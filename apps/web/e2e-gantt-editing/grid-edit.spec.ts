@@ -137,6 +137,35 @@ async function readActivity(
   return row;
 }
 
+/**
+ * Every activity on the open plan, or an empty list — **never a throw**.
+ *
+ * Its sibling above throws on a miss, which is right where the row must already exist and a miss is
+ * the failure. It is wrong inside `expect.poll`, which treats a throw as fatal rather than as a
+ * reason to try again: a poll waiting for a write to land got exactly one attempt, and reported the
+ * gap between the keystroke and the response as "no activity named Piling".
+ */
+async function readActivities(
+  page: Page,
+  orgSlug: string,
+): Promise<{ name: string; durationMinutes: number; durationDays: number }[]> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+        { credentials: 'include' },
+      );
+      if (!response.ok) return [];
+      const body = (await response.json()) as {
+        data: { name: string; durationMinutes: number; durationDays: number }[];
+      };
+      return body.data;
+    },
+    { org: orgSlug, id: planId },
+  );
+}
+
 /** The Duration cell on the first seeded row. */
 function durationCell(page: Page) {
   return ganttRow(page, 'Seeded 0').getByRole('gridcell').nth(2);
@@ -268,7 +297,23 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
   await field.fill('Piling');
   await field.press('Enter');
 
+  // **Polled through a helper that RETURNS the miss rather than throwing it.** `readActivity` ends
+  // in `throw new Error('no activity named …')`, and a throw inside `expect.poll` aborts the poll
+  // instead of retrying it — so the first attempt, before the write had landed, was fatal. The
+  // suite reported "no activity named Piling", which reads as "the write never happened" and was
+  // actually "the write had not happened *yet*". Found by the console epic's M7 sweep, where this
+  // was the one failure in twenty-nine.
+  //
+  // The rename is genuinely slower to observe than the duration edits above it: the poll asks for
+  // an activity that does not exist until the write lands, where those ask for a field on a row
+  // that is already there and merely re-reads it.
   await expect
-    .poll(async () => (await readActivity(page, orgSlug, 'Piling')).name, { timeout: 20_000 })
+    .poll(
+      async () => {
+        const rows = await readActivities(page, orgSlug);
+        return rows.find((a) => a.name === 'Piling')?.name ?? null;
+      },
+      { timeout: 20_000 },
+    )
     .toBe('Piling');
 });

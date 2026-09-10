@@ -241,6 +241,7 @@ export function Toolbar<Ctx>({
           disabled: !r.enabled,
           disabledReason: r.disabledReason,
           active: r.active,
+          activeKind: r.activeKind,
           layout: 'comfortable',
           itemProps: r.item.presentational
             ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
@@ -265,6 +266,12 @@ export function Toolbar<Ctx>({
         // always afford it.
         showLabel={(r.item.showLabel ?? 'auto') !== 'never'}
         {...(r.item.isActive ? { pressed: r.active } : {})}
+        // Forwarded here as well as in `Deck` — the component review caught this missing, which is
+        // the "one correct pattern applied to a control and not its neighbour" shape named three
+        // files over in this same diff. Latent rather than live (the one `isActive` item reaching
+        // this renderer is a `render` item), and latent is exactly how the recorded instances of
+        // that shape all began.
+        activeKind={r.activeKind}
         disabled={!r.enabled}
         disabledReason={r.disabledReason}
         srDescription={r.srDescription}

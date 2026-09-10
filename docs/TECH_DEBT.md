@@ -431,8 +431,26 @@ documented ≤ 10 (ADR-0053 §3).
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** open · **Verified:** 2026-09-10 · **Blocked on the product owner** (the outstanding
-readings are presses only they can make; do not fabricate them)
+**Status:** deferred (on a trigger) · **Verified:** 2026-09-10 · **PARKED 2026-09-10** — see the
+box below. **No longer blocked on the product owner.** Five
+sittings were taken 2026-09-10 (items 6, 6(e), 6(f)). §9's gate is **met at every judgeable point
+that reproduces**, at both scales and both framings. What remains is one attribution (the ~8 ms,
+which needs a DevTools recording) and one instrument gap (#283's unrecorded power state, now the
+leading explanation for the only reading that ever missed the floor). Neither is a press.
+
+> **PARKED — product-owner decision, 2026-09-10.** The canvas-performance programme is closed for
+> now. The question it existed to answer is answered: **ADR-0026 §9 is met at every judgeable point
+> that reproduces**, at 500 and 2,000, at both framings, and the layout gates run at the product
+> owner's own widths (1920×1080, 1646×1097, 1440×960, 1280×800 — `apps/web/e2e-workspace-fit/
+command-surface.spec.ts:35-40`). Nothing in the product is known to be failing for a user.
+> **This is not "no longer a defect" — it is "not worth more of anybody's attention today".** The
+> triggers below say when it becomes worth it again; none of them is a date, because a date would
+> make somebody re-read this on a Tuesday for no reason.
+>
+> **Trigger for this row specifically:** somebody reports the diagram feeling slow, OR a reading is
+> taken that misses §9's floor and reproduces. The residue is one attribution — the unaccounted
+> ~8 ms per frame at Fit — and #75's standing rule still holds: **it must not be guessed**, and a
+> DevTools Performance recording is the instrument, not another fps run.
 
 > **Correction, 2026-08-03 — read this before the rest of the row.** This entry was opened as "is
 > ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
@@ -749,6 +767,121 @@ would not exercise the code being budgeted.
    goes inside a frame; the ~8 ms between "JS finished" and "frame presented" needs a DevTools
    Performance recording, exactly as step 3 says, and must still not be guessed.
 
+6. **Third real-hardware reading set, 2026-09-10 — and it falsifies item 5(f)'s model with the very
+   point 5(f) asked for.** Same machine (`ANGLE (Intel, Intel(R) Arc(TM) Pro Graphics (0x00007D55)
+Direct3D11)`, 22 threads), Edge 152, 60 Hz idle interval 16.70 ms, DPR 1, attention held — at a
+   **1912×948** viewport, `web-v0.125.3`. `scale-scene`, full run, 180 frames × 3.
+
+   **The painter and the scene are unchanged between the two sittings**, which is what makes them
+   comparable at all: `apps/web/src/features/tsld/render/paint.ts` last changed in `d4270f22`
+   (2026-09-06) and `apps/web/src/features/perf-probe/scenes/` in `39de20bc` (2026-09-07), both
+   **before** the 2026-09-08 set. The only change under `features/tsld/render/` since is
+   `a11y.ts`/`a11y.test.ts` in `5d84bd05`, the parallel DOM layer, which is not on the paint path.
+
+   | framing | plan  | bars drawn | mean fps | dropped  | interval p95 | §9 floor | against it |
+   | ------- | ----- | ---------- | -------- | -------- | ------------ | -------- | ---------- |
+   | Week    | 500   | 243        | 60.0     | 0.00 pp  | 16.80 ms     | 45 fps   | **PASS**   |
+   | Week    | 2,000 | 267        | 60.0     | 0.00 pp  | 16.80 ms     | 30 fps   | **PASS**   |
+   | Fit     | 500   | 540        | 60.0     | 0.00 pp  | 16.80 ms     | 45 fps   | clears it  |
+   | Fit     | 2,000 | 1,658      | 35.2     | 70.37 pp | 33.40 ms     | 30 fps   | clears it  |
+
+   As before the two Fit rows are ungraded by P3, so "clears it" is arithmetic against §9's floor and
+   not a verdict the panel issued.
+
+   **(a) The model is falsified, and the residual is 28 %.** Item 5(f) fitted
+   `frame = a + b·bars + c·area` to three exactly-determining points and said in terms that it
+   "cannot be falsified by the data that produced it", naming the missing experiment: "a fourth
+   Fit/2,000 run at an intermediate window — roughly 1450×850 — would give the model its first degree
+   of freedom". 1912×948 is that window in area (1.813 Mpx, between 2.042 and 0.646). Refitting the
+   published coefficients reproduces them exactly (intercept −2.18 ms, 20.3 µs/bar, 4.26 ms/Mpx),
+   so the model below is 5(f)'s and not a paraphrase of it:
+
+   | Fit/2,000 @1912×948 | frame time   | fps      |
+   | ------------------- | ------------ | -------- |
+   | model prediction    | 39.22 ms     | 25.5     |
+   | **measured**        | **28.41 ms** | **35.2** |
+   | residual            | −10.81 ms    | −27.6 %  |
+
+   The model over-predicts. Put the other way: an 11.2 % smaller viewport drawing 7.5 % fewer bars
+   should have bought **3.70 ms** and bought **14.51 ms**. **The area term does not survive**, and
+   with it goes 5(f)'s "striking agreement" between its 8.7 ms area term and this row's
+   long-standing unattributed ~8 ms — which 5(f) had already labelled "not evidence". It was right
+   to.
+
+   **(b) The likely reason is that the fitted quantity is not continuous, and the tail says so
+   discretely.** A frame is presented on a refresh boundary, so `1000 / mean fps` is a blend of
+   integer multiples of the 16.70 ms period rather than a smooth function of draw cost. Expressed
+   that way the four Fit points read 1.05, 1.52, 1.70 and 2.57 periods — and the **interval p95
+   stepped from 4 periods (66.70 ms) to 2 (33.40 ms)** across an 11 % area change. A quantity that
+   moves in whole vsyncs cannot be linear in bars and pixels, and near a boundary a small change in
+   draw cost flips a large fraction of frames from N periods to N+1, which is exactly the
+   over-sensitivity observed. **This is a hypothesis with a mechanism and a discrete observation
+   supporting it, not an attribution** — the same standing this row gives the ~8 ms, and it must not
+   be promoted without the DevTools recording step 3 has always asked for.
+
+   **(c) §9's Fit/2,000 verdict has now flipped twice, and this time on an 11 % parameter.** 5(c)
+   recorded the gate as "missed at Fit at 2,000" from 23.3 fps. Today the same plan, same painter,
+   same machine, same scene measures **35.2 fps — above the same 30 fps floor**. Two days apart, the
+   only recorded difference a viewport 120 px shorter. #261 argued that an unstated canvas size
+   decides the verdict from a 2:1 comparison (1912×1068 against 1016×636); it is now shown by a
+   **1912×1068 against 1912×948**, which is close to the difference between one operator's window
+   and another's. **On the readings in hand §9's gate is met at Week at both scales and at Fit at
+   500, and at Fit at 2,000 it is unanswerable until #261 names the size.** That is a stronger
+   statement than 5(c)'s and it supersedes it.
+
+   **(e) ANSWERED 2026-09-10 07:53. It is between-sitting machine state, not geometry — and the
+   experiment ran in the direction that makes the conclusion unavoidable.** A fifth sitting at
+   **1920×1080** (fullscreen), the closest reproduction of the 2026-09-08 geometry the machine can
+   make:
+
+   | sitting               | area      | bars drawn | fps      | dropped  |
+   | --------------------- | --------- | ---------- | -------- | -------- |
+   | 2026-09-08 @1912×1068 | 2.042 Mpx | 1,792      | **23.3** | 97.22 pp |
+   | 2026-09-10 @1920×1080 | 2.074 Mpx | 1,825      | **32.2** | 85.37 pp |
+
+   **1.5 % more pixels and 1.8 % more bars, and it is 8.9 fps FASTER — 22× the 0.4 fps noise floor
+   item 6(f) measures.** Today draws more work on more pixels and does it quicker, which no
+   monotonic cost model permits from geometry alone. So whatever separates the two sittings is not
+   the window; it is something about the machine's state that neither report records, and
+   **#283 — the probe's unrecorded power state — is promoted from a possible confound to the leading
+   explanation** for a 38 % swing that made a shipped gate look failed. **#283 is nonetheless
+   deferred on a trigger (product owner, 2026-09-10) and that is not a contradiction**: the swing it
+   explains has already been explained, §9 is met at every point that reproduces, and nothing is
+   blocked behind capturing the field. It becomes worth doing the next time two readings disagree —
+   which is the only situation in which the missing field would have changed an answer.
+
+   **Three things follow, and all three are withdrawals of claims made earlier in this row.**
+
+   1. **Item 5(c)'s "missed at Fit at 2,000" is WITHDRAWN.** It rested on the single 23.3 fps
+      reading, which is not reproducible. Every judgeable Fit/2,000 point taken on 2026-09-10 clears
+      §9's 30 fps floor — **32.2 at fullscreen, 34.8 and 35.2 at 1912×948** — as does the
+      2026-09-08 small-window point at 39.5. **On the readings that reproduce, §9 is met at Fit at
+      2,000.** The honest summary of the whole set is that §9 passes everywhere except one sitting
+      nothing has been able to reproduce.
+   2. **Item 5(f)'s two-term model is dead rather than merely falsified.** Against today's two
+      judgeable points it over-predicts by **10.79 and 12.65 ms**, and worse, its per-bar term alone
+      charges 3.39 ms for the 948→1080 step, which measured **2.65 ms in total** — so the area
+      coefficient would have to be negative to fit. That is unphysical, and no re-fit rescues it.
+   3. **The vsync-quantisation hypothesis offered in item 6(b) is WITHDRAWN — it was mine, and the
+      data no longer needs it.** It was invented to explain a steep response to canvas area, and
+      that steepness was an artefact of comparing across sittings. Measured **within** one sitting
+      the response is close to proportional: +10.1 % bars and +14.4 % area buy **+9.3 %** frame
+      time. The discrete p95 step from 4 refresh periods to 2 is real and still unexplained, but it
+      is no longer evidence for anything, because the two readings it spanned were not comparable.
+
+   **The lesson is the one this register keeps re-learning, in a new place: two readings can differ
+   by 38 % with every recorded field identical.** The probe records viewport, DPR, GPU, threads,
+   memory, display interval, attention and motion, and none of them moved. A comparison is only as
+   good as the variables the instrument captures, and the one that matters here is not captured at
+   all.
+
+   **(d) What did NOT move is the finding.** Week is identical across all three sittings — 60.0 fps,
+   0.00 pp dropped, 16.80 ms p95, at both 500 and 2,000 — which is the surface a planner works on.
+   Item 5(b)'s conclusion also survives intact and is strengthened by a third point: Week/500 draws
+   243 bars and Week/2,000 draws 267, four times the plan for 24 more bars and no measurable
+   difference. **The cost is in the bars drawn, not in the plan**, and the remedy space is still
+   drawing cost at low px/day rather than anything about plan size.
+
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
 
@@ -772,6 +905,12 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 > framings (item 5(a)). The residue is now the **unattributed ~8 ms**, **#261's unstated canvas
 > size**, and the **1036×646 / ~1036×600 disagreement** between ADR-0026 §9b and this row — which is
 > an input to item 5(f)'s model fit, so it is arithmetic and not bookkeeping.
+>
+> **Amended 2026-09-10 (item 6).** The third clause is now worth less than it was: 5(f)'s model is
+> falsified out of sample, so an input to a fit that no longer stands is bookkeeping after all. The
+> first two clauses are unchanged and the second has grown — #261's unstated size now flips the
+> Fit/2,000 verdict across an **11 %** viewport change, not a 2:1 one, so it is the largest open
+> item on this row rather than a footnote to it.
 
 > **Status re-derived 2026-09-10, and what changed is a document rather than a number.** No new
 > reading was taken and none is claimed. What was checked is the row's relationship to the ADR it
@@ -5017,7 +5156,13 @@ replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verifi
 
 ### 261. ADR-0026 §9's frame-rate gate does not say at what canvas size it applies
 
-**Status:** open · **Raised:** 2026-09-08 (#75's viewport discriminator) · **Size:** S · **Owner:** repo
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-08 (#75's viewport discriminator) ·
+**Size:** S · **Owner:** repo
+
+> **PARKED 2026-09-10 with the rest of the canvas-performance programme.** The exhibit that made
+> this urgent is contaminated (see below) and size flips no verdict anywhere measured. **Trigger:**
+> anyone proposing to change ADR-0026 §9, or a display materially larger than 1920×1080 entering
+> use — the trend puts one below the floor and the gate still names no display.
 
 §9 states the gate as **≥ 45 fps @ 500 and ≥ 30 fps @ 2,000** under sustained pan, and fixes the
 hardware it applies to — "a mid-tier laptop **and** an iPad-class tablet (Safari), light and dark".
@@ -5040,6 +5185,44 @@ should be faced deliberately rather than arrived at by whoever next resizes a wi
 **Not decided here.** It changes the meaning of an accepted gate and belongs to whoever picks up the
 Fit-zoom work, alongside #75's unattributed time. Recording it is the point: the parameter has been
 absent since 2026 and was invisible until two runs disagreed.
+
+**THE EXHIBIT ABOVE IS CONTAMINATED, 2026-09-10 — the concern stands, the evidence does not.** This
+row's whole case was the pair **23.3 fps at 1912×1068 against 39.5 fps at 1016×636**: a fail and a
+pass against one floor, attributed to canvas size. #75 item 6(e) reproduced the larger geometry on
+the same machine two days later at **1920×1080 — 1.5 % MORE pixels — and measured 32.2 fps**. The
+23.3 fps reading does not reproduce, so the pair was never a clean size comparison; it was one
+sitting against another, with an unrecorded variable between them (#283).
+
+**What survives, measured within a single sitting so no state confound is possible:** at 1912×948,
+**35.2 fps**; at 1920×1080, **32.2 fps**. So canvas size does cost real frames — about **3 fps for
+14 % more area** — and it does **not** flip the verdict anywhere that has been measured, because
+every judgeable point clears 30 fps. The extrapolation is what keeps this row open: the trend puts a
+larger display below the floor, and nothing in ADR-0026 §9 says which display the gate is judged on.
+
+**So the remedy is unchanged and its urgency is lower.** Name the canvas size in ADR-0026 §9 —
+because a gate whose verdict is a function of an unstated parameter is underspecified whether or
+not that parameter has yet been shown to flip it. What is **withdrawn** is this row's previous
+claim that naming it "would mean §9's floor is currently missed at the 2,000 ceiling": on the
+readings that reproduce, it is met.
+
+**Strengthened 2026-09-10 by a third reading, and the margin is much smaller than this row assumed.**
+#75 item 6 measures the same plan, same painter, same scene, same machine at **1912×948**:
+**35.2 fps, above the same 30 fps floor** that 1912×1068 missed at 23.3 fps. So the verdict does not
+merely turn on a 2:1 viewport difference — it turns on **120 px of window height, an 11 % area
+change**, which is well inside the range two operators would differ by without either of them
+resizing anything deliberately. A reader could dismiss the original exhibit as an extreme
+comparison; this one cannot be dismissed that way.
+
+It also removes the reason to wait. This row said the decision "belongs to whoever picks up the
+Fit-zoom work" — but with the verdict flipping across an ordinary window difference, **there is no
+stable answer to "does the painter pass §9 at 2,000?" for anyone to pick that work up against**, and
+#75 item 6(c) now records the honest state as _unanswerable until the size is named_ rather than
+missed. Naming it is a prerequisite for the Fit work, not a companion to it.
+
+The consequence the original text asked to be faced deliberately is unchanged in kind and softer in
+degree: at a full-screen window on the §16 envelope the floor was missed at 23.3 fps and is now
+cleared at 35.2 fps at a slightly shorter one, so the candidate size decides whether §9 currently
+passes. That is precisely why it must be a decision and not a reading.
 
 ### 262. A dependency bump changed documented library behaviour, and only a citation gate noticed
 
@@ -5742,3 +5925,384 @@ this wants a spec rather than an edit):
 
 Option 1 is the one worth costing. Option 3 is already the written rule and has the shape #194
 records: an instruction that is correct, is not followed, and has no mechanism behind it.
+
+### 282. P3's reason for never grading Fit rests on a figure no reading since has come near
+
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the third real-hardware reading set,
+#75 item 6) · **Size:** S · **Owner:** repo
+
+> **PARKED 2026-09-10. Its two documentation halves are DONE** — P3's stale 10.2 pp premise is
+> corrected in `docs/specs/revision-compare-changes/m0-condition.md` and ADR-0127 D8's "unknown at
+> Fit" is replaced with the four readings, both on 2026-09-10, so no document now carries a figure
+> this row disproved. **What remains is item 3 alone**, a decision: whether P3's "never grade Fit"
+> still earns its keep now that `judgeRun` detects saturation explicitly rather than assuming it.
+> **Trigger:** the next time somebody wants a graded verdict at Fit, or #261 is picked up — it is
+> downstream of naming a canvas size.
+
+`docs/specs/revision-compare-changes/m0-condition.md:87-90` states P3 — the rule that the whole-plan
+framing is measured, reported and **never graded** — and gives its reason in one clause: _"The
+baseline at Fit already drops **10.2 %** of frames — a pre-existing overage #75 records and nobody
+has attributed."_
+
+**No Fit baseline this repository has recorded since is anywhere near 10.2 pp.** That figure is
+#75's 2026-08-03 reading at a ~1036×600 canvas. Every Fit baseline measured after it:
+
+| when       | canvas    | scenario      | baseline dropped |
+| ---------- | --------- | ------------- | ---------------- |
+| 2026-08-03 | ~1036×600 | imported XER  | 10.2 pp          |
+| 2026-09-08 | 1912×1068 | `scale-scene` | 97.22 pp         |
+| 2026-09-08 | 1016×636  | `scale-scene` | 47.78 pp         |
+| 2026-09-10 | 1912×948  | `scale-scene` | 69.63 / 70.37 pp |
+
+**P3's conclusion is not weakened by this — it is strengthened**, which is why this is a wrong number
+rather than a wrong rule. Its argument is ADR-0058's "a gate that fails on day one gets deleted
+rather than fixed", and a baseline at 69.63 pp fails harder than one at 10.2. The defect is that a
+reader who checks the premise — which is what this register keeps asking people to do — finds a
+figure matching nothing, and has no way to tell a stale citation from a typo.
+
+**The 2026-09-10 sittings also give P3 its first internal consistency check, and it passes twice.**
+The `revision-diff` Fit baseline and the `canvas-draw` Fit figure are the same painter on the same
+scene at the same canvas, taken from two different scenarios minutes apart — 69.63 vs 70.37 pp in the
+06:49 sitting (**0.74 pp** apart) and 70.93 vs 72.04 pp in the 07:44 sitting (**1.11 pp**), both well
+inside those sittings' own 3.89 and 5.00 pp run-to-run spreads. Two scenarios that share nothing but
+the painter landing that close, twice, is the strongest evidence the panel has produced that its Fit
+numbers mean something.
+
+**And there is now a measured answer being withheld — twice.** ADR-0127 D8 turned the revision
+overlay default-on with its Fit cost recorded as _unknown_; D8b says so in as many words. It is no
+longer unknown. Two sittings at 1912×948, 55 minutes apart:
+
+| sitting | viewport  | baseline | treatment | delta        | stated spread |
+| ------- | --------- | -------- | --------- | ------------ | ------------- |
+| 06:49   | 1912×948  | 69.63 pp | 75.19 pp  | **+5.56 pp** | 3.89 pp       |
+| 07:44   | 1912×948  | 70.93 pp | 75.56 pp  | **+4.63 pp** | 5.00 pp       |
+| 07:54   | 1920×1080 | 86.11 pp | 89.26 pp  | **+3.15 pp** | 2.78 pp       |
+| 07:56   | 968×493   | 0.00 pp  | 0.19 pp   | **+0.19 pp** | 0.00 pp       |
+
+All four are ungraded, so no verdict was issued, and the first three clear ADR-0127's own 2.00 pp
+bar. **The four together show #260's compression happening in front of the reader, which is worth
+more than any one of them**: as the baseline climbs 69.63 → 70.93 → 86.11 pp the delta falls
+5.56 → 4.63 → 3.15 pp, monotonically, because a metric bounded at 100 has less room to express a
+difference the closer it starts to the ceiling. So the overlay's cost is **not** smaller on a bigger
+canvas; the instrument's ability to report it is. The fourth row is the same effect at the other
+end — at 968×493 the painter drops nothing to begin with, so the overlay's cost is expressed almost
+undistorted at **+0.19 pp**, which matches ADR-0129's Week reading and is the best estimate of what
+the overlay actually costs when the painter is not already saturated.
+
+**The honest reading is therefore that the overlay costs a real but small amount, and that the
+larger Fit deltas are partly an artefact of where the baseline sits.** #75 item 6(f) measures this
+machine's Fit/2,000 repeat spread at 0.4 fps, so the deltas are not scatter; the compression is.
+
+**What would close it** is two edits and one decision, and only the third is work:
+
+1. **Correct P3's premise** to name a measured baseline and the canvas it was taken at, or to state
+   a range — the honest form, since #261 is unresolved and the figure varies from 47.78 to 97.22 pp
+   across canvas sizes alone.
+2. **Record the overlay's Fit cost in ADR-0127 D8**, replacing "unknown" with the number and its
+   standing. Leaving "unknown" in place once it has been measured is the drift class this register
+   exists for.
+3. **Decide whether P3 still holds** now that headroom at Fit is demonstrably ~30 pp rather than
+   ~0 pp. P3 was written against a baseline that would make a difference gate meaningless; that is
+   #260's condition, and the panel now computes `saturated` explicitly and returns INDETERMINATE for
+   it. If saturation is detected rather than assumed, "never grade Fit" may be doing work
+   `judgeRun` already does better. **Not decided here** — it changes an accepted condition, and it
+   is downstream of #261 naming a canvas size.
+
+Related: #75 (the readings), #261 (the unstated canvas size, which makes every figure above
+incomparable to the others), #260 (closed — the saturation detection that may supersede P3's
+mechanism).
+
+### 283. The performance probe does not record power state, and on an integrated GPU that decides readings
+
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** S ·
+**Owner:** repo
+
+> **Not scheduled — product-owner decision, 2026-09-10.** This row explains something real and
+> nothing currently depends on the explanation. #75's question is answered: §9's gate is **met** at
+> every judgeable point that reproduces, so there is no failing verdict waiting on this and no work
+> blocked behind it. What the gap costs today is the ability to compare a reading against one taken
+> on another day — which matters when somebody next needs that comparison, and not before.
+>
+> **The trigger** — pick this up when any of these happens, rather than on a date:
+>
+> 1. A probe reading is taken that **disagrees with a previous one** at the same viewport, as
+>    2026-09-08 and 2026-09-10 did. That is precisely when the missing field is the one you want.
+> 2. Someone proposes work against the Fit-zoom cost (#75's unattributed ~8 ms, decimation, dirty
+>    regions) — because that work would be justified by cross-sitting numbers this cannot yet make
+>    comparable.
+> 3. The probe is next opened for any other reason. It is a small addition to `readDevice()` and is
+>    much cheaper done alongside something else than as its own errand.
+>
+> Recording the trigger is the point: ADR-0085's rule is that an unconditioned item stays exactly one
+> priority below whatever is being done, forever.
+
+`apps/web/src/features/perf-probe/model/device.ts:61-71` captures viewport, DPR, GPU renderer, thread
+count, device memory, display interval, attention and motion preference. It does not capture whether
+the machine is on mains, and there is no `getBattery()` call anywhere under `features/perf-probe/`.
+
+Every reading this repository holds was taken on a **laptop with an integrated adapter** — the row
+that matters says so in terms: _"the **integrated** adapter, which is what the browser chose on a
+machine that also has a discrete one. That is what a planner gets"_ (#75). On that hardware a power
+profile change throttles the GPU directly, and a 30 % frame-time difference from mains-to-battery
+alone is unremarkable. It is not a rounding term; it is the same size as the largest unexplained
+quantity in #75.
+
+**The instrument already knows this matters and delegates it to memory.** The panel's free-text note
+carries the placeholder _"the Dell, docked, on mains"_ (`ui/performance-probe-panel.tsx:644`), so
+the field exists to hold the fact and nothing requires or captures it. The 2026-08-03 set records
+"mains" because a person typed it. The 2026-09-08 and 2026-09-10 sets do not record it at all — and
+#75 item 6 turns on a 10.81 ms residual between two of those sittings that this variable could
+account for on its own. **A reading whose largest confound is unrecorded cannot be compared to
+another**, which is #261's complaint about canvas size arriving a second time by a different door.
+
+**What would close it**: call `navigator.getBattery()` in `readDevice()` and store `charging` plus
+`level`, alongside the existing facts, rendered on the paste-ready block and the history row like the
+canvas size that #261 forced onto them. It is a Chromium-only API and absent in Firefox and Safari,
+so the honest shape is the one this panel already uses for a fact it cannot obtain — record it as
+**unknown** and say so, never as a default a reader would assume. That distinction is the whole
+lesson of ADR-0130's presentation model.
+
+Related: #75 (the reading whose residual this could explain), #261 (the other unrecorded parameter
+that makes readings incomparable).
+
+### 284. `on screen` means two different things depending on which scenario printed it
+
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the five-sitting probe set) ·
+**Size:** S · **Owner:** repo
+
+> **PARKED 2026-09-10 with the probe.** It misleads a reader of probe output and nothing else — the
+> judging is unaffected and conservative. **Trigger:** the probe is next opened for any reason, or
+> somebody compares `revision-diff` limbs across viewports and reaches the wrong conclusion about
+> bars drawn. Bundle it with #283, which is the same file and the same errand.
+
+Every probe limb prints `on screen  N bars at X px/day`, and #75 item 5(d) records **why** that line
+exists: ADR-0128's central finding is that painter cost tracks **bars drawn**, not plan size, and the
+2026-08-03 set could not be compared against anything because it never recorded that quantity. It is
+the load-bearing statistic of the whole panel.
+
+**The two scenarios derive it differently and the report does not say so.**
+
+- `scenes/canvas-draw.ts:138` — `cull(scene.scene.activities, view, size, EPOCH_ISO).length`, i.e.
+  exactly what the painter draws.
+- `scenes/revision-diff.ts:212-215` — `onScreenX(a.earlyStart) || onScreenX(a.earlyFinish)`, an
+  **x-axis test with no lane culling at all**.
+
+At any Fit framing the whole time span is on screen by construction, so the second form matches every
+activity in the plan. Measured across three viewports in one sitting:
+
+| viewport  | `canvas-draw` says | `revision-diff` says |
+| --------- | ------------------ | -------------------- |
+| 1920×1080 | 1,825 bars         | 2,160 bars           |
+| 1912×948  | 1,658 bars         | 2,160 bars           |
+| 968×493   | 965 bars           | 2,160 bars           |
+
+So a reader comparing `revision-diff` limbs sees the same 2,160 at every canvas size and concludes
+that bars drawn is **invariant to the viewport** — the exact opposite of the finding the column
+exists to support, and stated in the panel's own words rather than inferred.
+
+**The judging is not wrong, and that matters for the fix.** `revision-diff`'s value is a
+**denominator for a non-vacuity share** (`judge.ts:181`, `enough(visibleChangedBars, visibleBars)`),
+and its own comment says so: _"The denominators, over the WHOLE scene rather than the changed
+subset."_ A whole-scene denominator makes the share **smaller**, so that gate is stricter than a
+culled denominator would make it — conservative, never permissive. Nothing measured here is
+invalidated; what is wrong is that one label carries two quantities.
+
+**What would close it**: give the report two named fields rather than one overloaded one — the culled
+count for every scenario (which `revision-diff` does not currently compute at all) and, where a
+scenario uses a different denominator for its own vacuity test, print that separately and say what it
+is. **Do not simply switch `revision-diff` to `cull()`**: that would silently tighten the non-vacuity
+gate that ADR-0127 P3's "N" clause depends on, which is a behaviour change wearing a rename.
+
+Related: #75 (whose item 5(b)/(d) argument rests on this column), #261 (the other parameter that made
+readings incomparable), ADR-0128 (the decision the column serves).
+
+### 285. The command deck wears cards inside a band the foot wears bare
+
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the deck surface studies) · **Size:** S ·
+**Owner:** web
+
+> **Decided and NOT built — product-owner decision, 2026-09-10: bare, captions kept, a hairline
+> between groups.** Captured here on the standing instruction that proposed work is never lost.
+> **Trigger:** `Deck.tsx` or `toolbar-styles.ts` is next touched for any reason, or the product owner
+> asks. It is one variant switch and one class, so it is cheaper alongside something else than as
+> its own errand.
+
+**The complaint** was that the top of the plan workspace "doesn't quite belong" while the foot bar
+does. **The first diagnosis put to the product owner was wrong, and is recorded before the right
+one.** It framed the choice as _dark band vs light deck_ — and the deck is already navy, inside the
+same `<Surface tone="chrome">` as the header and the foot (`chrome-band.tsx:74`; the deck portals
+into that band's `rows` slot). I misread the product owner's screenshot, then two of my own
+photographs, in the same direction; four DOM and CSS reads disagreed with my eyes and I trusted my
+eyes. **Bytes settled it**: in the harness's own `plan-workspace.png` the gap between the deck's cards
+is RGB (20, 33, 61), identical to the foot bar, and a card interior is (31, 44, 70) — the 5 % tint.
+That is ADR-0076 Class 3 inside a choice put to somebody else, the #204 shape, and the rule it leaves
+is short: **a colour read off a downscaled full-page render is not evidence; sample the pixel.**
+
+**What actually differs, measured.** The deck's four groups are tinted (`bg-foreground/5`),
+1 px-bordered (`border-border/60`), rounded (`rounded-md`) boxes with `px-2 py-1.5` — the
+`toolbarCardVariants` **`boxed`** variant (`toolbar-styles.ts:119-150`). The foot's selection bar uses
+the same CVA's **`bare`** variant — no box at all — and the foot's facts sit bare on the band. So the
+deck is the only chrome surface in the shell wearing boxes, and header + deck form a **180 px navy
+slab** at both 1920 and 1646 (header 40 + deck 108) against a ~50 px strip below. Boxes inside a
+band, and a lot of band: that is the mismatch.
+
+**Four studies, rendered over the harness's own programme with CSS injected after paint — the tree
+was never touched — and measured rather than described:**
+
+| variant                 | band height | canvas returned | what the picture shows                                           |
+| ----------------------- | ----------- | --------------- | ---------------------------------------------------------------- |
+| baseline (shipped)      | 180 px      | —               | four tinted, bordered cards on navy                              |
+| **bare, captions kept** | **152 px**  | **+28 px**      | one continuous band; `FIND` / `PLAN` lose their leading boundary |
+| bare, no captions       | 152 px      | +28 px          | **reflows** — `Add·Link·Select·Arrange` jump up beside search    |
+| cards, no captions      | 180 px      | 0 px            | the same reflow, inside boxes                                    |
+
+Identical at 1920 and 1646. The 28 px is the cards' padding and borders across two rows, verified
+in bytes (card interior 31,44,70 → 20,33,61 in the bare study).
+
+**The caption finding is the one the heights table cannot show.** Removing the captions returns
+0 px — they sit beside their controls, not above them — but their **width** is what holds two
+groups per row: without it `flex-wrap` re-pairs "look" (`VIEW`+`FIND`) with "do"
+(`AUTHOR`+`PLAN`), authoring commands migrate onto the search line, and `PLAN` sits alone on row
+two. So "decide captions from the studies" resolved to **keep them**, and the bare study's one
+weakness — `FIND` and `PLAN` butting against the previous group with nothing but the caption to mark
+the seam — is answered by a hairline, not by boxes.
+
+**The change, when built.**
+
+1. `apps/web/src/components/ui/toolbar/Deck.tsx` — the group wrapper's
+   `className={toolbarCardVariants()}` becomes `toolbarCardVariants({ chrome: 'bare' })`. The
+   variant, its docblock and its second consumer already exist; nothing is added to the primitive.
+2. A hairline between consecutive groups, in the section idiom the deck already uses
+   (`Deck.tsx:268`, `border-border/50 ml-1 border-l pl-2`), applied to each group after the first.
+   Decorative — WCAG 1.4.11-exempt — so no contrast pair moves.
+3. Re-run: `e2e-workspace-fit` (the §2.5.8 sweep; controls keep `min-h-(--control-h)` because the
+   padding removed is the card's, outside them — verify, do not assume), `dock.spec.ts` (the foot's
+   41 px equality is untouched by construction and should stay so), **the base journey** (the ADR-0096
+   rule: change a screen, run it), and `shoot.mjs --only plan-workspace` for parity. Run the
+   accessibility reviewer over the deck render: no keyboard or ARIA contract changes, so §19.13 does
+   not fire, but it is a shared primitive's rendering and the review is cheap.
+4. A dated `docs/DECISIONS.md` entry, because ADR-0114 M6's measurement table recorded the _card_
+   choice (the selection bar declining the deck's geometry); this is the same argument run the other
+   way — the deck adopting the bar's bareness — and it should be findable from there.
+
+**ADR-0105:** no new user-facing entry point, no Playwright config or CI step, no change to a
+component's public contract (an existing variant is selected), no shared gate, no schema. A register
+row is the right instrument; the decision entry in step 4 is the record.
+
+**To re-render the studies** (no script is committed — the seed lives in `shoot.mjs` and a copy would
+drift): run `node apps/web/scripts/shoot.mjs --only plan-workspace`, then apply these to the page
+(DevTools or an `after` hook), where `D` is `[role="toolbar"][aria-label="Plan commands"]`:
+
+```css
+/* bare */
+D > [role='group'] {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+/* no captions */
+D > [role='group'] > span[aria-hidden='true'] {
+  display: none;
+}
+/* group hairline */
+D > [role='group'] + [role='group'] {
+  border-left: 1px solid var(--border);
+  padding-left: 0.5rem;
+}
+```
+
+Related: ADR-0109 D1 (the cards were inherited from the old Flask app with the wrap), ADR-0114 M6
+(the measurement that made the selection bar bare), ADR-0115 (the foot row joining the chrome scope
+— this is the same argument one row up), `toolbar-styles.ts` (`toolbarCardVariants`, both variants).
+
+### 286. No journey drives a peer take-over or an admin override
+
+**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the security review) · **Size:** M ·
+**Owner:** web
+
+ADR-0028's pen has five ways to change hands — a peer requests and waits out grace, a peer takes
+over after it, an Org Admin overrides immediately, the holder hands over, the holder keeps editing —
+and **not one of them is driven end to end by any Playwright suite in this repository**. Verified by
+searching every `e2e-*` directory: the three files that match `take over` or `override` match on a
+progress-tab phrase and two CSS comments. No suite opens two sessions against a real API with
+`PLAN_EDIT_LOCK_ENFORCED=true` and moves the lock between them.
+
+**It was found because a document claimed the opposite.** `docs/specs/workspace-console/feature-spec.md`
+§"No permission changes" ended _"and the journey proves that against a real API with
+`PLAN_EDIT_LOCK_ENFORCED=true`"_ — written from the shape of every other epic's enablement journey
+rather than from this one's. The security review went looking for the suite and reported it absent;
+the claim is corrected in place there rather than deleted, with the reasoning that survives it.
+
+**It is not an exposure and this row does not claim to be one.** Enforcement is server-side
+(`assertHoldsPen`, 423 `LockedError`) whatever the client renders, and three things independently
+bound what the relocated controls can do: `resolveLockView` is untouched, `EditLockControls`' `only`
+prop is a `filter` of the server-derived action list and can only narrow it, and
+`action-partition.structural.test.ts` pins the pen's two verbs and the seven hand-off actions as
+disjoint — so the deck's control has no path to `onOverride` or `onTakeOver` at all.
+
+**What the gap actually costs** is that the one interaction ADR-0028 exists for — the pen changing
+hands under a planner who did not ask — has never been exercised against a real lock lease by
+anything. Every unit case mocks the status; a mocked status cannot express grace expiry, a heartbeat
+lapsing, or two clients racing. That is the class of defect this repository's journeys keep catching
+and its unit suites keep missing.
+
+**Sized M, not S:** it needs a two-context Playwright fixture, two seeded members with different
+roles, and control over the grace window — none of which any existing harness provides.
+
+### 287. The pen's foot-row home is `shrink-0`, and its worst case was never measured
+
+**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** S ·
+**Owner:** web
+
+The pen's badge, live-region sentence and seven hand-off controls portal into `PenStatusOutlet`,
+which sits inside `PlanFacts` — and that container is `flex min-h-6 shrink-0 flex-wrap`
+(`plan-facts.tsx`). CQ-4's own reasoning rejected this home for exactly that word: it is the one
+item in the foot row that cannot give way.
+
+**`shrink-0` on a foot-row child is this repository's recorded shape for a clipped control.**
+ADR-0114 M1 found four controls painted and pointer-unreachable behind one, and ADR-0115 then had to
+re-scope a `max-w-64` off the same container for the same reason. Nothing says this instance is
+clipping today; what is missing is the reading that would settle it.
+
+**M0-T4 measured the resting case and named the gap in its own words** — _"Owed at M5: the same
+reading with an activity selected (the dock bar occupying the row) and at 1440"_. That reading was
+not taken. M6 re-measured the foot at a flat 51 px across all four widths, but its fixture is
+**pen held**, which is the one branch offering no hand-off controls at all: the narrow case, not the
+wide one.
+
+**The unmeasured combination** is an activity selected (so the object-action bar occupies the dock),
+a lock state offering hand-off controls (a peer asking, or an admin who may override), and 1440 —
+the narrowest width the epic is judged at. Three sources of width in a row where one of them cannot
+shrink.
+
+**Why it stayed in `PlanFacts` rather than moving as CQ-4 words it** is a decision and is recorded
+in `docs/specs/workspace-console/m7-review.md`: `PlanFactsOutlet` is gated on `hostsPlanSlots` and
+is not rendered below `md`, so a literal move would have deleted the pen's whole cluster on the
+screens with least room to lose it. The alternative was worse; the residual is this row.
+
+**Sized S:** it is one reading from the existing harness with a selection made and a hand-off branch
+seeded, not new machinery.
+
+### 288. `DECK_GROUPS[].caption` names a rendering the deck no longer has
+
+**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** XS ·
+**Owner:** web
+
+The field's only consumer is `aria-label={group.caption}` (`Deck.tsx`), so it is the group's
+**accessible name**. It has not captioned anything since M6 deleted the visible spans.
+
+**A field named for a rendering that no longer exists is how the next reader concludes the caption
+is coming back**, which is the same class as the stale sentences M7 swept out of this subsystem —
+`toolbar-registry.ts`'s "Absent ⇒ `look`", `state-ladder.structural.test.ts`'s amber ring, two
+orphaned docblocks. The difference is that those are prose and this is an identifier, so correcting
+it is a rename across a shared table rather than an edit.
+
+**Deliberately not done in M7**, and the reason is the milestone's own subject: M7's docs sweep
+touched nine prose sites, and a mechanical rename landing in the same commit hides among them —
+a reviewer reading that diff cannot tell the one behavioural risk from the eight safe corrections.
+It is one commit on its own, worth doing when `Deck.tsx` is next opened.
+
+**`name` rather than `label`**, if it matters to whoever picks it up: the deck has `ToolbarItem.label`
+already, meaning something else, and this subsystem has just been through one collision of that kind
+(the registry's `row` band axis against the deck's `row` line axis, same row).

@@ -254,8 +254,8 @@ export function PlanActivitiesFootRow({
        * chrome bands bracket the diagram. Decorative rule — 1.4.11-exempt — and the token, never a
        * literal (the colour-literal lint rule stands).
        *
-       * `px-2 py-1.5` COPIES the deck's own content inset (`plan-workspace-toolbar.tsx`, the
-       * `<div className="px-2 py-1.5">` around the Deck) rather than judging one: the product
+       * `px-2 py-1` COPIES the deck's own content inset (`plan-workspace-toolbar.tsx`, the
+       * `<div className="px-2 py-1">` around the Deck) rather than judging one: the product
        * owner's item was that this row sits tighter to its dark ground than the deck does to the
        * band's (measured 16 px left / ≈1 px top against the deck's 9 px,
        * `docs/specs/workspace-visual-polish/README.md` M0). Copying the classes rather than the
@@ -264,7 +264,7 @@ export function PlanActivitiesFootRow({
        * `dock.spec.ts`'s guarantees are deltas (a docked strip costs the canvas nothing), which a
        * constant applied to both states cannot move.
        */
-      className="border-t-primary flex min-h-9 shrink-0 items-center gap-2 border-t-[3px] px-2 py-1.5"
+      className="border-t-primary flex min-h-9 shrink-0 items-center gap-2 border-t-[3px] px-2 py-1"
     >
       {/* **The facts, now TRAILING** (foot-row-and-deck M3 — see the docblock above for why the
           order moved, and why the reason originally given for facts-leading did not hold). This row said "Activities" and the status bar said

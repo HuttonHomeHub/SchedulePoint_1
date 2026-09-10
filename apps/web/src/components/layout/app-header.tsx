@@ -174,7 +174,9 @@ function HeaderContents({
  * (M3-T2, above), and the one-row header folds the identity back into it — so the band no longer
  * needs a second row to hold it.
  *
- * **`min-h-14`, not `h-14`.** A wrapping row's height is a function of its width, which is the
+ * **`min-h-12`, not `h-12`** (it was `min-h-14` until the console epic's M1-T2 dropped the floor
+ * to what the row holds — a 40 px icon button plus `py-1`, 48 px; the 8 px above that were
+ * empty band, measured at `m0-measurement.md` §1). A wrapping row's height is a function of its width, which is the
  * accepted cost of the wrap (`docs/specs/one-row-header/falsification.md`): one line above a
  * container of 1480 px and two below it. A fixed height would clip the second line rather than
  * showing it, which is the ADR-0090 defect — content painted where a pointer cannot reach it — and
@@ -206,7 +208,7 @@ export function AppHeaderRow({
     //
     // `toolbar-band.tsx`'s invariant is honoured either way: the band width says how roomy the
     // surface is and never answers whether a row's content fits.
-    <ToolbarBandProvider className="min-h-14 px-4 py-1">
+    <ToolbarBandProvider className="min-h-12 px-4 py-1">
       <header className="flex min-h-full items-center">
         <HeaderContents identitySlotRef={identitySlotRef} modeSlotRef={modeSlotRef} />
       </header>

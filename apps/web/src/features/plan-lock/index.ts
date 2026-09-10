@@ -5,7 +5,8 @@
  * when off.
  */
 export { EditLockBanner } from './components/EditLockBanner';
-export { CompactPenStatus } from './components/CompactPenStatus';
+export { CompactPenStatus, HANDOFF_ACTIONS, PenStatusCluster } from './components/CompactPenStatus';
+export { PlanPenControl } from './components/PlanPenControl';
 export { PenReadOnlyNote } from './components/PenReadOnlyNote';
 export {
   usePlanPen,
@@ -23,3 +24,4 @@ export {
   type PlanGatingInput,
 } from './lib/plan-gating';
 export { penReason } from './lib/pen-reason';
+export { type PenLockView, usePenLockView } from './lib/use-pen-lock-view';

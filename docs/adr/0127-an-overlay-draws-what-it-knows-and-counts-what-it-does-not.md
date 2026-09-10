@@ -174,6 +174,17 @@ halves — free at Week (D8a), and **unknown at Fit**, where P3 leaves the frami
 `docs/TECH_DEBT.md` #260 shows the difference metric arithmetically unable to fail — and they turned
 it on.
 
+> **Fit is no longer unknown, 2026-09-10 — measured four times on the product owner's hardware**
+> (`docs/TECH_DEBT.md` #282). At 1912×948 the overlay costs **+5.56 pp** and **+4.63 pp** in two
+> sittings; at 1920×1080 **+3.15 pp**; at 968×493 **+0.19 pp**. All four are ungraded, so no verdict
+> was issued, and the four together are more informative than any one: as the baseline climbs
+> 69.63 → 70.93 → 86.11 pp the delta falls 5.56 → 4.63 → 3.15 **monotonically**, which is #260's
+> compression rather than the overlay getting cheaper on a bigger canvas. The undistorted figure is
+> the fourth — at 968×493 the painter drops nothing to begin with, and the overlay costs **+0.19 pp**,
+> matching ADR-0129's Week reading. So D8b's decision stands and its stated unknown is closed: the
+> overlay is cheap at every framing measured, and the large Fit deltas are mostly an artefact of
+> where the baseline sits.
+
 **What the default actually decides is narrower than "on".** The overlay draws nothing until a
 revision pair is chosen (`TsldPanel.tsx:1205`, `hasRevisionPair`), and the toggle already refuses
 with a stated reason when there is no pair or when the Gantt is showing. So a planner who never opens

@@ -11,6 +11,7 @@ import type { ZoomLevel } from '../render/render-model';
 import type { PlanViewMode } from '@/features/gantt';
 import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { InterchangeExportFormat } from '@/features/interchange';
+import type { PenLockView } from '@/features/plan-lock';
 
 /**
  * The context the TSLD toolbar registry ({@link tsldToolbarItems}) reads and commands (ADR-0031).
@@ -284,6 +285,17 @@ export interface TsldToolbarContext {
    * mutating items. (**Clear visual start** cited this until ADR-0094 M4-T1 moved it to the
    * selection bar; {@link lateOverlayActive} below is now read only by that surface's shared gate.) */
   canEditSchedule: boolean;
+  /**
+   * The resolved pen (console epic M5) — **one `usePenLockView` call**, made by the plan workspace
+   * and handed to both surfaces that show it: the deck's `Start editing` / `Stop editing` control
+   * and the foot row's badge, sentence and hand-off actions. The hook holds local state (a dismissed
+   * request id, a countdown tick, a just-acted ref), so a second call would let those halves
+   * disagree about the same lock, each looking correct alone.
+   *
+   * Optional because the Gantt's selection context and every existing test build a toolbar context
+   * without one; the pen item's `isVisible` reads `penManaged`, so absent ⇒ no pen item.
+   */
+  penLock?: PenLockView;
   /** Whether the read-only Late-start overlay (ADR-0033 M4) is on — the workspace's `authoringEnabled`
    * excludes it, so a pen-gated item can be disabled by the overlay while {@link canEditSchedule} is
    * still true. Exposed so a pen-gated item disabled BY the overlay can explain that case (F5/A1),

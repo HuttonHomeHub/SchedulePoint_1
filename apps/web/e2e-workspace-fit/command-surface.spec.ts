@@ -306,6 +306,231 @@ test.describe('The plan command surface', () => {
     }
   });
 
+  /**
+   * **F1 and F6 of the console epic** (`docs/specs/workspace-console/implementation-plan.md`,
+   * M1-T4): the band's height and the deck's line count, at the widths the epic is judged on.
+   *
+   * **Verified red first, both halves separately.** Against the tree before M1 the band is
+   * 180 px, so the height half fails on its own (`m0-measurement.md` §1). The line half passes
+   * against today's deck — two lines at 1920 and 1646 — so it was made to fail by injecting a
+   * 900 px item into the deck, which pushed the count to three; a line assertion that has never
+   * been seen red is a claim about the wrong element waiting to happen (ADR-0110 D5).
+   *
+   * **The line count is the number of distinct rows the CONTROLS sit on, never a constant and
+   * never "height ÷ tallest child".** The latter is the shape `pen-status.spec.ts` uses for the
+   * header, and it was the first draft here — and its red run PASSED against a 1500 px item
+   * injected into the deck, because a group that wraps INTERNALLY becomes the tallest child and
+   * divides itself away. Under the declared rows that is precisely the failure F6 exists to catch
+   * (`m0-measurement.md` §2: the LOOK row wraps inside itself at 1440). Clustering every control's
+   * `top` cannot be fooled that way and still survives a control-height change (ADR-0118). **The height half asserts a bar (≤ 145), not a value**: a gate pinned to
+   * 141 goes red on a deliberate change and says nothing about the defect.
+   *
+   * **1440 reads "at most three", not "exactly two"**, on M0's measurement rather than the study's
+   * figure: the LOOK set was 1452 px against a 1424 px container, so a third line at 1440 was
+   * the row wrapping honestly. After M1 deleted the cards it is 1416 — two lines with **8 px** to
+   * spare — and M4 owns whether C's wider column gap can afford that. The pinned positive is the
+   * control count — a deck rendering nothing is one line tall and 0 px is under any bar.
+   */
+  test('the band stays inside its height bar and the deck its line count, at every width', async () => {
+    test.setTimeout(240_000);
+    const BAND_MAX_PX = 145;
+    // M6 measured 51 px at 1280/1440/1646/1920. The bar is that reading, not a round number above
+    // it: a bound with slack in it cannot report the four pixels the inset is worth.
+    const FOOT_MAX_PX = 51;
+    const LINES: Record<number, { max: number }> = {
+      1920: { max: 2 },
+      1646: { max: 2 },
+      1440: { max: 3 },
+      1280: { max: 3 },
+    };
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(400);
+
+      const reading = await page.evaluate(() => {
+        const band = document.querySelector('[data-surface="chrome"]:not([data-activities-bar])');
+        const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+        if (!band || !deck)
+          throw new Error('the band or the deck was not found — nothing to assert about');
+        // Cluster within 4 px: controls on one row share a top to sub-pixel precision, and a real
+        // second line sits a whole control height below.
+        const linesIn = (root: Element) => {
+          const tops = [...root.querySelectorAll('[data-toolbar-item]')]
+            .map((el) => el.getBoundingClientRect().top)
+            .sort((a, b) => a - b);
+          let lines = 0;
+          let last = Number.NEGATIVE_INFINITY;
+          for (const t of tops) {
+            if (t - last > 4) lines += 1;
+            last = t;
+          }
+          return { lines, controls: tops.length };
+        };
+        const rowEl = (row: string) => {
+          const el = deck.querySelector(`[data-deck-row="${row}"]`);
+          if (!el) throw new Error(`the deck has no declared "${row}" row`);
+          return el;
+        };
+        const look = rowEl('look');
+        const doRow = rowEl('do');
+        const foot = document.querySelector('[data-activities-bar]');
+        if (!foot) throw new Error('the activities row was not found — nothing to assert about');
+        return {
+          foot: foot.getBoundingClientRect().height,
+          band: band.getBoundingClientRect().height,
+          ...linesIn(deck),
+          look: linesIn(look),
+          do: linesIn(doRow),
+          // Membership: which commands sit in which declared row. A line-count assertion alone
+          // passes against a build where a command has MOVED rows, which is the whole defect the
+          // declaration exists to prevent.
+          lookIds: [...look.querySelectorAll('[data-toolbar-item]')].map((el) =>
+            el.getAttribute('data-toolbar-item'),
+          ),
+          doIds: [...doRow.querySelectorAll('[data-toolbar-item]')].map((el) =>
+            el.getAttribute('data-toolbar-item'),
+          ),
+        };
+      });
+
+      // The pinned positive: an empty deck is one line tall and 0 px, and passes everything below.
+      expect(reading.controls, `no controls in the deck at ${viewport.width}`).toBeGreaterThan(15);
+
+      expect(
+        reading.lines,
+        `the deck's controls sit on ${reading.lines} rows at ${viewport.width}`,
+      ).toBeLessThanOrEqual(LINES[viewport.width]!.max);
+
+      // **Per row, since M4 declared them.** Each row is one line at every width the epic is judged
+      // on; below that the LOOK row is allowed a second line and the DO row is not, because a wrap
+      // inside a row is local — it can never move a command to the other row.
+      expect(
+        reading.look.lines,
+        `the LOOK row wraps to ${reading.look.lines} lines at ${viewport.width}`,
+      ).toBeLessThanOrEqual(viewport.width >= 1440 ? 1 : 2);
+      expect(
+        reading.do.lines,
+        `the DO row wraps to ${reading.do.lines} lines at ${viewport.width}`,
+      ).toBe(1);
+
+      // **Membership, and it is the assertion that carries M4's argument.** Line counts alone pass
+      // against a build where a command has moved rows — which is exactly what flex wrapping did
+      // before the rows were declared, and what a planner experiences as every command in the band
+      // changing place. Pinned by group rather than by a list of ids, so adding a command to an
+      // existing group needs no edit here.
+      expect(reading.lookIds, `the LOOK row is empty at ${viewport.width}`).not.toHaveLength(0);
+      expect(reading.doIds, `the DO row is empty at ${viewport.width}`).not.toHaveLength(0);
+      expect(
+        reading.lookIds.filter((id) => reading.doIds.includes(id)),
+        'a command appears in both declared rows',
+      ).toHaveLength(0);
+      expect(
+        reading.lookIds.includes('add-activity') || reading.doIds.includes('add-activity'),
+      ).toBe(true);
+      expect(reading.doIds, 'the authoring tools left the DO row').toContain('add-activity');
+      expect(reading.lookIds, 'the search field left the LOOK row').toContain('search');
+      // **1920 and 1646 only, by design.** F1 names those two widths; at 1440 the header itself
+      // wraps to two lines today (ADR-0112 D4's accepted state) because the pen cluster sits on
+      // it, and `m0-measurement.md` §1 shows that row un-wrapping to one line at 1440 the moment
+      // the pen leaves — which is M5's win. Asserting the bar at 1440 here would make M1 red for
+      // M5's reason. The first version of this case did exactly that.
+      if (viewport.width >= 1646) {
+        expect(
+          reading.band,
+          `the command band is ${reading.band} px at ${viewport.width} against a bar of ${BAND_MAX_PX}`,
+        ).toBeLessThanOrEqual(BAND_MAX_PX);
+      }
+
+      // **F7, the foot row, which had no gate until M7.** It was measured once by hand at M6 (51 px
+      // at all four widths) and nothing pinned it — while its inset is a **literal copy** of the
+      // deck's, kept in step by a rule written in a docblock rather than by anything that fails.
+      // A component review named the drift: change one `py-1` and the other silently stays.
+      //
+      // Asserted at every width, unlike the band above: the foot row carries no plan name and no
+      // pen sentence, so it has no state that legitimately wraps at 1440 and nothing to exempt.
+      expect(
+        reading.foot,
+        `the activities row is ${reading.foot} px at ${viewport.width} against a bar of ${FOOT_MAX_PX}`,
+      ).toBeLessThanOrEqual(FOOT_MAX_PX);
+    }
+  });
+
+  /**
+   * **Four states, four pictures** (console epic M3-T5). Arms a modal tool, opens a disclosure, and
+   * asserts the three treatments are pairwise distinct **as painted**.
+   *
+   * A unit test cannot ask this and it is worth saying why rather than leaving the duplication to
+   * look like an oversight: jsdom compiles no Tailwind, so `getComputedStyle` there reads an empty
+   * string and an assertion about a state's appearance passes against every value including the one
+   * the defect had. The unit tier can pin which CLASS a control takes; only a browser can say the
+   * classes resolve to different paint.
+   *
+   * **The defect this replaces**: `toolbarControlVariants` had a boolean `active` painting one wash
+   * — `bg-accent`, 1.34:1 against the band — for hover, for open and for armed alike, so an armed
+   * Add tool looked like a hovered button. WCAG 2.2 §1.4.11, and the confusion ADR-0064 was opened
+   * on. Verified red by forcing every state back to one background, which is exactly what the
+   * boolean did.
+   *
+   * It reads `color` and `box-shadow` as well as `background-color`, because armed deliberately
+   * keeps the band's fill: its channels are amber ink and a 2 px amber underline, both 7.91:1 on
+   * the band. An assertion that compared only backgrounds would call armed and rest identical and
+   * be right about the wrong property.
+   */
+  test('an armed tool, an open disclosure and a resting command paint differently', async () => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    await page.waitForTimeout(300);
+
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    const paintOf = (itemId: string) =>
+      page.evaluate((id) => {
+        const el = document.querySelector(
+          `[role="toolbar"][aria-label="Plan commands"] [data-toolbar-item="${id}"]`,
+        );
+        if (!el) throw new Error(`no control with data-toolbar-item="${id}"`);
+        const cs = getComputedStyle(el);
+        return `${cs.backgroundColor} | ${cs.color} | ${cs.boxShadow}`;
+      }, itemId);
+
+    // **Derived, not named.** The first version of this read `recalculate`, which is not in the
+    // deck at all — ADR-0109 D3 moved it to the status bar, beside the condition it answers. A
+    // hard-coded resting id is a gate that goes stale the moment the registry moves, so the
+    // control is chosen as the first one that is neither of the two this case manipulates.
+    const restId = await page.evaluate(() => {
+      const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+      const ids = [...(deck?.querySelectorAll('[data-toolbar-item]') ?? [])]
+        .map((el) => el.getAttribute('data-toolbar-item'))
+        .filter((id): id is string => id !== null && id !== 'add-activity' && id !== 'view');
+      if (ids.length === 0) throw new Error('the deck rendered no other commands to compare with');
+      return ids[0]!;
+    });
+    const rest = await paintOf(restId);
+
+    // Arm Add. Its primary is the split button's left half; clicking it arms the tool.
+    await deck.locator('[data-toolbar-item="add-activity"]').click();
+    await page.waitForTimeout(300);
+    const armed = await paintOf('add-activity');
+
+    // Escape returns to `select` (ADR-0064's arm/disarm contract), so the tool is disarmed before
+    // the disclosure is opened and the two states cannot be read from one another's frame.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    const disarmed = await paintOf('add-activity');
+
+    await deck.getByRole('button', { name: /^View/ }).click();
+    await page.waitForTimeout(300);
+    const open = await paintOf('view');
+    await page.keyboard.press('Escape');
+
+    // The pinned positive: if arming did nothing, `armed` would equal `disarmed` and every
+    // "differs from" assertion below would still hold against a deck where no state paints at all.
+    expect(armed, 'arming the Add tool changed nothing it paints').not.toBe(disarmed);
+
+    expect(armed, `armed ${armed} vs rest ${rest}`).not.toBe(rest);
+    expect(open, `open ${open} vs rest ${rest}`).not.toBe(rest);
+    expect(open, `open ${open} vs armed ${armed}`).not.toBe(armed);
+  });
+
   test('every command clears 24 × 24 and a pointer can reach it, at every width', async () => {
     test.setTimeout(240_000);
     for (const viewport of WIDTHS) {

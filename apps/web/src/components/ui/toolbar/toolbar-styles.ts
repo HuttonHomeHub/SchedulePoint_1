@@ -13,7 +13,10 @@ import { cva } from 'class-variance-authority';
  * - `tone: 'control'` — the interactive default (buttons, popover/overflow triggers): medium weight,
  *   foreground text, hover wash when idle.
  * - `tone: 'info'` — a non-interactive read-out chip (Project-finish): muted, no hover.
- * - `active` — pressed/open (`aria-pressed` / an open disclosure): the accent wash.
+ * - `state` — one of `rest` / `open` / `selected` / `armed` / `primary`. It replaced a boolean
+ *   `active` at
+ *   the console epic's M3, because that boolean painted ONE 1.34:1 wash for three different facts;
+ *   see the variant's own docblock for the ladder and why each state looks as it does.
  * - `disabled` — dimmed + inert cursor (the control stays focusable via `aria-disabled`, so this is
  *   presentation only).
  */
@@ -60,19 +63,28 @@ import { cva } from 'class-variance-authority';
  * `justify-center` goes with it: the floor adds width the icon would otherwise sit left of.
  */
 /**
- * **The card a group of toolbar commands sits in.**
+ * **The card the canvas selection bar sits in** — and, until the console epic's M1, the card each
+ * of the deck's groups sat in too.
  *
- * Declared once because it is used twice: `Deck` draws each of its four groups in one, and the
- * canvas selection bar adopts the same treatment so the command surface reads as one system
- * (foot-row epic M6). It lived as a bare literal inside `Deck.tsx` until 2026-08-27, and copying it
- * to a second consumer is the hand-copied variant `DESIGN_SYSTEM.md` forbids in as many words.
+ * **Superseded in place rather than prepended to.** This block used to be followed by a second
+ * `/**` recording M1's deletion, which left the text below attached to nothing and reading in the
+ * present tense about a deck that has neither cards nor captions. The M7 architecture review found
+ * two such orphans; the convention this file now follows is that a docblock is edited where it is
+ * wrong, and the wrong version is quoted only where the correction teaches something.
  *
- * **A style, not a component.** The two consumers deliberately want DIFFERENT behaviour — the deck
- * folds its groups and captions them, the selection bar does neither — so a shared `<DeckCard>`
- * would recouple two things that should stay apart. ADR-0062 is about not reimplementing
- * behaviour, which is a different hazard from this one.
+ * ## What M1 removed, and what survives
  *
- * ## What the two variants share, and why they share exactly that
+ * The deck's group box — a `border` plus `px-2 py-1.5` at ≈ 1.2:1 against the band it sat in — cost
+ * 14 px per deck line and 18 px per group to draw a boundary a 175 %-scaled screen cannot see
+ * (`m0-measurement.md` §1). It went, and the `chrome` variant with it. A group is now a bare row of
+ * controls, separated from its neighbour by an inset rule built at M7 (`Deck.tsx`) rather than by a
+ * box. The base survives for the **selection bar**, which is not that epic's subject and keeps it.
+ *
+ * **A style, not a component**, and that remains right for the reason it always was: the two
+ * consumers wanted different behaviour, so a shared `<DeckCard>` would recouple things that should
+ * stay apart. ADR-0062 is about not reimplementing behaviour, a different hazard from this one.
+ *
+ * ## What the variants share, and why they share exactly that
  *
  * **The card treatment — background and radius — plus the flex layout every toolbar row needs.**
  * (This said "background and radius only" for one commit, and the base declares
@@ -95,58 +107,31 @@ import { cva } from 'class-variance-authority';
  * This is the epic's own rule applied to its own styling: the treatment that reads as shared is
  * shared, and the geometry that costs canvas is not.
  */
-/**
- * The **caption** treatment: the deck's group labels (VIEW / FIND / AUTHOR / PLAN) and the
- * selection bar's SELECTION label (workspace visual polish, 2026-08-28 — the product owner asked
- * for "a label so it ties in with the other toolbars", which makes the style two surfaces'
- * vocabulary rather than one component's literal). Declared here for the same reason as every
- * export above — and because the ADR-0097 weight ratchet counts `font-*` placed outside the
- * primitives, so a screen that respells this line is both a drift risk and a ratchet hit.
- *
- * The box is `--control-h`, which is what `toolbarControlVariants` uses: captions centre beside
- * real controls, and a shorter box put their labels ~2 px adrift (the M1-T1 measurement). It was
- * the literal `min-h-9` until ADR-0118 M2 gave that token a coarse axis — at which point a literal
- * here would have held the caption at 36 px while its own controls went to 44, putting every
- * caption 4 px adrift **on touch only**, which is the one place nobody was looking. One correct
- * pattern applied to a control and not its neighbour is the shape this register has recorded in
- * six consecutive epics; the fix is that both read the same token, not that both were remembered.
- * Consumers add their own geometry — the deck its `gap-1` chevron seam and fold affordances, the
- * selection bar a `px-1`.
- */
-export const TOOLBAR_CAPTION =
-  'text-primary text-micro flex min-h-(--control-h) shrink-0 items-center font-bold tracking-wider uppercase';
+export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md');
 
-export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md', {
-  variants: {
-    /**
-     * **Does this card own its band, or sit inside one somebody else owns?**
-     *
-     * It shipped as `density` for one commit and both the component and the architecture gate said
-     * the same thing about it: `density` in this codebase means spacing and weight
-     * (`notice-strip.tsx`, `form.tsx`), and this variant also turns a **border** on — which is
-     * chrome, not density. Worse, the name invites a third consumer to reason on a scale that does
-     * not exist here. The real discriminator is context, and the measurement table above is about
-     * context: the padding and the border cost a line **because the foot row is already the
-     * container**, not because the card is denser.
-     *
-     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `--control-h` content (it read
-     * `min-h-9` until ADR-0118 M2 gave that token a coarse axis), right in a band the deck owns
-     * outright.
-     *
-     * `bare` is for a card inside a row that is already the container — the canvas selection bar in
-     * the plan's foot row, where `selection-actions.tsx` records why the docked bar had no box at
-     * all until M6 ("a bar that brings its own box makes the row 6 px taller than the 36 px it
-     * already occupied") and `dock.spec.ts` bounds the row's cost to the canvas. It declares
-     * nothing, because the base declares no padding and no border: `px-0 py-0` was written here
-     * first and is a **no-op**, which made a two-valued variant a boolean wearing a scale's name.
-     */
-    chrome: {
-      boxed: 'border-border/60 border px-2 py-1.5',
-      bare: '',
-    },
-  },
-  defaultVariants: { chrome: 'boxed' },
-});
+/**
+ * **One seam vocabulary across the three bands** (console epic, S7 / M1-T3). A seam WITHIN a
+ * surface is an inset hairline — a 1 px rule that stops short of the control row's top and bottom
+ * — drawn as a `::before` on the element that follows it, in `--border` (a decoration, 1.4.11-
+ * exempt, ADR-0055). It replaced three idioms that each said "these are related" differently: the
+ * deck's `border-l` between sections, the split caret's `border-l`, and the header's full-height
+ * hairline (ADR-0119). Declared once so the three consumers cannot drift (the
+ * `TOOLBAR_CARET_TARGET` precedent). The height is `inset-y-1/4` — 50 % of the box — rather than
+ * the study's 44 %, because the ratchet on arbitrary values (ADR-0099) is worth more than 6 %
+ * of a hairline. **The group-level seam takes `inset-y-1/5` (60 %) and is NOT this constant** —
+ * it is written inline in `Deck.tsx` because it also needs a negative offset to sit in the row's
+ * own `gap-2`, which this rule (positioned inside a padded box) does not. This sentence read "the
+ * group-level seam that joins it at M4" until M7, stating as fact a thing no milestone built: the
+ * seam was specified in M1-T3, promised here, and absent from the tree until the ux and
+ * architecture reviews found it, by which point M6 had deleted the caption border that was
+ * incidentally doing its job.
+ *
+ * A pseudo-element rather than a `border-l` because a border is part of the box: it widens the
+ * element, it moves with padding, and it is the same 1 px whether the row is 36 or 44 tall. The
+ * rule below is positioned against the box and never changes its size.
+ */
+export const TOOLBAR_INSET_RULE =
+  'relative before:absolute before:inset-y-1/4 before:left-0 before:w-px before:bg-border';
 
 /**
  * A split button's caret is a pointer target in its own right and **not** a `[data-toolbar-item]`
@@ -159,7 +144,10 @@ export const TOOLBAR_CARET_TARGET =
   'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
 
 export const toolbarSplitCaretVariants = cva(
-  `border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70 ${TOOLBAR_CARET_TARGET}`,
+  // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than
+  // `opacity-70`: `--muted-foreground` inside the chrome scope is `--chrome-muted-foreground`,
+  // 8:1 on the band (globals.css declares it), where an opacity is a value nobody gated.
+  `${TOOLBAR_INSET_RULE} text-muted-foreground ml-0.5 flex items-center self-stretch pl-1.5 ${TOOLBAR_CARET_TARGET}`,
 );
 
 /**
@@ -195,13 +183,128 @@ export const toolbarControlVariants = cva(
         control: 'text-foreground font-medium',
         info: 'text-muted-foreground',
       },
-      active: { true: 'bg-accent text-accent-foreground', false: '' },
+      /**
+       * **The state ladder** (console epic M3, `docs/specs/workspace-console/`). It replaces a
+       * boolean `active`, and replacing rather than extending it is the instrument: the compiler
+       * finds all ten call sites, which a grep would not.
+       *
+       * The boolean painted one wash — `bg-accent`, **1.34:1** against the band — for three
+       * different facts, so an armed Add tool looked like a hovered button and an open `View ▾`
+       * looked like both. That is the WCAG 2.2 §1.4.11 exposure the epic was opened on, and the
+       * defect ADR-0064 exists because of.
+       *
+       * | state | what it means | fill | second channel |
+       * | --- | --- | --- | --- |
+       * | `rest` | nothing is true of it | none (hover wash on pointer) | — |
+       * | `open` | its panel or menu is showing | `--secondary`, 3.15:1 | `aria-expanded`, and the panel itself |
+       * | `selected` | it is the chosen one of alternatives, or its lens is on | `--secondary`, 3.15:1 | a 2 px `--background` underline, 3.15:1 on that fill |
+       * | `armed` | it is a MODAL TOOL and the next canvas gesture belongs to it | none — amber ink, 7.91:1 | a 2 px `--primary` underline |
+       * | `primary` | it is the PEN, and nothing else ever | `--primary`, 7.91:1 | it leads its row; its label is a verb |
+       *
+       * **`primary` exists so the pen and an armed tool can never look alike, and it is reserved to
+       * one control by rule rather than by nobody happening to use it.** The pen is the precondition
+       * for the eleven authoring commands beside it, so it is the loudest thing on the row and the
+       * only amber slab; an armed tool is amber INK and an amber underline on the band's own navy.
+       * Read the two rows above together — they differ in fill, in ink and in whether a rule is
+       * drawn, which is three channels rather than a hue.
+       *
+       * It carries **no underline**: its label is already a verb that changes (`Start editing` →
+       * `Stop editing`) and its `aria-pressed` says the same thing again, so a third mark would be
+       * a mark for a fact two channels already carry — while the underline is exactly what `armed`
+       * and `selected` use, which is the collision this state exists to avoid.
+       *
+       * **It shipped missing, and the milestone that needed it wired the pen to `armed` instead.**
+       * The approved plan's M3-T2 names five states in as many words; M3 built four and nothing
+       * recorded the difference, so M5 reached for the nearest one and reproduced the two-identical-
+       * pictures defect the paragraph below records having already been fixed once — with both
+       * controls unfilled and identical rather than both filled and identical. Found by the
+       * component review, not by a gate: `state-ladder.structural.test.ts` pins which items are
+       * `armed` and could not see a pen that declared no `activeKind` at all.
+       *
+       * **Armed keeps the band's fill and takes an amber outline**, which is the product owner's
+       * choice from two rendered studies rather than a default. An amber-FILLED armed tool sat
+       * beside the pen (`Stop editing`, itself amber-filled) at the head of the same row: two
+       * identical amber slabs, so "the pen is held" and "a tool is armed" became one picture — the
+       * exact confusion this ladder exists to remove.
+       *
+       * **`selected` COMPOSES with `open` rather than being outranked by it, and that is a
+       * correction.** The first version of this ladder made `open` win, justified by the caret
+       * rotating to distinguish them — **and no caret in this product rotates**; the component
+       * review found the claim fabricated and it was load-bearing for the rule. Since `selected`'s
+       * class is `open`'s plus an underline, the honest rule is the simple one: **a control's own
+       * state outranks the transient fact that its panel is showing**, in both primitives. A
+       * filtered `Filter ▾` therefore keeps its underline while open, which is what a planner needs
+       * — the alternative silently withdrew the one mark saying a filter was applied at exactly the
+       * moment they opened the menu to check.
+       *
+       * **`selected` and `armed` are declared on the item (`activeKind`), never inferred from
+       * ARIA.** `ToolbarPopover` reports `aria-pressed` for an open disclosure, so a ladder driven
+       * from that attribute would paint an open menu as an armed tool. `toolbar-registry.ts` says
+       * which four items are modal, and a structural test pins the set.
+       *
+       * **Armed carries NO ring, and that is CQ-2 resolved by measurement rather than by the
+       * plan's default.** It was drafted as a 2 px inset amber ring — and `--chrome-ring` and
+       * `--chrome-primary` are the identical string, while this CVA already draws focus as
+       * `ring-2 ring-inset`, so an armed control that is also keyboard-focused (the ordinary case:
+       * you arm it with Enter and focus stays there) would show ONE amber inset ring for two
+       * different facts. The plan's remedy was to move focus outside the box (`ring-offset-2`).
+       * Measured in a browser after M1: the deck's smallest gap between two controls on a row is
+       * **4 px**, which a 2 px offset plus a 2 px ring consumes exactly — the offset ring touches
+       * its neighbour. So the ring is dropped instead, which is the plan's own stated fallback, and
+       * the shared focus treatment is left untouched.
+       *
+       * Nothing is lost: armed keeps the band's fill, so **both** of its remaining channels are on
+       * the band at 7.91:1 — amber ink (asserted as a TEXT pair, 4.5:1) and a 2 px amber underline.
+       * 1.4.1 is satisfied by the underline, which is a shape and not a hue.
+       *
+       * **`font-semibold` was drafted here too and removed for a layout reason**: weight changes a
+       * control's WIDTH, so arming a tool would widen it, and this deck wraps — a row could break a
+       * line the moment a planner armed Add and re-join it when they disarmed, moving every command
+       * beside it under their cursor mid-interaction. Neither surviving channel touches layout.
+       *
+       * `selected`'s underline is `inset` for a different measured reason: an outset mark was
+       * rejected because the clearance below the deck's last control row is 6 px, so a 2 px amber
+       * underline there would sit 4 px above the band's own 3 px amber rule.
+       */
+      state: {
+        rest: '',
+        open: 'bg-secondary text-secondary-foreground',
+        selected:
+          'bg-secondary text-secondary-foreground shadow-[inset_0_-2px_0_0_var(--background)]',
+        armed: 'text-primary shadow-[inset_0_-2px_0_0_var(--primary)]',
+        // **Its own focus ring, and that is CQ-2 arriving one state late.** The shared treatment on
+        // the base is `focus-visible:ring-ring ring-inset`, and inside the chrome scope `--ring`
+        // and `--primary` are the **identical string** — so an inset ring on this state's own amber
+        // fill is a 1:1 indicator, invisible, on the one control this epic put at the head of the
+        // row. WCAG 2.2 §2.4.7, and §1.4.11 for the indicator itself.
+        //
+        // CQ-2 recorded that collision and answered it for `armed` by dropping the ring, which
+        // works there because `armed` keeps the band's fill and so never had a ring-on-fill pair at
+        // all. M5 added a state that does, and the check was not re-run: one correct pattern
+        // applied to a control and not its neighbour, the shape this register has recorded in seven
+        // consecutive epics, inside the ladder built to end it. Found by the M7 ux review.
+        //
+        // `--primary-foreground` is the ink this state already puts on this fill, so the indicator
+        // is 7.91:1 by the same arithmetic as its label and needs no new token.
+        // `ring-offset-2` is NOT the answer, for the reason CQ-2 gives above: the deck's smallest
+        // gap between two controls is 4 px, which a 2 px offset plus a 2 px ring consumes exactly.
+        primary: 'bg-primary text-primary-foreground focus-visible:ring-primary-foreground',
+      },
       disabled: { true: 'cursor-default opacity-50', false: '' },
     },
     compoundVariants: [
-      // Idle interactive control gets the hover wash; an active or disabled one does not.
-      { tone: 'control', active: false, disabled: false, class: 'hover:bg-accent/60' },
+      // Idle interactive control gets the hover wash; a control in any other state, or a disabled
+      // one, does not — a hover wash over a state fill would say two things at once, and hover is
+      // the one state a reader never has to FIND (their pointer is already on it).
+      //
+      // **`--muted` rather than the previous `bg-accent/60`, and the change is deliberate.** The
+      // two are 0.018 apart in lightness (1.25:1 and 1.34:1 against the band), so the swap is not
+      // visible — what it buys is that `--accent` stops being spent on hover at all, and hover
+      // becomes a token this file's new state-ladder block reports by name. An alpha over a state
+      // fill would also composite differently per state, which is how one wash came to mean three
+      // things in the first place.
+      { tone: 'control', state: 'rest', disabled: false, class: 'hover:bg-muted' },
     ],
-    defaultVariants: { tone: 'control', active: false, disabled: false },
+    defaultVariants: { tone: 'control', state: 'rest', disabled: false },
   },
 );

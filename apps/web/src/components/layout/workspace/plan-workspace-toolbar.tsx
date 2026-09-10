@@ -9,6 +9,7 @@ import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
+import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { docksToClose, type RightDock } from './right-docks';
@@ -80,7 +81,7 @@ import {
   type SelectionContextInput,
 } from '@/features/plan-actions/build-selection-context';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
-import { CompactPenStatus } from '@/features/plan-lock';
+import { HANDOFF_ACTIONS, PenStatusCluster, usePenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, plansQueryOptions } from '@/features/plans';
 import {
   LIVE_REVISION,
@@ -509,8 +510,13 @@ export function ToolbarPlanWorkspace({
   const ganttViewState = useGanttViewState();
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
 
+  // **One call, two surfaces** (console epic M5). Its result goes to the deck's pen item through
+  // the toolbar context and to the foot row's cluster through the status portal.
+  const penLock = usePenLockView(model.pen, model.currentUserId ?? undefined);
+
   const ctx = useTsldToolbarContext({
     model,
+    penLock,
     plan,
     canvasUi,
     openDialog: setDialog,
@@ -1590,7 +1596,10 @@ export function ToolbarPlanWorkspace({
             row's density reflects the surface rather than whatever width is left after its
             siblings. Without it, the project-finish chip beside Row 1 silently costs the four
             viewport commands their labels — measured on a 1646 px screen, shipped in web-v0.86.0. */}
-          <ToolbarBandProvider className="border-border flex flex-col border-b">
+          {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
+              directly on the band's 3 px amber rule with nothing between them — a double seam that
+              said the same thing twice, 1 px apart. */}
+          <ToolbarBandProvider className="flex flex-col">
             {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
@@ -1811,10 +1820,23 @@ export function ToolbarPlanWorkspace({
                     segmentLabels={PLAN_MODE_SEGMENT_LABELS}
                   />
                 </div>
-                <CompactPenStatus
-                  pen={model.pen}
-                  {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-                />
+                {/* **The pen's VERB left this row for the command deck** (console epic M5): it is
+                    the control that unlocks the eleven authoring commands, and it sat three
+                    sections away from them. Its badge, its `role="status"` sentence and its seven
+                    hand-off actions render in the plan's foot row instead — the product owner's
+                    answer to CQ-4, measured at M0-T4 as costing that row nothing at 1646.
+
+                    The cluster is portalled from here rather than rendered by the foot, because
+                    `usePenLockView` is called ONCE (below) and its result feeds both this and the
+                    deck's control. The hook holds local state, so a second call would let the two
+                    halves disagree about the same lock. */}
+                <PenStatusHost>
+                  <PenStatusCluster
+                    penLock={penLock}
+                    only={HANDOFF_ACTIONS}
+                    portalSentence={false}
+                  />
+                </PenStatusHost>
               </div>
             </ChromePortal>
 
@@ -1863,7 +1885,11 @@ export function ToolbarPlanWorkspace({
               fills the band by wrapping into it rather than by being told to grow, and a flex child
               that grows is exactly how a row ends up measuring its own leftover width, which is the
               defect class this replaces. */}
-            <div className="px-2 py-1.5">
+            {/* `py-1` since the console epic's M6-T2 — the captions left this deck, so the
+                wrapper's own inset is the last of the band's height that is not a control.
+                `activity-bottom-panel.tsx` follows it by the rule written in that file: its inset
+                COPIES this one rather than judging its own, so the two cannot part company. */}
+            <div className="px-2 py-1">
               <Deck
                 items={rows.strip}
                 context={ctx}

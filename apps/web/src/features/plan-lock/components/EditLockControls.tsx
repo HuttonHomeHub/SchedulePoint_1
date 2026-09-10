@@ -9,6 +9,17 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export interface EditLockControlsProps {
   actions: readonly LockAction[];
+  /**
+   * Render only these actions, dropping the rest (console epic M5-T1). The pen's `start`/`stop`
+   * moved to the command deck — it is the control that unlocks the eleven commands beside it — while
+   * the badge, the live-region sentence and the seven hand-off actions stay in the plan's foot row.
+   * Two surfaces, ONE `usePenLockView` call: the hook holds real local state (`dismissedRequestId`,
+   * a countdown tick, a just-acted ref), so a second call would let the two halves disagree about
+   * the same lock — the ADR-0062 drift, invisible because each looks right alone.
+   *
+   * Absent ⇒ every action in {@link actions}, which is what every pre-M5 caller means.
+   */
+  only?: readonly LockAction[];
   /** The current holder (for the admin take-over confirm copy). */
   holder: PlanEditLockActor | null;
   /** Any lock mutation is in flight — disables the action buttons. */
@@ -31,7 +42,8 @@ export interface EditLockControlsProps {
  * focus-trapped `ConfirmDialog` (`role="alertdialog"`) — a non-destructive confirm.
  */
 export function EditLockControls({
-  actions,
+  actions: allActions,
+  only,
   holder,
   isPending,
   onStart,
@@ -44,6 +56,7 @@ export function EditLockControls({
   onDismiss,
 }: EditLockControlsProps): React.ReactElement | null {
   const [confirmOverride, setConfirmOverride] = useState(false);
+  const actions = only ? allActions.filter((a) => only.includes(a)) : allActions;
   if (actions.length === 0) return null;
 
   return (

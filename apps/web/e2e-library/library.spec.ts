@@ -130,7 +130,14 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   await page.getByLabel('Show archived').selectOption('include');
   await expect(page).toHaveURL(/[?&]archived=include/);
   const archivedRow = page.getByRole('row', { name: /Crew A/ });
-  await expect(archivedRow.getByText('Archived')).toBeVisible();
+  // **`exact`, because the row's own action buttons spell the badge by accident.** Playwright's
+  // string form of `getByText` is a case-insensitive SUBSTRING, and the actions cell renders three
+  // labelled buttons whose concatenated text is `EditUnarchiveDelete` — which contains `archiveD`.
+  // So the moment the row is archived and its Archive button becomes `Unarchive`, an inexact match
+  // resolves to the badge AND the actions cell, and the line fails on strict mode rather than on
+  // anything the product got wrong. Pre-existing and independent of the console epic (the badge and
+  // the buttons have both read this way since ADR-0053 M4); found by the epic's full sweep.
+  await expect(archivedRow.getByText('Archived', { exact: true })).toBeVisible();
   await expect(page.getByText(/keeps working and still schedules exactly as before/)).toBeVisible();
 
   // The existing assignment SURVIVES — archive retires a resource from new selections only.

@@ -45,7 +45,18 @@ export function OrgSwitcher({
           // because the sweep queried `button,a,[role=button],input` and a `<select>` is none of
           // those. Found by the architecture review reading the query rather than the result: the
           // gate reported the header clean, and it was clean of everything it could see.
-          'border-input bg-background h-(--control-h) min-w-0 rounded-md border px-2 text-sm',
+          // **`bg-field`, not `bg-background`** (console epic M2-T2). It read the SURFACE family,
+          // so it painted whatever ground it sat on — navy in the chrome band, where every other
+          // control that takes typed or chosen input reads the FIELD family. S4's rebind alone
+          // could not have reached it, which is the finding that made this its own task: the brief
+          // proposed the rebind as the whole fix.
+          //
+          // `color-scheme: dark` is not set and is not an oversight: M0-T5 read this control's
+          // computed style in Chromium through CDP and `.bg-background` already won the cascade
+          // over all four user-agent `select` rules, so the paint follows the class. What a
+          // different platform's user agent does to a closed `<select>` is unmeasured here, and a
+          // guess dressed as a fix would be worse than the honest gap.
+          'border-input bg-field text-field-foreground h-(--control-h) min-w-0 rounded-md border px-2 text-sm',
           'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
           className,
         )}

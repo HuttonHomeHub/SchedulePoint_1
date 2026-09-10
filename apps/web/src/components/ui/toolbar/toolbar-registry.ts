@@ -171,7 +171,12 @@ export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutM
 /**
  * Which of the two toolbar rows an item belongs to (ADR-0031 two-row amendment). `look` = the
  * always-live view/navigate/find row; `do` = the build-&-manage row (its pen-gated authoring cluster
- * shades as a set). Absent ⇒ `look`. The workspace renders one {@link Toolbar} per row, so this only
+ * shades as a set). **Absent ⇒ `strip`** — this read "Absent ⇒ `look`" until M7, stale since
+ * Graphite M5 merged the two command rows and renamed the values, and newly confusing since the
+ * console epic's M4 revived `look`/`do` as live identifiers on a **different axis**: the deck's two
+ * LINES (`DECK_ROWS`, `data-deck-row`), which are not this field. A stale sentence naming a dead
+ * value became a cross-reference to the wrong live thing (M7 architecture review, `#288`).
+ * The workspace renders one {@link Toolbar} per row, so this only
  * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
  */
 /**
@@ -212,6 +217,12 @@ export interface ToolbarItemRenderApi extends ToolbarLayoutEnv {
   disabledReason: string | undefined;
   /** Resolved active/pressed state (`isActive`). */
   active: boolean;
+  /**
+   * The resolved {@link ToolbarItem.activeKind}. A `render` item paints its own control, so it has
+   * to be handed the same fact a plain command gets, or the ladder holds on eight of the deck's
+   * controls and not the other fifteen — which is this repository's most-recorded defect shape.
+   */
+  activeKind: 'armed' | 'selected' | 'primary';
   /**
    * Spread these onto the item's single focusable control so it joins the toolbar's roving-tabindex
    * model (APG). Carries the managed `tabIndex`, the marker attributes the toolbar queries, and the
@@ -343,6 +354,43 @@ export interface ToolbarItem<Ctx> {
   /** Toggle/segment pressed state → `aria-pressed`. Absent ⇒ not a toggle. */
   isActive?: (ctx: Ctx) => boolean;
   /**
+   * **Which KIND of active this is** — and it is declared here rather than inferred, which is the
+   * whole point of the field (console epic M3-T2).
+   *
+   * `'selected'` (the default) is *the chosen one among alternatives, or a lens that is on*: a mode
+   * segment, `Filter ▾` with a filter applied, `Notes` with the panel open. `'armed'` is narrower
+   * and means *this is a MODAL TOOL and the next canvas gesture belongs to it* — Add, Link, Select,
+   * Isolate. They are different facts with different consequences, and until M3 they rendered as
+   * the same 1.34:1 wash, which is the defect ADR-0064 was opened on.
+   *
+   * `'primary'` is the third and the loudest: *this surface's one highest-emphasis control* — a
+   * filled slab rather than ink or a notch. In the plan workspace that is the ADR-0028 pen, the
+   * precondition for the eleven authoring commands beside it, and `state-ladder.structural.test.ts`
+   * says so by name. **The DESIGN-SYSTEM rule is the cardinality, not the identity**: at most one
+   * per rendered surface, enforced below by {@link defineToolbar}. Which control earns it is a
+   * product decision that belongs to the product's own registry, and this field carries no opinion
+   * about the pen.
+   *
+   * That split is the M7 architecture review's, and its argument is what makes it a rule rather
+   * than a preference: a name list in one feature's test cannot see a control registered in a
+   * third registry, so it would let a second amber slab appear with nothing red — while an author
+   * who DID register in one of the two arrives at a list that prose forbids them to append to and
+   * has no good move. A cardinality the primitive enforces covers both.
+   *
+   * **Inferring the kind from ARIA would be wrong**, and the durable reason is not the one this
+   * docblock used to give. It cited `ToolbarPopover` reporting `aria-pressed` for a merely-open
+   * panel — which M3-T4 then removed, so the example is now history rather than evidence (the M7
+   * architecture review found the stale present tense). The reason that survives is stronger:
+   * **ARIA has no vocabulary for this distinction at all.** `aria-pressed="true"` is correct markup
+   * for "this lens is on" and for "this modal tool holds the next canvas gesture" alike, so the DOM
+   * structurally cannot carry the discriminator whoever sets it. The set of modal tools is a fact
+   * about the product, so the product states it.
+   *
+   * Absent ⇒ `'selected'`, because a toggle is the common case and the other two are exceptions
+   * that have to say so.
+   */
+  activeKind?: 'armed' | 'selected' | 'primary';
+  /**
    * Whether the command's work is currently in flight → `aria-busy` on the control. Absent ⇒ never
    * busy. Deliberately separate from {@link isEnabled}: a busy command is usually also disabled, but
    * "off because you can't do this" and "off because it is happening right now" are different facts,
@@ -408,6 +456,8 @@ export interface ResolvedToolbarItem<Ctx> {
   item: ToolbarItem<Ctx>;
   enabled: boolean;
   active: boolean;
+  /** The resolved {@link ToolbarItem.activeKind} — `'selected'` where the item declares none. */
+  activeKind: 'armed' | 'selected' | 'primary';
   disabledReason: string | undefined;
   /** The resolved {@link ToolbarItem.srDescription}, or `undefined`. */
   srDescription: string | undefined;
@@ -435,6 +485,10 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       seen.add(item.id);
       if (!item.label)
         throw new Error(`ToolbarItem "${item.id}": label is required (accessible name)`);
+      if (item.activeKind === 'primary' && item.isActive === undefined)
+        throw new Error(
+          `ToolbarItem "${item.id}": activeKind "primary" needs isActive, or it declares a picture it can never take`,
+        );
       const hasActivate = typeof item.onActivate === 'function';
       const hasRender = typeof item.render === 'function';
       if (hasActivate === hasRender) {
@@ -446,6 +500,31 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       }
     }
   }
+  // **At most ONE `primary` per registry, because "the loudest control" is a superlative** (console
+  // epic M7, the architecture review). Two of them is not a louder surface, it is a surface with no
+  // loudest control and a reader with nowhere to look first.
+  //
+  // This is the DESIGN-SYSTEM half of the rule and it is deliberately the only half that lives
+  // here: the primitive enforces the cardinality, and which control earns it stays a product fact
+  // in the product's own registry (`state-ladder.structural.test.ts` names the pen).
+  //
+  // It exists because the first version of that reservation was a name list in one feature's test,
+  // which is unenforceable in the direction that matters: a control registered in a THIRD registry
+  // is invisible to it, so a second amber slab could appear with nothing red — while an author who
+  // did register in one of the two arrived at a list prose forbade them to append to, with no good
+  // move left. A cardinality covers both, in development, at the point of declaration.
+  //
+  // A registry is one rendered surface here (`defineToolbar` is called once per surface), which is
+  // what makes "per registry" and "per rendered surface" the same statement today. If that ever
+  // stops being true the check moves to the renderer; the rule does not change.
+  const primaries = items.filter((item) => item.activeKind === 'primary').map((item) => item.id);
+  if (primaries.length > 1) {
+    throw new Error(
+      `defineToolbar: ${primaries.length} items declare activeKind "primary" (${primaries.join(', ')}) — ` +
+        'a surface has at most one highest-emphasis control.',
+    );
+  }
+
   // **A segment's members must share a `tier`** (ADR-0090 M5, component gate).
   //
   // Written for demotion: a `tier: 3` member sat in the static overflow while its partner stayed on
@@ -587,6 +666,7 @@ export function resolveItems<Ctx>(
         item,
         enabled,
         active: item.isActive?.(ctx) ?? false,
+        activeKind: item.activeKind ?? 'selected',
         disabledReason: enabled ? undefined : item.disabledReason?.(ctx),
         srDescription: item.srDescription?.(ctx),
         // A function icon is called exactly once here, not per consumer: the bar and the `⋯`
