@@ -956,7 +956,8 @@ expected to take.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
-**Status:** open · **Verified:** 2026-09-09 · **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
+**Status:** open · **Verified:** 2026-09-10 · **Severity RAISED — it writes** (see the 2026-09-10
+note; the "display only" framing below is false) · **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
 inherited it rather than introducing it.
 
 `effectiveHoursPerDay()` (`apps/web/src/lib/effective-hours-per-day.ts`) resolves the factor as the
@@ -1035,6 +1036,52 @@ engine is not involved and the recalc parity gate is untouched.
 > resource, then the activity's own calendar, then the plan's. The client's helper still takes
 > `{ activityCalendarId, planCalendarId }` and nothing else, so it structurally cannot express the
 > first rung.
+
+> **Specced 2026-09-10 (`docs/specs/resource-dependent-day-factor/`), and three of this row's own
+> claims are wrong — one of them the sentence that has kept it a low priority.**
+>
+> **1. It is NOT display-only. It writes.** This row says _"Both are display and neither writes a
+> wrong value — the API stores minutes, and the engine reschedules on the correct calendar
+> regardless."_ `durationWriteFields` (`duration-field.ts:118-131`) returns
+> `{ durationMinutes: parsed.minutes }`, parsed against this helper's factor, and **both**
+> `ActivityCreateDialog` and `ActivityEditorDialog` import it. Worked through: an activity on an 8 h
+> calendar with a 24 h driving resource, planner types `5d` → 2,400 stored minutes → the engine
+> spends them at 1440/day = **1.67 days of work**. The read comes back
+> `minutesToDays(2400, 480)` = 5, so the field says `5d` and the table says `5 d`. **A
+> schedule-affecting write with a fully self-consistent read-back** — which is precisely why nobody
+> has reported it, and why the row's own reasoning ("the API stores minutes") reads as reassurance
+> when it is the mechanism.
+>
+> **2. The defect is server-vs-server, not client-vs-server.** The client is a faithful mirror of
+> `apps/api/src/modules/activities/day-factor.ts:19-24`, which is `activityCalendarId ??
+planCalendarId` — the same rule. Two server rules both claim to name "the activity's effective
+> calendar", and only `schedule.service.ts:1277-1287` is driver-aware. The consequence nobody had
+> written down: `durationDays` and `totalFloat` sit on one DTO and are converted on **different
+> factors** — `schedule.service.ts:428` passes the driver-aware `graph.calIdByActivity`, while
+> `activity-response.dto.ts:406` uses the stored activity-own `dayFactorMinutes`. And
+> `schedule.repository.ts:756-759` states the property that violates, in its own comment: _"Same
+> factor as its duration, so '3 days of work with 1 day of float' is one consistent statement."_
+>
+> **3. The fix this row prescribes would BREAK three correct sites.** It says to teach the helper a
+> `RESOURCE_DEPENDENT` branch _"so every caller is corrected at once"_. Three of the twelve are the
+> assignment join lag, which is **correct today by decision**: ADR-0071 §1 is headed
+> "activity-calendar-framed", ADR-0035 §34 says "the activity's own calendar", and
+> `schedule.service.ts:1143-1146` refuses the substitution explicitly for the histogram. So one
+> branch corrects five sites and breaks three. **The discriminator is which QUANTITY is being
+> measured, not which activity** — which is why there can be no single-branch fix, and why this row
+> has been scoped twice without closing.
+>
+> **What the spec recommends** is two named rules and a required discriminated `DayFrame`
+> (`{kind:'own'} | {kind:'scheduling', drivingCalendarId?}`), so all twelve calls fail to typecheck
+> and both wrong wirings are compile errors — the ADR-0117/ADR-0132 no-default shape. Sequencing is
+> load-bearing: **server first**, because fixing the client first would make a planner type `1d` and
+> the table say `3 d`. The client picker is `readOnly` for `RESOURCE_DEPENDENT`
+> (`ActivityCalendarField.tsx:85,141`), so the "only the client knows the pending selection"
+> argument — the reason this helper exists at all — does not apply to the one type it is about.
+>
+> **Deliberately not built here.** It is six milestones, it changes `durationDays` on existing rows
+> (ADR-0068 §6's named hazard, verbatim), and it wants six specialist reviews. What this note buys is
+> that the next reader does not inherit "display only".
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 
