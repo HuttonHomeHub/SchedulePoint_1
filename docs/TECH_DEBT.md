@@ -812,6 +812,24 @@ Direct3D11)`, 22 threads), Edge 152, 60 Hz idle interval 16.70 ms, DPR 1, attent
    500, and at Fit at 2,000 it is unanswerable until #261 names the size.** That is a stronger
    statement than 5(c)'s and it supersedes it.
 
+   **(e) A second candidate for the 10.81 ms is uncontrolled, and the instrument cannot rule it
+   out.** The probe records viewport, DPR, GPU string, thread count, memory, display interval,
+   attention and motion preference (`apps/web/src/features/perf-probe/model/device.ts:61-71`) and
+   **not power state** — there is no `getBattery()` call anywhere in `features/perf-probe/`. On a
+   laptop with an **integrated** adapter, mains against battery is a first-order term on exactly this
+   quantity, comfortably capable of a 30 % frame-time difference on its own. The 2026-08-03 set
+   records "**mains**" because a person wrote it down; neither the 2026-09-08 nor the 2026-09-10
+   report carries it, and the panel's own note field placeholder — "the Dell, docked, on mains"
+   (`ui/performance-probe-panel.tsx:644`) — shows the instrument knows the variable matters and
+   leaves capturing it to whoever remembers. Filed as **#283**.
+
+   So there are two live candidates for the residual, (b) and this, and **the reading set in hand
+   cannot separate them**. The discriminating experiment is cheap and is not a model fit: re-run
+   Fit/2,000 at **1912×1068** — the 2026-09-08 geometry exactly — in the current session. If it
+   reproduces ~23 fps the difference is geometry and (b) stands; if it reproduces ~35 fps the
+   geometry is innocent and something about the machine's state changed between the sittings. Either
+   way it is one press, and it should be taken before anything is concluded from the residual.
+
    **(d) What did NOT move is the finding.** Week is identical across all three sittings — 60.0 fps,
    0.00 pp dropped, 16.80 ms p95, at both 500 and 2,000 — which is the surface a planner works on.
    Item 5(b)'s conclusion also survives intact and is strengthened by a third point: Week/500 draws
@@ -5897,3 +5915,36 @@ difference here had room to be expressed and was.
 Related: #75 (the readings), #261 (the unstated canvas size, which makes every figure above
 incomparable to the others), #260 (closed — the saturation detection that may supersede P3's
 mechanism).
+
+### 283. The performance probe does not record power state, and on an integrated GPU that decides readings
+
+**Status:** open · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** S · **Owner:** repo
+
+`apps/web/src/features/perf-probe/model/device.ts:61-71` captures viewport, DPR, GPU renderer, thread
+count, device memory, display interval, attention and motion preference. It does not capture whether
+the machine is on mains, and there is no `getBattery()` call anywhere under `features/perf-probe/`.
+
+Every reading this repository holds was taken on a **laptop with an integrated adapter** — the row
+that matters says so in terms: _"the **integrated** adapter, which is what the browser chose on a
+machine that also has a discrete one. That is what a planner gets"_ (#75). On that hardware a power
+profile change throttles the GPU directly, and a 30 % frame-time difference from mains-to-battery
+alone is unremarkable. It is not a rounding term; it is the same size as the largest unexplained
+quantity in #75.
+
+**The instrument already knows this matters and delegates it to memory.** The panel's free-text note
+carries the placeholder _"the Dell, docked, on mains"_ (`ui/performance-probe-panel.tsx:644`), so
+the field exists to hold the fact and nothing requires or captures it. The 2026-08-03 set records
+"mains" because a person typed it. The 2026-09-08 and 2026-09-10 sets do not record it at all — and
+#75 item 6 turns on a 10.81 ms residual between two of those sittings that this variable could
+account for on its own. **A reading whose largest confound is unrecorded cannot be compared to
+another**, which is #261's complaint about canvas size arriving a second time by a different door.
+
+**What would close it**: call `navigator.getBattery()` in `readDevice()` and store `charging` plus
+`level`, alongside the existing facts, rendered on the paste-ready block and the history row like the
+canvas size that #261 forced onto them. It is a Chromium-only API and absent in Firefox and Safari,
+so the honest shape is the one this panel already uses for a fact it cannot obtain — record it as
+**unknown** and say so, never as a default a reader would assume. That distinction is the whole
+lesson of ADR-0130's presentation model.
+
+Related: #75 (the reading whose residual this could explain), #261 (the other unrecorded parameter
+that makes readings incomparable).
