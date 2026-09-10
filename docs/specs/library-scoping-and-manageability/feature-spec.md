@@ -1,6 +1,6 @@
 # Feature Spec: Calendar scoping tiers & resource-library manageability
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0053)
 - **Author(s):** feature-analyst (with James Ewbank)
 - **Date:** 2026-07-25
 - **Tracking issue / epic:** _(to be created)_ — "Library scoping & manageability"

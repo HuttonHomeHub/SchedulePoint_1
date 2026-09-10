@@ -1,6 +1,6 @@
 # Feature Spec: Resource Levelling (M7 resource rung)
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Accepted — shipped (ADR-0041)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats), with James Ewbank
 - **Date:** 2026-07-17
 - **Tracking issue / epic:** Engine conformance & validation framework (ADR-0034) — capability epic **M7 (the Resource dimension)**, rung: **Resource levelling** (`levelling_test`, scenario **S10**). Follows M7.1/M7.2 (the resource model + resource-dependent scheduling, ADR-0039) and rung 4 (duration/units types, ADR-0040).

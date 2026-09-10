@@ -1,6 +1,6 @@
 # Feature Spec: A search param is a string, and the URL says so
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0123)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-01
 - **Tracking issue / epic:** — (`docs/TECH_DEBT.md` [#96](../../TECH_DEBT.md))

@@ -26,7 +26,6 @@ import {
   type ToolbarItemRenderApi,
 } from '@/components/ui/toolbar/toolbar-registry';
 import {
-  TOOLBAR_CAPTION,
   TOOLBAR_CARET_TARGET,
   toolbarCardVariants,
   toolbarControlVariants,
@@ -274,7 +273,17 @@ function IsolateControl({
             }
           }}
           className={cn(
-            toolbarControlVariants({ active: ctx.isolateActive, disabled }),
+            // Isolate is the fourth MODAL tool (console epic M3-T2): while it is on, the canvas
+            // shows a subset and the planner's next reading of the diagram is governed by it. Its
+            // caret's menu being open is a different fact and takes the disclosure state below.
+            // `api.activeKind`, not the literal `'armed'`: the registry declares which tools are
+            // modal, and hard-coding it here makes that declaration decorative — the "plumbed to
+            // nowhere" hazard the same diff documents fixing in this control's three siblings, and
+            // which the accessibility review found still live on the fourth.
+            toolbarControlVariants({
+              state: ctx.isolateActive ? api.activeKind : 'rest',
+              disabled,
+            }),
             'rounded-r-none pr-1',
           )}
         >
@@ -304,12 +313,12 @@ function IsolateControl({
           // pointer can see, it can also reach"). Corrected rather than deleted, because the
           // constant is still what holds the floor and the gate is what proves it.
           className={cn(
-            toolbarControlVariants({ active: open, disabled }),
+            toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }),
             'rounded-l-none px-1',
             TOOLBAR_CARET_TARGET,
           )}
         >
-          <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+          <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         </button>
       </span>
       <Menu
@@ -859,6 +868,10 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       ? [
           {
             id: 'isolate-logic',
+            // The fourth MODAL tool (console epic M3-T2): while it is on, the canvas shows a
+            // subset and the diagram a planner reads is governed by it. `IsolateControl` paints
+            // its own armed state, and this declaration is what makes the set readable.
+            activeKind: 'armed' as const,
             group: 'find',
             tier: 1,
             showLabel: 'always',
@@ -973,7 +986,9 @@ export function SelectionActionsBar({
       // consumed exactly the 15 px of margin M3 had left — and dropping the padding still cost a
       // line at 1646, where the content sits at the container width and a 2 px border is enough to
       // wrap it. So what is shared is the background and the radius, which cost nothing; the border
-      // and the padding belong to `boxed`. See `toolbarCardVariants` for the table.
+      // and the padding were the deck's alone — its `boxed` variant, deleted at the console
+      // epic's M1 when the deck lost its card too, so the CVA is now the shared base and nothing
+      // else. See `toolbarCardVariants`.
       //
       // The rewrite is deliberate: a comment asserting an invariant the code no longer honours is
       // the defect class this repository keeps recording, and deleting it would have lost the
@@ -1002,19 +1017,20 @@ export function SelectionActionsBar({
       // nothing and `dock.spec.ts` asserts that as an equality rather than a bound.
       // The principle the sentence carried still holds and is worth keeping: a row that is too tall
       // is a trade; a row that hides a command is not.
-      className={cn(toolbarCardVariants({ chrome: 'bare' }), 'min-w-0 items-center')}
+      className={cn(toolbarCardVariants(), 'min-w-0 items-center')}
     >
-      {/* **The bar's caption, in the deck's caption style** (workspace visual polish, 2026-08-28).
-          The product owner asked for a label "so it ties in with the other toolbars"; the deck's
-          rows carry VIEW / FIND / AUTHOR / PLAN, and this bar had no visible subject at all — its
-          `Actions for …` label is aria-only. SELECTION, not "Modify" (the steer): half the bar's
-          items are reads, and its discriminator has been "the selected object" since ADR-0093. A
-          static span, not the deck's disclosure button — the fold is leaving the deck in this same
-          pass, and a caption that pretends to fold a bar that cannot would be lit-but-inert.
-          The PLURAL bar deliberately gets none: its `NoticeStrip` message already states the
-          subject in a sentence ("N activities selected — …"), and a second label beside it would
-          be the same fact rendered twice (ADR-0093's shape, one row down). */}
-      <span className={cn(TOOLBAR_CAPTION, 'border-primary/25 border-r pr-2 pl-1')}>Selection</span>
+      {/* **The SELECTION caption is gone with the deck's four** (console epic M6-T1, CQ-1).
+          It was added on 2026-08-28 because the product owner asked for a label "so it ties in
+          with the other toolbars" — the deck's rows carried VIEW / FIND / AUTHOR / PLAN and this
+          bar had no visible subject at all. That reason lapses the moment those four go: a label
+          tying this bar to captions that no longer exist ties it to nothing, and it would then be
+          the only uppercase micro-caption left in the workspace.
+
+          Nothing is lost to assistive technology, which was true of the deck's four and is true
+          here for a different reason: the bar's `Actions for <name>` toolbar label names the
+          subject, and names it more precisely than the word SELECTION did. The plural bar already
+          had none, so the two bars now agree rather than differing by an accident of when each
+          was written. */}
       <Toolbar
         items={selectionActionItems}
         context={context}

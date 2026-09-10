@@ -53,6 +53,7 @@ below assumes they are green.
 | `pnpm check:counts`                        | The stage-banner figures going stale — in `CLAUDE.md`, `README.md` **and** `docs/ARCHITECTURE.md`, at **every** occurrence in each. |
 | `pnpm check:claims`                        | A citation into a dependency's internals that has moved.                                                                            |
 | `pnpm check:flags`                         | A feature flag with no enablement date, or a retirement batch past its date.                                                        |
+| `pnpm check:spec-status`                   | A spec headed `Draft` whose directory an ADR cites — a shipped epic still claiming it was never approved.                           |
 
 **Prefer adding a gate to adding a checklist item.** A gate that computes runs
 every push; a checklist item runs when someone remembers. Every row above

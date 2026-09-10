@@ -21,6 +21,7 @@ export function ToolbarPopover({
   itemProps,
   disabled,
   active,
+  activeKind,
   title,
   disabledReason,
   align = 'start',
@@ -32,10 +33,23 @@ export function ToolbarPopover({
   /** From the toolbar item's `render(ctx, api)` — joins the trigger to the roving tab order. */
   itemProps: ToolbarItemRenderApi['itemProps'];
   disabled?: boolean;
-  /** Reflect an **engaged** state on the trigger even while the panel is closed (e.g. an attribute
-   * filter is on) — `aria-pressed`/active becomes `open || active`, so the cue survives closing the
-   * popover (mirrors the Colour-by picker's `api.active || open`). Absent ⇒ pressed only while open. */
+  /**
+   * Reflect an **engaged** state on the trigger even while the panel is closed (e.g. an attribute
+   * filter is on), so the cue survives closing the popover.
+   *
+   * It read *"`aria-pressed`/active becomes `open || active` … Absent ⇒ pressed only while open"*
+   * until the console epic's M3, and both halves are now false: an open disclosure reports
+   * `aria-expanded` and no `aria-pressed` at all, and it paints the `open` state rather than the
+   * engaged one. Corrected rather than deleted, because the old sentence is what the three
+   * consumers were written against.
+   */
   active?: boolean;
+  /**
+   * Which picture an engaged trigger takes — see `ToolbarItem.activeKind`. It outranks `open`:
+   * `selected` paints `open`'s fill plus an underline, so an engaged trigger keeps its mark while
+   * the panel is showing instead of losing it exactly when the planner opened the panel to check.
+   */
+  activeKind?: 'armed' | 'selected' | 'primary';
   /** Native tooltip on the trigger. Absent ⇒ no title. */
   title?: string;
   /**
@@ -91,7 +105,21 @@ export function ToolbarPopover({
         aria-disabled={disabled || undefined}
         aria-haspopup="dialog"
         aria-expanded={open}
-        {...(active !== undefined ? { 'aria-pressed': open || active } : {})}
+        // **`aria-pressed` reports the item's own state, never whether the panel is open**
+        // (console epic M3-T4). It read `open || active`, which said "pressed" to a screen reader
+        // about a disclosure that is merely showing — a fact `aria-expanded` on the same element
+        // already carries, and one that made an open menu indistinguishable from an armed tool for
+        // both an AT user and the state ladder. A trigger that declares no `isActive` now reports
+        // no `aria-pressed` at all while open.
+        //
+        // **Not "what the APG disclosure pattern asks for"**, which is how this read until the
+        // accessibility review: that pattern does not mention `aria-pressed` anywhere, because a
+        // canonical disclosure has no pressed state to report. This control is a hybrid — a toggle
+        // that also owns a panel — so the argument is the plainer one: `aria-expanded` already says
+        // the panel is showing, and `aria-pressed` should answer a different question or say
+        // nothing. Only `Filter ▾` is affected in practice; the other three triggers pass no
+        // `active` at all, so the guard above was already false for them.
+        {...(active !== undefined ? { 'aria-pressed': active } : {})}
         // The name is pinned whenever a reason span is rendered, for the same reason `ToolbarButton`
         // pins it: the span lives inside the button, and a button's name comes from its content, so
         // without this the reason would be appended to the name as well as the description
@@ -111,7 +139,15 @@ export function ToolbarPopover({
           else openPanel();
         }}
         className={cn(
-          toolbarControlVariants({ active: open || active === true, disabled: disabled === true }),
+          toolbarControlVariants({
+            // **The item's own state outranks the transient fact that its panel is showing** — the
+            // same rule `ToolbarSplitButton` uses, so the two primitives need not be reasoned about
+            // separately. `selected`'s class is `open`'s plus an underline, so a filtered
+            // `Filter ▾` keeps its underline while open rather than losing it at the moment the
+            // planner opened the menu to check. Open with nothing else true still paints the fill.
+            state: active === true ? (activeKind ?? 'selected') : open ? 'open' : 'rest',
+            disabled: disabled === true,
+          }),
         )}
       >
         {icon ? (
@@ -120,7 +156,7 @@ export function ToolbarPopover({
           </span>
         ) : null}
         {compact ? null : <span className="truncate">{label}</span>}
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {describedBy ? (
           <span id={reasonId} className="sr-only">
             {disabledReason}

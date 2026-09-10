@@ -1,6 +1,6 @@
 # Feature Spec: The plan-workspace command surface — repair, then consolidate
 
-- **Status:** Draft — **awaiting product-owner approval**
+- **Status:** Accepted — shipped (ADR-0090) — its §42 superseded by ADR-0093
 - **Author(s):** feature-analyst (Claude Code), for James Ewbank
 - **Date:** 2026-08-11
 - **Tracking issue / epic:** _(none yet)_

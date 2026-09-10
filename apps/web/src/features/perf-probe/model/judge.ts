@@ -69,6 +69,21 @@ export interface JudgeResult {
   readonly deltaPp: number;
   /** The baseline's own run-to-run spread — the instrument's noise floor for this run. */
   readonly baselineSpreadPp: number;
+  /**
+   * How much of the metric's range the baseline left unused — `100 - baselineMeanPp`.
+   *
+   * `droppedPct` is a share of frames, so it is bounded at 100 and the largest delta P1 can ever
+   * see is this number. It is on every result, gated or not, because the reading that exposed
+   * `docs/TECH_DEBT.md` #260 is an **ungated** one and would return before any gated branch.
+   */
+  readonly headroomPp: number;
+  /**
+   * True when the remaining headroom is smaller than the bar the delta is judged against.
+   *
+   * When it is, **P1 cannot fail** — a treatment that dropped every remaining frame would still
+   * score inside the bar — so a delta printed beside it does not mean what it looks like.
+   */
+  readonly saturated: boolean;
   readonly treatmentFps: number;
   readonly p1: boolean;
   readonly p2: boolean;
@@ -135,6 +150,19 @@ const share = (n: number, d: number): number => (d === 0 ? 0 : (n / d) * 100);
  * So: **spread ≥ bar means the machine cannot answer, full stop.** Simple, conservative in the
  * direction of refusing, and with no tuning parameter to argue about later.
  *
+ * ## Its sibling: the metric's range, not the machine's noise
+ *
+ * `docs/TECH_DEBT.md` #260 found the same shape one quantity along. `droppedPct` is bounded at 100,
+ * so when the baseline sits near the ceiling the largest delta P1 can ever see is smaller than the
+ * bar and **P1 cannot fail** — a treatment that dropped every remaining frame would score inside
+ * it. The product owner's first real-hardware reading is the case: a baseline of 98.33 pp leaves
+ * 1.67 pp against a 2.00 pp bar, and the report printed `delta -0.19 pp`, which reads as "the
+ * overlay is free" and cannot mean that.
+ *
+ * Both refusals say "no verdict computed here means anything"; they differ in what has run out.
+ * Saturation is checked first because a ceiling compresses the spread beneath it, so a saturated
+ * run can look quiet at the exact moment it has nothing left to say.
+ *
  * Today the CLI prints this as a *note after the verdict*, which reads as a result somebody should
  * act on; a human had to notice it by hand and write the finding into `m0-condition.md` §"Three
  * findings". Making it a first-class verdict is the correction this epic exists to make automatic.
@@ -181,11 +209,21 @@ export function judgeRun(input: JudgeInput): JudgeResult {
   const p1 = deltaPp <= barPp;
   const p2 = treatmentFps >= minFps;
 
+  // Computed for every result, gated or not, and that placement is the whole of #260's own
+  // correction to itself. That row proposed the guard "where the spread guard sits" — and the
+  // reading that exposed it is an **ungated** Fit run, which returns at the `!gated` line below
+  // before any gated branch can be reached. A fact placed inside the verdict branch would have been
+  // absent from the exhibit it was written for.
+  const headroomPp = 100 - baselineMeanPp;
+  const saturated = headroomPp < barPp;
+
   const common = {
     baselineMeanPp,
     treatmentMeanPp,
     deltaPp,
     baselineSpreadPp,
+    headroomPp,
+    saturated,
     treatmentFps,
     p1,
     p2,
@@ -193,6 +231,31 @@ export function judgeRun(input: JudgeInput): JudgeResult {
 
   // Reported, never gated — see `gated`.
   if (!gated) return { ...common, verdict: 'REPORTED_ONLY' };
+
+  // ── The metric's remaining range against the question's precision. ────────────────────────────
+  //
+  // Checked BEFORE the spread guard, and the ordering is an argument rather than an arbitrary
+  // choice: a ceiling **compresses** the spread it sits under. A baseline pinned at 99 pp on every
+  // repeat has a spread of nearly zero, so the spread guard would read that machine as perfectly
+  // able to resolve the question at the exact moment the metric has no room left to express an
+  // answer. Saturation is the more fundamental refusal, so it speaks first.
+  //
+  // It is arithmetic, not policy — unlike the Fit preset's ungating, which is ADR-0058's
+  // day-one-failure judgement. Any machine whose Week baseline ran hot enough reaches the same dead
+  // zone with the gate still armed, which is why this is not confined to the framing that found it.
+  if (saturated) {
+    return {
+      ...common,
+      verdict: 'INDETERMINATE',
+      indeterminateReason:
+        `the baseline already dropped ${baselineMeanPp.toFixed(2)} pp of its frames, leaving ` +
+        `${headroomPp.toFixed(2)} pp of headroom against a ${barPp.toFixed(2)} pp bar — so the ` +
+        `largest difference this run could possibly show is smaller than the bar, and P1 cannot ` +
+        `fail whatever the treatment costs. The delta below is a property of the ceiling, not a ` +
+        `measurement of the feature. The remedy is a framing or a machine where the baseline has ` +
+        `room, not a smaller bar.`,
+    };
+  }
 
   // The instrument's noise floor against the question's precision. Checked BEFORE pass/fail,
   // because an unfit instrument's PASS and its FAIL are equally meaningless.

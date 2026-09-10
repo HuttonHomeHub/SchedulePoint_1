@@ -16,10 +16,14 @@ import {
  * overlap is rare. On a live programme the data date is *near* today by definition, so "rare" is a
  * claim that has to be measured rather than argued.
  *
- * **It observes rather than computes.** The two pills are painted on the scene canvas TODAY, on
- * separate rows (`paint.ts:1376`, `:1399`), which is exactly what makes them readable as a pair:
+ * **It observes rather than computes.** The two pills WERE painted on the scene canvas when this was
+ * written, on separate rows, which is exactly what makes them readable as a pair:
  * this pass scans the real painted pixels for each pill and reports whether the two x intervals
- * intersect. That is the number the arithmetic cannot produce, because the arithmetic omits the
+ * intersect. _(The two `paint.ts` line citations that stood here are gone: ADR-0106 moved both
+ * labels into the ruler as DOM and #148 deleted the canvas pills, and `paint.ts:1374-1400` now holds
+ * the ADR-0127 revision-comparison overlay — an unrelated layer. A harness citing lines that have
+ * since come to mean something else reads as evidence and is not, which is `docs/TECH_DEBT.md` #277.
+ * The readings this file produced are unaffected; only its account of where they came from was.)_ That is the number the arithmetic cannot produce, because the arithmetic omits the
  * edge clamp (`cx = max(0, min(centre − w/2, width − w))`).
  *
  * **Two things make the scan honest, and the first draft had neither.**

@@ -25,6 +25,13 @@ export interface ToolbarSplitButtonProps {
   /** Whether the type menu is open. Widens the control's active wash and sets `aria-expanded`. */
   open: boolean;
   /**
+   * Which picture the primary takes while {@link pressed}. Defaults to `'armed'` here rather than
+   * to `'selected'`, which is the one place in the ladder where the default differs and it is not
+   * an inconsistency: every split button in this product arms a modal tool (Add, Link), so the
+   * common case is the armed one and a future toggle-shaped split button says so explicitly.
+   */
+  activeKind?: 'armed' | 'selected' | 'primary';
+  /**
    * Gates **both halves**. Correct while a split button's two halves are two faces of one command
    * (`Add ▾`, `Link ▾`), which was every consumer until ADR-0091 C4.
    *
@@ -115,6 +122,7 @@ export function ToolbarSplitButton({
   caretRef,
   pressed,
   open,
+  activeKind,
   disabled = false,
   primaryDisabled,
   caretDisabled,
@@ -145,7 +153,17 @@ export function ToolbarSplitButton({
       className={cn(
         // The wrapper's wash reads "this control is unavailable", so it may only dim when BOTH
         // halves are — otherwise a live caret sits inside a shaded control and looks inert.
-        toolbarControlVariants({ active: pressed || open, disabled: primaryOff && caretOff }),
+        // **`pressed` and `open` stop being one state** (console epic M3-T4). They were `||`-ed
+        // into one wash, so a planner could not tell "the Add tool is armed and the next canvas
+        // click draws" from "its type menu happens to be showing" — two facts with very different
+        // consequences, which is the confusion ADR-0064 was opened on. The item's own state
+        // outranks the transient one, which is `ToolbarPopover`'s rule too: an asymmetry between
+        // the two was drafted and withdrawn, because its stated reason — a rotating caret marking
+        // an open disclosure — described a behaviour this product does not have.
+        toolbarControlVariants({
+          state: pressed ? (activeKind ?? 'armed') : open ? 'open' : 'rest',
+          disabled: primaryOff && caretOff,
+        }),
         'gap-0 p-0',
       )}
     >

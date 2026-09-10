@@ -47,6 +47,43 @@ describe('defineToolbar invariants', () => {
     );
   });
 
+  /**
+   * **The cardinality half of `primary`** (console epic M7). `primary` is the loudest treatment a
+   * control can take, and "loudest" is a superlative: two of them is not a louder surface, it is a
+   * surface with no loudest control.
+   *
+   * The primitive enforces the COUNT and says nothing about which control earns it — that stays a
+   * product fact in the product's own registry. The reservation was first written as a name list in
+   * one feature's structural test, which cannot see a control registered in a third registry; a
+   * count can, at the point of declaration.
+   */
+  it('throws when two items declare themselves primary', () => {
+    const loud = (id: string): ToolbarItem<Ctx> =>
+      base({ id, activeKind: 'primary', isActive: () => true });
+    expect(() => defineToolbar([loud('pen'), loud('other')])).toThrow(
+      /2 items declare activeKind "primary" \(pen, other\)/,
+    );
+  });
+
+  it('allows exactly one primary, which is the whole point of the rule', () => {
+    const items = [
+      base({ id: 'pen', activeKind: 'primary', isActive: () => true }),
+      base({ id: 'b' }),
+    ];
+    expect(defineToolbar(items)).toBe(items);
+  });
+
+  /**
+   * `activeKind` without `isActive` is a control declaring a picture it can never take — it reads
+   * as covered and is not. The TSLD structural test makes the same assertion for the four modal
+   * tools; this is the primitive refusing it for `primary` at declaration, where the author is.
+   */
+  it('throws when a primary item can never become active', () => {
+    expect(() => defineToolbar([base({ id: 'pen', activeKind: 'primary' })])).toThrow(
+      /activeKind "primary" needs isActive/,
+    );
+  });
+
   it('throws when both onActivate and render are provided', () => {
     const both: ToolbarItem<Ctx> = {
       id: 'x',
@@ -185,6 +222,7 @@ describe('partitionByTier', () => {
         item: base({ id: 'a', tier: 1 }),
         enabled: true,
         active: false,
+        activeKind: 'selected',
         disabledReason: undefined,
         srDescription: undefined,
       },
@@ -192,6 +230,7 @@ describe('partitionByTier', () => {
         item: base({ id: 'b', tier: 2 }),
         enabled: true,
         active: false,
+        activeKind: 'selected',
         disabledReason: undefined,
         srDescription: undefined,
       },
@@ -199,6 +238,7 @@ describe('partitionByTier', () => {
         item: base({ id: 'c', tier: 3 }),
         enabled: true,
         active: false,
+        activeKind: 'selected',
         disabledReason: undefined,
         srDescription: undefined,
       },
@@ -294,9 +334,14 @@ describe('defineToolbar — a segment’s members share a tier', () => {
   });
 
   it('rejects a pair whose tiers disagree, naming the group', () => {
-    // A tier-3 companion is in the STATIC overflow and never enters `computeLadder`'s companion lookup, so
-    // the segment would split: one half always in the `⋯`, the other only sometimes. That is the
-    // exact state `segment` exists to prevent, and it would look correct in the registry.
+    // A tier-3 companion would split the segment: one half reached one way, the other another.
+    // That is the exact state `segment` exists to prevent, and it would look correct in the
+    // registry.
+    //
+    // This paragraph described the split in terms of `computeLadder`'s companion lookup and the
+    // static `⋯` — both deleted with the width ladder (ADR-0109 D1), and the correction fourteen
+    // lines below in this same file already said so about `companionsOf` while this one went on
+    // citing its sibling. Same class as `docs/TECH_DEBT.md` #193, inside the file that records it.
     expect(() => defineToolbar([seg('left', 1), seg('right', 3)])).toThrow(/view-mode/);
   });
 });

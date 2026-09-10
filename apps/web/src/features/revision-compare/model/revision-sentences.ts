@@ -1,4 +1,8 @@
 import type {
+  CrossPlanCorrelation,
+  CrossPlanRevisionCompare,
+  CrossPlanRevisionFrame,
+  CrossPlanRevisionPlan,
   RevisionCompare,
   RevisionCompletion,
   RevisionCompletionReason,
@@ -38,6 +42,13 @@ const COMPLETION_REASONS: Record<RevisionCompletionReason, string> = {
   CARRIER_REMOVED:
     'The activity that finished last in the earlier revision is not in the later one, so there ' +
     'is no pair of dates to measure. What entered and left the critical path is still shown below.',
+  // Reachable only when comparing two SEPARATELY IMPORTED plans, which are matched on activity
+  // code. The sentence names the cause a planner can act on — the codes — rather than the
+  // mechanism, because "no common activities" reads as "these plans are unrelated" when the far
+  // commoner truth is that one of the two files was exported without them.
+  NO_COMMON_ACTIVITIES:
+    'These two plans share no activity codes, so there is no pair of activities to measure ' +
+    'between. Check that both were exported with their activity IDs.',
 };
 
 /**
@@ -115,11 +126,20 @@ export function settingsCaveat(verdict: RevisionSettingsVerdict): string | null 
  * critical as having left the critical path — each row technically true, the picture false. This
  * is the sentence that goes in their place.
  */
-export function criticalPathUnavailable(reason: 'SIDE_NOT_SCHEDULED' | null): string | null {
-  return reason === null
-    ? null
-    : 'One of these revisions was never calculated, so there is no critical path to compare ' +
-        'against. Recalculate the plan and capture a baseline from it.';
+export function criticalPathUnavailable(
+  reason: 'SIDE_NOT_SCHEDULED' | 'NO_COMMON_CODES' | null,
+): string | null {
+  // Two reasons, two sentences, and never one standing in for the other. `NO_COMMON_CODES` is
+  // rendered by the panel as its own notice ABOVE the delta, so it must not also produce a
+  // "recalculate the plan" instruction that would send a reader to fix the wrong thing.
+  if (reason === null) return null;
+  if (reason === 'NO_COMMON_CODES') {
+    return 'These two plans share no activity codes, so there is no critical path to compare.';
+  }
+  return (
+    'One of these revisions was never calculated, so there is no critical path to compare ' +
+    'against. Recalculate the plan and capture a baseline from it.'
+  );
 }
 
 /**
@@ -180,9 +200,19 @@ export const LEVELLING_CAVEAT_PRINT =
  * because the live region is the only channel a screen-reader user has and collapsing them there
  * undoes the distinction the visible copy makes.
  */
-export function comparisonAnnouncement(compare: RevisionCompare, levelResources = false): string {
+export function comparisonAnnouncement(
+  compare: RevisionCompare | CrossPlanRevisionCompare,
+  levelResources = false,
+): string {
+  /**
+   * **Cross-plan the coverage is spoken FIRST, matching the visual order** — and for the same
+   * reason it is rendered first: every count after it is worth exactly what it says they are. A
+   * screen-reader user hearing "12 left the critical path" with no coverage has been handed the
+   * confident half of a comparison whose denominator they cannot see.
+   */
+  const coverage = 'correlation' in compare ? `${correlationSentence(compare.correlation)} ` : '';
   const unavailable = criticalPathUnavailable(compare.criticalPath.notAssessableReason);
-  if (unavailable !== null) return unavailable;
+  if (unavailable !== null) return `${coverage}${unavailable}`;
   const { enteredTotal, leftTotal, addedTotal, removedTotal } = compare.criticalPath;
   const parts: string[] = [];
   // **Every count is the server's TRUE total, never a returned array's length.** All four row sets
@@ -196,8 +226,8 @@ export function comparisonAnnouncement(compare: RevisionCompare, levelResources 
   const subject = `${sideTitle(compare.from)} compared with ${sideTitle(compare.to)}`;
   const headline =
     parts.length === 0
-      ? `${subject}: no activity entered or left the critical path.`
-      : `${subject}: ${parts.join(', ')}.`;
+      ? `${coverage}${subject}: no activity entered or left the critical path.`
+      : `${coverage}${subject}: ${parts.join(', ')}.`;
 
   // **The caveats that can invalidate these very numbers are spoken WITH them.** A sighted reader
   // meets the settings warning as a strip immediately above the counts; the announcement is the
@@ -216,4 +246,107 @@ export function comparisonAnnouncement(compare: RevisionCompare, levelResources 
 /** "Showing 200 of 412" — the cap and the true total both from the payload, never a local constant. */
 export function truncationNote(shown: number, total: number, cap: number): string | null {
   return total > shown ? `Showing the first ${cap} of ${total}.` : null;
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ * **Comparing two SEPARATELY IMPORTED plans** — the sentences the cross-plan case needs and the
+ * same-plan case does not.
+ *
+ * They live here, in the ONE sentences module, for the reason this file exists: the panel and the
+ * printed document both read them, and two copies of a caveat are how a screen and a handover
+ * artefact come to say different things about the same comparison.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ */
+
+/** A plan named the way a reader needs it when there are two on screen: the plan, then its project. */
+export function planLabel(plan: CrossPlanRevisionPlan): string {
+  return `${plan.name} (${plan.projectName})`;
+}
+
+/**
+ * **How well the two plans matched — the sentence a reader checks before believing anything else.**
+ *
+ * It leads with `matched`, because every number below the coverage block is worth exactly what
+ * this says it is. The unmatched counts are stated as a possibility rather than a fact: matching on
+ * code cannot tell a removed activity from a re-coded one, and asserting either would be a claim
+ * the product cannot make.
+ */
+export function correlationSentence(correlation: CrossPlanCorrelation): string {
+  const { matched, fromUnmatched, toUnmatched } = correlation;
+  const activity = matched === 1 ? 'activity' : 'activities';
+  if (fromUnmatched === 0 && toUnmatched === 0) {
+    return `All ${String(matched)} ${activity} matched by activity code.`;
+  }
+  const parts: string[] = [];
+  if (fromUnmatched > 0) parts.push(`${String(fromUnmatched)} only in the earlier plan`);
+  if (toUnmatched > 0) parts.push(`${String(toUnmatched)} only in the later one`);
+  return `${String(matched)} ${activity} matched by activity code; ${parts.join(' and ')}.`;
+}
+
+/**
+ * The uncoded sentence — **its own, because an uncoded row is a THIRD state**.
+ *
+ * It is neither added nor removed: the product does not know which, so it is excluded from the
+ * comparison and counted. Collapsing it into the unmatched counts would be the ADR-0073 C1 defect —
+ * two different facts arriving in one channel as one.
+ */
+export function uncodedSentence(correlation: CrossPlanCorrelation): string | null {
+  const total = correlation.fromUncoded + correlation.toUncoded;
+  if (total === 0) return null;
+  const row = total === 1 ? 'activity has' : 'activities have';
+  return (
+    `${String(total)} ${row} no activity code, so ${total === 1 ? 'it is' : 'they are'} not ` +
+    'compared at all — not counted as added, and not as removed.'
+  );
+}
+
+/**
+ * **The re-code caveat**, rendered wherever added or removed rows are.
+ *
+ * This is the one honest limit of matching on code, and it is stated rather than left for a
+ * planner to discover: an activity whose code changed between the two exports looks exactly like
+ * one activity removed and a different one added. The product cannot tell them apart and does not
+ * pretend to.
+ */
+export const RECODE_CAVEAT =
+  'These two plans are matched on activity code, so an activity whose code changed between the ' +
+  'two looks the same as one removed and another added.';
+
+/**
+ * The measurement frame — **named because two plans need not share one**.
+ *
+ * Same-plan this goes without saying and is deliberately not said. Across two plans the movement
+ * is measured on the earlier plan's calendar with its hours-per-day, and a number with no frame
+ * beside it is a number the reader cannot check.
+ */
+export function frameSentence(frame: CrossPlanRevisionFrame): string {
+  const calendar = frame.calendarName ?? 'a calendar where every day works';
+  return `Movement is measured in working days on ${frame.planName}'s calendar (${calendar}).`;
+}
+
+/**
+ * **No codes in common** — a real answer, and the sentence says what to do about it.
+ *
+ * The commonest cause by far is an export written without activity IDs, not two unrelated
+ * programmes, so the sentence leads with the check a planner can actually make. It names both
+ * plans, because with two on screen a reader cannot infer which one is missing them.
+ */
+export function noCommonCodesSentence(compare: CrossPlanRevisionCompare): string {
+  return (
+    `${planLabel(compare.fromPlan)} and ${planLabel(compare.toPlan)} share no activity codes, ` +
+    'so there is nothing to compare between them. Check that both were exported with their ' +
+    'activity IDs.'
+  );
+}
+
+/**
+ * Why a row carries no "show me" control: it is not in the plan on screen.
+ *
+ * Stated as a plain sentence rather than a shaded button, which is ADR-0082's discriminator — the
+ * action does not apply to the object, so it is omitted, and what is owed is an explanation of the
+ * absence rather than a control that refuses.
+ */
+export function otherPlanRowNote(planName: string): string {
+  return `Only in ${planName}`;
 }

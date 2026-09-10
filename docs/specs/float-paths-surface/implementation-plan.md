@@ -1,6 +1,6 @@
 # Implementation Plan: Multiple float paths — the planner's surface
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Draft
 - **Status:** Draft — **do not implement before approval** (`docs/PROCESS.md` Definition of Ready)
 - **Owner:** _(to be assigned)_
 - **Flag:** `VITE_FLOAT_PATHS` (`flagDefaultOff`), flipped in **M4**

@@ -89,7 +89,7 @@ export function StaffConsoleScreen(): React.ReactElement {
             staff member out on day one — and the compensation it named was that the console says
             which hat is active. That was decided and never built; the UX review found it. */}
         {identity.data.dualHatted && (
-          <Alert tone="info" className="mt-3">
+          <Alert purpose="condition" tone="info" className="mt-3">
             <strong className="font-medium">This account is also an organisation member.</strong>{' '}
             Staff-ness confers nothing inside any organisation, and nothing you do here is done as a
             member. Anything you reach in the app itself, you reach with your ordinary membership.
@@ -160,7 +160,7 @@ function MailHealthPanel(): React.ReactElement {
       {data !== undefined && (
         <>
           {!data.transportConfigured && (
-            <Alert tone="info">
+            <Alert purpose="condition" tone="info">
               <strong className="font-medium">No mail transport is configured.</strong> Every
               message is being written to the log instead of sent — which produces no failures, and
               is why the counts below read as healthy.
@@ -313,14 +313,14 @@ function RetentionPanel(): React.ReactElement {
       {retention !== undefined && (
         <>
           {!retention.enabled && (
-            <Alert tone="info" id={RETENTION_DISABLED_ID}>
+            <Alert purpose="condition" tone="info" id={RETENTION_DISABLED_ID}>
               <strong className="font-medium">Retention sweeping is disabled.</strong> Nothing is
               being deleted. Set <code>RETENTION_SWEEP_ENABLED=true</code> to resume — the ages
               below are still real, and will keep growing until you do.
             </Alert>
           )}
           {retention.consecutiveFailures > 0 && (
-            <Alert tone="error" id={RETENTION_FAILING_ID}>
+            <Alert purpose="condition" tone="error" id={RETENTION_FAILING_ID}>
               <strong className="font-medium">
                 The last {String(retention.consecutiveFailures)} sweep
                 {retention.consecutiveFailures === 1 ? '' : 's'} failed.
@@ -341,7 +341,13 @@ function RetentionPanel(): React.ReactElement {
               // the boot run is unawaited and finishes in milliseconds on an idle table, so this
               // almost certainly means it is stuck. Drawing it as muted body text alongside the
               // healthy sentence is the lit-but-inert shape ADR-0059 M6 records.
-              <Alert tone="error">{schedule.text}</Alert>
+              // `tone="error"` with `purpose="condition"` is the intended combination and not a
+              // slip: being stuck is serious, which is what the tone says, and it is also a state
+              // that was already true when the reader arrived — so it must not interrupt them. The
+              // two props answer different questions (ADR-0132).
+              <Alert purpose="condition" tone="error">
+                {schedule.text}
+              </Alert>
             ) : (
               <p className="text-muted-foreground text-sm">{schedule.text}</p>
             ))}
@@ -430,7 +436,7 @@ function SecurityPanel(): React.ReactElement {
         loadingLabel="Loading policy reports…"
         errorLabel="Could not read policy reports."
         empty={
-          <Alert tone="info">
+          <Alert purpose="condition" tone="info">
             <strong className="font-medium">No violations recorded.</strong> That is not yet proof
             the policy is clean — delivery from a browser to this sink has never been verified
             end&nbsp;to&nbsp;end, so an empty table means nothing has arrived rather than nothing

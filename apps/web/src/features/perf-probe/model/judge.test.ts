@@ -147,3 +147,88 @@ describe('judgeRun', () => {
     ).toThrow(/NON-VACUITY FAILED/);
   });
 });
+
+/**
+ * The saturation guard — `docs/TECH_DEBT.md` #260.
+ *
+ * Every number below is a **recorded reading**, not an invented one, for the same reason the block
+ * above says so: an invented fixture proves the judge agrees with whoever wrote it. Both exhibits
+ * in #260 are transcribed here, and the **ungated** one is first because it is the one that would
+ * have been missed — the row proposed the guard "where the spread guard sits", and the reading that
+ * exposed it returns before that point.
+ */
+describe('judgeRun — a saturated baseline', () => {
+  it('reports the fact on an UNGATED run, which is the reading that exposed #260', () => {
+    // The product owner's first real-hardware reading, 2026-09-08: revision-diff / Fit / 2,160 bars,
+    // baseline 98.33 pp, delta -0.19 pp. Fit is ungated, so this run returns REPORTED_ONLY and never
+    // reaches a gated branch — the fact has to be computed before that return or it is absent from
+    // the exhibit it was written for.
+    const r = judgeRun(input({ gated: false, pairs: pairsFor(98.33, 0.2, 98.14) }));
+
+    expect(r.verdict).toBe('REPORTED_ONLY');
+    expect(r.saturated).toBe(true);
+    expect(r.headroomPp).toBeCloseTo(1.67, 2);
+    // And the delta it prints beside that: negative, which reads as "the overlay is free".
+    expect(r.deltaPp).toBeLessThan(0);
+  });
+
+  it('refuses a GATED saturated run instead of passing it', () => {
+    // The same shape with the gate armed — which is reachable on any machine whose Week baseline
+    // ran hot enough, so this is not confined to the framing that found it. Without the guard P1 is
+    // true (a negative delta is inside any positive bar) and P2 holds, so this returns PASS.
+    const r = judgeRun(input({ gated: true, pairs: pairsFor(98.33, 0.2, 98.14) }));
+
+    expect(r.verdict).toBe('INDETERMINATE');
+    expect(r.saturated).toBe(true);
+    expect(r.indeterminateReason).toMatch(/1\.67 pp of headroom against a 2\.00 pp bar/);
+    expect(r.indeterminateReason).toMatch(/P1 cannot fail/);
+  });
+
+  it('names the ceiling on the case that sat unnoticed in a results table', () => {
+    // `docs/specs/revision-compare-changes/m0-condition.md:199` — scale / Fit / 1646: baseline
+    // 99.07, treatment 100.00, delta +0.93. And 100.00 - 99.07 = 0.93 exactly: the recorded delta
+    // IS the saturation value. It sat beside genuine deltas with nothing distinguishing it.
+    const r = judgeRun(input({ gated: false, pairs: pairsFor(99.07, 0.0, 100.0) }));
+
+    expect(r.saturated).toBe(true);
+    expect(r.headroomPp).toBeCloseTo(0.93, 2);
+    expect(r.deltaPp).toBeCloseTo(0.93, 2);
+  });
+
+  it('outranks the spread guard, because a ceiling compresses the spread beneath it', () => {
+    // A baseline pinned at the ceiling on every repeat has almost no spread, so the spread guard
+    // would read this machine as perfectly able to resolve the question at the exact moment the
+    // metric has no room left to express an answer. Saturation speaks first.
+    const r = judgeRun(input({ gated: true, pairs: pairsFor(99.5, 0.05, 99.5) }));
+
+    expect(r.verdict).toBe('INDETERMINATE');
+    expect(r.baselineSpreadPp).toBeLessThan(2.0);
+    expect(r.indeterminateReason).toMatch(/headroom/);
+    expect(r.indeterminateReason).not.toMatch(/run-to-run spread/);
+  });
+
+  it('leaves an unsaturated run untouched in every field', () => {
+    // The regression that matters most: the passing cell above, re-judged. Same verdict, same
+    // figures, with the two new fields stating that the metric had room.
+    const r = judgeRun(input());
+
+    expect(r.verdict).toBe('PASS');
+    expect(r.saturated).toBe(false);
+    expect(r.headroomPp).toBeCloseTo(99.44, 2);
+    expect(r.deltaPp).toBeCloseTo(0.74, 2);
+    expect(r.p1).toBe(true);
+    expect(r.p2).toBe(true);
+  });
+
+  it('treats headroom exactly equal to the bar as unsaturated', () => {
+    // `<`, not `<=`. A run with exactly 2.00 pp of headroom against a 2.00 pp bar can still show a
+    // delta that reaches the bar, so P1 can fail and the verdict means something. The spread guard
+    // next door uses `>=` for the mirror-image reason: a spread that EQUALS the bar has already
+    // swallowed it.
+    const r = judgeRun(input({ gated: true, pairs: pairsFor(98.0, 0.1, 98.0) }));
+
+    expect(r.headroomPp).toBeCloseTo(2.0, 6);
+    expect(r.saturated).toBe(false);
+    expect(r.verdict).not.toBe('INDETERMINATE');
+  });
+});

@@ -169,17 +169,30 @@ entry stops being needed.
   bar, and a control that answers a condition belongs beside the condition it
   answers — which is why Recalculate is offered only when the schedule is behind
   the plan (ADR-0109 D3).
-  - **One deliberate exception, and it is open rather than settled.** ADR-0112 D1
-    moved the edit-lock's _sentence_ to the plan's facts row while its badge and
-    every hand-off control stayed on the plan's identity line, to free 155 px on a
-    row measured to have four pixels of headroom. For the six of ten lock states
-    that pair a sentence with an action, the condition and the control it answers
-    are now at opposite ends of the screen — a real cost, raised by the ux review,
-    put to the product owner with the width consequence, and accepted on the basis
-    that the badge still names the state beside the buttons and that the question
-    is better answered from use than from review. **Do not read this as licence to
-    separate a control from its condition elsewhere**; read it as one case with a
-    named trigger to revisit (a report about the taken-over or take-over states).
+  - **One deliberate exception, and it is open rather than settled.** The edit-lock
+    is split across two ends of the screen, and it got there in two steps that
+    pulled in opposite directions. ADR-0112 D1 moved its _sentence_ to the plan's
+    facts row and kept its badge and hand-off controls on the identity line, to
+    free 155 px on a row measured to have four pixels of headroom. ADR-0133 then
+    moved the **verb** the other way — `Start editing` / `Stop editing` is now the
+    first control of the command deck's authoring group, beside the eleven
+    commands it is the precondition for — and sent the badge and the seven
+    hand-off controls _down_ to join the sentence.
+
+    So the arrangement this bullet described is gone: the badge is no longer on
+    the identity line, and the condition and its sentence are now together rather
+    than apart. What survives is the cost, in a different shape. For the lock
+    states that offer a hand-off — a peer asking, an admin who may override — the
+    reader sees the condition in the foot row and the pen's own verb at the top of
+    the screen. The compensation is that the commands the verb governs are the
+    ones it now sits beside, which is this rule being obeyed rather than broken
+    for the eleven controls that most depend on it.
+
+    Accepted on the same basis as before: put to the product owner with the width
+    consequence, and better answered from use than from review. **Do not read this
+    as licence to separate a control from its condition elsewhere**; read it as
+    one case with a named trigger to revisit (a report about the taken-over or
+    take-over states).
 - Breadcrumbs for anything two or more levels deep.
 - Deep-linkable everything: filters, tabs, and pagination live in the URL so a
   view can be shared and restored.

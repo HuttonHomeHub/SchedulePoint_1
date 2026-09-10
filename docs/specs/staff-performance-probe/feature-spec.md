@@ -1,6 +1,6 @@
 # Feature Spec: Canvas performance probe on the staff console
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0128) — extended by ADR-0130
 - **Author(s):** feature-analyst
 - **Date:** 2026-09-07
 - **Tracking issue / epic:** _(none yet)_

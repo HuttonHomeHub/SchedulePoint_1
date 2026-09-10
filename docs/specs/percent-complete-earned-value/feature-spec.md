@@ -1,6 +1,6 @@
 # Feature Spec: Percent-complete types & Earned Value (M7 cost/EV rung)
 
-- **Status:** Draft (awaiting approval — no application code written)
+- **Status:** Accepted — shipped (ADR-0042) — EV4's web surface deferred
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats), with James Ewbank
 - **Date:** 2026-07-17
 - **Tracking issue / epic:** Engine conformance & validation framework (ADR-0034) — capability epic **M7 (the Resource dimension)**, rung: **Percent-complete types & Earned Value**. Follows the resource model (ADR-0039), duration/units types (ADR-0040), and resource levelling (ADR-0041); it is the **cost/EV** rung those ADRs each named as "a later rung with its own ADR".

@@ -369,10 +369,11 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                          |
 | 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**                    |
 | 11  | `pnpm check:debt-status`                                    | you added, closed or edited a `docs/TECH_DEBT.md` row (ADR-0120)                                  |
-| 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or either drift gate                                   |
-| 13  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
+| 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or any register gate                                   |
+| 13  | `pnpm check:spec-status`                                    | you added a spec, filed an ADR, or shipped an epic (ADR-0131)                                     |
+| 14  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
 
-**Step 13 is the only advisory gate, and `prepush.sh` prints it differently.** `check:reconcile-due`
+**Step 14 is the only advisory gate, and `prepush.sh` prints it differently.** `check:reconcile-due`
 exits **2**, not 1: the rule is that **exit 1 is for an obligation whose remedy is an edit to the
 file that failed, and exit 2 for one whose remedy is somebody's judgement** (ADR-0120 D2). A missed
 reconciliation pass is the second kind, and blocking a push on a documentation chore is how a gate
@@ -626,8 +627,12 @@ Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   still present in the file, and that the compact table cannot silently regrow —
   because that file decides what gets picked up next, and **14 of its 138 rows**
   carried a machine-readable status, so a candidate recommended from it had been
-  fixed three weeks earlier (ADR-0120). `pnpm check:doc-register` runs the
-  fixtures for the parser both drift gates read with; two of its own cases had
+  fixed three weeks earlier (ADR-0120). `pnpm check:spec-status` reads every spec document's
+  `**Status:**` header and refuses a **cited** spec that is still headed `Draft` — an ADR citing a
+  spec is the record that its design became a decision, so it cannot also be awaiting approval to
+  build. **54 of them said exactly that**, over live surfaces, because `docs/PROCESS.md` named the
+  header as front matter and named no step that revisits it (ADR-0131). `pnpm check:doc-register`
+  runs the fixtures for the parser every register gate reads with; two of its own cases had
   shipped **vacuous**, because Prettier normalised the malformation each fixture
   was named for, so each fixture now asserts its own contents before any case
   runs. `check:reconcile-due` is **deliberately not here**: it is advisory, and

@@ -1,6 +1,6 @@
 # Implementation Plan: The light corporate theme
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — awaiting approval
 - **Owner:** _tbc_
 

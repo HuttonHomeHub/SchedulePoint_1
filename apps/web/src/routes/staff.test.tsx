@@ -597,10 +597,18 @@ describe('the Retention section', () => {
       processStartedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     });
 
-    // `role="alert"` is `Alert tone="error"`; the routine just-booted case renders a plain
-    // paragraph, so this asserts the escalation rather than merely the words.
-    const alerts = screen.getAllByRole('alert').map((node) => node.textContent ?? '');
-    expect(alerts.some((text) => text.includes('has not swept yet'))).toBe(true);
+    // **This asserted `getAllByRole('alert')` until ADR-0132**, using the live role as a proxy for
+    // "which of the two treatments rendered". That proxy is gone deliberately: a stuck sweeper is a
+    // standing condition, so its `Alert` is now `purpose="condition"` and carries no role — and a
+    // test that went red here would otherwise read as the escalation having been lost.
+    //
+    // The discriminator is now the treatment itself, which is what the case was ever about: the
+    // escalated rendering is an `Alert` — a bordered block with a leading icon — while the routine
+    // just-booted case is a plain `<p>` with neither. Asserted in both directions so it cannot pass
+    // against a third rendering that happens to have an icon.
+    const escalated = screen.getByText(/has not swept yet/);
+    expect(escalated.closest('p')).toBeNull();
+    expect(escalated.parentElement?.querySelector('svg')).not.toBeNull();
   });
 
   it('states that audit_events is deliberately NOT swept', async () => {
@@ -640,5 +648,57 @@ describe('the Retention section', () => {
 
     await screen.findByRole('heading', { name: 'Retention' });
     expect(await screen.findByText('Could not read retention state.')).toBeInTheDocument();
+  });
+
+  /**
+   * **G3 — the standing conditions on this screen are not live regions** (ADR-0132, `#118` item 3).
+   *
+   * The console's caveats are facts about the installation: mail has no transport, retention is
+   * disabled, the last sweeps failed. Each is rendered only once its query settles, so the region
+   * and its content are inserted together — the unreliable case for a live region, and either way
+   * it announces a standing condition as though something had just happened. Two of them were
+   * `role="alert"`, i.e. **assertive**, produced by data arriving.
+   *
+   * **jsdom has no assistive technology.** These assertions are about rendered `role` attributes
+   * and nothing else; nothing here establishes what a screen reader says. That limit is stated in
+   * the file rather than only in the spec, because the file is what the next reader opens.
+   *
+   * **The pinned positive comes first, and it is not decoration.** Every assertion below is an
+   * absence, and an absence is what a screen that rendered nothing also produces — so the caveat
+   * sentences are asserted present before their roles are asserted gone. Without that this case
+   * cannot tell "the conditions are correctly quiet" from "the panels never loaded", which is the
+   * shape this repository keeps recording (ADR-0093; ADR-0120's own gate shipped it).
+   */
+  it('renders the installation caveats without making them live regions', async () => {
+    renderStaffWith({
+      '/staff/health': {
+        failuresLast24h: 0,
+        failuresLastHour: 0,
+        lastFailureAt: null,
+        // Four of the six conditions at once — as many as can coexist. `enabled: false` and a
+        // stuck sweeper are mutually exclusive (a disabled sweeper computes no schedule sentence),
+        // and `dualHatted` belongs to a different query. A screen showing one condition would pass
+        // a weaker version of this case while leaving the rest unexercised.
+        transportConfigured: false,
+        alertingConfigured: false,
+        heartbeatConfigured: false,
+        recentFailures: [],
+        retention: healthyRetention({ enabled: false, consecutiveFailures: 3 }),
+      },
+    });
+
+    // ── The pinned positive: the conditions are on screen and readable.
+    expect(await screen.findByText(/No mail transport is configured/)).toBeInTheDocument();
+    expect(await screen.findByText(/Retention sweeping is disabled/)).toBeInTheDocument();
+
+    // ── Nothing on this screen interrupts. `role="alert"` is assertive, and not one of the facts
+    //    here is worth cutting across whatever a reader is doing.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    // ── The panels' own polite regions survive, and they are the channel that should carry a
+    //    change. Asserted by their live attribute rather than by role, because `Panel` uses
+    //    `aria-live="polite"` on a paragraph and never `role="status"` — a role query would report
+    //    zero here and read as "the announcements are gone".
+    expect(document.querySelectorAll('[aria-live="polite"]').length).toBeGreaterThan(0);
   });
 });

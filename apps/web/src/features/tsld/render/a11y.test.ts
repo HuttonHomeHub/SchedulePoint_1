@@ -541,6 +541,50 @@ describe('the comparison overlay’s spoken summary', () => {
     const summary = compareOverlaySummary([ghost('Piling')], 0);
     expect(summary?.heading).not.toContain('under Changes');
   });
+
+  describe('the undrawable reason — two comparisons, two TRUE answers', () => {
+    /**
+     * **The likeliest defect in the cross-plan milestone, and it is a false sentence rather than a
+     * missing one.**
+     *
+     * Same-plan the old side genuinely did not record a position. Cross-plan the other plan DID
+     * record it — the position simply is not comparable, because two independently imported plans
+     * derive their lane order separately. Shipping the same-plan wording would state something
+     * untrue about the other plan's data, which is worse than saying nothing, and it is likely
+     * precisely because the mechanism is correct and reusing it feels like reuse.
+     */
+    it('the same-plan sentence is UNCHANGED — asserted, not assumed', () => {
+      // The default, and the exact wording that shipped. If a cross-plan edit reaches this branch
+      // it is a regression on the comparison nobody was working on.
+      const summary = compareOverlaySummary([ghost('Piling')], 3);
+      expect(summary?.heading).toContain(
+        '3 not shown because the old revision did not record where they were',
+      );
+      expect(summary?.heading).not.toContain('independently');
+    });
+
+    it('the cross-plan sentence says the positions are not COMPARABLE, never unrecorded', () => {
+      const summary = compareOverlaySummary([ghost('Piling')], 3, undefined, 'NOT_COMPARABLE');
+      expect(summary?.heading).toContain('3 not shown');
+      expect(summary?.heading).toContain('lay their activities out independently');
+      // The false half, asserted absent rather than left to a reader to notice.
+      expect(summary?.heading).not.toContain('did not record');
+      // And it points at where the work IS carried, so the fact survives the position not doing so.
+      expect(summary?.heading).toContain('Changes');
+    });
+
+    it('the reason changes nothing else — the removed list and the counts are identical', () => {
+      // A discriminator that quietly altered a neighbouring sentence would be the widening this
+      // repository keeps recording; the two summaries differ in exactly one clause.
+      const rows = [ghost('Piling'), ghost('Site hoarding', true)];
+      const samePlan = compareOverlaySummary(rows, 2);
+      const crossPlan = compareOverlaySummary(rows, 2, undefined, 'NOT_COMPARABLE');
+      expect(crossPlan?.removed).toEqual(samePlan?.removed);
+      expect(crossPlan?.undrawn).toBe(samePlan?.undrawn);
+      expect(crossPlan?.heading).toContain('1 moved');
+      expect(crossPlan?.heading).toContain('1 removed');
+    });
+  });
 });
 
 describe('the per-row compare clause', () => {

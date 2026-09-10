@@ -1,6 +1,6 @@
 # Feature Spec: The plan workspace's chrome — bands, docks, and what a command is
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0092)
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-13
 - **Tracking issue / epic:** _(to be raised)_

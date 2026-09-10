@@ -1,7 +1,6 @@
 # Feature Spec: Schedule Health Check (DCMA 14-point assessment)
 
-- **Status:** Reviewed (4 specialist passes folded, §3.7) · **all 5 critical questions answered
-  2026-08-27** · **awaiting approval before implementation**
+- **Status:** Accepted — shipped (ADR-0116)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-27 (revised the same day: review findings + product-owner decisions)
 - **Tracking issue / epic:** _(to be created)_

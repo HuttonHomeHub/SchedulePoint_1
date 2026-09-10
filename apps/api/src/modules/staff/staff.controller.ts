@@ -215,6 +215,12 @@ export class StaffController {
       'page carries addresses, and scoped in the repository rather than by a query parameter.',
   })
   @ApiOkResponse({ type: StaffAccountsDto })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A query parameter was out of bounds — `limit` outside 1–100, or a non-integer. Declared ' +
+      'because `forbidNonWhitelisted` makes it reachable from a hand-built URL, and an undeclared ' +
+      'status is one a generated client has no branch for.',
+  })
   async accounts(
     @CurrentStaff() staff: StaffPrincipal,
     @RequestContext() context: RequestContext,
@@ -284,6 +290,9 @@ export class StaffController {
       'than an action of its own.',
   })
   @ApiOkResponse({ type: [ProbeResultRowDto] })
+  @ApiUnprocessableEntityResponse({
+    description: 'A query parameter was out of bounds — `limit` outside 1–100, or a non-integer.',
+  })
   async probeResults(
     @CurrentStaff() staff: StaffPrincipal,
     @RequestContext() context: RequestContext,

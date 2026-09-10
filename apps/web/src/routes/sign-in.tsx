@@ -24,7 +24,11 @@ export function SignInScreen(): React.ReactElement {
 
   return (
     <AuthShell title="Sign in" description="Welcome back to SchedulePoint.">
-      {search.signedOut ? <Alert tone="info">You have been signed out.</Alert> : null}
+      {search.signedOut ? (
+        <Alert purpose="event" tone="info">
+          You have been signed out.
+        </Alert>
+      ) : null}
       <SignInForm onSuccess={() => router.history.push(search.redirect ?? '/')} />
       {PASSWORD_RESET_ENABLED ? (
         <p className="text-muted-foreground text-sm">

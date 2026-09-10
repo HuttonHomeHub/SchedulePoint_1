@@ -1,6 +1,6 @@
 # Feature Spec: Stacked resource histogram
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Accepted — shipped (ADR-0121)
 - **Author(s):** feature-analyst (Claude Code), for James Ewbank
 - **Date:** 2026-08-30 · **revised 2026-08-31** to fold four specialist reviews (§0.1)
 - **Tracking issue / epic:** _(none yet)_

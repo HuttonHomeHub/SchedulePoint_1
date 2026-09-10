@@ -1,6 +1,15 @@
 import type { Verdict } from '../model/judge';
+import {
+  NOT_RECORDED,
+  SITTING_SPREAD_LIMIT_MS,
+  describeSpread,
+  sittingFromOutcome,
+  sittingSpreadMs,
+  type Sitting,
+  type SittingLimb,
+} from '../model/sitting';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
-import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe';
+import type { ProbeOutcome } from '../runner/run-probe';
 
 /**
  * The paste-ready block a **Copy** button produces.
@@ -15,82 +24,177 @@ import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe'
  * Pure: no clipboard, no DOM, no clock beyond what the run already recorded. That is what lets
  * every line below be asserted from a literal.
  */
-export function formatProbeReport(outcome: ProbeOutcome): string {
-  if (outcome.kind === 'cancelled') {
+export function formatProbeReport(
+  outcome: ProbeOutcome,
+  machineLabel: string | null = null,
+): string {
+  const sitting = sittingFromOutcome(outcome, machineLabel);
+  if (sitting === null) {
+    // No context at all — a refusal that never got as far as reading the machine. The block still
+    // says what happened rather than returning empty, because an empty clipboard is the one
+    // outcome a reader cannot distinguish from a broken button.
+    return outcome.kind === 'refused'
+      ? [
+          'SchedulePoint performance probe — RUN REFUSED',
+          '',
+          `  reason   ${outcome.refusal.reason}`,
+          `  ${outcome.refusal.sentence}`,
+          '',
+          'No measurement was taken. This is NOT a pass and NOT a failure.',
+        ].join('\n')
+      : [
+          'SchedulePoint performance probe — RUN CANCELLED',
+          '',
+          'You stopped this run, so it was not completed and nothing was recorded.',
+          'This is NOT a pass and NOT a failure.',
+        ].join('\n');
+  }
+  return formatSitting(sitting);
+}
+
+/**
+ * The block, from the one presentation model.
+ *
+ * **`formatProbeReport` is kept as a thin adapter over this**, deliberately: `probe-report.test.ts`
+ * is the before/after oracle for the whole re-pointing (M2-T3) and its assertions do not change, so
+ * it goes on calling the function it always called, with the outcomes it always passed. A formatter
+ * whose own suite had to be rewritten alongside it would prove nothing about the move.
+ */
+export function formatSitting(sitting: Sitting): string {
+  if (sitting.outcome === 'cancelled') {
+    // **The kept limbs are printed.** A stopped press keeps every limb that finished (M3), so a
+    // block that stopped at the context would hand the operator a sentence about readings it then
+    // refused to show them — and the Copy button sits outside this branch, so it is reachable
+    // exactly when there is something to copy.
+    const kept = sitting.limbs.length;
     return [
-      'SchedulePoint performance probe — RUN CANCELLED',
+      'SchedulePoint performance probe — RUN STOPPED',
       '',
-      'You stopped this run, so it was not completed and nothing was recorded.',
+      kept === 0
+        ? 'You stopped this run before anything finished, so nothing was measured and nothing was recorded.'
+        : `You stopped this run. ${kept === 1 ? 'One reading' : `${String(kept)} readings`} had already finished and ${kept === 1 ? 'was' : 'were'} kept; the rest were not taken.`,
       'This is NOT a pass and NOT a failure.',
-      ...(outcome.context ? ['', ...contextLines(outcome.context)] : []),
-    ].join('\n');
+      '',
+      ...contextLines(sitting),
+      ...(kept === 0 ? [] : ['', ...sitting.limbs.flatMap((limb) => [...limbLines(limb), ''])]),
+    ]
+      .join('\n')
+      .trimEnd();
   }
 
-  if (outcome.kind === 'refused') {
+  if (sitting.outcome === 'refused') {
     return [
       'SchedulePoint performance probe — RUN REFUSED',
       '',
-      `  reason   ${outcome.refusal.reason}`,
-      `  ${outcome.refusal.sentence}`,
+      `  reason   ${sitting.refusal?.reason ?? NOT_RECORDED}`,
+      `  ${sitting.refusal?.sentence ?? ''}`,
       '',
       'No measurement was taken. This is NOT a pass and NOT a failure.',
-      ...(outcome.context ? ['', ...contextLines(outcome.context)] : []),
+      '',
+      ...contextLines(sitting),
     ].join('\n');
   }
 
   return [
     'SchedulePoint performance probe',
     '',
-    ...contextLines(outcome.context),
+    ...contextLines(sitting),
     '',
-    ...outcome.limbs.flatMap((limb) => [...limbLines(limb), '']),
+    ...sitting.limbs.flatMap((limb) => [...limbLines(limb), '']),
   ]
     .join('\n')
     .trimEnd();
 }
 
-function contextLines(context: RunContext): string[] {
-  const d = context.device;
+function contextLines(sitting: Sitting): string[] {
+  const context = sitting.context;
+  // **Computed from the readings rather than declared on the context**, because it is a fact about
+  // the set and not about the machine — and because it must be absent, not zero, when there is only
+  // one reading to time.
+  const spread = sittingSpreadMs(sitting);
   return [
-    `  scenario   ${context.scenarioLabel} (${context.scenarioId})`,
-    `  framing    ${context.preset}`,
-    `  run size   ${context.size} — ${String(context.frames)} frames x ${String(context.repeats)}`,
-    `  viewport   ${String(context.viewport.width)}x${String(context.viewport.height)} css px, dpr ${String(d.devicePixelRatio)}`,
+    // **Scenario, framing and protocol are NOT here**, and their absence is the point. A sitting is
+    // up to four presses under one `sweep_id`, so those three differ from reading to reading; they
+    // print on each reading's own block below. Leaving them here would have labelled a whole
+    // sitting with whichever reading sorted first, and nothing in the block would look wrong.
+    // **`varies` rather than one reading's figure**, when a sitting holds readings taken at more
+    // than one canvas. #261 records the same plan on the same machine measuring 23.3 fps at
+    // 1912x1068 and 39.5 fps at 1016x636, so stating one of two here would settle by accident the
+    // confound this line exists to expose. Each reading prints its own below.
+    `  viewport   ${
+      context.viewport === null
+        ? 'varies between readings — see each below'
+        : `${String(context.viewport.width)}x${String(context.viewport.height)} css px`
+    }, dpr ${String(context.devicePixelRatio)}`,
     `  display    idle frame interval ${context.idleInterval.toFixed(2)} ms`,
     // A masked adapter is printed AS masked. Writing "unknown GPU" would put a fiction in the one
     // field a reader trusts to explain an outlier (the product owner's Q1, answered 2026-09-07).
-    `  gpu        ${d.gpu ?? (d.gpuMasked ? '(withheld by the browser)' : '(not available)')}`,
-    `  threads    ${d.hardwareConcurrency === null ? '(not reported)' : String(d.hardwareConcurrency)}`,
-    `  memory     ${d.deviceMemoryGb === null ? '(not reported)' : `~${String(d.deviceMemoryGb)} GiB`}`,
+    // A STORED row has one nullable column and cannot tell masked from unavailable, so it says
+    // neither — `gpuMasked` is null there and the neutral marker is the honest rendering.
+    `  gpu        ${context.gpu ?? (context.gpuMasked === null ? NOT_RECORDED : context.gpuMasked ? '(withheld by the browser)' : '(not available)')}`,
+    `  threads    ${context.hardwareConcurrency === null ? '(not reported)' : String(context.hardwareConcurrency)}`,
+    `  memory     ${context.deviceMemoryGb === null ? '(not reported)' : `~${String(context.deviceMemoryGb)} GiB`}`,
     // Both recorded rather than acted on, and both explain an outlier nothing else would. A blur
     // is NOT a refusal — the window kept painting, something else took the keyboard — so it has to
     // be visible here or the fact is captured and never read.
-    `  attention  ${context.lostFocusDuringRun ? 'the window lost focus during the run' : 'held throughout'}`,
-    `  motion     ${d.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
-    `  agent      ${d.userAgent}`,
+    // A disjunction over the sitting, and each reading repeats its own below. A blur is NOT a
+    // refusal — the window kept painting, something else took the keyboard — so a sweep can hold
+    // three clean readings and one suspect, and only saying "held throughout" because the first
+    // one was clean is the falsehood this line used to be capable of.
+    `  attention  ${context.anyReadingLostFocus ? 'the window lost focus during the run' : 'held throughout'}`,
+    `  motion     ${context.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
+    `  agent      ${context.userAgent}`,
     `  at         ${context.startedAt}`,
+    // **Printed only when it is news.** Every ordinary sitting spans minutes, and a line saying so
+    // on all of them would be read past; this fires for the case M6-T4 creates — a reading re-run
+    // under the same `sweep_id`, hours or days later — where the facts above were recorded with the
+    // earliest reading and the block would otherwise present them as true of all of them.
+    ...(spread !== null && spread > SITTING_SPREAD_LIMIT_MS
+      ? [`  spread     readings taken ${describeSpread(spread)} apart — NOT one sitting in time`]
+      : []),
     `  web        ${context.appVersion}`,
+    // Carried where it exists rather than dropped to make the two adapters look symmetrical: the
+    // browser does not learn it until the POST returns, and the block is copyable before that.
+    // A reading taken across a deploy is one a reader should be able to spot.
+    ...(context.apiVersion === null ? [] : [`  api        ${context.apiVersion}`]),
+    ...(context.machineLabel === null ? [] : [`  machine    ${context.machineLabel}`]),
   ];
 }
 
-/** Repeats behind a limb's figures — a difference limb counts pairs, an absolute one counts runs. */
-function repeatsOf(limb: LimbOutcome): number {
-  return (limb.recording.pairs ?? limb.recording.runs ?? []).length;
-}
-
 /** The verdict line and its sentence, so no verdict ever prints bare. */
-function verdictLines(limb: LimbOutcome, verdict: Verdict, indeterminateReason?: string): string[] {
+function verdictLines(
+  limb: SittingLimb,
+  verdict: Verdict,
+  indeterminateReason?: string,
+  saturated?: boolean,
+): string[] {
   const note = verdictNote(verdict, {
-    gated: limb.recording.thresholds.gated === true,
-    repeats: repeatsOf(limb),
+    gated: limb.gated,
+    repeats: limb.repeats,
     indeterminateReason,
+    saturated,
   });
   return [`  VERDICT: ${verdictLabel(verdict)}`, ...(note === null ? [] : [`  because ${note}`])];
 }
 
-function limbLines(limb: LimbOutcome): string[] {
+function limbLines(limb: SittingLimb): string[] {
   const head = [
     `  ── ${limb.limbLabel} ──`,
+    // **The same three labels the sitting header used to carry, relocated rather than renamed.**
+    // Spec §4.6 keeps this file's line vocabulary and its own suite is the before/after oracle; a
+    // sitting spanning four presses makes these three per-reading facts, so they move down here and
+    // keep their words. A reader who greps a stored block for `framing` still finds it.
+    `  scenario   ${limb.scenarioLabel} (${limb.scenarioId})`,
+    `  framing    ${limb.preset}`,
+    // **`(not recorded)` rather than the default**, on a reading stored before `frames_per_phase`
+    // existed and for the size, which is still not a column. The default is exactly what a reader
+    // would otherwise assume and exactly what a non-default run would contradict.
+    `  run size   ${limb.size ?? NOT_RECORDED} — ${limb.frames === null ? NOT_RECORDED : `${String(limb.frames)} frames`} x ${String(limb.repeats)}`,
+    ...(limb.recordedAt === null ? [] : [`  taken      ${limb.recordedAt}`]),
+    `  viewport   ${String(limb.viewport.width)}x${String(limb.viewport.height)} css px`,
+    // Repeated per reading rather than only summarised on the sitting: the sitting says whether
+    // ANY reading lost the window, and this is the one that says which.
+    ...(limb.lostFocusDuringRun ? ['  attention  this reading lost focus'] : []),
     `  scene      ${limb.sceneSummary}`,
     // Reported on every limb, never only when it fails. A reading taken on an almost-empty canvas
     // is a reading about the cull, and ADR-0066 records that looking exactly like a good result.
@@ -127,8 +231,14 @@ function limbLines(limb: LimbOutcome): string[] {
     ...changedOnScreenLine(limb),
     `  baseline   ${r.baselineMeanPp.toFixed(2)} pp   (run-to-run spread ${r.baselineSpreadPp.toFixed(2)} pp)`,
     `  treatment  ${r.treatmentMeanPp.toFixed(2)} pp   ${r.treatmentFps.toFixed(1)} fps`,
-    `  delta      ${r.deltaPp >= 0 ? '+' : ''}${r.deltaPp.toFixed(2)} pp`,
-    ...verdictLines(limb, r.verdict, r.indeterminateReason),
+    // The caveat rides ON the delta line, not only after the verdict three lines down. #260's
+    // defect is a figure that reads as "the overlay is free"; a reader who takes the number and
+    // stops is exactly the reader who needs telling, and they never reach the verdict block.
+    `  delta      ${r.deltaPp >= 0 ? '+' : ''}${r.deltaPp.toFixed(2)} pp` +
+      (r.saturated
+        ? `   [CEILING: only ${r.headroomPp.toFixed(2)} pp of headroom — see VERDICT]`
+        : ''),
+    ...verdictLines(limb, r.verdict, r.indeterminateReason, r.saturated),
   ];
 }
 
@@ -140,8 +250,8 @@ function limbLines(limb: LimbOutcome): string[] {
  * head line's `visibleBars` answers a different question (ADR-0066's cull), which is why both are
  * printed and neither substitutes for the other.
  */
-function changedOnScreenLine(limb: LimbOutcome): readonly string[] {
-  const c = limb.recording.counts;
+function changedOnScreenLine(limb: SittingLimb): readonly string[] {
+  const c = limb.counts;
   const { visibleChangedBars, visibleBars, visibleChangedLinks, visibleLinks } = c;
   if (
     visibleChangedBars === undefined ||

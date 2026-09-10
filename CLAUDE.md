@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 62 migrations, 1181 web
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1208 web
 > source files with 42 Playwright suites beside the base journey, and
-> 128 ADRs.
+> 133 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -108,7 +108,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   23 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (31 models) + 62 migrations
+│   │   ├── prisma/           #   Schema (31 models) + 63 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -4064,6 +4064,297 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   NUMBER, not a panel** — #75 stays open until the readings are taken, and the unattributed ~8 ms at
   the whole-plan framing is a separate question this changes nothing about.
 
+- **ADR-0129** _(Accepted; M0–M4 landed 2026-09-08)_ — Identity across two imports is the code, and
+  the match is shown before what it produced. Three tiers of revision comparison ship and every one
+  is plan-nested and correlates on `activities.id` — right for a plan against its own baseline, and
+  incapable of the case a planner pays for. **An import always targets a NEW plan** (ADR-0050), so a
+  re-issued P6 file is a **sibling plan** sharing no activity ids at all, and an id-keyed comparison
+  reports every row of one as removed and every row of the other as added. **The blocker is identity,
+  not plumbing**: everything downstream already works across two plans, because
+  `computeRevisionDelta` cannot tell which side came from `baseline_activities` and which from
+  `activities` — the property that made baseline-vs-baseline free at ADR-0125. So a cross-plan
+  comparison is **a change of what fills the correlation slot and nothing else**, and the pure
+  functions are not modified: their existing suites pass unchanged and are the before/after oracle.
+  **The key is `code`, matched exactly** — folding would manufacture a duplicate the database
+  deliberately permits, since `uq_activities_plan_code` is a case-sensitive btree. **Duplication is
+  answered by that index rather than by repair code, and that is a recorded finding**: the backlog row
+  and this epic's own brief both asserted the column has no unique constraint, and named the method
+  that established it — grepping Prisma decorators, which **structurally cannot see the answer**,
+  because Prisma cannot express a partial unique and every one of them here lives in raw SQL. The
+  obligation that leaves is a test reading `pg_indexes` on the running database (never the migration
+  file, which would describe history), proved to discriminate by relaxing the index inside a
+  rolled-back transaction.
+  **The coverage is stated first** — on screen, in the live region and on paper — because every
+  number below is worth exactly what it says they are; every count including the zeroes, every
+  capped list beside its true total. **No codes in common is a 200 with a typed reason and NO
+  delta**, carried on the criticality block as well as at the top level: four empty sets and a null
+  reason read as "assessed, and nothing changed", the opposite of the truth. A **hard coverage
+  threshold was rejected** as a number tuned to no data. The route is **org-scoped** (ADR-0045's
+  precedent — two plan ids leave no honest `:planId`), both sides resolve org-scoped to a **uniform
+  404**, each revision against **its own plan**, and a same-plan pair is **422 before the revisions
+  are resolved**, because it is the wrong question whatever revisions it names and the two routes
+  correlate on **different keys**. The shipped route is byte-identical.
+  **The overlay draws what has an honest lane and counts what does not**, because **time is a shared
+  coordinate across two plans and lane is not**: an imported activity's lane is its position in the
+  source file until phase 3 repacks it by computed dates, and phase 3 is best-effort. A matched
+  ghost sits at the **anchor's** lane — literally where that bar is — and the `moved` test **drops
+  its lane clause**, without which the overlay silently becomes the whole-old-plan design rejected at
+  ADR-0127 CQ-2: busy, plausible, failing nothing. ADR-0127 D2 is **applied, not overturned** — the
+  lane is still never guessed. **`computeSchedule` is not called, not imported and not reachable**
+  (ADR-0125 D1's strong form, and **not** ADR-0116 D7's weaker sibling, named so nobody reaches for
+  the wrong one), enforced by a gate that covered the new module the day it was written because
+  `revision-sources.ts` derives its roster by prefix. **No schema change, and that is a statement**:
+  `database-architect` is not engaged because there is nothing to design.
+  **Three defects were found by reading or by driving rather than by anything failing.** The painter's
+  **link** layer is not shape-driven: it resolves an ADDED or CHANGED link by looking its
+  `dependencyId` up among the edges the diagram already draws, so a link handed to it under a
+  correlation key matched nothing, drew nothing and reported nothing while the total counted it — a
+  picture quietly missing rows in the one place a reader cannot check. The **undrawable sentence** is
+  false cross-plan ("the old revision did not record where they were" — it did; the position is not
+  comparable), the likeliest defect in the milestone precisely because reusing it feels like reuse.
+  And the **omission rule was wired to a branch that can never fire**: `entered`/`left` hold only
+  matched rows, so their null-id branch is unreachable and the plan-name prop threaded there was
+  scaffolded for a caller that does not exist — the journey proved it, not a reading. **The role-
+  invariance scanner was found to have a THIRD bypass** by being given a second consumer: a key
+  preceded by a decorator on the same line is at neither line start nor after a `{`, and the health
+  report's gate was green against that form only because its DTO happens not to use it.
+  **A re-code is indistinguishable from a removal plus an addition, permanently and by
+  construction**, and the product says so wherever added or removed rows appear. The same holds one
+  level down for a **re-typed link**, because the edge key must carry the type — one plan may hold an
+  FS and an SS between the same pair — while a **lag** change keeps the key and reads as CHANGED.
+  Written down because this epic's own journey asserted otherwise on its first run. **P3, the
+  overlay's paint cost, is TAKEN and PASSES** (product owner's hardware, 2026-09-09, `web-v0.125.0`):
+  `revision-diff` at Week framing, 2,000 activities per side, **baseline 0.00 pp with a 0.00 pp
+  run-to-run spread, treatment 0.00 pp at 60.0 fps, delta +0.00 pp** against ADR-0127's 2.00 pp bar.
+  **The spread limb is what makes that a verdict rather than a shrug** — ADR-0127 D8 recorded a
+  machine whose no-change baseline moved 0.56 → 1.85 and 0.93 → 10.00 pp and was honestly reported
+  INDETERMINATE — and the run was **not vacuous**, the overlay drawing 37 of 264 on-screen bars and
+  49 of 372 links while it was measured. So the committed prediction holds: the cross-plan rule
+  narrows what is drawn, it costs no more than the same-plan overlay (D8a: 0.19 → 0.00 pp), and **the
+  lane clause did not leak back in**. What it does **not** establish is stated rather than widened —
+  one framing, one machine, **Fit still ungraded** (`docs/TECH_DEBT.md` #260, whose 98.33 pp baseline
+  is the opposite failure), and Week culls 2,160 bars to 264, which is ADR-0128's finding that cost
+  tracks bars drawn rather than plan size. **No feature flag** (ADR-0088 D1).
+
+- **ADR-0130** _(Accepted; M0–M7 landed 2026-09-09)_ — One press takes every reading, and a sitting
+  is what a reading belongs to. ADR-0128 put the canvas benchmark on the staff console because the
+  number is about the operator's own machine; they used it the next day and reported two things —
+  _"some say they don't get recorded and some say reported but not graded"_ and _"why split the
+  tests"_. Both were true and **they were about two different mechanisms producing similar-sounding
+  sentences**, which reading the code separated before anything was designed: **two of the eight
+  combinations the picker offered produced a verdict**, and "not recorded" was never about gating at
+  all but about a refusal, a cancellation or a failed POST, each with its own wording. Four more
+  things fell out that nobody had reported.
+  **The load-bearing decision is that the sweep is a loop ABOVE the runner and nothing about the
+  measurement changes** — `runProbe`, `refuseRun`, `judgeAbsolute`'s rules and the scenes are
+  untouched, so a reading taken after the epic is comparable with one taken before it, which is the
+  single property `perf_probe_results` exists to preserve. A server-side sweep is refused rather
+  than deferred, and it is the thing ADR-0128 exists to refuse. All four controls take **one**
+  orchestration (a single run is a one-step sweep), and the plan is **derived from the registry**,
+  so a third scenario joins the sweep with no edit.
+  **The completed limb becomes the unit of durability.** A cancelled press used to throw away
+  finished work — stopping during the second limb of the two-limb scenario destroyed a **complete**
+  500-activity limb, three full repeats, nothing about it wrong — and nobody had reported it,
+  because a discarded measurement leaves nothing behind to report. Each step now POSTs as it lands,
+  a refusal does not end the sweep, and **the refusal rules are not weakened anywhere**: a number
+  from an unsuitable machine is worse than no number, so the remedy is to take the reading again.
+  **A sitting becomes a stored fact**, and `sweep_id` is the first **client-supplied** grouping
+  column on a table whose grouping was deliberately server-minted (amending ADR-0128 D5/D7) —
+  because only the client knows four presses were one act. Neither new column takes a `DEFAULT`:
+  `NULL` means _a single press_ and _a row that predates the column_, and the
+  `hours_per_day_minutes DEFAULT 1440` precedent licenses nothing, since 1440 was true of every
+  pre-existing row and neither of these is knowable for any. A sitting is then keyed by **which id
+  space grouped it**, namespaced rather than `sweepId ?? runId`, because a sweep whose other three
+  readings were refused stores exactly one row and counting rows would call it a single press.
+  **That decision is what made the epic's own worst defect reachable, and it shipped for two
+  milestones**: `runSweep` minted an id unconditionally, so every single **Measure one thing** press
+  grouped as a sweep and the history told the operator _"This sitting has 1 of 4 readings. 3 were
+  refused or never taken"_ — every clause false, on the commonest press there is, against a schema
+  whose own approved words said the opposite. **No test could see it**: every fixture in the model's
+  suite sets `sweepId: null` for a single press, because that is what the producer was supposed to
+  send, so a suite built from the contract was blind to a producer disobeying it.
+  **One presentation model with two adapters feeds one formatter**, which is what lets the
+  paste-ready block be produced for a reading taken last week — `docs/TECH_DEBT.md` #75's founding
+  failure, a measurement unreachable by the person who needs it, reproduced one tier in — and what
+  stops the screen and the copied artefact disagreeing. A field a stored row cannot supply is
+  `null`, never a guess and never an omission, and prints as an explicit marker. Three sitting facts
+  are **disjunctions or refusals rather than the first row's value**; the canvas says
+  `varies between readings` when they disagree, because stating one of two would settle
+  `docs/TECH_DEBT.md` #261's confound by accident on the screen built to expose it.
+  **Two remedies, because there are two failures.** `Retry recording` re-sends a body that exists;
+  **Run the missing measurements** re-runs only what produced nothing, under the **same** sitting id.
+  Re-measuring a `not recorded` step would spend twenty-five seconds obtaining **different** numbers
+  under the impression of re-sending the ones on screen. The merge replaces steps and never the
+  sitting, and a sitting that now spans more than an hour says so on the block and in the report.
+  **`saturated` is a fact, and #260's own prescribed remedy would not have caught #260's own
+  exhibit** — `judge.ts` returns `REPORTED_ONLY` for an ungated run **before** the spread check, and
+  the exhibit is ungated, so the misleading figure is the printed delta and not the withheld verdict.
+  Established by reading the judge, not inferred from the row.
+  **ADR-0128's three refusals hold**: no CI gate, no verdict column, and Fit stays reported and never
+  graded. **Neither #75 nor #261 is closed by this epic** — it removes the friction that stopped #75
+  being re-derived for a year; the readings are still owed and are the product owner's to take.
+  Five corrections are recorded, each found by running or reading rather than by anything failing:
+  the quick sweep is **13.07 s and the spec said ~30 s** in two places (Class 1, and the **spec** was
+  corrected because the code computes the answer); **every `revision-diff` reading had been
+  unstorable since that scenario shipped**, answered `422 … property frames should not exist` and
+  reported in the same words as a dropped socket, found by a journey reading the response body rather
+  than counting failures; a journey assertion that **had silently stopped being able to report**,
+  counting rows against a read capped at 50 so the total is invariant once fifty readings exist; a
+  screen **inferring absence from that same page** and saying readings were refused when they were
+  merely unreturned (`docs/TECH_DEBT.md` #271); and a release that would have shipped **no image
+  carrying its own DTO**, since M4 added two accepted body fields with no changeset while the client
+  sent one unconditionally.
+  **The gate pass earned its place for the eighth epic running.** Seven specialists; security,
+  backend-performance and database-architect passed having **re-derived the epic's own numbers from
+  the shipped code** (a 0.13–0.17 ms backward index scan at 100,000 rows, a `ctid` Tid Scan at ~3 ms
+  a batch, the migration proven safe against a populated table rebuilt from the 62 earlier ones).
+  The other four blocked, and **three of their findings are one correct rule applied one level too
+  low or one file over**: the `inert` guard covering this panel while the overlay covers the page —
+  the M5 review's own fix, at the wrong scope, so Tab from Stop reached a control hidden behind an
+  opaque full-screen canvas (WCAG 2.2 §2.4.11, invisible to axe twice over, since no rule covers
+  obscuring and the journey waits for the overlay to be **gone** before it scans); a saturation
+  enumeration **counting a renderer that renders nothing**, `judgeStoredRow` having lost its last
+  production caller at M6 while the gate written against "one renderer updated and not its
+  neighbour" went on asserting on it, green; and the epic's headline number wrong on the screen it
+  built to remove wrong numbers — the approved spec says "four **steps**, six **readings**, each a
+  row" **seven times**, and the code counted steps, captioning a complete sweep `4 readings` over a
+  table of six, under a docblock whose own arithmetic said eight. Two more were the plan and the
+  documents rather than the code (a Done checklist claiming three register items closed when two
+  were untouched, and `docs/API.md` never touched while `docs/DATABASE.md` got a full update for the
+  same change — its missing paragraph asserting the opposite of what is now true). The database
+  review found a wrong sentence **shipping in the OpenAPI spec** (`frames_per_phase` as "the frames
+  per repeat", which halves the count for a difference limb — the kind ADR-0129 P3 was measured on)
+  and one now **permanent**: the M4 migration's stated reason for re-citing #253 is false, the
+  Closed-numbers ledger existing precisely so an inbound citation stays resolvable, which is
+  ADR-0076 Class 3 inside a correction about a wrong citation — and a checksummed migration cannot
+  be edited, so the correction lives in `docs/DATABASE.md`. Two reviewers independently reached the
+  truncation rule's premise, which this epic's own resume feature made untrue fifty lines below
+  where it is asserted (`docs/TECH_DEBT.md` #273; not reachable today only because the resume reads
+  its id from in-memory state). Every fix carries a regression test verified red first; two findings
+  are recorded rather than rushed (#272/#273).
+  **The CPM engine is not imported** — in its honest form: there is nothing
+  here to hold parity for.
+
+- **ADR-0131** _(Accepted; M0–M5 landed 2026-09-09)_ — A spec header states its approval, and a
+  citation is what closes it. **Fifty-four spec documents behind shipped, ADR-filed work were headed
+  `Draft — awaiting approval before implementation`** — `audit-log`'s said it about a table that has
+  been append-only in the database since 2026-08-03, `gantt-editing`'s about a view released in
+  `web-v0.92.0`. Nobody was negligent, and that is the diagnosis: `docs/PROCESS.md` names the header
+  as front matter and names no step that revisits it, so it drifted **by being nobody's step**. That
+  is the ADR-0058 shape, which is why the answer is a gate rather than a sweep — a sweep fixes
+  today's fifty-four and guarantees tomorrow's. It matters because of **ADR-0105**: a reader
+  deciding whether a change needs a full spec opens the spec and reads the header, and a `Draft`
+  header over shipped work tells them stages 1–4 were never completed for the surface they are about
+  to change.
+  **The predicate is citation, and the refinement was measured and rejected.** Eleven ADRs are
+  `Proposed` and **four of them are live production surfaces** (0029 the app-shell, 0030 the
+  canvas-first workspace, 0031 the toolbar registry, 0032 canvas-first authoring), so keying on the
+  ADR's own status would silently miss the loudest cases. The objection then **defuses itself**:
+  following all eleven, 0029–0032 cite files that live in `docs/plans/`, 0082 and 0083 cite no spec
+  directory at all, and the rest cite shipped epics — the population of _cited by a Proposed ADR
+  whose work has not started_ is empty. The claim is narrow and true: an ADR citing a spec is the
+  record that its design became a decision, so it cannot also be awaiting approval to build. It does
+  **not** claim the work shipped (`docs/adr/0083-shaded-form-fields.md:3-5` is a filed ADR with
+  nothing built), which is why `Approved` is admitted for a cited spec and only `Draft` is refused.
+  **The join runs directory-first, and that is what made this ADR's own defect survivable.** The
+  first version anchored on `docs/specs/<slug>` and found **70 of 72** cited slugs — ADRs link their
+  spec **relatively** (`0044-…:139` writes `../specs/…`) — and C2, which only asks that the cited
+  set be non-empty, passed cheerfully on the 70. Silent under-inclusion, in the gate whose own spec
+  rejects a predicate for exactly that. It was caught only because M0 had produced an **independent**
+  number to compare against. Widened, the gate's figures land on M0's exactly: 91 spec documents, 72
+  cited, 72 `Draft`, 54 of those cited, 4 cited with nothing to read — two instruments sharing no
+  code, agreeing on every figure.
+  **`headerField` is a new export, not a widened `fieldValue`.** That function's anchor is the bare
+  column-0 form, which is **2 of 91** spec headers; using it would have read two files and reported
+  green over eighty-nine, which is ADR-0124's Finding 0 inside the commit citing ADR-0124. Widening
+  it would also have changed `check:debt-status` over a different document family. Both of the new
+  reader's properties are requirements on evidence: 84 status lines sit at line 3 and the rest at
+  8, 8, 9, 17, 18, 21 and 30, so a **line anchor misses seven**; and `one-row-header` carries two
+  status lines — the spec's at :3 and an embedded ADR draft's at :796 — so a **last-wins reader
+  reports the draft's status as the spec's**. Refusing the non-canonical forms is then a separate
+  strict pass, because a header in the wrong shape is still a header (ADR-0124).
+  **A vocabulary of five, not a blocklist of pre-approval wordings** — an unknown word fails loudly,
+  a blocklist fails silently the first time somebody invents a phrasing, which is how the estate
+  acquired `Reviewed`, `Delivered`, `Proposed` and `**Awaiting approval**`. The normaliser strips
+  emphasis because **#274's own count of 67 missed three bold `**Draft — …**` headers**: the fourth
+  string-matching miscount of this population, the cited-Draft figure alone going 28 → 50 → 54, each
+  correction upward.
+  **S6 is a departure from the approved spec's assertion table, and it is M0's.** The spec treated
+  the cited directories with no spec document as a documented blind spot; M0 measured four —
+  `canvas-decomposition`, `canvas-maximisation`, `design-system-rewrite`, `graphite`, all shipped
+  epics — and concluded _"it cannot be a silent skip: a silent skip is how the estate reached this
+  state."_ **The plan side is a contradiction rule, not a presence rule**, on the measurement that
+  46 of 90 plans annotate and 44 do not: a bare link asserts nothing, and requiring an annotation
+  would invent a second field nobody is forced to write, which is #274's defect one document along.
+  **Report-only, then swept, then armed and watched failing** (the ADR-0120 sequence): the gate
+  shipped deliberately absent from `package.json`, the red run against the un-swept estate is
+  committed, the sweep took 66 findings to 0, and a deliberately re-drafted header then produced
+  `FAIL` under `prepush.sh` — not `WARN`, which is the difference between registered and enforced.
+  **17 `Draft` specs remain and none is a finding**: no ADR cites them, which is the measured blind
+  spot and is a quarter of the original population. Every assertion was verified red against a named
+  mutation (ADR-0110 D5), 23 across 27 cases; **C0's fixture took two attempts and the first would
+  have passed against its own mutation**, because an empty spec directory also empties the cited set
+  so C2 fired and the run was red for the wrong reason. **The CPM engine is not imported and no
+  migration runs** — no product code changes at all.
+
+- **ADR-0133** _(Accepted; M0–M8 landed 2026-09-10)_ — A command surface declares its rows, and the
+  pen leads the one it unlocks. Five epics had worked this band and each asked whether the row
+  fitted; none asked what it was made of. **The measurement that opened this one is the whole
+  argument**: at 1280 the deck's twelve authoring commands sum **1069 px inside a 1264 px
+  container** — they fit, with 195 px to spare — and the row wrapped anyway. The overflow was never
+  the commands. It was two caption spans, their padding, their dividers and the gaps either side.
+  So the group cards and the captions go (band 143 → **139 px** at 1440/1646/1920 against a 145
+  bar; foot row **51 px**), the two rows become **declared** DOM rows whose gate asserts
+  **membership and not the line count** (a build where a command changed rows passes a count
+  perfectly, and that is the defect a planner feels), and the shared CVA gains a five-rung state
+  ladder declared per registry item.
+  **Deleting the captions needed a repair that is part of the decision.** With them gone the deck's
+  four groups were separated by 8 px of nothing while the registry sections _inside_ them kept a
+  painted rule and 16 px — the finer division twice as wide and the only one marked, and the
+  boundary that vanished is the one carrying most meaning on the DO row, where the eleven pen-gated
+  commands meet three that are never gated. A group seam now draws at 60 % height against the
+  section rule's 50 %: **the coarser boundary is the taller mark**, gated as that relationship
+  rather than as two class strings.
+  **The pen's verb leads the row it unlocks** and its badge, `role="status"` sentence and seven
+  hand-off controls go to the foot row. It is **shaded with its reason, never absent** (an item that
+  disappears takes a roving stop with it and shifts every command sideways); **focus stays on the
+  control that was pressed**, because the deck's pen relabels rather than unmounting, and the old
+  restore — written for a surface where a successful action removed the button that ran it — threw
+  focus to the other end of the screen; and "I hold the pen" derives from the lock's **tone**, never
+  its action list, which drops `stop` in one branch for reasons about which buttons the foot row
+  renders and so shaded the pen beside eleven live commands under a sentence naming a peer.
+  **D6 is the transferable rule and it was learnt by breaking it: a toolbar context member is a fact
+  or a callback, never a live hook return.** Sharing one `usePenLockView` call is right — a second
+  would let the two halves disagree about one lock — but threading its whole return through a
+  context documented as a seam of flags and callbacks put an unstable object graph, eight closures
+  and a `RefObject` into it: a handle to a DOM node in a _different_ surface, passed through the
+  deck's context to an item forbidden to touch it. The cost was **measured, not argued** — a
+  render-count probe against the pre-epic baseline showed the hook's once-a-second tick moving from
+  a leaf to the workspace root and re-rendering the canvas host every second, re-resolving every
+  registered command with it, while **the context memo's own docblock names that hazard**.
+  **And the memoisation is why the ADR is worth reading.** The first fix listed the pen object in
+  its dependency array; `usePlanPen` rebuilds that object every render, so the memo never hit and
+  the remedy for a per-second re-render recomputed per render. **Nothing failed** — no test went
+  red, the code read correctly, and a reviewer would have read it as closed. It was caught by asking
+  whether the input was stable, which is a question rather than an instrument, and the property is
+  now a gate because the only thing separating the working version from the broken one is an
+  identity across a re-render.
+  `primary` is reserved by a **cardinality the primitive throws on** rather than a name list in one
+  feature's test — a list cannot see a control registered in a third registry, so a second amber
+  slab could appear with nothing red. The state ladder's justification is corrected to the durable
+  one: **ARIA has no vocabulary for this distinction at all**, so the DOM structurally cannot carry
+  it whoever sets it.
+  **Three things in this epic were specified and not built** — the ladder's fifth state, the group
+  seam, one outlet placement — and only the first was caught before the gate pass, because it
+  painted visibly wrong. ADR-0058's rule is _verify the claim_; this adds that **a plan is a claim
+  too**, and the ones that survive unchecked are precisely the ones nothing renders. The general
+  form: a milestone implementing a closed vocabulary implements all of it, or the plan is amended in
+  the same commit — an enum with an unused member is invisible and harmless, one with a **missing**
+  member forces the next caller to reach for the nearest wrong one, which is exactly what produced
+  the two-identical-pictures collision the ladder existed to remove. Open with numbers rather than
+  intentions: `docs/TECH_DEBT.md` #286/#287/#288. **The CPM engine is not imported and no migration
+  runs** — `apps/web` only, which is what makes the whole epic revertible.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -4273,6 +4564,33 @@ A lighter-weight running log of smaller decisions is in
   scene, and bars drawn (unrecorded in 2026-08-03's set) all differ, and one
   re-run at ~1036×600 would discriminate. Week is unchanged across both dates.
   The unattributed ~8 ms is still unattributed and still must not be guessed.
+  **Five sittings on 2026-09-10 (#75 item 6 and its sub-items) settle it, and
+  the 23.3 fps figure above must not be quoted on its own — it is the one
+  reading in the whole set that nothing has reproduced.** Same machine, same
+  painter and same scene (verified against the tree, not assumed). At
+  **1920×1080 — 1.5 % MORE pixels and 1.8 % more bars than the 2026-09-08
+  run — Fit/2,000 measures 32.2 fps**, 8.9 fps faster, against a repeat-measured
+  noise floor of **0.4 fps**. More work on more pixels, quicker, which no
+  monotonic cost model permits from geometry: **the difference is
+  between-sitting machine state, not canvas size.** The probe records no power
+  state (`docs/TECH_DEBT.md` #283), which is now the leading explanation —
+  **deferred on a trigger, and deliberately not work**: the swing is already
+  explained and §9 is met, so the field is worth capturing the next time two
+  readings disagree, not before.
+  **So §9's gate is MET at every judgeable point that reproduces** — 32.2 fps
+  fullscreen, 34.8 and 35.2 at 1912×948, 39.5 at the small window, and 60.0 at
+  Week at both scales. Three earlier claims are withdrawn with it: #75 item
+  5(c)'s "missed at Fit at 2,000"; item 5(f)'s two-term model (whose per-bar
+  term alone charges more than the whole measured step, so its area coefficient
+  would have to be negative); and the vsync-quantisation hypothesis, which was
+  invented to explain a steepness that turned out to be the cross-sitting
+  artefact. Within one sitting the response is close to proportional: +10 % bars
+  and +14 % area buy +9 % frame time. **#261's exhibit is contaminated by the
+  same finding** — its 23.3-against-39.5 pair was never a clean size comparison
+  — though its concern stands, since size does cost ~3 fps for 14 % more area
+  and §9 still names no display. What survives every sitting unchanged is
+  **Week: 60.0 fps, 0.00 pp dropped, at both 500 and 2,000** — the surface a
+  planner works on — and **cost tracking bars drawn rather than plan size**.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 

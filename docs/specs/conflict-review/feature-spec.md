@@ -1,7 +1,6 @@
 # Feature Spec: Conflict review — a count you can see, and an action that fits
 
-- **Status:** Draft — awaiting product-owner approval of the plan (all five open questions ANSWERED
-  2026-08-13, recorded in §1)
+- **Status:** Accepted — shipped (ADR-0094)
 - **Author(s):** Claude Code (from a product-owner observation on `web-v0.89.0`)
 - **Date:** 2026-08-13
 - **Related ADR(s):** ADR-0031 (toolbar registry & taxonomy), ADR-0064 (a statement lives in

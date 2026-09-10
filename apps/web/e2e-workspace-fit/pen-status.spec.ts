@@ -10,13 +10,23 @@ import {
 } from '../e2e-workspace-chrome/support';
 
 /**
- * **M1 — the pen's sentence is read in the plan's facts row, and its controls stay on the plan.**
+ * **The pen's three parts, and the three places they are read.**
  *
- * The one-row header's first shippable slice. `CompactPenStatus` used to render a badge, a
- * live-region sentence and every ADR-0028 hand-off control as one block on the identity row; the
- * sentence is a **fact** and now portals to wherever the plan's facts are read, while the badge and
- * the controls are **actions** and stay beside the plan (ADR-0093's discriminator applied to a
- * model rather than to a command).
+ * The one-row header split the block `CompactPenStatus` used to render — a badge, a live-region
+ * sentence and every ADR-0028 hand-off control — by asking what each thing IS: the sentence is a
+ * **fact** and portals to wherever the plan's facts are read, the rest are **actions** and stayed
+ * beside the plan (ADR-0093's discriminator applied to a model rather than to a command).
+ *
+ * **The console epic's M5 split it once more, and this suite is the record of where the pieces
+ * landed.** The pen's VERB — `Start editing` / `Stop editing` — is the control that unlocks the
+ * eleven authoring commands, and it sat three sections away from them on the identity row; it is
+ * now a registry item at the head of the command deck's `Author` card. Its badge and its seven
+ * hand-off controls went the other way, to the plan's foot row beside the sentence they explain
+ * (the product owner's answer to CQ-4).
+ *
+ * So the three parts are in three places and each case below names one. The header holds **none**
+ * of them, which is the assertion most likely to be broken by a later change and the one this
+ * suite would otherwise have kept asserting the opposite of.
  *
  * **Why a journey and not another unit case.** Three of the four assertions here are about *which
  * element contains which*, across a React portal, in a real layout — and the unit suite's answer to
@@ -67,32 +77,60 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
     await expect(sentence).toHaveText(/editing this plan/i);
     await expect(sentence).toHaveAttribute('aria-live', 'polite');
 
-    // **The pinned negative, and it is the assertion that means the most.** The controls must NOT
-    // have travelled with the sentence: a hand-off action belongs on the object. Without this the
-    // suite passes equally against a change that moved the whole cluster, which is the shape this
-    // milestone exists to avoid.
+    // **The pinned negative, and it is the assertion that means the most.** The VERB must not have
+    // travelled with the sentence: it belongs at the head of the row it unlocks. Without this the
+    // suite passes equally against a change that moved the whole cluster back into one block,
+    // which is the shape both splits exist to avoid.
     await expect(factsRow.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
+
+    // **The badge DID travel, and the hand-off controls with it** (console epic M5, CQ-4). Asserted
+    // positively rather than left as the absence above: "the verb is not here" is equally true of a
+    // foot row that carries nothing at all.
+    //
+    // Located by `data-plan-pen` — the cluster's own stable hook — and not by the word `Editing`.
+    // The sentence is `sr-only` in eight of the ten lock states and still contributes to
+    // `textContent`, so a copy assertion here would be satisfied by the sentence that was already
+    // in this row before M5, and would say nothing about the badge or the controls beside it. That
+    // is the same class of false pass this suite's own header records (`data-plan-pen` exists
+    // because a probe located the cluster by its sentence and silently changed subject).
+    const cluster = factsRow.locator('[data-plan-pen]');
+    await expect(cluster).toBeVisible();
+    await expect(cluster.getByText('Editing', { exact: true })).toBeVisible();
   });
 
   /**
-   * **This case passes in both states, and that is recorded rather than left for a reader to
-   * discover.** Verified against a build with the outlet removed: the other two cases go red and
-   * this one stays green, because everything it asserts is true whether the sentence moved or not —
-   * the controls never left, and there is one live region either way. It is a pinned invariant, not
-   * a discriminator, and its discriminating sibling is the first case above.
+   * **The verb leads the row it unlocks, and the header keeps none of the three parts.**
+   *
+   * This replaces a case that asserted the badge and `Stop editing` are in the header — true until
+   * M5 and false after it. It was NOT deleted and re-added: its own docblock recorded that it
+   * passed in both states of the split it was written for, which is exactly the property that makes
+   * a stale assertion survive a change. The version below is a discriminator in both directions.
    */
-  test('the badge and Stop editing stay in the header, beside the plan', async () => {
-    // **Scoped to the banner, not to `[data-plan-identity]`'s parent.** The header became three
-    // sections on 2026-08-26 and the pen moved out of the identity section into the mode section,
-    // so the old locator asserted the pen was somewhere it deliberately no longer is. The claim
-    // that matters is unchanged and is what this now says: the controls are in the header row and
-    // — per the case above — not in the facts row.
-    const header = page.getByRole('banner');
-    await expect(header.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  test('the pen verb leads the command deck, and the header holds no part of the pen', async () => {
+    // Located by the toolbar's role and name — never by copy, which is ADR-0091 M7's standing rule
+    // after three journeys broke on a label change.
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    await expect(deck.getByRole('button', { name: 'Stop editing' })).toBeVisible();
 
-    // The state word stays visible beside the plan even though the sentence has moved, which is
-    // what keeps the header self-explanatory at a glance.
-    await expect(header).toContainText('Editing');
+    // **First on the DO ROW**, not first in the deck — and the difference is what this assertion
+    // got wrong on its first run, which is the reason it is worth a comment. The deck declares two
+    // rows (M4): LOOK carries View and Find, DO carries Author and Plan. Querying the deck's first
+    // roving stop returns the LOOK row's, which is `today`, and says nothing about the pen at all.
+    //
+    // Scoped to `[data-deck-row="do"]`, the claim is the milestone's: the control that opens the
+    // authoring commands sits immediately before them. Read from DOM order, so it cannot be
+    // satisfied by a control that merely renders somewhere on the row.
+    const firstStop = await deck
+      .locator('[data-deck-row="do"] [data-toolbar-item]')
+      .first()
+      .getAttribute('data-toolbar-item');
+    expect(firstStop).toBe('pen');
+
+    // **The header holds none of it.** The command deck is a sibling of `<header>` inside the chrome
+    // band, so this is a real containment question rather than a restatement.
+    const header = page.getByRole('banner');
+    await expect(header.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
+    await expect(header).not.toContainText('Editing');
 
     // And the sentence is not ALSO here — one subject, one place. A host that portalled and kept
     // its in-place copy would put two live regions in the document, which a screen-reader user
@@ -100,9 +138,41 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
     await expect(page.getByRole('status').filter({ hasText: /editing this plan/i })).toHaveCount(1);
   });
 
+  /**
+   * **Focus stays on the control the planner pressed** (console epic M5-T4, WCAG 2.2 §2.4.3).
+   *
+   * `usePenLockView` has pulled focus back to its container since ADR-0028, because Start and Stop
+   * were different members of `EditLockControls` and the successful action removed the button that
+   * ran it. The deck's pen is ONE item that relabels, so the element survives and there is nothing
+   * to restore — and restoring anyway throws focus to the foot row at the other end of the screen,
+   * which also silently kills every workspace accelerator (a React `onKeyDown` on the workspace
+   * root). A unit case pins the rule; only a browser has a real focus ring to ask about it.
+   *
+   * Asserted on the ELEMENT, never on "focus is not on `<body>`": the weaker assertion passes
+   * against the defect, because the foot row is a perfectly good element to land on.
+   */
+  test('leaves focus on the deck pen after the lock changes hands', async () => {
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    const verb = deck.getByRole('button', { name: 'Stop editing' });
+    await verb.focus();
+    await verb.click();
+
+    await expect(deck.getByRole('button', { name: 'Start editing' })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-toolbar-item')))
+      .toBe('pen');
+
+    await ensurePen(page);
+  });
+
   test('releasing the pen updates the sentence in place, in the facts row', async () => {
     const factsRow = page.locator('[data-schedule-state]');
-    await page.getByRole('banner').getByRole('button', { name: 'Stop editing' }).click();
+    await page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .getByRole('button', { name: 'Stop editing' })
+      .click();
 
     await expect(factsRow.getByRole('status')).toHaveText(/no one is editing this plan/i, {
       timeout: 15_000,
@@ -169,9 +239,16 @@ test.describe('the merged header row', () => {
     // design was priced on. 1280's arithmetic is the tightest of the three, so it is the width where
     // a short fixture would be most likely to report a fit the product does not have — and the
     // fixture above deliberately uses a long name and a real project.
+    // **1440 became ONE line at the console epic's M5, and that is a measurement rather than a
+    // relaxation.** The pen's verb left this row for the command deck, and the row's content went
+    // from wrapping at 1440 to **1267 px against a 1408 px container** — measured at all four
+    // judged widths, where the content figure is invariant and only the container moves. 1280's
+    // container is 1248, still 19 px short, so it stays at two lines and this case keeps a width
+    // where the row is known to wrap. Without that the assertion would only ever prove the row
+    // fits, which is half a claim.
     for (const [width, expected] of [
       [1646, 1],
-      [1440, 2],
+      [1440, 1],
       [1280, 2],
     ] as const) {
       await page.setViewportSize({ width, height: 1000 });

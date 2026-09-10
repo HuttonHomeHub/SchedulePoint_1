@@ -204,27 +204,40 @@ describe('Deck — the roving keyboard model', () => {
  * - captions are outside the roving order (a static label in the sequence would be a stop that
  *   does nothing — the inverse of the defect that put them in it).
  */
-describe('Deck — captions are static labels', () => {
-  it('renders no disclosure captions and keeps the group names for AT', () => {
+describe('Deck — the captions are gone and the group names are not', () => {
+  it('renders no caption at all, and keeps every group name for AT', () => {
     renderDeck();
     // The old buttons were named `<caption> commands`; none may survive, under any state.
     expect(screen.queryByRole('button', { name: /commands$/ })).not.toBeInTheDocument();
     expect(document.querySelector('[aria-expanded]')).toBeNull();
 
-    // The grouping itself is kept — the caption word reaches AT once, as the group's name.
+    // **The grouping is kept and this is the milestone's acceptance condition** (console epic
+    // M6-T1): the word reaches AT exactly as it did, as the group's own name. Nothing was lost,
+    // because the span that went was `aria-hidden` — the argument ADR-0119 used to delete `MODE`.
     for (const name of ['View', 'Find', 'Author', 'Plan']) {
       expect(screen.getByRole('group', { name })).toBeInTheDocument();
     }
-    // And the visible caption is aria-hidden, so the word is not announced twice.
+
+    // **And the visible word is gone**, asserted in the group that carries the longest of the four
+    // rather than by searching the deck: a document-wide query for "Author" would be satisfied by
+    // the group's own `aria-label`, which is exactly the thing that must survive. This case read
+    // the opposite until M6 — it required the span to exist and be `aria-hidden` — so it is
+    // inverted here rather than deleted, which is what keeps it a discriminator in both
+    // directions.
     const authorGroup = screen.getByRole('group', { name: 'Author' });
-    const caption = [...authorGroup.querySelectorAll('span')].find(
-      (s) => s.textContent === 'Author',
-    );
-    expect(caption).toBeDefined();
-    expect(caption).toHaveAttribute('aria-hidden', 'true');
+    expect(
+      [...authorGroup.querySelectorAll('span')].filter((el) => el.textContent === 'Author'),
+    ).toEqual([]);
   });
 
-  it('keeps captions out of the roving order', () => {
+  /**
+   * **Kept after the captions went, and deliberately.** Its subject was a static label that could
+   * have crept back into the sequence; with no label at all the `caption:` filter can only pass —
+   * so the assertion that carries this case now is the pinned positive, which still proves the
+   * roving walk laps the deck. Deleting it would remove the only unit-level cover of that walk to
+   * retire a filter that costs nothing.
+   */
+  it('laps the deck without ever landing on a caption', () => {
     renderDeck();
     const today = screen.getByRole('button', { name: 'Today' });
     today.focus();

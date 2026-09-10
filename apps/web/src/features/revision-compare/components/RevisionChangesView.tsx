@@ -1,4 +1,9 @@
-import type { RevisionChangeReport, RevisionClassAssessment } from '@repo/types';
+import type {
+  CrossPlanChangeReport,
+  CrossPlanClassAssessment,
+  RevisionChangeReport,
+  RevisionClassAssessment,
+} from '@repo/types';
 import * as React from 'react';
 import { useEffect, useId, useRef } from 'react';
 
@@ -9,6 +14,7 @@ import {
   classTitle,
   notAssessableSentence,
 } from '../model/change-sentences';
+import { otherPlanRowNote } from '../model/revision-sentences';
 
 import { useAnnounce } from '@/components/ui/announcer';
 
@@ -33,17 +39,31 @@ import { useAnnounce } from '@/components/ui/announcer';
  * ordering is the server's; this component does not re-sort.
  */
 export interface RevisionChangesViewProps {
-  readonly report: RevisionChangeReport;
+  /**
+   * **One view renders both kinds.** A cross-plan row's `activityId` is nullable, so the union is
+   * what forces the "nothing to reveal" case to be answered rather than remembered.
+   */
+  readonly report: RevisionChangeReport | CrossPlanChangeReport;
   /** Select and reveal an activity in whichever view is showing. */
   readonly onActivateActivity: (activityId: string, name?: string) => void;
+  /**
+   * Cross-plan only: the OTHER plan's name, printed where a row's activation control would be.
+   *
+   * A `REMOVED` row across two plans has no bar on this diagram at all, so the control is omitted
+   * (ADR-0082) — and an omission with nothing in its place is indistinguishable from a control
+   * that failed to render. Naming the plan is the explanation the absence owes.
+   */
+  readonly otherPlanName?: string | undefined;
 }
 
 function ClassSection({
   assessment,
   onActivateActivity,
+  otherPlanName,
 }: {
-  assessment: RevisionClassAssessment;
+  assessment: RevisionClassAssessment | CrossPlanClassAssessment;
   onActivateActivity: (activityId: string, name?: string) => void;
+  otherPlanName?: string | undefined;
 }): React.ReactElement {
   const headingId = useId();
   const count = classCountSentence(assessment);
@@ -78,7 +98,43 @@ function ClassSection({
                 // paid classes landed, is most of the list: moving an activity to another lane or
                 // reporting progress against it changes no criticality. The sentence below would
                 // then have said "not in the live plan" about a bar the reader can see.
-                const reachable = row.existsLive;
+                /**
+                 * **Two absences, one of which is not a state to explain** — the panel's own
+                 * `MovedRow` rule, applied here so the two views cannot treat one row differently.
+                 *
+                 * A null `activityId` (cross-plan only) means the row lives in the OTHER plan and
+                 * has no bar on this diagram at all, so revealing it does not apply to the object:
+                 * the control is omitted. `existsLive === false` with a real id is the same-plan
+                 * case — deleted since — which IS a state, so it is shaded with a reason. Reusing
+                 * one treatment for both would either promise an action that can never arrive or
+                 * withhold the explanation for one that could.
+                 */
+                const activityId = row.activityId;
+                const reachable = activityId !== null && row.existsLive;
+                if (activityId === null) {
+                  return (
+                    <li
+                      key={row.subjectId}
+                      // `min-w-0` on the row AND on each growing child: a flex item defaults to
+                      // `min-width: auto`, so `truncate` cannot engage inside one and a long
+                      // activity or plan name overflows the 380 px panel rather than clipping.
+                      // The sibling `RevisionCorrelationSummary` already pairs the two correctly.
+                      className="flex w-full min-w-0 items-baseline gap-2 px-1 py-0.5 text-xs"
+                    >
+                      <span className="min-w-0 truncate">{row.code ?? row.name}</span>
+                      <span className="text-muted-foreground min-w-0 truncate">
+                        {row.from ?? '—'} → {row.to ?? '—'}
+                      </span>
+                      {otherPlanName === undefined ? null : (
+                        // The explanation the omission owes: an omitted control with nothing in
+                        // its place is indistinguishable from one that failed to render.
+                        <span className="text-muted-foreground shrink-0">
+                          {otherPlanRowNote(otherPlanName)}
+                        </span>
+                      )}
+                    </li>
+                  );
+                }
                 return (
                   <li key={row.subjectId}>
                     <button
@@ -98,9 +154,9 @@ function ClassSection({
                       onClick={() => {
                         // The name travels WITH the id: this row knows it, and the panel's
                         // lookup covers only the delta's rows (see `announceActivation`).
-                        if (reachable) onActivateActivity(row.activityId, row.name);
+                        if (reachable) onActivateActivity(activityId, row.name);
                       }}
-                      className="hover:bg-muted/60 flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                      className="hover:bg-muted/60 flex w-full min-w-0 items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     >
                       {/* No weight. The code already reads as the row's subject because the
                           values beside it are `text-muted-foreground`; adding weight on top would
@@ -108,10 +164,27 @@ function ClassSection({
                           exists to catch exactly that. The heading below KEEPS its weight, because
                           it matches `MovedSection`'s h3 in the same panel and dropping it would
                           make one view's headings lighter than the other's for no reason. */}
-                      <span>{row.code ?? row.name}</span>
-                      <span className="text-muted-foreground truncate">
+                      <span className="min-w-0 truncate">{row.code ?? row.name}</span>
+                      <span className="text-muted-foreground min-w-0 truncate">
                         {row.from ?? '—'} → {row.to ?? '—'}
                       </span>
+                      {/*
+                        **The reason, VISIBLE — not only to a screen reader.**
+
+                        The delta view states the identical fact in plain text a sighted planner can
+                        read (`· not in the live plan`), and this view stated it only in an
+                        `sr-only` span: switching tabs turned a dimmed, unclickable row into one
+                        with nothing saying why. The panel's own rule is "shaded with a reason,
+                        never silently inert", and it was failing in one of its two
+                        implementations. Found by the M4 ux review. The `sr-only` sibling below
+                        stays, because it is the DESCRIPTION — folding the reason into the
+                        accessible name is the defect ADR-0117 records one control along.
+                      */}
+                      {reachable ? null : (
+                        <span className="text-muted-foreground shrink-0" aria-hidden="true">
+                          · not in the live plan
+                        </span>
+                      )}
                     </button>
                     {!reachable && (
                       <span id={reasonId} className="sr-only">
@@ -132,13 +205,14 @@ function ClassSection({
 export function RevisionChangesView({
   report,
   onActivateActivity,
+  otherPlanName,
 }: RevisionChangesViewProps): React.ReactElement {
   const announce = useAnnounce();
   const footerId = useId();
 
   // Once per settled report, never per render — the ADR-0079 stale-debounce lesson: a re-render
   // must not re-arm the message, or a later one overwrites it four jumps in.
-  const spokenRef = useRef<RevisionChangeReport | null>(null);
+  const spokenRef = useRef<RevisionChangeReport | CrossPlanChangeReport | null>(null);
   useEffect(() => {
     if (spokenRef.current === report) return;
     spokenRef.current = report;
@@ -173,6 +247,7 @@ export function RevisionChangesView({
           key={assessment.changeClass}
           assessment={assessment}
           onActivateActivity={onActivateActivity}
+          otherPlanName={otherPlanName}
         />
       ))}
       <p id={footerId} className="text-muted-foreground border-t pt-2 text-xs">

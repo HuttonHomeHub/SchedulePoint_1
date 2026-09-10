@@ -130,6 +130,27 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
 const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
   ['--background', '--ring', 'the focus indicator against the surface it sits on'],
   ['--background', '--primary', 'a primary button against the surface'],
+  // **The focus indicator against a FILLED control, which is a different question from the line
+  // above** (console epic M7). The shared toolbar focus treatment is `ring-inset`, so on a control
+  // whose own fill is `--primary` the ring is measured against that fill and not against the band.
+  // Inside the chrome scope `--ring` and `--primary` resolve to the **identical string**, so the
+  // pen's `primary` state painted an amber ring on an amber fill: a 1:1 indicator, invisible, on
+  // the one control the epic exists to put at the head of the row (WCAG 2.2 §2.4.7 and §1.4.11).
+  //
+  // The collision is CQ-2's, answered once already for `armed` by dropping its ring — an answer
+  // that worked because `armed` keeps the band's own fill and therefore never had this pair. M5
+  // added a state that does have one, and nobody re-ran the check: the matrix asserted the ring
+  // against the surface and had no pair for the ring against a control. Found by the M7 ux review.
+  //
+  // The pair is added BEFORE the CSS that satisfies it, which is this file's own rule and exists
+  // because `--canvas-grid-month` and the minimap frame each shipped broken the other way round.
+  // **No new token.** The ring on a `--primary`-filled control is `--primary-foreground`, the ink
+  // that control already puts on that fill — so the requirement is expressed by a pair that exists
+  // rather than by a name added to every scope's family, which ADR-0097's completeness rule would
+  // then oblige all seven to carry. The same two tokens appear in TEXT_PAIRS above at the stricter
+  // 4.5 bar; this line is not redundant, because the two say different things and a future author
+  // re-valuing one has to satisfy both reasons rather than infer this one from a label's.
+  ['--primary', '--primary-foreground', 'the focus indicator on a control filled with --primary'],
   // **The status fills against the surface — asserted now, and this is where the closure pays
   // off.** These five lines used to be one long comment explaining why `--destructive` could NOT
   // be asserted: it was not a rebound name, so inside a scope it kept the page's red while
@@ -409,6 +430,119 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
  * marker names itself in words and stands beside a rule whose weight and dash pattern already
  * distinguish it (ADR-0056), so 1.4.1 is satisfied independently.
  */
+/**
+ * **The command deck's state ladder** (console epic M3-T1, `docs/specs/workspace-console/`).
+ *
+ * **This block lands BEFORE the CSS it gates**, which is the rule this file already states two
+ * blocks down and the reason `--canvas-grid-month` shipped at 2.08:1 behind a green suite.
+ *
+ * The ladder exists because the deck had **one** usable surface step and spent it three times: the
+ * group card, hover, and pressed/armed all sat between 1.2:1 and 1.34:1 of the band, so **an armed
+ * Add tool looked like a hovered button** — a WCAG 2.2 §1.4.11 exposure on the state a planner most
+ * needs to notice, and the defect ADR-0064 was opened on. Four states now have four pictures.
+ *
+ * It is scoped to `chrome` deliberately rather than joining `TEXT_PAIRS`: "armed" is a property of
+ * a modal tool on the command surface, and a page-scope button has no such state. Sweeping the
+ * ladder over seven scopes would assert a criterion about marks that do not exist there.
+ *
+ * **The selected underline is `--background`, not `--primary`, and that is the accessibility
+ * review's finding rather than a preference.** The approved plan (M3-T1 step 2) says to gate an
+ * amber underline at 3:1 against its own fill. Amber measures **2.51:1** there, and sweeping
+ * `--secondary`'s lightness shows why no re-value rescues it — the fill needs ≥ 3:1 against the
+ * band to identify the state at all, and the underline needs ≥ 3:1 against the fill:
+ *
+ * | `--secondary` L | underline / fill | fill / band |
+ * | --------------- | ---------------- | ----------- |
+ * | 0.54 (shipped)  | 2.51             | **3.15**    |
+ * | 0.50            | 2.97             | 2.66        |
+ * | 0.46            | **3.53**         | 2.24        |
+ *
+ * No AMBER value satisfies both, for a reason that is **arithmetic rather than empirical**: the
+ * band and the amber are 7.91:1 apart, and two 3:1 steps need 9:1. A fill sitting between them
+ * cannot be 3:1 from both ends of a 7.91:1 range. Drawing the underline **outside** the box, where
+ * it would sit on the band at 7.91:1, was measured in a browser and rejected: after M1 deleted the
+ * group cards the deck's clearance below its last control row is **6 px**, so an outset 2 px amber
+ * mark would sit 4 px above the band's own 3 px amber rule — two parallel amber lines nearly
+ * touching, on a row carrying a selected-capable control (`notes`).
+ *
+ * **So the underline takes the BAND's own colour instead, and is asserted at 3:1 like everything
+ * else.** `--background` against `--secondary` is the same 3.15:1 pair as the fill against the
+ * band, read the other way round; it paints as a notch cut from the bottom of the chip. `armed`
+ * keeps an amber underline, because armed has no fill — its underline sits on the band at 7.91:1.
+ *
+ * **The first version of this block reported the amber underline instead of fixing it**, arguing
+ * that no criterion requires a redundant second channel because "an open control carries a rotated
+ * caret" — a caret that **does not exist**; no caret in this product rotates. The accessibility
+ * review then found that the argument had also stopped being true on its own terms: once `selected`
+ * was made to outrank `open` (so a filtered `Filter ▾` keeps its mark while its panel is showing),
+ * an engaged open trigger and an idle open trigger share the identical `--secondary` fill, and the
+ * underline becomes the **sole** carrier of "engaged" at exactly the moment a planner opened the
+ * panel to check. Not redundant, therefore not exempt. Both are recorded rather than tidied away:
+ * the fabricated premise, and the fact that fixing the precedence is what made it load-bearing.
+ */
+describe("the command deck's state ladder gives four states four pictures", () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'chrome');
+
+  it('an ARMED tool: its amber label is legible on the band it sits on', () => {
+    // Armed keeps the band's fill and takes amber ink, a 2 px amber ring and an underline — the
+    // product owner's choice from two rendered studies, because the pen (`Stop editing`) is an
+    // amber-FILLED control leading the same row, and an amber-filled armed tool put two identical
+    // amber slabs side by side: "pen held" and "tool armed" became one picture, which is the
+    // confusion the ladder exists to remove.
+    //
+    // So the label is text on `--background`, and 1.4.3 asks 4.5:1 — where the existing
+    // `--background`/`--primary` NON-text pair only ever asked 3:1. That gap is what this asserts.
+    const value = ratio(tokens, '--background', '--primary');
+    expect(value, `--primary ink on --background is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+
+  it('an OPEN disclosure: its fill is a perceivable component against the band', () => {
+    // 1.4.11. Without this the state is carried by a wash nobody can find, which is the 1.34:1
+    // defect being replaced.
+    const value = ratio(tokens, '--background', '--secondary');
+    expect(value, `--secondary on --background is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('an OPEN disclosure: its label is legible on its own fill', () => {
+    const value = ratio(tokens, '--secondary', '--secondary-foreground');
+    expect(
+      value,
+      `--secondary-foreground on --secondary is ${fmtRatio(value)}`,
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('a SELECTED control: its underline is perceivable on its own fill', () => {
+    // 1.4.11, and asserted rather than reported since the accessibility review: while the panel is
+    // open this mark is the only thing separating an engaged trigger from an idle one.
+    const value = ratio(tokens, '--secondary', '--background');
+    expect(
+      value,
+      `the selected underline on its fill is ${fmtRatio(value)}`,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('reports what an AMBER underline would have measured on that fill', () => {
+    // Kept as a reading rather than deleted: it is the number the plan's step 2 asked to gate at
+    // 3:1, and a later reader reaching for amber here should meet the measurement, not rediscover
+    // it. Reported so a regression in either token still shows in the output.
+    const value = ratio(tokens, '--secondary', '--primary');
+    expect(value, `amber on the selected fill would be ${fmtRatio(value)}`).toBeGreaterThan(1);
+  });
+
+  it('reports HOVER against the band, which is transient and pointer-accompanied', () => {
+    // Deliberately unasserted, and the reason is written down so a later reader does not read the
+    // missing assertion as an oversight: hover is not a state a reader has to FIND — it is produced
+    // by, and lasts only as long as, a pointer the reader is already aiming. The family also has one
+    // usable surface step between the band and `--secondary` (`--muted` and `--accent` are 0.018
+    // apart in lightness), and spending it on hover is what leaves it available for the states that
+    // do have to be found. Reported so a regression is still visible in the output.
+    const value = ratio(tokens, '--background', '--muted');
+    expect(value, `hover fill on the band is ${fmtRatio(value)}`).toBeGreaterThan(1);
+  });
+});
+
 describe('the axis markers are legible in the ruler band', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 

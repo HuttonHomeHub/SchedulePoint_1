@@ -149,7 +149,24 @@ export type ProbeOutcome =
    * reviews, independently, and the second is a WCAG 2.2.2 failure, because the confirmation offers
    * cancellation as the reason full-screen motion is not stilled for `prefers-reduced-motion`.
    */
-  | { readonly kind: 'cancelled'; readonly context: RunContext | null }
+  | {
+      readonly kind: 'cancelled';
+      readonly context: RunContext | null;
+      /**
+       * The limbs that finished **before** the operator pressed Stop.
+       *
+       * **A cancellation is not evidence that the completed work is worthless.** `canvas-draw` runs
+       * two scales, so stopping during the second discarded a complete 500-activity limb — three
+       * full repeats, nothing about it wrong — because the recording unit was the press. The
+       * comment that justified it said "a limb runner that stopped early returns a partial result
+       * and there is no honest way to judge one", which is true of the interrupted limb and false
+       * of its finished neighbour.
+       *
+       * Every limb here collected **all** its repeats or pairs; an interrupted one is dropped by
+       * the runners rather than truncated, so this array can never contain a partial reading.
+       */
+      readonly limbs: LimbOutcome[];
+    }
   | { readonly kind: 'measured'; readonly context: RunContext; readonly limbs: LimbOutcome[] };
 
 export interface ProbeRunInput {
@@ -277,11 +294,14 @@ export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
         ? await runDifferenceLimbs(phase)
         : await runAbsoluteLimbs(phase);
 
-    // Asked AFTER the limbs return, because a limb runner that stopped early returns a partial
-    // result and there is no honest way to judge one. The cancellation wins over everything below:
-    // a partial run is neither a measurement nor a refusal.
+    // Asked AFTER the limbs return. The cancellation still wins over everything below — a stopped
+    // run is neither a complete measurement nor a refusal, and it is not judged as one — but it
+    // **carries the limbs that finished**, which the runners have already filtered to the complete
+    // ones. This comment used to say a partial result could not honestly be judged and used that to
+    // discard the lot; the first half is right about the interrupted limb and says nothing about
+    // the one before it.
     const settledContext: RunContext = { ...context, lostFocusDuringRun: lostFocus };
-    if (shouldStop()) return { kind: 'cancelled', context: settledContext };
+    if (shouldStop()) return { kind: 'cancelled', context: settledContext, limbs };
 
     const recorded = frames * repeats;
     const refusal = refuseRun({
@@ -344,6 +364,11 @@ async function runDifferenceLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
     idleInterval: phase.idleInterval,
     shouldStop,
   });
+
+  // The same rule as the absolute runner, for the same reason. A partial PAIR is already
+  // impossible — `revision-diff.ts:453` pushes only after both phases return — but a partial COUNT
+  // of pairs is not, and a difference verdict is computed from the spread across them.
+  if (outcome.pairs.length < pairs) return [];
 
   return [
     {
@@ -411,6 +436,13 @@ async function runAbsoluteLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
       );
       runs.push(await runDrawPhase(ctx, scene, framing, viewport, palette, frames, idleInterval));
     }
+
+    // **A limb is recorded iff it collected every repeat.** Recording a partial one would be worse
+    // than discarding it: the figures would be real and the row would be indistinguishable from a
+    // full reading, so a two-repeat limb would sit in the history beside three-repeat ones with
+    // nothing saying its spread was measured over less. The spread is the limb that makes a verdict
+    // mean anything (ADR-0128), and it is exactly what a short run understates.
+    if (runs.length < repeats) break;
 
     limbs.push({
       limbId: limb.id,

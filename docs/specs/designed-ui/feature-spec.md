@@ -1,6 +1,6 @@
 # Feature Spec: Designed UI — surface scopes, a designed chrome band, and the canvas visual language
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0055)
 - **Author(s):** Claude Code (feature-analyst), with James Ewbank (product)
 - **Date:** 2026-07-26
 - **Tracking issue / epic:** _(to be raised — "Designed UI" epic)_

@@ -594,6 +594,31 @@ discriminators. Each becomes a spec/plan before build:
   closed the day before. The epic also found two defects that are **not** touch defects (#213) and
   an approved plan clause whose own risk table claimed it shipped (#214 — both halves built and closed 2026-09-01, the Gantt half having gone unbuilt a second time).
 
+- **The plan workspace's command console** — **shipped** (ADR-0133, 2026-09-10). The band's group
+  cards and captions go, its two rows become declared DOM rows rather than a wrap outcome, the
+  shared toolbar CVA gains a five-rung state ladder declared per item, and the ADR-0028 pen's verb
+  moves to the head of the row it unlocks while its badge, sentence and hand-off controls move to
+  the plan's foot row. Measured: the command band 143 → **139 px** at 1440/1646/1920 against a
+  145 px bar, the activities row **51 px**, the deck back inside its line bound at 1280.
+
+  The finding worth carrying is that the overflow was **never the commands**: at 1280 the authoring
+  row's twelve controls fit their container with 195 px to spare and the row wrapped anyway, on the
+  captions and their dividers. And three things in the epic were specified and not built — the
+  ladder's fifth state, the group seam, one outlet placement — of which only the one that painted
+  visibly wrong was caught before the gate pass. A plan is a claim too, and the ones that survive
+  unchecked are the ones nothing renders.
+
+- **The staff console stops interrupting** — **shipped** (ADR-0132, 2026-09-09, the tech-debt
+  drive). `Alert` gains a required `purpose: 'event' | 'condition'` with no default — ADR-0117's
+  shape for ADR-0117's reason — so a message says whether it reports something that just happened or
+  states a condition that was already true. `tone` keeps deciding urgency and `role` is still not a
+  prop. Six caveats on `/staff` stop being live regions, **two of them assertive** and produced by a
+  query settling; two of those six were already announced correctly by the panel's own polite region,
+  so removing the duplicate costs nothing. The discriminator is written into the primitive — _would
+  this sentence read the same to somebody who arrived five minutes later and did nothing?_ — because
+  no gate can read intent, and the register's note that raised it was wrong about the count (25 sites,
+  not 33) and about the number of offenders (six, not four).
+
 - **Icon-only commands name themselves everywhere** — **shipped** (ADR-0117, 2026-08-28, the
   fix-slice epic). The product's first Tooltip primitive: a hand-rolled APG hook meeting
   WCAG 1.4.13 in full, opening on hover, on focus, and on a coarse-pointer long-press that shows
@@ -661,6 +686,36 @@ discriminators. Each becomes a spec/plan before build:
   authoritative-looking number from the wrong machine is worse than none. Two consequences are
   stated rather than discovered — the numbers are **client-reported**, and there is **no CI gate
   here and never will be**, because the question is about a real display.
+- **One press for every reading, and a sitting you can come back to** — **shipping** (ADR-0130).
+  ADR-0128 put the instrument on the console; the product owner used it the next day and reported
+  that the panel offered eight equal-looking choices of which **two** produced a verdict, and that
+  several told them a reading had not been recorded without saying which of three unrelated things
+  had happened. One press now takes every reading the probe can take, about two minutes, and a
+  thirteen-second **check** answers "does this machine produce readings at all" before that time is
+  spent. **The completed reading is the unit of durability**: each step is stored as it lands, a
+  refusal does not end the run, and a **Stop** keeps every reading that finished — which it did not
+  before, and nobody had reported that, because a discarded measurement leaves nothing behind to
+  report. The history is then **grouped into the sittings the readings were taken in**, with the
+  machine, the canvas and the display stated once above them and the paste-ready block obtainable
+  months later rather than only in the seconds after a run. A sitting that did not get every reading
+  can be **finished** rather than restarted, and if that happens a day later the block says the
+  readings were not taken together. Nothing about the measurement itself changed, which is the point:
+  a reading taken after this is comparable with one taken before it.
+- **Comparing two imported revisions** — **shipping** (ADR-0129). The comparison a planner
+  actually pays for, and the one the product could not do: an import always targets a **new plan**,
+  so a re-issued P6 file arrives as a sibling plan and not as a baseline, and the three shipped
+  comparison tiers all match on activity **id**, which two independent imports share none of. They
+  are matched on **activity code** instead, exactly — no case folding, because the index that keeps
+  a code unique per plan is case-sensitive and folding would manufacture a collision the product
+  permits. The **coverage is stated first**, on screen, in the live region and on paper: "twelve
+  left the critical path" means one thing at 98 % coverage and something else at 40 %, and every
+  number below is worth exactly what the coverage says it is. Two plans with **no codes in common**
+  get a sentence and no delta rather than a confident list of everything removed and everything
+  added. The overlay draws it too — a matched activity's ghost sits at the lane of its own live
+  bar, because **time is shared between two plans and lane is not**, and work with no honest lane
+  is counted rather than placed somewhere arbitrary. One limit is stated rather than implied and
+  cannot be removed: matching on code cannot tell a **re-coded** activity from one removed and
+  another added.
 
 ## Guiding constraints
 

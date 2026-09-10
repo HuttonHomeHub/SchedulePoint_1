@@ -66,6 +66,13 @@ export class StaffProbeService {
           await tx.perfProbeResult.create({
             data: {
               runId,
+              // **Client-supplied, and deliberately so** — the one field here that is. `runId`,
+              // `recordedAt` and `apiVersion` are server-set because the client cannot be trusted
+              // with them; `sweepId` is the opposite case, because only the client knows that four
+              // presses were one sitting and the server holds no state across them. `?? null`
+              // rather than a default: absent means a single press, which is a fact, not a gap.
+              sweepId: dto.sweepId ?? null,
+              framesPerPhase: dto.framesPerPhase ?? null,
               recordedByUserId: staff.userId,
               recordedByLabel: staff.email,
               scenarioId: dto.scenarioId,
@@ -163,6 +170,8 @@ function toRow(row: PersistedRow): ProbeResultRowDto {
   return {
     id: row.id,
     runId: row.runId,
+    sweepId: row.sweepId,
+    framesPerPhase: row.framesPerPhase,
     recordedAt: row.recordedAt.toISOString(),
     recordedByLabel: row.recordedByLabel,
     scenarioId: row.scenarioId,

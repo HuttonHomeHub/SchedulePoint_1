@@ -1,6 +1,6 @@
 # Feature Spec: The light corporate theme
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Accepted — shipped (ADR-0102)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-21
 - **Tracking issue / epic:** _tbc_

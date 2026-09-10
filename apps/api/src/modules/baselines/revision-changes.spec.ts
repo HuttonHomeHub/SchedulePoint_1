@@ -61,6 +61,9 @@ const opts = (o: Partial<ClassifyOptions> = {}): ClassifyOptions => ({
   fromScheduled: true,
   toScheduled: true,
   bothSnapshotted: true,
+  // The same-plan default: matched on ACTIVITY ID, so a re-code is a real, reportable change and
+  // every existing case below runs against exactly the behaviour it always did.
+  codeIsTheCorrelationKey: false,
   includeProgress: false,
   calendarName: () => null,
   cap: 200,
@@ -432,5 +435,77 @@ describe('the revision change classifier', () => {
     const back = classifyRevisionChanges(side(b), side(a), opts());
     expect(classOf(forward, 'RENAMED')?.rows[0]?.from).toBe('One');
     expect(classOf(back, 'RENAMED')?.rows[0]?.from).toBe('Two');
+  });
+});
+
+describe('the RECODED class across two SEPARATELY IMPORTED plans', () => {
+  /**
+   * **The class is unanswerable there, and saying nothing is the defect.**
+   *
+   * Two plans matched ON the activity code have equal codes on every matched pair by construction,
+   * so `from.code !== to.code` is unreachable — the class would print a confident "no changes in
+   * this revision" for a question the product structurally cannot answer. Every row individually
+   * true and the picture a lie, which is the failure this whole comparison exists to remove,
+   * reproduced inside it. Found by the M4 ux review; the spec had named the reason and nothing
+   * built it.
+   */
+  const row = (activityId: string, code: string | null, name: string): RevisionRow => ({
+    activityId,
+    code,
+    name,
+    type: 'TASK',
+    durationMinutes: 480,
+    isCritical: false,
+    totalFloatDays: 0,
+    earlyStart: '2026-01-05',
+    earlyFinish: '2026-01-06',
+    laneIndex: 0,
+    parentId: null,
+    calendarId: null,
+    constraintType: null,
+    constraintDate: null,
+    secondaryConstraintType: null,
+    secondaryConstraintDate: null,
+    percentComplete: null,
+    actualStart: null,
+    actualFinish: null,
+  });
+
+  const recoded = (options: Partial<ClassifyOptions>) =>
+    classifyRevisionChanges(
+      side([row('A100', 'A100', 'Groundworks')]),
+      side([row('A100', 'A100', 'Groundworks')]),
+      opts(options),
+    ).classes.find((c) => c.changeClass === 'RECODED');
+
+  it('reports a REASON rather than "no changes" when the code IS the correlation key', () => {
+    const assessment = recoded({ codeIsTheCorrelationKey: true });
+    expect(assessment).toBeDefined();
+    expect(assessment?.notAssessableReason).toBe('CODE_IS_THE_CORRELATION_KEY');
+    // Empty and zeroed, so no client can read rows out of an unanswerable class.
+    expect(assessment?.rows).toEqual([]);
+    expect(assessment?.total).toBe(0);
+  });
+
+  it('leaves the SAME-PLAN behaviour untouched — matched on id, so a re-code is real', () => {
+    // Asserted beside it because one passing does not imply the other: a fix that gated the class
+    // unconditionally would satisfy the case above and silently remove a real answer here.
+    const assessment = recoded({ codeIsTheCorrelationKey: false });
+    expect(assessment?.notAssessableReason).toBeNull();
+  });
+
+  it('gates ONLY the RECODED class — every other class still answers', () => {
+    const classes = classifyRevisionChanges(
+      side([row('A100', 'A100', 'Groundworks')]),
+      side([row('A100', 'A100', 'Piling')]),
+      opts({ codeIsTheCorrelationKey: true }),
+    ).classes;
+    const renamed = classes.find((c) => c.changeClass === 'RENAMED');
+    expect(renamed?.notAssessableReason).toBeNull();
+    expect(renamed?.rows).toHaveLength(1);
+    // And nothing else picked the reason up.
+    expect(
+      classes.filter((c) => c.notAssessableReason === 'CODE_IS_THE_CORRELATION_KEY'),
+    ).toHaveLength(1);
   });
 });

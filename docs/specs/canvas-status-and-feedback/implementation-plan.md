@@ -1,6 +1,6 @@
 # Implementation Plan: Canvas status & feedback
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Draft
 - **Status:** Draft — awaiting approval before implementation
 - **Owner:** _(unassigned)_
 

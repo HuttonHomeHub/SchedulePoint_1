@@ -1,7 +1,6 @@
 # Feature Spec: Gantt editing — the Gantt as a working surface
 
-- **Status:** **Draft — awaiting approval.** Four CRITICAL questions in §1 change the design or the
-  scope; defaults are stated for everything else.
+- **Status:** Accepted — shipped (ADR-0095)
 - **Author(s):** Feature Analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-17
 - **Tracking issue / epic:** —

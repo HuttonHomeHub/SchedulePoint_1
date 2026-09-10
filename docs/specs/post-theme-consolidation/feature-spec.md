@@ -1,6 +1,6 @@
 # Feature Spec: the exported diagram is the diagram
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0105)
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-21
 - **Tracking issue / epic:** post-theme consolidation (W1 · W2 · W3)

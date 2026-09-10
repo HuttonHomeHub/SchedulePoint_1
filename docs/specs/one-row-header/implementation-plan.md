@@ -1,6 +1,6 @@
 # Implementation Plan: The one-row header
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — **awaiting approval**
 - **Owner:** _(unassigned)_
 

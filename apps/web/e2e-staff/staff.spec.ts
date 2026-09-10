@@ -32,6 +32,22 @@ import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
  * Chromium only (TECH_DEBT #25a), serial.
  */
 
+/**
+ * A stored sitting's table, located by the ACT it names.
+ *
+ * The history stopped being one flat table at M6-T1: it is now one block per sitting, and each
+ * block's caption names what the operator did — `Sweep of 6 readings — …` or `One reading — …` —
+ * because that is the distinction `sweep_id` exists to record. The old caption ("Readings recorded
+ * on this installation") survives on exactly one path, the loading/error/empty projection, so a
+ * journey that went on asking for it would find the table only when there was nothing in it.
+ *
+ * That is what happened: both tests in this file failed on the first run after M6-T3, having passed
+ * every unit suite throughout. Located by role and name rather than by a `data-` hook deliberately
+ * — the caption IS the accessible name of the region a screen-reader user navigates to, so asking
+ * for it is asking the same question they do.
+ */
+const SITTING_TABLE = /^(Sweep of \d+ readings?|One reading) — /;
+
 const PASSWORD = 'correct-horse-battery';
 /** Must equal the config's `STAFF_EMAILS` entry, modulo case and padding — that is the point. */
 const STAFF_EMAIL = 'ops@schedulepoint.test';
@@ -132,7 +148,12 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await squatterContext.close();
 
   // ---------------------------------------------------------------- The staff member
-  const staffContext = await browser.newContext();
+  // **`clipboard-write` is granted explicitly, and CI is why.** `navigator.clipboard.writeText`
+  // needs the permission; without it the promise REJECTS, the Copy handler takes its failure branch
+  // and no "Copied." is ever announced. That passed locally and failed on the runner — a divergence
+  // that says nothing about the product and everything about the harness, which is the class of
+  // false signal this suite exists to avoid producing.
+  const staffContext = await browser.newContext({ permissions: ['clipboard-write'] });
   const staff = await staffContext.newPage();
   await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
 
@@ -302,6 +323,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // journey can never accidentally assert a verdict a container has no business producing.
   const probePanel = staff.getByRole('heading', { name: 'Performance' });
   await expect(probePanel).toBeVisible();
+  await openMeasureOne(staff);
   await staff.getByRole('combobox', { name: 'Length' }).selectOption('quick');
   // Typed BEFORE the run: the note travels with the reading rather than being editable afterwards
   // (insert-time only in v1 — an edit route needs `updated_at` and a version column).
@@ -332,6 +354,19 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     );
   }
 
+  // **A saturated delta never appears without its caveat** (`docs/TECH_DEBT.md` #260).
+  //
+  // Reachable here rather than decorative: the default scenario is `revision-diff`, a DIFFERENCE
+  // limb, so this container's software rasteriser can genuinely pin the baseline at the ceiling —
+  // the M1-T3 driver run recorded `baseline 100.00 pp` at the whole-plan framing on this same
+  // hardware. It may equally not fire (that run measured 30 pp at Week), so the assertion is
+  // conditional in BOTH directions and asserts the pairing rather than forcing an outcome: a
+  // ceiling sentence with no figure beside it is as wrong as a figure with no sentence.
+  const CEILING = /property of the ceiling/;
+  if (CEILING.test(resultText)) {
+    expect(resultText, 'the caveat names the figure it qualifies').toMatch(/[+-]?\d+\.\d+\s*pp/);
+  }
+
   // And a refusal is never dressed as a verdict. This is the assertion the fourth verdict value
   // exists for, checked against the whole panel rather than the alert alone — the defect would be a
   // pass/fail word left somewhere else on the surface beside a correctly-worded refusal.
@@ -350,24 +385,205 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // This is the only place the POST is driven against a real API with the real guard, the real
   // validation pipe and the real audit producer. A component test sees whatever its mock returns,
   // which is exactly why the DTO's bounds and the transaction cannot be proven there.
-  if (resultText.includes('The run was refused')) {
+  //
+  // **Which branch ran is recorded on the run**, because everything below the `else` is skipped on
+  // a refusal and a skipped assertion is indistinguishable from a passing one in a green report.
+  // That is the ADR-0093 shape — a suite that cannot tell "covered" from "there was nothing to
+  // cover" proves neither — and it matters more from M2 on, where the branch carries the columns,
+  // the Copy control and the caveat association that are this milestone's whole deliverable.
+  const refused = resultText.includes('The run was refused');
+  // Printed rather than annotated. An annotation was written first and is not reachable in this
+  // workflow — the list reporter does not render one, so it never appeared in the terminal or in
+  // `.e2e-logs`, which is an instrument reporting where nobody reads. Established by running it.
+  // eslint-disable-next-line no-console
+  console.log(
+    refused
+      ? 'PROBE OUTCOME: REFUSED — the history assertions below were NOT exercised on this run.'
+      : 'PROBE OUTCOME: MEASURED — the history assertions below were exercised.',
+  );
+
+  if (refused) {
     await expect(staff.getByText('No readings recorded yet.')).toBeVisible();
     await expect(staff.getByRole('button', { name: 'Retry recording' })).toHaveCount(0);
   } else {
     await expect(staff.getByText('Recorded. It appears in the history below.')).toBeVisible({
       timeout: 15_000,
     });
-    const history = staff.getByRole('table', {
-      name: /Readings recorded on this installation/,
-    });
-    await expect(history.getByRole('cell', { name: 'CI container' }).first()).toBeVisible();
+    const history = staff.getByRole('table', { name: SITTING_TABLE }).first();
     // More than the header row, asserted as a shape rather than as a count: a scenario may be
     // measured at more than one scale, and each scale is its own row.
     await expect(history.getByRole('row')).not.toHaveCount(1);
+
+    // **The three facts that decide whether a reading means anything** (M2-T1) — asserted where
+    // they now LIVE rather than dropped. All three were stored on every row since this table
+    // shipped and rendered on none, against an acceptance criterion the predecessor spec approved;
+    // M6-T2 then moved them out of the columns and into the sitting's facts list, because a sweep
+    // repeated the machine, the canvas and the display on every one of its rows. The fact being on
+    // screen is the criterion; which element carries it is this milestone's business. Asserted
+    // against a REAL stored row, because a component test renders whatever fixture it was handed
+    // and cannot tell you the value is fed by the field the API actually returns.
+    await expect(staff.getByText('CI container').first()).toBeVisible();
+    // A real viewport and a real measured interval, not zeroes or blanks: the shapes are what a
+    // wrong wiring would break, and a blank value is what it would look like.
+    await expect(staff.getByText(/^\d+×\d+ @[\d.]+x$/).first()).toBeVisible();
+    await expect(staff.getByText(/^[\d.]+ ms idle frame interval$/).first()).toBeVisible();
+    await expect(
+      staff.getByText(/^(held throughout|a reading lost focus — see the table)$/).first(),
+    ).toBeVisible();
+    // And the reading's own time, which is per row rather than per sitting since M6-T4: a resumed
+    // reading is stored under the same `sweep_id` hours later, so the sitting's one timestamp is
+    // true of its earliest reading and merely probable of the rest.
+    await expect(history.getByRole('columnheader', { name: 'Taken' })).toBeVisible();
+
+    // **The entry point for M2-T3** (ADR-0081). The block is the deliverable `docs/TECH_DEBT.md`
+    // #75 actually consumes, and until this milestone it could only be produced in the seconds
+    // after a run. Clicking it here proves the control reaches a stored reading through the real
+    // formatter — the clipboard write itself is asserted in the unit suite, since a headless
+    // browser's clipboard permission is a property of the harness rather than of the product.
+    //
+    // `Copy report` is the SITTING's control and sits beside its table rather than inside it, which
+    // is M6-T3's own decision: a block for one limb of a four-reading sweep is a partial answer
+    // that looks complete. The name is a full match, so it cannot resolve to the live result
+    // block's `Copy full report`.
+    // Matched by prefix, not by the exact label: M7 gave each sitting's Copy button an
+    // `aria-label` carrying its own caption, because with N blocks on screen an assistive-technology
+    // user browsing by button list met a column of identical "Copy report" entries.
+    await expect(staff.getByRole('button', { name: /^Copy report/ }).first()).toBeVisible();
+    await staff
+      .getByRole('button', { name: /^Copy report/ })
+      .first()
+      .click();
+    await expect(staff.getByText('Copied.').first()).toBeVisible();
+
+    // **Everything a reader needs to judge these numbers is reachable from INSIDE the region.**
+    // `DataTable` is a focusable `role="region"`, so a landmark-navigating reader lands in the table
+    // having skipped whatever sits above it — the caveat that says what the Canvas figure is for,
+    // and (since M7) the block's own machine facts, spread warning and partial notice. This used to
+    // read one id; `aria-describedby` is a space-separated LIST and now carries several, so a
+    // single-id assertion looked like a product defect and was the harness being one version behind.
+    const describedBy = await staff
+      .getByRole('region')
+      .filter({ has: history })
+      .first()
+      .getAttribute('aria-describedby');
+    expect(describedBy, 'the table names what describes it').not.toBeNull();
+    const ids = String(describedBy).split(/\s+/).filter(Boolean);
+    expect(
+      ids.length,
+      'the sitting describes itself as well as citing the shared caveat',
+    ).toBeGreaterThan(1);
+
+    let described = '';
+    for (const id of ids) {
+      const target = staff.locator(`#${id}`);
+      // A dangling id is worse than a missing one: assistive technology reports a description that
+      // resolves to nothing, which a reader cannot tell from a description that was never there.
+      await expect(target, `#${id} resolves to an element`).toHaveCount(1);
+      described += `${(await target.textContent()) ?? ''}\n`;
+    }
+
+    expect(described, 'the shared comparability caveat').toContain('per megapixel');
+    // And the block's OWN facts, which differ per sitting and are what decide whether the numbers
+    // in this particular table mean anything.
+    expect(described, "this sitting's own machine facts").toContain('CI container');
   }
 
   // The overlay must be gone: it is `position: fixed; inset: 0`, so a leaked one would cover the
   // console and every later assertion — including the axe sweep below — would be about a canvas.
+  await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
+
+  // ── M3: a limb is the unit of durability ────────────────────────────────────────────────────
+  //
+  // Stopping used to discard the whole press, so on the two-scale `canvas-draw` scenario a stop
+  // during the second limb threw away a COMPLETE 500-activity limb — every repeat collected,
+  // nothing about it wrong. Nobody reported that, which is why it is not a register row: a
+  // discarded measurement leaves nothing behind to report.
+  //
+  // `canvas-draw` is chosen deliberately. `revision-diff` has ONE limb, so a stop can never leave
+  // anything behind and a journey driving it would assert an invariant it cannot violate.
+  await openMeasureOne(staff);
+  await staff.getByRole('combobox', { name: 'Measurement' }).selectOption('canvas-draw');
+  // **`full`, not `quick`, and that is the difference between a journey and a decoration.** At 40
+  // frames a limb finishes in well under a second, so the second one was over before the click
+  // landed and this whole section asserted nothing — established by running it, because the branch
+  // prints which path it took. At 180 x 3 there is a real window to stop inside. The second limb is
+  // never completed, so the cost is one 500-activity limb rather than a whole full measurement.
+  await staff.getByRole('combobox', { name: 'Length' }).selectOption('full');
+  await staff.getByRole('button', { name: 'Run measurement' }).click();
+  await staff.getByRole('alertdialog').getByRole('button', { name: 'Run measurement' }).click();
+
+  // Wait for the SECOND limb to start, which is the only observable proof that the first finished.
+  // Stopping on a timer would be a race with no evidence either way.
+  //
+  // `.first()` is load-bearing. The progress sentence renders TWICE — once visibly beside the Stop
+  // button and once in the panel's `sr-only` live region — so an unscoped `getByText` resolves to
+  // two elements and `waitFor` raises a strict-mode violation. The first version of this caught
+  // that and reported it as "the second limb never started", which is a real signal turned into a
+  // false one by a bare `.catch`. Found by making the diagnosis print what it saw instead of what
+  // it concluded.
+  let stopFailure = '';
+  const stopped = await staff
+    .getByText(/Drawing 2000 activities/)
+    .first()
+    .waitFor({ timeout: 90_000 })
+    .then(async () => {
+      await staff.getByRole('button', { name: /^Stop/ }).click();
+      return true;
+    })
+    .catch((error: unknown) => {
+      stopFailure = error instanceof Error ? (error.message.split('\n')[0] ?? '') : String(error);
+      return false;
+    });
+
+  await expect(staff.locator('[data-perf-probe-result]')).toBeVisible({ timeout: 60_000 });
+  const afterText = (await staff.locator('[data-perf-probe-result]').textContent()) ?? '';
+
+  // Printed, for the same reason the branch above is: a run that completed before the click landed
+  // is a legitimate outcome that exercises none of M3, and a green report cannot otherwise say so.
+  // eslint-disable-next-line no-console
+  console.log(
+    `M3 DIAGNOSIS: secondLimbSeen=${String(stopped)} resultSaysStopped=${String(
+      afterText.includes('You stopped this run'),
+    )}${stopFailure === '' ? '' : ` reason="${stopFailure}"`}`,
+  );
+
+  if (afterText.includes('You stopped this run')) {
+    // **The whole point.** A stop after the first limb keeps that limb, so the sentence names what
+    // survived and the history grows. "Nothing was measured" here would be the pre-M3 behaviour.
+    expect(afterText).toMatch(/had already finished and (was|were) kept/);
+
+    // **What reached the database, asserted as the SHAPE of the newest sitting rather than as a
+    // total that grew.** This used to count every row in the history before and after and require
+    // the number to rise — and `staff-probe.service.ts:14` caps the read at 50 rows, so on any
+    // installation that has taken fifty readings the total is invariant: a new reading displaces
+    // the oldest and the count cannot move. It passed for months because a fresh local database
+    // has fewer, and it failed here at 75 rows with the product behaving perfectly. A gate that
+    // stops being able to report is exactly what this epic is about, one tier out.
+    //
+    // The replacement is sharper as well as sound. M3's claim is not "the history grew" but "the
+    // completed limb survived and the interrupted one did not", so the newest sitting is a single
+    // press holding EXACTLY ONE reading — the 500-activity limb — beside a header row. The suite
+    // runs `workers: 1, fullyParallel: false`, so the newest sitting is this press.
+    //
+    // Polled rather than counted once: "Recorded." means the POST resolved, not that the history
+    // query has refetched and re-rendered, and reading in that gap is a race that once failed this
+    // on one run in four.
+    await expect
+      .poll(
+        async () =>
+          staff.getByRole('table', { name: SITTING_TABLE }).first().getByRole('row').count(),
+        {
+          message: 'a stopped press still stored its completed limb as a sitting of one',
+          timeout: 15_000,
+        },
+      )
+      .toBe(2);
+    await expect(
+      staff.getByRole('table', { name: /^One reading — / }).first(),
+      'a single press is a single press, not a sweep permanently missing three readings',
+    ).toBeVisible();
+  }
+
   await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
 
   // The console is a real screen and gets the same accessibility bar as every other one.
@@ -378,6 +594,182 @@ test('a staff member reaches the console; a member cannot tell it exists', async
 
   await staffContext.close();
 });
+
+/**
+ * **The sweep, driven end to end — M5-T5, and it lands WITH the milestone that adds the control.**
+ *
+ * ADR-0081's rule: a milestone claiming user-facing capability names its entry point and its journey
+ * lands with it, not at enablement. This register records five capabilities that shipped with unit
+ * tests and no door, and the most recent found its own drawer unreachable in the default path while
+ * every unit test stayed green — because those tests mount the component and the defect was in the
+ * seam between the component and the shell.
+ *
+ * **A second `test()` rather than an extension of the first**, and the reason is measured rather
+ * than assumed: `playwright.staff.config.ts:30` sets `timeout: 120_000` PER TEST, and the first
+ * test already spends most of a minute. Adding a sweep to it would leave the sweep racing the
+ * budget rather than the product.
+ *
+ * **It presses "Check the probe works", not "Run all measurements"**, for the same measured reason:
+ * `sweep-duration.ts` puts a full sweep at ~126 s, which does not fit a 120 s per-test timeout at
+ * all. The short sweep exercises every seam that matters here — the plan, the loop, the per-step
+ * POST, the sitting id — and differs only in frame count.
+ */
+test('a staff member takes every reading in one press', async ({ browser }) => {
+  const staffContext = await browser.newContext();
+  const staff = await staffContext.newPage();
+
+  /**
+   * **Why a step was not recorded, rather than how many were not.**
+   *
+   * The panel tells an operator "measured but NOT recorded" and offers Retry, which is the right
+   * copy for them and useless for diagnosis: the first run of this test reported two of four steps
+   * unrecorded and there was nothing on the page, in the log, or in the API's piped output saying
+   * whether that was a 429, a 422 or a dropped socket. A count is not a cause — the register's own
+   * complaint about coarse instruments, met here by reading the responses the browser already has.
+   */
+  const storeFailures: number[] = [];
+  const storeFailureBodies: string[] = [];
+  staff.on('response', (response) => {
+    if (
+      response.request().method() !== 'POST' ||
+      !response.url().includes('/staff/probe-results') ||
+      response.ok()
+    ) {
+      return;
+    }
+    // The status is recorded **synchronously**, the body when it arrives. The assertion below reads
+    // the status list, so it can never race a `text()` promise that has not settled; the body is
+    // for the reader and is allowed to be late.
+    const status = response.status();
+    storeFailures.push(status);
+    void response
+      .text()
+      .then((body) => storeFailureBodies.push(`${String(status)} ${body.slice(0, 300)}`))
+      .catch(() => storeFailureBodies.push(`${String(status)} (body unavailable)`));
+  });
+
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+  await staff.goto('/staff');
+
+  // The console, or nothing to test. The verification branch is proved by the first test; this one
+  // asserts it is already in rather than repeating that machinery, and says so if it is not.
+  await expect(
+    staff.getByRole('heading', { name: 'Staff console' }),
+    'the first test verifies this account; this one assumes it',
+  ).toBeVisible({ timeout: 30_000 });
+
+  // **The entry point named in the spec, pressed.** If this locator ever stops matching, the
+  // capability has no door — which is the defect this test exists to prevent rather than to
+  // describe.
+  await staff.getByRole('button', { name: 'Check the probe works' }).click();
+
+  const dialog = staff.getByRole('alertdialog');
+  await expect(dialog).toBeVisible();
+  // Its own duration, derived — not the constant every confirmation used to quote.
+  await expect(dialog).toContainText(/This takes/);
+  // And the promise that it produces no verdicts, because every reading runs once.
+  await expect(dialog).toContainText(/none of them\s+can be graded|cannot be graded|can be graded/);
+  await dialog.getByRole('button', { name: 'Check the probe' }).click();
+
+  // A sweep is four steps, and a container drops frames badly, so the budget is generous and the
+  // assertion is about the KIND of outcome rather than a number — the shape the existing probe
+  // assertion already uses, which accepts a refusal as a correct answer.
+  const result = staff.locator('[data-perf-probe-result]');
+  await expect(result).toBeVisible({ timeout: 90_000 });
+
+  const text = (await result.textContent()) ?? '';
+  // Printed, because everything below branches on what the container managed and a skipped branch
+  // is indistinguishable from a passing one in a green report.
+  // eslint-disable-next-line no-console
+  console.log(`SWEEP OUTCOME: ${text.slice(0, 600).replace(/\s+/g, ' ')}`);
+  // eslint-disable-next-line no-console
+  console.log(
+    `SWEEP STORE FAILURES: ${storeFailureBodies.length === 0 ? 'none' : storeFailureBodies.join(' | ')}`,
+  );
+
+  /**
+   * **A 4xx is a defect; anything else is the container.**
+   *
+   * This is the one assertion here that does not accept whatever the machine managed, and the
+   * distinction is principled rather than convenient: a 5xx or a dropped socket is the environment,
+   * and a container is entitled to produce one — but a 4xx means the client sent a body the server
+   * refuses, which no amount of load can cause and no retry can fix, while the panel goes on
+   * offering **Retry recording** for it.
+   *
+   * Verified red, and not hypothetically: the first run of this test reported two of four steps
+   * "measured but NOT recorded", and the cause was `422 … property frames should not exist` on
+   * every `revision-diff` reading — half of what "Run all measurements" produces, unstorable since
+   * the day that scenario shipped, which is in as many words the complaint this epic was opened on.
+   */
+  expect(
+    storeFailures.filter((status) => status >= 400 && status < 500),
+    'the client sent a body the API refuses — a container cannot cause this and Retry cannot fix it',
+  ).toEqual([]);
+
+  // **The sitting summary names what happened to every step**, in the vocabulary the epic settled:
+  // measured, refused, or not taken — never a bare count that hides which.
+  expect(text).toMatch(/Sitting finished|You stopped this sitting/);
+
+  // The overlay must be gone: it is `fixed inset-0`, so a leaked one covers the console and every
+  // later assertion — including the axe sweep — would be about a canvas.
+  await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
+
+  // **What reached the database, which is a different question from what was measured.** A sweep
+  // records per step as each completes, so a container that refused one reading still stores the
+  // others — that is the whole reason an interruption is cheap.
+  const history = staff.getByRole('table', { name: SITTING_TABLE }).first();
+  if (/measured/.test(text)) {
+    await expect(history).toBeVisible({ timeout: 20_000 });
+    // More than the header row. Asserted as a shape rather than a count, because how many of the
+    // four steps this container manages is a property of the container.
+    await expect(history.getByRole('row')).not.toHaveCount(1);
+    // **And the NEWEST sitting is named as ONE act.** A sweep's steps POST separately, so the thing
+    // that makes them one sitting is the client-minted `sweep_id` surviving four round trips into
+    // the grouping — invisible to every unit test here, because those hand the model rows that
+    // already carry it. If it did not survive, this reads `One reading` four times over.
+    //
+    // The newest rather than "exactly one": the history is installation-wide and a local database
+    // accumulates across runs, so a count is a fact about how many times this suite has been run.
+    // Asserted on `.first()` because the API returns newest first and this suite is serial.
+    await expect(staff.getByRole('table', { name: SITTING_TABLE }).first()).toHaveAccessibleName(
+      /^Sweep of \d+ readings? — /,
+    );
+  }
+
+  // The console is a real screen and gets the same accessibility bar as every other one — and this
+  // milestone added three controls, a disclosure and a per-step result block to it.
+  const results = await new AxeBuilder({ page: staff })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+
+  await staffContext.close();
+});
+
+/**
+ * Open the **Measure one thing** disclosure, whatever state it is already in.
+ *
+ * The three single-run selects moved behind a `<details>` in staff-probe M5, when the two sweep
+ * buttons became the panel's primary controls — "which of eight combinations do I want?" is the
+ * question an operator asks last. This journey went on driving them without opening it, and on the
+ * first run after that rework it timed out at `selectOption` with the accessibility snapshot
+ * showing a collapsed `"Measure one thing"` and **no combobox in the tree at all**.
+ *
+ * **Nothing below this tier could have reported it.** The panel's own unit suite opens the same
+ * disclosure — its helper's docblock says why, in as many words — so it passed throughout. One
+ * correct pattern applied to a control and not its neighbour, which is the shape this register
+ * records most often, arriving here through a control that MOVED rather than one never wired.
+ *
+ * Idempotent by asking whether the select is reachable rather than by clicking blind: a `<summary>`
+ * toggles, so a second unconditional click shuts it again and the failure names the select instead
+ * of the click that caused it.
+ */
+async function openMeasureOne(page: Page): Promise<void> {
+  const length = page.getByRole('combobox', { name: 'Length' });
+  if (await length.isVisible()) return;
+  await page.getByText('Measure one thing').click();
+  await expect(length).toBeVisible();
+}
 
 /**
  * One row of the retention table, located by the table it names.

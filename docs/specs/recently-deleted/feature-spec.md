@@ -1,6 +1,6 @@
 # Feature Spec: Recently Deleted improvements
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0096)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-18
 - **Tracking issue / epic:** _(unassigned)_

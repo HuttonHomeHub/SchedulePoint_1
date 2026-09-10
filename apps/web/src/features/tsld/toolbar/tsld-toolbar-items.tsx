@@ -45,6 +45,7 @@ import {
   X,
   GitCompareArrows,
   HeartPulse,
+  PenLine,
 } from 'lucide-react';
 import { useId, useRef } from 'react';
 
@@ -104,6 +105,8 @@ import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
 import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
+import { PlanPenControl } from '@/features/plan-lock';
+import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
 import { cn } from '@/lib/utils';
 
 /**
@@ -145,13 +148,18 @@ type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels'
  * both. The trade was put to the product owner with the measured numbers rather than taken here,
  * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
  *
- * **Tier 3 rather than a low `priority`, and the distinction is load-bearing.** `autoLabelsFit`
- * sums the WHOLE bar (`Toolbar.tsx`), so a merely width-demoted item still pays for its label and
- * demoting it would buy nothing at all. `partitionByTier` takes tier 3 out of `bar` entirely.
- *
- * The other route — making the label sum read only the inline set — is exactly the feedback loop
- * {@link measureLabelWidth}'s docblock exists to prevent: labelling widens the row, the widened row
+ * **Tier 3 rather than a low `priority`, and the distinction was load-bearing when this was
+ * written.** `autoLabelsFit` summed the WHOLE bar, so a merely width-demoted item still paid for
+ * its label and demoting it bought nothing; `partitionByTier` takes tier 3 out of `bar` entirely.
+ * The other route — making the label sum read only the inline set — was the feedback loop
+ * `measureLabelWidth`'s docblock existed to prevent: labelling widens the row, the widened row
  * overflows, overflowing narrows it, and the narrower row can afford labels again.
+ *
+ * **Both of those functions were deleted with the width ladder (ADR-0109 D1), and neither has
+ * existed since.** The paragraph is kept because it records why the tier exists and what the
+ * rejected alternative cost; read it as history, not as a description of a live mechanism. The
+ * `{@link measureLabelWidth}` that stood here resolved to nothing — a broken TSDoc link of exactly
+ * the `isWidthConstrained` class `docs/TECH_DEBT.md` #193 records.
  *
  * `showLabel: 'never'` was measured and rejected: it drops an item's label cost while keeping its
  * 32 px and its gap, so the three Row-1 candidates save 308 px against a 360 px gap — not enough,
@@ -238,7 +246,13 @@ interface LensToggle {
   promotion?: { icon: React.ReactNode; order: number };
 }
 
-const LENS_TOGGLES: readonly LensToggle[] = [
+/**
+ * Exported for the compare-overlay refusal gate, which asserts that a cross-plan pair triggers NO
+ * refusal and that there are exactly two refusal states. The registry builder filters these by
+ * `enabled` and by group, so a suite reading the built items cannot see a toggle's own `reason` —
+ * which is the thing under test.
+ */
+export const LENS_TOGGLES: readonly LensToggle[] = [
   {
     id: 'baseline-overlay',
     group: 'insight',
@@ -379,10 +393,12 @@ function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
  * The Row-1 registry items for the promoted lens toggles (workspace-chrome M4) — **derived** from
  * the same `LensToggle` records `View ▾` reads, never restated.
  *
- * `showLabel: { atLeast: 'comfortable' }` rather than `'auto'`: `autoLabelsFit` is all-or-nothing
- * for a whole row, so an `'auto'` item follows its neighbours' collective fate and can label itself
- * at a narrow band that happens to have slack — the trap ADR-0091 D3a records for the zoom cluster.
- * These two carry a name a planner searches for, so a band rule is what they need.
+ * `showLabel: { atLeast: 'comfortable' }` rather than `'auto'`. The original reason — that
+ * `autoLabelsFit` was all-or-nothing for a whole row, so an `'auto'` item could label itself at a
+ * narrow band that happened to have slack — **lapsed with the width ladder (ADR-0109 D1)**.
+ * `'auto'` now means always label, so it would label these two at *every* width. These carry a
+ * name a planner searches for and should still go icon-only on a narrow window, so a band rule
+ * remains what they need; only the argument for it has changed.
  */
 function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
   return LENS_TOGGLES.filter((t) => t.enabled && t.promotion !== undefined).map((t) => {
@@ -551,6 +567,13 @@ function GoToTodayControl({
   return (
     <>
       <ToolbarSplitButton
+        // Read from the RESOLVED item rather than left to this component's default: the component
+        // review found all three `render` items ignoring `api.activeKind`, so changing an item's
+        // declaration in the registry had no visual effect at all — the field's whole stated
+        // purpose, plumbed to nowhere, with the paint correct only because two hand-kept copies
+        // happened to agree. Passed on every split button including the one that never presses, so
+        // the rule a later author copies is the one that is right.
+        activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={primaryRef}
         caretRef={caretRef}
@@ -710,6 +733,13 @@ function AddActivityControl({
   return (
     <>
       <ToolbarSplitButton
+        // Read from the RESOLVED item rather than left to this component's default: the component
+        // review found all three `render` items ignoring `api.activeKind`, so changing an item's
+        // declaration in the registry had no visual effect at all — the field's whole stated
+        // purpose, plumbed to nowhere, with the paint correct only because two hand-kept copies
+        // happened to agree. Passed on every split button including the one that never presses, so
+        // the rule a later author copies is the one that is right.
+        activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={mainButtonRef}
         caretRef={triggerRef}
@@ -876,6 +906,13 @@ function LinkControl({
        * pair sits in a `div` that carries the control chrome so the two regions read as one control.
        */}
       <ToolbarSplitButton
+        // Read from the RESOLVED item rather than left to this component's default: the component
+        // review found all three `render` items ignoring `api.activeKind`, so changing an item's
+        // declaration in the registry had no visual effect at all — the field's whole stated
+        // purpose, plumbed to nowhere, with the paint correct only because two hand-kept copies
+        // happened to agree. Passed on every split button including the one that never presses, so
+        // the rule a later author copies is the one that is right.
+        activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={mainButtonRef}
         caretRef={triggerRef}
@@ -1340,11 +1377,11 @@ function PlanAnalysisControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ active: open, disabled }))}
+        className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <ChartArea aria-hidden="true" className="size-4" />
         {compact ? null : <span className="truncate">{ANALYSIS_LABEL}</span>}
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
             {api.disabledReason}
@@ -1426,6 +1463,7 @@ function FilterMenuControl({
       // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
+      activeKind={api.activeKind}
       {...(api.disabled ? { disabled: true } : {})}
       // `disabledReason`, not `title` (ADR-0090 M5 accessibility gate). `Filter` is
       // `isEnabled: ctx.hasDiagram`, so every empty or uncomputed plan reaches this state, and a
@@ -1523,11 +1561,11 @@ function ExportMenuControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ active: open, disabled }))}
+        className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
         {compact ? null : <span className="truncate">{SHARE_EXPORT_LABEL}</span>}
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
             {api.disabledReason}
@@ -2073,6 +2111,48 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * *Edit plan*); `today` is a viewport **Go-to-today** jump (today at the left inset, not centred),
  * distinct from the "Today line" display toggle in `View▾` (which only shows/hides the marker).
  */
+/**
+ * **Why a reader whose ROLE forbids editing cannot take the pen.**
+ *
+ * Deliberately not assembled from `lockCopy`: the lock vocabulary describes what the lock is doing,
+ * and this sentence describes something the lock has no opinion about. It matches the phrasing
+ * `scheduleRefusal` gives every pen-gated command beside it ("Your role cannot …"), so a reader
+ * tabbing along the row hears one explanation rather than two.
+ */
+const PEN_ROLE_REFUSAL = 'Your role cannot edit this plan.';
+
+/**
+ * Which of the pen's two verbs this lock state offers.
+ *
+ * **One derivation, read by `isEnabled` and `isActive`.** The component review found the enabled
+ * rule written twice — once here and once inside `PlanPenControl` — agreeing only because both were
+ * typed by hand on the same afternoon; a later edit to either would leave the registry saying the
+ * control is shut while the component rendered it live with no reason attached. `PlanPenControl`
+ * now reads the RESOLVED item, so this is the single source and the component has no opinion.
+ *
+ * **"I hold the pen" is the view's TONE, not `actions.includes('stop')`, and that distinction is a
+ * defect the accessibility review found rather than a nicety.** `resolveLockView` drops `stop` from
+ * the action list in one branch — you are editing and a peer has asked for the pen, where the foot
+ * row offers `Hand over` and `Keep editing` instead — while `holdsPen` (`state === 'HELD_BY_ME'`)
+ * and therefore `canEditSchedule` and `authoringEnabled` all stay **true**. Reading the action list
+ * here shaded the pen, labelled it `Start editing` and described it as _"Jane is asking to edit this
+ * plan"_ — **beside eleven live authoring commands**, on the one control whose whole job is to say
+ * who may author. A keyboard reader tabbed from a dimmed "Start editing" straight into an enabled
+ * "Add activity". That array answers _which buttons does the FOOT ROW render_; it was never an
+ * answer to _do I hold the pen_, and the two coincide in twelve of the thirteen branches, which is
+ * why it read as correct.
+ *
+ * The tone answers the question directly and is true in **both** `HELD_BY_ME` sub-branches.
+ * `resolveLockView` and `HANDOFF_ACTIONS` are untouched: this is a one-surface correction.
+ */
+function penVerbs(ctx: TsldToolbarContext): { canStart: boolean; canStop: boolean } {
+  const actions = ctx.penLock?.controlsProps.actions ?? [];
+  return {
+    canStart: actions.includes('start'),
+    canStop: ctx.penLock?.view?.tone === 'editing',
+  };
+}
+
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/tier/order/
   // label/icon each remaining id carries in BOTH its real (flag-on) item and its
@@ -2251,9 +2331,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'` — `autoLabelsFit` is all-or-nothing for the whole row, so
-      // these would follow their neighbours' collective fate and label at a narrow band that
-      // happened to have slack, which is exactly what the 1440 measurement forbids.
+      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
+      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
+      // label, so it would label these at every width. The 1440 measurement still forbids that,
+      // so the band rule stands on the measurement rather than on the deleted mechanism.
       showLabel: { atLeast: 'comfortable' },
       order: 10,
       priority: 100,
@@ -2272,9 +2353,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'` — `autoLabelsFit` is all-or-nothing for the whole row, so
-      // these would follow their neighbours' collective fate and label at a narrow band that
-      // happened to have slack, which is exactly what the 1440 measurement forbids.
+      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
+      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
+      // label, so it would label these at every width. The 1440 measurement still forbids that,
+      // so the band rule stands on the measurement rather than on the deleted mechanism.
       showLabel: { atLeast: 'comfortable' },
       order: 11,
       priority: 100,
@@ -2291,9 +2373,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'` — `autoLabelsFit` is all-or-nothing for the whole row, so
-      // these would follow their neighbours' collective fate and label at a narrow band that
-      // happened to have slack, which is exactly what the 1440 measurement forbids.
+      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
+      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
+      // label, so it would label these at every width. The 1440 measurement still forbids that,
+      // so the band rule stands on the measurement rather than on the deleted mechanism.
       showLabel: { atLeast: 'comfortable' },
       order: 12,
       priority: 100,
@@ -2574,12 +2657,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // label, on the same reasoning that moved `search-status` into the search field a few lines up:
     // a read-out is not a command and does not belong in a `role="toolbar"`.
     //
-    // The two destinations are not comparable, and the measurement is what shows it. The search
-    // field is a `render` item — pinned, painted at every width. A **label** is painted only when
-    // `autoLabelsFit` is true, and `docs/specs/workspace-layout/m2-item-widths.md` records that at
-    // 1920 it is false: every `'auto'` item on this row measures 32 px, icon-only. So folding the
-    // count into the label would make it invisible **at the width this whole epic exists to fix**,
-    // on the product owner's own monitor — deleting information under cover of tidying.
+    // The two destinations are not comparable. The search field is a `render` item — pinned,
+    // painted at every width.
+    //
+    // **The measurement that used to finish this argument has lapsed.** It read: a label paints
+    // only when `autoLabelsFit` is true, and `m2-item-widths.md` records that at 1920 it is false,
+    // so folding the count into the label would hide it at the width the epic exists to fix.
+    // ADR-0109 D1 deleted the ladder and `autoLabelsFit` with it; labels now always paint, so the
+    // fold would no longer hide anything. What still refuses it is ADR-0094's other half, which
+    // was never about width: a live count folded into a label reduces the control's accessible
+    // name to a status, re-read on every cycle.
     //
     // The chip costs nothing to keep: `isVisible` is false unless a conflict is being cycled, so it
     // occupies no width at rest and none of the M2 arithmetic depends on it. It stays, and
@@ -2640,6 +2727,77 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // actions (baselines, calendar, export…) stay live on the same row because they don't need the pen.
     // Add activity — a plain toggle button flag-off (byte-for-byte unchanged); flag-on the canvas-first
     // Add split-button (ADR-0032 M4), a menu-button that also picks the draw kind (task / milestone).
+    /**
+     * **The pen, at the head of the row it unlocks** (console epic M5-T2).
+     *
+     * `order: -1` puts it first in `tools`, ahead of Add — the eleven authoring commands beside it
+     * are exactly what it shades. It was three sections away on the plan's identity line until now,
+     * which `UX_STANDARDS.md`'s own rule ("a control belongs beside the condition it answers")
+     * argues against: the condition this one answers is "may I author?".
+     *
+     * **`penGated` is absent, and a test says so.** This is the control that GRANTS the pen; gating
+     * it on holding one would shade it in precisely the state it exists for.
+     *
+     * A `render` item rather than an `onActivate` one because its accessible name is the verb and
+     * changes with the lock — and `ToolbarItem.label` is a plain string that ADR-0094 records
+     * refusing to make context-bearing. The registry label is the static handle; the rendered
+     * control carries `Start editing` / `Stop editing`.
+     */
+    {
+      id: 'pen',
+      group: 'tools',
+      order: -1,
+      tier: 1,
+      showLabel: 'always',
+      label: 'Editing control',
+      icon: <PenLine className="size-4" />,
+      isVisible: (ctx) => ctx.penLock?.penManaged === true,
+      // Shaded, never absent, in the eleven branches offering neither verb: an item that disappears
+      // takes a roving stop with it and shifts every command on the DO row sideways.
+      isEnabled: (ctx) => penVerbs(ctx).canStart || penVerbs(ctx).canStop,
+      // **Why the pen is shut, not what the lock is doing** — and the difference produced a
+      // sentence that contradicted itself. This read `view.message`, and for the two branches that
+      // matter most to a Viewer or a Contributor (`FREE` or `EXPIRED` with `canAcquire: false`)
+      // `resolveLockView` sets that message to "No one is editing this plan." So the product shaded
+      // `Start editing` and gave, as its stated reason, a sentence that answers the opposite
+      // question: if nobody is editing, why can I not?
+      //
+      // Every pen-gated command one item to the right — Add activity, Link, Auto-arrange — already
+      // gets this right through `scheduleRefusal`, whose own docblock names the failure: "A Viewer
+      // told to 'start editing' is being pointed at a button their role will never give them."
+      // The pen reached for the status sentence instead. One correct pattern applied to a control
+      // and not its neighbour, in the one control whose entire job is to explain this distinction.
+      // Found by the M7 ux review.
+      //
+      // The lock's own sentence is still the right reason wherever the lock IS the reason — a peer
+      // holds it, the reader's request is waiting out grace — so the branch is on which of the two
+      // facts is doing the refusing, not on which sentence reads better.
+      disabledReason: (ctx) => {
+        const view = ctx.penLock?.view;
+        if (!view) return lockCopy.loading;
+        // The role, not the lock: nothing is holding the pen and the reader still cannot take it.
+        // Offering them the pen would be a dead end dressed as a next step.
+        if (view.tone === 'neutral' && !penVerbs(ctx).canStart) return PEN_ROLE_REFUSAL;
+        return view.message;
+      },
+      // **`primary`, never `armed`** — the state the approved plan (M3-T2) named and M3 shipped
+      // without, so M5's first version reached for `armed` and made the pen and an armed tool one
+      // picture. That is the collision `toolbar-styles.ts` records having already fixed once, in
+      // the opposite direction. See that CVA's state-ladder docblock.
+      isActive: (ctx) => penVerbs(ctx).canStop,
+      activeKind: 'primary',
+      render: (ctx, api) =>
+        ctx.penLock ? (
+          <PlanPenControl
+            isPending={ctx.penLock.controlsProps.isPending}
+            onStart={ctx.penLock.controlsProps.onStart}
+            onStop={ctx.penLock.controlsProps.onStop}
+            api={api}
+          />
+        ) : (
+          <></>
+        ),
+    },
     {
       id: 'add-activity',
       group: 'tools',
@@ -2675,6 +2833,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
        * shows its progress on this trigger's label.
        */
       isActive: (ctx) => ctx.isAddingActivity || ctx.isLoeSpanning,
+      // A MODAL tool: while it is armed the next canvas click draws (console epic M3-T2). Declared
+      // rather than inferred — `state-ladder.structural.test.ts` reads this set, and the split
+      // button's own default would satisfy the paint while leaving the set unstated.
+      activeKind: 'armed',
       ...(CANVAS_AUTHORING_ENABLED
         ? { render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} /> }
         : { onActivate: (ctx) => ctx.toggleAddActivity() }),
@@ -2695,6 +2857,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // See `add-activity` above: a `render` item that publishes only its own `pressed` leaves the
       // registry — and therefore `Deck`'s no-fold-while-armed guard — blind to an armed tool.
       isActive: (ctx) => ctx.isLinking,
+      activeKind: 'armed',
       render: (ctx, api) => <LinkControl ctx={ctx} api={api} />,
     },
     /*
@@ -2727,6 +2890,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             description: 'Marquee-select activities on the canvas',
             icon: <SquareDashedMousePointer className="size-4" />,
             isActive: (ctx: TsldToolbarContext) => ctx.isMarqueeSelecting,
+            activeKind: 'armed' as const,
             onActivate: (ctx: TsldToolbarContext) => ctx.toggleMarqueeMode(),
           },
         ]

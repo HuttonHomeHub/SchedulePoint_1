@@ -1,6 +1,6 @@
 # Feature Spec: Duration Types & the Resource-Units model (M7 rung 4)
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Accepted — shipped (ADR-0040)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats), with James Ewbank
 - **Date:** 2026-07-17
 - **Tracking issue / epic:** Engine conformance & validation framework (ADR-0034) — capability epic **M7 (the Resource dimension)**, **rung 4: Duration/Units types** (`dt_*`). Follows M7.1/M7.2 (the resource model + resource-dependent scheduling, ADR-0039).

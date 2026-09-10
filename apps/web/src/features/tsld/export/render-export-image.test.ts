@@ -154,4 +154,48 @@ describe('renderExportImage', () => {
       'the printed diagram sits inside a document that already names the plan',
     ).not.toContain('North Tower');
   });
+
+  /**
+   * **A picture carrying a CROSS-PLAN comparison names BOTH plans, or its title is false.**
+   *
+   * The comparison overlay is composed into the export deliberately (ADR-0103): it is the one lens
+   * whose whole purpose is to be handed to somebody who was not in the room. Across two plans that
+   * makes a single-plan title a statement the reader has no way to check — they see one name and
+   * ghosts drawn from a plan nobody mentioned. Checked here rather than assumed, because the
+   * milestone's own plan asked whether the band names the plan at all: it does, at `:28`.
+   */
+  it('names BOTH plans when the picture carries a cross-plan comparison', async () => {
+    const written: string[] = [];
+    const ctx = fakeCtx();
+    Object.defineProperty(ctx, 'fillText', {
+      value: (text: string) => written.push(text),
+      writable: true,
+    });
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ctx,
+      toBlob: (cb: (b: Blob | null) => void) => cb(new Blob(['png'], { type: 'image/png' })),
+    } as unknown as HTMLCanvasElement;
+    await renderExportImage(
+      input({
+        meta: {
+          planName: 'North Tower',
+          dataDate: '2026-01-01',
+          generatedAtIso: '2026-07-20',
+          comparedWithPlanName: 'North Tower Rev B',
+        },
+      }),
+      { createCanvas: () => canvas, paint: vi.fn() },
+    );
+    const title = written.join(' ');
+    expect(title).toContain('North Tower');
+    expect(title).toContain('North Tower Rev B');
+  });
+
+  it('names ONE plan when there is no cross-plan comparison — the same-plan title is unchanged', () => {
+    // Asserted rather than assumed: an optional field that silently altered the commonest title
+    // would be a regression on every export nobody was working on.
+    expect(input().meta.comparedWithPlanName).toBeUndefined();
+  });
 });

@@ -1,7 +1,8 @@
 # Feature Spec: Three object-surface defects
 
-> **Status:** approved by the product owner in conversation, 2026-08-27, from the analysis this
-> document records. **Stage 1–2 were done in that exchange** — the problem was found by reading the
+- **Status:** Approved — by the product owner in conversation, 2026-08-27, from the analysis this document records
+
+> **Stage 1–2 were done in that exchange** — the problem was found by reading the
 > code behind three observations from a released build, and each recommendation was accepted as
 > written. This artefact exists because ADR-0105's trigger fired: US-2 adds a **new user-facing
 > entry point** to the object bar, and that is the one case where "the change is small" is exactly

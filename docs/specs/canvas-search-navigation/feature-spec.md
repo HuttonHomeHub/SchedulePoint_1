@@ -1,6 +1,6 @@
 # Feature Spec: Make search take you there
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Accepted — shipped (ADR-0079)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-07
 - **Tracking issue / epic:** _(to be raised)_

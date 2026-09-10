@@ -138,7 +138,18 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await b.keyboard.press('Escape');
 
   await requestBtn.click();
-  await expect(b.getByText(/Requested — waiting/i)).toBeVisible();
+  // **Scoped to the live region, not to the page.** This read `b.getByText(/Requested — waiting/i)`
+  // and went ambiguous at console M5: the pen's verb moved to the command deck, where a shaded
+  // control carries its reason as an `sr-only` sibling linked by `aria-describedby` (ADR-0082), and
+  // the lock's own sentence is that reason. So the same words are now legitimately on screen twice —
+  // once as the button's description, once as the `role="status"` sentence ADR-0112 D1 put in the
+  // foot row — and an unscoped match resolved to both. Neither copy is a defect: the name stays
+  // pinned to `Start editing` by `aria-label`, so nothing is announced twice in one breath.
+  //
+  // Asserting the STATUS region is strictly stronger than what it replaces: it says the sentence
+  // reached the live region a requester is told to watch, which the old line could have satisfied
+  // from the sr-only span alone.
+  await expect(b.getByRole('status').filter({ hasText: /Requested — waiting/i })).toBeVisible();
 
   // --- A sees the incoming request and hands over -------------------------------------------
   await refetchLock(a);

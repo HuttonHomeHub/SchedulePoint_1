@@ -6,7 +6,7 @@ this stage: this is spec + plan + ADR outlines only, awaiting approval.
 
 # Feature Spec: Engine Conformance & Validation Framework
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Accepted — shipped (ADR-0034) — the framework; its milestone sub-specs sit beside this file
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-15
 - **Tracking issue / epic:** _TBD_

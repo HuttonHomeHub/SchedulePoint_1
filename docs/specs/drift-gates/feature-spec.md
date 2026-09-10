@@ -1,6 +1,6 @@
 # Feature Spec: Drift gates — a computed observer for the register and for the pass
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0120)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-30
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #219(a) and #220

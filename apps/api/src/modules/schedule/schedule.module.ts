@@ -7,6 +7,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
 
+import { CrossPlanRevisionCompareController } from './cross-plan-revision-compare.controller';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleRepository } from './schedule.repository';
 import { ScheduleService } from './schedule.service';
@@ -28,7 +29,9 @@ import { ScheduleService } from './schedule.service';
     CrossPlanDependenciesModule,
     BaselinesModule,
   ],
-  controllers: [ScheduleController],
+  // Two controllers, because the cross-plan comparison carries TWO plan ids and therefore has no
+  // honest `:planId` segment — the ADR-0045 precedent, not a new pattern.
+  controllers: [ScheduleController, CrossPlanRevisionCompareController],
   // CalendarRepository: the recalculation persists float in DAYS, and the factor comes from
   // each activity's own calendar (ADR-0068 §3a).
   providers: [ScheduleService, ScheduleRepository, CalendarRepository],

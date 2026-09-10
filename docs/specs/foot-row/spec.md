@@ -1,6 +1,6 @@
 # Feature Spec: The stable foot row
 
-- **Status:** Draft — **rewritten 2026-08-26 after four blocking specialist reviews**
+- **Status:** Accepted — shipped (ADR-0114)
 - **Measurement:** [`m0-measurement.md`](m0-measurement.md) — every figure below is from that run
 - **Related:** ADR-0060, ADR-0064, ADR-0080, ADR-0082, ADR-0090, ADR-0092, ADR-0093, **ADR-0109**,
   ADR-0110, ADR-0112, ADR-0113

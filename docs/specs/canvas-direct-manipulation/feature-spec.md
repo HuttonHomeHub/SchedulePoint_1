@@ -1,6 +1,6 @@
 # Feature Spec: TSLD Canvas Direct-Manipulation Upgrade
 
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0052)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-22
 - **Tracking issue / epic:** TBD

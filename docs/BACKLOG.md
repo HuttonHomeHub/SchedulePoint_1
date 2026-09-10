@@ -130,15 +130,41 @@ a product idea that has not yet earned a roadmap line:
   **two plans** (ADR-0050: "import target is always a new plan"), and nothing in the model lets a
   comparison span them. So this needs a cross-plan comparison — which is a real design question
   about identity, since matching an activity across two independent imports cannot use the id and
-  has to use the source `activity_code`, with its own reject/repair/report contract (ADR-0035) for
-  a code that is absent, duplicated or reused. Verified 2026-09-06 by reading the controller and
+  has to use the source code. **That field is `Activity.code`, not `activity_code`** — corrected
+  2026-09-08 by reading the schema, the name this entry used existing nowhere in it, which is the
+  stale-entry failure recorded twice above happening to the entry's own remedy rather than to its
+  problem. Three facts about it shape the design and none was recorded here: `packages/interchange/src/xer-adapter.ts:541`
+  **does** map P6's `task_code` onto it and already reports a finding when absent
+  (`:548`, falling back to the source task id — which makes that code **file-local**, so two exports
+  of one programme need not agree); the column is **nullable**; and **it is UNIQUE per plan**, by
+  `uq_activities_plan_code` — a partial index (`WHERE deleted_at IS NULL AND code IS NOT NULL`)
+  declared in raw SQL at `20260710092048_add_activities/migration.sql:81`.
+  **This paragraph asserted the opposite for one commit, on 2026-09-08, and the method is the
+  transferable part:** the claim was "verified" by grepping `@@unique`/`@unique`, which in this
+  repository structurally cannot see the answer — Prisma cannot express a partial unique, so every
+  one of them lives in `prisma/migrations/` and `schema.prisma` merely comments about them (it does,
+  twice, at `:1325` and `:2563`, and the grep missed those too). A constraint claim here is verified
+  against the migrations, never the schema alone. Caught by the spec agent re-deriving it rather
+  than trusting the brief — which is the rule working, one turn after the same rule caught this
+  entry.
+  So "duplicated within one side" is **not a case to repair; it is a case the database refuses**,
+  and the reject/repair/report contract (ADR-0035) narrows to two cases: a code that is absent, and
+  a code present on one side only — the second being indistinguishable from a re-code, which is the
+  genuinely hard one. Verified 2026-09-06 by reading the controller and
   the DTO, not the schema.
-  **And one measurement is owed before any of it:** the compare overlay ships default-OFF because
-  its paint cost is **unanswered**, not because it was judged acceptable. The M0 harness works and
-  refused to produce a verdict — the container's own baseline moved 0.56→1.85 pp at 1646 and
-  0.93→10.00 pp at 1920 between two runs an hour apart with no code change, against a 2.00 pp bar.
-  It needs a **headed run on the product owner's hardware**; the environment here is recorded as
-  disqualified.
+  **The measurement this entry said was owed has been TAKEN, and the entry is corrected rather than
+  stepped over — for the third time in three days, in the same file.** It read: the compare overlay
+  ships default-OFF because its paint cost is unanswered, and needs a headed run on the product
+  owner's hardware. That run happened on 2026-09-08, on the ADR-0128 staff panel built for exactly
+  this: at the **Week** framing on 2,000 activities the baseline is 0.19 pp dropped, the treatment
+  0.00 pp at **60.0 fps**, delta **−0.19 pp** against a 2.00 pp bar — and, decisively, the machine's
+  own run-to-run spread is **0.56 pp**, inside the bar, so the instrument could resolve the question
+  the container was disqualified from answering. **PASS on both limbs**, recorded as ADR-0127 D8a,
+  and the product owner then turned the overlay **default-on** (D8b). This is no longer a blocker.
+  **What is still unknown is the Fit framing**, and that is a different claim from the one this
+  paragraph used to make: P3 leaves that framing ungraded by policy, and `docs/TECH_DEBT.md` #260
+  records that at a baseline of 98.33 pp the difference metric has less headroom than the bar, so a
+  delta there is arithmetically incapable of failing. Do not read a Fit number as reassurance.
 
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so

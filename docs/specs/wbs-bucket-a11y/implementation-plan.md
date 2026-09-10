@@ -1,6 +1,6 @@
 # Implementation Plan: The WBS band's accessible equivalent
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) — **awaiting approval**
+- **Feature spec:** [./feature-spec.md](./feature-spec.md) — Draft
 - **Status:** Draft
 - **Owner:** web
 - **Register row:** `docs/TECH_DEBT.md` #232

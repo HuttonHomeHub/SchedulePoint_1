@@ -3603,11 +3603,52 @@ model PerfProbeResult {
   /// Groups the limbs of ONE press. A plain correlation UUID with **no FK and no parent table** —
   /// the ADR-0073 C3.3 `correlation_id` pattern, and the `baseline_activities.source_activity_id`
   /// precedent for a non-FK identity column. A `perf_probe_runs` parent was rejected: it gives the
-  /// ADR-0087 sweep a two-table **ordered** delete, the class `docs/TECH_DEBT.md` #253 records
-  /// thirteen copies of, and the ADR-0126 M4 shape where a fourth child table broke 557 API e2e
-  /// tests on a RESTRICT FK. Minted **server-side**, so a client cannot forge grouping — two runs
-  /// claiming one id would make one machine's numbers read as another's. Deliberately unindexed.
+  /// ADR-0087 sweep a two-table **ordered** delete, the class `docs/TECH_DEBT.md` #256 records —
+  /// five e2e resets hand-ordered the schema and were already wrong about one table, found only by
+  /// an unrelated spec failing on a constraint it does not recognise — and the ADR-0126 M4 shape
+  /// where a fourth child table broke 557 API e2e tests on a RESTRICT FK. Minted **server-side**,
+  /// so a client cannot forge grouping — two runs claiming one id would make one machine's numbers
+  /// read as another's. Deliberately unindexed.
+  ///
+  /// (This cited #253 until 2026-09-09. That row is closed and ledgered, and its number now points
+  /// at an unrelated entry, so a reader following it landed somewhere else. Corrected rather than
+  /// stepped over — ADR-0071.)
   runId String @map("run_id") @db.Uuid
+
+  /// Groups several presses into ONE SITTING — one press of "Run all measurements", which works
+  /// through the scenario x preset plan and POSTs per completed step so an interruption is cheap.
+  /// `run_id` groups the limbs of one press; this sits above it.
+  ///
+  /// NULL means **this reading was a single press**, true of every row written before this column
+  /// existed and of every future single run. No DEFAULT: it would claim membership of a sitting
+  /// that does not exist (the ADR-0126 rule that a DEFAULT invents a fact), and no value is true of
+  /// the existing rows — which is what separates this from ADR-0068's `DEFAULT 1440`.
+  ///
+  /// **Client-supplied, and it does NOT inherit `run_id`'s cannot-be-forged property.** Only the
+  /// client knows that four presses were one sitting; the server holds no session state across
+  /// them and cannot observe it — the `app_version` position. What that grants (grouping rows the
+  /// operator did not group) is strictly weaker than fabricating the numbers, which ADR-0128's
+  /// Consequences already accept of a compromised staff session — with one manifestation worth
+  /// naming, since no constraint here can address it: the reader takes a sitting's machine facts
+  /// from its first row, so a forged grouping prints one machine's fingerprint over a mixed sitting.
+  /// Cross-row and unknowable to the server, which is further support for the rejected CHECKs.
+  ///
+  /// **REUSE ACROSS TIME IS A FEATURE, not a defect to constrain away.** "Run the missing
+  /// measurements" (ADR-0130 D6) re-runs a refused reading under this SAME id, deliberately, and
+  /// the two presses can be hours or days apart — the reader states the spread rather than hiding
+  /// it. So a uniqueness rule, a first-seen rule, or a "rows sharing a sweep id must fall within N
+  /// hours" window would each break shipped behaviour. Written here because it is the fourth CHECK
+  /// a later reader reaches for and the only one the migration does not enumerate; the M7 database
+  /// review found nothing on the server side recording it.
+  ///
+  /// `UUID` rather than `TEXT` for a reason stronger than storage: Postgres normalises `uuid` to
+  /// canonical lowercase, so a client that posts `A1B2...` on one step and `a1b2...` on another
+  /// still groups. Under `TEXT` that would silently become **two sittings** — a plausible failure
+  /// of the exact thing the column exists to do.
+  ///
+  /// No FK, no parent table, deliberately unindexed: no query filters on it, and the grouping
+  /// happens client-side over a page already fetched.
+  sweepId String? @map("sweep_id") @db.Uuid
 
   /// The instant the run settled. **Server-stamped, never client-supplied**: it is the retention
   /// predicate and the read's leading key, and a browser clock is neither trustworthy nor monotonic
@@ -3679,6 +3720,31 @@ model PerfProbeResult {
   /// per pair; storing those is ~20 kB, breaches the size CHECK, and is a different decision — an
   /// unqueryable blob whose only consumer is a profiler this feature explicitly is not.
   samples Json @db.JsonB
+
+  /// The frame budget ONE PHASE ran for — the other half of the protocol `samples` carries. That
+  /// array's length is the repeats; this is the frames per **phase**, which is what the column is named. For an
+  /// absolute limb a repeat is one phase, so repeats x this is the frame count. For a DIFFERENCE
+  /// limb a repeat is a PAIR — a baseline and a treatment back to back (`run-probe.ts`'s
+  /// `runDifferenceLimbs` docblock) — so the frame count is repeats x this x 2. This said "the
+  /// frames per repeat", which is right for one limb kind and halves the other; `revision-diff` is
+  /// the scenario ADR-0129 P3 was measured on. Found by the M7 database review.
+  ///
+  /// NULL means **not recorded**, never a default and never guessed. It is inferable from
+  /// `samples.length`, because a client-side constant ties frames to repeats — and inferring it
+  /// would write a fact derived from a bundle version into a column readers will trust. A stored
+  /// reading whose protocol is unknown says so instead.
+  ///
+  /// The NULL stays ambiguous forever: written before the column existed, or a producer omitted
+  /// it. **A NULL on a row whose `recorded_at` is after 2026-09-09 is a producer bug, not a
+  /// historic gap** — said here because it is the only way a later reader can tell them apart.
+  /// Making the DTO field required would remove the ambiguity and permanently re-introduce the
+  /// release-skew failure the migration describes, which is worse.
+  ///
+  /// **Sign bound only**, in `ck_perf_probe_results_measurement_bounds`. A count being positive is
+  /// a fact; a range is a protocol, and a protocol in a CHECK means the day the product widens it
+  /// the database silently refuses rows the product decided to accept. The ceiling lives on the
+  /// DTO, where it is required rather than decorative: this is int4 and `@IsInt()` passes `1e12`.
+  framesPerPhase Int? @map("frames_per_phase")
 
   /// The non-vacuity numerators **and denominators**, counted inside the viewport. Both halves,
   /// because a numerator alone cannot distinguish "few bars drawn" from "few bars to draw" — the

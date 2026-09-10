@@ -107,6 +107,14 @@ function renderPanel(over: Partial<RevisionComparePanelProps> = {}) {
     onToChange: vi.fn(),
     onClose: vi.fn(),
     onActivateActivity: vi.fn(),
+    // The same-plan default: no other plans loaded, so the **Compare with** picker does not render
+    // and every existing case below runs against exactly the surface it always did. That is the
+    // rollback contract for this milestone, since there is no flag — a case asserting the shipped
+    // route is still called with the shipped params sits with the cross-plan cases.
+    otherPlans: null,
+    otherPlansPending: false,
+    comparePlanId: null,
+    onComparePlanChange: vi.fn(),
     ...over,
   };
   return { ...render(<RevisionComparePanel {...props} />), props };
@@ -673,5 +681,35 @@ describe('the Changes view', () => {
     const { container } = renderPanel({ compare: withChanges() });
     fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
     expect((await axe(container)).violations).toEqual([]);
+  });
+});
+
+describe('the cross-plan surface — the M4 ux review\u2019s findings, pinned', () => {
+  it('shows "Comparing…" while a CROSS-PLAN request is in flight', () => {
+    /**
+     * **It never did.** The spinner was gated on `isPending && from !== null`, and `from` is the
+     * SAME-PLAN picker's state — it stays null for the whole life of a cross-plan comparison. So
+     * the condition was `true && false` on every cross-plan request and the panel showed the
+     * pickers and nothing at all between the choice and the answer.
+     *
+     * No test could have caught it: the only "Comparing…" case set `from`, and the only case that
+     * set `comparePlanId` hard-coded `isPending: false`. So this asserts the combination neither
+     * did.
+     */
+    renderPanel({ comparePlanId: 'other-plan', from: null, isPending: true, compare: null });
+    expect(screen.getByText(/comparing/i)).toBeInTheDocument();
+  });
+
+  it('still shows it for a SAME-PLAN request, which is what always worked', () => {
+    // Asserted beside it because one passing does not imply the other: a fix that dropped the
+    // `from` limb entirely would satisfy the case above and start showing a spinner on a panel
+    // where nobody has chosen anything.
+    renderPanel({ comparePlanId: null, from: 'b1', isPending: true, compare: null });
+    expect(screen.getByText(/comparing/i)).toBeInTheDocument();
+  });
+
+  it('shows NO spinner when nothing is chosen, however pending the query claims to be', () => {
+    renderPanel({ comparePlanId: null, from: null, isPending: true, compare: null });
+    expect(screen.queryByText(/comparing/i)).not.toBeInTheDocument();
   });
 });

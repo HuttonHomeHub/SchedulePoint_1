@@ -1,5 +1,220 @@
 # @repo/web
 
+## 0.126.0
+
+### Minor Changes
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's command band loses the group cards, the double seam above its amber rule and
+  8 px of empty header, giving the diagram 37 px back at 1646 and 1920 (band 180 → 143 px) with the
+  group captions still present. Sections and split-button carets are separated by one shared inset
+  hairline, and disclosure carets take the chrome's muted ink instead of an opacity. First slice of
+  the workspace console (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Four states on the plan workspace's command deck now paint four different pictures. A hovered
+  button, an open menu and an **armed** modal tool were one wash at 1.34:1 against the band, so a
+  planner could not tell that the next canvas click would draw. An armed tool takes amber ink and an
+  underline; an open or engaged control takes a fill, and an engaged one keeps its mark while its
+  panel is open. Third slice of the workspace console (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The pen leads the row it unlocks.
+  
+  `Start editing` / `Stop editing` moves off the plan header and becomes the first control of the
+  command deck's **Author** card — immediately before the eleven authoring commands it is the
+  precondition for. It sat three sections away from them until now.
+  
+  Its badge, its live-region sentence and its seven hand-off controls (Request control, Take over
+  now, Override, Hand over, Keep editing, Dismiss) go the other way, to the plan's foot row, where
+  they read beside the sentence that explains them.
+  
+  Two behaviour changes fall out of the move:
+  
+  - The pen is **shaded with its reason, never absent**, in the eleven lock states offering neither
+    verb. An item that disappears takes a roving stop with it and shifts every command on the row
+    sideways, so a planner reaching for `Add activity` by muscle memory would land on `Link` — and
+    only in the states where the pen is unavailable.
+  - **Focus stays on the control you pressed.** The pen's focus return was written for a surface
+    where a successful Start or Stop removed the button that ran it; the deck's control relabels
+    instead, so focus was never lost and is no longer moved.
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The command deck's captions go, and the rows do the grouping.
+  
+  VIEW / FIND / AUTHOR / PLAN and the selection bar's SELECTION are deleted. Nothing is lost to a
+  screen reader: each was an `aria-hidden` span beside a group whose own accessible name already
+  carried the word, and those names are untouched.
+  
+  The width they were spending is what pays for the pen the previous release put on that row.
+  Measured at 1280, the twelve commands on the authoring row fit their container with 195 pixels to
+  spare and the row still wrapped — the overflow was the captions, their dividers and the gaps
+  either side, not the commands. Deleting them takes that row back to a single line with the pen
+  still on it.
+  
+  The command band is now 139 pixels at 1440, 1646 and 1920, and the activities row 51.
+
+### Patch Changes
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's search field and the organisation switcher stop being the two brightest
+  objects on a navy command band: the chrome scope's field family recesses into the band's own hue,
+  with the control's outline carrying the identification — which is the rule the token matrix already
+  states for every other surface. Second slice of the workspace console
+  (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's command deck now declares its two rows — what you are looking at, then what you
+  can do to it — instead of letting flex wrapping decide. A label change can wrap a row; it can no
+  longer move a command to the other one. At 1440 the deck is two lines where it was three. Fourth
+  slice of the workspace console (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fixes from the command console's gate pass.
+  
+  The pen's focus ring is now visible when the pen is held. Inside the chrome the ring colour and the
+  pen's own fill are the same amber, and the shared treatment draws the ring inside the control — so
+  a keyboard planner who tabbed to Stop editing saw nothing at all.
+  
+  The pen no longer explains itself with the wrong sentence. A reader whose role does not allow
+  editing was shown a dimmed Start editing accompanied by "No one is editing this plan.", which
+  answers a different question. It now says what every command beside it says.
+  
+  The deck draws a mark between its groups again, taller than the one between the sections inside a
+  group. Deleting the captions removed the only thing separating Author from Plan, and the finer
+  boundary was left as the only one with a line through it.
+  
+  The plan workspace stops re-rendering once a second. The pen's relative-time clock had been moved
+  to the top of the workspace, where it invalidated the whole command surface every tick; it now
+  produces a new value only when something a reader can see has changed, and stops entirely while the
+  tab is in the background.
+
+## 0.125.3
+
+### Patch Changes
+
+- [#504](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/504) [`ec1227a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ec1227a870400fa401d23b692fcee8da40ff437f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console stops interrupting: an alert now says whether it is an event or a standing
+  condition.
+  
+  `Alert` gains a required `purpose` with no default. `tone` keeps deciding urgency and `role` is
+  still not a prop; `purpose` answers a different question the primitive could not previously ask.
+  Six caveats on the staff console — two of them assertive, and all six produced by a query settling
+  rather than by anything happening — stop being live regions. Two of those were already announced
+  correctly by the panel's own polite region, so the alert was saying them twice.
+  
+  One caveat had no other channel, and the retention panel now says so out loud. Its polite region
+  could not see whether the sweeper had run at all, so a stuck sweeper whose tables were still inside
+  their periods was announced as "every table is inside its period" while the visible alert said the
+  opposite. It now reports "the sweeper appears stuck", ranked between a failing sweep and an overdue
+  table.
+  
+  See ADR-0132.
+
+## 0.125.2
+
+### Patch Changes
+
+- [#502](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/502) [`f50e400`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f50e40036a66e283dc88c83f7c028e6d66b0f5ef) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - No user-visible change. Repository tooling: `check:spec-status` makes a spec document's approval
+  state a computed rule rather than a remembered one (ADR-0131).
+
+## 0.125.1
+
+### Patch Changes
+
+- [#498](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/498) [`04c3dc2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/04c3dc235c187ade70e7b293e7f5bc666c73c650) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A recorded performance reading can be read back, and copied.
+  
+  The history row now names the canvas it was taken at, the measured display interval and whether
+  the window held focus — three facts stored on every row since the table shipped and rendered on
+  none, which is enough to decide a verdict rather than a rounding term. The table also says, in a
+  note linked to it, that a reading is only comparable to another taken at the same canvas size.
+  
+  The paste-ready block is no longer only available in the seconds after a run: it is built from one
+  presentation model that both a finished run and a stored reading can fill, and a Copy control on
+  each row produces it. Where a stored row genuinely cannot supply a field, the block says so rather
+  than printing the default a reader would otherwise assume.
+
+- [#500](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/500) [`2fb3be7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2fb3be76388830cb26704bc3c99db58abb653311) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - One press takes every reading the performance probe can take.
+  
+  The panel led with three selects and a Run button, so a complete set of readings was four separate
+  presses with three fields to set correctly each time — and the readings that resulted were four
+  unrelated rows. **Run all measurements** now walks every measurement at both framings under one
+  sitting id, announcing each step as it starts and as it settles, and **Check the probe works** does
+  the same at one repeat for anyone who wants to know the probe runs here before committing two
+  minutes to it. Both confirmations state their own duration, derived from the plan they are about to
+  run rather than from a constant. The three selects are still there, behind a **Measure one thing**
+  disclosure.
+  
+  A refused step no longer ends the sitting, and a step whose figures failed to store keeps them so a
+  retry can send them: what a press produced is reported per step, in a vocabulary that distinguishes
+  a reading the machine declined from one nobody attempted.
+  
+  It also repairs a defect that had made half of those readings unstorable since the revision-compare
+  measurement shipped: that scene reports one more field per measured window than the API accepts, so
+  every reading of it was refused. Each window is now built field by field at the boundary.
+
+- [#501](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/501) [`cb38638`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cb38638ad3e9b2c4566b0d4b9755c0b778bba452) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff performance panel groups its history into the sittings the readings were taken in, and
+  offers to take again the ones a sitting never got.
+  
+  Each block states the machine, the canvas, the display and the operator once, above a table of the
+  readings that vary; **Run the missing measurements** re-runs only the refused or never-taken steps
+  under the same sitting id. A sitting whose readings span more than an hour says so, on screen and
+  in the copied report.
+  
+  Two false statements are removed with it. A single measurement no longer files itself as a sweep
+  of one reading with three missing, and the oldest block no longer claims a reading was refused when
+  it may simply be beyond the read's fifty-row page.
+
+- [#501](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/501) [`cb38638`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cb38638ad3e9b2c4566b0d4b9755c0b778bba452) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The performance panel's gate pass, and four corrections that reach a reader.
+  
+  The full-screen measurement overlay now takes the whole page out of the keyboard's reach while it
+  covers it, rather than only this panel's own controls — six other panels sit beside it on the staff
+  console, and Tab from Stop was landing on a control hidden behind the canvas.
+  
+  A complete sweep is **six readings**, not four: the caption and the partial notice were counting
+  steps and calling them readings, over a table that shows one row per reading.
+  
+  The API's published spec is corrected in two places. `counts` and `thresholds` are named on the
+  response with the same shapes the request already names, both history reads declare the 422 an
+  out-of-range `limit` reaches, and `framesPerPhase`'s description no longer halves the frame count
+  for a paired measurement.
+  
+  Each sitting's Copy button, its own machine facts and its warnings are now reachable to assistive
+  technology from inside the table they belong to, and a retry announces that it is running.
+
+- [#498](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/498) [`04c3dc2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/04c3dc235c187ade70e7b293e7f5bc666c73c650) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Stopping a performance run no longer throws away what it already measured.
+  
+  The canvas-draw measurement runs at two scales. Stopping during the second discarded a complete
+  first one — every repeat collected, nothing about it wrong — because the recording unit was the
+  whole press rather than the limb. A limb that collected all its repeats is now kept and stored; one
+  interrupted partway is dropped rather than truncated, so a short reading can never sit in the
+  history looking like a full one. The Stop button says what it keeps, and the result says how many
+  readings were kept and that the rest were not taken.
+
+- [#496](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/496) [`3f9b66b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3f9b66b0dfcfe438768c4a0ab1509bd4c489240f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The performance probe refuses a verdict when the metric has no room left to give one.
+  
+  `droppedPct` is a share of frames and is bounded at 100, so a baseline sitting near the ceiling
+  leaves less headroom than the 2.00 pp bar the difference is judged against — and the difference
+  gate then cannot fail whatever the feature costs. The judge now computes that headroom on every
+  result and returns INDETERMINATE when a gated run is saturated; every surface that prints a delta,
+  including the command-line driver, says so beside the figure rather than leaving a number that
+  reads as "this cost nothing".
+
+## 0.125.0
+
+### Minor Changes
+
+- [#491](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/491) [`5d84bd0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5d84bd051d0606a95db589e5fb9365c3414886af) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Compare the open plan against another plan in the same project.
+  
+  Two revisions of one programme that arrived as two imports are two sibling plans
+  sharing no activity ids, so the existing comparison had nothing to say about them.
+  A **Compare with** picker in the Compare revisions dock now matches them on
+  activity code and shows the match coverage first — every number below it is worth
+  exactly what the coverage says it is. The difference is drawn on the diagram too,
+  and the printed handover names both plans.
+  
+  Two limits are stated rather than implied: an activity whose code changed between
+  the two looks the same as one removed and another added, and work that exists in
+  only one plan is counted rather than drawn, because two independent imports do not
+  share a lane order.
+
+### Patch Changes
+
+- Updated dependencies [[`5d84bd0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5d84bd051d0606a95db589e5fb9365c3414886af)]:
+  - @repo/types@0.31.0
+
 ## 0.124.0
 
 ### Minor Changes

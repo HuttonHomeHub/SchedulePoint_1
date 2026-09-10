@@ -353,3 +353,17 @@ it is the record of what was agreed, and ADRs cite it.
 
 The **feature-analyst** agent ([`.claude/agents/feature-analyst.md`](../.claude/agents/feature-analyst.md))
 runs Stages 1–5 and produces these artifacts.
+
+**The spec's `**Status:**` header is computed, not remembered.** `pnpm check:spec-status` reads
+every `docs/specs/*/feature-spec.md` and `spec.md`, and refuses five things: a missing header, a
+token outside `Draft | Approved | Accepted | Superseded | Withdrawn`, an `Accepted` header naming no
+ADR that resolves, a non-canonical form, and — the rule the gate exists for — **a spec headed
+`Draft` whose directory any ADR cites**. An ADR citing a spec is the record that that spec's design
+became a decision, so it cannot still be awaiting approval to build. It does not claim the work
+shipped, which is why `Approved` is admitted for a cited spec.
+
+This exists because it drifted **by being nobody's step**: 54 spec headers behind live, ADR-filed
+surfaces still read "awaiting approval before implementation", and nothing in this document sent
+anybody back to them. So **closing a feature includes writing its header** — `Accepted — shipped
+(ADR-NNNN)` — in the same change that files the ADR. See ADR-0131 and
+[`docs/specs/spec-status-gate/`](specs/spec-status-gate/).

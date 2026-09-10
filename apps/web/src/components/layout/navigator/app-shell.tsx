@@ -56,9 +56,12 @@ function ShellFrame(): React.ReactElement {
    *
    * **The rule was never missing; it was applied to two controls and not their third neighbour.**
    * `app-header.tsx`'s below-`lg` Explorer trigger is already `{shell && orgSlug ? …}`, and
-   * `tool-rail.tsx` already withholds the six organisation destinations without a slug — whose own
-   * test is titled "renders no destinations outside an organisation — there are none to show". The
-   * Explorer button sat forty lines from that, ungated. So this is one derived fact rather than a
+   * `org-destinations.tsx` already withholds the six organisation destinations without a slug. The
+   * Explorer button sat forty lines from that, ungated. _(This named `tool-rail.tsx` and quoted a
+   * test title from it until 2026-09-09. ADR-0109 D2 deleted the tool rail: neither that file nor
+   * that test exists, and the destinations moved to `org-destinations.tsx`, whose four cases carry
+   * different titles. A citation into a deleted file reads as evidence and cannot be checked —
+   * `docs/TECH_DEBT.md` #277.)_ So this is one derived fact rather than a
    * third copy of the same condition, which is the ADR-0064 §7 / ADR-0093 shape: at the third
    * instance, extract.
    *

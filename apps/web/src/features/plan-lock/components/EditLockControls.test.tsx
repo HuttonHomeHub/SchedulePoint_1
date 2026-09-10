@@ -70,4 +70,46 @@ describe('EditLockControls', () => {
     renderControls(['start'], { isPending: true });
     expect(screen.getByRole('button', { name: 'Start editing' })).toBeDisabled();
   });
+
+  /**
+   * **`only` — the subset filter the console epic's M5 added, and its direct coverage** (a component
+   * review finding: it shipped exercised once, indirectly, through a workspace fixture).
+   *
+   * The plan workspace passes `HANDOFF_ACTIONS` because the pen's verb renders in the command deck
+   * instead. The decision to keep the subset at the CALL SITE rather than defaulting it here is what
+   * preserved this suite as the extraction's oracle — three cases above are about `start`/`stop`,
+   * and a default that dropped them would have made a refactor into a behaviour change wearing its
+   * clothes.
+   */
+  describe('the `only` subset filter', () => {
+    it('renders just the named actions, dropping the rest', () => {
+      renderControls(['start', 'stop', 'request'], { only: ['request'] });
+      expect(screen.getByRole('button', { name: 'Request control' })).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Start editing' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Stop editing' })).toBeNull();
+    });
+
+    it('renders nothing when the subset and the actions do not intersect', () => {
+      // The state the plan workspace reaches on eight of the thirteen lock branches: the pen offers
+      // a verb and no hand-off, so the foot row's controls resolve to an empty list. It must fall
+      // through to the same "no actions" path as an empty array — an empty `<div>` with a gap would
+      // leave the foot row's spacing arguing with itself for a control that is not there.
+      const { container } = render(
+        <EditLockControls
+          actions={['start']}
+          only={['request', 'handover']}
+          holder={null}
+          isPending={false}
+          {...handlers()}
+        />,
+      );
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('is absent-means-everything, which is what keeps every pre-M5 caller unchanged', () => {
+      renderControls(['start', 'request']);
+      expect(screen.getByRole('button', { name: 'Start editing' })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Request control' })).toBeVisible();
+    });
+  });
 });

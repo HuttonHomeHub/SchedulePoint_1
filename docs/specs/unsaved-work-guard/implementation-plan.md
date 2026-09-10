@@ -1,6 +1,6 @@
 # Implementation Plan: The unsaved-work navigation guard
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Approved
 - **Status:** Draft — awaiting approval
 - **Owner:** —
 

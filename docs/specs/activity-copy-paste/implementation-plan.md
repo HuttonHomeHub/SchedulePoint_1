@@ -1,6 +1,6 @@
 # Implementation Plan: Activity copy, paste and duplicate
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) — **awaiting approval**
+- **Feature spec:** [./feature-spec.md](./feature-spec.md) — Accepted
 - **Status:** Draft
 - **Owner:** _(unassigned)_
 - **Flag:** `VITE_ACTIVITY_COPY_PASTE` — `flagDefaultOff` from M0, flipped to `flagDefaultOn` in M5.

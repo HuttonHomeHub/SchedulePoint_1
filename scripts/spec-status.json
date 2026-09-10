@@ -1,0 +1,12 @@
+{
+  "_": "Two registers for check:spec-status. `exempt` names a spec that IS cited by an ADR and is legitimately still headed Draft — the residual false positive §4.4 names, where an ADR cites a spec as prior art rather than as its origin. `citedWithoutSpec` names a directory an ADR cites that holds no feature-spec.md or spec.md, so there is no header to read. Both are refused by C3 the moment they stop being true, because dead config is how a register stops being read.",
+  "exempt": {},
+  "exemptNotes": "EMPTY BY MEASUREMENT, not by omission. M0-T3 took the whole-estate join — 72 cited slugs, every one of them the origin citation of an ADR whose work has shipped — so on the day this gate armed there was nothing to exempt. Add an entry only when an ADR cites a spec it did not come from AND that spec has genuinely not been approved; write the sentence saying which ADR and why, because an exemption is a human overriding the rule and the next reader has to be able to judge it.",
+  "citedWithoutSpec": {
+    "canvas-decomposition": "ADR-0078. A refactor epic that shipped from a plan (`plan.md`) with no separate feature spec — the work is a barrel-preserving module move with no user-facing capability, so stages 1-2 had nothing to describe.",
+    "canvas-maximisation": "ADR-0113. Shipped from a measurement record (`m0-measurement.md`) rather than a spec: the epic's whole content was measuring four proposals, two of which turned out not to exist as work.",
+    "design-system-rewrite": "ADR-0097. A design epic whose artefacts are `README.md`, `design.md` and five milestone documents; the design pass replaced the spec rather than following one.",
+    "graphite": "ADR-0099 and ADR-0102. Same shape as design-system-rewrite — `design.md` plus six milestone documents, and the palette was chosen from measured contrast rather than specified in advance."
+  },
+  "citedWithoutSpecNotes": "This register exists because M0-T1 found four occupants on day one and they are shipped epics, not edge cases. The rule it enforces (S6) is a departure from the approved spec's §4.6 table, and M0's own words are the reason: 'it cannot be a silent skip: a silent skip is how the estate reached this state.' An entry dies the moment the directory gains a spec document — C3 says so — because at that point the gate can read a header and this file would be hiding it."
+}

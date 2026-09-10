@@ -17,3 +17,8 @@ export {
   MIN_CHANGED_ABSOLUTE,
 } from './judge';
 export { SCENARIOS, scenarioById, isGated } from './scenarios';
+// The saturation caveat, so the driver prints the SAME sentence as the three browser surfaces
+// rather than a fourth wording of it. Found during M1-T2: the plan named three renderers of a
+// delta and there are four — this file is not under `src/`, so the enumeration that catches a
+// forgotten browser surface could not see it. The sweep is widened to reach here too.
+export { SATURATED_CAVEAT } from './verdict-copy';

@@ -1,6 +1,6 @@
 # Implementation Plan: Stage E — Resource view on the canvas
 
-- **Feature spec:** `docs/specs/canvas-resource-view/feature-spec.md` (awaiting approval)
+- **Feature spec:** `docs/specs/canvas-resource-view/feature-spec.md` — Accepted
 - **Status:** Draft (awaiting approval — do not implement)
 - **Owner:** _TBD_
 
