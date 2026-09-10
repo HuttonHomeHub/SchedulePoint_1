@@ -119,9 +119,13 @@ Long-name run (the one that matters):
 - **Moving the whole cluster buys the one-line header back at 1646 for a real plan name; keeping
   the badge in the header does not.** That is CQ-4's default supported by a number, and the reason
   the answered CQ-4 ("foot row") is the right one beyond tidiness.
-- `pen-status.spec.ts`'s assertions (1 line at 1646, 2 at 1440 and 1280) hold in both worlds for its
-  39-char fixture; **none inverts**. The risk table's "1440 may become one line" does not occur — the
-  1440 row is wrapped by the identity content, not by the pen.
+- `pen-status.spec.ts`'s assertions (1 line at 1646, 2 at 1440 and 1280) hold in both worlds for
+  the **74-char** name. **For the fixture's own 39-char name, 1440 DOES invert**: §1's C run — which
+  hides the pen cluster — reads the header at **42 px (one line) at 1440**, against 88 today. So
+  the risk table's "1440 may become one line" occurs for the journey's fixture and not for a long
+  programme name, and M5-T6 must re-point that assertion rather than leave it. (This paragraph said
+  "none inverts" until M1's re-measurement put the two runs side by side — a claim made from one
+  name, corrected by the other.)
 
 ## 6. M0-T4 — the pen cluster's width in both of CQ-4's homes
 

@@ -116,37 +116,39 @@ import { cva } from 'class-variance-authority';
 export const TOOLBAR_CAPTION =
   'text-primary text-micro flex min-h-(--control-h) shrink-0 items-center font-bold tracking-wider uppercase';
 
-export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md', {
-  variants: {
-    /**
-     * **Does this card own its band, or sit inside one somebody else owns?**
-     *
-     * It shipped as `density` for one commit and both the component and the architecture gate said
-     * the same thing about it: `density` in this codebase means spacing and weight
-     * (`notice-strip.tsx`, `form.tsx`), and this variant also turns a **border** on — which is
-     * chrome, not density. Worse, the name invites a third consumer to reason on a scale that does
-     * not exist here. The real discriminator is context, and the measurement table above is about
-     * context: the padding and the border cost a line **because the foot row is already the
-     * container**, not because the card is denser.
-     *
-     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `--control-h` content (it read
-     * `min-h-9` until ADR-0118 M2 gave that token a coarse axis), right in a band the deck owns
-     * outright.
-     *
-     * `bare` is for a card inside a row that is already the container — the canvas selection bar in
-     * the plan's foot row, where `selection-actions.tsx` records why the docked bar had no box at
-     * all until M6 ("a bar that brings its own box makes the row 6 px taller than the 36 px it
-     * already occupied") and `dock.spec.ts` bounds the row's cost to the canvas. It declares
-     * nothing, because the base declares no padding and no border: `px-0 py-0` was written here
-     * first and is a **no-op**, which made a two-valued variant a boolean wearing a scale's name.
-     */
-    chrome: {
-      boxed: 'border-border/60 border px-2 py-1.5',
-      bare: '',
-    },
-  },
-  defaultVariants: { chrome: 'boxed' },
-});
+/**
+ * **The card lost its box at the console epic's M1** (`docs/specs/workspace-console/`, S1) and
+ * the `chrome` variant went with it. The deck's group card was a `border` plus `px-2 py-1.5` around
+ * `--control-h` content, drawn at ≈ 1.2:1 against the band it sat in — measured
+ * (`m0-measurement.md` §1) as **14 px of height per deck line and 18 px of width per group**
+ * spent on a boundary a 175 %-scaled screen cannot see. It is deleted rather than kept as an
+ * unused variant: a one-consumer `boxed` beside a no-op `bare` is a boolean wearing a scale's
+ * name, which is the shape the first version of this CVA already shipped once as `density`.
+ *
+ * What survives is the shared BASE — the tint, the flex row, the gap and the radius — because the
+ * canvas selection bar in the foot row still reads it (`selection-actions.tsx`), and that bar is
+ * deliberately untouched here: ADR-0115 measured its geometry three times and changing it is that
+ * epic's subject, not this one's.
+ */
+export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md');
+
+/**
+ * **One seam vocabulary across the three bands** (console epic, S7 / M1-T3). A seam WITHIN a
+ * surface is an inset hairline — a 1 px rule that stops short of the control row's top and bottom
+ * — drawn as a `::before` on the element that follows it, in `--border` (a decoration, 1.4.11-
+ * exempt, ADR-0055). It replaced three idioms that each said "these are related" differently: the
+ * deck's `border-l` between sections, the split caret's `border-l`, and the header's full-height
+ * hairline (ADR-0119). Declared once so the three consumers cannot drift (the
+ * `TOOLBAR_CARET_TARGET` precedent). The height is `inset-y-1/4` — 50 % of the box — rather than
+ * the study's 44 %, because the ratchet on arbitrary values (ADR-0099) is worth more than 6 %
+ * of a hairline; the group-level seam that joins it at M4 takes `inset-y-1/5` (60 %).
+ *
+ * A pseudo-element rather than a `border-l` because a border is part of the box: it widens the
+ * element, it moves with padding, and it is the same 1 px whether the row is 36 or 44 tall. The
+ * rule below is positioned against the box and never changes its size.
+ */
+export const TOOLBAR_INSET_RULE =
+  'relative before:absolute before:inset-y-1/4 before:left-0 before:w-px before:bg-border';
 
 /**
  * A split button's caret is a pointer target in its own right and **not** a `[data-toolbar-item]`
@@ -159,7 +161,10 @@ export const TOOLBAR_CARET_TARGET =
   'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
 
 export const toolbarSplitCaretVariants = cva(
-  `border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70 ${TOOLBAR_CARET_TARGET}`,
+  // The divider is the shared inset rule, and the glyph's dimming is a declared token rather than
+  // `opacity-70`: `--muted-foreground` inside the chrome scope is `--chrome-muted-foreground`,
+  // 8:1 on the band (globals.css declares it), where an opacity is a value nobody gated.
+  `${TOOLBAR_INSET_RULE} text-muted-foreground ml-0.5 flex items-center self-stretch pl-1.5 ${TOOLBAR_CARET_TARGET}`,
 );
 
 /**

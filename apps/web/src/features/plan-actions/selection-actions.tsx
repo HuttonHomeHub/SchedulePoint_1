@@ -973,7 +973,9 @@ export function SelectionActionsBar({
       // consumed exactly the 15 px of margin M3 had left — and dropping the padding still cost a
       // line at 1646, where the content sits at the container width and a 2 px border is enough to
       // wrap it. So what is shared is the background and the radius, which cost nothing; the border
-      // and the padding belong to `boxed`. See `toolbarCardVariants` for the table.
+      // and the padding were the deck's alone — its `boxed` variant, deleted at the console
+      // epic's M1 when the deck lost its card too, so the CVA is now the shared base and nothing
+      // else. See `toolbarCardVariants`.
       //
       // The rewrite is deliberate: a comment asserting an invariant the code no longer honours is
       // the defect class this repository keeps recording, and deleting it would have lost the
@@ -1002,7 +1004,7 @@ export function SelectionActionsBar({
       // nothing and `dock.spec.ts` asserts that as an equality rather than a bound.
       // The principle the sentence carried still holds and is worth keeping: a row that is too tall
       // is a trade; a row that hides a command is not.
-      className={cn(toolbarCardVariants({ chrome: 'bare' }), 'min-w-0 items-center')}
+      className={cn(toolbarCardVariants(), 'min-w-0 items-center')}
     >
       {/* **The bar's caption, in the deck's caption style** (workspace visual polish, 2026-08-28).
           The product owner asked for a label "so it ties in with the other toolbars"; the deck's

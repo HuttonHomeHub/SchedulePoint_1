@@ -7,7 +7,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
-import { TOOLBAR_CAPTION, toolbarCardVariants } from './toolbar-styles';
+import { TOOLBAR_CAPTION, TOOLBAR_INSET_RULE } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 
 import { cn } from '@/lib/utils';
@@ -231,10 +231,12 @@ export function Deck<Ctx>({
             // This said "the buttons are untouched — stacked, labelled, exactly as approved" until
             // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
             // argument about the CARD, and is unaffected by what the buttons inside it do.
-            // Shared with the canvas selection bar since the foot-row epic's M6 — see
-            // `toolbarCardVariants` in `toolbar-styles.ts`. It was a literal here, and the second
-            // consumer would have copied it.
-            className={toolbarCardVariants()}
+            // **No card** (console epic M1-T1, S1). The group's box — a `border` and `px-2 py-1.5`
+            // at ≈ 1.2:1 against the band — cost 14 px per deck line and 18 px per group to draw
+            // a boundary a 175 %-scaled screen cannot see (`m0-measurement.md` §1). The group
+            // keeps its role and its name; its height is now the control row's. The shared
+            // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
+            className="flex items-stretch gap-2"
           >
             {/* **A STATIC label since the fold's removal** (workspace visual polish, 2026-08-28) —
                 it was a disclosure `<button>` with `aria-expanded`, a roving tab stop and the
@@ -263,9 +265,10 @@ export function Deck<Ctx>({
                   key={section[0]?.item.group ?? sectionIndex}
                   className={cn(
                     'flex flex-wrap items-stretch gap-1',
-                    // The seven-group taxonomy, surviving as a hairline inside the card rather
-                    // than as a caption above it.
-                    sectionIndex > 0 && 'border-border/50 ml-1 border-l pl-2',
+                    // The seven-group taxonomy, surviving as an inset hairline between sections
+                    // rather than as a caption above them — the ONE seam treatment the three
+                    // bands share (`TOOLBAR_INSET_RULE`), where this was a `border-l` of its own.
+                    sectionIndex > 0 && cn(TOOLBAR_INSET_RULE, 'ml-1 pl-2'),
                   )}
                 >
                   {section.map((r) =>

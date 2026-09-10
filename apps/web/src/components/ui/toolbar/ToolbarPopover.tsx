@@ -120,7 +120,7 @@ export function ToolbarPopover({
           </span>
         ) : null}
         {compact ? null : <span className="truncate">{label}</span>}
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {describedBy ? (
           <span id={reasonId} className="sr-only">
             {disabledReason}

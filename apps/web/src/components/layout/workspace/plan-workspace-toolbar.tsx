@@ -1590,7 +1590,10 @@ export function ToolbarPlanWorkspace({
             row's density reflects the surface rather than whatever width is left after its
             siblings. Without it, the project-finish chip beside Row 1 silently costs the four
             viewport commands their labels — measured on a 1646 px screen, shipped in web-v0.86.0. */}
-          <ToolbarBandProvider className="border-border flex flex-col border-b">
+          {/* No `border-b` here since the console epic's M1-T2 (S2): it was a 1 px hairline sitting
+              directly on the band's 3 px amber rule with nothing between them — a double seam that
+              said the same thing twice, 1 px apart. */}
+          <ToolbarBandProvider className="flex flex-col">
             {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available

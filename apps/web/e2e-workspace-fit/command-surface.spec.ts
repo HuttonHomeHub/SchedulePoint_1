@@ -306,6 +306,88 @@ test.describe('The plan command surface', () => {
     }
   });
 
+  /**
+   * **F1 and F6 of the console epic** (`docs/specs/workspace-console/implementation-plan.md`,
+   * M1-T4): the band's height and the deck's line count, at the widths the epic is judged on.
+   *
+   * **Verified red first, both halves separately.** Against the tree before M1 the band is
+   * 180 px, so the height half fails on its own (`m0-measurement.md` §1). The line half passes
+   * against today's deck — two lines at 1920 and 1646 — so it was made to fail by injecting a
+   * 900 px item into the deck, which pushed the count to three; a line assertion that has never
+   * been seen red is a claim about the wrong element waiting to happen (ADR-0110 D5).
+   *
+   * **The line count is the number of distinct rows the CONTROLS sit on, never a constant and
+   * never "height ÷ tallest child".** The latter is the shape `pen-status.spec.ts` uses for the
+   * header, and it was the first draft here — and its red run PASSED against a 1500 px item
+   * injected into the deck, because a group that wraps INTERNALLY becomes the tallest child and
+   * divides itself away. Under the declared rows that is precisely the failure F6 exists to catch
+   * (`m0-measurement.md` §2: the LOOK row wraps inside itself at 1440). Clustering every control's
+   * `top` cannot be fooled that way and still survives a control-height change (ADR-0118). **The height half asserts a bar (≤ 145), not a value**: a gate pinned to
+   * 141 goes red on a deliberate change and says nothing about the defect.
+   *
+   * **1440 reads "at most three", not "exactly two"**, on M0's measurement rather than the study's
+   * figure: the LOOK set was 1452 px against a 1424 px container, so a third line at 1440 was
+   * the row wrapping honestly. After M1 deleted the cards it is 1416 — two lines with **8 px** to
+   * spare — and M4 owns whether C's wider column gap can afford that. The pinned positive is the
+   * control count — a deck rendering nothing is one line tall and 0 px is under any bar.
+   */
+  test('the band stays inside its height bar and the deck its line count, at every width', async () => {
+    test.setTimeout(240_000);
+    const BAND_MAX_PX = 145;
+    const LINES: Record<number, { max: number }> = {
+      1920: { max: 2 },
+      1646: { max: 2 },
+      1440: { max: 3 },
+      1280: { max: 3 },
+    };
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(400);
+
+      const reading = await page.evaluate(() => {
+        const band = document.querySelector('[data-surface="chrome"]:not([data-activities-bar])');
+        const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+        if (!band || !deck)
+          throw new Error('the band or the deck was not found — nothing to assert about');
+        const tops = [...deck.querySelectorAll('[data-toolbar-item]')]
+          .map((el) => el.getBoundingClientRect().top)
+          .sort((a, b) => a - b);
+        // Cluster within 4 px: controls on one row share a top to sub-pixel precision, and a
+        // real second row sits a whole control height below.
+        let rows = 0;
+        let last = Number.NEGATIVE_INFINITY;
+        for (const t of tops) {
+          if (t - last > 4) rows += 1;
+          last = t;
+        }
+        return {
+          band: band.getBoundingClientRect().height,
+          lines: rows,
+          controls: tops.length,
+        };
+      });
+
+      // The pinned positive: an empty deck is one line tall and 0 px, and passes everything below.
+      expect(reading.controls, `no controls in the deck at ${viewport.width}`).toBeGreaterThan(15);
+
+      expect(
+        reading.lines,
+        `the deck's controls sit on ${reading.lines} rows at ${viewport.width}`,
+      ).toBeLessThanOrEqual(LINES[viewport.width]!.max);
+      // **1920 and 1646 only, by design.** F1 names those two widths; at 1440 the header itself
+      // wraps to two lines today (ADR-0112 D4's accepted state) because the pen cluster sits on
+      // it, and `m0-measurement.md` §1 shows that row un-wrapping to one line at 1440 the moment
+      // the pen leaves — which is M5's win. Asserting the bar at 1440 here would make M1 red for
+      // M5's reason. The first version of this case did exactly that.
+      if (viewport.width >= 1646) {
+        expect(
+          reading.band,
+          `the command band is ${reading.band} px at ${viewport.width} against a bar of ${BAND_MAX_PX}`,
+        ).toBeLessThanOrEqual(BAND_MAX_PX);
+      }
+    }
+  });
+
   test('every command clears 24 × 24 and a pointer can reach it, at every width', async () => {
     test.setTimeout(240_000);
     for (const viewport of WIDTHS) {
