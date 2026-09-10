@@ -239,9 +239,16 @@ test.describe('the merged header row', () => {
     // design was priced on. 1280's arithmetic is the tightest of the three, so it is the width where
     // a short fixture would be most likely to report a fit the product does not have — and the
     // fixture above deliberately uses a long name and a real project.
+    // **1440 became ONE line at the console epic's M5, and that is a measurement rather than a
+    // relaxation.** The pen's verb left this row for the command deck, and the row's content went
+    // from wrapping at 1440 to **1267 px against a 1408 px container** — measured at all four
+    // judged widths, where the content figure is invariant and only the container moves. 1280's
+    // container is 1248, still 19 px short, so it stays at two lines and this case keeps a width
+    // where the row is known to wrap. Without that the assertion would only ever prove the row
+    // fits, which is half a claim.
     for (const [width, expected] of [
       [1646, 1],
-      [1440, 2],
+      [1440, 1],
       [1280, 2],
     ] as const) {
       await page.setViewportSize({ width, height: 1000 });

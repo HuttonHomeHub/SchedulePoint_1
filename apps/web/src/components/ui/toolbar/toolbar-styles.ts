@@ -99,27 +99,6 @@ import { cva } from 'class-variance-authority';
  * shared, and the geometry that costs canvas is not.
  */
 /**
- * The **caption** treatment: the deck's group labels (VIEW / FIND / AUTHOR / PLAN) and the
- * selection bar's SELECTION label (workspace visual polish, 2026-08-28 — the product owner asked
- * for "a label so it ties in with the other toolbars", which makes the style two surfaces'
- * vocabulary rather than one component's literal). Declared here for the same reason as every
- * export above — and because the ADR-0097 weight ratchet counts `font-*` placed outside the
- * primitives, so a screen that respells this line is both a drift risk and a ratchet hit.
- *
- * The box is `--control-h`, which is what `toolbarControlVariants` uses: captions centre beside
- * real controls, and a shorter box put their labels ~2 px adrift (the M1-T1 measurement). It was
- * the literal `min-h-9` until ADR-0118 M2 gave that token a coarse axis — at which point a literal
- * here would have held the caption at 36 px while its own controls went to 44, putting every
- * caption 4 px adrift **on touch only**, which is the one place nobody was looking. One correct
- * pattern applied to a control and not its neighbour is the shape this register has recorded in
- * six consecutive epics; the fix is that both read the same token, not that both were remembered.
- * Consumers add their own geometry — the deck its `gap-1` chevron seam and fold affordances, the
- * selection bar a `px-1`.
- */
-export const TOOLBAR_CAPTION =
-  'text-primary text-micro flex min-h-(--control-h) shrink-0 items-center font-bold tracking-wider uppercase';
-
-/**
  * **The card lost its box at the console epic's M1** (`docs/specs/workspace-console/`, S1) and
  * the `chrome` variant went with it. The deck's group card was a `border` plus `px-2 py-1.5` around
  * `--control-h` content, drawn at ≈ 1.2:1 against the band it sat in — measured

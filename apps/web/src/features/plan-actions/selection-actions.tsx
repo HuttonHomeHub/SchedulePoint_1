@@ -26,7 +26,6 @@ import {
   type ToolbarItemRenderApi,
 } from '@/components/ui/toolbar/toolbar-registry';
 import {
-  TOOLBAR_CAPTION,
   TOOLBAR_CARET_TARGET,
   toolbarCardVariants,
   toolbarControlVariants,
@@ -1020,17 +1019,18 @@ export function SelectionActionsBar({
       // is a trade; a row that hides a command is not.
       className={cn(toolbarCardVariants(), 'min-w-0 items-center')}
     >
-      {/* **The bar's caption, in the deck's caption style** (workspace visual polish, 2026-08-28).
-          The product owner asked for a label "so it ties in with the other toolbars"; the deck's
-          rows carry VIEW / FIND / AUTHOR / PLAN, and this bar had no visible subject at all — its
-          `Actions for …` label is aria-only. SELECTION, not "Modify" (the steer): half the bar's
-          items are reads, and its discriminator has been "the selected object" since ADR-0093. A
-          static span, not the deck's disclosure button — the fold is leaving the deck in this same
-          pass, and a caption that pretends to fold a bar that cannot would be lit-but-inert.
-          The PLURAL bar deliberately gets none: its `NoticeStrip` message already states the
-          subject in a sentence ("N activities selected — …"), and a second label beside it would
-          be the same fact rendered twice (ADR-0093's shape, one row down). */}
-      <span className={cn(TOOLBAR_CAPTION, 'border-primary/25 border-r pr-2 pl-1')}>Selection</span>
+      {/* **The SELECTION caption is gone with the deck's four** (console epic M6-T1, CQ-1).
+          It was added on 2026-08-28 because the product owner asked for a label "so it ties in
+          with the other toolbars" — the deck's rows carried VIEW / FIND / AUTHOR / PLAN and this
+          bar had no visible subject at all. That reason lapses the moment those four go: a label
+          tying this bar to captions that no longer exist ties it to nothing, and it would then be
+          the only uppercase micro-caption left in the workspace.
+
+          Nothing is lost to assistive technology, which was true of the deck's four and is true
+          here for a different reason: the bar's `Actions for <name>` toolbar label names the
+          subject, and names it more precisely than the word SELECTION did. The plural bar already
+          had none, so the two bars now agree rather than differing by an accident of when each
+          was written. */}
       <Toolbar
         items={selectionActionItems}
         context={context}

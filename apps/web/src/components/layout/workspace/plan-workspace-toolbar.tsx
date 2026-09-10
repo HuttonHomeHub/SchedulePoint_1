@@ -1885,7 +1885,11 @@ export function ToolbarPlanWorkspace({
               fills the band by wrapping into it rather than by being told to grow, and a flex child
               that grows is exactly how a row ends up measuring its own leftover width, which is the
               defect class this replaces. */}
-            <div className="px-2 py-1.5">
+            {/* `py-1` since the console epic's M6-T2 — the captions left this deck, so the
+                wrapper's own inset is the last of the band's height that is not a control.
+                `activity-bottom-panel.tsx` follows it by the rule written in that file: its inset
+                COPIES this one rather than judging its own, so the two cannot part company. */}
+            <div className="px-2 py-1">
               <Deck
                 items={rows.strip}
                 context={ctx}

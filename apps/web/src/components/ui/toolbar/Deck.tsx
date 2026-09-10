@@ -7,7 +7,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
-import { TOOLBAR_CAPTION, TOOLBAR_INSET_RULE } from './toolbar-styles';
+import { TOOLBAR_INSET_RULE } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 
 import { cn } from '@/lib/utils';
@@ -270,27 +270,24 @@ export function Deck<Ctx>({
                   // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
                   className="flex items-stretch gap-2"
                 >
-                  {/* **A STATIC label since the fold's removal** (workspace visual polish, 2026-08-28) —
-                it was a disclosure `<button>` with `aria-expanded`, a roving tab stop and the
-                ADR-0114 M7 `hasActive` guard, all of which went with the fold. `aria-hidden`,
-                because the group's own `aria-label` already carries the word: a visible span that
-                also announced would read "View, group — View" to a screen-reader user, the same
-                fact twice (the ADR-0110 D1 duplication, one channel over). Pointer users see the
-                caption; AT users hear the group.
+                  {/* **The caption is gone and the group's NAME is not** (console epic M6-T1).
+                It was an `aria-hidden` span reading VIEW / FIND / AUTHOR / PLAN, so nothing was
+                lost to assistive technology: the group's own `aria-label` has always carried the
+                word, which is the argument ADR-0119 used to delete `MODE`. The acceptance
+                condition is that `command-surface.spec.ts`'s four `getByRole('group', { name })`
+                assertions pass **unchanged**, and they do.
 
-                `text-micro` is the ramp's smallest member and carries its own letter-spacing, and
-                the box is `--control-h` — a caption centred beside controls of that height at a
-                shorter box sat its label ~2 px adrift (the M1-T2 measurement, still true of a
-                span). It read `min-h-9` until ADR-0118 M2 gave the token a coarse axis; both the
-                caption and the controls now read the token, so they cannot part company at 44 px. The `border-r` that separated the caption from its buttons stays: the
-                grouping is the value the captions kept. */}
-                  <span
-                    aria-hidden="true"
-                    className={cn(TOOLBAR_CAPTION, 'border-primary/25 border-r pr-2')}
-                  >
-                    {group.caption}
-                  </span>
+                It **reverses a direct product-owner instruction** from the 2026-08-28 polish pass,
+                knowingly and on their later call (CQ-1), because the rows now do the grouping the
+                words were carrying: M4 declared LOOK and DO, and a row you can see is a stronger
+                boundary than a word you have to read.
 
+                **The width it frees is what pays for the pen** (M5). Measured at 1280: the DO
+                row's twelve commands sum 1069 px inside a 1264 px container — they fit with 195 px
+                to spare — and the row still wrapped to two lines, because the overflow was never
+                the commands. It was this span, its `pr-2`, its `border-r` and the gaps either
+                side, twice over on a row carrying two cards. The captions cost the row more than
+                the control the previous milestone added to it. */}
                   <div className="flex flex-wrap items-stretch gap-1">
                     {group.sections.map((section, sectionIndex) => (
                       <div
