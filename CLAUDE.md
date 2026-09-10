@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1205 web
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1208 web
 > source files with 42 Playwright suites beside the base journey, and
-> 132 ADRs.
+> 133 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4296,6 +4296,64 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   have passed against its own mutation**, because an empty spec directory also empties the cited set
   so C2 fired and the run was red for the wrong reason. **The CPM engine is not imported and no
   migration runs** — no product code changes at all.
+
+- **ADR-0133** _(Accepted; M0–M8 landed 2026-09-10)_ — A command surface declares its rows, and the
+  pen leads the one it unlocks. Five epics had worked this band and each asked whether the row
+  fitted; none asked what it was made of. **The measurement that opened this one is the whole
+  argument**: at 1280 the deck's twelve authoring commands sum **1069 px inside a 1264 px
+  container** — they fit, with 195 px to spare — and the row wrapped anyway. The overflow was never
+  the commands. It was two caption spans, their padding, their dividers and the gaps either side.
+  So the group cards and the captions go (band 143 → **139 px** at 1440/1646/1920 against a 145
+  bar; foot row **51 px**), the two rows become **declared** DOM rows whose gate asserts
+  **membership and not the line count** (a build where a command changed rows passes a count
+  perfectly, and that is the defect a planner feels), and the shared CVA gains a five-rung state
+  ladder declared per registry item.
+  **Deleting the captions needed a repair that is part of the decision.** With them gone the deck's
+  four groups were separated by 8 px of nothing while the registry sections _inside_ them kept a
+  painted rule and 16 px — the finer division twice as wide and the only one marked, and the
+  boundary that vanished is the one carrying most meaning on the DO row, where the eleven pen-gated
+  commands meet three that are never gated. A group seam now draws at 60 % height against the
+  section rule's 50 %: **the coarser boundary is the taller mark**, gated as that relationship
+  rather than as two class strings.
+  **The pen's verb leads the row it unlocks** and its badge, `role="status"` sentence and seven
+  hand-off controls go to the foot row. It is **shaded with its reason, never absent** (an item that
+  disappears takes a roving stop with it and shifts every command sideways); **focus stays on the
+  control that was pressed**, because the deck's pen relabels rather than unmounting, and the old
+  restore — written for a surface where a successful action removed the button that ran it — threw
+  focus to the other end of the screen; and "I hold the pen" derives from the lock's **tone**, never
+  its action list, which drops `stop` in one branch for reasons about which buttons the foot row
+  renders and so shaded the pen beside eleven live commands under a sentence naming a peer.
+  **D6 is the transferable rule and it was learnt by breaking it: a toolbar context member is a fact
+  or a callback, never a live hook return.** Sharing one `usePenLockView` call is right — a second
+  would let the two halves disagree about one lock — but threading its whole return through a
+  context documented as a seam of flags and callbacks put an unstable object graph, eight closures
+  and a `RefObject` into it: a handle to a DOM node in a _different_ surface, passed through the
+  deck's context to an item forbidden to touch it. The cost was **measured, not argued** — a
+  render-count probe against the pre-epic baseline showed the hook's once-a-second tick moving from
+  a leaf to the workspace root and re-rendering the canvas host every second, re-resolving every
+  registered command with it, while **the context memo's own docblock names that hazard**.
+  **And the memoisation is why the ADR is worth reading.** The first fix listed the pen object in
+  its dependency array; `usePlanPen` rebuilds that object every render, so the memo never hit and
+  the remedy for a per-second re-render recomputed per render. **Nothing failed** — no test went
+  red, the code read correctly, and a reviewer would have read it as closed. It was caught by asking
+  whether the input was stable, which is a question rather than an instrument, and the property is
+  now a gate because the only thing separating the working version from the broken one is an
+  identity across a re-render.
+  `primary` is reserved by a **cardinality the primitive throws on** rather than a name list in one
+  feature's test — a list cannot see a control registered in a third registry, so a second amber
+  slab could appear with nothing red. The state ladder's justification is corrected to the durable
+  one: **ARIA has no vocabulary for this distinction at all**, so the DOM structurally cannot carry
+  it whoever sets it.
+  **Three things in this epic were specified and not built** — the ladder's fifth state, the group
+  seam, one outlet placement — and only the first was caught before the gate pass, because it
+  painted visibly wrong. ADR-0058's rule is _verify the claim_; this adds that **a plan is a claim
+  too**, and the ones that survive unchecked are precisely the ones nothing renders. The general
+  form: a milestone implementing a closed vocabulary implements all of it, or the plan is amended in
+  the same commit — an enum with an unused member is invisible and harmless, one with a **missing**
+  member forces the next caller to reach for the nearest wrong one, which is exactly what produced
+  the two-identical-pictures collision the ladder existed to remove. Open with numbers rather than
+  intentions: `docs/TECH_DEBT.md` #286/#287/#288. **The CPM engine is not imported and no migration
+  runs** — `apps/web` only, which is what makes the whole epic revertible.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

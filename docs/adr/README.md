@@ -156,3 +156,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0130](0130-one-press-takes-every-reading-and-a-sitting-is-what-a-reading-belongs-to.md) | One press takes every reading, and a sitting is what a reading belongs to | Accepted           |
 | [0131](0131-a-spec-header-states-its-approval-and-a-citation-is-what-closes-it.md)       | A spec header states its approval, and a citation is what closes it       | Accepted           |
 | [0132](0132-an-alert-says-whether-it-is-an-event-or-a-standing-condition.md)             | An alert says whether it is an event or a standing condition              | Accepted           |
+| [0133](0133-a-command-surface-declares-its-rows-and-the-pen-leads-the-one-it-unlocks.md) | A command surface declares its rows, and the pen leads the one it unlocks | Accepted           |

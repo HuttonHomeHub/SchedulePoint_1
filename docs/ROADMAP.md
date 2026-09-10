@@ -594,6 +594,20 @@ discriminators. Each becomes a spec/plan before build:
   closed the day before. The epic also found two defects that are **not** touch defects (#213) and
   an approved plan clause whose own risk table claimed it shipped (#214 — both halves built and closed 2026-09-01, the Gantt half having gone unbuilt a second time).
 
+- **The plan workspace's command console** — **shipped** (ADR-0133, 2026-09-10). The band's group
+  cards and captions go, its two rows become declared DOM rows rather than a wrap outcome, the
+  shared toolbar CVA gains a five-rung state ladder declared per item, and the ADR-0028 pen's verb
+  moves to the head of the row it unlocks while its badge, sentence and hand-off controls move to
+  the plan's foot row. Measured: the command band 143 → **139 px** at 1440/1646/1920 against a
+  145 px bar, the activities row **51 px**, the deck back inside its line bound at 1280.
+
+  The finding worth carrying is that the overflow was **never the commands**: at 1280 the authoring
+  row's twelve controls fit their container with 195 px to spare and the row wrapped anyway, on the
+  captions and their dividers. And three things in the epic were specified and not built — the
+  ladder's fifth state, the group seam, one outlet placement — of which only the one that painted
+  visibly wrong was caught before the gate pass. A plan is a claim too, and the ones that survive
+  unchecked are the ones nothing renders.
+
 - **The staff console stops interrupting** — **shipped** (ADR-0132, 2026-09-09, the tech-debt
   drive). `Alert` gains a required `purpose: 'event' | 'condition'` with no default — ADR-0117's
   shape for ADR-0117's reason — so a message says whether it reports something that just happened or

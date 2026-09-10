@@ -63,19 +63,28 @@ import { cva } from 'class-variance-authority';
  * `justify-center` goes with it: the floor adds width the icon would otherwise sit left of.
  */
 /**
- * **The card a group of toolbar commands sits in.**
+ * **The card the canvas selection bar sits in** — and, until the console epic's M1, the card each
+ * of the deck's groups sat in too.
  *
- * Declared once because it is used twice: `Deck` draws each of its four groups in one, and the
- * canvas selection bar adopts the same treatment so the command surface reads as one system
- * (foot-row epic M6). It lived as a bare literal inside `Deck.tsx` until 2026-08-27, and copying it
- * to a second consumer is the hand-copied variant `DESIGN_SYSTEM.md` forbids in as many words.
+ * **Superseded in place rather than prepended to.** This block used to be followed by a second
+ * `/**` recording M1's deletion, which left the text below attached to nothing and reading in the
+ * present tense about a deck that has neither cards nor captions. The M7 architecture review found
+ * two such orphans; the convention this file now follows is that a docblock is edited where it is
+ * wrong, and the wrong version is quoted only where the correction teaches something.
  *
- * **A style, not a component.** The two consumers deliberately want DIFFERENT behaviour — the deck
- * folds its groups and captions them, the selection bar does neither — so a shared `<DeckCard>`
- * would recouple two things that should stay apart. ADR-0062 is about not reimplementing
- * behaviour, which is a different hazard from this one.
+ * ## What M1 removed, and what survives
  *
- * ## What the two variants share, and why they share exactly that
+ * The deck's group box — a `border` plus `px-2 py-1.5` at ≈ 1.2:1 against the band it sat in — cost
+ * 14 px per deck line and 18 px per group to draw a boundary a 175 %-scaled screen cannot see
+ * (`m0-measurement.md` §1). It went, and the `chrome` variant with it. A group is now a bare row of
+ * controls, separated from its neighbour by an inset rule built at M7 (`Deck.tsx`) rather than by a
+ * box. The base survives for the **selection bar**, which is not that epic's subject and keeps it.
+ *
+ * **A style, not a component**, and that remains right for the reason it always was: the two
+ * consumers wanted different behaviour, so a shared `<DeckCard>` would recouple things that should
+ * stay apart. ADR-0062 is about not reimplementing behaviour, a different hazard from this one.
+ *
+ * ## What the variants share, and why they share exactly that
  *
  * **The card treatment — background and radius — plus the flex layout every toolbar row needs.**
  * (This said "background and radius only" for one commit, and the base declares
@@ -97,20 +106,6 @@ import { cva } from 'class-variance-authority';
  *
  * This is the epic's own rule applied to its own styling: the treatment that reads as shared is
  * shared, and the geometry that costs canvas is not.
- */
-/**
- * **The card lost its box at the console epic's M1** (`docs/specs/workspace-console/`, S1) and
- * the `chrome` variant went with it. The deck's group card was a `border` plus `px-2 py-1.5` around
- * `--control-h` content, drawn at ≈ 1.2:1 against the band it sat in — measured
- * (`m0-measurement.md` §1) as **14 px of height per deck line and 18 px of width per group**
- * spent on a boundary a 175 %-scaled screen cannot see. It is deleted rather than kept as an
- * unused variant: a one-consumer `boxed` beside a no-op `bare` is a boolean wearing a scale's
- * name, which is the shape the first version of this CVA already shipped once as `density`.
- *
- * What survives is the shared BASE — the tint, the flex row, the gap and the radius — because the
- * canvas selection bar in the foot row still reads it (`selection-actions.tsx`), and that bar is
- * deliberately untouched here: ADR-0115 measured its geometry three times and changing it is that
- * epic's subject, not this one's.
  */
 export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md');
 

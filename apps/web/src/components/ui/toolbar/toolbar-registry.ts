@@ -171,7 +171,12 @@ export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutM
 /**
  * Which of the two toolbar rows an item belongs to (ADR-0031 two-row amendment). `look` = the
  * always-live view/navigate/find row; `do` = the build-&-manage row (its pen-gated authoring cluster
- * shades as a set). Absent ⇒ `look`. The workspace renders one {@link Toolbar} per row, so this only
+ * shades as a set). **Absent ⇒ `strip`** — this read "Absent ⇒ `look`" until M7, stale since
+ * Graphite M5 merged the two command rows and renamed the values, and newly confusing since the
+ * console epic's M4 revived `look`/`do` as live identifiers on a **different axis**: the deck's two
+ * LINES (`DECK_ROWS`, `data-deck-row`), which are not this field. A stale sentence naming a dead
+ * value became a cross-reference to the wrong live thing (M7 architecture review, `#288`).
+ * The workspace renders one {@link Toolbar} per row, so this only
  * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
  */
 /**

@@ -7,9 +7,12 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
  * **Exactly four controls are MODAL tools and exactly one is the PEN, and the product says which**
  * (console epic M3-T3, widened at M5).
  *
- * `activeKind` decides whether an active control paints as **armed** — amber ink, an amber ring and
- * an underline, 7.91:1 against the band — or as **selected**, a `--secondary` fill with an
- * underline. They are different facts: armed means *the next canvas gesture belongs to this tool*,
+ * `activeKind` decides whether an active control paints as **armed** — amber ink and an amber
+ * underline on the band's own fill, both 7.91:1 — or as **selected**, a `--secondary` fill with an
+ * underline. (This said "an amber ring" until M7. It was written at M3 and CQ-2 then resolved to
+ * the plan's fallback, dropping the ring because `--chrome-ring` and `--chrome-primary` are the
+ * identical string and an armed control that is also focused would have shown one amber inset ring
+ * for two facts. Nothing swept the sentence.) They are different facts: armed means *the next canvas gesture belongs to this tool*,
  * selected means *this is the chosen one of alternatives, or this lens is on*. Until M3 they were
  * the same 1.34:1 wash, which is the defect ADR-0064 was opened on and a WCAG 2.2 §1.4.11 exposure
  * besides.

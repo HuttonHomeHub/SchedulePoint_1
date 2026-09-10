@@ -6283,3 +6283,26 @@ screens with least room to lose it. The alternative was worse; the residual is t
 
 **Sized S:** it is one reading from the existing harness with a selection made and a hand-off branch
 seeded, not new machinery.
+
+### 288. `DECK_GROUPS[].caption` names a rendering the deck no longer has
+
+**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** XS ·
+**Owner:** web
+
+The field's only consumer is `aria-label={group.caption}` (`Deck.tsx`), so it is the group's
+**accessible name**. It has not captioned anything since M6 deleted the visible spans.
+
+**A field named for a rendering that no longer exists is how the next reader concludes the caption
+is coming back**, which is the same class as the stale sentences M7 swept out of this subsystem —
+`toolbar-registry.ts`'s "Absent ⇒ `look`", `state-ladder.structural.test.ts`'s amber ring, two
+orphaned docblocks. The difference is that those are prose and this is an identifier, so correcting
+it is a rename across a shared table rather than an edit.
+
+**Deliberately not done in M7**, and the reason is the milestone's own subject: M7's docs sweep
+touched nine prose sites, and a mechanical rename landing in the same commit hides among them —
+a reviewer reading that diff cannot tell the one behavioural risk from the eight safe corrections.
+It is one commit on its own, worth doing when `Deck.tsx` is next opened.
+
+**`name` rather than `label`**, if it matters to whoever picks it up: the deck has `ToolbarItem.label`
+already, meaning something else, and this subsystem has just been through one collision of that kind
+(the registry's `row` band axis against the deck's `row` line axis, same row).

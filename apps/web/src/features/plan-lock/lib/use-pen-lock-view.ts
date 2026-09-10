@@ -6,26 +6,16 @@ import type { EditLockControlsProps } from '../components/EditLockControls';
 import { type LockView, resolveLockView } from './lock-view';
 
 /**
- * The shared orchestration behind every "who holds the pen" surface (ADR-0028): resolving the
- * {@link LockView} from the live status, the once-a-second tick for the `aria-hidden` "active …" /
- * grace asides, the transient "Keep editing" dismissal, the lost-control scroll-into-view, and the
- * WCAG 2.4.3 focus return — when the user's *own* action unmounts the button they pressed, focus is
- * pulled back to the surface's container rather than dropping to `<body>`. **When it does not
- * unmount it, nothing moves**; see the effect's own comment for why that qualifier is load-bearing
- * rather than defensive.
- *
- * Extracted so the full {@link EditLockBanner} card and the compact toolbar pen-status render from
- * one implementation — the delicate hand-off logic lives in exactly one place. Attach the returned
- * `containerRef` to each surface's `role="status"` root and spread `controlsProps` on
- * `EditLockControls`; `view` is null while the status is still loading (render a placeholder).
- */
-/**
  * One resolved pen, shared by the two surfaces that show it (console epic M5).
  *
- * Named because the hook is now called **once** — in the plan workspace — and its return handed to
- * both the deck's `Start editing` / `Stop editing` control and the foot row's badge, sentence and
- * hand-off actions. It holds real local state (a dismissed request id, a countdown tick, a just-acted
- * ref), so a second call would let those two halves disagree about the same lock.
+ * Named because the hook is called **once** — in the plan workspace — and its return handed to both
+ * the deck's `Start editing` / `Stop editing` control and the foot row's badge, sentence and
+ * hand-off actions. It holds real local state (a dismissed request id, a countdown tick, a
+ * just-acted ref), so a second call would let those two halves disagree about the same lock.
+ *
+ * `containerRef` belongs to the **cluster**, not to the deck's control: attach it to the surface
+ * rendering `role="status"`. `view` is null while the status is still loading — render a
+ * placeholder, never an empty state, which reads as "nobody is editing".
  */
 export interface PenLockView {
   penManaged: boolean;
@@ -34,6 +24,23 @@ export interface PenLockView {
   controlsProps: EditLockControlsProps;
 }
 
+/**
+ * The shared orchestration behind every "who holds the pen" surface (ADR-0028): resolving the
+ * {@link LockView} from the live status, the once-a-second tick for the `aria-hidden` "active …" /
+ * grace asides, the transient "Keep editing" dismissal, the lost-control scroll-into-view, and the
+ * WCAG 2.4.3 focus return — when the user's *own* action unmounts the button they pressed, focus is
+ * pulled back to the surface's container rather than dropping to `<body>`. **When it does not
+ * unmount it, nothing moves**; see that effect's own comment for why the qualifier is load-bearing.
+ *
+ * Extracted so the full `EditLockBanner` card and the compact pen status render from one
+ * implementation — the delicate hand-off logic lives in exactly one place.
+ *
+ * **This docblock was orphaned for the whole of M5**, left above a second `/**` that described the
+ * interface below it, so the function itself carried none and its text still instructed callers to
+ * attach `containerRef` to "each surface's `role=\"status\"` root" — which the deck's pen control
+ * deliberately does not do. Found by the M7 architecture review; the convention this file now
+ * follows is that a docblock is edited where it is wrong rather than prepended to.
+ */
 export function usePenLockView(
   pen: PlanPen,
   currentUserId: string | undefined,
@@ -123,24 +130,6 @@ export function usePenLockView(
       fn();
     };
 
-  const controlsProps: EditLockControlsProps = {
-    actions: view?.actions ?? [],
-    holder: pen.status?.holder ?? null,
-    isPending: pen.isPending,
-    onStart: act(pen.startEditing),
-    onStop: act(pen.stopEditing),
-    onRequest: act(pen.requestControl),
-    // Peer take-over and admin override are the SAME server call — `acquire({takeover:true})`; the
-    // server decides immediate (override) vs post-grace (peer). They differ only in affordance.
-    onTakeOver: act(pen.takeOver),
-    onOverride: act(pen.takeOver),
-    onHandover: act(pen.handoff),
-    onKeep: act(() => {
-      if (pen.status?.requestedBy) setDismissedRequestId(pen.status.requestedBy.id);
-    }),
-    onDismiss: act(pen.dismissLost),
-  };
-
   // **Referentially stable while nothing a reader can see has changed** (console epic M7).
   //
   // This returned a fresh object literal on every render, which was harmless while the hook was
@@ -166,11 +155,62 @@ export function usePenLockView(
   // inside `view` and therefore inside `signature`'s subject only when its text changes, so a
   // countdown crossing a whole minute re-renders and the fifty-nine seconds between do not.
   const signatureWithAside = `${signature}|${view?.aside ?? ''}|${view?.message ?? ''}|${view?.badge ?? ''}`;
+
+  // **The dependencies are the STABLE pieces, never `pen` itself**, and the first version of this
+  // memo got that wrong in a way worth keeping: it listed `pen`, which `usePlanPen` rebuilds as a
+  // fresh object literal on every render (`use-plan-edit-lock.ts` — it is not memoised). So the
+  // memo never hit, and the fix for a once-a-second re-render was a `useMemo` that recomputed every
+  // time: correct-looking, and incapable of working. Caught by asking whether the input was stable
+  // rather than by anything failing, which is the only way this class is ever caught.
+  //
+  // The pieces below ARE stable: every callback is a `useCallback` on that hook, `penManaged` is a
+  // build-time constant, and `holder` comes from the query cache. `signatureWithAside` covers
+  // everything the two surfaces render, so a change a reader can see always produces a new object
+  // and a tick that moves nothing does not.
+  const { startEditing, stopEditing, requestControl, takeOver, handoff, dismissLost } = pen;
+  const holder = pen.status?.holder ?? null;
+  const requestedById = pen.status?.requestedBy?.id ?? null;
+  const { penManaged, isPending } = pen;
+
   return useMemo(
-    () => ({ penManaged: pen.penManaged, view, containerRef, controlsProps }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `view` and `controlsProps` are rebuilt
-    // every render by construction; `signatureWithAside` is the derived answer to whether either
-    // says anything different, and `pen` supplies the callbacks, which are stable per `PlanPen`.
-    [pen, signatureWithAside, pen.penManaged, pen.isPending],
+    () => ({
+      penManaged,
+      view,
+      containerRef,
+      controlsProps: {
+        actions: view?.actions ?? [],
+        holder,
+        isPending,
+        onStart: act(startEditing),
+        onStop: act(stopEditing),
+        onRequest: act(requestControl),
+        // Peer take-over and admin override are the SAME server call — `acquire({takeover:true})`;
+        // the server decides immediate (override) vs post-grace (peer). They differ only in
+        // affordance.
+        onTakeOver: act(takeOver),
+        onOverride: act(takeOver),
+        onHandover: act(handoff),
+        onKeep: act(() => {
+          if (requestedById !== null) setDismissedRequestId(requestedById);
+        }),
+        onDismiss: act(dismissLost),
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `view` is rebuilt every render by
+    // construction and `signatureWithAside` is the derived answer to whether it says anything
+    // different; `act` is a local closure over a ref, which is stable by definition.
+    [
+      penManaged,
+      isPending,
+      signatureWithAside,
+      holder,
+      requestedById,
+      startEditing,
+      stopEditing,
+      requestControl,
+      takeOver,
+      handoff,
+      dismissLost,
+    ],
   );
 }

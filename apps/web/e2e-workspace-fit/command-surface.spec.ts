@@ -334,6 +334,9 @@ test.describe('The plan command surface', () => {
   test('the band stays inside its height bar and the deck its line count, at every width', async () => {
     test.setTimeout(240_000);
     const BAND_MAX_PX = 145;
+    // M6 measured 51 px at 1280/1440/1646/1920. The bar is that reading, not a round number above
+    // it: a bound with slack in it cannot report the four pixels the inset is worth.
+    const FOOT_MAX_PX = 51;
     const LINES: Record<number, { max: number }> = {
       1920: { max: 2 },
       1646: { max: 2 },
@@ -370,7 +373,10 @@ test.describe('The plan command surface', () => {
         };
         const look = rowEl('look');
         const doRow = rowEl('do');
+        const foot = document.querySelector('[data-activities-bar]');
+        if (!foot) throw new Error('the activities row was not found — nothing to assert about');
         return {
+          foot: foot.getBoundingClientRect().height,
           band: band.getBoundingClientRect().height,
           ...linesIn(deck),
           look: linesIn(look),
@@ -434,6 +440,18 @@ test.describe('The plan command surface', () => {
           `the command band is ${reading.band} px at ${viewport.width} against a bar of ${BAND_MAX_PX}`,
         ).toBeLessThanOrEqual(BAND_MAX_PX);
       }
+
+      // **F7, the foot row, which had no gate until M7.** It was measured once by hand at M6 (51 px
+      // at all four widths) and nothing pinned it — while its inset is a **literal copy** of the
+      // deck's, kept in step by a rule written in a docblock rather than by anything that fails.
+      // A component review named the drift: change one `py-1` and the other silently stays.
+      //
+      // Asserted at every width, unlike the band above: the foot row carries no plan name and no
+      // pen sentence, so it has no state that legitimately wraps at 1440 and nothing to exempt.
+      expect(
+        reading.foot,
+        `the activities row is ${reading.foot} px at ${viewport.width} against a bar of ${FOOT_MAX_PX}`,
+      ).toBeLessThanOrEqual(FOOT_MAX_PX);
     }
   });
 

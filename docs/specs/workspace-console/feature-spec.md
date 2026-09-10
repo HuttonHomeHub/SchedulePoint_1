@@ -329,8 +329,18 @@ It has to ship with M1, because M1 changes every group's width.
 > - **Given** a peer holds the pen **then** the control is shaded and its `aria-describedby`
 >   reason names them; `Request control` is in the foot beside the badge and the sentence.
 > - **Given** the pen is taken from me mid-edit **then** the foot's `role="status"` announces it,
->   the badge flips to `Read-only`, `Dismiss` is in the foot, and focus is pulled to the foot
->   cluster — not to `<body>`.
+>   the badge flips to `Read-only`, and `Dismiss` is in the foot beside them.
+>
+>   **This criterion ended "and focus is pulled to the foot cluster — not to `<body>`", and the
+>   product has never done that** — corrected at M7, where the accessibility review went looking.
+>   The focus return fires only after the reader's OWN action (`justActedRef`), and a pen taken by
+>   somebody else is by definition not one. Nor is focus dropped: nothing unmounts, because a
+>   shaded control keeps `aria-disabled` and stays in the DOM. So focus simply does not move, which
+>   is the correct behaviour for an event the reader did not cause — moving it would be the defect.
+>   The sentence was written from the shape of the criterion above it rather than from the code.
+>   ADR-0076 Class 3, in an acceptance criterion, which is the worst place for one: a criterion is
+>   what a milestone is judged against, so an untrue one is either never checked or checked and
+>   quietly ignored.
 
 > **US-4** — As a **planner on a 1646 px screen**, I want more of the screen to be the diagram.
 >

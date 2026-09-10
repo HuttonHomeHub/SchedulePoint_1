@@ -40,8 +40,10 @@ import { cn } from '@/lib/utils';
  * arithmetic too: the deck wraps, so width is no longer scarce enough to spend interactivity
  * buying it back, and the fold had already cost two real defects (the ADR-0114 M7 `hasActive`
  * guard protecting a tool whose publishers never published, and a persisted fold set that could
- * strand a group folded-and-active). The captions survive as **static labels** — the grouping is
- * the value; the disclosure was the cost.
+ * strand a group folded-and-active). The captions then survived as **static labels** — and went
+ * entirely at the console epic's M6, once M4 had declared the two rows and made the row itself the
+ * grouping (product owner, CQ-1). What marks a group from its neighbour now is an inset rule, built
+ * at M7 after being specified twice and built neither time.
  *
  * **Buttons were stacked until M1 (workspace-chrome-fit, 2026-08-25) made every control inline.**
  * Read the paragraph below as history: its width argument still explains why the deck can afford to
@@ -55,10 +57,27 @@ import { cn } from '@/lib/utils';
  * ## The 7 → 4 mapping
  *
  * The registry's seven-group taxonomy (ADR-0031) is **not** discarded and the ~40 registrations are
- * untouched. Seven captioned cards would be more chrome than commands, so pairs that answer the same
- * question share a card and keep a hairline between them: `frame`+`lens` are both "what am I
- * looking at", `object`+`output`+`help` are all "this plan, as a document". The taxonomy survives as
- * structure inside the card rather than as a caption above it.
+ * untouched. Seven named groups would be more chrome than commands, so pairs that answer the same
+ * question share one and keep a hairline between them: `frame`+`lens` are both "what am I looking
+ * at", `object`+`output`+`help` are all "this plan, as a document". The taxonomy survives as
+ * structure **inside** a group rather than as a name above it.
+ *
+ * **There is no card**, and this paragraph said there was until M7. M1 deleted the box (a border
+ * and padding at ≈1.2:1 against the band, drawing a boundary a 175 %-scaled screen cannot see) and
+ * M6 deleted the caption. A deck group is now a bare row of controls with a `role` and an
+ * `aria-label`, marked off from its neighbour by a rule taller than the one between its own
+ * sections — the coarser boundary being the stronger mark, which is what makes the two read as a
+ * hierarchy rather than as two of the same thing.
+ *
+ * ## What `caption` is called, and why it is not renamed
+ *
+ * `DECK_GROUPS[].caption` no longer captions anything: its only consumer is `aria-label`, so it is
+ * the group's **accessible name**. The M7 architecture review is right that the field is misnamed
+ * and that a name describing a rendering which no longer exists is how a reader concludes the
+ * caption is coming back. It is left alone here deliberately — renaming it is a rename of a field
+ * in a shared table during a milestone whose subject is documentation, and the cost of doing it in
+ * the same commit as nine prose corrections is that a mechanical change hides among them. Filed as
+ * `docs/TECH_DEBT.md` #288.
  */
 const DECK_GROUPS = [
   { id: 'view', caption: 'View', row: 'look', members: ['frame', 'lens'] },
