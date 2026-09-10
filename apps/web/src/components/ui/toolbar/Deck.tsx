@@ -69,24 +69,32 @@ import { cn } from '@/lib/utils';
  * sections — the coarser boundary being the stronger mark, which is what makes the two read as a
  * hierarchy rather than as two of the same thing.
  *
- * ## What `caption` is called, and why it is not renamed
+ * ## What `caption` was called, and why it is now `name`
  *
- * `DECK_GROUPS[].caption` no longer captions anything: its only consumer is `aria-label`, so it is
- * the group's **accessible name**. The M7 architecture review is right that the field is misnamed
- * and that a name describing a rendering which no longer exists is how a reader concludes the
- * caption is coming back. It is left alone here deliberately — renaming it is a rename of a field
- * in a shared table during a milestone whose subject is documentation, and the cost of doing it in
- * the same commit as nine prose corrections is that a mechanical change hides among them. Filed as
- * `docs/TECH_DEBT.md` #288.
+ * `DECK_GROUPS[].caption` had not captioned anything since M6 deleted the visible spans: its only
+ * consumer is `aria-label`, so it is the group's **accessible name** and nothing else. The M7
+ * architecture review was right that a field named for a rendering which no longer exists is how a
+ * reader concludes the caption is coming back (`docs/TECH_DEBT.md` #288) — the same class as the
+ * stale sentences that milestone swept out of this subsystem, except that those are prose and this
+ * is an identifier, which is why it survived several passes that corrected the words around it.
+ *
+ * **`name` and not `label`**: this file already has `ToolbarItem.label`, meaning the word printed
+ * beside a control, and the subsystem has just been through one collision of exactly that kind (the
+ * registry's `row` band axis against the deck's `row` line axis). `name` is also the ARIA
+ * vocabulary for what `aria-label` sets, so the identifier and its one consumer now agree.
+ *
+ * M7 deferred it so a mechanical rename would not hide among nine prose corrections in one diff,
+ * which is why it is its own commit. `DECK_GROUPS` is module-local, so the change does not leave
+ * this file — the register row's "a rename across a shared table" overstates the blast radius.
  */
 const DECK_GROUPS = [
-  { id: 'view', caption: 'View', row: 'look', members: ['frame', 'lens'] },
-  { id: 'find', caption: 'Find', row: 'look', members: ['find'] },
-  { id: 'author', caption: 'Author', row: 'do', members: ['tools'] },
-  { id: 'plan', caption: 'Plan', row: 'do', members: ['object', 'output', 'help'] },
+  { id: 'view', name: 'View', row: 'look', members: ['frame', 'lens'] },
+  { id: 'find', name: 'Find', row: 'look', members: ['find'] },
+  { id: 'author', name: 'Author', row: 'do', members: ['tools'] },
+  { id: 'plan', name: 'Plan', row: 'do', members: ['object', 'output', 'help'] },
 ] as const satisfies ReadonlyArray<{
   id: string;
-  caption: string;
+  name: string;
   row: DeckRowId;
   members: readonly ToolbarGroupId[];
 }>;
@@ -267,8 +275,12 @@ export function Deck<Ctx>({
                 <div
                   key={group.id}
                   role="group"
-                  aria-label={group.caption}
-                  // **A ROW, caption leading — not a caption stacked above the buttons.**
+                  aria-label={group.name}
+                  // **A ROW, caption leading — not a caption stacked above the buttons.** Read this
+                  // paragraph as history: M6 then deleted the caption outright, so what survives of
+                  // the decision is the row, and the group's name reaches AT through the
+                  // `aria-label` above rather than through anything rendered. Kept because the
+                  // measurement is the reason the deck is one row tall per card at all.
                   //
                   // Measured (`measure-output/m4-vertical-stack.json`): as a stacked card this was 81 px,
                   // of which ~29 was a full-width caption row, and the deck was 170 px because the four
