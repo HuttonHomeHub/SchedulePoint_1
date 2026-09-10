@@ -4721,12 +4721,39 @@ and now `RevisionComparePanel`, with no shared hook.
 > The honest finding is narrower and more useful: the recipe is hand-rolled in the sites that are
 > **neither a toolbar item nor a form field**, which is where no shared home exists yet.
 >
-> **The replacement count is deliberately NOT asserted here.** Ten of the thirteen named sites do
-> carry `aria-disabled`, and 46 files reference it repo-wide, most of them passing it through a
-> primitive — so separating an implementation from a consumer needs a proper pass rather than a
-> `grep`, and the `Size: M` beside this row rests on a number nobody has established. Re-deriving it
-> is the first task when this is taken, not an assumption to inherit; putting a figure here that I
-> had not properly measured would be the defect this row is being corrected for.
+> **The pass was done (2026-09-10), and the method matters more than the number.** A file is an
+> **implementation** if it writes the `aria-disabled` attribute onto an element it renders **and**
+> owns an `sr-only` reason node linked by `aria-describedby` — that is the recipe this row names,
+> all three parts. A **consumer** forwards `disabledReason` to a primitive and implements nothing.
+> Comments are stripped before classifying, or a file explaining the recipe counts as using it (five
+> gates in this repository have shipped that way).
+>
+> | class                                           | count  |
+> | ----------------------------------------------- | ------ |
+> | implementations (attribute + own linked reason) | **10** |
+> | partial (attribute, **no reason of its own**)   | **32** |
+> | consumers (forward `disabledReason`)            | 7      |
+> | mentions only                                   | 1      |
+>
+> **Ten is not the row's thirteen minus the three corrected above, and saying so would be a tidy
+> lie.** It is a different ten. Seven overlap (`menu`, `plan-facts`, `ToolbarPopover`,
+> `ToolbarSplitButton`, `tsld-toolbar-items`, `RevisionComparePanel`, and — see below —
+> `ToolbarButton`, which the row never named); four of the row's thirteen (`scope-save-bar`,
+> `GanttCell`, `BulkSelectionBar`, `CreateActivityPopover`) turn out to be **partial** rather than
+> implementations; and three the row never mentions are (`RevisionChangesView`,
+> `ScheduleHealthPanel`, `TsldPanel`). The arithmetic coinciding at ten is a coincidence.
+>
+> **The 32 is the number worth looking at, and it is not 32 defects.** These write the attribute and
+> supply no reason at all — which is ADR-0082's actual subject, one tier below this row's. Some are
+> plainly fine: a submit button shaded while its own save is in flight needs no sentence, because the
+> state is temporal and the reader caused it. ADR-0082's rule bites where the state is one the reader
+> **can change** or one their **role** imposes, and separating those two populations is a judgement
+> per call site, not a predicate. **So it is reported as a population and not as a finding** — the
+> same discipline that stopped a number being invented here in the first place.
+>
+> **`Size: M` still rests on nothing.** The extraction this row asks for is 10 files, not 13, and the
+> larger question the pass uncovered (which of the 32 owe a reason) is a different piece of work that
+> should be filed on its own terms rather than folded in here.
 
 The count is **the reviewer's and has not been re-derived here**, which is why this row is
 `unverified` rather than `open` — a count nobody re-ran is exactly the claim ADR-0076 Class 1 is
