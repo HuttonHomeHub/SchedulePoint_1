@@ -85,10 +85,18 @@ its published figures are software-rasterised).
 > still be perfectly smooth. Both are required._
 >
 > **P3 — Fit is MEASURED AND REPORTED, NOT GATED.** The baseline at Fit already drops 10.2 % of
-> frames — a pre-existing overage #75 records and nobody has attributed. Gating a new feature on a
+> frames [**the figure is stale — see the note below this block**] — a pre-existing overage #75 records and nobody has attributed. Gating a new feature on a
 > state that is already failing is the "a gate that fails on day one gets deleted rather than fixed"
 > trap (ADR-0058). The Fit numbers go into the verdict and to the product owner **as information**.
 >
+> **P3's 10.2 % is STALE, corrected 2026-09-10 (`docs/TECH_DEBT.md` #282).** No Fit baseline
+> measured since has come near it: 97.22 pp at 1912×1068, 47.78 pp at 1016×636, 69.63/70.93 pp at
+> 1912×948, 86.11 pp at 1920×1080, 0.00 pp at 968×493. The figure varies with canvas size by more
+> than it varies from anything else, so no single number is correct here. **P3's conclusion is
+> unaffected and is strengthened** — its argument is ADR-0058's "a gate that fails on day one gets
+> deleted rather than fixed", and a baseline at 70–86 pp fails harder than one at 10.2. Only the
+> premise was wrong, and a reader checking it would have found a figure matching nothing.
+
 > **N — non-vacuity, checked FIRST and reported first.** The composed change set must light
 > **≥ 40 changed links** and **≥ 25 changed bars** _within the measured viewport_, counted by the
 > harness and printed before any timing. Without this the treatment paints almost nothing, P1 passes

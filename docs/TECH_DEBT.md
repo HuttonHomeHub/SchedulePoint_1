@@ -431,11 +431,26 @@ documented ≤ 10 (ADR-0053 §3).
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** open · **Verified:** 2026-09-10 · **No longer blocked on the product owner.** Five
+**Status:** deferred (on a trigger) · **Verified:** 2026-09-10 · **PARKED 2026-09-10** — see the
+box below. **No longer blocked on the product owner.** Five
 sittings were taken 2026-09-10 (items 6, 6(e), 6(f)). §9's gate is **met at every judgeable point
 that reproduces**, at both scales and both framings. What remains is one attribution (the ~8 ms,
 which needs a DevTools recording) and one instrument gap (#283's unrecorded power state, now the
 leading explanation for the only reading that ever missed the floor). Neither is a press.
+
+> **PARKED — product-owner decision, 2026-09-10.** The canvas-performance programme is closed for
+> now. The question it existed to answer is answered: **ADR-0026 §9 is met at every judgeable point
+> that reproduces**, at 500 and 2,000, at both framings, and the layout gates run at the product
+> owner's own widths (1920×1080, 1646×1097, 1440×960, 1280×800 — `apps/web/e2e-workspace-fit/
+command-surface.spec.ts:35-40`). Nothing in the product is known to be failing for a user.
+> **This is not "no longer a defect" — it is "not worth more of anybody's attention today".** The
+> triggers below say when it becomes worth it again; none of them is a date, because a date would
+> make somebody re-read this on a Tuesday for no reason.
+>
+> **Trigger for this row specifically:** somebody reports the diagram feeling slow, OR a reading is
+> taken that misses §9's floor and reproduces. The residue is one attribution — the unaccounted
+> ~8 ms per frame at Fit — and #75's standing rule still holds: **it must not be guessed**, and a
+> DevTools Performance recording is the instrument, not another fps run.
 
 > **Correction, 2026-08-03 — read this before the rest of the row.** This entry was opened as "is
 > ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
@@ -5141,7 +5156,13 @@ replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verifi
 
 ### 261. ADR-0026 §9's frame-rate gate does not say at what canvas size it applies
 
-**Status:** open · **Raised:** 2026-09-08 (#75's viewport discriminator) · **Size:** S · **Owner:** repo
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-08 (#75's viewport discriminator) ·
+**Size:** S · **Owner:** repo
+
+> **PARKED 2026-09-10 with the rest of the canvas-performance programme.** The exhibit that made
+> this urgent is contaminated (see below) and size flips no verdict anywhere measured. **Trigger:**
+> anyone proposing to change ADR-0026 §9, or a display materially larger than 1920×1080 entering
+> use — the trend puts one below the floor and the gate still names no display.
 
 §9 states the gate as **≥ 45 fps @ 500 and ≥ 30 fps @ 2,000** under sustained pan, and fixes the
 hardware it applies to — "a mid-tier laptop **and** an iPad-class tablet (Safari), light and dark".
@@ -5907,8 +5928,16 @@ records: an instruction that is correct, is not followed, and has no mechanism b
 
 ### 282. P3's reason for never grading Fit rests on a figure no reading since has come near
 
-**Status:** open · **Raised:** 2026-09-10 (the third real-hardware reading set, #75 item 6) ·
-**Size:** S · **Owner:** repo
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the third real-hardware reading set,
+#75 item 6) · **Size:** S · **Owner:** repo
+
+> **PARKED 2026-09-10. Its two documentation halves are DONE** — P3's stale 10.2 pp premise is
+> corrected in `docs/specs/revision-compare-changes/m0-condition.md` and ADR-0127 D8's "unknown at
+> Fit" is replaced with the four readings, both on 2026-09-10, so no document now carries a figure
+> this row disproved. **What remains is item 3 alone**, a decision: whether P3's "never grade Fit"
+> still earns its keep now that `judgeRun` detects saturation explicitly rather than assuming it.
+> **Trigger:** the next time somebody wants a graded verdict at Fit, or #261 is picked up — it is
+> downstream of naming a canvas size.
 
 `docs/specs/revision-compare-changes/m0-condition.md:87-90` states P3 — the rule that the whole-plan
 framing is measured, reported and **never graded** — and gives its reason in one clause: _"The
@@ -6038,7 +6067,13 @@ that makes readings incomparable).
 
 ### 284. `on screen` means two different things depending on which scenario printed it
 
-**Status:** open · **Raised:** 2026-09-10 (the five-sitting probe set) · **Size:** S · **Owner:** repo
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the five-sitting probe set) ·
+**Size:** S · **Owner:** repo
+
+> **PARKED 2026-09-10 with the probe.** It misleads a reader of probe output and nothing else — the
+> judging is unaffected and conservative. **Trigger:** the probe is next opened for any reason, or
+> somebody compares `revision-diff` limbs across viewports and reaches the wrong conclusion about
+> bars drawn. Bundle it with #283, which is the same file and the same errand.
 
 Every probe limb prints `on screen  N bars at X px/day`, and #75 item 5(d) records **why** that line
 exists: ADR-0128's central finding is that painter cost tracks **bars drawn**, not plan size, and the
