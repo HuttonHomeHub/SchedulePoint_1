@@ -6395,6 +6395,67 @@ screens with least room to lose it. The alternative was worse; the residual is t
 **Sized S:** it is one reading from the existing harness with a selection made and a hand-off branch
 seeded, not new machinery.
 
+### 289. NestJS 12 breaks the API e2e bootstrap, and Dependabot titles it as routine
+
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (driving dependabot #482) ·
+**Size:** L · **Owner:** api
+
+`CLAUDE.md` §3 records the stack as **NestJS 11**. Dependabot #482 moves `@nestjs/common`, `core`,
+`platform-express`, `swagger`, `terminus` and `config` from 11 to **12** under the title
+_"chore(deps): bump the nestjs group across 1 directory with 6 updates"_ — a **major framework
+upgrade wearing a routine dependency title**, which is how one gets merged by habit. It is not
+mergeable today and it is not a one-line fix.
+
+**Reproduced rather than inferred**, in a worktree at the PR's merged head `5aebb06c` with 12.0.1
+installed, so this is not staleness — the branch had already been updated from `main`:
+
+1. `TypeError: Reflect.getOwnMetadata is not a function`, thrown from `@nestjs/common` 12.0.1's
+   own optional-parameter decorator while importing its console-logger service. NestJS 12
+   evaluates an `@Optional()` decorator **at import of its own module**, before anything loads
+   `reflect-metadata`. Vitest reports `setup 0ms` and collects **0 tests**. (The two file-and-line
+   positions are in the PR comment on #482 rather than here — see the note below on why.)
+2. Adding `setupFiles: ['reflect-metadata']` to `apps/api/vitest.e2e.config.mts` clears that — 45
+   tests then enumerate — and reveals `TypeError: ExpressAdapter is not a constructor`.
+   **`ExpressAdapter` appears nowhere in `apps/api/src`**, so this is NestJS 12's own module graph
+   failing to construct under Vitest, not our call site.
+
+**Why only one job fails, and why that is the misleading part.** `Build & smoke-boot images` and
+`Format, lint, typecheck & unit tests` both PASS on this head — the application compiles and the
+container boots, because `main.ts` and the image import `reflect-metadata` first. So the surface
+reading is "one flaky e2e job on a dependency bump", and the truth is that the framework's
+test-time bootstrap no longer works.
+
+**The Postgres log is a trap and cost a false diagnosis here.** It carries
+`column "issuer" of relation "accounts" contains null values` and a duplicate-key error on
+`accounts_issuer_account_id_key`, which read exactly like a broken migration. They are
+`account-issuer-migration.e2e-spec.ts`'s own **deliberate negative-case fixtures** (ADR-0107) — the
+output of a _passing_ test. I reported them as the root cause before opening that spec. Anybody
+diagnosing a CI failure from a service-container log will meet the same shape, because Postgres
+logs a test's intentional errors identically to a real one.
+
+**Not fixed, and not to be fixed as a dependency chore.** Moving to 12 changes a recorded
+architectural choice (§3) and needs the product owner's decision plus, on this register's own
+rules, an ADR — §2's "every dependency is a liability" cuts both ways, since staying on 11 has a
+cost too. What is owed first is the size of the migration, which nobody has measured: the two
+failures above are what one spec file reached, not a survey.
+
+**A second, smaller finding worth keeping.** The step log for a failing CI job is unreadable with
+this session's token (`403` on step content; only the service-container log returns), which is what
+forced the local reproduction. That is not a defect to fix, but it is why "re-run it and see"
+is the tempting move and why the register should record the diagnosis when somebody does the work.
+
+**And a third, which is a real limit of `check:claims` rather than a mistake in this row.** The
+first draft cited both failures as `<file>.js:<line>` and **`pnpm check:claims` refused the push** —
+correctly, by its own rule (ADR-0076): a dependency-internal citation must be registered in
+`scripts/dependency-claims.json` with a verified anchor. It cannot be, here. That register holds
+**one version per package** (#178) and this repository runs NestJS **11**, so a citation into 12.0.1
+names lines in a tree nothing installs — the gate would either fail forever or force
+`verifiedAgainst` to claim a version the application does not run, which is #178's structural
+problem exactly. So the positions live in the PR comment, where they are evidence for a decision,
+and this row describes them in prose. **The gate is built for citations into code that ships**, and
+a citation into a version evaluated and rejected is outside what it can police — worth knowing
+before the next person tries to register one.
+
 ### 288. `DECK_GROUPS[].caption` names a rendering the deck no longer has
 
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** XS ·
