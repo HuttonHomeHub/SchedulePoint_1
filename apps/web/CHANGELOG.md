@@ -1,5 +1,87 @@
 # @repo/web
 
+## 0.126.0
+
+### Minor Changes
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's command band loses the group cards, the double seam above its amber rule and
+  8 px of empty header, giving the diagram 37 px back at 1646 and 1920 (band 180 → 143 px) with the
+  group captions still present. Sections and split-button carets are separated by one shared inset
+  hairline, and disclosure carets take the chrome's muted ink instead of an opacity. First slice of
+  the workspace console (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Four states on the plan workspace's command deck now paint four different pictures. A hovered
+  button, an open menu and an **armed** modal tool were one wash at 1.34:1 against the band, so a
+  planner could not tell that the next canvas click would draw. An armed tool takes amber ink and an
+  underline; an open or engaged control takes a fill, and an engaged one keeps its mark while its
+  panel is open. Third slice of the workspace console (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The pen leads the row it unlocks.
+  
+  `Start editing` / `Stop editing` moves off the plan header and becomes the first control of the
+  command deck's **Author** card — immediately before the eleven authoring commands it is the
+  precondition for. It sat three sections away from them until now.
+  
+  Its badge, its live-region sentence and its seven hand-off controls (Request control, Take over
+  now, Override, Hand over, Keep editing, Dismiss) go the other way, to the plan's foot row, where
+  they read beside the sentence that explains them.
+  
+  Two behaviour changes fall out of the move:
+  
+  - The pen is **shaded with its reason, never absent**, in the eleven lock states offering neither
+    verb. An item that disappears takes a roving stop with it and shifts every command on the row
+    sideways, so a planner reaching for `Add activity` by muscle memory would land on `Link` — and
+    only in the states where the pen is unavailable.
+  - **Focus stays on the control you pressed.** The pen's focus return was written for a surface
+    where a successful Start or Stop removed the button that ran it; the deck's control relabels
+    instead, so focus was never lost and is no longer moved.
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The command deck's captions go, and the rows do the grouping.
+  
+  VIEW / FIND / AUTHOR / PLAN and the selection bar's SELECTION are deleted. Nothing is lost to a
+  screen reader: each was an `aria-hidden` span beside a group whose own accessible name already
+  carried the word, and those names are untouched.
+  
+  The width they were spending is what pays for the pen the previous release put on that row.
+  Measured at 1280, the twelve commands on the authoring row fit their container with 195 pixels to
+  spare and the row still wrapped — the overflow was the captions, their dividers and the gaps
+  either side, not the commands. Deleting them takes that row back to a single line with the pen
+  still on it.
+  
+  The command band is now 139 pixels at 1440, 1646 and 1920, and the activities row 51.
+
+### Patch Changes
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's search field and the organisation switcher stop being the two brightest
+  objects on a navy command band: the chrome scope's field family recesses into the band's own hue,
+  with the control's outline carrying the identification — which is the rule the token matrix already
+  states for every other surface. Second slice of the workspace console
+  (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan workspace's command deck now declares its two rows — what you are looking at, then what you
+  can do to it — instead of letting flex wrapping decide. A label change can wrap a row; it can no
+  longer move a command to the other one. At 1440 the deck is two lines where it was three. Fourth
+  slice of the workspace console (`docs/specs/workspace-console/`).
+
+- [#506](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/506) [`73d390b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/73d390bda82be25ededd59eee24c2eb4440516df) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fixes from the command console's gate pass.
+  
+  The pen's focus ring is now visible when the pen is held. Inside the chrome the ring colour and the
+  pen's own fill are the same amber, and the shared treatment draws the ring inside the control — so
+  a keyboard planner who tabbed to Stop editing saw nothing at all.
+  
+  The pen no longer explains itself with the wrong sentence. A reader whose role does not allow
+  editing was shown a dimmed Start editing accompanied by "No one is editing this plan.", which
+  answers a different question. It now says what every command beside it says.
+  
+  The deck draws a mark between its groups again, taller than the one between the sections inside a
+  group. Deleting the captions removed the only thing separating Author from Plan, and the finer
+  boundary was left as the only one with a line through it.
+  
+  The plan workspace stops re-rendering once a second. The pen's relative-time clock had been moved
+  to the top of the workspace, where it invalidated the whole command surface every tick; it now
+  produces a new value only when something a reader can see has changed, and stops entirely while the
+  tab is in the background.
+
 ## 0.125.3
 
 ### Patch Changes
