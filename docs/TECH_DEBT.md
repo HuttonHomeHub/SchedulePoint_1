@@ -251,7 +251,7 @@ other is a client bug in a different file.
 
 ### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
-**Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-10 · **Size:** M · **Owner:** web
 
 > **Most of this row was discharged by ADR-0083 and nobody closed it** — found by the 2026-09-01
 > verification sweep, and it is a **half-executed** close: that ADR's own step 8 says _"Delete #64
@@ -280,6 +280,10 @@ long-lived editor session where the pen can be taken by another user at any mome
 
 Its neighbouring controls are already correct (`:450`, `:602`, `:662` all shade rather than
 disable), which is moot while the whole subtree unmounts around them.
+
+**Re-verified 2026-09-10**: `AssignmentRow.tsx:511` is still `{canWrite ? (`, unchanged, and
+`components/ui/` still contains no checkbox primitive — so neither this row's survivor nor #72's
+has moved since the narrowing.
 
 **Already specified**: ADR-0083 D5 cites this exact line and schedules it as **M3** (_"`AssignmentRow`
 (#64's worst case)"_), which has not landed. So no new spec is owed — the work is to delete the
@@ -338,7 +342,7 @@ can.
 
 ### 72. The bulk-selection checkboxes are hand-rolled
 
-**Status:** open · **Verified:** 2026-09-01
+**Status:** open · **Verified:** 2026-09-10
 
 **The target-size half closed 2026-09-01 and the primitive half did not**, so the row is narrowed
 rather than deleted.
@@ -1457,7 +1461,7 @@ reading as owed work, which is the drift class this register exists to catch.
 
 ### 242. `/forgot-password?email=` is a specified capability with no producer
 
-**Status:** open
+**Status:** open · **Verified:** 2026-09-10
 
 **Found:** 2026-09-02, while scoping #96 — by asking which of the eighteen search params the
 application itself writes, and finding that this one is not among them.
@@ -1635,8 +1639,15 @@ cheap and honest; the first is correct. **Do not do neither.**
 
 ### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
 
-**Status:** open · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
 **Owner:** repo
+
+**Re-verified 2026-09-10 by probe rather than by reading**, because the previous verification was a
+measurement and deserved the same treatment: `fieldValue` on a real inline header returns
+`Status -> "open · **Verified:** 2026-09-09"` and `Verified -> null`. So the anchor is unchanged,
+A8 still cannot fire, and — worth noting for whoever fixes it — `Status` does not merely survive,
+it returns the **whole rest of the line** including the other fields, which every consumer is
+today parsing past by accident.
 
 `check-debt-status.mjs` reads exactly two fields through `fieldValue`: `Status` and `Verified`.
 `Status` is written at column 0 on all 66 detailed rows and is read correctly. `Verified` is written
@@ -1719,7 +1730,7 @@ adds to and does not replace.
 
 ### 244. CI's gate roster is hand-written while `prepush.sh` derives its own
 
-**Status:** open · **Raised:** 2026-09-02 (the ADR-0124 devops gate pass) · **Size:** S ·
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-02 (the ADR-0124 devops gate pass) · **Size:** S ·
 **Owner:** repo
 
 `scripts/prepush.sh` derives its gate list from `package.json` — deliberately, and its own comment
@@ -1750,9 +1761,24 @@ a change to a shared gate and an ADR-0105 full-spec trigger; smuggling it into a
 judgement that rule exists to remove. `#240` refused to widen `check:claims` inside the milestone
 that found it for the same reason, and that refusal is why this register works.
 
-**Why it is debt and not a defect today:** the rosters agree as of this row, and CI's steps carry
-per-gate comments explaining what each exists for — which a derived loop would lose. That is a real
-cost of the obvious fix and should be weighed rather than assumed away.
+**Why it was debt and not a defect when filed:** the rosters agreed as of this row, and CI's steps
+carry per-gate comments explaining what each exists for — which a derived loop would lose. That is a
+real cost of the obvious fix and should be weighed rather than assumed away.
+
+**That last sentence is now FALSE, and the live instance has changed identity — 2026-09-10.** Re-run
+of the row's own command: 16 `check:*` scripts, **two absent from `ci.yml`**. One is
+`check:reconcile-due`, which is the exemption this row already anticipates two paragraphs above and
+is therefore not a finding. The other is **`check:browser-safe`, a BLOCKING gate**, enforced today
+only by a locally-run `pnpm prepush` — which is precisely the state the row describes, in a
+different gate from the one it names. `check:advisory-agreement`, the instance the row was filed
+on, has since been added to CI.
+
+**The identity change is the point rather than a detail.** A reader who trusted this row would go
+looking at `check:advisory-agreement`, find it present, and conclude the row was stale and closable
+— when the condition it describes is live in a gate the row does not mention. A row naming its
+instance rather than its rule decays into a false negative, which is the failure mode
+`docs/RECONCILE.md` exists to catch and the reason the fix must assert the two rosters **agree**
+rather than that any particular gate is present.
 
 ### 239. The plan's members query and its restore both scale with a fetch nobody profiles
 
@@ -1921,7 +1947,7 @@ register exists for.
 
 ### 100. The operator-facing mail signal still has no operator-facing channel
 
-**Status:** open · **Raised:** 2026-08-09 · **Size:** S
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-08-09 · **Size:** S
 
 > **Programme M3-T2/T3 shipped both halves that live in this repository.**
 > `scripts/watch-mail-failures.sh` greps `mail.send_failed` from the API container and POSTs to a
@@ -2036,7 +2062,7 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 ### 101. `check:claims` completeness has structural blind spots
 
-**Status:** open (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
+**Status:** open · **Verified:** 2026-09-10 · (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
 **Narrowed:** 2026-08-08 (W5 M2-T4)
 
 `pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
@@ -2046,6 +2072,19 @@ exclusion for files this repository owns — and the widening immediately surfac
 citations that had been in the tree unregistered all along**: `nodemailer`'s `_formatError` and
 `zod`'s `allowsEval` probe. Both were verified and registered. Two limitations remain, recorded here
 rather than solved, because each trade is a real one:
+
+**Re-verified 2026-09-10, and the blind spot is still LATENT rather than live.** Measured over the
+real register: **100 claims across 15 packages**, 31 distinct dependency basenames, and **none** of
+them is also a basename in this repository — so limitation 1 below still cannot be silently
+skipping anything today. The register has roughly doubled since this row was narrowed (40 claims
+across five packages at ADR-0077), which is what makes re-running the check worth more than
+re-reading the row: the collision becomes likelier with every citation added, and nothing warns.
+
+**The first probe run for this re-verification reported twelve collisions and was wrong**, which is
+recorded because it is this row's own failure mode one level up: it matched every path-shaped
+string in the JSON, including the repo-side fields that name _our_ files by design, so it
+"found" exactly the citations that are supposed to be there. A measurement of a blind spot has to
+read the field the gate reads — `claims[].path` — and not the file.
 
 1. **The own-file exclusion is by basename.** `ownBasenames()` runs `git ls-files` and excludes any
    citation whose basename this repo also has. If a dependency file and a repo file ever share a
@@ -4510,81 +4549,6 @@ than lost with the row:
 wrong twice in two days (#189, then #192 inside its fix). They belong with #197's shared-contract
 slice rather than alone.
 
-### 230. A cascade delete's undo still truncates the history, and its reason has lapsed
-
-**Status:** open · **Raised:** 2026-08-31 (closing #92) · **Size:** S
-
-**Built, not yet merged.** M0 (the anchor fix) is released on its own as `api-v0.55.3`. M1 removed
-the truncation and M2-T0 wired the activities panel's delete and dissolve to the same history; M2-T1
-gave the `PARENT_DELETED` refusal words that name the recovering action; M3 appended the ADR-0048
-amendment. Delete this row and ledger it once that is merged and released — not before, because a
-row that says "closed" while the code sits on a branch is the drift this register exists to stop.
-
-What is deliberately NOT built, with its reason, is **naming the blocked phase** — see the ADR-0048
-amendment §3 and the withdrawn alternate flow in the spec. The short form: the flow that case was
-designed around was driven and does not produce a refusal, because answering CQ-3 "in scope" closed
-the only route to it.
-
-Deleting a WBS summary with a subtree clears the undo stack
-(`use-plan-workspace-model.ts` `recordActivityDelete`). That is ADR-0048 M2's decision, and its
-stated reason was that a re-create could only rebuild the summary — "a partial re-create would be a
-broken undo".
-
-**That reason is now false.** #92 pointed the leaf inverse at
-`POST …/activities/restore-batch/:batchId`, and a cascade delete stamps **one** `deleteBatchId`
-across the whole subtree (`activities.service.ts:1191-1221`), which `restoreDeleteBatch` restores in
-one call with ids and links intact. So the cascade case would work with the code that is already
-there — the branch that refuses it is the only thing stopping it.
-
-**It is filed rather than done**, because it is a capability change and not a defect fix: a planner
-who deletes a phase today loses their history and would then keep it, which is a different product
-behaviour, reversing a decision an accepted ADR records. ADR-0105's rule says a register row covers
-stages 1–2 only while the change adds no new surface; this reverses an ADR decision, so it wants an
-ADR-0048 amendment naming the M4 restore as what changed.
-
-**One thing to check before building it**, rather than assume: the restore is top-down
-parent-active, so a subtree whose summary's OWN parent was deleted afterwards is a case the
-amendment has to answer — refuse, or restore what it can and say so.
-
-**DECIDED 2026-09-02 (product owner), spec at `docs/specs/cascade-undo/`.** Restore the cascade;
-where the phase's own ancestor was deleted afterwards, **refuse and name the phase** rather than
-partially restore; ship the anchor fix as its own release first.
-
-**And the scope widened against the spec's default: the activities table's unrecorded
-delete/dissolve is IN.** Today that table deletes and dissolves with no undo seam call while its
-dialog sibling records both, so the same action is undoable from one surface and not the other. The
-plan's M2-T2 journey must be re-designed before it is built — the spec named that consequence when
-it raised the question.
-
-**The spec also found a live defect this row did not have**, which is why it is worth reading before
-picking the work up: `restoreDeleteBatch` takes its anchor from a `findMany` with no `orderBy` and
-uses `ids[0]`, so a cascade restore succeeds only when an unrequested ordering happens to return the
-root first. Nothing in this repository has ever restored a cascade batch against a real database.
-
-**M0 (2026-09-02) fixed that anchor and shipped it on its own** — `batch-restore-anchor.ts` picks
-the batch's root (a member whose parent is outside the batch), which is the only member
-`assertParentActive` can accept, and falls back to the lowest id so a batch with no such member
-still names one rather than throwing. Pinned by `batch-restore-anchor.spec.ts`, verified red against
-`(members) => members[0]?.id`.
-
-**M0's gate pass found nothing blocking.** Security traced every gate and confirmed none moves, that
-the widened `select` cannot leak (`assertValidParent` guarantees every `parentId` was same-org and
-same-plan when it was written), and that a crafted `parentId` cannot steer the sweep, because
-`restoreBatch` keys on the anchor ROW's own `deleteBatchId` read inside the transaction. Two
-non-blocking suggestions were folded: the fallback now says it fell back, and the scale harness
-cleans up in `finally`. Backend-performance re-derived the M0-T3 numbers from the code and put the
-anchor change's own cost at **~0.9 ms of a 312 ms restore**; its two substantive findings are #238
-and #239.
-
-**And the attempt to make the API e2e case discriminating is recorded in that file rather than
-hidden, because it is the more useful half.** Written the obvious way it PASSES against the defect;
-rewriting the summary's row to force a hostile heap order makes it fail — but only when the file
-runs alone, because a full suite's 44 `beforeEach` sweeps leave free space that hands the rewritten
-tuple an earlier slot. A probe asserting the hostile precondition caught that in the full run
-instead of reporting a green that proved nothing. **Physical order is not something a test can
-hold**, so the pure unit spec is the gate and the e2e case is a capability proof — the first time
-anything here has restored a cascade batch end to end.
-
 ### 269. A failed store says it failed and never why, and offers a Retry that some failures cannot use
 
 **Status:** open · **Raised:** 2026-09-09 (probe-sweep M5) · **Size:** S · **Owner:** web
@@ -4676,6 +4640,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                         | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --- | --------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 230 | A cascade delete's undo truncated the history, and its reason had lapsed                            | 2026-09-10 | **Found already shipped and unclosed — the eighth recorded instance of that shape, and the row's own instruction was to close it.** It read _"Built, not yet merged … Delete this row and ledger it once that is merged and released — not before"_, and all three conditions were met on 2026-09-02: `a356866e` (#460) removed the branch, and `web-v0.125.3` carries both `commands.ts`'s _"the branch is gone"_ recording seam and `use-plan-undo-redo.ts`'s `UNDO_PARENT_DELETED_MESSAGE`/`REDO_PARENT_DELETED_MESSAGE`. Verified against the **release tag** rather than the working tree, because "merged" and "released" are different claims and this row deliberately waited on the second. ADR-0048's amendment is filed (`0048-…:95`, _Register row: #230_). The delay is the interesting part: the row was correct, complete and self-closing for eight days, and nothing observes "a row whose stated close condition is now true" — `check:debt-status` asks whether a row HAS a status, never whether the status is still true, which is the gap `docs/RECONCILE.md`'s pass exists to cover and why it cannot be replaced by a gate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 187 | The deck's labels sat 3 px apart, and the fourth hypothesis was never run                           | 2026-09-09 | **Closed by measurement, and the measurement falsified the row's own next step.** The row recorded three hypotheses built, measured and falsified, then named a fourth — the icons, since deck items carry `size-3`/`size-4` glyphs and in an `items-center` line the tallest child sets the line box — and said it was cheap and undone. Run at last (`apps/web/measure-toolbar/m7-icon-hypothesis.spec.ts`, four widths, real Chromium, pen held, 23 deck items at a uniform 36 px): **the spread does not reproduce at all — 0 px on every row at 1280, 1440, 1646 and 1920**, one distinct label top per row. Confirmed independently by the row's OWN named instrument, `m0-repaired.spec.ts`, which reports `worstRowSpread: 0` in all sixteen of its reads. So the null test was **vacuous** — there was no spread for removing the icons to close — which is why the probe checks non-vacuity first and says VACUOUS rather than reporting a treatment of zero as a success (the ADR-0093 shape: a green result that cannot tell "the rule holds" from "the population was empty"). A **positive control** rescued the run: shrinking one labelled item's icon from 16 px to 12 px — the very `size-3` the hypothesis names — moved that item's label by **zero**, so hypothesis four is FALSIFIED on today's deck exactly like the other three, and not merely unreproducible. A fixed-height item (`min-h-9`, measured 36) centres its label on the item and not on the tallest child, so an icon cannot move it. What closed the original 3 px is **not established** and is deliberately not guessed at; the row's whole purpose was to stop the next person re-running these experiments, and with the defect absent and its last hypothesis dead there is nothing left to re-run. The probe is kept rather than deleted — it is the evidence, and its positive control is what makes a future zero mean something. |
 | 267 | (never a distinct defect) The performance panel announces its outcome twice                         | 2026-09-09 | **Filed in error and withdrawn the same day.** It is `docs/TECH_DEBT.md` #259 item 10, raised 2026-09-07 at the staff-performance-probe gate pass — noticed independently in the code by somebody who did not look for it in the register first. The analysis it carried (what M3 sharpened, and the three candidate remedies with their costs) is folded into #259 item 10, which is where the defect already lived. The number is ledgered rather than freed, because two live rows for one defect is exactly the failure this table exists to prevent.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 260 | A saturated dropped-frame baseline made the difference gate arithmetically unfailable               | 2026-09-09 | `docs/specs/probe-sweep/` M1 (the ADR is filed at M7 — the number is not reserved here, per ADR-0071). `judgeRun` computes `headroomPp`/`saturated` on **every** result and returns INDETERMINATE when a gated run is saturated. **Verified red first**: against the old judge the product owner's own reading — baseline 98.33 pp, delta −0.19 pp — returned `PASS` with the gate armed. Two corrections to the row itself, both found by building it. Its proposed placement ("where the spread guard sits") was **wrong**: its own headline exhibit is an **ungated** Fit run, which returns `REPORTED_ONLY` before any gated branch — so the fact is computed before the `!gated` return, only the verdict is gated, and the first unit case is the ungated one. And saturation is checked **before** the spread guard, because a ceiling compresses the spread beneath it: a baseline pinned near 100 on every repeat has almost no run-to-run spread, so the existing refusal reads the machine as perfectly quiet at the exact moment the metric has no room to express an answer — observed, not argued, in the M1-T3 run that records `baseline 100.00 pp (spread 0.00 pp)` and `delta +0.00 pp`, this defect at its purest. There were also **four** renderers of a delta and not the three the plan named: the CLI driver prints one and does not call `verdictNote`, so the structural enumeration written for the browser surfaces could not see it. `docs/specs/probe-sweep/m1-cli-oracle.md`.                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -4824,13 +4789,16 @@ different derivations of different subjects; its docblock has to say so, or the 
 
 ### 249. Four hand-copied dock-geometry blocks in the plan workspace
 
-**Status:** open · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
 
 `plan-workspace-toolbar.tsx` now carries **four** near-identical dock-resize blocks — notes,
 floatPaths, health and revisions — each about fifteen lines of `Prefs` / `EffectiveMax` / `Width` /
 `PointerToSize` / `onResize` wiring, copied by hand. The revision comparison's block is a faithful
 copy of the pattern rather than a new defect, and the M4 component review flagged the count rather
 than the copy.
+
+**Re-verified 2026-09-10**: still exactly four, by distinct identifier rather than by eye —
+`notesEffectiveMax`, `floatPathsEffectiveMax`, `healthEffectiveMax`, `revisionEffectiveMax`.
 
 Four is the point at which `right-docks.ts`'s own lesson starts applying to this geometry too: that
 file exists because _"the way [pair statements] fail is that five get written"_, and it replaced them
@@ -4841,11 +4809,15 @@ for another reason — not as a standalone refactor of a file three epics have m
 
 ### 250. `FloatPathsPanel` shades a missing activity with no reason at all
 
-**Status:** open · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
 
 `FloatPathsPanel.tsx:375-409` renders a row for an activity that is no longer in the plan with
 `aria-disabled` plus `pointer-events-none opacity-60` and **no reason** — so a reader meets a shaded
 control that never says why it is shut, which is the ADR-0082 defect that decision exists to close.
+
+**Re-verified 2026-09-10**: `FloatPathsPanel.tsx` still renders `aria-disabled={activity.missing || undefined}`
+with `pointer-events-none opacity-60` and no `aria-describedby` or `sr-only` reason anywhere in that
+row. Unchanged.
 
 Found while reviewing its sibling: `RevisionComparePanel`'s equivalent row carries an `sr-only`
 reason linked by `aria-describedby`, and the comparison is what surfaced the gap. Out of scope for
@@ -4956,7 +4928,7 @@ another unexplained cross-spec FK failure appears.
 
 ### 257. ADR-0086 D6 records a staff write that was never built
 
-**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M0-T4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-07 (staff-performance-probe M0-T4) · **Size:** S · **Owner:** repo
 
 `docs/adr/0086-staff-principal.md:143-145` states, in an **Accepted** ADR:
 
@@ -4966,6 +4938,19 @@ another unexplained cross-spec FK failure appears.
 
 There is no `@Post`, `@Put`, `@Patch` or `@Delete` anywhere in `apps/api/src/modules/staff/`. The
 controller has six `@Get` routes and nothing else. Verified by grep, 2026-09-07.
+
+**That paragraph went stale the same week and the row's claim did not — 2026-09-10.** The staff
+module now has a write: `staff.controller.ts:252`, `@Post('probe-results')`, shipped by ADR-0128 as
+the console's canvas benchmark. So "no `@Post` anywhere" is false, while **the row's actual subject
+— the "send a test message" route ADR-0086 D6 describes as existing — is still not built**. The
+distinction matters because the stale sentence is the one a reader would run, and finding a `@Post`
+would read as the row being closable.
+
+ADR-0128's own register entry records the same finding from the other side ("ADR-0086 D6's claim
+that one already exists is **false** — the shape landed and the route never did"), so the epic that
+added the first real write knew D6 was wrong about a different one. **This row stays open**: an
+Accepted ADR still describes a capability that does not exist, and no amount of unrelated writes
+changes that.
 
 **The shape landed and the route never did.** `mail_events.kind`'s CHECK permits `test`, and
 `staff-health.dto.ts:12` enumerates it — so the design is half-present, which is what made the claim
@@ -5036,7 +5021,7 @@ words and ambiguous on screen, which is the failure mode this epic spent its who
 
 ### 258. The pacing arithmetic is written three times, and the shared copy was the dead one
 
-**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** M · **Owner:** repo
 
 `model/pacing.ts` exported a `panPhase` built, in its own words, "so the panel and the CLI pace runs
 identically", and it had **zero callers**. Both scenes reimplemented the same gap / percentile /
@@ -5044,6 +5029,17 @@ dropped-frame / fps arithmetic from scratch instead: `scenes/canvas-draw.ts`'s `
 `scenes/revision-diff.ts`'s `panRun`, the latter also carrying its own `percentile` and its own
 `measureIdleInterval`. Three copies, and the one that looked like the shared home was the one
 nothing used.
+
+**Half of this is now CLOSED and the title is therefore wrong — 2026-09-10.** The dead copy is gone:
+`model/pacing.ts:41` reads _"There was a `panPhase` here, and it was dead"_, and what survives in that
+file — `measureIdleInterval` — has a real caller (`runner/run-probe.ts:250`). So it is no longer
+true that the shared home is the unused one, which was the row's sharpest observation.
+
+**What survives is the duplication itself**, and it is still two independent implementations rather
+than one: `scenes/canvas-draw.ts:170` and `scenes/revision-diff.ts:79` each declare their own
+`percentile`, and each recomputes gaps, dropped-frame count and fps beside it. Three copies became
+two, by deletion rather than by consolidation — which removes the confusing part and leaves the
+drift risk exactly where it was.
 
 That is the exact drift ADR-0128 D2 exists to prevent, stated in this epic's own docblocks: two
 implementations drift and the drift is invisible, because each looks right alone. The concrete
@@ -5383,7 +5379,7 @@ re-derive the diagnosis from four confusing failures.
 
 ### 265. Two measurement harnesses write a fixed filename into the OS temp directory
 
-**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PR #491 CI) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (ADR-0129, PR #491 CI) · **Size:** S · **Owner:** api
 
 CodeQL failed PR #491 on one high-severity `js/insecure-temporary-file` alert (CWE-377):
 `revision-compare-imported-p2.e2e-spec.ts` wrote its report to `join(tmpdir(),
@@ -5553,7 +5549,7 @@ first thing whatever spec picks this up should write.
 
 ### 273. The oldest-block truncation rule rests on a premise the resume feature removed
 
-**Status:** open · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** S · **Owner:** web
 
 `probe-sittings.tsx` withholds the "N were refused or never taken" claim from the **oldest** block
 on screen, because that is the one the 50-row page boundary can cut (`docs/TECH_DEBT.md` #271). The
@@ -5654,7 +5650,7 @@ declined. Do not do both.
 
 ### 277. A citation of a symbol nobody remembers existed is invisible to a grep for deleted names
 
-**Status:** open · **Raised:** 2026-09-09 (verification sweep, batch 3) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (verification sweep, batch 3) · **Size:** S · **Owner:** web
 
 `#193` swept the toolbar for citations of machinery ADR-0109 D1 deleted, and closed every item it
 named. **Nine citations of `autoLabelsFit` survived it, across three files, and the symbol has no
@@ -5662,6 +5658,13 @@ definition anywhere** — every hit is inside a comment, proved by excluding com
 nothing back. Beside them sat a `{@link measureLabelWidth}` resolving to nothing, a
 `ToolbarOverflow.test.tsx` pointer to a file that no longer exists, and a `computeLadder` citation
 **fourteen lines above** the correction in the same file that was written to catch its sibling.
+
+**Re-verified 2026-09-10, and it has GROWN: ten citations, not nine**, across the same three files
+(`toolbar-registry.ts`, `tsld-toolbar-items.tsx`, `tsld-toolbar-quick-wins.test.tsx`), with every
+hit still inside a comment and still no definition anywhere in `apps/web/src`. So a dead name is
+not merely surviving, it is **propagating** — somebody wrote a new comment citing it in the day
+since this row was filed, which is precisely the mechanism the row describes: a citation of a
+symbol nobody remembers reads as documentation of something real, so the next author repeats it.
 
 **Why `#193`'s sweep could not have found them, and this is the transferable part.** That sweep
 grepped for the names it remembered deleting — `ToolbarOverflow`, `toolbar-ladder.ts`,
@@ -5693,7 +5696,7 @@ rejecting its own proposed gate on 129 findings.
 
 ### 278. `SheetHeader`'s close button defaults to the dense-row exception, and four panels are not dense rows
 
-**Status:** open · **Raised:** 2026-09-09 (register sweep) · **Size:** S · **Owner:** a panel-chrome pass
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (register sweep) · **Size:** S · **Owner:** a panel-chrome pass
 
 **ADR-0118 D1's second named exception is applied by CONTAINER in `#215` and by DEFAULT in
 `sheet.tsx`, and those are not the same rule.** `SheetHeader`'s signature is
@@ -5736,7 +5739,7 @@ scoped to a population this consumer is not in.
 
 ### 279. The reset that closes the split-pair defect has no CSS rule, no caller, and would paint the wrong thing
 
-**Status:** open · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
 
 **#118 item 4 asked for a per-pair scope filter. Specced properly, the answer is that the mechanism
 this repository already decided on was never built** — and the filter is a way of writing down a hole
@@ -5843,7 +5846,7 @@ before anything is edited.
 
 ### 280. A gate piped into `tail` reports the pipe's exit status, and a push went out on a red one
 
-**Status:** open · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
 
 **This is not hypothetical and it is not old: it happened while writing #279's neighbours.** The
 command was
@@ -5887,7 +5890,7 @@ the following commit — but "nil this time" is the reason a silent failure surv
 
 ### 281. A long-lived branch with no open pull request gets no CI at all, and `prepush` reads as though it were CI
 
-**Status:** open · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
 
 **Measured tonight: fourteen commits reached `origin` and CI ran on none of them.**
 `.github/workflows/ci.yml:3-7` triggers on `push` to **`main`** and on `pull_request` targeting
@@ -6218,7 +6221,7 @@ Related: ADR-0109 D1 (the cards were inherited from the old Flask app with the w
 
 ### 286. No journey drives a peer take-over or an admin override
 
-**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the security review) · **Size:** M ·
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (workspace-console M7, the security review) · **Size:** M ·
 **Owner:** web
 
 ADR-0028's pen has five ways to change hands — a peer requests and waits out grace, a peer takes
@@ -6252,7 +6255,7 @@ roles, and control over the grace window — none of which any existing harness 
 
 ### 287. The pen's foot-row home is `shrink-0`, and its worst case was never measured
 
-**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** S ·
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** S ·
 **Owner:** web
 
 The pen's badge, live-region sentence and seven hand-off controls portal into `PenStatusOutlet`,
@@ -6286,7 +6289,7 @@ seeded, not new machinery.
 
 ### 288. `DECK_GROUPS[].caption` names a rendering the deck no longer has
 
-**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** XS ·
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** XS ·
 **Owner:** web
 
 The field's only consumer is `aria-label={group.caption}` (`Deck.tsx`), so it is the group's
