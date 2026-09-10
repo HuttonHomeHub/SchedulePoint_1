@@ -984,6 +984,38 @@
       "lines": "145-163",
       "anchor": "export const allowsEval = /* @__PURE__*/ cached(() => {",
       "citedBy": ["apps/web/src/config/zod-jitless.ts"]
+    },
+    {
+      "ref": "password.mjs:61-72",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "61-72",
+      "anchor": "if (!user) {",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "email-verification.mjs:104-116",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "104-116",
+      "anchor": "const MINIMUM_MS = 500;",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "index.mjs:305",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "305",
+      "anchor": "return path.startsWith(\"/sign-in\") || path.startsWith(\"/sign-up\") || path.startsWith(\"/cha",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "index.mjs:309-314",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "309-314",
+      "anchor": "}, {",
+      "citedBy": ["docs/TECH_DEBT.md"]
     }
   ]
 }

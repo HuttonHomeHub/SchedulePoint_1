@@ -5423,3 +5423,47 @@ here**: it touches `globals.css`, `Card`, `Menu`, `Combobox` and `Tooltip`'s con
 accessibility, component and ux review plus a pixel-identical screenshot set as its falsification
 condition. That is an epic, not a follow-up, and its M0 must re-derive these numbers by running
 before anything is edited.
+
+### 280. A gate piped into `tail` reports the pipe's exit status, and a push went out on a red one
+
+**Status:** open · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
+
+**This is not hypothetical and it is not old: it happened while writing #279's neighbours.** The
+command was
+
+```
+timeout 2400 pnpm prepush 2>&1 | tail -5 && git add -A && git commit … && git push …
+```
+
+`prepush` **failed** — `check:claims` refused four citations that had just been corrected, which is
+the gate working exactly as designed. The `&&` then read **`tail`'s** exit status, which is 0
+whatever the left-hand side did, and the commit and the push both went out. `f1b6d426` reached the
+remote on a red gate.
+
+**The repository already knows this.** `scripts/e2e-local.sh` carries a `PIPESTATUS` guard with a
+comment saying in as many words that "without it a piped run always exits 0 and this script would
+silently stop being able to fail", and **#276** records a failing gate's log being tailed to twelve
+lines and losing the diagnosis. Both are about the same operator habit; neither prevents it, because
+both live inside a script and the habit is at the call site.
+
+**What makes it worth a row rather than a note to be more careful:** the failure is **silent and
+inverted**. A piped gate that passes and a piped gate that fails produce the same exit status, so
+the protection is not weakened, it is **absent**, and nothing downstream says so. `prepush` prints a
+red `FAILED:` line — which `tail -5` had scrolled away, because the gate roster is longer than five
+lines and the failure is announced at the end.
+
+**Candidate mechanisms, none built** (this is a shared gate's invocation, so ADR-0105 fires and it
+wants a spec rather than a quiet edit):
+
+1. **`prepush.sh` writes a sentinel** — a file, or a line on stderr that a wrapper checks — so a
+   piped run has something a later command can test that a pipe cannot swallow.
+2. **A `pnpm prepush:push` target** that runs the gate and the push in one process, making the
+   `&&` unnecessary. Cheapest, and it removes the call site rather than guarding it.
+3. **Nothing, and rely on CI.** Honest, and it costs a round trip and a red build on the branch —
+   which is what would have happened here.
+
+Option 2 is the one worth costing: this register's own rule is that when you find yourself writing
+"remember not to pipe it", you write a mechanism instead (#194, ADR-0058).
+
+**The immediate damage was nil** — the four citations were registered and the gate is green again in
+the following commit — but "nil this time" is the reason a silent failure survives.
