@@ -203,12 +203,32 @@ describe('on a plan that has not been calculated', () => {
 
     expect(cellUnder('Activity')).not.toHaveAttribute('aria-readonly');
     expect(cellUnder('Duration')).not.toHaveAttribute('aria-readonly');
-    // And the dates are shut with an action, not a report of unavailability.
-    const start = cellUnder('Start');
-    expect(start).toHaveAttribute('aria-readonly', 'true');
-    expect(document.getElementById(start.getAttribute('aria-describedby')!)).toHaveTextContent(
-      /Recalculate/i,
-    );
+
+    /**
+     * **The dates carry NO shading and no reason, and that changed with
+     * `docs/TECH_DEBT.md` #290.**
+     *
+     * This used to assert `aria-readonly="true"` with a reason reading "Recalculate…" — shut with
+     * an action rather than a report of unavailability, which is the right shape for a cell that
+     * becomes editable once the action is taken. It never did. `earlyStart`/`earlyFinish` were
+     * listed in `GANTT_EDITABLE_COLUMNS` while `cellWriteFields` returned `null` for every input,
+     * so recalculating only got the planner as far as a cell that opened and refused a correctly
+     * formatted date.
+     *
+     * The columns are now read-only unconditionally, so the promise is **unfulfillable in both
+     * states** and keeping it would announce a false statement to a screen-reader user — the
+     * defect class this register keeps recording, in the one channel with no way to check. Start
+     * and Finish are now ordinary read-only columns, exactly like Float and Predecessors beside
+     * them, and ADR-0082's discriminator agrees: omit when the action does not apply to the
+     * object, shade with a reason only when it is shut by a state the reader can change.
+     *
+     * The gate's `!hasComputedSchedule` branch is deliberately KEPT (`cell-gate.ts:96`) and still
+     * has its own coverage — the `percentComplete` precedent one file over: carrying the answer in
+     * the model means landing the typed-date cell (`docs/specs/gantt-editing-gaps/` M3) is a
+     * column, not a re-decision about which permission it needs.
+     */
+    expect(cellUnder('Start')).not.toHaveAttribute('aria-readonly');
+    expect(cellUnder('Start')).not.toHaveAttribute('aria-describedby');
   });
 });
 

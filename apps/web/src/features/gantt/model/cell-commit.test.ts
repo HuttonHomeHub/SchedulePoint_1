@@ -2,6 +2,7 @@ import type { ActivitySummary } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { cellWriteFields, commitCell, describeCommitFailure } from './cell-commit';
+import { GANTT_EDITABLE_COLUMNS, type GanttCellKey } from './cell-edit';
 
 import { ApiFetchError } from '@/lib/api/client';
 
@@ -59,10 +60,60 @@ describe('cellWriteFields', () => {
 
   it('never PATCHes a computed date column', () => {
     // The engine owns `earlyStart`/`earlyFinish`. A client writing them would be asserting an answer
-    // rather than an input; the typed-date cell writes the CONSTRAINT a drag writes (M2-T3b). Until
-    // that lands, refusing beats sending something plausible to a field the server recomputes.
+    // rather than an input; the typed-date cell writes the CONSTRAINT a drag writes, which is
+    // `docs/specs/gantt-editing-gaps/` M3 and needs an ADR because it is a schedule semantic.
+    // Refusing beats sending something plausible to a field the server recomputes.
+    //
+    // **This assertion is true of the WRITE and says nothing about the CELL**, which is exactly how
+    // `docs/TECH_DEBT.md` #290 shipped: both keys were also listed in `GANTT_EDITABLE_COLUMNS`, so
+    // the cell opened, took a keystroke and refused every value — and this test passed throughout,
+    // pinning the dead end as correct. The case below is the one that can see it.
     expect(cellWriteFields('earlyStart', '2026-03-01', EIGHT_HOUR)).toBeNull();
     expect(cellWriteFields('earlyFinish', '2026-03-05', EIGHT_HOUR)).toBeNull();
+  });
+
+  /**
+   * A value each key accepts, if it accepts anything at all.
+   *
+   * **Total over `GanttCellKey`, and the compiler is the enforcement** — a key added without a
+   * sample fails to typecheck rather than being silently skipped by the loop below, which is how a
+   * roster test comes to pass over a roster it is not reading (ADR-0093).
+   */
+  const ACCEPTED_SAMPLE: Record<GanttCellKey, string> = {
+    name: 'Renamed',
+    duration: '3d',
+    percentComplete: '50',
+    earlyStart: '2026-03-01',
+    earlyFinish: '2026-03-05',
+  };
+
+  it('never lists a column as editable that the commit path refuses outright', () => {
+    /**
+     * **`docs/TECH_DEBT.md` #290, and it is the RELATIONSHIP that was wrong rather than either
+     * side.** `GANTT_EDITABLE_COLUMNS` decides whether a cell opens; `cellWriteFields` decides
+     * whether anything can be written. Both files were internally correct and defensible, and
+     * nothing compared them — so `earlyStart`/`earlyFinish` were listed as editable while the
+     * commit returned `null` for every input, and the grid answered "That value is not something
+     * this cell accepts." to a correctly-formatted date. Live since `web-v0.92.0`.
+     *
+     * Asserting "the two keys are absent" would fix today and not the class. This asks the
+     * question that was never asked: for every column the grid will OPEN, is there any value it
+     * takes? A key whose editor can only ever refuse is an entry point with no capability —
+     * ADR-0081's shape inverted — and the planner is told they typed it wrong.
+     */
+    const listed = Object.entries(GANTT_EDITABLE_COLUMNS).filter(
+      (entry): entry is [string, GanttCellKey] => entry[1] !== undefined,
+    );
+    // A pinned positive: an empty roster would satisfy the loop below perfectly, and a green run
+    // could not then tell "every editable column works" from "no column is editable".
+    expect(listed.length).toBeGreaterThan(0);
+
+    for (const [column, key] of listed) {
+      expect(
+        cellWriteFields(key, ACCEPTED_SAMPLE[key], EIGHT_HOUR),
+        `column "${column}" opens an editor but cellWriteFields("${key}") refuses every value`,
+      ).not.toBeNull();
+    }
   });
 });
 

@@ -238,14 +238,28 @@ export interface GanttGridEditing {
 /**
  * The grid column keys that map to an editable cell.
  *
- * `percentComplete` is deliberately present in {@link GanttCellKey} and absent here: the grid has
- * no Progress column yet. Carrying it in the model means adding that column later is a column, not
- * a re-decision about which permission a progress write needs — and the gate test already covers
- * it, so the answer cannot quietly change in between.
+ * **A column belongs here only if `cellWriteFields` can accept SOMETHING for it.** This list
+ * decides whether a cell opens; it does not decide whether anything can be written, and the two
+ * being decided in different files with nothing comparing them is `docs/TECH_DEBT.md` #290:
+ * `earlyStart`/`earlyFinish` were listed here while the commit path returned `null` for every
+ * input, so the cell opened, took a keystroke, and answered "That value is not something this cell
+ * accepts." to a correctly-formatted date — shown and spoken, live since `web-v0.92.0`. Both files
+ * were internally correct and defensible; only the relationship was wrong.
+ * `cell-commit.test.ts` now asserts it.
+ *
+ * Three keys are deliberately present in {@link GanttCellKey} and absent here, for two different
+ * reasons, and the difference matters to whoever adds one back:
+ *
+ * - `percentComplete` — the grid has no Progress column yet. Carrying it in the model means adding
+ *   that column later is a column, not a re-decision about which permission a progress write needs,
+ *   and the gate test already covers it so the answer cannot quietly change in between.
+ * - `earlyStart` / `earlyFinish` — the grid HAS these columns and they are **read-only**. The
+ *   engine owns them, so a typed date must write the CONSTRAINT a drag writes rather than assert an
+ *   answer the server recomputes. That is a schedule semantic needing an ADR, and it is
+ *   `docs/specs/gantt-editing-gaps/` M3. **Adding either key back without landing that write
+ *   re-creates #290**, which is why the assertion exists rather than a comment asking nicely.
  */
 export const GANTT_EDITABLE_COLUMNS: Partial<Record<string, GanttCellKey>> = {
   name: 'name',
   duration: 'duration',
-  earlyStart: 'earlyStart',
-  earlyFinish: 'earlyFinish',
 };

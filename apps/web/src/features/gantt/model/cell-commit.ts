@@ -88,8 +88,16 @@ export function cellWriteFields(
     case 'earlyFinish':
       // Q2. A typed date writes the CONSTRAINT a drag writes, never a computed column — the engine
       // owns `earlyStart`, and a client that PATCHed it would be asserting an answer rather than an
-      // input. Wired in M2-T3b with the constraint note; refused here until then rather than sent
-      // somewhere plausible, because a silently-wrong write is worse than a refusal.
+      // input. Refused here rather than sent somewhere plausible, because a silently-wrong write is
+      // worse than a refusal.
+      //
+      // **This deferred to a task that does not exist.** It said "wired in M2-T3b"; `M2-T3b` is in
+      // no approved spec, and the two keys were meanwhile listed in `GANTT_EDITABLE_COLUMNS`, so
+      // the cell opened and refused every value (`docs/TECH_DEBT.md` #290). The columns are now
+      // read-only and the real destination is `docs/specs/gantt-editing-gaps/` M3, which needs an
+      // ADR because it is a schedule semantic. This branch stays: it is still the right answer if
+      // the key is ever routed here again, and `cell-commit.test.ts` now refuses the combination
+      // rather than trusting a comment.
       return null;
   }
 }
