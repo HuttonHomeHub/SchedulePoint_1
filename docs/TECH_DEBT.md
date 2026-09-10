@@ -1093,13 +1093,34 @@ planCalendarId` — the same rule. Two server rules both claim to name "the acti
 > a rollback contract, and pinning it off here would take the degraded whole-days branch where the
 > factor is provably unused, characterising a path on which the defect cannot occur.
 >
-> **What is still owed, and it is the other half of the claim** (M0-T1): that the engine then spends
-> those 2,400 minutes at the driving resource's 1440/day. That needs a real database and a
-> recalculate. It is established by reading `schedule.service.ts:1277-1287` and `resolveDayFactors`
-> — and reading is exactly what got this row's severity wrong for a year, so it is recorded as owed
-> rather than counted as proved. **The seed catalogue cannot supply the fixture**: every calendar it
-> builds has `hoursPerDay: null` (`packages/seed/src/**`, four builders), so no seeded plan can
-> exhibit this divergence at all, and M0-T1 must construct one through the public API.
+> **The engine half is now EXECUTED too** (`apps/api/test/resource-dependent-day-factor.e2e-spec.ts`,
+> M0-T1) — against a real database, through the public REST API throughout, so no step of the
+> fixture reuses the assembly the defect lives in.
+>
+> **The measured result.** A plan on an 8 h calendar. Two activities, both written
+> `durationDays: 5`, both storing **2,400 minutes** — the driver is not consulted on the way in. One
+> is an ordinary `TASK`; the other is `RESOURCE_DEPENDENT` with a driving crane on a 24 h calendar.
+> After one recalculate:
+>
+> | activity                          | written | stored    | early finish   |
+> | --------------------------------- | ------- | --------- | -------------- |
+> | Task twin                         | `5d`    | 2,400 min | **2026-01-05** |
+> | Crane lift (`RESOURCE_DEPENDENT`) | `5d`    | 2,400 min | **2026-01-02** |
+>
+> A planner asked for five days of crane time and the programme reserves under two — while every
+> read-out still says `5d`, because `minutesToDays(2400, 480)` returns 5 on the way back out.
+>
+> **The second case is the discriminator, not decoration.** With the driving resource on a calendar
+> whose day length **matches**, the two finishes coincide. So the difference above is caused by the
+> day length and not by a driver that failed to resolve — which is a different defect that would
+> produce the same-looking failure, and without this case a green run could not tell them apart.
+>
+> **The seed catalogue could not supply the fixture**: every calendar it builds has
+> `hoursPerDay: null` (`packages/seed/src/{fixture,pairwise,scale,negative}`), so no seeded plan can
+> exhibit this divergence at all. `docs/TEST_PLAYBOOK.md`'s `plan:capability-resources` row watches
+> the right distinction on calendars of **equal** day length — precisely the case where it is
+> invisible. Both files are characterisation: when M2 lands, `2026-01-02` becomes `2026-01-05` and a
+> green run stops meaning "the defect is still here".
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 
