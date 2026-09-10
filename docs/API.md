@@ -1157,7 +1157,18 @@ boundary, because at that boundary an absent reading is stored rather than missi
   revision of another plan or org is **404, never 403**. `entered`/`left` are
   capped at 200 with the cap and the true totals in the payload. Shares the
   global 100/60 s budget — measured, not assumed: p95 58.7 ms at 2,000
-  activities (`docs/specs/revision-compare-delta/m1-f3-measurement.md`).
+  activities (`docs/specs/revision-compare-delta/m1-f3-measurement.md`). **That
+  figure is the delta-only request, which is not the one a client sends**: the
+  panel always asks for `changes` and `ghosts`, and until 2026-09-10 the harness
+  passed no `include` at all, so the classifier and the two geometry builders
+  had never been timed over HTTP (`docs/TECH_DEBT.md` #254). Both configurations
+  are now measured back to back in one process, and the client's clears the
+  250 ms bar with about a hundred milliseconds of headroom
+  (`docs/specs/revision-compare-delta/f3-include-measurement.md`). The **cost of
+  the projections is deliberately not published as a ratio**: repeated on one
+  machine it moved 1.04x–1.22x, a spread wider than the difference it measures,
+  so what travels is that they are a small fraction of a request the bar already
+  clears — not a coefficient.
 - The same route takes **three opt-in projections** (ADR-0126, ADR-0127), each
   absent unless asked for so a caller that does not opt in receives
   byte-identically the delta-only response.

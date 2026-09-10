@@ -39,11 +39,29 @@ therefore adds the projections and leaves the seed alone.
 ## The measurement
 
 Same harness, same seed, same 2,000 activities / 1,900 dependencies, same 15 runs after 3 warm-ups,
-same nearest-rank p95. **One difference: the request carries `?include=changes,ghosts`.**
+same nearest-rank p95. **One difference: the request carries `&include=changes&include=ghosts`.**
 
 Both configurations are measured **in the same process, back to back**, because the interesting
 quantity is the _difference_ between them and a figure taken on another night against another
 machine cannot supply it.
+
+**The repeated form, and this file said the comma form until it was read against the DTO.** The
+first version of this condition specified `?include=changes,ghosts` in three places. That request is
+**refused with 422**: `revision-compare-query.dto.ts` normalises through the shared `toArray` helper
+and validates `@IsIn(REVISION_INCLUDES, { each: true })`, so a comma-joined value is read as **one**
+member named `changes,ghosts` and fails — which the cross-plan sibling's own property description
+states in as many words (`cross-plan-revision-compare-query.dto.ts:69-70`). Had it been run as
+written, the harness would have thrown `compare 422` before taking a single sample, and the likely
+reading of that failure is "the route is broken", not "the condition is". Corrected here rather than
+edited quietly, because a condition committed before a measurement is worth exactly what its
+accuracy is worth.
+
+**The include set is the client's, established by reading it and not by choosing it.**
+`REVISION_COMPARE_INCLUDES` is `['changes', 'ghosts']`
+(`apps/web/src/features/revision-compare/api/use-revision-compare.ts:23`), both production call
+sites pass that constant, and the query builder sorts before joining — so the shipped request is
+`&include=changes&include=ghosts`, which is what the harness sends verbatim. `progress` is
+deliberately **not** measured, because the client deliberately does not ask for it.
 
 ## The conditions
 
@@ -52,7 +70,7 @@ the projections must be non-empty: at least one change row and at least one ghos
 `include` produced nothing would report the cost of asking for nothing and read as a pass. This is
 the ADR-0093 shape and the harness already applies it to the delta; it is extended, not invented.
 
-**C2 — the headline.** `p95` of the `?include=changes,ghosts` request **≤ 250 ms**, the bar
+**C2 — the headline.** `p95` of the `&include=changes&include=ghosts` request **≤ 250 ms**, the bar
 `docs/API.md` publishes.
 
 **C3 — the honest one, and it is the reason to run this at all.** Report the delta-only p95 and the
