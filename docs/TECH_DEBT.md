@@ -6471,3 +6471,52 @@ problem exactly. So the positions live in the PR comment, where they are evidenc
 and this row describes them in prose. **The gate is built for citations into code that ships**, and
 a citation into a version evaluated and rejected is outside what it can police — worth knowing
 before the next person tries to register one.
+
+### 291. `check:adr-coverage` cannot see CLAUDE.md, which is the register a reader actually opens
+
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
+
+**ADR-0132 was Accepted on 2026-09-09, filed in `docs/adr/`, listed in `docs/adr/README.md`, and
+cited by `docs/ROADMAP.md`, `docs/TECH_DEBT.md`, `docs/DESIGN_SYSTEM.md` and five spec directories
+— and appeared ZERO times in `CLAUDE.md` §16.** Nothing failed, because
+`scripts/check-adr-coverage.mjs` gates the ADR index and `ROADMAP.md` and never reads `CLAUDE.md`.
+
+This is the **ADR-0071 failure one document along**, and the third recorded instance of the class:
+ADR-0071 itself was cited by shipped code while absent from the register; ADR-0078 S1 found **seven**
+ADRs missing from `docs/adr/README.md` and repaired them by hand; ADR-0110 D6 then gated that index
+in both directions — and the gate it wrote covers the index a reader rarely opens and not the
+section they are briefed from. §16 is the register in the operating manual: it is what every human
+and every agent reads to learn what has been decided, and an ADR absent from it is invisible to the
+one audience that matters most.
+
+**The repair is done; the gate is not.** ADR-0132 now has its entry, and a full comparison of all
+**133** ADR files against §16 found **exactly one** missing, so the estate is clean today. It will
+not stay clean: the previous two instances of this class were also repaired by hand, and both
+recurred.
+
+**Found incidentally, which is the part worth keeping.** Nobody was auditing the register — an agent
+writing an unrelated spec (`docs/specs/delivery-gates/`) noticed the citation while reading
+`DESIGN_SYSTEM.md`. That is luck, and luck is what ADR-0058 replaces with a computed gate. The
+previous instance was found the same way (ADR-0078 S1, while filing a different ADR).
+
+**Why it is filed rather than fixed.** Widening `check:adr-coverage` to a third document is a
+**shared-gate change**, which CLAUDE.md §19.1 makes an ADR-0105 trigger: the spec and plan are
+mandatory whatever the size. Two things want settling in it rather than being decided by whoever
+edits the script:
+
+1. **What counts as covered.** `docs/adr/README.md` is an index — one line per ADR — and §16 is a
+   prose register whose entries run to paragraphs. A presence check on `ADR-NNNN` is trivially
+   satisfiable by a citation inside a _different_ ADR's entry, which several entries contain
+   (ADR-0132's own text cites ADR-0117, ADR-0088 and ADR-0034). So the assertion has to anchor on
+   the entry's own bullet form, and a naive `includes` would have passed over exactly the gap it was
+   written to catch — the scan-matching-prose trap this register has recorded four times.
+2. **Whether §16 should be generated rather than checked.** A derived section cannot drift at all,
+   but it would lose the thing that makes §16 useful: the entries are written, not templated, and
+   several are the best account of a decision that exists anywhere.
+
+Until then the check is one command, and it belongs in the reconciliation pass
+(`docs/RECONCILE.md`) rather than in anybody's memory:
+
+```
+python3 -c "import os,re; nums=sorted({m.group(1) for f in os.listdir('docs/adr') if (m:=re.match(r'(\d{4})-',f))}); c=open('CLAUDE.md').read(); print([n for n in nums if f'ADR-{n}' not in c])"
+```

@@ -4297,6 +4297,43 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   so C2 fired and the run was red for the wrong reason. **The CPM engine is not imported and no
   migration runs** — no product code changes at all.
 
+- **ADR-0132** _(Accepted; landed 2026-09-09)_ — An alert says whether it is an event or a
+  standing condition. `Alert` derived its ARIA live-region role from its `tone` and deliberately
+  `Omit`ted `role` so two call sites could not answer one question differently — **that argument is
+  right and is why this ADR does not overturn it.** What it left out is that `tone` answers _how
+  urgent_ and nothing answered a different question: **is this an event at all?** Six staff-console
+  alerts state **standing conditions of the installation** — no mail transport, retention sweeping
+  disabled, the sweeper overdue — and each renders only once its query settles, so the live region
+  and its content enter the DOM **together**, which is the unreliable case for a live region rather
+  than the silent one, and either way announces a persistent fact as though something had just
+  happened. `alert.tsx`'s own docblock says an Alert is "a message about what just happened", which
+  none of these is. So `purpose: 'event' | 'condition'` is **required with no default** (ADR-0117's
+  shape for ADR-0117's reason): `condition` renders **no `role` at all**, `event` renders exactly
+  today's tone-derived role, and `Omit<…, 'role'>` stands. A default of `'event'` would have touched
+  two files instead of twelve and left the next author reaching this defect by not knowing the
+  question existed — which is how the present ten arose. **D4 says plainly that no WCAG success
+  criterion is failed**, this register having overstated such a citation once (ADR-0082).
+  **Three things found by reading changed the shape of the decision, and all three corrected the
+  note that raised it**: the count was wrong (25 production call sites, not 33 — the extra eight
+  were `render()` calls inside `alert.test.tsx`); there are **six** offending sites and not four,
+  **two of them `role="alert"`**, an assertive region created by data arriving being the worse case
+  and absent from the brief entirely; and two of the six **duplicate a sentence the screen already
+  announces correctly** through `Panel`'s properly-mounted polite region, which is what makes "do
+  nothing" unarguable rather than merely unattractive — those two are also `aria-describedby`
+  targets of the retention table, so they are read on insertion and again on focus. A third
+  duplicate was then found and **recorded rather than acted on**: the ADR's accounting named two and
+  there are three, which changes no decision and would have been wrong to state as two. `NoticeStrip`
+  unification is **refused rather than deferred**, and three `DataTable empty={…}` sites are
+  classified while their _treatment_ is left to the empty-state question. No feature flag (ADR-0088
+  D1). **The CPM engine is not imported and no migration runs.**
+  **This entry was missing from the register until 2026-09-10 — the ADR-0071 failure, one document
+  along.** ADR-0132 was filed, Accepted, in `docs/adr/README.md`, and cited by `docs/ROADMAP.md`,
+  `docs/TECH_DEBT.md`, `docs/DESIGN_SYSTEM.md` and five spec directories, while being absent from
+  this list. `check:adr-coverage` gates the ADR index and `ROADMAP.md` and **structurally cannot see
+  this file**, so nothing failed. Found incidentally by an agent writing an unrelated spec, and
+  repaired in the same pass rather than stepped over; the gap is now `docs/TECH_DEBT.md` #291, and a
+  full comparison of all 133 ADR files against this section found **exactly one** missing.
+
 - **ADR-0133** _(Accepted; M0–M8 landed 2026-09-10)_ — A command surface declares its rows, and the
   pen leads the one it unlocks. Five epics had worked this band and each asked whether the row
   fitted; none asked what it was made of. **The measurement that opened this one is the whole
