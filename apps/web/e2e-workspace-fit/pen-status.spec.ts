@@ -112,11 +112,16 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
     const deck = page.getByRole('toolbar', { name: 'Plan commands' });
     await expect(deck.getByRole('button', { name: 'Stop editing' })).toBeVisible();
 
-    // **First**, not merely present: the whole point of the move is that the control which opens
-    // the authoring commands sits immediately before them. Read from the DOM order of the deck's
-    // roving stops, so it cannot be satisfied by a control that merely renders somewhere in the row.
+    // **First on the DO ROW**, not first in the deck — and the difference is what this assertion
+    // got wrong on its first run, which is the reason it is worth a comment. The deck declares two
+    // rows (M4): LOOK carries View and Find, DO carries Author and Plan. Querying the deck's first
+    // roving stop returns the LOOK row's, which is `today`, and says nothing about the pen at all.
+    //
+    // Scoped to `[data-deck-row="do"]`, the claim is the milestone's: the control that opens the
+    // authoring commands sits immediately before them. Read from DOM order, so it cannot be
+    // satisfied by a control that merely renders somewhere on the row.
     const firstStop = await deck
-      .locator('[data-toolbar-item]')
+      .locator('[data-deck-row="do"] [data-toolbar-item]')
       .first()
       .getAttribute('data-toolbar-item');
     expect(firstStop).toBe('pen');
