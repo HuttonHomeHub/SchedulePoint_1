@@ -6215,3 +6215,37 @@ D > [role='group'] + [role='group'] {
 Related: ADR-0109 D1 (the cards were inherited from the old Flask app with the wrap), ADR-0114 M6
 (the measurement that made the selection bar bare), ADR-0115 (the foot row joining the chrome scope
 — this is the same argument one row up), `toolbar-styles.ts` (`toolbarCardVariants`, both variants).
+
+### 286. No journey drives a peer take-over or an admin override
+
+**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the security review) · **Size:** M ·
+**Owner:** web
+
+ADR-0028's pen has five ways to change hands — a peer requests and waits out grace, a peer takes
+over after it, an Org Admin overrides immediately, the holder hands over, the holder keeps editing —
+and **not one of them is driven end to end by any Playwright suite in this repository**. Verified by
+searching every `e2e-*` directory: the three files that match `take over` or `override` match on a
+progress-tab phrase and two CSS comments. No suite opens two sessions against a real API with
+`PLAN_EDIT_LOCK_ENFORCED=true` and moves the lock between them.
+
+**It was found because a document claimed the opposite.** `docs/specs/workspace-console/feature-spec.md`
+§"No permission changes" ended _"and the journey proves that against a real API with
+`PLAN_EDIT_LOCK_ENFORCED=true`"_ — written from the shape of every other epic's enablement journey
+rather than from this one's. The security review went looking for the suite and reported it absent;
+the claim is corrected in place there rather than deleted, with the reasoning that survives it.
+
+**It is not an exposure and this row does not claim to be one.** Enforcement is server-side
+(`assertHoldsPen`, 423 `LockedError`) whatever the client renders, and three things independently
+bound what the relocated controls can do: `resolveLockView` is untouched, `EditLockControls`' `only`
+prop is a `filter` of the server-derived action list and can only narrow it, and
+`action-partition.structural.test.ts` pins the pen's two verbs and the seven hand-off actions as
+disjoint — so the deck's control has no path to `onOverride` or `onTakeOver` at all.
+
+**What the gap actually costs** is that the one interaction ADR-0028 exists for — the pen changing
+hands under a planner who did not ask — has never been exercised against a real lock lease by
+anything. Every unit case mocks the status; a mocked status cannot express grace expiry, a heartbeat
+lapsing, or two clients racing. That is the class of defect this repository's journeys keep catching
+and its unit suites keep missing.
+
+**Sized M, not S:** it needs a two-context Playwright fixture, two seeded members with different
+roles, and control over the grace window — none of which any existing harness provides.

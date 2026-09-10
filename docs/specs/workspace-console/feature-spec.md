@@ -386,8 +386,23 @@ shape:
   where it is needed. Pinned by a unit test.
 - The seven hand-off actions keep their existing server-capability gates
   (`canAcquire` / `canRequest` / `canTakeOver` / `canOverride`) — the client never re-derives lock
-  policy (ADR-0028). Moving where they render changes nothing about who may press them, and the
-  journey proves that against a real API with `PLAN_EDIT_LOCK_ENFORCED=true`.
+  policy (ADR-0028). Moving where they render changes nothing about who may press them.
+
+  **This sentence ended "and the journey proves that against a real API with
+  `PLAN_EDIT_LOCK_ENFORCED=true`", and no such journey exists** — corrected at M7, where the
+  security review went looking for it. There is no Playwright suite anywhere in the repository
+  that drives a peer take-over or an admin override end to end with two sessions; the phrase was
+  written from the shape of every other epic's enablement journey rather than from this one's.
+  It is a **pre-existing** coverage gap, not something this epic weakened, and it creates no
+  exposure, because enforcement is server-side whatever the client renders. What actually holds
+  the claim up is narrower and worth naming precisely: `resolveLockView` is untouched by this
+  epic, `EditLockControls`' new `only` prop is a `filter` of the server-derived list and can
+  therefore only narrow it, and `action-partition.structural.test.ts` pins the pen's two verbs and
+  the seven hand-off actions as disjoint — so the deck's control has no path to `onOverride` or
+  `onTakeOver` at all. Filed as `docs/TECH_DEBT.md` #286.
+
+  ADR-0076 Class 3: a decision-bearing claim asserted and never checked, in the section of the
+  spec whose whole subject is that a relocation must not silently remove a capability.
 
 ### Validation rules
 
