@@ -1,8 +1,7 @@
 # Implementation Plan: The plan-workspace console — declared rows, one state ladder, and the pen beside what it gates
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Draft, awaiting approval before
-  implementation.
-- **Status:** Draft — awaiting approval before implementation
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Approved 2026-09-10.
+- **Status:** Approved — by the product owner, 2026-09-10 (build M0–M8)
 - **Owner:** —
 
 > **This plan does not depend on CQ-1, CQ-2 or CQ-4.** Each is one task's worth of work either
@@ -975,7 +974,9 @@ runs. **Any of these failing withdraws the milestone that broke it.**
 | **F4** | The **coarse-pointer** sweep green at 1646 / 1024 / 834 / 390, all three surfaces                 | M1 onward                | `command-surface.spec.ts` coarse projection      |
 | **F5** | The **24 px** sweep green at 1920 / 1646 / 1440 / 1280, deck + object bar + Gantt grid            | M1 onward                | `command-surface.spec.ts`                        |
 | **F6** | The deck renders **exactly two** line boxes at 1920 / 1646 / 1440, **at most three** at 1280      | M1, tightened at M4      | M1-T4 / M4-T3                                    |
-| **F7** | The foot row ≤ **51 px** at 1646 and 1920                                                         | M6                       | M0 harness (M6-T2)                               |
+
+> **F6 at 1440, after M0** (`m0-measurement.md` §2): the LOOK set is 1452.1 px today and ≈ 1456 under C's 48 px column gap, against a 1424 px container — **32 px over**, and 8 px over even at an 8 px gap. "Exactly two at 1440" was written against a study figure M0 has now disproved; **M4 owns the remedy** (a tighter gap, a shorter label, or re-stating the 1440 clause as "at most three"), and until M4 lands the clause is read as "at most three at 1440 and 1280".
+> | **F7** | The foot row ≤ **51 px** at 1646 and 1920 | M6 | M0 harness (M6-T2) |
 
 ## Risks & assumptions (rollup)
 

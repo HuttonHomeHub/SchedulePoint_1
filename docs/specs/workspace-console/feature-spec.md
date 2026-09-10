@@ -1,6 +1,6 @@
 # Feature Spec: The plan-workspace console — declared rows, one state ladder, and the pen beside what it gates
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner, 2026-09-10 (build M0–M8; CQ-1 drop the caption; CQ-4 foot row; CQ-2/CQ-3 take the defaults)
 - **Author(s):** feature-analyst, from the `ui-architect` design study
   (`scratchpad/toolbar-design/directions.md`, 2026-09-10) and the product owner's choice of
   **Direction C — "The console"** in full, plus shared repairs S1–S7
@@ -79,7 +79,10 @@ The rule is ADR-0076's: a claim that decides something names what was run or rea
    it. Read: `OrgSwitcher.tsx:42-51`, `globals.css:1075-1088`. There is no base `select` rule and
    **no `color-scheme` declaration anywhere in `globals.css`** (grepped). So either the shipped
    screenshot disagrees with the code or a user-agent rule is winning, and **which it is has not
-   been established** — that is **M0-T5**. The repair, whichever it is, is to give the control the
+   been established** — that is **M0-T5**. **Answered (`m0-measurement.md` §7): in Chromium the
+   control paints navy — `.bg-background` wins the cascade over four user-agent `select` rules and
+   the preflight — so the "live defect" is not reproduced on this platform, and what the product
+   owner's Windows screenshot shows is unexplained here.** The repair, whichever it is, is to give the control the
    chrome's **field** vocabulary (`bg-field text-field-foreground border-input`) rather than the
    surface's, which is what makes S4 reach it at all.
 
@@ -230,6 +233,7 @@ It has to ship with M1, because M1 changes every group's width.
   three bands is the whole of S7, and keeping one caption in the product would make it the only
   one. If it stays, `TOOLBAR_CAPTION` keeps a single consumer and M6 shrinks by one file. Cheap
   either way; the plan does not depend on it.
+  **Answered 2026-09-10 (product owner): drop it — C in full.**
 
 - **CQ-2 — the focus ring on an **armed** control.** Now that armed is a **2 px inset amber ring**
   (§4.2), it collides with the focus ring, and the collision is exact rather than approximate:
@@ -261,6 +265,8 @@ It has to ship with M1, because M1 changes every group's width.
   in that row that cannot give way. **M0-T4 measures both** before M5 commits. The in-place fallback
   (no outlet registered → renders where `CompactPenStatus` sits today) is unchanged either way and
   is what keeps every existing unit suite passing.
+  **Answered 2026-09-10 (product owner): the default — the foot row, beside the pen sentence;
+  M0-T4 still measures both homes so the number is on record.**
 
 **Non-critical — defaults stated, work proceeds.**
 
