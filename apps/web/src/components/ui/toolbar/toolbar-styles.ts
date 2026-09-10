@@ -13,7 +13,9 @@ import { cva } from 'class-variance-authority';
  * - `tone: 'control'` — the interactive default (buttons, popover/overflow triggers): medium weight,
  *   foreground text, hover wash when idle.
  * - `tone: 'info'` — a non-interactive read-out chip (Project-finish): muted, no hover.
- * - `active` — pressed/open (`aria-pressed` / an open disclosure): the accent wash.
+ * - `state` — one of `rest` / `open` / `selected` / `armed`. It replaced a boolean `active` at
+ *   the console epic's M3, because that boolean painted ONE 1.34:1 wash for three different facts;
+ *   see the variant's own docblock for the ladder and why each state looks as it does.
  * - `disabled` — dimmed + inert cursor (the control stays focusable via `aria-disabled`, so this is
  *   presentation only).
  */
@@ -200,13 +202,90 @@ export const toolbarControlVariants = cva(
         control: 'text-foreground font-medium',
         info: 'text-muted-foreground',
       },
-      active: { true: 'bg-accent text-accent-foreground', false: '' },
+      /**
+       * **The state ladder** (console epic M3, `docs/specs/workspace-console/`). It replaces a
+       * boolean `active`, and replacing rather than extending it is the instrument: the compiler
+       * finds all ten call sites, which a grep would not.
+       *
+       * The boolean painted one wash — `bg-accent`, **1.34:1** against the band — for three
+       * different facts, so an armed Add tool looked like a hovered button and an open `View ▾`
+       * looked like both. That is the WCAG 2.2 §1.4.11 exposure the epic was opened on, and the
+       * defect ADR-0064 exists because of.
+       *
+       * | state | what it means | fill | second channel |
+       * | --- | --- | --- | --- |
+       * | `rest` | nothing is true of it | none (hover wash on pointer) | — |
+       * | `open` | its panel or menu is showing | `--secondary`, 3.15:1 | `aria-expanded`, and the panel itself |
+       * | `selected` | it is the chosen one of alternatives, or its lens is on | `--secondary`, 3.15:1 | a 2 px `--background` underline, 3.15:1 on that fill |
+       * | `armed` | it is a MODAL TOOL and the next canvas gesture belongs to it | none — amber ink, 7.91:1 | a 2 px `--primary` underline |
+       *
+       * **Armed keeps the band's fill and takes an amber outline**, which is the product owner's
+       * choice from two rendered studies rather than a default. An amber-FILLED armed tool sat
+       * beside the pen (`Stop editing`, itself amber-filled) at the head of the same row: two
+       * identical amber slabs, so "the pen is held" and "a tool is armed" became one picture — the
+       * exact confusion this ladder exists to remove.
+       *
+       * **`selected` COMPOSES with `open` rather than being outranked by it, and that is a
+       * correction.** The first version of this ladder made `open` win, justified by the caret
+       * rotating to distinguish them — **and no caret in this product rotates**; the component
+       * review found the claim fabricated and it was load-bearing for the rule. Since `selected`'s
+       * class is `open`'s plus an underline, the honest rule is the simple one: **a control's own
+       * state outranks the transient fact that its panel is showing**, in both primitives. A
+       * filtered `Filter ▾` therefore keeps its underline while open, which is what a planner needs
+       * — the alternative silently withdrew the one mark saying a filter was applied at exactly the
+       * moment they opened the menu to check.
+       *
+       * **`selected` and `armed` are declared on the item (`activeKind`), never inferred from
+       * ARIA.** `ToolbarPopover` reports `aria-pressed` for an open disclosure, so a ladder driven
+       * from that attribute would paint an open menu as an armed tool. `toolbar-registry.ts` says
+       * which four items are modal, and a structural test pins the set.
+       *
+       * **Armed carries NO ring, and that is CQ-2 resolved by measurement rather than by the
+       * plan's default.** It was drafted as a 2 px inset amber ring — and `--chrome-ring` and
+       * `--chrome-primary` are the identical string, while this CVA already draws focus as
+       * `ring-2 ring-inset`, so an armed control that is also keyboard-focused (the ordinary case:
+       * you arm it with Enter and focus stays there) would show ONE amber inset ring for two
+       * different facts. The plan's remedy was to move focus outside the box (`ring-offset-2`).
+       * Measured in a browser after M1: the deck's smallest gap between two controls on a row is
+       * **4 px**, which a 2 px offset plus a 2 px ring consumes exactly — the offset ring touches
+       * its neighbour. So the ring is dropped instead, which is the plan's own stated fallback, and
+       * the shared focus treatment is left untouched.
+       *
+       * Nothing is lost: armed keeps the band's fill, so **both** of its remaining channels are on
+       * the band at 7.91:1 — amber ink (asserted as a TEXT pair, 4.5:1) and a 2 px amber underline.
+       * 1.4.1 is satisfied by the underline, which is a shape and not a hue.
+       *
+       * **`font-semibold` was drafted here too and removed for a layout reason**: weight changes a
+       * control's WIDTH, so arming a tool would widen it, and this deck wraps — a row could break a
+       * line the moment a planner armed Add and re-join it when they disarmed, moving every command
+       * beside it under their cursor mid-interaction. Neither surviving channel touches layout.
+       *
+       * `selected`'s underline is `inset` for a different measured reason: an outset mark was
+       * rejected because the clearance below the deck's last control row is 6 px, so a 2 px amber
+       * underline there would sit 4 px above the band's own 3 px amber rule.
+       */
+      state: {
+        rest: '',
+        open: 'bg-secondary text-secondary-foreground',
+        selected:
+          'bg-secondary text-secondary-foreground shadow-[inset_0_-2px_0_0_var(--background)]',
+        armed: 'text-primary shadow-[inset_0_-2px_0_0_var(--primary)]',
+      },
       disabled: { true: 'cursor-default opacity-50', false: '' },
     },
     compoundVariants: [
-      // Idle interactive control gets the hover wash; an active or disabled one does not.
-      { tone: 'control', active: false, disabled: false, class: 'hover:bg-accent/60' },
+      // Idle interactive control gets the hover wash; a control in any other state, or a disabled
+      // one, does not — a hover wash over a state fill would say two things at once, and hover is
+      // the one state a reader never has to FIND (their pointer is already on it).
+      //
+      // **`--muted` rather than the previous `bg-accent/60`, and the change is deliberate.** The
+      // two are 0.018 apart in lightness (1.25:1 and 1.34:1 against the band), so the swap is not
+      // visible — what it buys is that `--accent` stops being spent on hover at all, and hover
+      // becomes a token this file's new state-ladder block reports by name. An alpha over a state
+      // fill would also composite differently per state, which is how one wash came to mean three
+      // things in the first place.
+      { tone: 'control', state: 'rest', disabled: false, class: 'hover:bg-muted' },
     ],
-    defaultVariants: { tone: 'control', active: false, disabled: false },
+    defaultVariants: { tone: 'control', state: 'rest', disabled: false },
   },
 );

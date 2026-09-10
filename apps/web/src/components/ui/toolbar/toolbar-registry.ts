@@ -213,6 +213,12 @@ export interface ToolbarItemRenderApi extends ToolbarLayoutEnv {
   /** Resolved active/pressed state (`isActive`). */
   active: boolean;
   /**
+   * The resolved {@link ToolbarItem.activeKind}. A `render` item paints its own control, so it has
+   * to be handed the same fact a plain command gets, or the ladder holds on eight of the deck's
+   * controls and not the other fifteen — which is this repository's most-recorded defect shape.
+   */
+  activeKind: 'armed' | 'selected';
+  /**
    * Spread these onto the item's single focusable control so it joins the toolbar's roving-tabindex
    * model (APG). Carries the managed `tabIndex`, the marker attributes the toolbar queries, and the
    * focus sync. An interactive `render` item MUST spread this on exactly one focusable element. For a
@@ -343,6 +349,25 @@ export interface ToolbarItem<Ctx> {
   /** Toggle/segment pressed state → `aria-pressed`. Absent ⇒ not a toggle. */
   isActive?: (ctx: Ctx) => boolean;
   /**
+   * **Which KIND of active this is** — and it is declared here rather than inferred, which is the
+   * whole point of the field (console epic M3-T2).
+   *
+   * `'selected'` (the default) is *the chosen one among alternatives, or a lens that is on*: a mode
+   * segment, `Filter ▾` with a filter applied, `Notes` with the panel open. `'armed'` is narrower
+   * and means *this is a MODAL TOOL and the next canvas gesture belongs to it* — Add, Link, Select,
+   * Isolate. They are different facts with different consequences, and until M3 they rendered as
+   * the same 1.34:1 wash, which is the defect ADR-0064 was opened on.
+   *
+   * **Inferring it from ARIA would be wrong, and specifically wrong.** `ToolbarPopover` sets
+   * `aria-pressed` when its panel is open (`ToolbarPopover.tsx`), so a ladder driven from that
+   * attribute paints an open `View ▾` as an armed tool. The set of modal tools is a fact about the
+   * product, so the product states it, and `state-ladder.structural.test.ts` pins the four.
+   *
+   * Absent ⇒ `'selected'`, because a toggle is the common case and a modal tool is the exception
+   * that has to say so.
+   */
+  activeKind?: 'armed' | 'selected';
+  /**
    * Whether the command's work is currently in flight → `aria-busy` on the control. Absent ⇒ never
    * busy. Deliberately separate from {@link isEnabled}: a busy command is usually also disabled, but
    * "off because you can't do this" and "off because it is happening right now" are different facts,
@@ -408,6 +433,8 @@ export interface ResolvedToolbarItem<Ctx> {
   item: ToolbarItem<Ctx>;
   enabled: boolean;
   active: boolean;
+  /** The resolved {@link ToolbarItem.activeKind} — `'selected'` where the item declares none. */
+  activeKind: 'armed' | 'selected';
   disabledReason: string | undefined;
   /** The resolved {@link ToolbarItem.srDescription}, or `undefined`. */
   srDescription: string | undefined;
@@ -587,6 +614,7 @@ export function resolveItems<Ctx>(
         item,
         enabled,
         active: item.isActive?.(ctx) ?? false,
+        activeKind: item.activeKind ?? 'selected',
         disabledReason: enabled ? undefined : item.disabledReason?.(ctx),
         srDescription: item.srDescription?.(ctx),
         // A function icon is called exactly once here, not per consumer: the bar and the `⋯`

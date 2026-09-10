@@ -388,6 +388,82 @@ test.describe('The plan command surface', () => {
     }
   });
 
+  /**
+   * **Four states, four pictures** (console epic M3-T5). Arms a modal tool, opens a disclosure, and
+   * asserts the three treatments are pairwise distinct **as painted**.
+   *
+   * A unit test cannot ask this and it is worth saying why rather than leaving the duplication to
+   * look like an oversight: jsdom compiles no Tailwind, so `getComputedStyle` there reads an empty
+   * string and an assertion about a state's appearance passes against every value including the one
+   * the defect had. The unit tier can pin which CLASS a control takes; only a browser can say the
+   * classes resolve to different paint.
+   *
+   * **The defect this replaces**: `toolbarControlVariants` had a boolean `active` painting one wash
+   * — `bg-accent`, 1.34:1 against the band — for hover, for open and for armed alike, so an armed
+   * Add tool looked like a hovered button. WCAG 2.2 §1.4.11, and the confusion ADR-0064 was opened
+   * on. Verified red by forcing every state back to one background, which is exactly what the
+   * boolean did.
+   *
+   * It reads `color` and `box-shadow` as well as `background-color`, because armed deliberately
+   * keeps the band's fill: its channels are amber ink and a 2 px amber underline, both 7.91:1 on
+   * the band. An assertion that compared only backgrounds would call armed and rest identical and
+   * be right about the wrong property.
+   */
+  test('an armed tool, an open disclosure and a resting command paint differently', async () => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    await page.waitForTimeout(300);
+
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    const paintOf = (itemId: string) =>
+      page.evaluate((id) => {
+        const el = document.querySelector(
+          `[role="toolbar"][aria-label="Plan commands"] [data-toolbar-item="${id}"]`,
+        );
+        if (!el) throw new Error(`no control with data-toolbar-item="${id}"`);
+        const cs = getComputedStyle(el);
+        return `${cs.backgroundColor} | ${cs.color} | ${cs.boxShadow}`;
+      }, itemId);
+
+    // **Derived, not named.** The first version of this read `recalculate`, which is not in the
+    // deck at all — ADR-0109 D3 moved it to the status bar, beside the condition it answers. A
+    // hard-coded resting id is a gate that goes stale the moment the registry moves, so the
+    // control is chosen as the first one that is neither of the two this case manipulates.
+    const restId = await page.evaluate(() => {
+      const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+      const ids = [...(deck?.querySelectorAll('[data-toolbar-item]') ?? [])]
+        .map((el) => el.getAttribute('data-toolbar-item'))
+        .filter((id): id is string => id !== null && id !== 'add-activity' && id !== 'view');
+      if (ids.length === 0) throw new Error('the deck rendered no other commands to compare with');
+      return ids[0]!;
+    });
+    const rest = await paintOf(restId);
+
+    // Arm Add. Its primary is the split button's left half; clicking it arms the tool.
+    await deck.locator('[data-toolbar-item="add-activity"]').click();
+    await page.waitForTimeout(300);
+    const armed = await paintOf('add-activity');
+
+    // Escape returns to `select` (ADR-0064's arm/disarm contract), so the tool is disarmed before
+    // the disclosure is opened and the two states cannot be read from one another's frame.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    const disarmed = await paintOf('add-activity');
+
+    await deck.getByRole('button', { name: /^View/ }).click();
+    await page.waitForTimeout(300);
+    const open = await paintOf('view');
+    await page.keyboard.press('Escape');
+
+    // The pinned positive: if arming did nothing, `armed` would equal `disarmed` and every
+    // "differs from" assertion below would still hold against a deck where no state paints at all.
+    expect(armed, 'arming the Add tool changed nothing it paints').not.toBe(disarmed);
+
+    expect(armed, `armed ${armed} vs rest ${rest}`).not.toBe(rest);
+    expect(open, `open ${open} vs rest ${rest}`).not.toBe(rest);
+    expect(open, `open ${open} vs armed ${armed}`).not.toBe(armed);
+  });
+
   test('every command clears 24 × 24 and a pointer can reach it, at every width', async () => {
     test.setTimeout(240_000);
     for (const viewport of WIDTHS) {

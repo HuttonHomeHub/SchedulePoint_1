@@ -278,6 +278,7 @@ export function Deck<Ctx>({
                           disabled: !r.enabled,
                           disabledReason: r.disabledReason,
                           active: r.active,
+                          activeKind: r.activeKind,
                           layout: 'comfortable',
                           itemProps: r.item.presentational
                             ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
@@ -299,6 +300,7 @@ export function Deck<Ctx>({
                         {...(r.busy ? { busy: true } : {})}
                         showLabel={!ICON_ONLY.has(r.item.id)}
                         {...(r.item.isActive ? { pressed: r.active } : {})}
+                        activeKind={r.activeKind}
                         disabled={!r.enabled}
                         disabledReason={r.disabledReason}
                         srDescription={r.srDescription}

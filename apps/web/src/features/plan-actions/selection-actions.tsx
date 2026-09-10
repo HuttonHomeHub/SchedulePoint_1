@@ -274,7 +274,17 @@ function IsolateControl({
             }
           }}
           className={cn(
-            toolbarControlVariants({ active: ctx.isolateActive, disabled }),
+            // Isolate is the fourth MODAL tool (console epic M3-T2): while it is on, the canvas
+            // shows a subset and the planner's next reading of the diagram is governed by it. Its
+            // caret's menu being open is a different fact and takes the disclosure state below.
+            // `api.activeKind`, not the literal `'armed'`: the registry declares which tools are
+            // modal, and hard-coding it here makes that declaration decorative — the "plumbed to
+            // nowhere" hazard the same diff documents fixing in this control's three siblings, and
+            // which the accessibility review found still live on the fourth.
+            toolbarControlVariants({
+              state: ctx.isolateActive ? api.activeKind : 'rest',
+              disabled,
+            }),
             'rounded-r-none pr-1',
           )}
         >
@@ -304,12 +314,12 @@ function IsolateControl({
           // pointer can see, it can also reach"). Corrected rather than deleted, because the
           // constant is still what holds the floor and the gate is what proves it.
           className={cn(
-            toolbarControlVariants({ active: open, disabled }),
+            toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }),
             'rounded-l-none px-1',
             TOOLBAR_CARET_TARGET,
           )}
         >
-          <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+          <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         </button>
       </span>
       <Menu
@@ -859,6 +869,10 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       ? [
           {
             id: 'isolate-logic',
+            // The fourth MODAL tool (console epic M3-T2): while it is on, the canvas shows a
+            // subset and the diagram a planner reads is governed by it. `IsolateControl` paints
+            // its own armed state, and this declaration is what makes the set readable.
+            activeKind: 'armed' as const,
             group: 'find',
             tier: 1,
             showLabel: 'always',

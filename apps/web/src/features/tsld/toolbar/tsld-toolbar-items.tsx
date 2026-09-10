@@ -564,6 +564,13 @@ function GoToTodayControl({
   return (
     <>
       <ToolbarSplitButton
+        // Read from the RESOLVED item rather than left to this component's default: the component
+        // review found all three `render` items ignoring `api.activeKind`, so changing an item's
+        // declaration in the registry had no visual effect at all — the field's whole stated
+        // purpose, plumbed to nowhere, with the paint correct only because two hand-kept copies
+        // happened to agree. Passed on every split button including the one that never presses, so
+        // the rule a later author copies is the one that is right.
+        activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={primaryRef}
         caretRef={caretRef}
@@ -723,6 +730,13 @@ function AddActivityControl({
   return (
     <>
       <ToolbarSplitButton
+        // Read from the RESOLVED item rather than left to this component's default: the component
+        // review found all three `render` items ignoring `api.activeKind`, so changing an item's
+        // declaration in the registry had no visual effect at all — the field's whole stated
+        // purpose, plumbed to nowhere, with the paint correct only because two hand-kept copies
+        // happened to agree. Passed on every split button including the one that never presses, so
+        // the rule a later author copies is the one that is right.
+        activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={mainButtonRef}
         caretRef={triggerRef}
@@ -889,6 +903,13 @@ function LinkControl({
        * pair sits in a `div` that carries the control chrome so the two regions read as one control.
        */}
       <ToolbarSplitButton
+        // Read from the RESOLVED item rather than left to this component's default: the component
+        // review found all three `render` items ignoring `api.activeKind`, so changing an item's
+        // declaration in the registry had no visual effect at all — the field's whole stated
+        // purpose, plumbed to nowhere, with the paint correct only because two hand-kept copies
+        // happened to agree. Passed on every split button including the one that never presses, so
+        // the rule a later author copies is the one that is right.
+        activeKind={api.activeKind}
         itemProps={api.itemProps}
         primaryRef={mainButtonRef}
         caretRef={triggerRef}
@@ -1353,11 +1374,11 @@ function PlanAnalysisControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ active: open, disabled }))}
+        className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <ChartArea aria-hidden="true" className="size-4" />
         {compact ? null : <span className="truncate">{ANALYSIS_LABEL}</span>}
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
             {api.disabledReason}
@@ -1439,6 +1460,7 @@ function FilterMenuControl({
       // Reflect an engaged attribute filter on the trigger even once the popover closes (U1 — mirrors
       // ColourByControl's `api.active || open`), and surface the disabled reason when shaded (A2).
       active={api.active}
+      activeKind={api.activeKind}
       {...(api.disabled ? { disabled: true } : {})}
       // `disabledReason`, not `title` (ADR-0090 M5 accessibility gate). `Filter` is
       // `isEnabled: ctx.hasDiagram`, so every empty or uncomputed plan reaches this state, and a
@@ -1536,11 +1558,11 @@ function ExportMenuControl({
         onClick={() => {
           if (!disabled) toggle();
         }}
-        className={cn(toolbarControlVariants({ active: open, disabled }))}
+        className={cn(toolbarControlVariants({ state: open ? 'open' : 'rest', disabled }))}
       >
         <FileDown aria-hidden="true" className="size-4" />
         {compact ? null : <span className="truncate">{SHARE_EXPORT_LABEL}</span>}
-        <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
+        <ChevronDown aria-hidden="true" className="text-muted-foreground size-3.5" />
         {disabled && api.disabledReason ? (
           <span id={reasonId} className="sr-only">
             {api.disabledReason}
@@ -2695,6 +2717,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
        * shows its progress on this trigger's label.
        */
       isActive: (ctx) => ctx.isAddingActivity || ctx.isLoeSpanning,
+      // A MODAL tool: while it is armed the next canvas click draws (console epic M3-T2). Declared
+      // rather than inferred — `state-ladder.structural.test.ts` reads this set, and the split
+      // button's own default would satisfy the paint while leaving the set unstated.
+      activeKind: 'armed',
       ...(CANVAS_AUTHORING_ENABLED
         ? { render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} /> }
         : { onActivate: (ctx) => ctx.toggleAddActivity() }),
@@ -2715,6 +2741,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // See `add-activity` above: a `render` item that publishes only its own `pressed` leaves the
       // registry — and therefore `Deck`'s no-fold-while-armed guard — blind to an armed tool.
       isActive: (ctx) => ctx.isLinking,
+      activeKind: 'armed',
       render: (ctx, api) => <LinkControl ctx={ctx} api={api} />,
     },
     /*
@@ -2747,6 +2774,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
             description: 'Marquee-select activities on the canvas',
             icon: <SquareDashedMousePointer className="size-4" />,
             isActive: (ctx: TsldToolbarContext) => ctx.isMarqueeSelecting,
+            activeKind: 'armed' as const,
             onActivate: (ctx: TsldToolbarContext) => ctx.toggleMarqueeMode(),
           },
         ]
