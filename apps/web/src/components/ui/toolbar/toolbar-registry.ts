@@ -358,13 +358,31 @@ export interface ToolbarItem<Ctx> {
    * Isolate. They are different facts with different consequences, and until M3 they rendered as
    * the same 1.34:1 wash, which is the defect ADR-0064 was opened on.
    *
-   * **Inferring it from ARIA would be wrong, and specifically wrong.** `ToolbarPopover` sets
-   * `aria-pressed` when its panel is open (`ToolbarPopover.tsx`), so a ladder driven from that
-   * attribute paints an open `View ▾` as an armed tool. The set of modal tools is a fact about the
-   * product, so the product states it, and `state-ladder.structural.test.ts` pins the four.
+   * `'primary'` is the third and the loudest: *this surface's one highest-emphasis control* — a
+   * filled slab rather than ink or a notch. In the plan workspace that is the ADR-0028 pen, the
+   * precondition for the eleven authoring commands beside it, and `state-ladder.structural.test.ts`
+   * says so by name. **The DESIGN-SYSTEM rule is the cardinality, not the identity**: at most one
+   * per rendered surface, enforced below by {@link defineToolbar}. Which control earns it is a
+   * product decision that belongs to the product's own registry, and this field carries no opinion
+   * about the pen.
    *
-   * Absent ⇒ `'selected'`, because a toggle is the common case and a modal tool is the exception
-   * that has to say so.
+   * That split is the M7 architecture review's, and its argument is what makes it a rule rather
+   * than a preference: a name list in one feature's test cannot see a control registered in a
+   * third registry, so it would let a second amber slab appear with nothing red — while an author
+   * who DID register in one of the two arrives at a list that prose forbids them to append to and
+   * has no good move. A cardinality the primitive enforces covers both.
+   *
+   * **Inferring the kind from ARIA would be wrong**, and the durable reason is not the one this
+   * docblock used to give. It cited `ToolbarPopover` reporting `aria-pressed` for a merely-open
+   * panel — which M3-T4 then removed, so the example is now history rather than evidence (the M7
+   * architecture review found the stale present tense). The reason that survives is stronger:
+   * **ARIA has no vocabulary for this distinction at all.** `aria-pressed="true"` is correct markup
+   * for "this lens is on" and for "this modal tool holds the next canvas gesture" alike, so the DOM
+   * structurally cannot carry the discriminator whoever sets it. The set of modal tools is a fact
+   * about the product, so the product states it.
+   *
+   * Absent ⇒ `'selected'`, because a toggle is the common case and the other two are exceptions
+   * that have to say so.
    */
   activeKind?: 'armed' | 'selected' | 'primary';
   /**
@@ -462,6 +480,10 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       seen.add(item.id);
       if (!item.label)
         throw new Error(`ToolbarItem "${item.id}": label is required (accessible name)`);
+      if (item.activeKind === 'primary' && item.isActive === undefined)
+        throw new Error(
+          `ToolbarItem "${item.id}": activeKind "primary" needs isActive, or it declares a picture it can never take`,
+        );
       const hasActivate = typeof item.onActivate === 'function';
       const hasRender = typeof item.render === 'function';
       if (hasActivate === hasRender) {
@@ -473,6 +495,31 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       }
     }
   }
+  // **At most ONE `primary` per registry, because "the loudest control" is a superlative** (console
+  // epic M7, the architecture review). Two of them is not a louder surface, it is a surface with no
+  // loudest control and a reader with nowhere to look first.
+  //
+  // This is the DESIGN-SYSTEM half of the rule and it is deliberately the only half that lives
+  // here: the primitive enforces the cardinality, and which control earns it stays a product fact
+  // in the product's own registry (`state-ladder.structural.test.ts` names the pen).
+  //
+  // It exists because the first version of that reservation was a name list in one feature's test,
+  // which is unenforceable in the direction that matters: a control registered in a THIRD registry
+  // is invisible to it, so a second amber slab could appear with nothing red — while an author who
+  // did register in one of the two arrived at a list prose forbade them to append to, with no good
+  // move left. A cardinality covers both, in development, at the point of declaration.
+  //
+  // A registry is one rendered surface here (`defineToolbar` is called once per surface), which is
+  // what makes "per registry" and "per rendered surface" the same statement today. If that ever
+  // stops being true the check moves to the renderer; the rule does not change.
+  const primaries = items.filter((item) => item.activeKind === 'primary').map((item) => item.id);
+  if (primaries.length > 1) {
+    throw new Error(
+      `defineToolbar: ${primaries.length} items declare activeKind "primary" (${primaries.join(', ')}) — ` +
+        'a surface has at most one highest-emphasis control.',
+    );
+  }
+
   // **A segment's members must share a `tier`** (ADR-0090 M5, component gate).
   //
   // Written for demotion: a `tier: 3` member sat in the static overflow while its partner stayed on

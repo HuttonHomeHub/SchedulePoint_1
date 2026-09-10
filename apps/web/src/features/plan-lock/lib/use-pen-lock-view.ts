@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PlanPen } from '../api/use-plan-edit-lock';
 import type { EditLockControlsProps } from '../components/EditLockControls';
@@ -45,10 +45,34 @@ export function usePenLockView(
   const containerRef = useRef<HTMLDivElement>(null);
   const justActedRef = useRef(false);
 
+  // **Paused while the tab is hidden**, which `render/use-now.ts` has done since ADR-0056 and this
+  // timer did not: a backgrounded plan re-rendered the workspace 3,600 times an hour to advance a
+  // relative-time phrase nobody was looking at. One correct pattern applied to a control and not
+  // its neighbour, found by the M7 architecture review. Re-syncs on becoming visible rather than
+  // waiting up to a second, so the aside is never briefly stale on return.
   useEffect(() => {
     if (now !== undefined || !pen.penManaged) return;
-    const id = setInterval(() => setTick(Date.now()), 1000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | undefined;
+    const start = () => {
+      id = setInterval(() => setTick(Date.now()), 1000);
+    };
+    const stop = () => {
+      if (id !== undefined) clearInterval(id);
+      id = undefined;
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) stop();
+      else {
+        setTick(Date.now());
+        start();
+      }
+    };
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [now, pen.penManaged]);
 
   const effectiveNow = now ?? tick;
@@ -117,5 +141,36 @@ export function usePenLockView(
     onDismiss: act(pen.dismissLost),
   };
 
-  return { penManaged: pen.penManaged, view, containerRef, controlsProps };
+  // **Referentially stable while nothing a reader can see has changed** (console epic M7).
+  //
+  // This returned a fresh object literal on every render, which was harmless while the hook was
+  // called in a leaf: `CompactPenStatus` re-rendered once a second and nothing else did. M5 moved
+  // the call to the top of `ToolbarPlanWorkspace` and threaded the result through the TSLD toolbar
+  // context — so the tick below began invalidating that context's `useMemo` every second, and with
+  // it `resolveItems` over every registered command, both toolbars, and `TsldPanel`, which is the
+  // canvas host and is not itself memoised.
+  //
+  // **Measured rather than argued, by two reviewers independently**: a render-count probe at the
+  // shipped code against the pre-epic baseline showed `TsldPanel` going 1 → 6 renders across five
+  // ticks where it had gone 1 → 2 and not scaled with the tick at all. The context memo's own
+  // docblock names this hazard in as many words — "an unrelated parent re-render … doesn't hand
+  // `<Toolbar>` a fresh context and churn its resolve → partition → measure cycle" — and M5
+  // defeated it unconditionally.
+  //
+  // `signature` is already the hook's own answer to "has anything about the view changed", and it
+  // is what the focus effect keys on. Reusing it here is not a convenience: it means the identity
+  // and the effect cannot disagree about what counts as a change.
+  //
+  // The tick still fires; it just stops producing a new object when the second it counted did not
+  // move any date the reader sees. What still moves per tick is the `aria-hidden` aside — which is
+  // inside `view` and therefore inside `signature`'s subject only when its text changes, so a
+  // countdown crossing a whole minute re-renders and the fifty-nine seconds between do not.
+  const signatureWithAside = `${signature}|${view?.aside ?? ''}|${view?.message ?? ''}|${view?.badge ?? ''}`;
+  return useMemo(
+    () => ({ penManaged: pen.penManaged, view, containerRef, controlsProps }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `view` and `controlsProps` are rebuilt
+    // every render by construction; `signatureWithAside` is the derived answer to whether either
+    // says anything different, and `pen` supplies the callbacks, which are stable per `PlanPen`.
+    [pen, signatureWithAside, pen.penManaged, pen.isPending],
+  );
 }

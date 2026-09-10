@@ -123,7 +123,13 @@ export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2
  * hairline (ADR-0119). Declared once so the three consumers cannot drift (the
  * `TOOLBAR_CARET_TARGET` precedent). The height is `inset-y-1/4` — 50 % of the box — rather than
  * the study's 44 %, because the ratchet on arbitrary values (ADR-0099) is worth more than 6 %
- * of a hairline; the group-level seam that joins it at M4 takes `inset-y-1/5` (60 %).
+ * of a hairline. **The group-level seam takes `inset-y-1/5` (60 %) and is NOT this constant** —
+ * it is written inline in `Deck.tsx` because it also needs a negative offset to sit in the row's
+ * own `gap-2`, which this rule (positioned inside a padded box) does not. This sentence read "the
+ * group-level seam that joins it at M4" until M7, stating as fact a thing no milestone built: the
+ * seam was specified in M1-T3, promised here, and absent from the tree until the ux and
+ * architecture reviews found it, by which point M6 had deleted the caption border that was
+ * incidentally doing its job.
  *
  * A pseudo-element rather than a `border-l` because a border is part of the box: it widens the
  * element, it moves with padding, and it is the same 1 px whether the row is 36 or 44 tall. The
@@ -271,7 +277,23 @@ export const toolbarControlVariants = cva(
         selected:
           'bg-secondary text-secondary-foreground shadow-[inset_0_-2px_0_0_var(--background)]',
         armed: 'text-primary shadow-[inset_0_-2px_0_0_var(--primary)]',
-        primary: 'bg-primary text-primary-foreground',
+        // **Its own focus ring, and that is CQ-2 arriving one state late.** The shared treatment on
+        // the base is `focus-visible:ring-ring ring-inset`, and inside the chrome scope `--ring`
+        // and `--primary` are the **identical string** — so an inset ring on this state's own amber
+        // fill is a 1:1 indicator, invisible, on the one control this epic put at the head of the
+        // row. WCAG 2.2 §2.4.7, and §1.4.11 for the indicator itself.
+        //
+        // CQ-2 recorded that collision and answered it for `armed` by dropping the ring, which
+        // works there because `armed` keeps the band's fill and so never had a ring-on-fill pair at
+        // all. M5 added a state that does, and the check was not re-run: one correct pattern
+        // applied to a control and not its neighbour, the shape this register has recorded in seven
+        // consecutive epics, inside the ladder built to end it. Found by the M7 ux review.
+        //
+        // `--primary-foreground` is the ink this state already puts on this fill, so the indicator
+        // is 7.91:1 by the same arithmetic as its label and needs no new token.
+        // `ring-offset-2` is NOT the answer, for the reason CQ-2 gives above: the deck's smallest
+        // gap between two controls is 4 px, which a 2 px offset plus a 2 px ring consumes exactly.
+        primary: 'bg-primary text-primary-foreground focus-visible:ring-primary-foreground',
       },
       disabled: { true: 'cursor-default opacity-50', false: '' },
     },

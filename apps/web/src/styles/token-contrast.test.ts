@@ -130,6 +130,27 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
 const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
   ['--background', '--ring', 'the focus indicator against the surface it sits on'],
   ['--background', '--primary', 'a primary button against the surface'],
+  // **The focus indicator against a FILLED control, which is a different question from the line
+  // above** (console epic M7). The shared toolbar focus treatment is `ring-inset`, so on a control
+  // whose own fill is `--primary` the ring is measured against that fill and not against the band.
+  // Inside the chrome scope `--ring` and `--primary` resolve to the **identical string**, so the
+  // pen's `primary` state painted an amber ring on an amber fill: a 1:1 indicator, invisible, on
+  // the one control the epic exists to put at the head of the row (WCAG 2.2 §2.4.7 and §1.4.11).
+  //
+  // The collision is CQ-2's, answered once already for `armed` by dropping its ring — an answer
+  // that worked because `armed` keeps the band's own fill and therefore never had this pair. M5
+  // added a state that does have one, and nobody re-ran the check: the matrix asserted the ring
+  // against the surface and had no pair for the ring against a control. Found by the M7 ux review.
+  //
+  // The pair is added BEFORE the CSS that satisfies it, which is this file's own rule and exists
+  // because `--canvas-grid-month` and the minimap frame each shipped broken the other way round.
+  // **No new token.** The ring on a `--primary`-filled control is `--primary-foreground`, the ink
+  // that control already puts on that fill — so the requirement is expressed by a pair that exists
+  // rather than by a name added to every scope's family, which ADR-0097's completeness rule would
+  // then oblige all seven to carry. The same two tokens appear in TEXT_PAIRS above at the stricter
+  // 4.5 bar; this line is not redundant, because the two say different things and a future author
+  // re-valuing one has to satisfy both reasons rather than infer this one from a label's.
+  ['--primary', '--primary-foreground', 'the focus indicator on a control filled with --primary'],
   // **The status fills against the surface — asserted now, and this is where the closure pays
   // off.** These five lines used to be one long comment explaining why `--destructive` could NOT
   // be asserted: it was not a rebound name, so inside a scope it kept the page's red while

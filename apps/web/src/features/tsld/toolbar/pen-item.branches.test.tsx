@@ -294,4 +294,40 @@ describe('the pen toolbar item, across every lock branch', () => {
     renderPen(pen({ status: status({ state: 'HELD_BY_OTHER', holder: JANE }) }));
     expect(penControl()).toHaveAccessibleDescription(/jane/i);
   });
+
+  /**
+   * **And the reason answers the question that was asked** (M7, the ux review).
+   *
+   * These two branches are a Viewer or a Contributor looking at a plan nobody is editing.
+   * `resolveLockView` sets their message to "No one is editing this plan." — true about the lock,
+   * and self-contradictory as the stated reason a `Start editing` button is off. The pen used that
+   * sentence verbatim while every pen-gated command beside it distinguished the role from the lock
+   * through `scheduleRefusal`.
+   *
+   * Asserted in BOTH directions: the role sentence is present, and the lock's status sentence is
+   * not. Only the first would pass against copy that says both things and buries the useful half.
+   */
+  it.each([
+    ['FREE', status({ state: 'FREE', canAcquire: false })],
+    ['EXPIRED', status({ state: 'EXPIRED', holder: JANE, canAcquire: false })],
+  ] as const)(
+    'tells a reader whose role forbids editing that it is their role (%s)',
+    (_name, st) => {
+      renderPen(pen({ status: st }));
+      const control = penControl();
+      expect(control).toHaveAccessibleDescription(/your role/i);
+      expect(control).not.toHaveAccessibleDescription(/no one is editing/i);
+    },
+  );
+
+  /**
+   * The other half of the same rule: where the LOCK is what refuses, its own sentence is still the
+   * right reason. Without this case the fix above could be satisfied by saying "your role" in every
+   * shaded branch, which would be false for a Planner who simply does not hold the pen — the
+   * invented-sentence defect `plan-gating.ts` records this repository removing twice.
+   */
+  it('keeps the lock’s own sentence where the lock is what refuses', () => {
+    renderPen(pen({ status: status({ state: 'HELD_BY_OTHER', holder: JANE, canRequest: true }) }));
+    expect(penControl()).not.toHaveAccessibleDescription(/your role/i);
+  });
 });

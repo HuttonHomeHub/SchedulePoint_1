@@ -2112,6 +2112,16 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * distinct from the "Today line" display toggle in `View▾` (which only shows/hides the marker).
  */
 /**
+ * **Why a reader whose ROLE forbids editing cannot take the pen.**
+ *
+ * Deliberately not assembled from `lockCopy`: the lock vocabulary describes what the lock is doing,
+ * and this sentence describes something the lock has no opinion about. It matches the phrasing
+ * `scheduleRefusal` gives every pen-gated command beside it ("Your role cannot …"), so a reader
+ * tabbing along the row hears one explanation rather than two.
+ */
+const PEN_ROLE_REFUSAL = 'Your role cannot edit this plan.';
+
+/**
  * Which of the pen's two verbs this lock state offers.
  *
  * **One derivation, read by `isEnabled` and `isActive`.** The component review found the enabled
@@ -2745,7 +2755,31 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Shaded, never absent, in the eleven branches offering neither verb: an item that disappears
       // takes a roving stop with it and shifts every command on the DO row sideways.
       isEnabled: (ctx) => penVerbs(ctx).canStart || penVerbs(ctx).canStop,
-      disabledReason: (ctx) => ctx.penLock?.view?.message ?? lockCopy.loading,
+      // **Why the pen is shut, not what the lock is doing** — and the difference produced a
+      // sentence that contradicted itself. This read `view.message`, and for the two branches that
+      // matter most to a Viewer or a Contributor (`FREE` or `EXPIRED` with `canAcquire: false`)
+      // `resolveLockView` sets that message to "No one is editing this plan." So the product shaded
+      // `Start editing` and gave, as its stated reason, a sentence that answers the opposite
+      // question: if nobody is editing, why can I not?
+      //
+      // Every pen-gated command one item to the right — Add activity, Link, Auto-arrange — already
+      // gets this right through `scheduleRefusal`, whose own docblock names the failure: "A Viewer
+      // told to 'start editing' is being pointed at a button their role will never give them."
+      // The pen reached for the status sentence instead. One correct pattern applied to a control
+      // and not its neighbour, in the one control whose entire job is to explain this distinction.
+      // Found by the M7 ux review.
+      //
+      // The lock's own sentence is still the right reason wherever the lock IS the reason — a peer
+      // holds it, the reader's request is waiting out grace — so the branch is on which of the two
+      // facts is doing the refusing, not on which sentence reads better.
+      disabledReason: (ctx) => {
+        const view = ctx.penLock?.view;
+        if (!view) return lockCopy.loading;
+        // The role, not the lock: nothing is holding the pen and the reader still cannot take it.
+        // Offering them the pen would be a dead end dressed as a next step.
+        if (view.tone === 'neutral' && !penVerbs(ctx).canStart) return PEN_ROLE_REFUSAL;
+        return view.message;
+      },
       // **`primary`, never `armed`** — the state the approved plan (M3-T2) named and M3 shipped
       // without, so M5's first version reached for `armed` and made the pen and an armed tool one
       // picture. That is the collision `toolbar-styles.ts` records having already fixed once, in

@@ -6249,3 +6249,37 @@ and its unit suites keep missing.
 
 **Sized M, not S:** it needs a two-context Playwright fixture, two seeded members with different
 roles, and control over the grace window — none of which any existing harness provides.
+
+### 287. The pen's foot-row home is `shrink-0`, and its worst case was never measured
+
+**Status:** open · **Raised:** 2026-09-10 (workspace-console M7, the architecture review) · **Size:** S ·
+**Owner:** web
+
+The pen's badge, live-region sentence and seven hand-off controls portal into `PenStatusOutlet`,
+which sits inside `PlanFacts` — and that container is `flex min-h-6 shrink-0 flex-wrap`
+(`plan-facts.tsx`). CQ-4's own reasoning rejected this home for exactly that word: it is the one
+item in the foot row that cannot give way.
+
+**`shrink-0` on a foot-row child is this repository's recorded shape for a clipped control.**
+ADR-0114 M1 found four controls painted and pointer-unreachable behind one, and ADR-0115 then had to
+re-scope a `max-w-64` off the same container for the same reason. Nothing says this instance is
+clipping today; what is missing is the reading that would settle it.
+
+**M0-T4 measured the resting case and named the gap in its own words** — _"Owed at M5: the same
+reading with an activity selected (the dock bar occupying the row) and at 1440"_. That reading was
+not taken. M6 re-measured the foot at a flat 51 px across all four widths, but its fixture is
+**pen held**, which is the one branch offering no hand-off controls at all: the narrow case, not the
+wide one.
+
+**The unmeasured combination** is an activity selected (so the object-action bar occupies the dock),
+a lock state offering hand-off controls (a peer asking, or an admin who may override), and 1440 —
+the narrowest width the epic is judged at. Three sources of width in a row where one of them cannot
+shrink.
+
+**Why it stayed in `PlanFacts` rather than moving as CQ-4 words it** is a decision and is recorded
+in `docs/specs/workspace-console/m7-review.md`: `PlanFactsOutlet` is gated on `hostsPlanSlots` and
+is not rendered below `md`, so a literal move would have deleted the pen's whole cluster on the
+screens with least room to lose it. The alternative was worse; the residual is this row.
+
+**Sized S:** it is one reading from the existing harness with a selection made and a hand-off branch
+seeded, not new machinery.

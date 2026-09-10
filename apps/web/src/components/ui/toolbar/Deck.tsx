@@ -243,7 +243,7 @@ export function Deck<Ctx>({
         <div key={row} data-deck-row={row} className="flex flex-wrap items-start gap-2">
           {groups
             .filter((group) => group.row === row)
-            .map((group) => {
+            .map((group, groupIndex) => {
               return (
                 <div
                   key={group.id}
@@ -268,7 +268,30 @@ export function Deck<Ctx>({
                   // a boundary a 175 %-scaled screen cannot see (`m0-measurement.md` §1). The group
                   // keeps its role and its name; its height is now the control row's. The shared
                   // `toolbarCardVariants` base survives for the selection bar, which is not this epic's.
-                  className="flex items-stretch gap-2"
+                  className={cn(
+                    'flex items-stretch gap-2',
+                    // **The group seam, built at M7 having been promised twice and never made.**
+                    // `TOOLBAR_INSET_RULE`'s own docblock states as fact that "the group-level seam
+                    // joins it at M4"; M1-T3 specified its geometry. Neither happened, and M6 then
+                    // deleted the caption whose `border-r` had been the only mark at this boundary
+                    // — so the DECK's four groups were separated by 8 px of nothing while the
+                    // registry SECTIONS inside them kept a painted rule and 16 px. The finer
+                    // division was twice as wide and the only one with ink: a hierarchy inverted,
+                    // and the boundary it erased is the one that matters most on the DO row, where
+                    // Author's eleven pen-gated commands meet Plan's, which are never gated.
+                    //
+                    // Found by the M7 ux and architecture reviews independently. It is the third
+                    // instance in this epic of work specified and not built — the other two being
+                    // the ladder's fifth state and CQ-4's outlet — and the only one of the three
+                    // that looked right at rest, which is why nothing surfaced it until the
+                    // captions went.
+                    //
+                    // `inset-y-1/5` is the 60 % M1-T3 named, against the section rule's 50 %: the
+                    // coarser boundary is the taller mark, which is the whole point and is what
+                    // makes the two readable as a hierarchy rather than as two of the same thing.
+                    groupIndex > 0 &&
+                      'before:bg-border relative before:absolute before:inset-y-1/5 before:-left-1 before:w-px',
+                  )}
                 >
                   {/* **The caption is gone and the group's NAME is not** (console epic M6-T1).
                 It was an `aria-hidden` span reading VIEW / FIND / AUTHOR / PLAN, so nothing was
