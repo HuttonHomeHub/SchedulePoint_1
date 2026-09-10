@@ -150,7 +150,7 @@ own slice without re-opening anything S4 shipped.
 
 ### 60. The Gantt's scroll behaviour is unmeasured on real hardware
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10
 
 The Gantt's substrate decision (ADR-0059 §1) rests on one claim: the live node count is bounded by
 the viewport, not by the plan. That claim **is** measured — the flag-on Playwright journey
@@ -179,6 +179,29 @@ measured on a runner would be noise dressed as a guarantee.
 > no-install DevTools method on the operator's own machine, added 2026-08-03. It has simply never
 > been pointed at the Gantt. That makes this row **cheaper than it reads**, which is the direction
 > that matters: it has been sitting behind an obstacle that was removed a month ago.
+
+> **Re-derived 2026-09-10: STILL TRUE, and this row's own "cheaper than it reads" footnote is
+> WRONG.** Nothing that has landed since covers it. `apps/web/measure-gantt/` measures **link
+> density** and its own docblock excludes render cost by name (`link-density.spec.ts:36-39`, _"Not
+> measured here: the render cost of drawing N paths… A render measurement is its own task"_); its
+> sibling measures grid-width arithmetic. The ADR-0128/0130 staff perf probe — built precisely so an
+> operator can measure on their own machine — has **two scenarios and neither is the Gantt**
+> (`scenarios.ts:99`, `:123`). `e2e-gantt/gantt-scale.spec.ts:30-32` still delegates here by number.
+>
+> **The footnote claimed #75's Route A "has simply never been pointed at the Gantt", making this
+> cheaper than it reads. It cannot be pointed at the Gantt.**
+> `apps/web/scripts/measure-draw-in-browser.js` refuses it **twice** — `:44-49` aborts with "No
+> canvas found. Open a plan on the Diagram (TSLD) view", `:63-68` aborts on the missing activity
+> listbox — and the Gantt has neither, by ADR-0059 §1's whole decision. The runbook says so too
+> (`docs/guides/measure-draw-performance.md:47-48`: "**not Gantt**"). The rAF-wrapping _technique_
+> transfers; the shipped script does not. Cheaper than it was, not "point the existing script at it"
+> cheap.
+>
+> **Two figures in the body are wrong.** The journey does not seed "two plans an order of magnitude
+> apart": it seeds **one** plan and tops it up (`gantt-scale.spec.ts:67`, "Top the SAME plan up by
+> three times"), from `FIRST_FILL = 100` to `TOPPED_UP = 300` (`:45-46`) — a factor of **three**. The
+> spec's own comment says three. And the stale `#59` reference the footnote corrects here **still
+> stands uncorrected in the code**, at `gantt-scale.spec.ts:30`.
 
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
 
@@ -345,7 +368,7 @@ ADR-0063 M6 component and UX gates.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10
 
 > **Narrowed 2026-08-09 (programme M5), and the largest input changed.** This row asked what happens
 > when a writer waits on a plan lock held by a long transaction. The longest such transaction — a
@@ -389,9 +412,27 @@ confirmed defect — the design (plan-scoped key, skipped on the uncontended pat
 Related: the parent-chain walk inside that lock has **no depth cap**, unlike the resource tree's
 documented ≤ 10 (ADR-0053 §3).
 
+> **Re-derived 2026-09-10: STILL TRUE, and every figure in it is exact.** Fourteen
+> `acquirePlanWriteLock(` call sites across five modules — activities ×6, baselines ×3, plan-lock
+> ×3, `dependency.repository` ×1, `schedule.repository` ×1 — counted, and matching the row row for
+> row. The 15 s global and 60 s batch ceilings are `prisma.service.ts:25` and `:36`, applied at
+> `:43`, with the two overrides where the row says. The parent-chain walk really has **no depth cap**
+> (`activities.service.ts:184-193`, an unbounded `while` issuing one query per level inside the
+> transaction that took the lock).
+>
+> **No contention benchmark exists anywhere** — all fifteen `measure-*` scripts were searched and
+> `advisory`/`contention`/`concurrent` appear in none of them, and no API e2e drives two writers at
+> one plan key. **ADR-0116 M6 does not close this**: its 694.3 ms recalculate figure is the whole
+> HTTP route end to end, which bounds the hold from above and says nothing about how long the lock
+> is actually held or how long a queued writer waits. The row cites it as indicative and is right to.
+>
+> One citation nit: `prisma.service.ts` lives at `apps/api/src/**prisma**/`, not under `common/`, so
+> a reader grepping the path this row implies finds nothing.
+
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10 · **Blocked on the product owner** (the outstanding
+readings are presses only they can make; do not fabricate them)
 
 > **Correction, 2026-08-03 — read this before the rest of the row.** This entry was opened as "is
 > ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
@@ -732,6 +773,19 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 > size**, and the **1036×646 / ~1036×600 disagreement** between ADR-0026 §9b and this row — which is
 > an input to item 5(f)'s model fit, so it is arithmetic and not bookkeeping.
 
+> **Status re-derived 2026-09-10, and what changed is a document rather than a number.** No new
+> reading was taken and none is claimed. What was checked is the row's relationship to the ADR it
+> points readers at: **ADR-0026 §9b's table still showed a bare `PASS` for the Fit framing**, while
+> §9c — filed the day before, from the 2026-09-08 set — measures the same framing at **23.3 fps
+> against the same 30 fps floor**. This row's step 4(b) sends readers straight to §9b, so a reader
+> following it met the reassuring half and would have had to scroll to find the correction. §9b now
+> carries an inline marker at the table itself, because a correction a reader has to scroll to find
+> is a correction that does not reach the reader who stopped at the table.
+>
+> **What is still owed is unchanged and is not mine to produce**: the outstanding probe presses
+> belong to the product owner, on their own hardware, and the unattributed ~8 ms at the whole-plan
+> framing must not be guessed at. This row and **#261** both stay open on that.
+
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
 **Status:** open · **Verified:** 2026-09-09
@@ -984,7 +1038,7 @@ engine is not involved and the recalc parity gate is untouched.
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10
 
 > **Narrowed 2026-08-08.** The row says a fix should "cover the invitation accept path at the same
 > time". That path is **already safe**: `AcceptInvitationCard.tsx:243-256` requires a real button
@@ -1041,6 +1095,35 @@ token, the other the token travelling in a URL. The confirm-button interstitial 
 verify/invite stays this row's own, separate remediation.
 
 ---
+
+> **Re-derived 2026-09-10: STILL TRUE and unbuilt — and the gating question has an answer nobody
+> had written down.**
+>
+> **The deployed host's flag state is readable from the staff console.**
+> `staff-health.service.ts:271` returns `requireEmailVerification` on `GET /staff/health`, and
+> `routes/staff.tsx:488-489` renders it as a badge. So "is this armed in production?" is a
+> two-click lookup on `/staff` rather than a question only the product owner can answer — the same
+> shape as #117's closing method. Worth knowing before anyone escalates this row on an assumption.
+>
+> **What the repository genuinely cannot tell you** is the value itself: `docker-compose.yml:65` and
+> `docker-compose.release.yml:99` both read `${AUTH_REQUIRE_EMAIL_VERIFICATION:-false}` and
+> `.env.example:41` is `false` — all defaults. The real value lives in the host's gitignored `.env`.
+> So the row's flat sentence _"it has not bitten: `AUTH_REQUIRE_EMAIL_VERIFICATION` is still off"_ is
+> a claim about production stated as fact, and is the one sentence here that **could not be
+> established**. Read the badge rather than the row.
+>
+> **Two dependency-internals claims are unregistered** (ADR-0076 Class 2). The row attributes "a bare
+> acting GET" to `better-auth.ts:249-250`, and those lines are the app's own _send seam_
+> (`sendVerificationEmail: async ({ user, url }) =>`) — there is no route and no GET there; the route
+> is inside `better-auth`, which this repository does not contain. The 2026-08-05 extension about
+> `GET /api/auth/reset-password/:token` redirecting with the raw token is the same shape.
+> `scripts/dependency-claims.json` has **no** entry for either, so `check:claims` cannot see them and
+> a bump would move both silently. Registering them needs the claims read against the installed
+> package, which is a task and not an edit — recorded rather than done here.
+>
+> Confirmed accurate: the invitation path is safe behind a real button press
+> (`AcceptInvitationCard.tsx`, the `Button` spanning `:243-259`), and the web half does strip the
+> token from the address bar (`routes/reset-password.tsx:46`, `replace: true`).
 
 ### 89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
 
@@ -1975,7 +2058,7 @@ taken as one slice. (3)–(5) are consistency and tidiness.
 
 ### 117. CSP report delivery is unverified end to end
 
-**Status:** unverified · **Verified:** 2026-09-01 (the row's own subject still needs a deployed host)
+**Status:** open · **Verified:** 2026-09-10
 
 > **This row had NO `**Status:**` line at all until 2026-09-01, and `check:debt-status` reported
 > "71 rows (71 with a status, 0 without)" over a document where that was false.** The cause is in
@@ -2024,6 +2107,22 @@ blank while the policy kept `report-to`, reporting would die with no error anywh
 origin serving both the app and the API, which is the deployed stack and not a preview server —
 the same shape as `docs/TECH_DEBT.md` #100's operator half, and closable the same way: by
 observation on the host, not by a test.
+
+> **Re-derived 2026-09-10: STILL TRUE, and every figure in the row re-derives.** The
+> browser→sink hop remains the untested segment and each artefact says so in its own file:
+> `e2e-csp/csp.spec.ts:175-181` ("what it **cannot** prove: that the report is delivered… no request
+> is ever interceptable") pointing back here at `:190`; `e2e-staff/staff.spec.ts:238-244` asserts the
+> CSP panel renders and explicitly refuses to assert its state; and `csp-report.e2e-spec.ts`'s seven
+> cases drive supertest into the Nest app rather than a browser.
+>
+> Counted: the unit suite really is **20** cases (13 `it` plus an `it.each` of 7 at `:194`). The
+> parser registration is **three** content types, not two (`app-setup.ts:69` adds
+> `application/reports+json`) — the row understates itself. `nginx.conf:112-115` and `:136` emit both
+> directives, and the read route is `staff.controller.ts:166`.
+>
+> **One footnote is stale in tense:** it says the parser fix "is filed separately as #231", and #231
+> **closed on 2026-09-02** under ADR-0124 — the fix is live at `doc-register.mjs:93-94,:120`. It
+> reads as an outstanding filing and is done.
 
 ### 118. Staff-console M6 review findings that were not folded
 

@@ -27,7 +27,9 @@ import {
  * navigating between plans, which is a shell behaviour this suite has no business depending on.
  *
  * What this measures is **structure, not milliseconds**. A timing number from a CI container is
- * noise (the ADR-0054 counting-stub precedent, and the reason `TECH_DEBT #59` exists); a node count
+ * noise (the ADR-0054 counting-stub precedent, and the reason `TECH_DEBT #75` exists — this said
+ * `#59`, which was folded into #75 on 2026-08-03 and is now a ledger number; corrected 2026-09-10);
+ * a node count
  * is exact and means the same thing on every machine. Frame timing on the ADR-0026 hardware
  * envelope — a mid-tier laptop, iPad-class Safari — stays an operator gate (`TECH_DEBT #60`).
  */
