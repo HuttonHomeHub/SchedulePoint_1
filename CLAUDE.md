@@ -4506,22 +4506,30 @@ A lighter-weight running log of smaller decisions is in
   scene, and bars drawn (unrecorded in 2026-08-03's set) all differ, and one
   re-run at ~1036×600 would discriminate. Week is unchanged across both dates.
   The unattributed ~8 ms is still unattributed and still must not be guessed.
-  **Third reading set, 2026-09-10** (#75 item 6), same machine and — verified
-  against the tree, not assumed — **the same painter and the same scene**, at a
-  1912×948 viewport. Do not quote the 23.3 fps figure above on its own: Fit/2000
-  now measures **35.2 fps, above the same 30 fps floor it missed two days
-  earlier**, on a viewport 120 px shorter. That is #261 (the gate names no canvas
-  size) shown across an **11 %** area change rather than the 2:1 one it was
-  raised on, so the honest state of §9 at Fit/2,000 is **unanswerable until the
-  size is named** — neither the pass nor the fail should be quoted as the
-  verdict. It also **falsifies #75 item 5(f)'s two-term model** with the very
-  out-of-sample point that item asked for: predicted 39.22 ms, measured 28.41,
-  residual −28 %. So the "~4.26 ms per megapixel" area term, and its striking
-  agreement with the unattributed ~8 ms, do **not** stand — that agreement was
-  labelled "not evidence" when written and it was right. What survives all three
-  sittings unchanged is **Week: 60.0 fps, 0.00 pp dropped, at both 500 and
-  2,000** — the surface a planner works on — and **cost tracking bars drawn
-  rather than plan size**.
+  **Five sittings on 2026-09-10 (#75 item 6 and its sub-items) settle it, and
+  the 23.3 fps figure above must not be quoted on its own — it is the one
+  reading in the whole set that nothing has reproduced.** Same machine, same
+  painter and same scene (verified against the tree, not assumed). At
+  **1920×1080 — 1.5 % MORE pixels and 1.8 % more bars than the 2026-09-08
+  run — Fit/2,000 measures 32.2 fps**, 8.9 fps faster, against a repeat-measured
+  noise floor of **0.4 fps**. More work on more pixels, quicker, which no
+  monotonic cost model permits from geometry: **the difference is
+  between-sitting machine state, not canvas size.** The probe records no power
+  state (`docs/TECH_DEBT.md` #283), which is now the leading explanation.
+  **So §9's gate is MET at every judgeable point that reproduces** — 32.2 fps
+  fullscreen, 34.8 and 35.2 at 1912×948, 39.5 at the small window, and 60.0 at
+  Week at both scales. Three earlier claims are withdrawn with it: #75 item
+  5(c)'s "missed at Fit at 2,000"; item 5(f)'s two-term model (whose per-bar
+  term alone charges more than the whole measured step, so its area coefficient
+  would have to be negative); and the vsync-quantisation hypothesis, which was
+  invented to explain a steepness that turned out to be the cross-sitting
+  artefact. Within one sitting the response is close to proportional: +10 % bars
+  and +14 % area buy +9 % frame time. **#261's exhibit is contaminated by the
+  same finding** — its 23.3-against-39.5 pair was never a clean size comparison
+  — though its concern stands, since size does cost ~3 fps for 14 % more area
+  and §9 still names no display. What survives every sitting unchanged is
+  **Week: 60.0 fps, 0.00 pp dropped, at both 500 and 2,000** — the surface a
+  planner works on — and **cost tracking bars drawn rather than plan size**.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 

@@ -431,9 +431,11 @@ documented ≤ 10 (ADR-0053 §3).
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** open · **Verified:** 2026-09-10 · **No longer blocked on the product owner** — the
-outstanding presses were taken 2026-09-10 (item 6). What remains is a decision (#261's canvas size)
-and an attribution (the ~8 ms, which needs a DevTools recording), neither of which is a press.
+**Status:** open · **Verified:** 2026-09-10 · **No longer blocked on the product owner.** Five
+sittings were taken 2026-09-10 (items 6, 6(e), 6(f)). §9's gate is **met at every judgeable point
+that reproduces**, at both scales and both framings. What remains is one attribution (the ~8 ms,
+which needs a DevTools recording) and one instrument gap (#283's unrecorded power state, now the
+leading explanation for the only reading that ever missed the floor). Neither is a press.
 
 > **Correction, 2026-08-03 — read this before the rest of the row.** This entry was opened as "is
 > ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
@@ -812,48 +814,47 @@ Direct3D11)`, 22 threads), Edge 152, 60 Hz idle interval 16.70 ms, DPR 1, attent
    500, and at Fit at 2,000 it is unanswerable until #261 names the size.** That is a stronger
    statement than 5(c)'s and it supersedes it.
 
-   **(e) A second candidate for the 10.81 ms is uncontrolled, and the instrument cannot rule it
-   out.** The probe records viewport, DPR, GPU string, thread count, memory, display interval,
-   attention and motion preference (`apps/web/src/features/perf-probe/model/device.ts:61-71`) and
-   **not power state** — there is no `getBattery()` call anywhere in `features/perf-probe/`. On a
-   laptop with an **integrated** adapter, mains against battery is a first-order term on exactly this
-   quantity, comfortably capable of a 30 % frame-time difference on its own. The 2026-08-03 set
-   records "**mains**" because a person wrote it down; neither the 2026-09-08 nor the 2026-09-10
-   report carries it, and the panel's own note field placeholder — "the Dell, docked, on mains"
-   (`ui/performance-probe-panel.tsx:644`) — shows the instrument knows the variable matters and
-   leaves capturing it to whoever remembers. Filed as **#283**.
+   **(e) ANSWERED 2026-09-10 07:53. It is between-sitting machine state, not geometry — and the
+   experiment ran in the direction that makes the conclusion unavoidable.** A fifth sitting at
+   **1920×1080** (fullscreen), the closest reproduction of the 2026-09-08 geometry the machine can
+   make:
 
-   So there are two live candidates for the residual, (b) and this, and **the reading set in hand
-   cannot separate them**. The discriminating experiment is cheap and is not a model fit: re-run
-   Fit/2,000 at **1912×1068** — the 2026-09-08 geometry exactly — in the current session. If it
-   reproduces ~23 fps the difference is geometry and (b) stands; if it reproduces ~35 fps the
-   geometry is innocent and something about the machine's state changed between the sittings. Either
-   way it is one press, and it should be taken before anything is concluded from the residual.
+   | sitting               | area      | bars drawn | fps      | dropped  |
+   | --------------------- | --------- | ---------- | -------- | -------- |
+   | 2026-09-08 @1912×1068 | 2.042 Mpx | 1,792      | **23.3** | 97.22 pp |
+   | 2026-09-10 @1920×1080 | 2.074 Mpx | 1,825      | **32.2** | 85.37 pp |
 
-   **(f) A fourth sitting repeated the third at IDENTICAL geometry, and gives this instrument its
-   first repeatability figure.** 2026-09-10 07:44–07:45, same machine, same 1912×948 viewport, 55
-   minutes after item 6's set — taken as an attempt at the (e) discriminator, which needed a
-   DIFFERENT window height and did not get one, so **it does not resolve (e)**. What it does resolve
-   is how much of any figure here is noise:
+   **1.5 % more pixels and 1.8 % more bars, and it is 8.9 fps FASTER — 22× the 0.4 fps noise floor
+   item 6(f) measures.** Today draws more work on more pixels and does it quicker, which no
+   monotonic cost model permits from geometry alone. So whatever separates the two sittings is not
+   the window; it is something about the machine's state that neither report records, and
+   **#283 — the probe's unrecorded power state — is promoted from a possible confound to the leading
+   explanation** for a 38 % swing that made a shipped gate look failed.
 
-   | limb                       | 06:49 sitting | 07:44 sitting | delta    |
-   | -------------------------- | ------------- | ------------- | -------- |
-   | Week/500, Week/2000        | 60.0 fps      | 60.0 fps      | **0.00** |
-   | Fit/500                    | 60.0 fps      | 60.0 fps      | **0.00** |
-   | Fit/2,000                  | 35.2 fps      | 34.8 fps      | −0.4 fps |
-   | Fit/2,000 dropped          | 70.37 pp      | 72.04 pp      | +1.67 pp |
-   | `revision-diff` Week/2,000 | +0.00 pp      | +0.00 pp      | **0.00** |
+   **Three things follow, and all three are withdrawals of claims made earlier in this row.**
 
-   **The noise floor at the one limb that is not pinned at 60 fps is 0.4 fps**, and every other limb
-   repeated to the digit. That settles a question (e) could not have raised: the **11.9 fps**
-   cross-sitting gap this item is about is **30× the run-to-run spread**, so it is a real difference
-   in what the machine did and not measurement scatter. Which of geometry or between-sitting state
-   produced it is still open, and (e)'s experiment is still the one that answers it.
+   1. **Item 5(c)'s "missed at Fit at 2,000" is WITHDRAWN.** It rested on the single 23.3 fps
+      reading, which is not reproducible. Every judgeable Fit/2,000 point taken on 2026-09-10 clears
+      §9's 30 fps floor — **32.2 at fullscreen, 34.8 and 35.2 at 1912×948** — as does the
+      2026-09-08 small-window point at 39.5. **On the readings that reproduce, §9 is met at Fit at
+      2,000.** The honest summary of the whole set is that §9 passes everywhere except one sitting
+      nothing has been able to reproduce.
+   2. **Item 5(f)'s two-term model is dead rather than merely falsified.** Against today's two
+      judgeable points it over-predicts by **10.79 and 12.65 ms**, and worse, its per-bar term alone
+      charges 3.39 ms for the 948→1080 step, which measured **2.65 ms in total** — so the area
+      coefficient would have to be negative to fit. That is unphysical, and no re-fit rescues it.
+   3. **The vsync-quantisation hypothesis offered in item 6(b) is WITHDRAWN — it was mine, and the
+      data no longer needs it.** It was invented to explain a steep response to canvas area, and
+      that steepness was an artefact of comparing across sittings. Measured **within** one sitting
+      the response is close to proportional: +10.1 % bars and +14.4 % area buy **+9.3 %** frame
+      time. The discrete p95 step from 4 refresh periods to 2 is real and still unexplained, but it
+      is no longer evidence for anything, because the two readings it spanned were not comparable.
 
-   It also makes the machine's **within-session** stability a measured fact rather than an
-   assumption, which is what any future comparison rests on — and note the asymmetry: stability
-   within a session is no evidence at all about stability **across** sessions, which is precisely
-   the axis (e) probes.
+   **The lesson is the one this register keeps re-learning, in a new place: two readings can differ
+   by 38 % with every recorded field identical.** The probe records viewport, DPR, GPU, threads,
+   memory, display interval, attention and motion, and none of them moved. A comparison is only as
+   good as the variables the instrument captures, and the one that matters here is not captured at
+   all.
 
    **(d) What did NOT move is the finding.** Week is identical across all three sittings — 60.0 fps,
    0.00 pp dropped, 16.80 ms p95, at both 500 and 2,000 — which is the surface a planner works on.
@@ -5160,6 +5161,25 @@ should be faced deliberately rather than arrived at by whoever next resizes a wi
 Fit-zoom work, alongside #75's unattributed time. Recording it is the point: the parameter has been
 absent since 2026 and was invisible until two runs disagreed.
 
+**THE EXHIBIT ABOVE IS CONTAMINATED, 2026-09-10 — the concern stands, the evidence does not.** This
+row's whole case was the pair **23.3 fps at 1912×1068 against 39.5 fps at 1016×636**: a fail and a
+pass against one floor, attributed to canvas size. #75 item 6(e) reproduced the larger geometry on
+the same machine two days later at **1920×1080 — 1.5 % MORE pixels — and measured 32.2 fps**. The
+23.3 fps reading does not reproduce, so the pair was never a clean size comparison; it was one
+sitting against another, with an unrecorded variable between them (#283).
+
+**What survives, measured within a single sitting so no state confound is possible:** at 1912×948,
+**35.2 fps**; at 1920×1080, **32.2 fps**. So canvas size does cost real frames — about **3 fps for
+14 % more area** — and it does **not** flip the verdict anywhere that has been measured, because
+every judgeable point clears 30 fps. The extrapolation is what keeps this row open: the trend puts a
+larger display below the floor, and nothing in ADR-0026 §9 says which display the gate is judged on.
+
+**So the remedy is unchanged and its urgency is lower.** Name the canvas size in ADR-0026 §9 —
+because a gate whose verdict is a function of an unstated parameter is underspecified whether or
+not that parameter has yet been shown to flip it. What is **withdrawn** is this row's previous
+claim that naming it "would mean §9's floor is currently missed at the 2,000 ceiling": on the
+readings that reproduce, it is met.
+
 **Strengthened 2026-09-10 by a third reading, and the margin is much smaller than this row assumed.**
 #75 item 6 measures the same plan, same painter, same scene, same machine at **1912×948**:
 **35.2 fps, above the same 30 fps floor** that 1912×1068 missed at 23.3 fps. So the verdict does not
@@ -5919,18 +5939,26 @@ numbers mean something.
 overlay default-on with its Fit cost recorded as _unknown_; D8b says so in as many words. It is no
 longer unknown. Two sittings at 1912×948, 55 minutes apart:
 
-| sitting | baseline | treatment | delta        | stated spread |
-| ------- | -------- | --------- | ------------ | ------------- |
-| 06:49   | 69.63 pp | 75.19 pp  | **+5.56 pp** | 3.89 pp       |
-| 07:44   | 70.93 pp | 75.56 pp  | **+4.63 pp** | 5.00 pp       |
+| sitting | viewport  | baseline | treatment | delta        | stated spread |
+| ------- | --------- | -------- | --------- | ------------ | ------------- |
+| 06:49   | 1912×948  | 69.63 pp | 75.19 pp  | **+5.56 pp** | 3.89 pp       |
+| 07:44   | 1912×948  | 70.93 pp | 75.56 pp  | **+4.63 pp** | 5.00 pp       |
+| 07:54   | 1920×1080 | 86.11 pp | 89.26 pp  | **+3.15 pp** | 2.78 pp       |
+| 07:56   | 968×493   | 0.00 pp  | 0.19 pp   | **+0.19 pp** | 0.00 pp       |
 
-Both are above ADR-0127's own 2.00 pp bar; both are ungraded, so no verdict was issued. **The
-magnitude sits at roughly one spread and is therefore weak on its own — the evidence is the
-agreement between two independent sittings**, since noise would be expected to vary the sign and it
-does not, and #75 item 6(f) measures this machine's Fit/2,000 repeat spread at **0.4 fps**. Mean
-+5.09 pp. Crucially this is _not_ #260's dead arithmetic: a ~70 pp baseline leaves ~30 pp of
-headroom, so unlike the 98.33 pp exhibit that closed #260 the difference here had room to be
-expressed and was.
+All four are ungraded, so no verdict was issued, and the first three clear ADR-0127's own 2.00 pp
+bar. **The four together show #260's compression happening in front of the reader, which is worth
+more than any one of them**: as the baseline climbs 69.63 → 70.93 → 86.11 pp the delta falls
+5.56 → 4.63 → 3.15 pp, monotonically, because a metric bounded at 100 has less room to express a
+difference the closer it starts to the ceiling. So the overlay's cost is **not** smaller on a bigger
+canvas; the instrument's ability to report it is. The fourth row is the same effect at the other
+end — at 968×493 the painter drops nothing to begin with, so the overlay's cost is expressed almost
+undistorted at **+0.19 pp**, which matches ADR-0129's Week reading and is the best estimate of what
+the overlay actually costs when the painter is not already saturated.
+
+**The honest reading is therefore that the overlay costs a real but small amount, and that the
+larger Fit deltas are partly an artefact of where the baseline sits.** #75 item 6(f) measures this
+machine's Fit/2,000 repeat spread at 0.4 fps, so the deltas are not scatter; the compression is.
 
 **What would close it** is two edits and one decision, and only the third is work:
 
@@ -5983,3 +6011,48 @@ lesson of ADR-0130's presentation model.
 
 Related: #75 (the reading whose residual this could explain), #261 (the other unrecorded parameter
 that makes readings incomparable).
+
+### 284. `on screen` means two different things depending on which scenario printed it
+
+**Status:** open · **Raised:** 2026-09-10 (the five-sitting probe set) · **Size:** S · **Owner:** repo
+
+Every probe limb prints `on screen  N bars at X px/day`, and #75 item 5(d) records **why** that line
+exists: ADR-0128's central finding is that painter cost tracks **bars drawn**, not plan size, and the
+2026-08-03 set could not be compared against anything because it never recorded that quantity. It is
+the load-bearing statistic of the whole panel.
+
+**The two scenarios derive it differently and the report does not say so.**
+
+- `scenes/canvas-draw.ts:138` — `cull(scene.scene.activities, view, size, EPOCH_ISO).length`, i.e.
+  exactly what the painter draws.
+- `scenes/revision-diff.ts:212-215` — `onScreenX(a.earlyStart) || onScreenX(a.earlyFinish)`, an
+  **x-axis test with no lane culling at all**.
+
+At any Fit framing the whole time span is on screen by construction, so the second form matches every
+activity in the plan. Measured across three viewports in one sitting:
+
+| viewport  | `canvas-draw` says | `revision-diff` says |
+| --------- | ------------------ | -------------------- |
+| 1920×1080 | 1,825 bars         | 2,160 bars           |
+| 1912×948  | 1,658 bars         | 2,160 bars           |
+| 968×493   | 965 bars           | 2,160 bars           |
+
+So a reader comparing `revision-diff` limbs sees the same 2,160 at every canvas size and concludes
+that bars drawn is **invariant to the viewport** — the exact opposite of the finding the column
+exists to support, and stated in the panel's own words rather than inferred.
+
+**The judging is not wrong, and that matters for the fix.** `revision-diff`'s value is a
+**denominator for a non-vacuity share** (`judge.ts:181`, `enough(visibleChangedBars, visibleBars)`),
+and its own comment says so: _"The denominators, over the WHOLE scene rather than the changed
+subset."_ A whole-scene denominator makes the share **smaller**, so that gate is stricter than a
+culled denominator would make it — conservative, never permissive. Nothing measured here is
+invalidated; what is wrong is that one label carries two quantities.
+
+**What would close it**: give the report two named fields rather than one overloaded one — the culled
+count for every scenario (which `revision-diff` does not currently compute at all) and, where a
+scenario uses a different denominator for its own vacuity test, print that separately and say what it
+is. **Do not simply switch `revision-diff` to `cull()`**: that would silently tighten the non-vacuity
+gate that ADR-0127 P3's "N" clause depends on, which is a behaviour change wearing a rename.
+
+Related: #75 (whose item 5(b)/(d) argument rests on this column), #261 (the other parameter that made
+readings incomparable), ADR-0128 (the decision the column serves).
