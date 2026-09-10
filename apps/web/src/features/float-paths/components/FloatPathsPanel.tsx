@@ -374,6 +374,16 @@ function FloatPathDisclosure({
             <li key={activity.id}>
               <button
                 type="button"
+                // **A shaded row says WHY, linked as a sibling and never folded into the name**
+                // (ADR-0082, `docs/TECH_DEBT.md` #250). This row was shaded with `aria-disabled`
+                // and `pointer-events-none opacity-60` and no reason at all, so a reader met a
+                // control that refuses and never says what would make it work — the exact defect
+                // ADR-0082 exists to close, in a panel whose sibling two directories away
+                // (`RevisionComparePanel`'s `MovedRow`) had carried the reason since it shipped.
+                // Found by reviewing that sibling, not this file: nothing compares two panels.
+                aria-describedby={
+                  activity.missing ? `${regionId}-missing-${activity.id}` : undefined
+                }
                 onClick={() => {
                   // `aria-disabled` + a **click guard**, never the native `disabled` attribute
                   // (the ADR-0060 M6 / ADR-0063 M6 rule) — the row must keep its tab stop so the
@@ -407,6 +417,15 @@ function FloatPathDisclosure({
                   </span>
                 )}
               </button>
+              {activity.missing ? (
+                // An `sr-only` SIBLING rather than text inside the control: folded into the button
+                // the sentence would join its accessible NAME, and a reader would hear the activity
+                // and its refusal as one run-on label. `RevisionComparePanel`'s `MovedRow` states
+                // the same rule, and ADR-0117's `purpose` distinction is the general form of it.
+                <span id={`${regionId}-missing-${activity.id}`} className="sr-only">
+                  This activity is not in the loaded plan, so it cannot be shown on the diagram.
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
