@@ -154,11 +154,23 @@ const geometry = (page) =>
     const padWrap = rowsChild?.firstElementChild;
     const deck = q(deckSel);
     const foot = q('[data-activities-bar]');
+    // **Cluster the CONTROLS' tops, never height ÷ tallest child.** That was this harness's metric
+    // until M4 declared the deck's two rows — at which point the tallest child became a row
+    // WRAPPER, and a deck of three visual lines reported 1.55. It is the same trap the gate hit at
+    // M1, one instrument along: a ratio that is only a line count while every child is one line.
     const lines = (row) => {
       if (!row) return null;
-      const kids = [...row.children];
-      const tallest = Math.max(0, ...kids.map((c) => c.getBoundingClientRect().height));
-      return tallest ? +(row.getBoundingClientRect().height / tallest).toFixed(2) : 0;
+      const tops = [...row.querySelectorAll('[data-toolbar-item]')]
+        .map((c) => c.getBoundingClientRect().top)
+        .sort((a, b) => a - b);
+      if (tops.length === 0) return 0;
+      let n = 0;
+      let last = -Infinity;
+      for (const t of tops) {
+        if (t - last > 4) n += 1;
+        last = t;
+      }
+      return n;
     };
     const bandCs = band ? getComputedStyle(band) : null;
     return {
@@ -192,7 +204,10 @@ const geometry = (page) =>
 const rowWidths = (page) =>
   page.evaluate((deckSel) => {
     const deck = document.querySelector(deckSel);
-    const groups = [...deck.querySelectorAll(':scope > [role="group"]')];
+    // `querySelectorAll`, not `:scope >`: since M4 declared the deck's two rows the groups sit
+    // inside a row wrapper rather than directly under the toolbar, and the `:scope >` form returned
+    // an EMPTY list — the harness reporting nothing about a structure that had changed under it.
+    const groups = [...deck.querySelectorAll('[role="group"]')];
     const g = groups.map((el) => {
       const b = el.getBoundingClientRect();
       const label = el.getAttribute('aria-label');
@@ -229,7 +244,10 @@ const rowWidths = (page) =>
       container: deck.clientWidth,
       scrollWidth: deck.scrollWidth,
       gap: cs.columnGap || cs.gap,
-      groups: g,
+      groups: g.map((x, i) => ({
+        ...x,
+        row: groups[i].closest('[data-deck-row]')?.getAttribute('data-deck-row') ?? '(undeclared)',
+      })),
     };
   }, DECK);
 

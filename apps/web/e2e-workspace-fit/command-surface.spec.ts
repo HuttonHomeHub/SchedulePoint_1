@@ -349,21 +349,41 @@ test.describe('The plan command surface', () => {
         const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
         if (!band || !deck)
           throw new Error('the band or the deck was not found — nothing to assert about');
-        const tops = [...deck.querySelectorAll('[data-toolbar-item]')]
-          .map((el) => el.getBoundingClientRect().top)
-          .sort((a, b) => a - b);
-        // Cluster within 4 px: controls on one row share a top to sub-pixel precision, and a
-        // real second row sits a whole control height below.
-        let rows = 0;
-        let last = Number.NEGATIVE_INFINITY;
-        for (const t of tops) {
-          if (t - last > 4) rows += 1;
-          last = t;
-        }
+        // Cluster within 4 px: controls on one row share a top to sub-pixel precision, and a real
+        // second line sits a whole control height below.
+        const linesIn = (root: Element) => {
+          const tops = [...root.querySelectorAll('[data-toolbar-item]')]
+            .map((el) => el.getBoundingClientRect().top)
+            .sort((a, b) => a - b);
+          let lines = 0;
+          let last = Number.NEGATIVE_INFINITY;
+          for (const t of tops) {
+            if (t - last > 4) lines += 1;
+            last = t;
+          }
+          return { lines, controls: tops.length };
+        };
+        const rowEl = (row: string) => {
+          const el = deck.querySelector(`[data-deck-row="${row}"]`);
+          if (!el) throw new Error(`the deck has no declared "${row}" row`);
+          return el;
+        };
+        const look = rowEl('look');
+        const doRow = rowEl('do');
         return {
           band: band.getBoundingClientRect().height,
-          lines: rows,
-          controls: tops.length,
+          ...linesIn(deck),
+          look: linesIn(look),
+          do: linesIn(doRow),
+          // Membership: which commands sit in which declared row. A line-count assertion alone
+          // passes against a build where a command has MOVED rows, which is the whole defect the
+          // declaration exists to prevent.
+          lookIds: [...look.querySelectorAll('[data-toolbar-item]')].map((el) =>
+            el.getAttribute('data-toolbar-item'),
+          ),
+          doIds: [...doRow.querySelectorAll('[data-toolbar-item]')].map((el) =>
+            el.getAttribute('data-toolbar-item'),
+          ),
         };
       });
 
@@ -374,6 +394,35 @@ test.describe('The plan command surface', () => {
         reading.lines,
         `the deck's controls sit on ${reading.lines} rows at ${viewport.width}`,
       ).toBeLessThanOrEqual(LINES[viewport.width]!.max);
+
+      // **Per row, since M4 declared them.** Each row is one line at every width the epic is judged
+      // on; below that the LOOK row is allowed a second line and the DO row is not, because a wrap
+      // inside a row is local — it can never move a command to the other row.
+      expect(
+        reading.look.lines,
+        `the LOOK row wraps to ${reading.look.lines} lines at ${viewport.width}`,
+      ).toBeLessThanOrEqual(viewport.width >= 1440 ? 1 : 2);
+      expect(
+        reading.do.lines,
+        `the DO row wraps to ${reading.do.lines} lines at ${viewport.width}`,
+      ).toBe(1);
+
+      // **Membership, and it is the assertion that carries M4's argument.** Line counts alone pass
+      // against a build where a command has moved rows — which is exactly what flex wrapping did
+      // before the rows were declared, and what a planner experiences as every command in the band
+      // changing place. Pinned by group rather than by a list of ids, so adding a command to an
+      // existing group needs no edit here.
+      expect(reading.lookIds, `the LOOK row is empty at ${viewport.width}`).not.toHaveLength(0);
+      expect(reading.doIds, `the DO row is empty at ${viewport.width}`).not.toHaveLength(0);
+      expect(
+        reading.lookIds.filter((id) => reading.doIds.includes(id)),
+        'a command appears in both declared rows',
+      ).toHaveLength(0);
+      expect(
+        reading.lookIds.includes('add-activity') || reading.doIds.includes('add-activity'),
+      ).toBe(true);
+      expect(reading.doIds, 'the authoring tools left the DO row').toContain('add-activity');
+      expect(reading.lookIds, 'the search field left the LOOK row').toContain('search');
       // **1920 and 1646 only, by design.** F1 names those two widths; at 1440 the header itself
       // wraps to two lines today (ADR-0112 D4's accepted state) because the pen cluster sits on
       // it, and `m0-measurement.md` §1 shows that row un-wrapping to one line at 1440 the moment
