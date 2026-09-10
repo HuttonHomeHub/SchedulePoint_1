@@ -188,6 +188,20 @@ jobs:
       - name: Check the nginx template survives substitution
         run: pnpm check:nginx
 
+      # Every browser-side entry point still bundles FOR A BROWSER. Added to CI on 2026-09-10,
+      # and its absence is the whole of `docs/TECH_DEBT.md` #244: this gate is BLOCKING, has been
+      # in `package.json` since #252 built it, and was enforced only by a locally-run
+      # `pnpm prepush` — for the second time, in the same file, for the same reason. #244 was filed
+      # when `check:advisory-agreement` was the missing one; that was added and this one was not,
+      # so the row's condition simply moved to a different gate while the row went on naming the
+      # old one. What it guards is quiet by construction: #252's defect was a Node-only module
+      # pulled into a browser bundle by a barrel re-export, which broke `pnpm measure:draw` for a
+      # day and made NOTHING go red, because no file under `apps/web/src` imports that package.
+      # Adding the step does not close #244 — that row asks for the two ROSTERS to be asserted
+      # equal, since a fix naming one gate decays into a false negative exactly as this one did.
+      - name: Check browser-side entry points bundle for a browser
+        run: pnpm check:browser-safe
+
       - name: Unit tests
         run: pnpm test
 

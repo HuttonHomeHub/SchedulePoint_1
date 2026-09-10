@@ -1784,6 +1784,16 @@ only by a locally-run `pnpm prepush` — which is precisely the state the row de
 different gate from the one it names. `check:advisory-agreement`, the instance the row was filed
 on, has since been added to CI.
 
+**The missing step was added 2026-09-10 and this row does NOT close.** `ci.yml` now runs
+`check:browser-safe`, so the roster is down to one absence and that one is the documented
+advisory exemption (`check:reconcile-due`). But adding a step is the fix this row exists to warn
+against: it repairs today's instance and leaves the mechanism intact, which is exactly how the
+condition moved from `check:advisory-agreement` to `check:browser-safe` in the first place. **The
+row closes when something ASSERTS the two rosters agree**, with the advisory exemption carried as
+a named entry and its reason, the way `scripts/adr-coverage.json` does. That assertion is a change
+to a shared gate and therefore an ADR-0105 full-spec trigger — which is why the step landed alone
+and the gate did not.
+
 **The identity change is the point rather than a detail.** A reader who trusted this row would go
 looking at `check:advisory-agreement`, find it present, and conclude the row was stale and closable
 — when the condition it describes is live in a gate the row does not mention. A row naming its
