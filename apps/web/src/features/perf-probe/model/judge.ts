@@ -298,6 +298,21 @@ export interface AbsoluteJudgeInput {
   readonly minFps: number;
   /** False at the Fit framing, where the shipped painter is already known to judder. */
   readonly gated: boolean;
+  /**
+   * The display's measured idle frame interval, in milliseconds — the same figure `refuseRun`
+   * checks against its plausible band and the report prints.
+   *
+   * **Required, never defaulted** (`docs/TECH_DEBT.md` #275, and the ADR-0070 `hoursPerDay`
+   * precedent). This value was stored on every row and printed in every block while the judge
+   * never read it — `grep -c idleInterval judge.ts` returned 0 — so a machine whose display cannot
+   * produce as many frames as the floor demands was failed for the display's cadence rather than
+   * for the painter's cost. A default would reintroduce exactly that, silently, at whichever call
+   * site forgot to pass it.
+   *
+   * Non-finite or non-positive means the row records no usable interval; the ceiling is then not
+   * computed rather than guessed.
+   */
+  readonly idleInterval: number;
 }
 
 export interface AbsoluteJudgeResult {
@@ -342,7 +357,7 @@ export interface AbsoluteJudgeResult {
  * consistent PASS. Only disagreement is refused.
  */
 export function judgeAbsolute(input: AbsoluteJudgeInput): AbsoluteJudgeResult {
-  const { runs, visibleBars, minVisibleBars, minFps, gated } = input;
+  const { runs, visibleBars, minVisibleBars, minFps, gated, idleInterval } = input;
 
   // ── Non-vacuity FIRST. An almost-empty canvas paces perfectly. ────────────────────────────────
   if (!Number.isFinite(visibleBars) || visibleBars < minVisibleBars) {
@@ -378,6 +393,48 @@ export function judgeAbsolute(input: AbsoluteJudgeInput): AbsoluteJudgeResult {
 
   // Reported, never gated — the Fit framing, where a gate would fail on day one (ADR-0058).
   if (!gated) return { ...common, verdict: 'REPORTED_ONLY' };
+
+  /**
+   * **The display's own ceiling, before any question about the painter** (`docs/TECH_DEBT.md`
+   * #275).
+   *
+   * A display that emits a frame every `idleInterval` ms cannot exceed `1000 / idleInterval` fps
+   * whatever the painter costs. When that ceiling is at or below the floor, the run is not a
+   * measurement of the painter at all — it is arithmetic about the hardware — and reporting FAIL
+   * is a confidently wrong answer about somebody's machine.
+   *
+   * Observed on iOS 18.7 Safari, `web-v0.125.1`: an idle interval of 33.00 ms (30 Hz, ceiling
+   * 30.3 fps) judged against the 500-activity floor of 45 fps. The probe admits such a display on
+   * purpose — `MIN/MAX_PLAUSIBLE_INTERVAL_MS` is 3..40, because 30 Hz is a real display and not a
+   * broken clock — so `refuseRun` is right to accept it and this is where the answer belongs.
+   *
+   * **Checked BEFORE the straddle case**, because when the ceiling binds, "the repeats disagree"
+   * is the wrong explanation for a reader to be given: the repeats agree perfectly and the floor
+   * is unreachable. Both return INDETERMINATE, and which reason is printed is the whole value.
+   *
+   * **It is not a phone rule.** Any throttled display reaches it — Low Power Mode, a laptop on
+   * battery, a panel negotiated at 30 Hz, a remote or virtualised session, thermal throttling.
+   *
+   * **What this deliberately does NOT do**: it does not add a margin. The 2,000-activity floor of
+   * 30 fps against a 30.3 fps ceiling leaves about 1 % of headroom, and #275 rightly calls a
+   * verdict decided at that distance a coin toss — but catching it means choosing a margin, and no
+   * margin has ever been measured here. Inventing one would be the number-tuned-to-the-answer this
+   * repository keeps refusing. The residual stays on #275 as an open decision.
+   */
+  const ceilingFps = Number.isFinite(idleInterval) && idleInterval > 0 ? 1000 / idleInterval : null;
+  if (ceilingFps !== null && ceilingFps <= minFps) {
+    return {
+      ...common,
+      verdict: 'INDETERMINATE',
+      indeterminateReason:
+        `this display cannot reach the floor. It emits a frame every ` +
+        `${idleInterval.toFixed(2)} ms, an arithmetic ceiling of ${ceilingFps.toFixed(1)} fps, and ` +
+        `the floor for this reading is ${String(minFps)} fps. No painter, however cheap, can ` +
+        `produce a passing number on this machine, so neither a pass nor a fail from this run says ` +
+        `anything about the painter. The remedy is a display that can answer the question — not a ` +
+        `lower floor, and not a faster painter.`,
+    };
+  }
 
   if (slowestRunFps < minFps && fastestRunFps >= minFps) {
     return {

@@ -473,6 +473,10 @@ async function runAbsoluteLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
           minVisibleBars: framing.minVisibleBars,
           minFps: limb.minFps,
           gated,
+          // The measured display cadence, so the judge can tell a slow painter from a display that
+          // cannot reach the floor at all (`docs/TECH_DEBT.md` #275). Already in scope: it is the
+          // same value `refuseRun` checks and the report prints.
+          idleInterval,
         }),
       })),
     });
