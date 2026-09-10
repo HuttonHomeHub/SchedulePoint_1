@@ -16,6 +16,27 @@ import { ProbeSittings } from './probe-sittings';
  * it.
  */
 
+/**
+ * The incompleteness notice, located by the wiring rather than by a live role.
+ *
+ * These two cases read `screen.getByRole('status')` until ADR-0132. That was never quite what they
+ * meant: the notice is a **standing condition** — "this sitting has 2 of 6 readings" is as true for
+ * a reader who arrives an hour later and does nothing — so it now carries no live role at all, and a
+ * role query would report zero and read as the notice having been lost.
+ *
+ * The replacement is stronger than the thing it replaces, because it asserts the notice is actually
+ * WIRED: the `Alert` carries an id and the readings table names it in `aria-describedby`, so this
+ * resolves the table's own description rather than trusting that some region on the page happens to
+ * hold the sentence. Matched on whole text for the reason the cases already recorded — the sentence
+ * is assembled from interpolated counts, so it is split across elements.
+ */
+function describedText(): string {
+  const table = screen.getByRole('region', { name: /readings/i });
+  const ids = (table.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
+  expect(ids.length).toBeGreaterThan(0);
+  return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+}
+
 const row = (over: Partial<ProbeResultRow> = {}): ProbeResultRow => ({
   id: 'r1',
   runId: 'run-1',
@@ -121,11 +142,9 @@ describe('ProbeSittings', () => {
       row({ id: 'old', runId: 'r-old', sweepId: null, recordedAt: '2026-09-01T09:00:00.000Z' }),
     ]);
 
-    // Matched on the alert's whole text rather than by `getByText`: the sentence is assembled from
-    // interpolated counts, so it is split across elements and a regex over one of them finds none.
-    const alert = screen.getByRole('status');
-    expect(alert.textContent).toContain('This sitting has 2 of 6 readings');
-    expect(alert.textContent).toContain('4 were refused or never taken');
+    const alert = describedText();
+    expect(alert).toContain('This sitting has 2 of 6 readings');
+    expect(alert).toContain('4 were refused or never taken');
   });
 
   it('will not say WHY a reading is absent from the oldest block, because it cannot know', () => {
@@ -138,10 +157,10 @@ describe('ProbeSittings', () => {
     // Verified red by rendering the assertive sentence unconditionally.
     view(sweepRows().slice(0, 2));
 
-    const alert = screen.getByRole('status');
-    expect(alert.textContent).toContain('This sitting has 2 of 6 readings');
-    expect(alert.textContent).toContain('fall outside this page');
-    expect(alert.textContent).not.toContain('were refused or never taken');
+    const alert = describedText();
+    expect(alert).toContain('This sitting has 2 of 6 readings');
+    expect(alert).toContain('fall outside this page');
+    expect(alert).not.toContain('were refused or never taken');
   });
 
   it('says the list is a page, so an absent sitting is not an absent reading', () => {

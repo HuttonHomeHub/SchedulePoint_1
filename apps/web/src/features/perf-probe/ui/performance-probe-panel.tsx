@@ -665,7 +665,11 @@ export function PerformanceProbePanel(): React.ReactElement {
           accent bar, a leading icon and an assertive-or-polite role — a bold sentence inside it is
           a fourth channel saying what four things already say, which is what the ADR-0097 weight
           ratchet exists to remove rather than to count. */}
-        {failure !== null && <Alert tone="error">The measurement did not run. {failure}</Alert>}
+        {failure !== null && (
+          <Alert purpose="event" tone="error">
+            The measurement did not run. {failure}
+          </Alert>
+        )}
 
         {outcome !== null && (
           <SittingResult
@@ -877,11 +881,13 @@ function ProbeResult({ outcome }: { outcome: ProbeOutcome }): React.ReactElement
         // "did not happen" sentence would lose the difference between "you stopped early" and
         // "your tab was in the background", which are the two things a reader most needs to tell
         // apart when a press produces less than they expected.
-        <Alert tone="info">{cancelledSentence(outcome.limbs.length)}</Alert>
+        <Alert purpose="event" tone="info">
+          {cancelledSentence(outcome.limbs.length)}
+        </Alert>
       ) : outcome.kind === 'refused' ? (
         // Deliberately carries NO pass/fail wording anywhere. A refusal rendered as a verdict is
         // the defect this whole vocabulary exists to prevent, and there is a test for it.
-        <Alert tone="info">
+        <Alert purpose="event" tone="info">
           The run was refused — nothing was measured. {outcome.refusal.sentence}
         </Alert>
       ) : (
@@ -894,7 +900,7 @@ function ProbeResult({ outcome }: { outcome: ProbeOutcome }): React.ReactElement
               {limb.minFps} fps
             </p>
             {limb.result.kind === 'unjudgeable' ? (
-              <Alert tone="info" className="mt-2">
+              <Alert purpose="event" tone="info" className="mt-2">
                 This run cannot be judged. {limb.result.message.split('\n')[0]}
               </Alert>
             ) : (
@@ -989,14 +995,14 @@ function SittingResult({
           )}
 
           {step.status === 'not taken' && (
-            <Alert tone="info">
+            <Alert purpose="event" tone="info">
               Not taken — the sitting was stopped before this reading began. Nobody asked the
               machine, so this is not a refusal.
             </Alert>
           )}
 
           {step.status === 'refused' && step.outcome?.kind === 'refused' && (
-            <Alert tone="info">
+            <Alert purpose="event" tone="info">
               The run was refused — nothing was measured. {step.outcome.refusal.sentence}
             </Alert>
           )}
@@ -1023,7 +1029,7 @@ function SittingResult({
           {step.status === 'not recorded' &&
             step.body !== null &&
             !retrying.has(stepKey(step.step)) && (
-              <Alert tone="error">
+              <Alert purpose="event" tone="error">
                 These figures were measured but NOT recorded.{' '}
                 <Button
                   variant="outline"

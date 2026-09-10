@@ -50,7 +50,11 @@ export function ServerError({
   if (typeof message !== 'string' || message === '') return null;
 
   return (
-    <Alert tone="error" className={className}>
+    // `event`, decided here rather than by the nineteen callers downstream of this adapter: a
+    // server failure is an outcome of something the reader just did, by construction. There is no
+    // shape of `ServerError` that is a standing condition, so exposing the choice would be offering
+    // a decision with one correct answer.
+    <Alert purpose="event" tone="error" className={className}>
       {message}
     </Alert>
   );

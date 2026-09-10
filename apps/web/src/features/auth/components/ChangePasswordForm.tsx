@@ -74,7 +74,9 @@ export function ChangePasswordForm(): React.ReactElement {
       <FormProblemCount errors={errors} />
       <ServerError message={formLevelError} />
       {changePassword.isSuccess ? (
-        <Alert tone="success">Password changed. Your other sessions have been signed out.</Alert>
+        <Alert purpose="event" tone="success">
+          Password changed. Your other sessions have been signed out.
+        </Alert>
       ) : null}
       <TextField
         label="Current password"

@@ -1,6 +1,6 @@
 # Feature Spec: `Alert` says whether it is an event or a standing condition
 
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0132)
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-09
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #118, item 3

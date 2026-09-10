@@ -1,7 +1,7 @@
 # Implementation Plan: `Alert` says whether it is an event or a standing condition
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0132)
 - **Owner:** unassigned — awaiting approval
 
 ## Breakdown

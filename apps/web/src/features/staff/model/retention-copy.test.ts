@@ -148,6 +148,18 @@ describe('scheduleSentence', () => {
 describe('statusSentence', () => {
   const table = (over: Partial<RetentionTable> = {}) => row(over);
 
+  /**
+   * A schedule that is not stuck, for the cases that are about a different signal.
+   *
+   * Spread rather than defaulted inside `statusSentence`: a default would mean a caller who forgets
+   * the schedule facts gets "not stuck" silently, which is the state the stuck case exists to catch.
+   */
+  const healthySchedule = {
+    intervalMinutes: 60,
+    lastRunAt: new Date().toISOString(),
+    processStartedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  };
+
   it('NEVER says every table is inside its period while the sweep is failing', () => {
     // **The defect this function exists to fix.** The first version branched
     // disabled → overdue-count → healthy and never consulted `consecutiveFailures`, so a sweep that
@@ -160,6 +172,7 @@ describe('statusSentence', () => {
       enabled: true,
       consecutiveFailures: 3,
       tables: [table({ overdue: false })],
+      ...healthySchedule,
     });
 
     expect(sentence).not.toContain('inside its period');
@@ -174,6 +187,7 @@ describe('statusSentence', () => {
         enabled: true,
         consecutiveFailures: 2,
         tables: [table({ overdue: true }), table({ overdue: false })],
+        ...healthySchedule,
       }),
     ).toContain('1 already past its period');
   });
@@ -184,14 +198,67 @@ describe('statusSentence', () => {
         enabled: false,
         consecutiveFailures: 0,
         tables: [table({ overdue: true }), table({ overdue: true })],
+        ...healthySchedule,
       }),
     ).toBe('Retention: sweeping is disabled. 2 already past its period.');
   });
 
-  it('says the healthy thing only when it is true', () => {
-    expect(statusSentence({ enabled: true, consecutiveFailures: 0, tables: [table()] })).toBe(
-      'Retention: every table is inside its period.',
+  it('NEVER says every table is inside its period while the sweeper is stuck', () => {
+    // **The same defect as the case at the top of this block, one signal along, and it arrived
+    // through the fix for a different one.** ADR-0132 made the visible stuck-sweeper alert
+    // `purpose="condition"` — correct, it is a standing fact — which removed its `role="alert"` and
+    // therefore its only announcement channel. This function could not see `lastRunAt` or
+    // `processStartedAt` at all, so in the commonest stuck state (no run yet, no table past its
+    // threshold) it went on saying the reassuring thing on the one polite channel, with the visible
+    // alert contradicting it two elements away. Found by the accessibility review of that change.
+    //
+    // Verified red against the pre-fix signature: it returned 'every table is inside its period.'
+    const sentence = statusSentence(
+      {
+        enabled: true,
+        consecutiveFailures: 0,
+        tables: [table({ overdue: false })],
+        intervalMinutes: 60,
+        // Never swept, and the process started three hours ago — well past one interval's grace, so
+        // `scheduleSentence` calls it overdue rather than routine.
+        lastRunAt: null,
+        processStartedAt: new Date(Date.parse('2026-09-09T09:00:00Z')).toISOString(),
+      },
+      Date.parse('2026-09-09T12:00:00Z'),
     );
+
+    expect(sentence).not.toContain('inside its period');
+    expect(sentence).toContain('stuck');
+  });
+
+  it('does NOT call a just-booted process stuck — the boot sweep is unawaited', () => {
+    // The grace period is the whole reason `overdue` is a distinct fact rather than "lastRunAt is
+    // null". Without this case the fix above would pass equally against a rule that called every
+    // fresh deploy stuck, which would be a false alarm on the one channel this exists to keep true.
+    expect(
+      statusSentence(
+        {
+          enabled: true,
+          consecutiveFailures: 0,
+          tables: [table({ overdue: false })],
+          intervalMinutes: 60,
+          lastRunAt: null,
+          processStartedAt: new Date(Date.parse('2026-09-09T11:58:00Z')).toISOString(),
+        },
+        Date.parse('2026-09-09T12:00:00Z'),
+      ),
+    ).toBe('Retention: every table is inside its period.');
+  });
+
+  it('says the healthy thing only when it is true', () => {
+    expect(
+      statusSentence({
+        enabled: true,
+        consecutiveFailures: 0,
+        tables: [table()],
+        ...healthySchedule,
+      }),
+    ).toBe('Retention: every table is inside its period.');
   });
 
   it('counts overdue tables when nothing has failed', () => {
@@ -200,6 +267,7 @@ describe('statusSentence', () => {
         enabled: true,
         consecutiveFailures: 0,
         tables: [table({ overdue: true }), table({ overdue: false })],
+        ...healthySchedule,
       }),
     ).toBe('Retention: 1 table is overdue.');
   });

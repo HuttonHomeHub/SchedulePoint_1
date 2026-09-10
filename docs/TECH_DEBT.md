@@ -2007,13 +2007,40 @@ report, and keying on the location shatters one violation into a row per call si
 open** — recorded here so the trade is findable, and so "a source location is a lead, not evidence"
 is written down somewhere other than one SQL comment.
 
-**3. `Alert tone="info"` gives a live-region role to two static first-paint caveats.** The
-no-transport note and the no-violations note are permanent documentation of what an empty result
-means, not something that just happened — so wrapping them in a polite live region risks an
-unsolicited announcement on load, and now that each panel announces its own settled state (WCAG
-4.1.3), risks overlapping with it. The fix belongs in the primitive, not this screen: `Alert` infers
-its role from `tone` alone, and the distinction it is missing is "reporting a change" vs "stating a
-standing fact". Not blocking — nothing is unreachable, and the copy is correct.
+**3. ~~`Alert tone="info"` gives a live-region role to two static first-paint caveats.~~ CLOSED
+2026-09-09 — ADR-0132, and it was bigger than this item in two directions and smaller in a third.**
+The item's diagnosis was exactly right, including where the fix belonged: `Alert` inferred its role
+from `tone` alone and could not express "reporting a change" vs "stating a standing fact". It now
+takes a required `purpose: 'event' | 'condition'` with no default (ADR-0117's shape), so the wrong
+announcement cannot be reached by omission, and `role` is still not a prop.
+
+What re-deriving it found, none of which was in the item:
+
+- **Six offending sites, not two, and two of them were `role="alert"` — assertive.** The sweeps-failed
+  and sweeper-overdue caveats interrupted the reader, produced by a query settling.
+- **Two of the six were already announced correctly elsewhere.** `retention-copy.ts` emits the same
+  two sentences into `Panel`'s properly-mounted polite region, so for those the live role was pure
+  duplication and removing it costs nothing at all. That is what made "do nothing" unarguable.
+- **25 production call sites, not 33.** The larger figure counted the eight `render()` calls inside
+  `alert.test.tsx`.
+
+**No WCAG success criterion is failed**, stated plainly because this register overstated one once
+(ADR-0082): 4.1.3 is engaged and _satisfied_ by the panel's polite region, and 2.2.4 is AAA. It is an
+ARIA robustness defect — a live region should exist before its content changes — plus duplication.
+
+**The gate pass found a regression the fix itself introduced, and fixed it.** Making the
+stuck-sweeper alert a `condition` was correct and left that fact with **no announcement channel**:
+`statusSentence` could not see `lastRunAt`/`processStartedAt`, so in the commonest stuck state it went
+on saying "every table is inside its period" on the one polite channel while the visible alert said
+the opposite. That is the defect its own docblock records fixing once for `consecutiveFailures`. The
+parameter is widened so the facts cannot be omitted; two regression tests, verified red.
+
+**What is NOT closed**, so this does not read as more than it is: `sign-in.tsx`'s signed-out alert
+stays an event and its first-paint delivery is AT-dependent regardless; the three `DataTable
+empty={…}` sites are classified but their _treatment_ belongs to the empty-state question; and
+`NoticeStrip` unification is **refused** in ADR-0132 D3 rather than deferred — its callers span three
+role outcomes and `purpose` expresses two. The two primitives now cross-reference each other, having
+contradicted each other for months without ever being read side by side.
 
 **4. `--card` / `--muted-foreground` is not in the contrast matrix — and adding it is not one line.**
 The staff console puts `text-muted-foreground` directly on `Card` rather than through

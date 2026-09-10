@@ -32,10 +32,35 @@ import { cn } from '@/lib/utils';
  * the figure without its context would make the alert the one element in the form with a radius of
  * its own. The faithful translation of "it matched its surroundings" is `rounded-md`.
  *
- * **The live-region role is derived from the tone, never passed in.** An error is assertive because
- * it interrupts a task the reader is mid-way through; a success or an informational note is polite
- * because it reports something already finished. Making that a prop would let two call sites answer
- * the same question differently, which is how this repo's message model drifted in the first place.
+ * **Two axes, and only one of them is the caller's judgement.** `tone` owns the icon, the colour and
+ * — for an event — how urgently to announce it: an error is assertive because it interrupts a task
+ * the reader is mid-way through, a success or a note is polite because it reports something already
+ * finished. That derivation is unchanged and `role` is still not a prop (`Omit<…, 'role'>` below),
+ * because letting two call sites answer *how urgent is this* differently is how a message model
+ * drifts.
+ *
+ * `purpose` answers a **different** question the primitive previously could not ask: is this an
+ * event or a standing condition? An event just happened and a live region is right for it. A
+ * standing condition — "no mail transport is configured", "retention sweeping is disabled" — is a
+ * fact about the world that was already true when the reader arrived, and marking it live announces
+ * it as though something had changed. Worse, such a caveat is usually rendered only once its query
+ * settles, so the region and its content are inserted **together**, which is the unreliable case for
+ * a live region rather than the silent one.
+ *
+ * **The discriminator, when a call site is not obvious:** would this sentence read the same to
+ * somebody who arrived five minutes later and did nothing? If yes it is a `condition`.
+ *
+ * **`purpose` has no default, deliberately** — the caller states which case they are in, so the
+ * wrong announcement cannot be reached by omission. That is `useTooltip`'s shape for `useTooltip`'s
+ * stated reason (`tooltip.tsx:44-55`), and it is the reason a `live={false}` boolean was rejected:
+ * a boolean records the mechanism and not the reason, so the next author cannot tell which case
+ * theirs is.
+ *
+ * **`NoticeStrip` deliberately answers this the other way** and takes its `role` from the caller
+ * (`notice-strip.tsx`). The two primitives disagree on purpose: this one carries four sentences with
+ * markup inside a bordered, iconned block and has a tone vocabulary to derive from; that one is a
+ * single truncating line whose callers span three different role outcomes, which two values cannot
+ * express. Neither is the other's home — see `docs/TECH_DEBT.md` #118.
  */
 const alertVariants = cva('flex items-start gap-3 rounded-md border-l-4 p-3 text-sm', {
   variants: {
@@ -48,7 +73,10 @@ const alertVariants = cva('flex items-start gap-3 rounded-md border-l-4 p-3 text
   defaultVariants: { tone: 'error' },
 });
 
-/** The tones, and the two facts each one fixes: which icon, and how urgently to announce it. */
+/**
+ * The tones, and the two facts each one fixes: which icon, and — for an `event` — how urgently to
+ * announce it. A `condition` uses the icon and ignores the role.
+ */
 const TONE_META = {
   error: { Icon: AlertCircle, role: 'alert' },
   success: { Icon: CheckCircle2, role: 'status' },
@@ -57,19 +85,37 @@ const TONE_META = {
 
 export type AlertTone = keyof typeof TONE_META;
 
+/** See {@link AlertProps.purpose}. Two values, because there are two cases and not a spectrum. */
+export type AlertPurpose = 'event' | 'condition';
+
 export interface AlertProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, 'role'>, VariantProps<typeof alertVariants> {
+  /**
+   * Whether this reports something that just happened, or states a condition that was already true.
+   * **Required, with no default** — see the docblock above. `'event'` renders the tone's live role;
+   * `'condition'` renders no `role` at all and keeps the tone's icon and colour.
+   */
+  purpose: AlertPurpose;
   tone?: AlertTone;
 }
 
 export const Alert = forwardRef<HTMLDivElement, AlertProps>(function Alert(
-  { tone = 'error', className, children, ...props },
+  { purpose, tone = 'error', className, children, ...props },
   ref,
 ) {
+  // `Icon` is unconditional: `tone` keeps owning the icon and the colour whatever the purpose is.
+  // The role is spread rather than passed as `role={…}` so a `condition` renders **no attribute**,
+  // not `role={undefined}` — the two look the same in React and only the first is what a census
+  // over the rendered DOM can assert.
   const { Icon, role } = TONE_META[tone];
 
   return (
-    <div ref={ref} role={role} className={cn(alertVariants({ tone }), className)} {...props}>
+    <div
+      ref={ref}
+      {...(purpose === 'event' ? { role } : {})}
+      className={cn(alertVariants({ tone }), className)}
+      {...props}
+    >
       {/* `aria-hidden`: the icon repeats what the role and the sentence already carry, and a
           screen-reader user reaching this region does not need "alert, image, alert". `mt-0.5`
           rather than `items-center`, so a two-line message keeps the icon beside its FIRST line

@@ -655,10 +655,22 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   previous Flask app (`static/css/auth.css:99-136`); colours are the
   `--*-text` tokens, never that app's hex values, because a literal cannot follow
   a surface scope and is invisible to `token-contrast.test.ts`.
-  **The live-region role is derived from the tone and is not a prop** —
+  **Two axes, and `role` is still not a prop** (ADR-0132). `tone` decides the
+  icon, the colour and — for an event — how urgently to announce it:
   `role="alert"` for an error (it interrupts a task in progress),
   `role="status"` for success and info (they report something finished). Making
-  it a prop would let two call sites answer the same question differently.
+  _that_ a prop would let two call sites answer the same question differently.
+  `purpose` decides a different question: **is this an event, or a standing
+  condition?** An event just happened and a live region is right for it. A
+  standing condition — "no mail transport is configured" — was already true when
+  the reader arrived, and marking it live announces it as though something had
+  changed; worse, such a caveat usually renders only once its query settles, so
+  the region and its content are inserted together, which is the unreliable case
+  for a live region rather than the silent one. `purpose` is **required with no
+  default**, so the wrong announcement cannot be reached by omission.
+  **The discriminator, when a call site is not obvious: would this sentence read
+  the same to somebody who arrived five minutes later and did nothing?** If yes,
+  it is a condition.
   **The authoring rule that goes with it: _a field's problem belongs to the
   field; the alert belongs to the form_.** Field validation renders inline under
   its control and nowhere else; server and form-level facts get the alert. Never

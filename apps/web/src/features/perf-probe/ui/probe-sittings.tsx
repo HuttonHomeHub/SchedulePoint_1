@@ -93,7 +93,7 @@ export function ProbeSittings({
           loadingLabel="Loading recorded readings…"
           errorLabel="Could not read the recorded readings."
           empty={
-            <Alert tone="info">
+            <Alert purpose="condition" tone="info">
               No readings recorded yet. Run a measurement above and it will be stored here, with the
               machine it ran on and the app version that drew the frames.
             </Alert>
@@ -217,7 +217,7 @@ function SittingBlock({
         only for the case that is genuinely two occasions filed as one.
       */}
       {spread !== null && spread > SITTING_SPREAD_LIMIT_MS && (
-        <Alert tone="info" id={spreadId}>
+        <Alert purpose="condition" tone="info" id={spreadId}>
           These readings were taken {describeSpread(spread)} apart, not at one time. Each row
           carries its own time below. The machine facts above were recorded with the earliest, so
           compare these readings with that in mind.
@@ -232,7 +232,7 @@ function SittingBlock({
         sitting for a complete one.
       */}
       {missing > 0 && (
-        <Alert tone="info" id={missingId}>
+        <Alert purpose="condition" tone="info" id={missingId}>
           This sitting has {String(readings)} of {String(EXPECTED_READINGS)} readings.{' '}
           {mayBeTruncated
             ? // **The oldest block asserts nothing about WHY.** It cannot: a reading missing here
@@ -252,7 +252,11 @@ function SittingBlock({
         getRowKey={(limb) => `${limb.scenarioId}/${limb.preset}/${limb.limbLabel}`}
         describedById={describedBy}
         loadingLabel="Loading readings…"
-        empty={<Alert tone="info">This sitting recorded no readings.</Alert>}
+        empty={
+          <Alert purpose="condition" tone="info">
+            This sitting recorded no readings.
+          </Alert>
+        }
       />
 
       <CopySittingButton sitting={sitting} label={caption} />

@@ -146,10 +146,22 @@ export function lastRunSentence(
  * noted the cause: nothing tested a failing sweep together with a zero overdue count.
  *
  * The order is by urgency, not by field order. A failing sweep outranks an overdue table because it
- * is the reason the table will stay overdue; disabled outranks both because it explains them.
+ * is the reason the table will stay overdue; disabled outranks both because it explains them. A
+ * **stuck** sweeper sits between the two: it is likewise the reason a table will stay overdue, but a
+ * failure is the more informative fact, because it ran and said so.
+ *
+ * **The stuck case is here because ADR-0132's accessibility review found the identical defect one
+ * signal along, in the fix for the first one.** Making that alert `purpose="condition"` was correct
+ * — it is a standing fact — but it left it with no announcement channel at all, while this function
+ * could not see `lastRunAt` or `processStartedAt` and so went on saying "every table is inside its
+ * period" in the common case: a stuck sweeper whose tables have not yet crossed their thresholds,
+ * which is exactly the state the paragraph above describes for `consecutiveFailures`. Reassuring, on
+ * the one channel that exists to state the settled result, with the visible alert contradicting it
+ * two elements away.
  */
 export function statusSentence(
-  retention: Pick<Retention, 'enabled' | 'consecutiveFailures' | 'tables'>,
+  retention: ScheduleFacts & Pick<Retention, 'consecutiveFailures' | 'tables'>,
+  now: number = Date.now(),
 ): string {
   const overdue = retention.tables.filter((table) => table.overdue).length;
   const alsoOverdue = overdue === 0 ? '' : ` ${String(overdue)} already past its period.`;
@@ -157,6 +169,14 @@ export function statusSentence(
   if (!retention.enabled) return `Retention: sweeping is disabled.${alsoOverdue}`;
   if (retention.consecutiveFailures > 0) {
     return `Retention: the last ${String(retention.consecutiveFailures)} sweep${retention.consecutiveFailures === 1 ? '' : 's'} failed.${alsoOverdue}`;
+  }
+  // **The stuck sweeper, derived here rather than passed in.** Taking it as a parameter would let a
+  // caller omit it and get the old, reassuring answer silently — which is the same "reachable by
+  // omission" failure ADR-0132 was written about. Widening the parameter type instead makes it a
+  // compile error to call this without the facts it needs. One derivation: `scheduleSentence` owns
+  // the grace-period rule and this reads its verdict rather than re-deciding it.
+  if (scheduleSentence(retention, now)?.overdue === true) {
+    return `Retention: the sweeper appears stuck.${alsoOverdue}`;
   }
   if (overdue === 0) return 'Retention: every table is inside its period.';
   return `Retention: ${String(overdue)} table${overdue === 1 ? ' is' : 's are'} overdue.`;
