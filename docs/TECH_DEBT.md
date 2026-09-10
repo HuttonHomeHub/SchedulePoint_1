@@ -852,7 +852,7 @@ contained, found by taking the finding seriously rather than by trying to satisf
 
 ### 84. Levelling is quadratic in the number of activities contending on ONE resource
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10
 
 **Found by** the backend-performance review of ADR-0071 M2, which measured `level.ts` before and
 after the join-lag rework and reported the honest result: the new implementation is marginally
@@ -887,6 +887,18 @@ operation a planner initiates deliberately, and 920 ms is well inside what a cap
 expected to take.
 
 ---
+
+> **Re-derived 2026-09-10 and STILL TRUE, structurally.** `level.ts:222-226` hands each levellable
+> activity `profile.get(asg.resourceId) ?? []` — the resource's whole growing placed-interval list —
+> and `blackoutsOf` (`:361-373`) iterates and sorts all of it, called per resource per activity at
+> `:450`. `occupy()` (`:138-143`) only ever pushes, so nothing prunes. No interval tree, no
+> per-resource cursor. Placement _i_ costs O(i log i); n activities on one resource are O(n² log n).
+> The 11.6 s figure is a measurement and was **not** re-run; the shape is what was re-checked.
+>
+> The 2026-09-01 footnote's three citations are exact (`level.ts:437-438`, `adr/0041:154`,
+> `adr/0041:168-169`). One residual it does not name: **ADR-0041 has no section "§F"** — `:159` is a
+> heading `### Invariants` with items lettered (a)–(f). The ADR uses "§F" as its own loose shorthand
+> at `:154`, so this row inherits it rather than inventing it; a reader hunting for a §F finds none.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
@@ -1436,7 +1448,7 @@ cost of the obvious fix and should be weighed rather than assumed away.
 
 ### 239. The plan's members query and its restore both scale with a fetch nobody profiles
 
-**Status:** unverified · **Raised:** 2026-09-02 (#230 M0's backend-performance gate) · **Size:** S
+**Status:** open · **Verified:** 2026-09-10
 
 Two suggestions from that review, recorded rather than acted on because neither is worth its cost
 today. Both were **measured**, not estimated.
@@ -1452,13 +1464,39 @@ this query is a meaningful share of it.
 
 **(b) The scale harness measures an unrepresentative phase.**
 `apps/api/test/cascade-restore-scale.e2e-spec.ts` seeds 2,000 flat `TASK` children of one summary
-with no dependencies, notes, steps, assignments or baselines — so six of the twelve `updateMany`s
-in `restoreBatch`, and both of `restoreLinksInBatch`'s queries, run as **0-row no-ops**. A real WBS
-phase has internal logic and often assignments. Everything skipped is index-backed (all twelve
+with no dependencies, notes, steps, assignments or baselines — so most of the `updateMany`s
+in `restoreBatch`, and all but the first of `restoreLinksInBatch`'s queries, are never exercised. A
+real WBS phase has internal logic and often assignments. Everything skipped is index-backed (all
 `delete_batch_id` indexes confirmed present), so this is unlikely to move the verdict — the
-measured 337 ms sits 15× inside its 5,000 ms condition — but the number is not representative of
+measured restore sits well inside its 5,000 ms condition — but the number is not representative of
 the shape #230 M1 actually restores, and saying so is cheaper than letting a later reader assume it
 is.
+
+> **Four of this row's numbers were invalidated by an unrelated epic, and one of its cross-references
+> stopped resolving** (re-derived 2026-09-10; the substance of both halves survives intact).
+>
+> - **Thirteen `updateMany`s in `restoreBatch`, not twelve.** ADR-0126's revision snapshot added
+>   `tx.baselineDependency.updateMany` **four days after this row was raised**, so the "six of
+>   twelve" was stale on arrival. Counted directly:
+>   `common/hierarchy/hierarchy-lifecycle.service.ts` holds 13, and `baselineDependency` is there.
+>   That is precisely the hand-maintained-sweep hazard that epic filed as **#253**, biting a
+>   neighbouring row rather than the sweep itself.
+> - **`restoreLinksInBatch` has three queries, not two**, and on this seed only the **first** runs —
+>   an early return skips the other two rather than executing them as no-ops. "Both … run as 0-row
+>   no-ops" is wrong twice over, in a sentence whose point is that the harness exercises nothing.
+> - **Seventeen `delete_batch_id` indexes, not twelve.** The substance holds — the new
+>   `baseline_dependencies` one is present — but the figure counts nothing current.
+> - **The restore's measured time is quoted as 337 ms here and 312 ms in #230**, from the same gate
+>   pass. Neither is re-derivable without running the harness, so the figure is removed rather than
+>   picked between: two numbers for one measurement means the register cannot say what was measured.
+> - **`#238` no longer exists as a row.** It closed 2026-09-02 and lives in the Closed-numbers
+>   ledger, so it resolves — but a reader grepping `### 238` finds nothing. Its resolution _chunked_
+>   that fetch, which makes the "a small fraction of #238's fetch" reasoning **stronger**, not weaker.
+>
+> The claims that decide anything are unchanged: `batchRestoreAnchor` still reads every member to
+> pick one id (`activities.service.ts:1402-1411`, then a `Set` filter with no raw SQL), and
+> `cascade-restore-scale.e2e-spec.ts` still seeds 2,000 flat `TASK` children of one summary with no
+> logic, notes, steps, assignments or baselines.
 
 ### 234. Fifteen page and panel loading states are spinners where the shape is known
 
@@ -1495,7 +1533,7 @@ of whatever picks this up.
 
 ### 99. `/request-password-reset` leaks account existence through timing
 
-**Status:** unverified · **Found:** 2026-08-05, by the ADR-0075 M4 backend-performance and security gates independently.
+**Status:** open · **Verified:** 2026-09-10
 
 The endpoint is uniform in **everything the caller can read** — same status, same body, whether the
 address exists or not (ADR-0074, and the property `sendPasswordReset` holds rather than borrows).
@@ -1520,7 +1558,7 @@ a branch that does nothing.)_
 A caller with a stopwatch can therefore still distinguish the two, which is the thing the uniform
 body exists to prevent. Note this is the **opposite** shape to `/send-verification-email`, where Better
 Auth mints a throwaway token and holds a 500 ms floor precisely to equalise the two branches
-(`email-verification.mjs:108-121`) — the machinery exists in the library, and this route does not
+(`email-verification.mjs:104-116`) — the machinery exists in the library, and this route does not
 use it.
 
 **ADR-0075 M4 narrowed it and did not close it.** `SEND_TIMEOUT_MS` bounds the known-address branch
@@ -1540,7 +1578,7 @@ network, and the gap is _reliable_ rather than noisy because it tracks a real ne
    the floor exceeds a slow send — which is exactly what a bad day removes.
 3. **Accept and document.** Defensible, but check the mitigation before leaning on it. The route's
    limit is **3 per 60 s per IP** — its own rule, not the 3-per-10-s one that covers
-   `/sign-in`/`/sign-up`/`/change-password` (`index.mjs:311-324`) — and it is
+   `/sign-in`/`/sign-up`/`/change-password`/`/change-email` (`index.mjs:309-314`) — and it is
    `enabled: options.isProduction` (`better-auth.ts:271`), so it does not exist in development at
    all. It is also per-replica in-process memory (#14(b)), so the real ceiling is 3 × replicas.
    Three probes a minute still enumerates a targeted list; it does not enumerate a dictionary.
@@ -1556,6 +1594,22 @@ nothing, and a claim that is true of the body and false of the clock is the kind
 register exists for.
 
 ---
+
+> **Re-derived 2026-09-10 against the installed `better-auth@1.7.1` and STILL TRUE — every
+> decision-bearing citation exact.** `create-context.mjs:220` is literally `} else await promise;`;
+> `password.mjs:83` awaits the send on the request path; `password.mjs:61-72` really does
+> `generateId(24)` plus a dummy verification lookup under a "mitigate timing attacks" comment (so
+> the 2026-09-03 correction stands and the original "does nothing" wording would have sent a reader
+> hunting a branch that does not exist); `better-auth.ts:271` is `enabled: options.isProduction`;
+> and `SEND_TIMEOUT_MS = 10_000` is applied at `smtp-mail.service.ts:308-309`.
+>
+> **Two citations were wrong and are corrected above.** The 3-per-10 s rule covers **four** paths,
+> not three — `/change-email` is in the same predicate (`index.mjs:305`) — and its block is
+> `:309-314`, where the row said `:311-324`; the file is **318 lines**, so that range ran past the
+> end of it. The 500 ms floor is `email-verification.mjs:104-116`, not `:108-121`, which was off at
+> both ends. Both passed `check:claims` throughout, because a claim registers an **anchor** line and
+> nothing validates a range's extent — **#181**'s blind spot, observed rather than argued, twice in
+> one row.
 
 ### 100. The operator-facing mail signal still has no operator-facing channel
 
@@ -2165,7 +2219,7 @@ bounds a sustained flood and the sweep bounds the residue after one stops.
 
 ### 123. One create-dialog earned-value case failed once in a full run and has not repeated
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10
 
 `ActivityCreateDialog.earned-value.test.tsx` → "creates an activity carrying the %-complete type
 and expense (major → minor)" failed exactly once, during a full `pnpm test` on 2026-08-11, and has
@@ -2207,9 +2261,16 @@ double-submit apart from a slow one. Left open rather than guessed at.
 > Worth stating plainly: this does not fix anything. It converts an unreproducible failure into one
 > that would arrive with evidence attached.
 
+> **Attempt 27, 2026-09-10: no reproduction.** The file was run in isolation — 4 passed of 4 — and
+> both halves of the row hold exactly: the case name is unchanged at
+> `ActivityCreateDialog.earned-value.test.tsx:113`, and the call-count assertion added on 2026-09-01
+> is present on **both** submitting cases (`:143`, `:160`) with the comment at `:136` distinguishing
+> a slow submit from a double one. An intermittent claim cannot be falsified by a passing run, only
+> given one more datum, and this is that. Nothing to change; the row stays open by design.
+
 ### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10
 
 `apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the
 whole base journey, so its six editing specs — `activities.spec.ts`, `baselines.spec.ts`,
@@ -2238,6 +2299,18 @@ editing spec needs changing for any reason — whichever comes first. Not a date
 dated flag work precisely because the date was the wrong instrument.
 
 **Do not** substitute unit-level flag-off suites for it (ADR-0088 D5, D7).
+
+> **Re-derived 2026-09-10 and STILL TRUE in every particular; no false claim found.**
+> `playwright.config.ts:65-68` still pins `VITE_TSLD_EDITING` and `VITE_PLAN_EDIT_LOCK` to `'false'`,
+> with its own comment naming this row. The six specs are exactly as counted — `activities` 1,
+> `baselines` 1, `dependencies` 2, `schedule` 2 — and none of the four files nor `e2e/workspace.ts`
+> contains any pen acquisition. `playwright.edit.config.ts` (the narrower harness) exists, and
+> `plan-gating.ts` + its suite exist and are consumed at `use-plan-workspace-model.ts:180`.
+>
+> **One thing a reader should notice that the row does not say:** both flags carry a `batch` field
+> in `scripts/flag-retirement.json` **alongside** a permanent `keep`. That reads as scheduled
+> retirement work, and ADR-0088 D4 says it will never happen — a queue and a decision wearing the
+> same clothes, which is the shape ADR-0073 C3.4 deleted `PENDING_COVERAGE` for.
 
 ### 120. Nothing reports `n_dead_tup` at runtime, so a retention drain's bloat is invisible while it happens
 
@@ -3368,7 +3441,7 @@ instance is not also fixed by writing a fourth sentence.
 
 ### 195. `pnpm prepush` cannot see uncommitted work in its diff-based checks
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-10
 
 _Filed 2026-08-26 by the reconciliation pass, from a false pass it produced._
 
@@ -3392,6 +3465,20 @@ loudly that it cannot see it; the silent green is the defect, not the scope of t
 with `#194` because both are about this gate, and both should be settled in one spec.
 
 ---
+
+> **Re-derived 2026-09-10 and STILL TRUE, with one qualification that changes how to read it.**
+> `check-frontend-only.mjs:93` still diffs `${BASE}...HEAD` with `BASE = 'origin/main'` (`:48`), and
+> the file contains no `porcelain`, no `dirty` and no `status --` — the cheap fix has not landed. It
+> remains the **only** diffing gate: every other `check-*.mjs` that touches git uses `git ls-files`
+> (`check-claims.mjs`, `check-reconcile-due.mjs`), which is a related but different blind spot —
+> untracked files are invisible to **those**, which is why an uncommitted ADR makes the two
+> reconciliation counts disagree by one until it is committed.
+>
+> **The qualification: the gate is currently inert.** `scripts/frontend-only.json` is
+> `"active": false`, and `check-frontend-only.mjs:80-86` exits 0 with a "skipped" message long
+> before it reaches the diff. So the blind spot exists in the mechanism and cannot bite until the
+> next frontend-only epic arms the declaration — worth knowing before anyone tries to reproduce the
+> false pass and concludes the row is stale.
 
 ### 197. Three rules with two or three implementations each, agreeing by discipline
 
