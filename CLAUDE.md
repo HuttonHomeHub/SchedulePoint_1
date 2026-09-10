@@ -4515,7 +4515,10 @@ A lighter-weight running log of smaller decisions is in
   noise floor of **0.4 fps**. More work on more pixels, quicker, which no
   monotonic cost model permits from geometry: **the difference is
   between-sitting machine state, not canvas size.** The probe records no power
-  state (`docs/TECH_DEBT.md` #283), which is now the leading explanation.
+  state (`docs/TECH_DEBT.md` #283), which is now the leading explanation —
+  **deferred on a trigger, and deliberately not work**: the swing is already
+  explained and §9 is met, so the field is worth capturing the next time two
+  readings disagree, not before.
   **So §9's gate is MET at every judgeable point that reproduces** — 32.2 fps
   fullscreen, 34.8 and 35.2 at 1912×948, 39.5 at the small window, and 60.0 at
   Week at both scales. Three earlier claims are withdrawn with it: #75 item

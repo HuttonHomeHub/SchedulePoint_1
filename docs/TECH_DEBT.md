@@ -829,7 +829,11 @@ Direct3D11)`, 22 threads), Edge 152, 60 Hz idle interval 16.70 ms, DPR 1, attent
    monotonic cost model permits from geometry alone. So whatever separates the two sittings is not
    the window; it is something about the machine's state that neither report records, and
    **#283 — the probe's unrecorded power state — is promoted from a possible confound to the leading
-   explanation** for a 38 % swing that made a shipped gate look failed.
+   explanation** for a 38 % swing that made a shipped gate look failed. **#283 is nonetheless
+   deferred on a trigger (product owner, 2026-09-10) and that is not a contradiction**: the swing it
+   explains has already been explained, §9 is met at every point that reproduces, and nothing is
+   blocked behind capturing the field. It becomes worth doing the next time two readings disagree —
+   which is the only situation in which the missing field would have changed an answer.
 
    **Three things follow, and all three are withdrawals of claims made earlier in this row.**
 
@@ -5981,7 +5985,27 @@ mechanism).
 
 ### 283. The performance probe does not record power state, and on an integrated GPU that decides readings
 
-**Status:** open · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** S · **Owner:** repo
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** S ·
+**Owner:** repo
+
+> **Not scheduled — product-owner decision, 2026-09-10.** This row explains something real and
+> nothing currently depends on the explanation. #75's question is answered: §9's gate is **met** at
+> every judgeable point that reproduces, so there is no failing verdict waiting on this and no work
+> blocked behind it. What the gap costs today is the ability to compare a reading against one taken
+> on another day — which matters when somebody next needs that comparison, and not before.
+>
+> **The trigger** — pick this up when any of these happens, rather than on a date:
+>
+> 1. A probe reading is taken that **disagrees with a previous one** at the same viewport, as
+>    2026-09-08 and 2026-09-10 did. That is precisely when the missing field is the one you want.
+> 2. Someone proposes work against the Fit-zoom cost (#75's unattributed ~8 ms, decimation, dirty
+>    regions) — because that work would be justified by cross-sitting numbers this cannot yet make
+>    comparable.
+> 3. The probe is next opened for any other reason. It is a small addition to `readDevice()` and is
+>    much cheaper done alongside something else than as its own errand.
+>
+> Recording the trigger is the point: ADR-0085's rule is that an unconditioned item stays exactly one
+> priority below whatever is being done, forever.
 
 `apps/web/src/features/perf-probe/model/device.ts:61-71` captures viewport, DPR, GPU renderer, thread
 count, device memory, display interval, attention and motion preference. It does not capture whether
