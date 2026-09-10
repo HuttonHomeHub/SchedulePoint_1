@@ -950,6 +950,24 @@ export class ScheduleService {
 
     // The same read snapshot `floatPaths` takes: the exact engine-input builder `recalculate`
     // uses, so the what-if can never drift from what a real recalculation would compute.
+    //
+    // **`graph.leveling` is deliberately NOT taken, and that is a KNOWN GAP rather than a
+    // decision** (`docs/TECH_DEBT.md` #248, ADR-0116 addendum 2026-09-10). `buildEngineGraph` also
+    // returns `leveling: { assignments, resources } | null`, and `recalculate` runs
+    // `levelSchedule` with it whenever `plan.levelResources` is true and persists THAT result — so
+    // on a levelled plan this what-if perturbs a schedule the product does not display, and
+    // measures the movement against a baseline the planner never sees.
+    //
+    // The sentence above ("can never drift from what a real recalculation would compute") is
+    // therefore true of the INPUT and not of the passes run over it. It is left standing because it
+    // is the reason the builder is shared at all; this note is what stops it being read as a
+    // guarantee about the output.
+    //
+    // Named here rather than left implicit because the drop was invisible: a destructure that omits
+    // a field looks exactly like a destructure of a type that never had one, every number the route
+    // returns is internally consistent, and the seeded fixture has `level_resources = false`, so no
+    // test could report it. Threading it through and levelling BOTH passes is the correct fix and
+    // is the open half of #248.
     const [{ activities, edges, options, meta }, labelRows] = await Promise.all([
       this.prisma.$transaction((tx) => this.buildEngineGraph(organization.id, plan, dataDate, tx)),
       this.schedule.loadHealthActivities(organization.id, planId),

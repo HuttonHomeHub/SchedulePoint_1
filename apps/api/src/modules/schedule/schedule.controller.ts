@@ -281,7 +281,13 @@ export class ScheduleController {
       'engine-owned column back after the call and asserts equality. The response is the upgraded ' +
       'metric-12 row in the same shape the report carries, so the report contract never changes; ' +
       'everything injected (amount, tolerance, subject, completion carrier) rides detail so the ' +
-      'verdict is reproducible by hand.',
+      'verdict is reproducible by hand. ' +
+      '**It runs the NETWORK pass only \u2014 resource levelling is not applied** ' +
+      '(docs/TECH_DEBT.md #248, ADR-0116 addendum 2026-09-10). On a plan with ' +
+      '`levelResources` set, a recalculation levels and persists that result, so this what-if ' +
+      'perturbs a schedule the product does not display and measures the movement against a ' +
+      'baseline the planner never sees. Every number it returns is internally consistent, so there ' +
+      'is no symptom \u2014 which is why it is stated here rather than left to be discovered.',
   })
   @ApiOkResponse({ type: HealthMetricResultDto })
   @ApiTooManyRequestsResponse({
@@ -296,7 +302,10 @@ export class ScheduleController {
       'no working time at all \u2014 an empty week with no working exceptions ' +
       '(CALENDAR_HAS_NO_WORKING_TIME); or a calendar has working time the schedule cannot ' +
       'reach within the engine\u2019s horizon (CALENDAR_WORKING_TIME_UNREACHABLE) \u2014 the ' +
-      'what-if runs the same passes a recalculation would, so it meets the same calendar states.',
+      'what-if runs the same NETWORK passes a recalculation would, so it meets the same calendar ' +
+      'states. This clause read \u201cthe same passes\u201d until 2026-09-10, which is false on a ' +
+      'levelled plan: the conclusion holds, because these three errors come from the network pass, ' +
+      'but the reason as stated was broader than the code (docs/TECH_DEBT.md #248).',
   })
   async criticalPathTest(
     @CurrentUser() principal: Principal,

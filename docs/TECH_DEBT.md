@@ -1642,6 +1642,35 @@ what the planner sees, at the cost of a second pass per side — or state the li
 OpenAPI description and in ADR-0116, the way that ADR already states its parity caveat. The second is
 cheap and honest; the first is correct. **Do not do neither.**
 
+---
+
+**2026-09-10 — the SECOND remedy is done; the first is still the open decision, and that is why this
+row stays open.** The limitation is now stated in three places: the route's `@ApiOperation`
+description, an addendum to ADR-0116 (recorded rather than rewritten, on the ADR-0026 §9b
+precedent), and a comment at the destructure itself. Nothing about the engine changed, so a
+levelled plan still gets a what-if measured against the network-only baseline — a reader is now told
+so instead of trusting it. **Threading `graph.leveling` through remains unbuilt** and is a decision
+about engine work: it costs a second levelling pass per side on every call to a route already
+throttled at 14/60 s on a measured budget.
+
+**Two things were found doing the honest half, and one is worse than what the row reported.**
+
+1. **The route's OpenAPI did not merely omit this — it claimed the opposite.** The 422 description
+   read _"the what-if runs the same passes a recalculation would, so it meets the same calendar
+   states"_. The conclusion holds (those three errors come from the network pass, which does run),
+   but the reason as stated is broader than the code and is simply false on a levelled plan. This
+   row said "nothing records this as a limitation"; in fact the one document a caller reads asserted
+   the gap away. Corrected in place with the old wording quoted, not silently replaced.
+2. **The citation had drifted again while this row was being acted on** — the destructure is at
+   `schedule.service.ts:953`, not the `:952` the 2026-09-10 re-verification recorded, which was
+   itself a correction of `:822`. Third line number for one statement. The comment now lives **at**
+   the destructure, so the next reader does not need a line number at all.
+
+**No regression test, and the reason is stated rather than skipped.** What changed is prose. A test
+asserting a description contains a word is the scan-matching-prose trap this repository has recorded
+four times, and it would pass against a route that had quietly started levelling. The behavioural
+assertion belongs with the first remedy, where there is something to assert.
+
 ### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
 
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
