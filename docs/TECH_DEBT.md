@@ -6115,3 +6115,103 @@ gate that ADR-0127 P3's "N" clause depends on, which is a behaviour change weari
 
 Related: #75 (whose item 5(b)/(d) argument rests on this column), #261 (the other parameter that made
 readings incomparable), ADR-0128 (the decision the column serves).
+
+### 285. The command deck wears cards inside a band the foot wears bare
+
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the deck surface studies) · **Size:** S ·
+**Owner:** web
+
+> **Decided and NOT built — product-owner decision, 2026-09-10: bare, captions kept, a hairline
+> between groups.** Captured here on the standing instruction that proposed work is never lost.
+> **Trigger:** `Deck.tsx` or `toolbar-styles.ts` is next touched for any reason, or the product owner
+> asks. It is one variant switch and one class, so it is cheaper alongside something else than as
+> its own errand.
+
+**The complaint** was that the top of the plan workspace "doesn't quite belong" while the foot bar
+does. **The first diagnosis put to the product owner was wrong, and is recorded before the right
+one.** It framed the choice as _dark band vs light deck_ — and the deck is already navy, inside the
+same `<Surface tone="chrome">` as the header and the foot (`chrome-band.tsx:74`; the deck portals
+into that band's `rows` slot). I misread the product owner's screenshot, then two of my own
+photographs, in the same direction; four DOM and CSS reads disagreed with my eyes and I trusted my
+eyes. **Bytes settled it**: in the harness's own `plan-workspace.png` the gap between the deck's cards
+is RGB (20, 33, 61), identical to the foot bar, and a card interior is (31, 44, 70) — the 5 % tint.
+That is ADR-0076 Class 3 inside a choice put to somebody else, the #204 shape, and the rule it leaves
+is short: **a colour read off a downscaled full-page render is not evidence; sample the pixel.**
+
+**What actually differs, measured.** The deck's four groups are tinted (`bg-foreground/5`),
+1 px-bordered (`border-border/60`), rounded (`rounded-md`) boxes with `px-2 py-1.5` — the
+`toolbarCardVariants` **`boxed`** variant (`toolbar-styles.ts:119-150`). The foot's selection bar uses
+the same CVA's **`bare`** variant — no box at all — and the foot's facts sit bare on the band. So the
+deck is the only chrome surface in the shell wearing boxes, and header + deck form a **180 px navy
+slab** at both 1920 and 1646 (header 40 + deck 108) against a ~50 px strip below. Boxes inside a
+band, and a lot of band: that is the mismatch.
+
+**Four studies, rendered over the harness's own programme with CSS injected after paint — the tree
+was never touched — and measured rather than described:**
+
+| variant                 | band height | canvas returned | what the picture shows                                           |
+| ----------------------- | ----------- | --------------- | ---------------------------------------------------------------- |
+| baseline (shipped)      | 180 px      | —               | four tinted, bordered cards on navy                              |
+| **bare, captions kept** | **152 px**  | **+28 px**      | one continuous band; `FIND` / `PLAN` lose their leading boundary |
+| bare, no captions       | 152 px      | +28 px          | **reflows** — `Add·Link·Select·Arrange` jump up beside search    |
+| cards, no captions      | 180 px      | 0 px            | the same reflow, inside boxes                                    |
+
+Identical at 1920 and 1646. The 28 px is the cards' padding and borders across two rows, verified
+in bytes (card interior 31,44,70 → 20,33,61 in the bare study).
+
+**The caption finding is the one the heights table cannot show.** Removing the captions returns
+0 px — they sit beside their controls, not above them — but their **width** is what holds two
+groups per row: without it `flex-wrap` re-pairs "look" (`VIEW`+`FIND`) with "do"
+(`AUTHOR`+`PLAN`), authoring commands migrate onto the search line, and `PLAN` sits alone on row
+two. So "decide captions from the studies" resolved to **keep them**, and the bare study's one
+weakness — `FIND` and `PLAN` butting against the previous group with nothing but the caption to mark
+the seam — is answered by a hairline, not by boxes.
+
+**The change, when built.**
+
+1. `apps/web/src/components/ui/toolbar/Deck.tsx` — the group wrapper's
+   `className={toolbarCardVariants()}` becomes `toolbarCardVariants({ chrome: 'bare' })`. The
+   variant, its docblock and its second consumer already exist; nothing is added to the primitive.
+2. A hairline between consecutive groups, in the section idiom the deck already uses
+   (`Deck.tsx:268`, `border-border/50 ml-1 border-l pl-2`), applied to each group after the first.
+   Decorative — WCAG 1.4.11-exempt — so no contrast pair moves.
+3. Re-run: `e2e-workspace-fit` (the §2.5.8 sweep; controls keep `min-h-(--control-h)` because the
+   padding removed is the card's, outside them — verify, do not assume), `dock.spec.ts` (the foot's
+   41 px equality is untouched by construction and should stay so), **the base journey** (the ADR-0096
+   rule: change a screen, run it), and `shoot.mjs --only plan-workspace` for parity. Run the
+   accessibility reviewer over the deck render: no keyboard or ARIA contract changes, so §19.13 does
+   not fire, but it is a shared primitive's rendering and the review is cheap.
+4. A dated `docs/DECISIONS.md` entry, because ADR-0114 M6's measurement table recorded the _card_
+   choice (the selection bar declining the deck's geometry); this is the same argument run the other
+   way — the deck adopting the bar's bareness — and it should be findable from there.
+
+**ADR-0105:** no new user-facing entry point, no Playwright config or CI step, no change to a
+component's public contract (an existing variant is selected), no shared gate, no schema. A register
+row is the right instrument; the decision entry in step 4 is the record.
+
+**To re-render the studies** (no script is committed — the seed lives in `shoot.mjs` and a copy would
+drift): run `node apps/web/scripts/shoot.mjs --only plan-workspace`, then apply these to the page
+(DevTools or an `after` hook), where `D` is `[role="toolbar"][aria-label="Plan commands"]`:
+
+```css
+/* bare */
+D > [role='group'] {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+/* no captions */
+D > [role='group'] > span[aria-hidden='true'] {
+  display: none;
+}
+/* group hairline */
+D > [role='group'] + [role='group'] {
+  border-left: 1px solid var(--border);
+  padding-left: 0.5rem;
+}
+```
+
+Related: ADR-0109 D1 (the cards were inherited from the old Flask app with the wrap), ADR-0114 M6
+(the measurement that made the selection bar bare), ADR-0115 (the foot row joining the chrome scope
+— this is the same argument one row up), `toolbar-styles.ts` (`toolbarCardVariants`, both variants).
