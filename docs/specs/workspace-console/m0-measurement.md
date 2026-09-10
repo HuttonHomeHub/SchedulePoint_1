@@ -519,3 +519,22 @@ Taken 2026-09-10T12:15:46.042Z against http://localhost:5173, Chromium via Playw
   | 390   | C       | 331  | 216    | 96   | 2.18       | 0    | 2.75rem        |
 
 - Study predicted 159 px for C's band under coarse at 1646. `docs/TECH_DEBT.md` #133 (labels lost in tablet mode) is reported by the line count, not asserted.
+
+---
+
+## Appendix C — §7 re-read after M2 (2026-09-10)
+
+The M2-T2 obligation was to **confirm the paint changed**, not the class — ADR-0102's finding is a
+surface scope that never reached its renderer while every gate stayed green. Same probe, same
+method (CDP `CSS.getMatchedStylesForNode` plus the resolved style), against the M2 tree:
+
+- computed `background-color: oklch(0.2 0.05 264)` — the recessed navy, where §7 read
+  `oklch(0.252 0.056 264)` (the band) before;
+- `color: oklch(0.985 0 0)`;
+- the winning rule is now `.bg-field { background-color: var(--field) }`, ahead of the same four
+  user-agent `select` rules and the preflight, exactly as `.bg-background` was.
+
+So the token rebind (M2-T1) and the vocabulary change (M2-T2) both reach the pixel, and §7's
+finding that the code — not a user-agent rule — decides this control's fill in Chromium still holds
+after the change. What a different platform does with `appearance: auto` on a closed `<select>`
+remains unmeasured, and the file says so rather than generalising from one platform.

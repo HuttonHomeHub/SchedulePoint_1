@@ -263,9 +263,18 @@
   --chrome-accent-foreground: oklch(0.985 0 0);
   --chrome-primary: oklch(0.786 0.167 70);
   --chrome-primary-foreground: oklch(0.252 0.056 264);
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.321 0 0);
-  --chrome-field-muted-foreground: oklch(0.51 0 0);
+  /* **A field of the chrome, not a hole in it** (console epic, S4/M2-T1). These three were the
+     page's white field pasted onto a navy band, which made the search box the brightest object on
+     the command surface and the organisation switcher the second — neither being the most
+     important thing there. They are now the band's own hue, one step recessed, with the outline
+     carrying the identification: which is the rule `token-contrast.test.ts` already states beside
+     the `--field`/`--input` pair ("`--field` is valued identically to the surface it sits on by
+     design, so this outline is the ONLY thing that says a text field is there") — a rule the
+     chrome scope was the sole exception to. Measured against the four pairs that gate this family:
+     ink 17.40:1, placeholder 9.07:1, outline on the field 4.99:1, outline on the band 4.39:1. */
+  --chrome-field: oklch(0.2 0.05 264);
+  --chrome-field-foreground: oklch(0.985 0 0);
+  --chrome-field-muted-foreground: oklch(0.78 0.02 264);
   --chrome-destructive-text: oklch(0.74 0.15 25);
   --chrome-success-text: oklch(0.8 0.12 150);
   --chrome-warning-text: oklch(0.8 0.14 70);
