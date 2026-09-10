@@ -830,6 +830,31 @@ Direct3D11)`, 22 threads), Edge 152, 60 Hz idle interval 16.70 ms, DPR 1, attent
    geometry is innocent and something about the machine's state changed between the sittings. Either
    way it is one press, and it should be taken before anything is concluded from the residual.
 
+   **(f) A fourth sitting repeated the third at IDENTICAL geometry, and gives this instrument its
+   first repeatability figure.** 2026-09-10 07:44–07:45, same machine, same 1912×948 viewport, 55
+   minutes after item 6's set — taken as an attempt at the (e) discriminator, which needed a
+   DIFFERENT window height and did not get one, so **it does not resolve (e)**. What it does resolve
+   is how much of any figure here is noise:
+
+   | limb                       | 06:49 sitting | 07:44 sitting | delta    |
+   | -------------------------- | ------------- | ------------- | -------- |
+   | Week/500, Week/2000        | 60.0 fps      | 60.0 fps      | **0.00** |
+   | Fit/500                    | 60.0 fps      | 60.0 fps      | **0.00** |
+   | Fit/2,000                  | 35.2 fps      | 34.8 fps      | −0.4 fps |
+   | Fit/2,000 dropped          | 70.37 pp      | 72.04 pp      | +1.67 pp |
+   | `revision-diff` Week/2,000 | +0.00 pp      | +0.00 pp      | **0.00** |
+
+   **The noise floor at the one limb that is not pinned at 60 fps is 0.4 fps**, and every other limb
+   repeated to the digit. That settles a question (e) could not have raised: the **11.9 fps**
+   cross-sitting gap this item is about is **30× the run-to-run spread**, so it is a real difference
+   in what the machine did and not measurement scatter. Which of geometry or between-sitting state
+   produced it is still open, and (e)'s experiment is still the one that answers it.
+
+   It also makes the machine's **within-session** stability a measured fact rather than an
+   assumption, which is what any future comparison rests on — and note the asymmetry: stability
+   within a session is no evidence at all about stability **across** sessions, which is precisely
+   the axis (e) probes.
+
    **(d) What did NOT move is the finding.** Week is identical across all three sittings — 60.0 fps,
    0.00 pp dropped, 16.80 ms p95, at both 500 and 2,000 — which is the surface a planner works on.
    Item 5(b)'s conclusion also survives intact and is strengthened by a third point: Week/500 draws
@@ -5882,20 +5907,30 @@ rather than fixed", and a baseline at 69.63 pp fails harder than one at 10.2. Th
 reader who checks the premise — which is what this register keeps asking people to do — finds a
 figure matching nothing, and has no way to tell a stale citation from a typo.
 
-**The 2026-09-10 sitting also gives P3 its first internal consistency check, and it passes.** The
-`revision-diff` Fit baseline (69.63 pp) and the `canvas-draw` Fit figure (70.37 pp) are the same
-painter on the same scene at the same canvas, taken from two different scenarios minutes apart, and
-they agree to **0.74 pp** — well inside that sitting's own 3.89 pp run-to-run spread. Two scenarios
-that share nothing but the painter landing that close is the strongest evidence the panel has
-produced that its Fit numbers mean something.
+**The 2026-09-10 sittings also give P3 its first internal consistency check, and it passes twice.**
+The `revision-diff` Fit baseline and the `canvas-draw` Fit figure are the same painter on the same
+scene at the same canvas, taken from two different scenarios minutes apart — 69.63 vs 70.37 pp in the
+06:49 sitting (**0.74 pp** apart) and 70.93 vs 72.04 pp in the 07:44 sitting (**1.11 pp**), both well
+inside those sittings' own 3.89 and 5.00 pp run-to-run spreads. Two scenarios that share nothing but
+the painter landing that close, twice, is the strongest evidence the panel has produced that its Fit
+numbers mean something.
 
-**And there is now a measured answer being withheld.** ADR-0127 D8 turned the revision overlay
-default-on with its Fit cost recorded as _unknown_; D8b says so in as many words. It is no longer
-unknown: at 1912×948 the overlay costs **+5.56 pp** (69.63 → 75.19, 34.1 fps), which is above
-ADR-0127's own 2.00 pp bar and **1.43× that sitting's 3.89 pp spread** — suggestive, not conclusive,
-and ungraded, so no verdict was issued. Crucially this is _not_ #260's dead arithmetic: a 69.63 pp
-baseline leaves **30.37 pp of headroom**, so unlike the 98.33 pp exhibit that closed #260 the
-difference here had room to be expressed and was.
+**And there is now a measured answer being withheld — twice.** ADR-0127 D8 turned the revision
+overlay default-on with its Fit cost recorded as _unknown_; D8b says so in as many words. It is no
+longer unknown. Two sittings at 1912×948, 55 minutes apart:
+
+| sitting | baseline | treatment | delta        | stated spread |
+| ------- | -------- | --------- | ------------ | ------------- |
+| 06:49   | 69.63 pp | 75.19 pp  | **+5.56 pp** | 3.89 pp       |
+| 07:44   | 70.93 pp | 75.56 pp  | **+4.63 pp** | 5.00 pp       |
+
+Both are above ADR-0127's own 2.00 pp bar; both are ungraded, so no verdict was issued. **The
+magnitude sits at roughly one spread and is therefore weak on its own — the evidence is the
+agreement between two independent sittings**, since noise would be expected to vary the sign and it
+does not, and #75 item 6(f) measures this machine's Fit/2,000 repeat spread at **0.4 fps**. Mean
++5.09 pp. Crucially this is _not_ #260's dead arithmetic: a ~70 pp baseline leaves ~30 pp of
+headroom, so unlike the 98.33 pp exhibit that closed #260 the difference here had room to be
+expressed and was.
 
 **What would close it** is two edits and one decision, and only the third is work:
 
