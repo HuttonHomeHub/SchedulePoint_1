@@ -4883,6 +4883,14 @@ with one derivation over the member list. The dock SET is derived; the dock GEOM
 Remedy: a `useRightDockGeometry(prefs, minWidth)` helper, taken the next time this file is touched
 for another reason — not as a standalone refactor of a file three epics have moved through.
 
+**The deferral trigger was CHECKED on 2026-09-10 and has not fired.** Picked up during a pass over
+the no-approval register work and deliberately put back: nothing in that pass touched
+`plan-workspace-toolbar.tsx`, and the stated reason — a large file three epics have moved through,
+where a standalone refactor is high risk for no delivered behaviour — is unchanged. Recorded rather
+than silently skipped, because ADR-0114 found that _a deferral whose reason has lapsed reads exactly
+like one whose reason still holds_; this one still holds, and the next reader should not have to
+re-derive that.
+
 ### 251. The `aria-disabled` shading recipe is hand-rolled in thirteen places
 
 **Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
