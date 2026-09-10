@@ -5592,11 +5592,33 @@ That is why #118 item 4 reads as one missing row and is not.
 1.04:1 pair "not hypothetical" on the strength of `tabs.tsx:169` writing `bg-card text-foreground`.
 That line is real; the containment is not. **There is exactly one `<Tabs` consumer in the product** —
 `ActivityEditorDialog.tsx:650` — and it is a modal `<Dialog>`, which sits in the browser's top layer
-and is inside no surface scope at all. **No `bg-card` occurs anywhere in a `chrome` or `brand`
-subtree.** So every one of the 34 is **latent**, which is what #118 item 4 concluded and what
-`surface.tsx:62-65` already says in its own words ("latent rather than live only because no `<Card>`
-currently renders inside a `<Surface>`"). The correction strengthens that row rather than replacing
-it — and it is ADR-0076 Class 3 inside a document that flagged its own inability to run anything.
+and is inside no surface scope at all. So every one of the 34 is **latent**, which is what #118 item
+4 concluded and what `surface.tsx:62-65` already says in its own words ("latent rather than live
+only because no `<Card>` currently renders inside a `<Surface>`"). The correction strengthens that
+row rather than replacing it — and it is ADR-0076 Class 3 inside a document that flagged its own
+inability to run anything.
+
+> **My own version of that was overstated too, and this is the corrected method** (self-audit,
+> 2026-09-10). This paragraph first read _"No `bg-card` occurs anywhere in a `chrome` or `brand`
+> subtree"_, and what had been checked was the **three files that OPEN those scopes** — not what
+> renders inside them. That is not the same claim: `ChromeBandRow` takes slot **refs**, so its
+> contents arrive by portal, and the subtree is the app header plus everything the plan toolbar
+> renders into the three chrome slots.
+>
+> Re-run properly — 68 files across `components/layout`, `components/ui/toolbar`,
+> `components/layout/status`, `features/tsld/toolbar` and `brand-panel.tsx`, with block, JSX and
+> line comments stripped first — the scan finds **two** reset fills, and both are already in
+> `reset-fills.structural.test.ts`'s allow-list with reasons that hold:
+> `resource-strip-panel.tsx` (which sits **beside** the band, not in it) and
+> `use-popover-panel.tsx` (which genuinely portals — verified, unlike the three neighbours corrected
+> above). **So the conclusion is unchanged and now rests on a method that supports it.** Recorded
+> rather than quietly widened, because the first version was a stronger sentence than its evidence,
+> which is the whole subject of the row it sits in.
+>
+> **What this method still cannot do** is prove containment across arbitrary composition — a future
+> component rendered into a chrome slot from a directory outside that candidate set is invisible to
+> it. That is the same limit the spec gives as its reason for refusing to gate the latency claim,
+> and it is why "latent" is a measurement of today rather than a property.
 
 **What IS live, and passes by luck:** `CreateActivityPopover` paints `bg-card` (`:73`) with
 `text-muted-foreground` (`:109`) and renders at `TsldPanel.tsx:2946`, **inside** the
