@@ -1082,6 +1082,24 @@ planCalendarId` — the same rule. Two server rules both claim to name "the acti
 > **Deliberately not built here.** It is six milestones, it changes `durationDays` on existing rows
 > (ADR-0068 §6's named hazard, verbatim), and it wants six specialist reviews. What this note buys is
 > that the next reader does not inherit "display only".
+>
+> **The write half is now EXECUTED, not read** (`apps/web/src/lib/day-factor-divergence.characterisation.test.ts`,
+> the spec's M0). Three cases, running: the helper returns **8** for an activity whose driving
+> resource sits on a 24 h calendar that **is in the list the surface already holds** (so the obstacle
+> is the signature, not the data); `durationWriteFields('5d', 8)` returns
+> `{ durationMinutes: 2400 }` against the 7,200 the scheduling calendar would give; and a third case
+> pins the two agreeing when the calendars agree, so a later green run cannot mean the fixture
+> stopped discriminating. The flag is deliberately **not** pinned — its sibling pins it off to assert
+> a rollback contract, and pinning it off here would take the degraded whole-days branch where the
+> factor is provably unused, characterising a path on which the defect cannot occur.
+>
+> **What is still owed, and it is the other half of the claim** (M0-T1): that the engine then spends
+> those 2,400 minutes at the driving resource's 1440/day. That needs a real database and a
+> recalculate. It is established by reading `schedule.service.ts:1277-1287` and `resolveDayFactors`
+> — and reading is exactly what got this row's severity wrong for a year, so it is recorded as owed
+> rather than counted as proved. **The seed catalogue cannot supply the fixture**: every calendar it
+> builds has `hoursPerDay: null` (`packages/seed/src/**`, four builders), so no seeded plan can
+> exhibit this divergence at all, and M0-T1 must construct one through the public API.
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 
