@@ -6520,3 +6520,58 @@ Until then the check is one command, and it belongs in the reconciliation pass
 ```
 python3 -c "import os,re; nums=sorted({m.group(1) for f in os.listdir('docs/adr') if (m:=re.match(r'(\d{4})-',f))}); c=open('CLAUDE.md').read(); print([n for n in nums if f'ADR-{n}' not in c])"
 ```
+
+### 292. The web entry chunk is 372 kB gzip, and every authenticated route is in it
+
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
+
+**Measured, not estimated.** `pnpm --filter @repo/web build`, 2026-09-10:
+
+| chunk                                    | raw         | gzip       |
+| ---------------------------------------- | ----------- | ---------- |
+| `index` (entry)                          | 1,274.17 kB | **372.42** |
+| `jspdf.es.min`                           | 399.10 kB   | 129.66     |
+| `html2canvas`                            | 199.54 kB   | 46.82      |
+| `index.es`                               | 151.34 kB   | 48.91      |
+| `paint`                                  | 113.93 kB   | 33.71      |
+| `staff`                                  | 75.69 kB    | 23.84      |
+| `purify.es`                              | 27.17 kB    | 10.57      |
+| `index.css`                              | 84.02 kB    | 15.21      |
+| `share`, `rolldown-runtime`, `run-probe` | < 1 kB each | < 1        |
+
+Ten JS chunks. `docs/FRONTEND_QUALITY.md`'s advisory budget is **≤ ~200 kB gzip** for the initial
+critical path, so the entry chunk is **1.86×** it.
+
+**The cause is not bloat, it is that the splitting the documentation describes does not exist.**
+That file said "route-based splitting by default — each route is its own chunk"; `app/router.tsx`
+declares 26 routes and has **two** `lazy()` boundaries (`/share`, `/staff`), and `vite.config.ts`
+sets no `manualChunks`. The other eight chunks are library splits Rolldown derived from those two
+dynamic imports plus the export path's. **Every authenticated route — the entire plan workspace,
+the Gantt, the canvas painter's host, every dialog — is in the entry chunk**, so a planner signing
+in downloads the whole application before the sign-in form paints. The sentence is corrected in
+place.
+
+**The heavy things are already lazy and are NOT the problem.** `jspdf` (129.66 kB gzip) and
+`html2canvas` (46.82 kB) sit behind the export path exactly as ADR's export stage intended, and
+`paint` is its own chunk. Removing them from the entry is done. What is in the entry is the
+application.
+
+**Do not read 372 against 200 as a regression.** The ~200 kB figure is not a measurement and never
+was — it predates anybody looking at a build, which is why `FRONTEND_QUALITY.md` labelled the
+budgets "advisory and unmeasured" in the same breath. This row records **the first measurement**,
+so there is no earlier number to have regressed from, and no claim here that 372 is too big — only
+that the two figures have never been compared and now have been.
+
+**What NOT to do with it.** Setting the budget is `docs/specs/delivery-gates/` M3, which is written
+and awaiting approval, and ADR-0058's rule is that a bar goes at the measured floor rather than at
+an aspiration — so this number is an input to that decision, not a target to code against. Splitting
+the authenticated routes is the obvious remedy and is **not** obviously right: TanStack Router
+prefetches on intent, the app is a persistent shell (ADR-0029) whose routes share most of their
+code, and a split that moves 300 kB out of the entry and then fetches it on the first navigation may
+buy a faster sign-in and a slower first plan open. **Measure the LCP effect before splitting**, on
+the product owner's own hardware, the way every other performance question in this repository has
+been settled.
+
+**Why it was never noticed.** Nothing in CI checks a bundle size (`#48(b)`, `docs/BACKLOG.md`), and
+the one document that would have told a reader the splitting story asserted a strategy the code does
+not implement — so a reader auditing bundle health would have found a plausible answer and stopped.

@@ -71,10 +71,20 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 ## Bundle size
 
 - **Budgets:** initial (critical-path) JS ≤ ~200KB gzipped; per lazy route chunk
-  ≤ ~150KB gzipped. **These are advisory and unmeasured** — nothing in CI checks
-  a bundle size, and no baseline has been recorded. Enforcing them is a backlog
-  item ([`BACKLOG.md`](BACKLOG.md)); until then, do not claim a change is within
-  budget without measuring it.
+  ≤ ~150KB gzipped. **These remain advisory and unenforced** — nothing in CI checks
+  a bundle size. Enforcing them is a backlog item ([`BACKLOG.md`](BACKLOG.md));
+  until then, do not claim a change is within budget without measuring it.
+- **A baseline now exists, and the initial bundle is 1.86× the budget above.**
+  Measured 2026-09-10 by `pnpm --filter @repo/web build` on `main`'s content:
+  entry chunk **1,274.17 kB raw / 372.42 kB gzip**, plus 84.02 kB / 15.21 kB gzip
+  of CSS. The largest non-entry chunks are `jspdf` (129.66 kB gzip) and
+  `html2canvas` (46.82 kB), both correctly lazy behind the export path. **The
+  ~200 kB figure is not a measurement and never was** — it predates any build
+  being looked at, and the gap is mostly explained by the bullet below on code
+  splitting rather than by anything being oversized. Recorded as a fact, not as a
+  target to move: what the budget should be is `docs/TECH_DEBT.md` #292 and
+  `docs/specs/delivery-gates/`, and ADR-0058 says a bar is set at the measured
+  floor rather than at an aspiration.
 - Prefer platform APIs and small libraries; **justify every new dependency**
   (size, maintenance, tree-shakeability) in the PR.
 - Import icons and utilities by name (tree-shakeable); never import whole
@@ -83,8 +93,16 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 ## Code splitting & lazy loading
 
-- **Route-based splitting by default** — each route is its own chunk; the app
-  shell and critical path stay in the initial bundle.
+- **Route-based splitting is the INTENTION, and is not what the app does today.**
+  This line read "route-based splitting by default — each route is its own chunk"
+  until 2026-09-10, when it was measured. `app/router.tsx` declares 26 routes and
+  has **two** `lazy()` boundaries — `/share` and `/staff` — and `vite.config.ts`
+  sets no `manualChunks`. A production build emits **10 JS chunks**, of which two
+  are route chunks (`share` at 0.30 kB gzip, being only the wrapper, and `staff`
+  at 23.84 kB); the rest are library splits that Rolldown derived from the two
+  dynamic imports. **Every authenticated route — the whole plan workspace — is in
+  the entry chunk.** Aim for the rule above when adding a route; do not read it as
+  a description of the present.
 - **Lazy-load heavy, non-critical UI** (charts, rich editors, rarely-used
   dialogs) behind `React.lazy`/dynamic import with a Suspense fallback.
 - Prefetch likely-next routes on link hover/focus (intent-based).
