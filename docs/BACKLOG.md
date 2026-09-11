@@ -147,23 +147,33 @@ a product idea that has not yet earned a roadmap line:
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.
-- `M` **Notifications.** Plan changes, pen hand-off requests, and import
-  completion currently surface only in-app. _(Corrected 2026-09-11: **its stated
-  blocker has lapsed, and the pointer no longer resolves.** "Needs the mail
-  transport (below) first" pointed at an entry in Platform foundations that was
-  removed on 2026-08-05 — that section now carries a call-out explaining why —
-  and the transport is real: `common/mail/smtp-mail.service.ts` ships beside
-  `logging-mail.service.ts`, selected purely on `MAIL_SMTP_URL` being set, and
-  the product owner confirmed the deployed host sending on 2026-08-05. So this
-  entry was blocked on something that shipped over a month ago, in the file that
-  decides what gets built next — the **fourth** time this file has said that, and
-  the first where the stale claim was a **dependency** rather than the item
-  itself.)_
-  What it genuinely needs is a decision about **which** events earn a
-  notification and through what channel, which is the ADR-0075 shape one feature
-  along: mail is best-effort and its failure belongs to the operator, so a
-  notification a planner is told was sent is a claim this transport cannot
-  make.
+- ~~`M` **Notifications.**~~ **SPECCED, AND DEFERRED ON A NAMED TRIGGER — 2026-09-11.** The
+  decision this row said was owed ("which events earn a notification and through what channel") is
+  taken: [ADR-0137](adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md),
+  with the full spec and plan at [`docs/specs/notifications/`](specs/notifications/).
+
+  **It is not queued work and should not be picked up as any.** The recommended recipient rule is
+  "members holding a write permission, **minus the actor**"; this installation has one member, so
+  that set is empty for every event kind, always. Built today it would emit **zero rows** and render
+  an empty inbox — inert, not merely low-value. **Trigger: a second person holding a write
+  permission in any organisation**, which is deliberately the same trigger ADR-0085 names, since
+  both features exist to serve somebody who is not the person who built the product.
+
+  _This entry has now been wrong twice, in the two opposite directions this file keeps producing._
+  It first said the work was blocked on a mail transport that had shipped **a month earlier**
+  (corrected 2026-09-11, the fourth stale claim found in this file and the first where the stale
+  part was a _dependency_ rather than the item). Corrected, it then said what the row "genuinely
+  needs" is a decision — and the decision, once taken, disqualified the build. So the row was wrong
+  about being blocked, and then wrong about being ready. Kept rather than deleted, because the
+  shape is the point: **a backlog row records what somebody believed when they wrote it**, and
+  sizing something `M` is itself a claim that it is work.
+
+  What survives for the day the trigger fires: the design is settled and the plan is loaded — M0's
+  three falsification bars land before any harness runs, M2 is the first user-facing milestone with
+  its entry point named (`/me/notifications` off the account chip), and the riskiest task is already
+  isolated (the import producer must **not** sit in its transaction, because phase 2 hard-deletes
+  the plan on recalculation failure). Three `database-architect` tasks are mandatory at M1/M4/M5.
+
 - `L` **Per-activity plan revision history.** "Who changed this duration?" is
   unanswerable and will stay that way, because the audit log deliberately and
   **permanently** excludes ordinary content edits (ADR-0073 §3): an activity's

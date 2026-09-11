@@ -1,7 +1,10 @@
 # Implementation Plan: Notifications
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval.**
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved** as a design; the build
+  waits on [ADR-0137](../../adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)'s trigger.
+- **Status:** Approved — the plan is accepted; the **build waits on ADR-0137's trigger**. M0's
+  falsification conditions and M1-T1's `database-architect` task stand as written for the day it
+  fires.
 - **Owner:** _(to be assigned on approval)_
 
 > **Nothing in this plan is built until the spec is approved and CQ-1, CQ-2 and CQ-3 are answered.**

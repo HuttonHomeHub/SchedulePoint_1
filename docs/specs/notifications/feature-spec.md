@@ -1,6 +1,8 @@
 # Feature Spec: Notifications
 
-- **Status:** Draft
+- **Status:** Approved — the design is accepted; the **build waits on ADR-0137's trigger** (a
+  second person holding a write permission in any organisation). At one member the recommended
+  recipient rule yields the empty set, so the feature would emit nothing. Not shelved: loaded.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-11
 - **Tracking issue / epic:** _(none yet)_

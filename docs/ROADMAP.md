@@ -435,6 +435,24 @@ discriminators. Each becomes a spec/plan before build:
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
+- **Notifications.** **Designed, not built — deferred on a named trigger** ([ADR-0137](adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md); spec and plan
+  complete at [`docs/specs/notifications/`](specs/notifications/)). The product tells you things only
+  while you are looking at the thing it is telling you about: a data-date move, a shared calendar's
+  working week, a baseline activation, an import, a deletion — each re-dates or removes work whose
+  author is by definition elsewhere. The design is settled — **the notification IS a durable row and
+  any channel is a best-effort pointer to it**, because `MailEvent` records failures only and the
+  product therefore cannot honestly claim a message was sent; which events earn one is derived from
+  two stated tests rather than listed.
+  **The trigger is a second person holding a write permission in any organisation**, and it is not a
+  hedge: the recommended recipient rule is "members holding a write permission, **minus the actor**",
+  which at one member is the empty set, so the feature would emit zero rows and render an empty
+  inbox. It is **inert rather than weak** — the day a second planner joins it becomes one of the more
+  valuable items here. Deliberately the same trigger as ADR-0085's privacy operations, because both
+  exist to serve people who are not the person who built the product.
+  _(The epic was opened on the pen hand-off and that premise was **disproved** while specifying it:
+  a peer takes the pen from an absent holder on inactivity alone, without needing an answer. See
+  ADR-0137 D4.)_
+
 - **Notes.** **Delivered & enabled (`VITE_NOTES` on by default)** — attributed, time-ordered note
   threads (ADR-0046) on **plans and activities** (client/project reserved for a later slice): a
   polymorphic `notes` table + cascade (M1), the non-pen-gated CRUD + counts API (M2), and the web
