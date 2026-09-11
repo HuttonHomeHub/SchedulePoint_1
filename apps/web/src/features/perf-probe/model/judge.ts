@@ -416,10 +416,16 @@ export function judgeAbsolute(input: AbsoluteJudgeInput): AbsoluteJudgeResult {
    * battery, a panel negotiated at 30 Hz, a remote or virtualised session, thermal throttling.
    *
    * **What this deliberately does NOT do**: it does not add a margin. The 2,000-activity floor of
-   * 30 fps against a 30.3 fps ceiling leaves about 1 % of headroom, and #275 rightly calls a
+   * 30 fps against a 30.3 fps ceiling leaves about 1 % of headroom, and #275 rightly called a
    * verdict decided at that distance a coin toss — but catching it means choosing a margin, and no
    * margin has ever been measured here. Inventing one would be the number-tuned-to-the-answer this
-   * repository keeps refusing. The residual stays on #275 as an open decision.
+   * repository keeps refusing. **#275 is closed and the residual is `docs/TECH_DEBT.md` #293**,
+   * where that row's own proposed remedy — INDETERMINATE when the run-to-run spread exceeds the
+   * ceiling-to-floor headroom — was tested arithmetically on 2026-09-11 and **withdrawn as
+   * unsound**: on a passing run every repeat lies inside that headroom so it essentially cannot
+   * fire, and on a failing one it fires in proportion to how bad the painter is, so a 5 fps reading
+   * on this display would be called unanswerable. Do not implement it from this docblock; read
+   * #293 for the disproof and for the candidate that replaced it.
    */
   const ceilingFps = Number.isFinite(idleInterval) && idleInterval > 0 ? 1000 / idleInterval : null;
   if (ceilingFps !== null && ceilingFps <= minFps) {

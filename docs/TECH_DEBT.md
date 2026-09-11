@@ -7064,6 +7064,45 @@ the gap between the floor and the ceiling, the reading cannot resolve the questi
 same argument `judgeAbsolute` already makes for the straddle case and would need no new constant at
 all. That is worth testing before any ratio is invented.
 
+> **Tested on 2026-09-11 — before inventing anything, which is what this row asked for — and the
+> proposal is UNSOUND. It is withdrawn rather than built.** No measurement was needed; the
+> arithmetic settles it, using only quantities `judgeAbsolute` already holds
+> (`slowestRunFps`, `fastestRunFps`, `minFps`, `ceilingFps`).
+>
+> Write headroom `h = ceiling − floor` and spread `s = fastest − slowest`. The proposed rule is
+> `s > h ⇒ INDETERMINATE`. Two consequences, and the second is fatal:
+>
+> - **It essentially cannot fire on a passing run.** Every repeat is bounded above by the display's
+>   ceiling and, on a passing run, below by the floor — so they all lie inside a band of width `h`
+>   and `s ≤ h`. (Approximately rather than exactly: `fps` is derived from measured gaps and can
+>   nudge fractionally past a nominal ceiling. The conclusion does not lean on the exact bound.)
+> - **On a FAILING run it fires in proportion to how bad the painter is, which is backwards.** Once
+>   every repeat is below the floor there is no upper bound on `s`, so the worse the painter, the
+>   more likely the rule calls the reading unanswerable. On the exhibit's own display — ceiling
+>   30.3, floor 30, `h = 0.3` — a painter managing **5 fps** would be declared INDETERMINATE for any
+>   spread above 0.3, and a 5 fps reading on a 30 Hz display is one of the most informative numbers
+>   the probe can produce. The rule would suppress exactly the failures worth reporting.
+>
+> So it does catch the exhibit, and for the wrong reason: not because the headroom is thin, but
+> because the run is below the floor. A rule that fires on "below the floor" is not a coin-toss
+> detector.
+>
+> **A better-shaped candidate, recorded as a candidate and NOT a decision.** The condition being
+> hunted is "the verdict would flip under a change smaller than the measurement's own uncertainty",
+> and the spread already IS that uncertainty — so the comparison is against the **distance to the
+> floor**, not against the headroom: `|meanFps − minFps| < s`. It fires when the reading sits inside
+> its own noise of the floor, stays silent at 5 fps (distance 25, spread ~1) and silent on a healthy
+> 59-against-45 (distance 14), and it needs no new constant either. It is **not** simply the
+> straddle case renamed: the straddle needs repeats either side of the floor, and this fires while
+> they are all on one side.
+>
+> **It is not built, because it cannot be tested against the exhibit and that is the row's own
+> rule.** The observed reading's per-repeat values were not retained — only that it "measured 30.0"
+> — so whether this candidate would have fired there is unknown, and a single-repeat run has `s = 0`
+> and is silent under it by construction. What would settle it is one reading on a throttled display
+> with its repeats kept. Recorded here so the next person starts from a disproof and a candidate
+> rather than from the proposal that does not work.
+
 **It is not urgent and it is not nothing.** SchedulePoint is a desktop application, and the reading
 that exposed the class was taken on a phone for curiosity. But the rule this leaves is that a
 throttled display can still be handed a confident FAIL about a painter it never measured — the class
