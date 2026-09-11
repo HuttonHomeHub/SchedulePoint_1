@@ -140,8 +140,22 @@ a product idea that has not yet earned a roadmap line:
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.
 - `M` **Notifications.** Plan changes, pen hand-off requests, and import
-  completion currently surface only in-app. Needs the mail transport (below)
-  first.
+  completion currently surface only in-app. _(Corrected 2026-09-11: **its stated
+  blocker has lapsed, and the pointer no longer resolves.** "Needs the mail
+  transport (below) first" pointed at an entry in Platform foundations that was
+  removed on 2026-08-05 — that section now carries a call-out explaining why —
+  and the transport is real: `common/mail/smtp-mail.service.ts` ships beside
+  `logging-mail.service.ts`, selected purely on `MAIL_SMTP_URL` being set, and
+  the product owner confirmed the deployed host sending on 2026-08-05. So this
+  entry was blocked on something that shipped over a month ago, in the file that
+  decides what gets built next — the **fourth** time this file has said that, and
+  the first where the stale claim was a **dependency** rather than the item
+  itself.)_
+  What it genuinely needs is a decision about **which** events earn a
+  notification and through what channel, which is the ADR-0075 shape one feature
+  along: mail is best-effort and its failure belongs to the operator, so a
+  notification a planner is told was sent is a claim this transport cannot
+  make.
 - `L` **Per-activity plan revision history.** "Who changed this duration?" is
   unanswerable and will stay that way, because the audit log deliberately and
   **permanently** excludes ordinary content edits (ADR-0073 §3): an activity's
@@ -153,6 +167,13 @@ a product idea that has not yet earned a roadmap line:
   a **different feature**, with a different table, a different retention story
   and a different read model (a per-activity timeline, not an organisation
   feed). Worth building on evidence that planners ask for it, not before.
+  _(Re-read 2026-09-11 and it stands, with one thing now true that was not when
+  it was written: the revision-comparison programme — ADR-0125/0126/0127/0129 —
+  answers the **what** half between two named revisions, including logic,
+  constraints, calendar, WBS parent, lane and progress. It answers **who** for
+  nothing, because a baseline snapshot has no actor, so the entry's own headline
+  question is unaffected. Worth knowing before somebody scopes this as "add an
+  actor column": the two halves live in different models.)_
 
 ## Platform foundations not yet built
 
