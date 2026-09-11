@@ -4489,7 +4489,7 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   checks on `main`, and "Default to PR title for squash merge commits" confirmed — recorded so
   "shipped" does not read as "enforced" — joined at the gate pass by a third, "require approval for
   first-time contributors", which decides whether a fork's PR runs CI at all.
-  **The gate pass earned its place, and three of the five reviews found the same defect
+  **The gate pass earned its place, and three of the four reviews found the same defect
   independently: the epic's own thesis failing on the epic's own first gate.** The spec said the
   advisory set is read out of `prepush.sh` and never restated; the shipped roster gate did not read
   that file at all. Reproduced rather than argued — add the CI step for the advisory gate **and**
@@ -4503,10 +4503,13 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   **hang** rather than a red test. And the security review found the licence gate's `@repo/` skip to
   be an assumption dressed as an assertion: measuring showed `pnpm licenses list` does not report
   workspace packages at all, so the branch could never fire for one of ours and the only thing it
-  could ever have admitted is a package that is **not** ours wearing our scope. Nine findings folded
-  with regression tests verified red first; two recorded as `docs/TECH_DEBT.md` #298 because both
-  change shared mechanisms, and folding a shared-gate change into an epic's last milestone is what
-  ADR-0105 exists to stop. #244 and #48(b) close. **The CPM engine is not imported and
+  could ever have admitted is a package that is **not** ours wearing our scope. **Four reviews, three
+  blocking, three distinct defects, twelve changes folded and two filed** — counted rather than
+  estimated, because the first draft of the ADR said "five specialists" and "nine findings" and had
+  counted neither, which is ADR-0076 Class 1 inside the ADR about Class 1, one paragraph from the
+  corrected assertion count it had already fixed for the same reason. The two filed as
+  `docs/TECH_DEBT.md` #298 both change shared mechanisms, and folding a shared-gate change into an
+  epic's last milestone is what ADR-0105 exists to stop. #244 and #48(b) close. **The CPM engine is not imported and
   no migration runs**; `apps/api` and `apps/web/src` contribute zero files to the diff.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

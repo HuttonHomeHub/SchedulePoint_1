@@ -201,10 +201,23 @@ worked. Both are pinned now, and both mutations go red.
 
 ### D6 — The gate pass found the epic's own thesis failing on the epic's own first gate
 
-Five specialists over the combined diff. The performance review passed with nothing blocking,
-having re-derived every figure from two clean builds — `entryGraph.gzip = 404744` byte-for-byte on
-both, all seven assertions live-mutated, and the byte-identity of `dist/assets` with the reporter on
-and off confirmed by `sha256sum` rather than taken from the commit message. The other four blocked.
+**Four specialists over the combined diff — and the first draft of this paragraph said five, then
+"the other four blocked", then "nine findings folded".** None of the three was counted. The plan's
+own table names exactly four engaged agents (devops, security, test-engineer, performance) with
+every other agent excluded by a written reason, and it is one file away. ADR-0076 Class 1, in the
+ADR whose subject is Class 1, written by the hand that had spent the same milestone correcting an
+assertion count from 25 to 49 for the same reason. Corrected here rather than quietly, because the
+commit that shipped this ADR carries the wrong figures in its message and cannot be edited once
+merged.
+
+**Counted: four reviews, three blocking, three distinct blocking defects, twelve changes folded and
+two filed.** The distinct defects are fewer than the reports, because the overlap is the finding:
+the advisory gap was reached by three reviewers independently and M3's missing tests by two.
+
+The performance review passed with nothing blocking, having re-derived every figure from two clean
+builds — `entryGraph.gzip = 404744` byte-for-byte on both, all seven assertions live-mutated, and
+the byte-identity of `dist/assets` with the reporter on and off confirmed by `sha256sum` rather than
+taken from the commit message. The other three blocked.
 
 **Three of the five found the same defect independently, and it is D1's own subject: the advisory
 cross-check was specified and never built.** D2 of the spec says the advisory set is read out of
@@ -261,6 +274,13 @@ repository; and the echoed title now has newlines stripped **for the echo only**
 reaching commitlint must still fail if it carries one. Two findings are recorded rather than rushed
 (`docs/TECH_DEBT.md` #298), both because they change shared mechanisms and folding a shared-gate
 change into an epic's last milestone is what ADR-0105 exists to stop.
+
+**The twelve, since a number nobody enumerates is the thing this ADR is about:** the advisory
+cross-check (R3a/R4a); the shared parser and its first suite; M3's `runGate` refactor and its suite;
+the licence gate's `@repo/` finding; the CSS budget (B6); the two non-discriminating assertions; the
+orphaned `ci.yml` comment; the PR-title action pins; the echoed title's newline strip; the
+Turbo-cache blind spot; the third operator setting; and the R-label and B5 scope notes. The units
+error below was found separately, re-deriving for this document rather than by a reviewer.
 
 ## Consequences
 
