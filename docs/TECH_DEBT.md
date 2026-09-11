@@ -259,7 +259,7 @@ other is a client bug in a different file.
 
 ### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
-**Status:** open · **Verified:** 2026-09-10 · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-11 · **Size:** S once one question is answered (see the 2026-09-11 assessment) · **Owner:** web
 
 > **Most of this row was discharged by ADR-0083 and nobody closed it** — found by the 2026-09-01
 > verification sweep, and it is a **half-executed** close: that ADR's own step 8 says _"Delete #64
@@ -288,6 +288,33 @@ long-lived editor session where the pen can be taken by another user at any mome
 
 Its neighbouring controls are already correct (`:450`, `:602`, `:662` all shade rather than
 disable), which is moot while the whole subtree unmounts around them.
+
+> **Assessed 2026-09-11, and the assessment turns an M-sized investigation into ONE product
+> question.** The mechanism this row needs is not missing and does not need designing — it is
+> already in the parent, twenty lines from the call site. `ActivityResourcesPanel` builds
+> `assignGate = { writable: canWrite, reason: writeReason ?? null }` and wraps the **assign form**
+> in `<FieldGateProvider gate={assignGate}>` (`:173`, `:358`), which is ADR-0083's treatment applied
+> exactly as `#66` closed it. The row LIST is not wrapped: `AssignmentRow` is handed a bare
+> `canWrite: boolean` (`:283`) and branches on it. So the fix is to extend a wrapper that exists
+> over a sibling subtree, not to invent a read-only rendering.
+>
+> **The blocker is a product decision nobody has stated, and it is the reason this is still open.**
+> `canWrite` here is a single boolean, so it cannot separate a Planner whose pen was taken (a
+> transient state, mid-edit, where the unmount is a guaranteed WCAG 2.4.3 focus drop) from a Viewer
+> (a permanent state, who would then meet eight shaded fields on every assignment instead of today's
+> one-line summary). A read-only render is right for the first and is a **visible product change**
+> for the second — and ADR-0083, which would settle it, is **Proposed rather than Accepted** and
+> carries two claims marked "reasoned from specification, not observed". That is the whole of what
+> is owed: answer "what does a Viewer see here", and the code follows in an afternoon.
+>
+> **A second thing to know before picking it up**: `writeReason` is **not** passed down to
+> `AssignmentRow` today, so a naive shading would produce eight shaded controls with no reason
+> attached — the ADR-0082 defect one layer along, arriving through the fix for this one.
+>
+> **Not fixed here, and deliberately not patched either.** The cheap alternative — leave the unmount
+> and move focus to the row heading — closes the 2.4.3 hazard without any visible change, and was
+> rejected: this row and ADR-0083 both record the remedy as a read-only render, and substituting a
+> focus-move would be overriding a recorded position to avoid asking a question.
 
 **Re-verified 2026-09-10**: `AssignmentRow.tsx:511` is still `{canWrite ? (`, unchanged, and
 `components/ui/` still contains no checkbox primitive — so neither this row's survivor nor #72's
@@ -1610,14 +1637,28 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 
 ### 248. The DCMA what-if drops the levelling pass, and nothing says so
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** M · **Owner:** api
 
-**Re-verified 2026-09-10 — the defect is unchanged and its CITATION has drifted**, which is this
-row's neighbour #246 happening to #248: the destructure is now at **`schedule.service.ts:952`**, not
-`:822`, and still reads `{ activities, edges, options, meta }`. A reader following the old line
-lands in `buildEngineGraph`'s cross-plan guard and finds nothing.
+**The honesty half is DONE (2026-09-11 sweep) and the engine half is what survives.** The row named
+two remedies and said to do at least one. The cheap one landed with the ADR-0116 addendum and is now
+in all three places a reader could meet it: the addendum §"the what-if does NOT run the levelling
+pass", a paragraph at the drop site naming this row, and the route's own OpenAPI description
+(`schedule.controller.ts:285` — _"It runs the NETWORK pass only — resource levelling is not
+applied"_). **So the sentence below beginning "Nothing records this as a limitation" is no longer
+true, and its `grep -ci "level" docs/adr/0116-*.md` returns 10 rather than 0.** It is kept rather
+than deleted because it is the finding's evidence as of the day it was raised; read it as history.
 
-`schedule.service.ts:822` destructures `{ activities, edges, options, meta }` from
+**What is owed is the correct remedy**: thread `graph.leveling` through and level BOTH the control
+and the perturbed pass. That is engine work with a second pass per side, which is a decision rather
+than a fold, and it is why this row stays open.
+
+**Its citation has now drifted TWICE, and the second time inside the commit that fixed the first.**
+On 2026-09-10 the row corrected `:822` to `:952`; the destructure is at **`:971`** today, because
+the addendum's own explanatory paragraph pushed it down. That is #246 in miniature, so this row stops
+citing a line: the site is **the `const [{ activities, edges, options, meta }, labelRows]`
+destructure inside `getCriticalPathTest`**, which a reader can find whatever moves above it.
+
+`getCriticalPathTest` destructures `{ activities, edges, options, meta }` from
 `buildEngineGraph` — and the builder's return type also carries
 `leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null`, which is
 **dropped on the floor**. So ADR-0116 M6's critical-path test runs `computeSchedule` twice and never
@@ -1629,7 +1670,8 @@ control run reproduces the pure network dates, so the movement it reports is mea
 wrong baseline — and the answer looks entirely reasonable, because every number in it is internally
 consistent.
 
-**Nothing records this as a limitation.** `grep -ci "level" docs/adr/0116-*.md` returns **0**. The
+**Nothing records this as a limitation.** _(As of 2026-09-03, when this was raised. Fixed — see the
+top of this row.)_ `grep -ci "level" docs/adr/0116-*.md` returns **0**. The
 ADR is otherwise scrupulous about naming what its measurement does and does not cover — it carries
 its own deliberately weaker parity sentence and a written non-mutation proof — so the omission reads
 as an oversight rather than a decision, which is exactly what makes it worth a row: a reader
