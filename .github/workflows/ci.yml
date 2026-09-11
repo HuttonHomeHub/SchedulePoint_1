@@ -223,6 +223,21 @@ jobs:
       - name: Build (api + web)
         run: pnpm build
 
+      # What the browser downloads before it can render anything, against a number somebody chose
+      # deliberately (`docs/specs/delivery-gates/` M3, closing `docs/TECH_DEBT.md` #48(b)).
+      #
+      # The quantity is the entry GRAPH — the entry chunk plus the closure of its STATIC imports —
+      # measured gzipped, because that is what crosses the wire. Dynamic imports are excluded: a
+      # `jspdf` behind an `await import()` costs the first paint nothing, and counting it would make
+      # the number describe a download nobody performs.
+      #
+      # **Not a root `check:*`, deliberately**, which is why `check:ci-roster` does not see it: it
+      # needs a production build, and making a five-second `pnpm prepush` wait thirty seconds for
+      # one is how a gate gets bypassed. It runs here, immediately after the build that produces its
+      # input.
+      - name: Check the web bundle budget
+        run: pnpm --filter @repo/web check:bundle-size
+
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest

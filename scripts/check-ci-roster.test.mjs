@@ -122,6 +122,64 @@ it('R4 — a gate both exempt and present in CI FAILS', () => {
   rmSync(root, { recursive: true, force: true });
 });
 
+// ------------------------------------------------- workspace gates, resolved where they live
+
+it('R2 — a WORKSPACE gate in CI is resolved against its own package.json, not the root', () => {
+  /**
+   * `docs/specs/delivery-gates/` M3 found this gate assuming every `check:*` in `ci.yml` is a root
+   * script. `check:bundle-size` lives in `apps/web` because it needs a production build, and is
+   * invoked as `pnpm --filter @repo/web check:bundle-size` — which R2 reported as a step for a
+   * script that does not exist. True of the root manifest, false of the repository.
+   *
+   * Exempting it would have been the quick answer and the wrong one: the gate would then be blind
+   * to a workspace step naming a script that really had been renamed.
+   *
+   * Verified red by deleting the workspace branch, which restores the false finding.
+   */
+  const root = tree({
+    'package.json': pkg('check:a'),
+    'apps/web/package.json': JSON.stringify({
+      name: '@repo/web',
+      scripts: { 'check:bundle-size': 'node x.mjs' },
+    }),
+    '.github/workflows/ci.yml': workflow(
+      step('check:a') +
+        '      - name: budget\n        run: pnpm --filter @repo/web check:bundle-size\n',
+    ),
+    'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+  });
+  assert.equal(run(root), 0);
+  rmSync(root, { recursive: true, force: true });
+});
+
+it('R2 — a workspace gate naming a script that workspace does not declare FAILS', () => {
+  // The teeth the exemption would have removed.
+  const root = tree({
+    'package.json': pkg('check:a'),
+    'apps/web/package.json': JSON.stringify({ name: '@repo/web', scripts: { build: 'vite' } }),
+    '.github/workflows/ci.yml': workflow(
+      step('check:a') +
+        '      - name: budget\n        run: pnpm --filter @repo/web check:bundle-size\n',
+    ),
+    'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+  });
+  assert.equal(run(root), 1);
+  rmSync(root, { recursive: true, force: true });
+});
+
+it('R2 — a workspace that does not exist FAILS', () => {
+  const root = tree({
+    'package.json': pkg('check:a'),
+    '.github/workflows/ci.yml': workflow(
+      step('check:a') +
+        '      - name: budget\n        run: pnpm --filter @repo/nope check:bundle-size\n',
+    ),
+    'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+  });
+  assert.equal(run(root), 1);
+  rmSync(root, { recursive: true, force: true });
+});
+
 // ---------------------------------------------------------------- the two that carry the gate
 
 it('R6 — a gate named only in a COMMENT is not covered', () => {

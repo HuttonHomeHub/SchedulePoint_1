@@ -298,7 +298,6 @@ narrowed one, which the Background-processing entry now states.**
   GHCR), so this is a decision and an ADR, not a rewrite.
 - `S` **Branch-protection & release-bot permissions** documented as code rather
   than configured by hand in the GitHub UI.
-- `S` **Bundle-size budget checks in CI** for the web app.
 - `M` **Performance budget / Lighthouse CI** on the plan workspace — the one
   screen where regressions would actually hurt.
 - `S` **Dependency licence checking in CI.**

@@ -43,7 +43,7 @@
  * and broken is a different failure with a different owner, and claiming otherwise would make this
  * gate's green mean more than it does.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { report } from './lib/doc-register.mjs';
@@ -67,6 +67,40 @@ export function runGate(root) {
 
   const pkg = JSON.parse(read('package.json'));
   const declared = Object.keys(pkg.scripts ?? {}).filter((k) => k.startsWith('check:'));
+
+  /**
+   * **A `check:*` in CI is not necessarily a ROOT script, and this gate assumed it was.**
+   *
+   * Found by `docs/specs/delivery-gates/` M3: `check:bundle-size` lives in `apps/web` because it
+   * needs a production build, and making a five-second `pnpm prepush` wait for one is how a gate
+   * gets bypassed. It is invoked as `pnpm --filter @repo/web check:bundle-size`, and R2 reported it
+   * as a CI step for a script that does not exist — true of the root manifest and false of the
+   * repository.
+   *
+   * Exempting it would have been the quick answer and the wrong one: the gate would then be blind
+   * to a workspace step naming a script that really had been renamed. So workspace scripts are
+   * resolved where they live, and R2 keeps its teeth in both places.
+   */
+  const workspaceScripts = new Map();
+  for (const dir of ['apps', 'packages']) {
+    let entries = [];
+    try {
+      entries = readdirSync(join(root, dir), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      try {
+        const manifest = JSON.parse(read(join(dir, entry.name, 'package.json')));
+        if (typeof manifest.name === 'string') {
+          workspaceScripts.set(manifest.name, new Set(Object.keys(manifest.scripts ?? {})));
+        }
+      } catch {
+        // A directory without a manifest is not a workspace package.
+      }
+    }
+  }
 
   let workflow;
   try {
@@ -99,7 +133,33 @@ export function runGate(root) {
 
   /** Comments gone — YAML's and the shell's alike, which is the same rule and the same defect. */
   const stripped = workflow.replace(/#[^\n]*/g, '');
-  const inCi = new Set([...stripped.matchAll(/\bcheck:[a-z][a-z0-9-]*/g)].map((m) => m[0]));
+
+  // Workspace invocations first, so their gate names are not then counted as root ones.
+  const workspaceCalls = [...stripped.matchAll(/--filter\s+(\S+)\s+(check:[a-z][a-z0-9-]*)/g)].map(
+    (m) => ({ workspace: m[1], gate: m[2] }),
+  );
+
+  for (const { workspace, gate } of workspaceCalls) {
+    const scripts = workspaceScripts.get(workspace);
+    if (scripts === undefined) {
+      problems.push(
+        `.github/workflows/ci.yml runs ${gate} in workspace ${workspace}, which is not a package ` +
+          'in apps/ or packages/.',
+      );
+    } else if (!scripts.has(gate)) {
+      problems.push(
+        `.github/workflows/ci.yml runs ${gate} in ${workspace}, which declares no such script. ` +
+          'A renamed or deleted gate leaves a CI step that fails for a reason nobody expects.',
+      );
+    }
+  }
+
+  const workspaceGateNames = new Set(workspaceCalls.map((c) => c.gate));
+  const inCi = new Set(
+    [...stripped.matchAll(/\bcheck:[a-z][a-z0-9-]*/g)]
+      .map((m) => m[0])
+      .filter((name) => !workspaceGateNames.has(name)),
+  );
 
   let exempt = {};
   try {

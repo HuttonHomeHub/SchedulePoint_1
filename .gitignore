@@ -87,3 +87,7 @@ measure-output/
 # Local e2e run logs — `scripts/e2e-local.sh` tees every run so an intermittent
 # failure is captured whatever the caller did with the pipe (`docs/TECH_DEBT.md` #119a).
 .e2e-logs/
+
+# The web bundle's size report — a BUILD ARTEFACT, written outside `dist/` so it is never served.
+# `apps/web/check:bundle-size` reads it in CI immediately after the build that writes it.
+apps/web/bundle-report.json

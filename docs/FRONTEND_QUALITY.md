@@ -70,21 +70,28 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 ## Bundle size
 
-- **Budgets:** initial (critical-path) JS ≤ ~200KB gzipped; per lazy route chunk
-  ≤ ~150KB gzipped. **These remain advisory and unenforced** — nothing in CI checks
-  a bundle size. Enforcing them is a backlog item ([`BACKLOG.md`](BACKLOG.md));
-  until then, do not claim a change is within budget without measuring it.
-- **A baseline now exists, and the initial bundle is 1.86× the budget above.**
-  Measured 2026-09-10 by `pnpm --filter @repo/web build` on `main`'s content:
-  entry chunk **1,274.17 kB raw / 372.42 kB gzip**, plus 84.02 kB / 15.21 kB gzip
-  of CSS. The largest non-entry chunks are `jspdf` (129.66 kB gzip) and
-  `html2canvas` (46.82 kB), both correctly lazy behind the export path. **The
-  ~200 kB figure is not a measurement and never was** — it predates any build
-  being looked at, and the gap is mostly explained by the bullet below on code
-  splitting rather than by anything being oversized. Recorded as a fact, not as a
-  target to move: what the budget should be is `docs/TECH_DEBT.md` #292 and
-  `docs/specs/delivery-gates/`, and ADR-0058 says a bar is set at the measured
-  floor rather than at an aspiration.
+- **The budget is enforced, and it is the measured floor plus 5%** — not the
+  ~200 kB figure this section carried for years, which predates any build being
+  looked at. `apps/web/bundle-budget.json` holds the numbers and
+  `pnpm --filter @repo/web check:bundle-size` compares them to a real artefact on
+  every CI run (`docs/specs/delivery-gates/` M3). ADR-0058: a bar set at an
+  aspiration gets deleted rather than met.
+- **The quantity is the entry GRAPH, not the entry chunk, and the difference is
+  33 kB.** The graph is the entry chunk plus the transitive closure of its
+  **static** imports — everything the browser must parse before it can render.
+  Measured 2026-09-11 by `pnpm --filter @repo/web build`, which now writes
+  `apps/web/bundle-report.json`: **3 chunks, 1,360.80 kB raw / 395.26 kB gzip**,
+  plus 82.31 kB / 14.79 kB gzip of CSS. The entry chunk **alone** is 362.21 kB
+  gzip — which is what this section recorded on 2026-09-10 as "the initial
+  bundle", understating first-paint by the 32.69 kB `paint` chunk it statically
+  imports.
+- **`jspdf` (125.57 kB gzip) and `html2canvas` (45.51 kB) are confirmed OUTSIDE
+  the entry graph** — verified from Rollup's own static/dynamic import lists
+  rather than inferred from chunk names, which cannot say which kind an import
+  was. They cost the first paint nothing.
+- The remaining gap to any aspirational figure is explained by the bullet below
+  on code splitting rather than by anything being oversized: every authenticated
+  route is in the entry chunk (`docs/TECH_DEBT.md` #292).
 - Prefer platform APIs and small libraries; **justify every new dependency**
   (size, maintenance, tree-shakeability) in the PR.
 - Import icons and utilities by name (tree-shakeable); never import whole
