@@ -216,10 +216,24 @@ describe('the typeface reaches the layers that opt out of the cascade', () => {
     // bullet now carries by design — a check satisfied by a nearby mention rather than by the
     // fact. The bullet's shape is `**Family:** \`--font-sans\` (**IBM Plex Sans**, self-hosted)`,
     // so the bolded name inside the parenthesis IS the claim.
+    //
+    // **Two expectations, not one, and the reason is the failure MESSAGE** (#218(b)). A single
+    // `**Family:** … (**name**` regex fails identically whether the bullet is gone or merely
+    // reshaped, and reports the first — so an author who dropped the parenthesis is sent looking
+    // for a bullet that is right there on the page. The gate's pass/fail set is unchanged by this
+    // split: both shapes failed before and both fail now. Only the sentence differs, which is the
+    // whole point, since a gate that names the wrong cause costs the next reader the time the gate
+    // was meant to save.
+    const familyLine = /^.*\*\*Family:\*\*.*$/m.exec(doc);
+    expect(familyLine, 'docs/DESIGN_SYSTEM.md has no **Family:** bullet at all').not.toBeNull();
+
     const familyBullet = /\*\*Family:\*\*[^\n]*?\(\*\*([^*]+)\*\*/.exec(doc);
     expect(
       familyBullet,
-      'docs/DESIGN_SYSTEM.md has no **Family:** bullet naming a bold family',
+      'the **Family:** bullet is on the page but not in the shape this gate reads — it must name ' +
+        'the face in bold inside a parenthesis, as `**Family:** `--font-sans` (**<face>**, …)`. ' +
+        'The claim is the bolded name; scanning the whole bullet would pass on a reverted value ' +
+        'so long as the correction prose still mentioned the face.',
     ).not.toBeNull();
     expect(
       familyBullet![1]!.trim(),

@@ -4419,6 +4419,20 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   the product mentions the gesture. It degrades gracefully (a tap still fires the command exactly
   as before), so this is an unadvertised affordance rather than a defect; the right home is
   whatever touch-help surface exists when one does.
+  > **Re-derived entry by entry 2026-09-11, and two clauses sharpen.** First, the gesture **is**
+  > documented — `docs/UX_STANDARDS.md:102-104,127` and `docs/DESIGN_SYSTEM.md:1001` all describe
+  > it — so the accurate finding is that no **user-facing** surface names it, which is what the
+  > item's own words ("nothing in the product") say and what its heading ("no documentation a user
+  > would find") overstates in the other direction. Developer docs are not the product; they are
+  > also not nothing, and a reader meeting this row deserves to know they exist.
+  >
+  > Second, the toolbar's live members are **narrower than "every icon-only control"**: nothing in
+  > `apps/web/src` sets `showLabel: 'never'` (both matches are comments recording the option being
+  > measured and rejected), so `ToolbarButton`'s icon-only tooltip branch is **dormant** and the one
+  > live toolbar consumer is the bespoke undo/redo pair at `tsld-toolbar-items.tsx:1984`. With
+  > `HierarchyTree`'s row-menu long-press that makes **two** live members, both named — the same
+  > count this row already reached, arrived at from the other side. The finding is unchanged; its
+  > blast radius is now a number rather than a category.
   > **One clause is struck, and it was false on the day it was written** (2026-09-09). The item
   > read "the shortcuts sheet is keyboard-shaped and **unmounted from the Gantt-less panels
   > anyway**". The sheet has mounted **once for the whole workspace, above both views**, since
@@ -4434,6 +4448,13 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
   span carries an empty strip between the title separator and the diagram. Cosmetic,
   low-frequency, consistent with the on-screen ruler's own resting state.
+  > **Re-derived 2026-09-11 and still exactly true.** `render-export-image.ts:190` is
+  > `input.markerRow ?? EXPORT_MARKER_ROW` — unconditional on whether any marker paints — and
+  > `export-image.test.ts:286-298` pins the reservation in both extents, so the blank strip is
+  > gated behaviour rather than an oversight nobody noticed. **It is therefore not a coding task
+  > today**: the only two remedies are to draw a separator (new paper furniture, a design call) or
+  > to collapse the row when nothing occupies it, which reverses the geometry-stability decision
+  > recorded in `docs/DECISIONS.md` and un-pins two tests written to hold it.
 - ~~**The export legend's group order differs from the DOM legend's**~~ — **CLOSED 2026-08-31.**
   `EXPORT_LEGEND` now runs Critical → Near-critical → On schedule → **Data date → Today** →
   Driving link → Non-driving link, which is `SHARED_CUES`' grouping. Its docblock had claimed to
@@ -4540,8 +4561,9 @@ follow-up landing its items — not item by item. Any single entry below may hav
 incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
 person picking it up checks that one, which is cheap because every entry names its file.
 
-Neither is blocking and neither was folded; both are recorded so they are decisions rather than
-things that were dropped.
+Neither was blocking and neither was folded; both were recorded so they are decisions rather than
+things that were dropped. **(b) closed 2026-09-11; (a) is live and is not a coding task** — it needs
+somebody to print the page and look at it.
 
 **(a) The printed programme's smallest type has never been looked at on paper.**
 `GanttPrintSurface.css` sets 9 px column text (`:77`), 8 px (`:135`) and a 7 pt bar label (`:256`).
@@ -4552,13 +4574,22 @@ was explicit that WCAG constrains contrast, resizability and spacing, not which 
 used), so this is a legibility judgement somebody has to make by printing the page. The screenshot
 harness photographs it (`gantt-print-programme`), which is a screen at 1646 px and not paper.
 
-**(b) The `**Family:**` bullet check is tighter than it was and is still not the tightest possible.**
-`typeface-reach.structural.test.ts` now parses the bolded family inside the bullet's parenthesis
-rather than scanning the whole bullet — so a reverted value can no longer be satisfied by the
-correction prose the same bullet carries by design. What it still cannot see is a bullet rewritten
-into a different shape: the regex is `**Family:** … (**<name>**`, and an edit that drops the
-parenthesis fails the "no claim at all" assertion rather than a wrong-family one. That is the right
-way round (loud, not silent), but the failure message would name the wrong cause.
+**(b) ~~The `**Family:**` bullet check is tighter than it was and is still not the tightest
+possible.~~ CLOSED 2026-09-11.**
+`typeface-reach.structural.test.ts` parses the bolded family inside the bullet's parenthesis rather
+than scanning the whole bullet — so a reverted value can no longer be satisfied by the correction
+prose the same bullet carries by design. What it could not see was a bullet rewritten into a
+different shape: the regex is `**Family:** … (**<name>**`, so an edit dropping the parenthesis failed
+the "no claim at all" assertion rather than a wrong-shape one. That was the right way round (loud,
+not silent) with the failure message naming the wrong cause.
+
+> **The fix is two expectations where there was one, and NOTHING about what passes changes** — both
+> shapes failed before and both fail now. Only the sentence differs, which is the entire value: a
+> gate that names the wrong cause spends the next reader's time looking for a bullet that is on the
+> page in front of them, i.e. it costs exactly what it was written to save. Verified by mutating
+> `docs/DESIGN_SYSTEM.md:78` twice and restoring it: dropping the parenthesis now reports "on the
+> page but not in the shape this gate reads" and quotes the shape; deleting the bullet reports "no
+> **Family:** bullet at all". 397 `src/styles` tests green afterwards.
 
 ---
 
