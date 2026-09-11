@@ -1,0 +1,85 @@
+# **The message that lands on `main`, checked before it lands.**
+#
+# `docs/specs/delivery-gates/` M2. Squash-merge is this repository's merge mode, and GitHub's squash
+# dialog defaults to the PULL REQUEST TITLE — so the PR title is the commit subject, and it is the
+# one message in the whole workflow that commitlint's git hook never sees. Measured: 88 of `main`'s
+# last 100 subjects are a PR title with ` (#N)` appended.
+#
+# **It validates the title WITH that suffix, which is not a detail.** A title of 94 characters
+# passes commitlint and lands at 101, over `header-max-length` — and one of the four historic
+# failures on `main` is exactly that shape. Checking the bare title would be green while the commit
+# it becomes is invalid, for anything in the 93–100 band. The real PR number is used rather than an
+# allowance for one, so the string checked is the string that will land.
+#
+# **A separate workflow rather than a job in `ci.yml`, deliberately.** This has to run on `edited`,
+# and `ci.yml` runs on `push` — a title fixed after a red run would otherwise stay red until
+# somebody pushed a dummy commit, which teaches people to ignore the check.
+#
+# **`pull_request`, never `pull_request_target`.** The latter runs with a writable token in the base
+# repository's context against the fork's head, which is how a title-reading workflow becomes a
+# token-exfiltration path. `permissions: {}` because it needs none: it reads the event payload it
+# was handed.
+#
+# **The title reaches the shell through `env:`, never through `${{ }}` inside `run:`.** Interpolation
+# happens before bash parses the script, so a title containing `"; curl …` would execute. Via `env:`
+# it is a value, not source text.
+#
+# Two blind spots, stated rather than implied:
+#
+#   1. The **release PR** ("chore(release): version packages") carries no checks at all — a tag or PR
+#      created with the default `GITHUB_TOKEN` cannot start another workflow run. Its title is a
+#      constant and is pinned in `scripts/commitlint-fixtures.test.mjs` instead.
+#   2. The squash dialog is **editable at merge time**, after this check has passed. Nothing in a
+#      repository can prevent that; branch protection and habit are the answer.
+name: PR title
+
+on:
+  pull_request:
+    # `edited` is the load-bearing one: without it a corrected title cannot clear the check.
+    # `ready_for_review` because a draft's title is usually the one that needs fixing.
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  # A title edited three times should produce one run, not three queued ones.
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: Check the PR title is a Conventional Commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint the title as the commit it will become
+        env:
+          # Values, not source text. See the header.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          SUBJECT="${PR_TITLE} (#${PR_NUMBER})"
+          echo "Checking: ${SUBJECT}"
+          echo
+          if ! printf '%s' "${SUBJECT}" | pnpm exec commitlint; then
+            echo
+            echo "::error::The PR title is not a valid Conventional Commit once merged."
+            echo "This repository squash-merges, and GitHub appends ' (#${PR_NUMBER})' to the title"
+            echo "to form the commit subject — so the string checked above is what lands on main,"
+            echo "and it is ${#SUBJECT} characters. The title alone is ${#PR_TITLE}."
+            echo
+            echo "Format: type(scope): subject   —   see CLAUDE.md section 9."
+            echo "Edit the title; this check re-runs on edit, with no new commit needed."
+            exit 1
+          fi

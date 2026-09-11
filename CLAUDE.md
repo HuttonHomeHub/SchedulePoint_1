@@ -203,7 +203,11 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
 ## 9. Commit standards
 
 - **[Conventional Commits](https://www.conventionalcommits.org/)** are enforced
-  by commitlint (git hook + expected in PR titles).
+  by commitlint — a git hook on every commit, and `.github/workflows/pr-title.yml` on the
+  **pull-request title**, which is the subject that actually lands on `main` under
+  squash-merge and the one message the hook never sees. That workflow checks the title with
+  the ` (#N)` suffix GitHub appends, because a 94-character title is legal and the 101-character
+  commit it becomes is not.
 - Format: `type(scope): subject` — e.g. `feat(api): add a recurring job scheduler`.
 - Allowed types: `feat, fix, docs, style, refactor, perf, test, build, ci, chore,
 revert`. Scopes: `web, api, config, types, interchange, db, ci, docs, deps, deps-dev, release,

@@ -296,8 +296,6 @@ narrowed one, which the Background-processing entry now states.**
   is a live item again rather than a standing regret. The foundation stays
   platform-neutral (ADR-0018 self-migrating image, ADR-0027 per-package tags,
   GHCR), so this is a decision and an ADR, not a rewrite.
-- `S` **PR-title lint in CI** — commitlint runs as a git hook, so a squash-merge
-  title is only enforced by convention. Belt-and-braces.
 - `S` **Branch-protection & release-bot permissions** documented as code rather
   than configured by hand in the GitHub UI.
 - `S` **Bundle-size budget checks in CI** for the web app.
