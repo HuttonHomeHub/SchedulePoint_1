@@ -300,7 +300,6 @@ narrowed one, which the Background-processing entry now states.**
   than configured by hand in the GitHub UI.
 - `M` **Performance budget / Lighthouse CI** on the plan workspace — the one
   screen where regressions would actually hurt.
-- `S` **Dependency licence checking in CI.**
 - `M` **Centralise the soft-delete filter** via a Prisma client extension, so it
   is enforced globally rather than repeated per repository. The cost of the
   current approach is that one forgotten `deletedAt: null` leaks deleted rows;

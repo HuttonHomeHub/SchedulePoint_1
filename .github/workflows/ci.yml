@@ -190,6 +190,20 @@ jobs:
       # of a reminder; this is that gate. Deliberately aimed at ROADMAP rather than CLAUDE.md's
       # register, which was complete on all three occasions: only the roadmap rots silently,
       # because nothing downstream breaks when a shipped capability is missing from it.
+      # Every package in the resolved tree carries a licence somebody allowed BY NAME. An
+      # allow-list, never a deny-list: a deny-list is silent about the licence nobody thought of,
+      # which is the one that matters, so anything the policy does not name — a copyleft identifier,
+      # a `WITH` exception this cannot parse, a missing `license` field — is unknown, and unknown
+      # fails. Whole tree, one tier, blocking (`docs/specs/delivery-gates/` CQ-3): a build tool can
+      # contaminate its output, so "it never ships" is an argument accepted only as a written
+      # exemption naming who read the package and when.
+      #
+      # Nothing had ever checked. A dependency arriving under AGPL would have been installed,
+      # bundled and shipped, and failed nothing — the same shape as every other row in this file,
+      # where the gate exists because the absence is quiet rather than because something broke.
+      - name: Check dependency licences
+        run: pnpm check:licenses
+
       - name: Check ADR coverage
         run: pnpm check:adr-coverage
 

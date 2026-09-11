@@ -201,6 +201,18 @@ remaining ADR-0072 items are tracked in [`TECH_DEBT.md`](TECH_DEBT.md).
   updates are prioritised. **Justify every new dependency** (maintenance,
   footprint). `pnpm` build scripts are allow-listed, not run blindly.
 - Pin the toolchain; `--frozen-lockfile` installs; review transitive additions.
+- **Licences are allow-listed, and the gate's default answer is no.**
+  `pnpm check:licenses` reads the whole resolved tree — dev dependencies
+  included, because a build tool can contaminate its output — and refuses any
+  package whose licence is not named in
+  [`scripts/licence-policy.json`](../scripts/licence-policy.json) with written
+  reasoning. A deny-list was rejected: it is silent about the licence nobody
+  thought of, which is the one that matters, so anything unresolvable (a `WITH`
+  exception, a missing `license` field) counts as unknown and fails. It runs in
+  `pnpm prepush` and as a CI step. Three blind spots are stated in the gate's own
+  docblock rather than implied: it reads the **manifest-declared** licence, it
+  sees packages rather than vendored source, and it says nothing about whether
+  attribution obligations are being met.
 
 ## Docker & runtime security
 
