@@ -4619,14 +4619,28 @@ its reason rather than quietly dropped.
   state the DOM chart's equivalent now carries; worth doing when either is next touched, and NOT
   worth doing while the nine-segment discontinuity (#226) is unattributed, because it changes the
   shape of the thing somebody will be profiling.
-- **`stackOffsets` is called in `ResourceStackChart`'s render body rather than memoised.** O(buckets
-  x segments), roughly 1,600 operations at the dialog's caps, on a dialog that re-renders rarely and
-  is nowhere near an animation loop. Recorded because it is free to fix, not because it costs
-  anything measurable.
+- ~~**`stackOffsets` is called in `ResourceStackChart`'s render body rather than memoised.**~~
+  **CLOSED 2026-09-11** — `useMemo` keyed on `[stacked, buckets.length]`, with the item's own
+  reasoning kept in the comment beside it so the next reader does not go looking for the measurement
+  that justified it: there isn't one, and that is the point. No test accompanies it, deliberately —
+  a memoisation's only observable is identity across a re-render, and asserting that here would pin
+  an implementation detail rather than a behaviour. 201 `features/resources` +
+  `resource-strip-panel` tests pass unchanged, which is the whole claim a pure-refactor makes
+  (the ADR-0078 barrel-preserving argument).
 - **`LEGEND_WIDTH_PX` is applied through an inline `style`, so it is invisible to the sizing
   ratchet.** `component-reviewer` noted Tailwind v4's dynamic spacing scale would compile `w-42` as a
   real utility and bring it back into that gate's reach. `PLOT_HEIGHT` genuinely cannot move — it is
   read in JS to compute the scale — so this is one of a pair and only half of it is movable.
+  > **Costed 2026-09-11 and NOT done, because it fires an ADR-0105 trigger.** `w-42` is 168 px
+  > exactly, so the arithmetic is free. What is not free is the shape: the width reaches the DOM
+  > through `StackLegend`'s optional `width?: number` prop, applied as an inline style in its
+  > `column` branch only (`StackLegend.tsx:33-34,46`). Moving it to a class means **removing that
+  > prop** — the width belongs to the layout, which is what that component's own docblock already
+  > says ("a 168 px column beside a 72 px strip") — and removing a prop is a **component
+  > public-contract change**, which ADR-0105 lists flatly as a trigger whatever the blast radius.
+  > Measured blast radius, so the next reader does not have to: **two** consumers
+  > (`ResourceStackChart.tsx:62` passes it, `resource-strip-panel.tsx:299` does not, being `row`),
+  > and the prop has no other reader. Small, and still the decision the trigger exists to catch.
 - ~~**The plan describes a third stacking mode, `Kind`, that was never built.**~~ **BUILT
   2026-09-01.** `StackBy` is `'resource' | 'group' | 'kind'`; the invariance gate now compares all
   three against the raw input rather than only against each other, and was verified red by making
@@ -4638,13 +4652,17 @@ its reason rather than quietly dropped.
   unorganised programmes it is most useful on. It now shades the `Group` **option** and carries the
   reason in that option's own label. Neither was covered by any test before: the "no groups" state
   had no assertion anywhere, which is why the regression would have shipped silently.
-- **The disclosure copy diverged from the approved spec without a recorded reason** — the spec says
-  `Show data table (all resources)` and the shipped label is `Show data table`. The shipped wording
-  is better beside a picker that already says "All resources (stacked)"; the undocumented divergence
-  is the finding, not the words.
+- ~~**The disclosure copy diverged from the approved spec without a recorded reason**~~ — the spec
+  says `Show data table (all resources)` and the shipped label is `Show data table`. The shipped
+  wording is better beside a picker that already says "All resources (stacked)"; the undocumented
+  divergence was the finding, not the words. **CLOSED 2026-09-11 by recording the reason where a
+  reader meets it** (`resource-strip-panel.tsx`, beside the label), which is what the finding asked
+  for — the words are unchanged, so nothing about the shipped screen moves.
 
-**Remedy:** fold the first three whenever `paint.ts`'s strip layer or `ResourceStackChart` is next
-touched; the last two want a decision rather than an edit.
+**Remedy (rewritten 2026-09-11, item by item — three of the five are now closed).** What is left is
+two, and neither is a fold: the painter's double walk stays parked until #226's nine-segment
+discontinuity is attributed, because folding the loops changes the shape of the thing somebody will
+be profiling; and `LEGEND_WIDTH_PX` needs the component-contract decision recorded against it above.
 
 ### 223. The canvas resource strip does not export or print, and the gate for that cannot see it
 
