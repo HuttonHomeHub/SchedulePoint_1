@@ -247,6 +247,31 @@ width any more.
 **A preset is still a command, not a derivation.** Resizing preserves the scale a user chose; it
 never re-derives it (ADR-0056). That rule was never about the ladder and outlives it.
 
+#### A roving container catches the focus somebody else drops (ADR-0135)
+
+**The rule:** _a roving container hands focus to itself when a focused child is removed by something
+other than the reader, and says what left._ It is implemented once —
+`components/ui/toolbar/use-focus-handoff.ts` — and called by both `Toolbar` and `Deck`; a structural
+gate asserts that neither carries its own copy **and** that both import it.
+
+Why it needs saying at all: this product had answered "where does focus go when a control
+disappears?" four times, always for an unmount the reader themselves caused. It had never answered it
+for one they did not. On a multi-tenant plan a peer can change a plan-level setting while you hold
+the pen, and your next refetch takes a control out from under your focus ring — measured, with focus
+landing on `<body>` (`docs/TECH_DEBT.md` #204(c)).
+
+**Authoring:** if an item's `isVisible` can flip because of somebody else's write, give it a
+`lostReason` — a **static** string about the CONDITION ("This action applies only while the plan is
+scheduled in Visual mode."), never a `(ctx) => string` like its neighbour `disabledReason`. A
+function has no honest moment to run: at focus time it describes the world before the change, and
+afterwards the item it would read is gone. The field is optional, so a development-only warning marks
+each gap the first time it is reached; where a sentence would be a guess, **omit it** — the reader is
+still told what left and where they are.
+
+It does **not** apply where the predicate is a build-time `VITE_` constant (inlined, ADR-0088 D1, so
+it cannot flip under anybody), to a `presentational` read-out (never a roving stop), or where only
+the reader's own action can remove the item.
+
 #### One geometry on a command surface (ADR-0110)
 
 **Every control on one surface takes the same box, whatever renders it.** A plain command and a

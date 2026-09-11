@@ -4389,6 +4389,47 @@ happening — recorded here so it is a decision rather than an omission.
 > from `activity-bottom-panel.tsx:155,317` rather than guessed"_. The **names** were read and the
 > locators work; the **line numbers** were not, in the sentence claiming they were. All corrected.
 
+> **FIXED 2026-09-11 (`docs/specs/unmount-focus-handoff/`, M1–M3), and (c) is CLOSED.**
+>
+> `useToolbarFocusHandoff` (`components/ui/toolbar/use-focus-handoff.ts`) is called by **both**
+> roving containers. It records the focused **element** — not an id, which would miss a split
+> button's caret, a `tabIndex={-1}` sibling of the marked focusable — notices it has left a
+> still-mounted container, yields one animation frame so anything else that was going to move focus
+> already has, and only then, if focus is still on `<body>`, focuses the container and announces.
+> Focus first, then announce, per the correction above.
+>
+> `clear-visual-placement` carries the sentence: _"This action applies only while the plan is
+> scheduled in Visual mode."_ Four flippable neighbours carry one too, and the five that
+> deliberately do not are enumerated with their reasons at `selection-actions.tsx`'s registry —
+> including every flag-gated item, whose predicate is a build-time constant (ADR-0088 D1) and
+> therefore cannot flip under anybody.
+>
+> **Three falsification conditions were answered in a browser before any code was written**
+> (`m0-measurement.md`): the bar SURVIVES the item, so this is the per-item case and not
+> `SelectionActionsBar`'s whole-bar cleanup; `document.activeElement` really is `BODY` inside the
+> layout effect of the removing commit, so the detection point works; and the harness reaches its
+> condition. A fourth thing was found by re-deriving the enumeration rather than trusting the spec:
+> there are **three** production mountings of these primitives, not the four the plan named.
+>
+> **Fixing it exposed a second defect in the state the fix creates.** With focus on the container,
+> ArrowRight landed on the **second** command — both primitives clamped a `-1` index to `0` and then
+> added one, so the first was unreachable by the key a reader would press first, on the very surface
+> the handoff puts them on. It was unreachable before because nothing could focus these containers.
+> `rovingIndexFor` now lives in `toolbar-keyboard.ts` and both call it, which also removes the wrap
+> arithmetic's second copy; ADR-0082's ArrowUp-lands-on-the-second-to-last defect is the same
+> expression read backwards.
+>
+> Eight of ten hook mutations and all eight seam mutations verified red (`m1-mutation-sweep.md`).
+> The two that stayed green are recorded rather than softened: the blur rule is **not coverable in
+> jsdom**, measured — removing a focused node there dispatches no blur at all — and the record-clear
+> is masked by the `activeElement` guard, so it is kept as defence in depth and its case says so.
+> `apps/web/e2e-workspace-chrome/peer-unmount-focus.spec.ts` covers the blur rule against a real
+> browser with two real sessions and the pen enforced.
+>
+> **The sibling defect it found is `#297`, filed separately on the product owner's decision**:
+> `HierarchyTree` short-circuits on a `focusedKey` that may name no row, which leaves the Project
+> Explorer with **no tab stop at all**. Same class, different mechanism, its own regression test.
+
 **(d) `LockView.badgeName` and `messageVisible` are optional fields on a flat interface.** Both are
 governed by rules about the tone ("only on `locked`", "only on `lost` and the incoming-request
 branch") that are held by unit cases rather than by the compiler. A discriminated union split by tone
@@ -7244,3 +7285,55 @@ records that being load-bearing in eight of ten lock states.
 **What the reading does NOT cover**, stated rather than implied: the Org Admin **override** branch,
 which offers a different control set and may be wider or narrower; one machine, one browser, one
 plan; and only the three widths probed.
+
+### 297. A stale `focusedKey` can leave the Project Explorer with no tab stop at all
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (`#204(c)`, kept separate on the
+product owner's decision) · **Size:** S · **Owner:** web
+
+`HierarchyTree` derives its single tab stop the way `Toolbar` and `Deck` derive theirs, and gets it
+wrong in a way neither of them does:
+
+```ts
+// HierarchyTree.tsx:125-129
+const activeKey =
+  focusedKey ?? (selectedIndex >= 0 ? rows[selectedIndex]!.key : null) ?? rows[0]?.key ?? null;
+const activeIndex = useMemo(
+  () => rows.findIndex((row) => row.key === activeKey),
+  [rows, activeKey],
+);
+```
+
+`focusedKey` **short-circuits the whole chain when it is non-null**, including when it names a row
+that is no longer there — a collapsed branch, a refetched tree, a plan a peer deleted. `activeKey`
+is then a key no row carries, `rows.findIndex` returns `-1`, and `isActive` (`:309`) is
+`row.key === activeKey`, which is false for **every** row. Nothing gets `tabIndex={0}`, and the
+`role="tree"` container is itself `tabIndex={-1}` (`:302`) — so the Project Explorer becomes
+**unreachable by Tab entirely** until something rewrites `focusedKey`.
+
+**It is the same class as `#204(c)` and a different mechanism, which is why it is filed separately
+rather than folded into that fix** (product-owner decision, 2026-09-11). #204(c) is an item leaving
+while a container stays mounted, answered by recording the focused element and handing focus back
+(`use-focus-handoff.ts`). This is a **stale key lookup**: nothing is removed under the focus ring,
+and the repair is in the derivation rather than in an effect. Folding them together would make one
+change span two unrelated failure modes and blur what either regression test proves.
+
+**The remedy is the pattern the two toolbar primitives already use** — resolve before falling back,
+so an unresolvable value cannot short-circuit:
+
+```ts
+const resolvedFocused =
+  focusedKey !== null && rows.some((r) => r.key === focusedKey) ? focusedKey : null;
+const activeKey =
+  resolvedFocused ?? (selectedIndex >= 0 ? rows[selectedIndex]!.key : null) ?? rows[0]?.key ?? null;
+```
+
+`Toolbar.tsx`'s `effectiveActiveId` and `Deck.tsx`'s `rovingId` both do exactly this, each under a
+comment explaining why, and each was written after the same defect. A third copy of the rule is
+itself worth a thought when this is picked up.
+
+**Not measured end to end.** The derivation is read from the code and the consequence follows from
+it; what has NOT been done is reproducing it in a browser by deleting a focused row from a second
+session, which is what would turn "no row is a tab stop" from an argument into a reading. Do that
+before writing the fix — a regression test verified red against the real sequence is worth more than
+one written against the shape.

@@ -616,6 +616,21 @@ discriminators. Each becomes a spec/plan before build:
   closed the day before. The epic also found two defects that are **not** touch defects (#213) and
   an approved plan clause whose own risk table claimed it shipped (#214 — both halves built and closed 2026-09-01, the Gantt half having gone unbuilt a second time).
 
+- **A peer's edit no longer drops your focus on the floor** — **shipped** (ADR-0135, 2026-09-11,
+  the tech-debt drive). A second Planner can change a plan-level setting while you hold the pen,
+  which takes a control out from under your focus ring; focus fell to `<body>`, and on the plan
+  workspace that silently disabled every keyboard accelerator too. `Toolbar` and `Deck` now share
+  one rule: record the focused element, notice it has left a still-mounted container, yield a frame
+  so anything else that was going to move focus already has, then hand focus to the bar and say what
+  went and why. Five registry items carry a reason sentence; the five that deliberately do not are
+  enumerated with their grounds.
+
+  Three claims were **measured in a browser before any code was written**, and one of them could
+  have ended the epic. Two more defects were found on the way: the arrows started one command too
+  far along from the new focus position — invisible until something could focus these containers at
+  all — and the Project Explorer has a worse variant of the same class, filed as its own row rather
+  than folded in (#297). `docs/TECH_DEBT.md` #204(c) closes.
+
 - **The plan workspace's command console** — **shipped** (ADR-0133, 2026-09-10). The band's group
   cards and captions go, its two rows become declared DOM rows rather than a wrap outcome, the
   shared toolbar CVA gains a five-rung state ladder declared per item, and the ADR-0028 pen's verb
