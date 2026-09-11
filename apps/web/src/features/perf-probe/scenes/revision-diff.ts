@@ -319,6 +319,20 @@ export interface BenchOptions {
    */
   idleInterval?: number;
   /**
+   * Called at the start of each pair, so the panel can say where the run has got to
+   * (`docs/TECH_DEBT.md` #259 item 11).
+   *
+   * **This scene narrated ONCE for the whole run** while its sibling `canvas-draw` narrates per
+   * repeat, so a screen-reader user driving a multi-pair `revision-diff` heard one sentence and
+   * then up to twenty-five seconds of nothing — indistinguishable from a run that had died. The
+   * difference was not a decision: `canvas-draw`'s repeat loop lives in the runner, where
+   * `onProgress` is in scope, and this scene's pair loop lives here, where it was not.
+   *
+   * Optional so the CLI driver keeps behaving exactly as it did — it narrates to nobody — which is
+   * the same reason `idleInterval` above is optional.
+   */
+  onPairStart?: (pairIndex: number, pairCount: number) => void;
+  /**
    * Asked between pairs. Returning true stops the run where it stands.
    *
    * A pair is the smallest unit that means anything here — baseline and treatment are run back to
@@ -433,6 +447,9 @@ export async function runRevisionDiff(
   const pairs: { baseline: PacingResult; treatment: PacingResult }[] = [];
   for (let p = 0; p < opts.pairs; p += 1) {
     if (opts.shouldStop?.()) break;
+    // Before the pair rather than after it, so the first sentence arrives when the work starts
+    // instead of when it is already done.
+    opts.onPairStart?.(p, opts.pairs);
     // Alternating, same session, baseline first. A container's absolute timings are noise; only a
     // paired difference is quotable (ADR-0100 M0's design, the one that passed).
     const baseline = await panRun(

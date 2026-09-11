@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { changedSet, countVisible } from './revision-diff';
+import { changedSet, countVisible, runRevisionDiff } from './revision-diff';
 
 import type { RenderActivity, RenderEdge } from '@/features/tsld/render/geometry';
 
@@ -153,5 +153,56 @@ describe('countVisible', () => {
     const counts = countVisible(ghosts, [], [], activities, view, SIZE);
     expect(counts.visibleBars).toBeGreaterThanOrEqual(counts.visibleChangedBars);
     expect(counts.visibleChangedBars).toBeGreaterThan(0);
+  });
+});
+
+describe('progress narration', () => {
+  /**
+   * `docs/TECH_DEBT.md` #259 item 11 — this scene narrated ONCE for a whole multi-pair run while
+   * its sibling `canvas-draw` narrates per repeat, so a screen-reader user heard one sentence and
+   * then up to twenty-five seconds of silence, which is indistinguishable from a run that died.
+   *
+   * Driven against a **stub 2D context**, because jsdom has no canvas and this assertion is about
+   * the callback's cadence rather than anything painted. Every method is a no-op recorder; if the
+   * painter ever needs a real return value from one of these the stub will fail loudly rather than
+   * silently measure nothing.
+   */
+  const stubCtx = (): CanvasRenderingContext2D => {
+    const noop = (): void => {};
+    const handler: ProxyHandler<object> = {
+      get: (_t, prop) => {
+        if (prop === 'canvas') return { width: 100, height: 100 };
+        if (prop === 'measureText') return () => ({ width: 10 });
+        if (prop === 'createPattern' || prop === 'createLinearGradient') return () => null;
+        if (prop === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
+        return noop;
+      },
+      set: () => true,
+    };
+    return new Proxy({}, handler) as CanvasRenderingContext2D;
+  };
+
+  it('calls back once per pair, not once per run', async () => {
+    const seen: { index: number; count: number }[] = [];
+    await runRevisionDiff(
+      stubCtx(),
+      { width: 400, height: 300 },
+      {} as Parameters<typeof runRevisionDiff>[2],
+      {
+        scene: 'fixture',
+        preset: 'week',
+        // One frame per phase keeps the test quick; the cadence being asserted is per PAIR.
+        frames: 1,
+        pairs: 3,
+        idleInterval: 16.7,
+        onPairStart: (index, count) => seen.push({ index, count }),
+      },
+    );
+
+    expect(seen).toEqual([
+      { index: 0, count: 3 },
+      { index: 1, count: 3 },
+      { index: 2, count: 3 },
+    ]);
   });
 });

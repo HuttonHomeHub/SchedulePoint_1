@@ -5280,8 +5280,23 @@ holding at the moment a run ends. The content is redundant rather than contradic
     where the defect already lived. Two rows for one defect is the failure the Closed-numbers
     ledger exists to prevent — the register disagreeing with itself about what a number means._
 
-11. **`revision-diff` narrates progress once for a whole multi-pair run** where `canvas-draw`
-narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds. 12. ~~**The on-screen "cannot be judged" alert prints only the first line**~~ — **closed
+11. ~~**`revision-diff` narrates progress once for a whole multi-pair run**~~ — **closed
+2026-09-11.** `BenchOptions` gains an optional `onPairStart`, called at the start of each pair, and
+the runner passes one that narrates in the same shape the absolute runner uses per repeat. So a
+screen-reader user now hears where the run has got to instead of one sentence followed by up to
+twenty-five seconds of silence, which is indistinguishable from a run that has died.
+
+    **The difference was never a decision, which is why it is worth stating**: `canvas-draw`'s
+    repeat loop lives in the runner where `onProgress` is already in scope, and this scene's pair
+    loop lives inside the scene where it was not. One reachable callback and one not, rather than
+    two answers to a question.
+
+    The callback is **optional**, so the CLI driver — which narrates to nobody — behaves exactly as
+    before, the same reason `idleInterval` beside it is optional. Pinned by a case driven against a
+    stub 2D context (jsdom has no canvas, and the assertion is about cadence rather than pixels),
+    **verified RED** by removing the call: it asserts the full sequence `[0/3, 1/3, 2/3]`, so a
+    version narrating once still fails it. 12. ~~**The on-screen "cannot be judged" alert prints only the first line**~~ — **closed
+
 2026-09-11.** It rendered `message.split('\n')[0]`, so everything after the first line was dropped
 on screen while the paste-ready report carried it whole. The dropped part is the part that matters:
 `NothingToJudgeError`'s non-vacuity message ends _"This is NOT a pass. A number measured on an

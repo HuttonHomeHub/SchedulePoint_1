@@ -353,6 +353,14 @@ async function runDifferenceLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
 
   onProgress(`Drawing ${String(limb.activities)} activities, ${String(pairs)} paired runs…`);
   const outcome = await runRevisionDiff(ctx, viewport, palette, {
+    // Per PAIR, matching what the absolute runner does per repeat (`docs/TECH_DEBT.md` #259 item
+    // 11). Without it this scene said one sentence and then went silent for the whole run, which
+    // to a screen-reader user is indistinguishable from a run that has died.
+    onPairStart: (index, count) => {
+      onProgress(
+        `Drawing ${String(limb.activities)} activities — paired run ${String(index + 1)} of ${String(count)}…`,
+      );
+    },
     scene: 'scale',
     preset,
     frames,
