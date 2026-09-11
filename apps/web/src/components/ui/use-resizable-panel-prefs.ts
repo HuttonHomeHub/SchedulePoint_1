@@ -6,9 +6,20 @@ import { useCallback, useEffect, useState } from 'react';
  * `localStorage`; corrupt/stale storage is ignored and reset to defaults (a convenience, never
  * relied on for correctness).
  *
- * The single implementation behind both the Project Explorer rail (vertical splitter → width)
- * and the plan workspace's activity panel (horizontal splitter → height), so the two share one
- * clamp/persist/reset behaviour (ADR-0029 / ADR-0030).
+ * **The single implementation behind every resizable panel in the product**, whichever axis it
+ * splits on — a vertical splitter persists a width, a horizontal one a height — so they share one
+ * clamp/persist/reset behaviour (ADR-0029 / ADR-0030). Each panel wraps it in a thin adapter that
+ * owns only its storage key and bounds.
+ *
+ * **It deliberately does not name its consumers, and that is the correction rather than the
+ * style.** This said "both the Project Explorer rail and the plan workspace's activity panel"
+ * until 2026-09-11, seven consumers later — so a reader costing a change from it (a debounce, say)
+ * was costing it against two panels instead of seven. `docs/TECH_DEBT.md` #149 records the same
+ * drift one level out, and its own correction to "nine" was wrong in the other direction: nine
+ * claimed, eight named, and one of those eight — the legend — only mentions this hook in a comment
+ * and never calls it. A roster in a shared primitive goes stale every time somebody adds a panel
+ * (ADR-0073 C4's rule: state the rule, not the inventory), so this one states the rule and a
+ * reader who needs the count derives it.
  */
 export interface ResizablePanelOptions {
   /** `localStorage` key namespacing this panel's preference. */

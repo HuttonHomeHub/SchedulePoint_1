@@ -1476,7 +1476,11 @@ is the ADR-0058 rule finding two of its own instances in the file that cites it.
 locked transactions, deliberate ("a row whose only label is a uuid answers nobody's question"), and
 harmless until either action is driven from a batch.
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+**Reclassified `open` → `deferred` on 2026-09-11.** Five of six are folded, and the survivor is a
+**watch-item with a named trigger** in its own words — it becomes real if either action is ever
+driven from a batch. `open` reads as owed work and invited a re-walk that found nothing to do.
 findings were folded with regression tests; these are the remainder, recorded rather than rushed.
 
 (a) **Two producers read one extra row inside a held lock** to label their audit event —
@@ -3043,7 +3047,13 @@ rule.
 
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+**Reclassified `open` → `deferred` on 2026-09-11, having walked all five.** Three are closed. The
+`localStorage` item's remedy is _measure before debouncing_ — a condition, not a task — and the
+status-bar item is a decision with its reason ("reassuring about something that does not happen").
+The one genuinely contained thing inside the first item, its stale consumer roster, was fixed rather
+than left: see that entry.
 
 **Raised 2026-08-20.** Five specialists over the ADR-0099 epic diff. Security and
 frontend-performance passed outright, both having re-derived the epic's own numbers from the code
@@ -3072,12 +3082,25 @@ verified red first. What follows is what was deliberately **not** folded, with t
   panel have done this since ADR-0030). Each write is a `JSON.stringify` of a two-field object and
   nothing has been profiled as hot, so a debounce would be an unmeasured optimisation — which is the
   thing this register keeps saying not to do. **The item's own arithmetic is stale, in the direction
-  that matters** (re-derived 2026-09-09): it said "Graphite adds two more consumers", and the hook now
-  has **nine** — the Explorer, the activity panel, notes, float paths, the Gantt grid, schedule health,
-  the legend and revision compare. So does the hook's own docblock, which still opens "The single
-  implementation behind **both** the Project Explorer rail and the plan workspace's activity panel"
-  (`use-resizable-panel-prefs.ts:9-11`) seven consumers later. The remedy is unchanged — measure
-  before debouncing — but a reader costing it from either number is costing it from 2026-08-20.
+  that matters** (re-derived 2026-09-09): it said "Graphite adds two more consumers", and the hook had
+  grown many more. So had the hook's own docblock, which still opened "The single implementation
+  behind **both** the Project Explorer rail and the plan workspace's activity panel" seven consumers
+  later. The remedy is unchanged — measure before debouncing — but a reader costing it from the old
+  number is costing it from 2026-08-20.
+  > **The 2026-09-09 correction was itself wrong, and this is the fourth miscount of this shape in
+  > this register** (2026-09-11). It said **nine**, then named **eight** — and one of those eight, the
+  > legend, only _mentions_ the hook in a comment (`use-legend-panel-prefs.ts:56`, "matches the shared
+  > `useResizablePanelPrefs`") and never calls it. Counted by CALL SITE rather than by grep hit it is
+  > **seven**: the Explorer, the activity panel, notes, float paths, the Gantt grid, schedule health
+  > and revision compare.
+  >
+  > **The hook's docblock is fixed by deleting the roster rather than updating it.** An enumeration in
+  > a shared primitive goes stale every time somebody adds a panel — which is exactly how it came to
+  > say "both" — so it now states the rule and a reader who needs the count derives it, which is
+  > ADR-0073 C4's move for the same reason. The seven adapter docblocks each carry their own small
+  > enumeration and are deliberately left: each is one hop from its own call site, where a wrong
+  > roster is cheap to notice, and sweeping seven files to correct prose nobody has been misled by is
+  > the drive-by churn §2 warns about.
 - ~~**`Toolbar`'s `ResizeObserver` re-observes on every commit.**~~ **CLOSED 2026-09-09, by
   relocation rather than by the accepted no-op argument.** The item was recorded as deliberate — the
   item set changes without a dependency the effect could key on, and `observe()` on an
@@ -3549,7 +3572,14 @@ then be changing underneath the citations it is checking.
 
 ### 184. Unsaved-work guard: the findings its gate pass did not block on
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+**Reclassified `open` → `deferred` on 2026-09-11, having walked all seven.** Five are closed. The
+two that survive are not folds and say so themselves: the CONFIRM-path focus gap is _"a systemic
+router gap… worth its own look at where focus should land after any route change"_ — a design pass
+across every navigation — and the coverage item was assessed and found to be **ADR-0081's shape
+rather than a gap**, with a named closing condition (the first non-modal registrant, and only that).
+The trailing note on Back is a record of an instrumented result, not work.
 
 _A second, em-dash-styled row briefly shared this number (the bulk-delete focus race); it is now **#209**._
 
