@@ -6301,9 +6301,21 @@ was re-derived here, and one of its claims did not survive that:
   get the **chrome** fill and ink — the opposite of the docblock's promise that a reset "RESTORES
   the page family for their subtree and then change one thing: their own fill". A mechanism with no
   callers, which would be wrong if it had one.
-- **Two documents instruct authors to use it** — `surface.tsx` and `reset-fills.structural.test.ts`
-  — so the instruction is live and unfollowable. ADR-0097 **D6.3** says the reset _closes_ the split
-  pair; it was decided as a runtime restoration and shipped as an exemption list in a test file.
+- **Two documents instructed authors to use it** — `surface.tsx` and
+  `reset-fills.structural.test.ts` — so the instruction was live and unfollowable. ADR-0097 **D6.3**
+  says the reset _closes_ the split pair; it was decided as a runtime restoration and shipped as an
+  exemption list in a test file.
+
+  > **Both are corrected, and the second was worse than "unfollowable"** (`surface.tsx` on
+  > 2026-09-10 with this row; `reset-fills.structural.test.ts` on 2026-09-11). That gate's docblock
+  > asserted the reset "makes `Card` and `Popover` restore the page family for their subtree" as a
+  > fact, and its **failure message told the next author to use `<Surface tone="card">` so the page
+  > family is restored** — so somebody hitting the gate and doing as instructed would swap a pair
+  > that is merely ungated for one that is **actively wrong** (the enclosing scope's fill and ink),
+  > and this gate would go green over the change. The instruction now says to add the site with the
+  > containment reason that makes it safe today and to raise it here, and names the reset as unbuilt
+  > at all four places that referred to it. The `ALLOWED` set and both assertions are untouched — the
+  > two cases still pass — because the defect was the advice, not the gate.
 
 **The measured numbers, taken with the real gate** by adding the pairs and reading the failures:
 
