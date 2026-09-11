@@ -4263,6 +4263,20 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > under a reader whose focus is on it. That is ADR-0028's world, not a contrived case — and it
 > still needs a browser plus a two-session fixture to settle, which is why it stays open.
 >
+> **Re-checked 2026-09-11, and the API half is now SETTLED: the route is open.** The obvious thing
+> that would have made this moot is a pen gate — if changing the mode required the pen, the only
+> user who could do it is the one already holding it, and taking the pen from the reader unmounts
+> the whole bar anyway. It does not. `PATCH /organizations/:orgSlug/plans/:planId` is documented
+> "Planner or Org Admin; optimistic locking" (`plans.controller.ts:60-61`), and
+> **`assertHoldsPen` appears nowhere in `apps/api/src/modules/plans/`** — nor does `holdsPen` or
+> `PlanLock`. So a second Planner can flip `schedulingMode` while the first holds the pen, changes
+> nothing about that pen, and the first user's next refetch unmounts `Clear visual start` under
+> whatever focus is on it.
+>
+> What remains is the browser half **only**: whether focus then lands on `<body>` or is caught. It
+> is a two-session fixture, which
+> `apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts` now shows how to build.
+>
 > Worth stating because it changes who would find it: the remaining path is not something a single
 > planner can do to themselves, so no solo journey will ever reproduce it.
 
@@ -5091,6 +5105,46 @@ Each was judged real and not worth holding the release for.
 
 Findings 4 and 5 are the two worth doing first: both are about a picture that is honest in its
 words and ambiguous on screen, which is the failure mode this epic spent its whole gate pass on.
+
+---
+
+**2026-09-11 — every entry checked INDIVIDUALLY for the first time. Three are done; three are open
+with a reason each.**
+
+This row's own caveat said its entries were checked as a list and any one might have been fixed
+incidentally. One had been, halfway, which is the case that caveat exists for.
+
+- **1 — DONE, and it was half fixed already.** The _response_ DTO already said it
+  (`revision-compare.dto.ts:414`, "which also returns `links`"); the **query** DTO's description —
+  the one a caller reads in the OpenAPI spec — did not. Now says so, and says there is no separate
+  `links` include value, so asking for `ghosts` is how a caller gets both. Had this been struck on
+  the first grep it would have been struck wrongly.
+- **2 — DONE.** The query DTO now states plainly that `?include=progress` **alone is a silent
+  no-op**, because the classifier only runs when `changes` is also requested. It previously said
+  "`progress` _additionally_ assesses…", which hints at the dependency and does not state it.
+- **6 — DONE, and it was a real defect rather than tidiness.** `compareOverlaySummary` returned
+  `readonly string[]` of names and the consumer rendered `key={name}`, so two removed activities
+  sharing a name were one React key — React renders them as one row, and the **second simply never
+  reaches the reader**, in the `sr-only` list that is the only account a screen-reader user gets of
+  removed work. Reachable, not theoretical: nothing makes an activity name unique here, only `code`
+  carries a per-plan unique index, and two removed "Excavate" rows are what a re-sequenced
+  programme produces. Now `{ activityId, name }`; verified RED first; the compiler caught the
+  consumer, which is the mechanism working. The name is still what a reader hears — the id is a key
+  and never copy.
+
+**Still open, each verified against the code today:**
+
+- **3** stands (`TsldPanel.tsx:260-271` — the five props are still separate). **Not done here
+  because it is a component's public contract**, which ADR-0105 makes a spec-and-approval change
+  whatever its size.
+- **4** stands. It is a **visual design decision** — choosing a treatment that separates
+  "incident to my selection" from "changed in the comparison" without reaching for colour alone —
+  and not a defect with one right answer.
+- **5** stands, and the verification is exact: `setRevisionFrom` has **one** caller in the whole
+  file, the picker's `onFromChange` (`plan-workspace-toolbar.tsx:1510`). Nothing clears the pair on
+  close. **Not done because the remedy is a product decision**: clear the pair on close, which
+  removes an overlay a planner may have opened deliberately, or keep it and caption it. ADR-0127
+  D8b made the overlay default-on, which makes that choice sharper rather than easier.
 
 ### 258. The pacing arithmetic is written three times, and the shared copy was the dead one
 

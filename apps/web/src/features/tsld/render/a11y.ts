@@ -179,7 +179,7 @@ export function baselineGhostClause(
  * quietly missing rows is unnoticeable — see `RevisionCompare.ghostsUndrawable`.
  */
 export function compareOverlaySummary(
-  ghosts: readonly { name: string; removed: boolean }[],
+  ghosts: readonly { activityId: string; name: string; removed: boolean }[],
   undrawable: number,
   /**
    * The changed-link counts. Stated as a NUMBER and never as a list of links, because a link is not
@@ -207,7 +207,19 @@ export function compareOverlaySummary(
   undrawableReason: 'NOT_RECORDED' | 'NOT_COMPARABLE' = 'NOT_RECORDED',
 ): {
   readonly heading: string;
-  readonly removed: readonly string[];
+  /**
+   * The removed activities, **each with its id** (`docs/TECH_DEBT.md` #255 item 6).
+   *
+   * This was `readonly string[]` and the consumer rendered `key={name}`, so two removed activities
+   * sharing a name produced a duplicate React key — React treats them as one row and drops the
+   * second from the list a screen-reader user is given, in the one channel with no way to check.
+   * It is reachable rather than theoretical: nothing makes an activity name unique here, only
+   * `code` carries a per-plan unique index, and two removed "Excavate" rows are what a re-sequenced
+   * programme produces.
+   *
+   * The **name** is still what a reader hears; the id is a key and never copy.
+   */
+  readonly removed: readonly { readonly activityId: string; readonly name: string }[];
   /** How many changed things the picture could not draw — bars plus links. */
   readonly undrawn: number;
   /** The VISIBLE sentence for that count. Empty when there is nothing withheld. */
@@ -216,7 +228,9 @@ export function compareOverlaySummary(
   if (ghosts.length === 0 && undrawable === 0 && links.drawn === 0 && links.undrawable === 0) {
     return null;
   }
-  const removed = ghosts.filter((g) => g.removed).map((g) => g.name);
+  const removed = ghosts
+    .filter((g) => g.removed)
+    .map((g) => ({ activityId: g.activityId, name: g.name }));
   const moved = ghosts.length - removed.length;
   const parts: string[] = [];
   if (moved > 0) parts.push(`${String(moved)} moved`);

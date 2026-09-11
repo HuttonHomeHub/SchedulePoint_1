@@ -70,9 +70,14 @@ export class RevisionCompareQueryDto {
     isArray: true,
     description:
       'Opt-in projections. Absent ⇒ byte-identical to the delta-only response. `changes` adds ' +
-      'the change list; `progress` additionally assesses the progress class, which is off by ' +
-      'default because it moves on nearly every activity every week; `ghosts` adds the old ' +
-      "side's geometry for the activities that CHANGED, which only a canvas needs.",
+      'the change list. **`progress` does nothing on its own** — it additionally assesses the ' +
+      'progress class, and the classifier only runs when `changes` is also asked for, so ' +
+      '`?include=progress` alone is a silent no-op rather than an error. It is off by default ' +
+      'because progress moves on nearly every activity every week and would bury the classes that ' +
+      "explain a date move. `ghosts` adds the old side's geometry for the activities that " +
+      'CHANGED, which only a canvas needs — **and returns `links` with it**, the changed edges, ' +
+      'under a separate top-level key. There is no separate `links` include value; asking for ' +
+      '`ghosts` is how a caller gets both.',
   })
   @IsOptional()
   // **`?include=changes` arrives as a STRING, not a one-element array.** Without this the single

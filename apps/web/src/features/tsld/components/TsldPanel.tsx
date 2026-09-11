@@ -3058,10 +3058,18 @@ export function TsldPanel({
                   // WebKit/VoiceOver. Same reason and same file as the listbox below.
                   // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
                   <ul role="list" aria-label="Removed in this revision">
-                    {compareSummary.removed.map((name) => (
+                    {/*
+                      **Keyed on the id, not the name** (`docs/TECH_DEBT.md` #255 item 6). Nothing
+                      makes an activity name unique here — only `code` carries a per-plan unique
+                      index — so two removed "Excavate" rows, which is what a re-sequenced
+                      programme produces, shared one React key and rendered as one item. The
+                      reader simply did not get told about the second, in the one channel with no
+                      way to check.
+                    */}
+                    {compareSummary.removed.map((entry) => (
                       // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
-                      <li role="listitem" key={name}>
-                        {name}
+                      <li role="listitem" key={entry.activityId}>
+                        {entry.name}
                       </li>
                     ))}
                   </ul>
