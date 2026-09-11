@@ -7328,3 +7328,35 @@ discovered; measuring what else it would pick up comes first.
 in the class this register records deferring and then discovering two epics later, so: the trigger
 for (a) is the next gate added to the chain, and for (b) the next suite anybody wants to place
 beside non-`src` code.
+
+### 299. `pnpm format:check` runs in CI and is in no local gate, so formatting is only ever found after a push
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (it failed PR #508) · **Size:** S · **Owner:** repo
+
+`.github/workflows/ci.yml` runs `pnpm format:check` as the first step of the quality job.
+`scripts/prepush.sh` runs `lint`, `typecheck`, `test` and every root `check:*` script — and
+`format:check` is **none of those**, so it has never been part of the documented pre-push gate.
+`grep -n 'format' scripts/prepush.sh` returns nothing.
+
+**This is `#244`'s rule pointing the other way.** That row closed by asserting that every local
+gate also runs in CI. Nothing asserts the converse, and this is the converse: a **CI** gate with no
+local route, which is exactly the shape `docs/specs/delivery-gates/` §4.1 D5 says must be either
+provided or stated as a blind spot. It was neither.
+
+**It is not covered by lint-staged either, and the reason matters.** The `commit-msg` hook formats
+**staged** files, so a file is only re-formatted on the commit that touches it. `cell-commit.ts`
+was written with a trailing comment on a `case` clause that Prettier reflows; the commit that
+introduced it formatted it, and the version that reached `main` still failed `--check`, because
+Prettier's fold is not idempotent in the way the write path assumed. So: `pnpm prepush` green,
+five pushes, CI red on the sixth for a file nobody had touched since.
+
+**Why it is filed rather than fixed here.** Adding a step to `prepush.sh` is a change to the shared
+pre-push gate, which CLAUDE.md §19.1 makes an ADR-0105 trigger — and doing it inside the release of
+the epic whose subject is that rule would be the failure that rule exists to prevent (the same
+reasoning as `#298`). Two things want settling in that spec rather than by whoever edits the script:
+whether `format:check` joins the derived list or becomes a `check:*` script so the roster gate can
+see it at all; and whether the roster assertion should be **bidirectional**, since a CI step naming
+something that is not a root gate is currently invisible to `check:ci-roster` by design.
+
+**Measured cost of doing nothing:** `pnpm format:check` takes ~19 s on this machine over the whole
+tree, so it is not free to add to a five-second gate — which is itself part of the design question.

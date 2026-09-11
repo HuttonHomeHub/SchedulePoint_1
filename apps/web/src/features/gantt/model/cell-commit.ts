@@ -96,11 +96,15 @@ export function cellWriteFields(key: GanttCellKey, text: string, ctx: CellWriteC
       // the one a planner reaches by pressing Enter on a cleared cell rather than by typing.
       return trimmed === '' ? refuse('A name cannot be empty.') : write({ name: trimmed });
 
-    case 'duration': // Exactly one of `durationDays` / `durationMinutes` — sending both is a 422 by design
+    // Exactly one of `durationDays` / `durationMinutes` — sending both is a 422 by design
     // (`@IsMutuallyExclusiveWith`), which is why this helper returns a union rather than an object
     // with two optional keys. Reused, not reimplemented: it already carries ADR-0070's rule that
     // `hoursPerDay` is required to mean anything, and degrades to whole days without it.
-    {
+    //
+    // The comment sits ABOVE the `case` rather than trailing it: Prettier reflows a trailing
+    // comment on a `case` by folding every following comment line onto it, which produced one
+    // 180-character line with the clauses in the wrong order. Correct code, unreadable comment.
+    case 'duration': {
       const fields = durationWriteFields(trimmed, ctx.hoursPerDay);
       return fields === null ? refuse(GENERIC_REFUSAL) : write(fields);
     }
