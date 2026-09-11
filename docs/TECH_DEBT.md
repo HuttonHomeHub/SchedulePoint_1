@@ -5759,11 +5759,36 @@ the footer; on paper they sit immediately after the correlation lists. Paper has
 told to check the coverage first may scroll past a long change list before meeting the caveat that
 qualifies it.
 
-**(k)** `RevisionComparePrintDocument.css` (and `HealthPrintDocument.css`) still carry hard-coded
-hex on a docblock claiming a `@media print` sheet cannot read a runtime token — which
-`print-document.css`, ADR-0103 and `docs/TECH_DEBT.md` #158 disproved, and which
-`PrintSurface.css`/`GanttPrintSurface.css` already migrated to the `--print*` family the container
-scopes. Shared debt with the health report; this epic touched the file without migrating it.
+**(k)** ~~`RevisionComparePrintDocument.css` (and `HealthPrintDocument.css`) still carry hard-coded
+hex on a docblock claiming a `@media print` sheet cannot read a runtime token~~ — **CLOSED
+2026-09-11**, both files.
+
+> **The scope was verified to reach them BEFORE anything was converted**, because converting a
+> sheet that is not inside the rebind resolves the PAGE theme onto paper — ADR-0102's exact trap,
+> where the canvas painter had never once used the canvas scope. Both mount through
+> `mountPrintDocument`, and `lib/print-document.ts:74` stamps `data-surface="print"` on that one
+> container, so the semantic names resolve to the print family. Checked, not assumed.
+>
+> **The values move as well as the names, and that is the point rather than a cost.** Ink was
+> `#111` against `--print-foreground`'s `oklch(0.321 0 0)`, muted ink `#333` against
+> `--print-muted-foreground`'s `oklch(0.51 0 0)`. `token-contrast.test.ts` computes ratios between
+> **tokens**, and `['--background','--foreground']` and `['--background','--muted-foreground']` are
+> both `TEXT_PAIRS` run for every scope including `print` — so the change moves this ink from
+> ungated literals into a gate that already runs, on the two documents whose whole purpose is to be
+> handed to somebody who was not in the room.
+>
+> **The health sheet's citation had rotted in a way worth naming**: it justified its literals as
+> "the GanttPrintSurface precedent", and that file had already migrated and records correcting this
+> exact belief in its own docblock. A citation to a precedent that has since reversed reads as
+> authority and is the opposite — the `#246` shape, in a stylesheet.
+>
+> **The blind spot, stated rather than implied.** Nothing stops a new hex literal appearing in
+> either file: the colour-literal lint rule is a `no-restricted-syntax` selector scoped to
+> `JSXAttribute[name.name=/^(className|style)$/]` (`packages/config/eslint/react.js:64,72`), so it
+> cannot see a stylesheet at all. `token-alias-reads.structural.test.ts` records the same
+> `.ts`/`.tsx`-only limit for its own question. These two files are correct today because somebody
+> read them, which is the condition ADR-0058 says to replace with a check — and widening either
+> instrument is a shared-gate change (ADR-0105), so it is named here rather than smuggled in.
 
 **(l)** `revision-compare-imported-p2.e2e-spec.ts` still carries an O(n·m) `some()`-inside-`filter()`
 in its own stand-in correlation — a leftover from before M1 shipped the real one, which the file's
