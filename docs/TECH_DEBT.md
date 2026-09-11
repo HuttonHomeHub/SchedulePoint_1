@@ -5404,6 +5404,45 @@ patch release can falsify nine statements at once. `#181`'s "cite by symbol rath
 is adjacent but different: symbols would have survived the line shift here and would **not** have
 caught `go(1)` → `go(-delta)`, because the symbol is the same.
 
+---
+
+**2026-09-11 — the question is MEASURED, and the exposure is small today for a reason that will not
+last.** Derived by walking `git log -p` over `scripts/dependency-claims.json` and taking, per
+package, the date its `verifiedAgainst` entry last **changed** — which is precisely "when were this
+package's citations last forced to be re-read", because that is the only event the gate creates.
+For a package never bumped since registration, it is the registration date.
+
+| package                | version  | claims | last forced re-read | age   |
+| ---------------------- | -------- | -----: | ------------------- | ----- |
+| better-auth            | 1.7.1    |     42 | 2026-09-10          | 1d    |
+| @tanstack/react-router | 1.170.33 |     15 | 2026-09-08          | 3d    |
+| @tanstack/history      | 1.162.2  |     13 | 2026-09-08          | 3d    |
+| @tanstack/router-core  | 1.171.28 |     12 | 2026-09-08          | 3d    |
+| lucide-react           | 1.33.0   |      5 | 2026-09-02          | 9d    |
+| react-hook-form        | 7.86.0   |      4 | 2026-08-22          | 20d   |
+| better-call            | 1.4.0    |      1 | 2026-08-22          | 20d   |
+| zod                    | 4.4.3    |      1 | 2026-08-22          | 20d   |
+| _seven others_         | —        |      6 | 2026-09-01 / 09-02  | 9–10d |
+
+**83 of 100 citations were re-read within the last three days; 17 are older, and the oldest cohort
+is 20 days — six claims across three packages.** So the specific worry this row raises has a small
+present value: there is no large body of citations quietly describing a library that moved under
+them.
+
+**The caveat is the whole finding, and it points the other way.** These ages are low largely because
+**the mechanism is young** — ADR-0076 registered the first claims about five weeks ago, and the
+number that dominates the table is `better-auth`'s 42, re-read yesterday only because ADR-0107 had
+to bump it. Nothing here shows that re-reads happen often; it shows that the register has not
+existed long enough for a package to go stale in it. The exposure grows by one day per day on every
+package nobody touches, and there is no gate for age — only for change.
+
+**So the row stays open, with its question answered and a sharper one in its place**: is a
+time-based re-read worth having (a periodic prompt, or the reconciliation pass taking the oldest
+cohort), or is bump-triggered re-reading enough given that a library which never changes cannot
+falsify a claim about it? The second is a real argument and not obviously wrong — the falsifier here
+was a **release**, not the passage of time. That is a decision rather than work, which is why this
+records the number and stops.
+
 ### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
 
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
