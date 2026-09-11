@@ -7460,3 +7460,63 @@ trigger.
 copy job names out of `.github/workflows/` on the day rather than from the list, and
 states the pending-forever failure mode so the next reader cannot repeat it by trusting a
 name.
+
+### 301. Every CI round trip waits 46 minutes on one sequential end-to-end job, and the ceiling on fixing it is not where it looks
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (reconciliation pass) · **Size:** M · **Owner:** repo
+
+`.github/workflows/ci.yml` declares three jobs; `e2e` runs **46 `test:e2e` invocations as
+sequential steps on one runner** and is the critical path of every run. Measured from the
+per-step timings of run `34613280766` (job `103309069671`, PR #508, all green), rather than
+estimated:
+
+| segment                                    | measured               |
+| ------------------------------------------ | ---------------------- |
+| whole `e2e` job                            | **2,792 s (46.5 min)** |
+| setup (checkout → drift check, steps 1–10) | 50 s                   |
+| API end-to-end (step 11)                   | **499 s (8 m 19 s)**   |
+| pairwise differential (step 12)            | 141 s                  |
+| Playwright browser install (step 13)       | 47 s                   |
+| web end-to-end (steps 14–57, 44 suites)    | **2,049 s (34.1 min)** |
+
+For comparison the other two jobs finish in 12 m 44 s and 2 m 26 s, so CI's wall clock **is**
+this job.
+
+**The obvious remedy has a ceiling, and the measurement is what shows where it sits.** Sharding
+the 44 web suites across a `matrix` costs each shard the fixed 97 s (setup + browser install)
+and cannot beat its own longest suite (Gantt editing, **185 s**):
+
+| web shards | per shard | critical path        |
+| ---------- | --------- | -------------------- |
+| two        | 1,122 s   | 18.7 min             |
+| three      | 780 s     | 13.0 min             |
+| **four**   | 609 s     | **11.5 min**         |
+| six        | 438 s     | 11.5 min — no change |
+| eight      | 353 s     | 11.5 min — no change |
+
+(The shard counts are **spelled** rather than written as digits, and that is not a style choice:
+`check:debt-status` A6 reads any table row whose first cell is a bare number as a Closed-numbers
+ledger entry and demands a `YYYY-MM-DD` in the second cell. Written as `| 2 | 1,122 s |` this
+table failed the gate on its first run — correctly, since at that point it **was** indistinguishable
+from a ledger row. Do not "tidy" these back to digits.)
+
+**Beyond four shards nothing improves**, because the API end-to-end + pairwise pair (640 s plus
+setup = 690 s) becomes the critical path and that is one vitest invocation, not 44 steps — so it
+does not split by the same mechanism. The honest summary is that ~46.5 min → ~11.5 min is
+available for a matrix, and everything past that is a **different** piece of work on the API
+suite. A reader who sharded "as far as it goes" would spend eight runners to buy what four buy.
+
+**Not built here, deliberately.** Editing the CI workflow is a shared-gate change and therefore
+an ADR-0105 trigger: it needs a spec, not a register row. The row exists so the decision is taken
+against numbers rather than an impression, and so the ceiling is known before anyone picks a
+shard count.
+
+**What the numbers do not cover**, stated rather than implied: runner queue time (each shard
+waits for its own allocation, and the figures above are execution only); the extra Postgres
+service container per shard (18 s to initialise, inside the 50 s setup); and whether the 44
+suites bin evenly — the longest is 185 s against a 4-shard budget of 609 s, so they can, but
+nobody has written the bin-packing. Actions minutes are free on this public repository
+(CLAUDE.md §19.9), so more runners cost nothing but concurrency.
+
+Related: `docs/TESTING.md` "Before you push" (the local half runs the same suites one at a
+time, deliberately — the round trip this row is about is CI's).
