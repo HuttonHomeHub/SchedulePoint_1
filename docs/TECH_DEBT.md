@@ -5681,10 +5681,33 @@ docblocks cite. Corrected in the cross-plan docblock rather than left; the shipp
 claim is untouched and inherits the gap. The concrete harm is independently covered by the G4 text
 scan. A `satisfies` on the three spread blocks would make the claim literally true.
 
-**(d)** `RevisionLinkChange['state']`'s `ADDED | REMOVED | CHANGED` is still a hand-copied `enum:`
-literal with no backing tuple, in a file whose header says every enum is derived.
-`REVISION_NOT_ASSESSABLE_REASONS` was added in M4 and closed the other two; this one is named rather
-than silently excepted.
+**(d)** ~~`RevisionLinkChange['state']`'s `ADDED | REMOVED | CHANGED` is still a hand-copied `enum:`
+literal with no backing tuple~~ — **CLOSED 2026-09-11.** `REVISION_LINK_STATES` is the missing
+tuple, `RevisionLinkState` derives from it, and `revision-compare.dto.ts:351` reads the identifier.
+The wire values are unchanged; what changes is that a fourth state reaches the DTO without anybody
+editing it, which is the whole of what the header's "every `enum:` is DERIVED" promises. The header
+said so with a footnote naming this exception, and the footnote is now a closure note rather than a
+standing caveat.
+
+> **The re-count is the part worth carrying, because "three" was an undercount** — the same shape as
+> `#265`'s remedy and `#274`'s population, found the same way, by enumerating rather than trusting.
+> Scanning both DTO files for `enum: [` returns **eight** sites, and they are three different things:
+>
+> - **Four are derived already** — `[...REVISION_FREE_CHANGE_CLASSES, ...REVISION_PAID_CHANGE_CLASSES]`,
+>   a spread of two tuples. A class added to either reaches all four with no edit. Not a finding.
+> - **Three are hand-copies of a union that lives in `@repo/types`** and are the same class as this
+>   item: `enum: ['CODE']` against `CrossPlanCorrelationKey`, `enum: ['NO_COMMON_CODES']` against
+>   `CrossPlanNotAssessableReason`, and `enum: ['SIDE_NOT_SCHEDULED', 'NO_COMMON_CODES']` against the
+>   inline union at `packages/types/src/index.ts:3122`. **Two of those three unions are themselves
+>   bare types rather than tuples**, so closing them means adding the tuple first — exactly the work
+>   this item just did, three times over, and on a union with **one** member where a tuple is
+>   arguable rather than obvious.
+> - The eighth is this item, now closed.
+>
+> Deliberately **not** swept in the same commit: the remaining three are a separate judgement (is a
+> one-value union worth a tuple?), and widening a closure to work nobody has reviewed is how a
+> "small fix" becomes the thing that needed a spec. Recorded here with the count corrected so the
+> next reader starts from eight rather than three.
 
 **(e)** ~~`docs/API.md`'s **existing, untouched** description of the plan-nested route's
 `ghosts`/`links` says "Neither is capped"~~ — **CLOSED 2026-09-11.** The claim was verified against

@@ -21,6 +21,7 @@ import {
   REVISION_COMPLETION_REASONS,
   REVISION_FREE_CHANGE_CLASSES,
   REVISION_PAID_CHANGE_CLASSES,
+  REVISION_LINK_STATES,
   REVISION_NOT_ASSESSABLE_REASONS,
   REVISION_SETTINGS_VERDICTS,
   REVISION_SIDE_KINDS,
@@ -47,9 +48,11 @@ import {
  * hand-copied, not because anybody preferred it but because no backing tuple existed to derive
  * from. `REVISION_NOT_ASSESSABLE_REASONS` was added rather than the claim softened, and it earned
  * its keep immediately — a third reason joined that union in the same commit and reached both DTOs
- * without either being edited. The `ADDED | REMOVED | CHANGED` link state remains a hand-copied
- * literal, and is named here rather than left as a silent exception to a sentence that says
- * "every".
+ * without either being edited. The `ADDED | REMOVED | CHANGED` link state was left as the last
+ * hand-copied literal and **named** here rather than silently excepted from a sentence that says
+ * "every"; `REVISION_LINK_STATES` closed it on 2026-09-11 (`docs/TECH_DEBT.md` #263(d)), so the
+ * sentence above is now true without a footnote. The wire values did not change — what changed is
+ * that a fourth state would reach this file on its own.
  */
 
 export class RevisionSideDto implements RevisionSide {
@@ -348,7 +351,7 @@ export class RevisionLinkChangeDto implements RevisionLinkChange {
   @ApiProperty({ description: 'Carried because a REMOVED edge is in no live edge list.' })
   predecessorId!: string;
   @ApiProperty() successorId!: string;
-  @ApiProperty({ enum: ['ADDED', 'REMOVED', 'CHANGED'] })
+  @ApiProperty({ enum: REVISION_LINK_STATES })
   state!: RevisionLinkChange['state'];
 }
 

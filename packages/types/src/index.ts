@@ -2985,11 +2985,23 @@ export interface RevisionGhostBar {
  * The endpoints are carried because a `REMOVED` edge is in no live edge list — the client cannot
  * look it up, exactly as it cannot look up a removed activity's bar.
  */
+/**
+ * **A tuple rather than a bare union, for the {@link REVISION_NOT_ASSESSABLE_REASONS} reason**
+ * (`docs/TECH_DEBT.md` #263(d)). `revision-compare.dto.ts`'s header claims every `enum:` is derived
+ * from the `@repo/types` tuple that also derives the union; M4 supplied the missing tuple for two
+ * of the three it was overclaiming and **named** this one rather than silently excepting it. This
+ * is the third. The wire values are unchanged — what changes is that adding a state reaches the
+ * DTO without anybody editing it.
+ */
+export const REVISION_LINK_STATES = ['ADDED', 'REMOVED', 'CHANGED'] as const;
+
+export type RevisionLinkState = (typeof REVISION_LINK_STATES)[number];
+
 export interface RevisionLinkChange {
   readonly dependencyId: string;
   readonly predecessorId: string;
   readonly successorId: string;
-  readonly state: 'ADDED' | 'REMOVED' | 'CHANGED';
+  readonly state: RevisionLinkState;
 }
 
 /** The key two independently-imported plans are matched on. One value, so the payload says so. */
