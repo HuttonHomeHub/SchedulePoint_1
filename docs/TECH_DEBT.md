@@ -3672,8 +3672,13 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ### 208. A journey that seeds through the API must tell the client itself
 
-**Status:** open · **Verified:** 2026-09-10 · (audited 2026-08-31 — see below; kept as the standing
-rule, not as owed work)
+**Status:** standing · **Verified:** 2026-09-11 · (audited 2026-08-31 — see below; kept as the
+standing rule, not as owed work)
+
+**Reclassified `open` → `standing` on 2026-09-11, on this row's own words.** It says in its header
+and again in its first paragraph that it records a constraint on how journeys seed rather than a site
+to fix — "there is nothing to grep for" — and `standing` is the vocabulary word for exactly that
+(`#216`'s precedent). `open` invited a reader to look for work that the row states does not exist.
 
 **Re-verified 2026-09-10 as a rule rather than a defect**, which is what this row is: it records a
 standing constraint on how journeys seed, not a site to fix, so there is nothing to grep for. It is
@@ -5178,7 +5183,15 @@ the next epic that touches three or more of them.
 
 ### 256. Every e2e reset hand-orders the whole schema, and five had it wrong
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
+
+**Reclassified `open` → `deferred` on 2026-09-11, on this row's own last sentence.** The five
+orderings are fixed; what remains is a design question the row deliberately files rather than
+answers, and it names its own trigger — "when a sixth table joins the pattern, or sooner if another
+unexplained cross-spec FK failure appears". That is what `deferred` means in this register's
+vocabulary (ADR-0120): a decision with a trigger, not an open question. `open` invited a reader to
+pick up a `clearAll` the row explicitly says should wait, and whose two hard parts (resets that
+deliberately preserve rows, and a cycle in the FK graph) it already names.
 
 **Re-verified 2026-09-10 by counting**: **41** e2e specs still call `deleteMany` directly, while
 **17** files use the `clearBaselineTree` helper #253 created — so the shared helper covers its one
