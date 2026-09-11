@@ -297,15 +297,25 @@ moment later. And the licence gate reads manifests: a package whose `license` fi
 its own LICENSE file is reported as its field says, and vendored source is invisible to it. Each of
 those is in the relevant gate's own docblock, where somebody debugging it will read it.
 
-**Three GitHub settings are outside this repository and are therefore not enforced by it.** The
-`PR title` check must be added to branch protection's required status checks on `main`, and
-"Default to PR title for squash merge commits" must be confirmed. Until both are done the workflow
-reports and does not block, and the subject it validates is not guaranteed to be the subject that
-lands. The third was named by the M5 security review and belongs with them: **"require approval for
-first-time contributors"** is the setting that decides whether a fork's pull request runs CI at all
-— and a fork's PR can carry its own `commitlint.config.js`, or a lockfile whose install runs a
-postinstall script. All three are owner actions, recorded here so "shipped" does not read as
-"enforced".
+**Three GitHub settings were outside this repository. Two were made, and the third was DECLINED —
+which is the part worth recording, because it makes a temporary-sounding sentence permanent.**
+"Default to PR title for squash merge commits" was confirmed and "require approval for first-time
+contributors" was already set (both product owner, 2026-09-11). **Branch protection was declined**
+the same day — "I'm not going to turn on branch protection at this time" — asked with the
+measurement and the exact steps in front of them. `main` carries no protection rule and no ruleset,
+verified three ways.
+
+So this ADR's four gates, **and every gate this repository has ever had**, report and **cannot
+block** — permanently, by decision, rather than pending an action somebody will get round to. The
+first draft of this paragraph said the workflow "reports and does not block **until** branch
+protection is configured", which read as a gap awaiting a fix; it is a property. The PR-title
+workflow validates the subject that will land and says so on the pull request; it cannot stop a
+merge past itself. What enforces it is a person or an agent reading the checks (`CLAUDE.md` §19.9),
+and that section now says so rather than leaving its own reason unstated.
+
+**Stating this is the point rather than a caveat**: a reader who adds a gate here believing it
+blocks would be wrong, and until now nothing in the repository would have told them. The residual
+risk is named and accepted: a red check can be merged past, and the control is discipline.
 
 **It is exempt from `docs/ROADMAP.md` rather than listed on it**, with `scripts/adr-coverage.json`
 carrying the reason — the same class as ADR-0124 and ADR-0131 a week earlier. A roadmap entry was

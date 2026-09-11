@@ -180,7 +180,18 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
 
 ## 8. Branching strategy
 
-- **Trunk-based.** `main` is always releasable and protected.
+- **Trunk-based.** `main` is always releasable — and, by product-owner decision
+  (2026-09-11), **not** protected. It carries no branch-protection rule and no ruleset,
+  measured three ways that day (`branches?protected=true` → `[]`, `/rulesets` → `[]`,
+  authenticated branch list → `protected: false` everywhere) and declined with those
+  numbers and the exact steps in front of them. This bullet read "and protected" until
+  then, which was false and had been for the project's life.
+  **The consequence is one sentence and is not softened: no CI check can block a merge
+  here, and none ever has** — not CodeQL, not the end-to-end suite, not the four gates
+  ADR-0136 shipped. Every gate is **advisory at the merge boundary**. That is not the
+  same as pointless: a gate that reports still tells you before you merge, which is where
+  its value was. What replaces enforcement is **§19.9** — which is why that section is a
+  rule and not fussiness.
 - Work happens on short-lived branches: `feat/<slug>`, `fix/<slug>`,
   `docs/<slug>`, `chore/<slug>`.
 - Open a PR early; keep it small; rebase (don't merge) `main` into your branch to
@@ -4509,7 +4520,13 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   counted neither, which is ADR-0076 Class 1 inside the ADR about Class 1, one paragraph from the
   corrected assertion count it had already fixed for the same reason. The two filed as
   `docs/TECH_DEBT.md` #298 both change shared mechanisms, and folding a shared-gate change into an
-  epic's last milestone is what ADR-0105 exists to stop. #244 and #48(b) close. It is **exempt from
+  epic's last milestone is what ADR-0105 exists to stop. #244 and #48(b) close.
+  **Two of the three GitHub settings were made and the third was DECLINED**, which turns a
+  temporary-sounding sentence into a permanent one: `main` carries no branch protection by
+  product-owner decision (2026-09-11, §8), so this ADR's four gates — **and every gate this
+  repository has ever had** — report and cannot block. The draft said "does not block **until**
+  branch protection is configured", which read as a gap awaiting a fix; it is a property, and
+  §19.9 is what replaces it. It is **exempt from
   `docs/ROADMAP.md` rather than listed on it** (the ADR-0124/ADR-0131 class): a roadmap entry was
   written and then removed when the plan was re-read, since a planner cannot act on a CI gate.
   **The CPM engine is not imported and no migration runs**; `apps/api` and `apps/web/src`
@@ -4824,7 +4841,14 @@ When operating in this repo, Claude Code should:
    a tooling one.
 9. **A GitHub `check_suite` event is not proof that CI passed.** Before merging,
    read the check runs for the PR's **current head** (`get_check_runs`) and
-   confirm every one is `completed` with `conclusion: success`. A relayed
+   confirm every one is `completed` with `conclusion: success`.
+
+   **This is the repository's only merge gate, which is why it is a rule and not
+   fussiness.** `main` carries no branch protection, by decision (§8), so nothing on
+   GitHub's side ever refuses a red suite. The six near-misses below would be an
+   embarrassment on a protected repository; here they were the entire safety margin.
+
+   A relayed
    "no check in this suite failed" event is a weaker claim than it reads as, in
    three distinct ways, **all three of which occurred on one afternoon**
    (2026-08-22, six times across PRs #347, #349 and #351):

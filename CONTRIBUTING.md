@@ -78,25 +78,36 @@ docs(repo): document the release process
 
 ## Branch protection (required checks)
 
-"CI green before merge" (CLAUDE.md §7) is only reliable when GitHub **enforces**
-it. Configure `main` under **Settings → Branches → Branch protection rules** (or
-a ruleset) so it cannot regress by convention alone:
+**`main` is deliberately NOT protected** — product-owner decision, 2026-09-11, taken with
+the measurement and the steps in front of them (CLAUDE.md §8). Nothing is configured, and
+**no CI check can block a merge here.** What stands in for enforcement is CLAUDE.md
+§19.9: read the check runs for the pull request's current head, and confirm every one is
+`completed` with `conclusion: success`, before merging.
+
+If that decision is ever revisited, this is the shape it should take — but
+**copy the job names out of `.github/workflows/` on the day, never from this list.**
+A required check whose name never reports sits **pending forever**, so every pull request
+becomes permanently unmergeable with no error naming the cause. That is not hypothetical:
+this list named `Verify feature template` until 2026-09-11, a job **ADR-0057 deleted**
+along with the reference template it verified. Correct when written, a trap by the time
+anyone followed it, and nothing connected the deletion to the instruction.
 
 - **Require a pull request before merging** (no direct pushes to `main`).
-- **Require status checks to pass**, and mark these CI jobs as required:
+- **Require status checks to pass.** The jobs that existed on 2026-09-11 were:
   - `Format, lint, typecheck & unit tests`
-  - `Verify feature template`
   - `End-to-end tests`
   - `Build & smoke-boot images`
+  - `Check the PR title is a Conventional Commit`
   - `Analyze (javascript-typescript)` (CodeQL)
 - **Require branches to be up to date before merging** (so checks run against
   the post-merge tree).
-- **Require conversation resolution** and at least one approving review
-  (CODEOWNERS-satisfied).
+- **Require conversation resolution.** An approving review needs a **second person**; with
+  a single committer it makes `main` unmergeable rather than safe, so leave approvals at
+  zero until there is somebody to approve.
 - Keep **Do not allow bypassing the above** on, including for admins.
 
-Without this, a job that is red (e.g. only one of several CI jobs failing) can
-still be merged — which is exactly how a broken build can reach `main`.
+Without protection, a job that is red can still be merged — which is exactly how a broken
+build reaches `main`, and why §19.9 is a rule rather than a courtesy.
 
 ## Reporting bugs & requesting features
 
