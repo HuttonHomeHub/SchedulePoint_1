@@ -1863,20 +1863,29 @@ export class ScheduleService {
       },
       // Absent (rather than an empty report) when not asked for, so a caller that did not opt in
       // sees byte-identically what it saw before this existed.
-      ...(changeReport ? { changes: changeReport } : {}),
+      //
+      // **Each branch carries its own `satisfies`, and that is not decoration** (#263(c)). The
+      // declared type on `result` runs an excess-property check on THIS literal and on each branch
+      // of a ternary assigned as a property value — but **not** inside `...(cond ? { … } : {})`, so
+      // the seven optional projection fields were attached through the one idiom the guarantee both
+      // DTOs' docblocks cite does not reach. Demonstrated by compiling the shape rather than
+      // reasoned about (M4 api review). A `satisfies` restores the check per branch.
+      ...(changeReport
+        ? ({ changes: changeReport } satisfies Pick<RevisionCompare, 'changes'>)
+        : {}),
       ...(ghostResult
-        ? {
+        ? ({
             ghosts: ghostResult.ghosts,
             ghostsTotal: ghostResult.total,
             ghostsUndrawable: ghostResult.undrawable,
-          }
+          } satisfies Pick<RevisionCompare, 'ghosts' | 'ghostsTotal' | 'ghostsUndrawable'>)
         : {}),
       ...(linkResult
-        ? {
+        ? ({
             links: linkResult.links,
             linksTotal: linkResult.total,
             linksUndrawable: linkResult.undrawable,
-          }
+          } satisfies Pick<RevisionCompare, 'links' | 'linksTotal' | 'linksUndrawable'>)
         : {}),
       criticalPath: bothScheduled
         ? {
@@ -2369,9 +2378,14 @@ export class ScheduleService {
           : null,
         newSideCarrierName: delta.completion.newSideCarrierName ?? null,
       },
-      ...(changeReport ? { changes: changeReport } : {}),
+      // Each branch carries its own `satisfies` for the sibling's reason (#263(c)): the declared
+      // type on `result` does not excess-property-check inside a conditional spread, which is how
+      // all seven optional projection fields are attached here.
+      ...(changeReport
+        ? ({ changes: changeReport } satisfies Pick<CrossPlanRevisionCompare, 'changes'>)
+        : {}),
       ...(ghostResult
-        ? {
+        ? ({
             // Every DRAWN ghost is matched — an unmatched row has no anchor lane and is counted,
             // never placed — so the anchor id is present by construction here. The `?? ''` is
             // unreachable and is written as a fallback rather than a `!` so a future widening of the
@@ -2382,10 +2396,10 @@ export class ScheduleService {
             })),
             ghostsTotal: ghostResult.total,
             ghostsUndrawable: ghostResult.undrawable,
-          }
+          } satisfies Pick<CrossPlanRevisionCompare, 'ghosts' | 'ghostsTotal' | 'ghostsUndrawable'>)
         : {}),
       ...(linkResult
-        ? {
+        ? ({
             /**
              * **An ADDED or CHANGED link is handed back under the ANCHOR PLAN'S OWN dependency id,
              * and that is a defect this milestone found by reading the painter rather than by
@@ -2413,7 +2427,7 @@ export class ScheduleService {
             })),
             linksTotal: linkResult.total,
             linksUndrawable: linkResult.undrawable,
-          }
+          } satisfies Pick<CrossPlanRevisionCompare, 'links' | 'linksTotal' | 'linksUndrawable'>)
         : {}),
       criticalPath: bothScheduled
         ? {

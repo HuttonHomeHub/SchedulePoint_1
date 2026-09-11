@@ -396,6 +396,14 @@ export class RevisionCompareDto implements RevisionCompare {
    * `revisionCompare` building `const result: RevisionCompare = { … }`, where TypeScript's
    * excess-property check on an object literal rejects anything extra at that one site.
    *
+   * **That was an overclaim until 2026-09-11, and the sibling DTO said so first**
+   * (`docs/TECH_DEBT.md` #263(c)). The declared type checks this literal and each branch of a
+   * ternary assigned as a property value, and does **not** fire inside `...(cond ? { … } : {})` —
+   * which is precisely how the seven optional projection fields are attached. Each of those three
+   * branches now carries its own `satisfies Pick<RevisionCompare, …>`, so the sentence above is
+   * true of the whole shape rather than of the part that never needed it. Verified by injecting a
+   * `cost` key into every branch and reading the six `TS2353` errors back, not by reasoning.
+   *
    * That is a service-discipline guarantee standing in for a DTO-boundary one, and it is the only
    * `.from` in this directory that works that way — the siblings copy fields explicitly. It is kept
    * because a hand-written copy of a 30-field nested shape is a second place to forget a field, and

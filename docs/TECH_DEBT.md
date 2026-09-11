@@ -5675,11 +5675,24 @@ gated, and it mirrors the sibling's already-accepted posture.
 
 **Four are the API contract's own claims.**
 
-**(c)** The excess-property check does **not** fire inside `...(cond ? { … } : {})`, demonstrated by
-compilation — so the seven optional projection fields are not covered by the mechanism both DTOs'
-docblocks cite. Corrected in the cross-plan docblock rather than left; the shipped route's identical
-claim is untouched and inherits the gap. The concrete harm is independently covered by the G4 text
-scan. A `satisfies` on the three spread blocks would make the claim literally true.
+**(c)** ~~The excess-property check does **not** fire inside `...(cond ? { … } : {})`~~ — **CLOSED
+2026-09-11 by the remedy this item named.** Each of the three conditional spreads in **both**
+routes now carries its own `satisfies Pick<…>`, so the claim both DTO docblocks make is true of the
+whole shape rather than of the part that never needed it, and the shipped route no longer inherits
+a gap its sibling had documented.
+
+> **Proved rather than reasoned, and proved six times rather than four.** A `cost` key was injected
+> into every branch and the compiler read back six `TS2353` errors naming the field and the exact
+> `Pick`. The first pass reached four — the two cross-plan ghost/link blocks carry long nested
+> docblocks that defeated the edit — and the honest options were to state "the same mechanism
+> applies" or to inject the other two. They were injected. Asserting a mechanism from a subset of
+> its call sites is how this register's recurring one-control-and-not-its-neighbour defect is
+> written down after the fact.
+>
+> **The G4 text scan is not made redundant and the docblock now says why**: it reads source text, so
+> it catches a cost-shaped field wherever it is written — including in a shape the compiler would
+> accept because somebody widened the type to admit it. The two instruments answer different
+> questions and the file previously implied the scan was standing in for the check.
 
 **(d)** ~~`RevisionLinkChange['state']`'s `ADDED | REMOVED | CHANGED` is still a hand-copied `enum:`
 literal with no backing tuple~~ — **CLOSED 2026-09-11.** `REVISION_LINK_STATES` is the missing
