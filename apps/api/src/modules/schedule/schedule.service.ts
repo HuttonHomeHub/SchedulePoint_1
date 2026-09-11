@@ -1530,7 +1530,7 @@ export class ScheduleService {
    * The plan's working-day calendar for this recalculation, built once (ADR-0024).
    * A null `calendarId`, or a calendar that is missing/soft-deleted (defensive — the
    * delete-in-use guard prevents deleting an in-use calendar), falls back to
-   * `allDaysWorkCalendar`, so the null path is byte-identical to M6 and the golden
+   * `allMinutesWorkCalendar`, so the null path is byte-identical to M6 and the golden
    * suite still holds.
    */
   private async resolveCalendar(

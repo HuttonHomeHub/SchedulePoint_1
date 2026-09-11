@@ -672,7 +672,7 @@ export function GanttPanel({
   /**
    * Indent / Outdent for one row (M5-T4), resolved against the order the planner is LOOKING at.
    *
-   * `orderedActivities` is the flattened row list, so "the summary above this row" means what it
+   * `ordered` is the flattened row list (buckets dropped), so "the summary above this row" means what it
    * appears to mean. Answering from plan order would file a row under a summary that is elsewhere
    * on screen — correct by some ordering, and wrong by the only one the planner can see.
    */

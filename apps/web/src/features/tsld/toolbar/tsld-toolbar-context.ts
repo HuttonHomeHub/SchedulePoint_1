@@ -20,9 +20,12 @@ import type { PenLockView } from '@/features/plan-lock';
  * so behaviour stays sourced from `usePlanWorkspaceModel` + the canvas control handle (the M4
  * builder assembles this from the model, the canvas UI state, and the dialog openers).
  *
- * `render`-item bodies that reuse existing components (the schedule summary, the legend) are passed
- * in as ready {@link ReactNode}s (`summaryContent`, `legendContent`) so the registry stays free of
- * data-fetching and the content isn't duplicated.
+ * A `render`-item body that reuses an existing component is passed in as a ready
+ * {@link ReactNode} — today that is `summaryContent` alone, so the registry stays free of
+ * data-fetching and the content isn't duplicated. This sentence named a `legendContent` beside it
+ * until 2026-09-11; the legend moved onto the canvas at the ADR-0031 amendment (see
+ * {@link TsldToolbarContext.legendOpen}) and the field went with it, leaving the interface's own
+ * opening docblock describing a member it does not have.
  */
 export interface TsldToolbarContext {
   // --- Frame / navigate (group 1) -----------------------------------------------------------
