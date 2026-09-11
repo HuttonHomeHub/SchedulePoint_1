@@ -1399,7 +1399,17 @@ verify/invite stays this row's own, separate remediation.
 
 ### 89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+> **Reclassified `open` → `deferred` on 2026-09-11: the repo half is PAID and the whole remainder is
+> an operator change.** Half 1 landed at ADR-0074 M1-T5 — `apps/web/nginx.conf`'s
+> `map $http_x_forwarded_proto $sp_forwarded_proto` preserves what arrives and falls back to
+> `$scheme` only when nothing does — so the repository can no longer destroy a correct value. Half 2
+> is a setting on the Nginx Proxy Manager host, with the instruction already written into
+> `docs/DEPLOYMENT.md`, and it is the trigger: **confirm NPM sends `X-Forwarded-Proto` on the HTTPS
+> host**. Nothing here can do it, and the row itself says nothing consumes the value today. Fourth
+> row reclassified on 2026-09-11 for this reason (`#100`, `#117`, `#154`, `#81`), and the shape is
+> the same every time: `open` reads as work somebody here could pick up.
 
 Every request arriving through Cloudflare → Nginx Proxy Manager → web → api carries:
 
