@@ -133,9 +133,17 @@ test('a peer flips the scheduling mode and the bar catches the focus it drops', 
   await expect(clear).toBeVisible();
   await clear.focus();
 
-  // Guard 1.
+  // Guard 1. **The accessible name, not `aria-label`** — this control carries `showLabel: 'always'`,
+  // so `ToolbarButton` names it from its text and there is no `aria-label` to read. The first run
+  // of this journey asserted the attribute alone and failed against a perfectly focused button.
   await expect
-    .poll(async () => a.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? ''))
+    .poll(async () =>
+      a.evaluate(() => {
+        const el = document.activeElement;
+        if (!el) return '';
+        return (el.getAttribute('aria-label') ?? el.textContent ?? '').trim();
+      }),
+    )
     .toContain('Clear visual start');
 
   // --- B: flip the plan to Early, over the public API, holding no pen ---------------------------
