@@ -480,6 +480,27 @@ export function RevisionComparePanel({
               />
             )}
 
+            {/* **The caveat and the frame sit WITH the coverage they qualify, which is where the
+                printout has always put them** (`docs/TECH_DEBT.md` #263(j)). On screen they used to
+                sit after the whole delta, just above the footer — so a reader told to read the
+                coverage first met the qualification on it only after scrolling a change list that
+                can run to two hundred rows, which is the one order in which a qualifier does no
+                work. The printed document puts both immediately after the correlation lists, and
+                the ux review's verdict was that paper had it right.
+
+                The caveat precedes the frame here for the same reason it does on paper: it is a
+                limit on what the numbers CAN mean, and the frame is a fact about which two plans
+                produced them. */}
+            {crossPlan === null || crossPlan.notAssessableReason !== null ? null : (
+              <p className="text-muted-foreground text-xs">{RECODE_CAVEAT}</p>
+            )}
+
+            {/* The measurement frame — named because two plans need not share one. Same-plan this
+                goes without saying and is deliberately not said. */}
+            {crossPlan === null ? null : (
+              <p className="text-muted-foreground text-xs">{frameSentence(crossPlan.frame)}</p>
+            )}
+
             {/* BOTH sides' instants. The screen used to state only the earlier one while the
                 printout stated both — so a planner comparing two baselines on screen could not see
                 they were six weeks apart, and the page they handed somebody else could. That
@@ -643,18 +664,6 @@ export function RevisionComparePanel({
                   </>
                 )}
               </>
-            )}
-
-            {/* The measurement frame — named because two plans need not share one. Same-plan this
-                goes without saying and is deliberately not said. */}
-            {crossPlan === null ? null : (
-              <p className="text-muted-foreground text-xs">{frameSentence(crossPlan.frame)}</p>
-            )}
-
-            {/* The re-code caveat: the one honest limit of matching on code, stated wherever added
-                or removed rows can appear rather than left for a planner to discover. */}
-            {crossPlan === null || crossPlan.notAssessableReason !== null ? null : (
-              <p className="text-muted-foreground text-xs">{RECODE_CAVEAT}</p>
             )}
 
             <p id={footerId} className="text-muted-foreground border-border border-t pt-2 text-sm">

@@ -5656,6 +5656,12 @@ Six specialists ran over the epic's combined diff. Seven findings blocked and we
 red-first regression tests (see the M4 commit). These twelve did not, each with the reason it was
 left rather than rushed.
 
+**Five of the twelve are closed as of 2026-09-11** — (c), (d), (e), (f) and (j), each verified red
+first. What remains is **(a)** and **(b)**, which are measurement rather than code, and **(g)**,
+**(h)** and **(i)**, which are semantics a reader should know rather than defects. A reader picking
+this up should start with (a): a 16 % headroom from a single unrepeated run is the one thing here
+that could still be wrong about the product.
+
 **Two are measurement, and they are the ones worth reading.**
 
 **(a) The P2 figure did not reproduce.** `m0-condition.md` records p95 208.2 ms (harness) and
@@ -5767,10 +5773,25 @@ terms even when reached through the cross-plan picker, where the planner chose a
 
 **Three are placement and style.**
 
-**(j)** On screen the re-code caveat and the measurement frame sit after the whole delta, just above
-the footer; on paper they sit immediately after the correlation lists. Paper has it right — a reader
-told to check the coverage first may scroll past a long change list before meeting the caveat that
-qualifies it.
+**(j)** ~~On screen the re-code caveat and the measurement frame sit after the whole delta~~ —
+**CLOSED 2026-09-11**, on paper's order, which the ux review called right and which is: caveat,
+then frame, both immediately after the coverage. The caveat precedes the frame because it is a
+limit on what the numbers CAN mean and the frame is a fact about which two plans produced them.
+
+> **The interesting part is which gate did not catch it, and why that is not a failure.**
+> `cross-plan-symmetry.test.tsx` exists specifically to assert that the two surfaces say the same
+> things, in both directions, and it passed throughout — because its docblock declares its reach in
+> advance: _"it checks the SENTENCES both surfaces are built from, not their layout, not their
+> ordering"_. The blind spot was written down before it cost anything, which is the difference
+> between a gate that under-claims and one that over-claims. It is now widened by exactly one
+> stated axis and the general layout claim is still not made.
+>
+> **The assertion is a RELATIONSHIP between three nodes, never an index.** An index pins the whole
+> layout and fails on any unrelated insertion, which is how an ordering test earns a reputation for
+> noise and gets deleted. Both cases run over **both** surfaces and `positionOf` throws when an
+> anchor is missing, so neither can pass vacuously. Verified red by restoring the pre-fix screen
+> order: both new cases failed, the five sentence cases stayed green — which is the declared blind
+> spot demonstrated rather than asserted.
 
 **(k)** ~~`RevisionComparePrintDocument.css` (and `HealthPrintDocument.css`) still carry hard-coded
 hex on a docblock claiming a `@media print` sheet cannot read a runtime token~~ — **CLOSED
