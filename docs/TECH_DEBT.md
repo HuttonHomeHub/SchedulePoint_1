@@ -345,7 +345,32 @@ ADR-0062 component gate as a suggestion — deliberately not rushed inside the e
 
 ### 70. The API e2e harness cannot reproduce a same-plan write race
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+> **The first remedy LANDED 2026-09-11 for the single-activity re-parent path, which is the one
+> this row was opened on.** `apps/api/test/wbs-reparent-race.e2e-spec.ts` drives two direct
+> `ActivitiesService.update` calls with a **barrier at the read seam** —
+> `ActivityRepository.findActiveByIdInOrg` wrapped so the first in-transaction read of either
+> summary waits up to 1500 ms for a peer, armed only on three-argument calls for those two ids so
+> `update`'s own two-argument preamble read cannot trip it.
+>
+> **Its non-vacuity assertions come first, because this row's whole subject is a case that looks
+> like a race and is not one.** Measured with the lock: `peerArrived` **false**, durations
+> **1524 ms and 3025 ms** — the second transaction blocked before it could reach the read, then
+> waited out the winner. With `acquirePlanWriteLock` commented out: `peerArrived` **true**,
+> durations **17 ms and 17 ms**, and **both calls succeed**, so the tree goes cyclic. Contrast those
+> 17 ms with the ~15 ms by which Supertest _separates_ the same pair: same order of magnitude,
+> opposite meanings. **Verified red both ways** — on the harness assertion, and, with that lifted,
+> on `expected 1 fulfilled, got 2`, so the invariant assertion discriminates too.
+>
+> **Reclassified `open` → `deferred`, not closed**, and the distinction is exact: the technique is
+> now proven and written down, but it has only been applied to `update`. `updateParents` (the WBS
+> membership batch) takes the same lock at `activities.service.ts:891` and still has no below-HTTP
+> race test, and so do the dependency-DAG and resource-tree paths this row's own text compares
+> itself to. The trigger is **the next change to any of those locks**, at which point the pattern to
+> copy exists. **The standing rule below still stands unchanged**: do not add another "serialises
+> concurrent …" e2e test — renaming does not make the HTTP harness able to race, and now there is
+> somewhere better to put it.
 
 The WBS re-parent path takes the plan advisory lock so two mirror re-parents cannot both pass a
 still-acyclic ancestor walk (ADR-0038 invariant (a), fixed in the WBS-improvements M0). The natural
