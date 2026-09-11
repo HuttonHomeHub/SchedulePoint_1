@@ -46,6 +46,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { parseAdvisoryGates } from './lib/advisory-gates.mjs';
 import { report } from './lib/doc-register.mjs';
 
 const NAME = 'check:ci-roster';
@@ -171,9 +172,45 @@ export function runGate(root) {
     );
   }
 
+  // **The ADVISORY set, read out of `scripts/prepush.sh` and never restated** — the spec's D2, and
+  // the one decision this gate shipped without. Three of the five M5 specialist reviews found the
+  // gap independently, and it reproduces: add `run: pnpm check:reconcile-due` to `ci.yml` AND
+  // remove its `ci-roster.json` entry — the natural pair of edits, since an entry saying "need not
+  // run in CI" looks redundant once it does — and the gate reported OK, silently converting a
+  // product-owner decision (ADR-0120: this gate WARNS and never blocks) into a blocking CI gate by
+  // the back door. R4 caught the single-edit version only by coincidence, because the one advisory
+  // gate happens also to hold the one exemption.
+  //
+  // `scripts/ci-roster.json`'s own comment CLAIMED this was already derived — "an entry here for a
+  // gate that is NOT advisory fails check:advisory-agreement instead" — which was false: that gate
+  // reads `prepush.sh` and each gate's source and has never heard of `ci-roster.json`. A
+  // decision-bearing claim asserted and not checked (ADR-0076 Class 3), inside the epic closing
+  // that class. The claim is now true because the derivation exists.
+  let advisory = new Set();
+  try {
+    advisory = parseAdvisoryGates(read('scripts/prepush.sh'));
+  } catch (error) {
+    problems.push(
+      `the advisory set could not be read from scripts/prepush.sh: ${
+        error instanceof Error ? error.message : error
+      }\n      Every assertion about advisory gates below is over that set, so an unreadable one ` +
+        'is refused rather than treated as empty.',
+    );
+  }
+
+  // **A note on the R numbers, because the spec's and the code's diverged.** `feature-spec.md` D4
+  // labels the ADVISORY assertions R3/R4 and has no label for the exempt map's own consistency;
+  // this file labelled the exempt-map checks R3/R4 and had no advisory assertions at all. The M5
+  // test-engineer review found a reader auditing spec-against-code has to reverse-engineer the
+  // mapping. Rather than renumber shipped labels, the advisory pair lands as **R3a/R4a** below and
+  // this comment is the mapping: spec R3 = code R3a, spec R4's advisory half = code R4a, and code
+  // R3/R4 are the stale-entry and contradiction checks the spec folded into R4's second half.
+  //
   // R1 — every declared gate is in CI, or exempt with a reason.
   for (const gate of declared) {
     if (inCi.has(gate)) continue;
+    // Advisory is a sufficient reason in itself, read from the one place that declares it.
+    if (advisory.has(gate)) continue;
     const reason = exempt[gate];
     if (typeof reason === 'string' && reason.trim() !== '') continue;
     problems.push(
@@ -208,6 +245,33 @@ export function runGate(root) {
     problems.push(
       `scripts/ci-roster.json says ${gate} need not run in CI, and .github/workflows/ci.yml runs ` +
         'it. One of the two is wrong, and the file with the reason in it is the one to read first.',
+    );
+  }
+
+  // R3a — an ADVISORY gate may not run in CI. This is the assertion the back door needed, and it
+  // is independent of `ci-roster.json` by construction: it compares CI against `prepush.sh`, so
+  // deleting the exemption cannot make it go quiet. GitHub Actions treats exit 2 as an ordinary
+  // job failure, so a step here turns "warns, never blocks" into "blocks" with nothing saying so.
+  for (const gate of advisory) {
+    if (!inCi.has(gate)) continue;
+    problems.push(
+      `${gate} is declared ADVISORY in scripts/prepush.sh and .github/workflows/ci.yml runs it.\n` +
+        '      CI has no advisory mode — it treats exit 2 as a failed job — so the step converts a ' +
+        'deliberate "warns, never blocks" decision into a blocking gate. Remove the step, or ' +
+        'remove the gate from ADVISORY_GATES and mean it.',
+    );
+  }
+
+  // R4a — an advisory gate needs no `ci-roster.json` entry to justify its absence, but it must not
+  // be justified TWICE. Two reasons for one absence are two places to update, and the day they
+  // disagree the reader cannot tell which is current.
+  for (const gate of Object.keys(exempt)) {
+    if (!advisory.has(gate)) continue;
+    if (!declared.includes(gate)) continue;
+    problems.push(
+      `${gate} is declared ADVISORY in scripts/prepush.sh AND carries a reason in ` +
+        'scripts/ci-roster.json. The advisory declaration is sufficient on its own and is the one ' +
+        'a reader will find; delete the roster entry rather than maintaining two answers.',
     );
   }
 

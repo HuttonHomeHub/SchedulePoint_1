@@ -20,9 +20,18 @@ import { dirname, join } from 'node:path';
 
 import { runGate, SELF } from './check-ci-roster.mjs';
 
-/** Build a throwaway repository root from a `{ 'path/from/root': contents }` map. */
+/**
+ * Build a throwaway repository root from a `{ 'path/from/root': contents }` map.
+ *
+ * **A `scripts/prepush.sh` is written unless the caller supplies one**, because the gate now reads
+ * the ADVISORY set out of it and refuses rather than treating an unreadable one as empty. The
+ * default declares a name no other fixture uses, so it is inert for every case that is not about
+ * advisory gates — and the cases that ARE pass their own.
+ */
 function tree(files) {
   const root = mkdtempSync(join(tmpdir(), 'ci-roster-'));
+  if (!('scripts/prepush.sh' in files))
+    files = { ...files, 'scripts/prepush.sh': prepush('check:nothing-here') };
   for (const [path, body] of Object.entries(files)) {
     const full = join(root, path);
     mkdirSync(dirname(full), { recursive: true });
@@ -35,6 +44,8 @@ const pkg = (...gates) =>
   JSON.stringify({ scripts: Object.fromEntries(gates.map((g) => [g, 'node x.mjs'])) });
 
 const workflow = (body) => `name: CI\njobs:\n  quality:\n    steps:\n${body}`;
+const prepush = (...gates) =>
+  `#!/usr/bin/env bash\nADVISORY_GATES=(${gates.map((g) => `"${g}"`).join(' ')})\n`;
 const step = (gate) => `      - name: ${gate}\n        run: pnpm ${gate}\n`;
 
 let failures = 0;
@@ -87,6 +98,79 @@ it('R1 — an EMPTY reason is not a reason', () => {
   });
   assert.equal(run(root), 1);
   rmSync(root, { recursive: true, force: true });
+});
+
+it('R3a — an ADVISORY gate running in CI FAILS, with no roster entry anywhere', () => {
+  /**
+   * **The back door, and the whole reason this assertion exists.** Three of the five M5 specialist
+   * reviews reached this independently: add the CI step AND delete the `ci-roster.json` entry —
+   * the natural pair of edits, since an entry reading "need not run in CI" looks redundant the
+   * moment it does — and the gate reported OK. `check:advisory-agreement` could not see it either:
+   * it compares `prepush.sh` against each gate's SOURCE and has never heard of `ci-roster.json`.
+   *
+   * CI has no advisory mode. GitHub Actions treats exit 2 as a failed job, so the step silently
+   * converts ADR-0120's "warns, never blocks" product-owner decision into a blocking gate.
+   *
+   * Verified red by deleting the R3a loop: the fixture below then returns 0.
+   */
+  const root = tree({
+    'package.json': pkg('check:a', 'check:warns'),
+    '.github/workflows/ci.yml': workflow(step('check:a') + step('check:warns')),
+    'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+    'scripts/prepush.sh': prepush('check:warns'),
+  });
+  assert.equal(run(root), 1);
+  rmSync(root, { recursive: true, force: true });
+});
+
+it('R3a — and the same advisory gate NOT in CI passes with no exemption at all', () => {
+  // The counter-case, without which R3a could be satisfied by refusing every advisory gate. The
+  // advisory declaration IS the reason; requiring a second one in `ci-roster.json` would be the
+  // two-answers-for-one-fact shape #244 exists to remove.
+  const root = tree({
+    'package.json': pkg('check:a', 'check:warns'),
+    '.github/workflows/ci.yml': workflow(step('check:a')),
+    'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+    'scripts/prepush.sh': prepush('check:warns'),
+  });
+  assert.equal(run(root), 0);
+  rmSync(root, { recursive: true, force: true });
+});
+
+it('R4a — an advisory gate that ALSO carries a roster reason FAILS', () => {
+  // Two reasons for one absence are two places to update, and the day they disagree a reader
+  // cannot tell which is current. Verified red by deleting the R4a loop.
+  const root = tree({
+    'package.json': pkg('check:a', 'check:warns'),
+    '.github/workflows/ci.yml': workflow(step('check:a')),
+    'scripts/ci-roster.json': JSON.stringify({
+      exempt: { 'check:warns': 'Advisory; it warns in prepush and never blocks.' },
+    }),
+    'scripts/prepush.sh': prepush('check:warns'),
+  });
+  assert.equal(run(root), 1);
+  rmSync(root, { recursive: true, force: true });
+});
+
+it('an unreadable ADVISORY_GATES is REFUSED, never read as an empty set', () => {
+  /**
+   * Every advisory assertion is over that set, so an empty one passes them all vacuously — the
+   * ADR-0093 shape, and the reason `parseAdvisoryGates` throws rather than returning `new Set()`.
+   * Two ways to have nothing: no array, and an array that parses to nothing.
+   */
+  for (const body of [
+    '#!/usr/bin/env bash\necho hello\n',
+    '#!/usr/bin/env bash\nADVISORY_GATES=()\n',
+  ]) {
+    const root = tree({
+      'package.json': pkg('check:a'),
+      '.github/workflows/ci.yml': workflow(step('check:a')),
+      'scripts/ci-roster.json': JSON.stringify({ exempt: {} }),
+      'scripts/prepush.sh': body,
+    });
+    assert.equal(run(root), 1, `an unreadable advisory declaration must be refused: ${body}`);
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 it('R2 — CI running a gate that no longer exists FAILS', () => {

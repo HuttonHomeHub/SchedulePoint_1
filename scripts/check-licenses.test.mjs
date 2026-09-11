@@ -116,21 +116,36 @@ it('L7 — an unknown key in the policy is refused', () => {
   assert.equal(run({ MIT: [pkg('a')] }, { ...BASE, deny: ['GPL-3.0'] }), 1);
 });
 
-it('workspace packages are skipped BY NAME, and only `@repo/`', () => {
+it('a `@repo/` name in the RESOLVED tree is a FINDING, not a skip', () => {
   /**
-   * `@repo/*` are this repository's own, private and unpublished. If one ever became publishable it
-   * would need a licence like anything else, and a silent skip is how that would go unnoticed.
+   * This assertion is inverted from what it was, and the inversion is the M5 security review's
+   * finding. The gate used to `continue` on a `@repo/` name, reasoning that those are this
+   * repository's own private, unpublished workspace packages.
    *
-   * **Both halves, because the first alone does not discriminate.** Widening the prefix from
-   * `@repo/` to `@` leaves the first assertion green — every scoped package would be skipped,
-   * including somebody else's — which is a far worse gate and an invisible change. Caught by the
-   * mutation sweep, not by reading.
+   * **Measuring settled it harder than either reading did**: `pnpm licenses list --json` reports
+   * the RESOLVED dependency tree and does not list workspace packages at all — 918 entries, 0 of
+   * them `@repo/`, pnpm 10.4.1. So the skip could never fire for one of ours, and the only thing it
+   * could ever have admitted is a package that is NOT ours wearing our scope. That is dependency
+   * confusion, waved through silently, by a gate whose whole design is that unknown fails.
+   *
+   * Three cases, because the first alone does not discriminate. Widening the prefix from `@repo/`
+   * to `@` was caught by the mutation sweep rather than by reading, and that mutation must stay
+   * red.
    */
-  assert.equal(run({ MIT: [pkg('a')], UNKNOWN: [pkg('@repo/types')] }), 0, 'our own is skipped');
+  assert.equal(
+    run({ MIT: [pkg('a')], UNKNOWN: [pkg('@repo/types')] }),
+    1,
+    'a @repo/ name in the resolved tree is refused — it cannot be one of ours',
+  );
   assert.equal(
     run({ MIT: [pkg('a')], 'GPL-3.0': [pkg('@someone-else/thing')] }),
     1,
     'a scoped package that is NOT ours is checked like anything else',
+  );
+  assert.equal(
+    run({ MIT: [pkg('a'), pkg('@fine/scoped')] }),
+    0,
+    'and an ordinary allowed scoped package still passes — the refusal is @repo/, not scoping',
   );
 });
 

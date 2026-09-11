@@ -80,11 +80,20 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
   33 kB.** The graph is the entry chunk plus the transitive closure of its
   **static** imports — everything the browser must parse before it can render.
   Measured 2026-09-11 by `pnpm --filter @repo/web build`, which now writes
-  `apps/web/bundle-report.json`: **3 chunks, 1,360.80 kB raw / 395.26 kB gzip**,
-  plus 82.31 kB / 14.79 kB gzip of CSS. The entry chunk **alone** is 362.21 kB
-  gzip — which is what this section recorded on 2026-09-10 as "the initial
-  bundle", understating first-paint by the 32.69 kB `paint` chunk it statically
-  imports.
+  `apps/web/bundle-report.json`. **In bytes, because that is what
+  `bundle-budget.json` holds and what the gate compares**: entry chunk 370,899
+  gzip, `paint` 33,477, the Rolldown runtime 368 — **404,744 for the graph**,
+  from 1,393,464 raw. CSS is a further 15,144 gzip from 84,285 raw. So recording
+  the entry chunk alone as "the initial bundle" understates first paint by
+  **33,845 bytes**, the `paint` chunk it statically imports.
+- **The figure this section carried on 2026-09-10 (372.42 kB) is NOT comparable
+  with the one above, and saying so is the correction.** It came from Vite's own
+  build reporter, which prints kB = 1000 bytes; these come from
+  `bundle-report-plugin.ts`. An earlier version of this bullet compared the two
+  as if they were one measurement. Gzip level was checked and is not the cause
+  (level 9 moves these assets ~0.2%), and `pnpm-lock.yaml` is untouched between
+  the two dates, so the vendor chunks did not change. **Quote bytes here**, and
+  compare like with like or not at all.
 - **`jspdf` (125.57 kB gzip) and `html2canvas` (45.51 kB) are confirmed OUTSIDE
   the entry graph** — verified from Rollup's own static/dynamic import lists
   rather than inferred from chunk names, which cannot say which kind an import

@@ -1,7 +1,7 @@
 # Implementation Plan: Delivery gates — four rules this repository states in prose and enforces nowhere
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved** 2026-09-11, taking all four critical questions' written defaults.
-- **Status:** Draft — awaiting approval before implementation
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted** — shipped 2026-09-11 (ADR-0136), taking all four critical questions' written defaults.
+- **Status:** **Accepted — shipped 2026-09-11**, M1–M5 landed.
 - **Owner:** repo
 
 > **A note on two template fields, so their absence is not an oversight (ADR-0081).** The template

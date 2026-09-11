@@ -1,15 +1,17 @@
 {
-  "_": "What the web app's first paint may cost, and what a raise means. See apps/web/scripts/check-bundle-size.mjs. A raise carries a one-line reason in `raisedBecause` — a budget quietly moved up is a budget that never says no.",
+  "_": "What the web app's first paint may cost, and what a raise means. THREE quantities: the JS entry graph, the ceiling on any one lazy chunk, and the render-blocking CSS — the last added at the M5 gate pass, when the performance review found it measured in the report and read by nothing, under a docblock claiming to cover everything the browser parses first. See apps/web/scripts/check-bundle-size.mjs. A raise carries a one-line reason in `raisedBecause` — a budget quietly moved up is a budget that never says no.",
   "measuredAt": "2026-09-11",
   "measuredBy": "pnpm --filter @repo/web build (writes bundle-report.json)",
   "floor": {
     "_": "The measurement the budget is derived from, kept so a later reader can see how much headroom has been spent without re-running the build.",
     "entryGraphGzipBytes": 404744,
-    "maxNonEntryChunkGzipBytes": 128583
+    "maxNonEntryChunkGzipBytes": 128583,
+    "cssGzipBytes": 15141
   },
   "headroomRatio": 1.05,
   "headroomRatioIsAJudgement": "1.05 is a CHOICE, not a measurement (product-owner decision, docs/specs/delivery-gates/ CQ-2). It is about 20 kB gzip on the entry graph — room for an ordinary feature without a conversation, and not room for a library. There is no evidence behind the number; it is the smallest margin that does not make the gate fire on routine work.",
   "entryGraphGzipBytes": 425984,
   "maxNonEntryChunkGzipBytes": 135168,
+  "cssGzipBytes": 16384,
   "raisedBecause": null
 }

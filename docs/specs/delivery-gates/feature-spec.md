@@ -1,6 +1,7 @@
 # Feature Spec: Delivery gates — four rules this repository states in prose and enforces nowhere
 
-- **Status:** Approved — 2026-09-11, by the product owner, taking **all four** critical questions'
+- **Status:** **Accepted — shipped 2026-09-11 (ADR-0136)**, M1–M5. Approved 2026-09-11 by the
+  product owner, taking **all four** critical questions'
   written defaults: CQ-1 adds `deps-dev` to `scope-enum` **and** to `CLAUDE.md` §9's scope list
   (keeping the dev/prod distinction `main`'s history currently records); CQ-2 sets the bundle budget
   at the measured floor × 1.05 rounded up to the nearest kB, with the ratio labelled in the file as
@@ -13,7 +14,8 @@
   than fixed), **ADR-0093** (a census assertion needs a pinned positive case), **ADR-0105** (a CI
   step or a shared gate is a spec-and-plan trigger), **ADR-0110 D5** (a gate is finished when the
   defect it names has made it fail), **ADR-0120**/**ADR-0124** (the exit-code convention; advisory
-  is a declaration, not a number). A **new ADR is proposed** — outline in §4.9.
+  is a declaration, not a number). Filed as
+  [**ADR-0136**](../../adr/0136-a-rule-is-enforced-where-the-artefact-lands.md).
 - **Closes (on completion):** `docs/TECH_DEBT.md` **#244**; `docs/BACKLOG.md` "PR-title lint in CI",
   "Bundle-size budget checks in CI", "Dependency licence checking in CI"; `docs/TECH_DEBT.md`
   **#48(b)** (the bundle half).

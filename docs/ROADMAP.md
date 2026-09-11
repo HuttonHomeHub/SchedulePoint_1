@@ -639,6 +639,27 @@ discriminators. Each becomes a spec/plan before build:
   all — and the Project Explorer has a worse variant of the same class, filed as its own row rather
   than folded in (#297). `docs/TECH_DEBT.md` #204(c) closes.
 
+- **Four delivery gates, and the roster that protects them** — **shipped** (ADR-0136, 2026-09-11,
+  the tech-debt drive). Four rules were stated in prose and enforced nowhere, or enforced where
+  enforcement does not happen. `CLAUDE.md` §9 called Conventional Commits "enforced by commitlint",
+  and commitlint ran in one place — a bypassable local hook that validates the branch commits a
+  **squash discards**, so the one message that lands on `main` was the one nothing checked. There
+  was no bundle budget and no licence check at all. And `docs/TECH_DEBT.md` #244 recorded CI's gate
+  roster being hand-written while `prepush.sh` derives its own — a condition that had already
+  failed twice, the second time by simply **moving** to a different gate after the first was fixed.
+
+  So: `check:ci-roster` asserts the two rosters equal in both directions, with an absence needing a
+  written reason; `pr-title.yml` validates the title as the subject it becomes, ` (#N)` suffix and
+  all, because **88 of `main`'s last 100 subjects carry it** and one historic failure is 94
+  characters as a title and 101 as the commit; the web bundle gets a **measured** floor and a 5 %
+  budget over the entry **graph** rather than the entry chunk; and every licence in the resolved
+  tree is allow-listed by name, with unknown failing by design.
+
+  The sequencing was structural rather than tidy, and it was exercised for real: M1's roster gate
+  **refused M4** between adding the licence script and adding its CI step. Two assertions were found
+  not to discriminate — by a mutation sweep that had itself reported nine false greens until it was
+  made to refuse a verdict over an unknown population. #244 and #48(b) close.
+
 - **The plan workspace's command console** — **shipped** (ADR-0133, 2026-09-10). The band's group
   cards and captions go, its two rows become declared DOM rows rather than a wrap outcome, the
   shared toolbar CVA gains a five-rung state ladder declared per item, and the ADR-0028 pen's verb

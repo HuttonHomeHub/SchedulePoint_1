@@ -1,6 +1,5 @@
 {
   "_": "Which root `check:*` gates need not appear as a CI step, and why. An entry is a DECISION with a reason, never a way to quiet a gate somebody has not got round to wiring up — if the reason is 'not yet', the remedy is the CI step, not a line here. See scripts/check-ci-roster.mjs.",
-  "exempt": {
-    "check:reconcile-due": "ADVISORY by product-owner decision (2026-08-30, ADR-0120): it warns in scripts/prepush.sh and never blocks. Adding it to CI would convert that decision into a blocking gate by the back door, which is the thing ci.yml's own comment at :75-77 says it is deliberately not doing. This is the only exemption, and it is derived rather than trusted: scripts/check-advisory-agreement.mjs already asserts that the advisory set and the code agree, so an entry here for a gate that is NOT advisory fails that check instead."
-  }
+  "__advisory": "ADVISORY gates need NO entry here and must not have one. They are read out of `ADVISORY_GATES` in scripts/prepush.sh — the one place that declares them (ADR-0124 D4: advisory is a declaration, not a number any tool can reach) — and the gate asserts they run in no CI step (R3a) and carry no second reason here (R4a). This file held `check:reconcile-due` until 2026-09-11, with a comment claiming the derivation already existed; it did not, and three of the five M5 specialist reviews found the same back door independently: add the CI step AND delete the entry — the natural pair, since an entry saying 'need not run in CI' looks redundant once it does — and both gates reported OK while a product-owner decision became a blocking gate.",
+  "exempt": {}
 }

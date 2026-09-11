@@ -52,11 +52,11 @@ jobs:
     name: Check the PR title is a Conventional Commit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -70,7 +70,15 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           SUBJECT="${PR_TITLE} (#${PR_NUMBER})"
-          echo "Checking: ${SUBJECT}"
+          # **Echoed with newlines stripped, and only for the echo.** The value reaching commitlint
+          # is the real one — a title with an embedded newline must fail, because the commit subject
+          # it becomes would be mangled, and hiding that would be the gate lying. But a newline in
+          # what we PRINT could open an Actions workflow command (`::error::`, `::group::`) from
+          # attacker-controlled text. Today's blast radius is annotation noise — GitHub disabled
+          # `set-env`/`add-path` after CVE-2020-15228 — and whether a PR title can even carry a raw
+          # newline through the API was NOT established (the M5 security review said so in those
+          # words rather than assuming either way). One `tr` is cheaper than finding out.
+          echo "Checking: $(printf '%s' "${SUBJECT}" | tr -d '\n\r')"
           echo
           if ! printf '%s' "${SUBJECT}" | pnpm exec commitlint; then
             echo

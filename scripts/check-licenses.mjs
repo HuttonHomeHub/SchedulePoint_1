@@ -123,10 +123,25 @@ export function runGate({ readTree, policyPath } = {}) {
       const name = typeof pkg?.name === 'string' ? pkg.name : '(unnamed)';
       seen.add(name);
 
-      // Workspace packages are this repository's own, `private: true` and unpublished. Asserted
-      // by name rather than assumed: a `@repo/*` that ever became publishable would need a licence
-      // like anything else, and skipping it silently is how that would go unnoticed.
-      if (name.startsWith('@repo/')) continue;
+      // **A `@repo/` name here is a FINDING, not a skip — and that is a measurement, not a
+      // preference.** This began as `if (name.startsWith('@repo/')) continue;`, on the reasoning
+      // that workspace packages are ours, `private: true` and unpublished. The M5 security review
+      // called it an assumption dressed as an assertion, and measuring settled it harder than
+      // either of us expected: `pnpm licenses list --json` reports the RESOLVED dependency tree and
+      // **does not list workspace packages at all** (918 entries, 0 of them `@repo/`, pnpm 10.4.1).
+      // So the branch could never fire for one of ours, and the only thing it could ever have
+      // skipped is a package that is NOT ours wearing our scope — dependency confusion, admitted
+      // silently, by the gate whose whole design is that the default answer is no.
+      if (name.startsWith('@repo/')) {
+        problems.push(
+          `${name} carries this repository's own \`@repo/\` scope and appears in the RESOLVED ` +
+            'dependency tree, where this workspace\u2019s own packages never do.\n' +
+            '      So it is one of two things, and both need a person: an external package ' +
+            'published under a scope we do not own (dependency confusion), or a change in what ' +
+            '`pnpm licenses list` reports. Do not add an exemption until you know which.',
+        );
+        continue;
+      }
 
       if (typeof exempt[name] === 'string' && exempt[name].trim() !== '') continue;
       if (isAllowed(licence, allow)) continue;

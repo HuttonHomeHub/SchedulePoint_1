@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1218 web
 > source files with 42 Playwright suites beside the base journey, and
-> 135 ADRs.
+> 136 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4432,6 +4432,82 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   _for_. The Visual-mode journey earns its place for a reason beyond symmetry — barely any journey
   in this repository runs in Visual mode, and ADR-0092 records that gap being exactly where a defect
   was hiding.
+
+- **ADR-0135** _(Accepted 2026-09-11)_ — A container hands focus back when somebody else removes the
+  control you were on. A second Planner changing a plan-level setting while you hold the pen takes a
+  registry item out from under your focus ring, and focus fell to `<body>` — which on the plan
+  workspace also silently disables every keyboard accelerator, since they are a React `onKeyDown` on
+  the workspace root. `Toolbar` and `Deck` share **one** rule (`use-focus-handoff.ts`): record the
+  focused **element** rather than an id — a split-button caret carries no id — capture its label and
+  the reason it went **at focus time**, because by the time it is removed the item has already left
+  the resolved set; yield one `requestAnimationFrame` so anything else that was going to move focus
+  already has; then act only if `document.activeElement` is `null` or `<body>`, so a container never
+  steals focus from a deliberate move. Five registry items carry a reason sentence and the five that
+  deliberately do not are enumerated with their grounds.
+  **Three claims were measured in a browser before any code was written**, and the seam gate found
+  what a human read did not: it proved the hook was **imported** and never that it was **spread onto
+  the container**, so the two-line change that would have disabled the whole feature left it green.
+  A fifth assertion was added and verified red both ways. Two further defects were found on the way
+  — the arrow keys started one command too far along from the handed-back position, invisible until
+  something could focus these containers at all, and the Project Explorer has a worse variant of the
+  same class, filed as `docs/TECH_DEBT.md` #297 rather than folded in. #204(c) closes. **The CPM
+  engine is not imported and no migration runs.**
+
+- **ADR-0136** _(Accepted 2026-09-11)_ — A rule is enforced where the artefact lands, and the roster
+  is derived. Four rules were stated in prose and enforced nowhere, or **enforced only where
+  enforcement does not happen** — the second half being the interesting one. §9 of this file called
+  Conventional Commits "enforced by commitlint (git hook + expected in PR titles)", and commitlint
+  ran in exactly one place: a bypassable local `commit-msg` hook that validates the branch commits a
+  **squash discards**, so the one message that survives into `main`'s history was the one nothing
+  checked at all. There was **no** bundle budget (the published figures admitted in the same
+  paragraph that they were "advisory and unmeasured") and **no** licence check over a tree that
+  ships inside two images on a public registry. And `docs/TECH_DEBT.md` #244 recorded CI's gate
+  roster being hand-written while `prepush.sh` derives its own — a condition that had already failed
+  **twice**, the second time by **moving** to a different gate after the first was fixed, which is
+  why that row refused to close on either and why it insists a fix must name its rule.
+  **They are one epic because #244's gate is the gate that protects the other three**, and that was
+  exercised for real rather than asserted: M1's `check:ci-roster` **refused M4** in the gap between
+  adding the licence script to `package.json` and adding its CI step. The PR-title workflow
+  validates the title as the subject it becomes, ` (#N)` suffix and all — **88 of `main`'s last 100
+  subjects carry it**, and one historic failure is 94 characters as a title and 101 as the commit,
+  legal as typed and illegal as what it becomes. The bundle's subject is the entry **graph** rather
+  than the entry chunk, and the floor is **measured** because the never-measured ~200 kB in the docs
+  would have failed on day one (ADR-0058). Licences are an **allow-list** over the whole tree, with
+  anything unresolvable counting as unknown and unknown failing; measured first at 918 packages and
+  17 identifiers, so `exempt` ships empty as a measurement rather than an oversight.
+  **The instruments were wrong more often than the code, which is the epic's transferable finding.**
+  The mutation sweep reported **nine false greens** before it was made to refuse a verdict unless the
+  number of cases that ran equals the number the suite declares — every one a run that had died
+  loading a reporter this vitest version does not have. It then caught two assertions that did not
+  discriminate: the licence gate's workspace skip could be widened from `@repo/` to every scoped
+  package and stay green, and the rule that a **blank** exemption reason admits nothing had no test
+  at all. Separately, the assertion written to catch a static `jspdf` import **could not fire**,
+  because Rollup **inlines** a statically-imported library into the entry chunk and leaves no chunk
+  carrying that name — found by doing the thing rather than simulating it, and fixed by reading the
+  module graph instead of chunk names. **Two GitHub settings are outside this repository and are
+  therefore not enforced by it**: the `PR title` check must be added to branch protection's required
+  checks on `main`, and "Default to PR title for squash merge commits" confirmed — recorded so
+  "shipped" does not read as "enforced" — joined at the gate pass by a third, "require approval for
+  first-time contributors", which decides whether a fork's PR runs CI at all.
+  **The gate pass earned its place, and three of the five reviews found the same defect
+  independently: the epic's own thesis failing on the epic's own first gate.** The spec said the
+  advisory set is read out of `prepush.sh` and never restated; the shipped roster gate did not read
+  that file at all. Reproduced rather than argued — add the CI step for the advisory gate **and**
+  delete its roster entry, which is the natural pair of edits because an entry reading "need not run
+  in CI" looks redundant the moment it does, and **both** gates report OK while a product-owner
+  decision that this gate warns and never blocks becomes a blocking CI gate. `ci-roster.json`'s own
+  comment claimed that derivation already existed; it did not. Fixing it by **sharing** the parse
+  rather than copying it then revealed that neither of that parse's two recorded hardenings was
+  tested by anything. Two reviews separately blocked on M3 having no committed tests at all — seven
+  assertions verified by hand with nothing left behind, and a cycle guard whose failure mode is a
+  **hang** rather than a red test. And the security review found the licence gate's `@repo/` skip to
+  be an assumption dressed as an assertion: measuring showed `pnpm licenses list` does not report
+  workspace packages at all, so the branch could never fire for one of ours and the only thing it
+  could ever have admitted is a package that is **not** ours wearing our scope. Nine findings folded
+  with regression tests verified red first; two recorded as `docs/TECH_DEBT.md` #298 because both
+  change shared mechanisms, and folding a shared-gate change into an epic's last milestone is what
+  ADR-0105 exists to stop. #244 and #48(b) close. **The CPM engine is not imported and
+  no migration runs**; `apps/api` and `apps/web/src` contribute zero files to the diff.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

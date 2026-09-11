@@ -7005,7 +7005,7 @@ before the next person tries to register one.
 
 ### 291. `check:adr-coverage` cannot see CLAUDE.md, which is the register a reader actually opens
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
 
 **ADR-0132 was Accepted on 2026-09-09, filed in `docs/adr/`, listed in `docs/adr/README.md`, and
 cited by `docs/ROADMAP.md`, `docs/TECH_DEBT.md`, `docs/DESIGN_SYSTEM.md` and five spec directories
@@ -7024,6 +7024,20 @@ one audience that matters most.
 **133** ADR files against §16 found **exactly one** missing, so the estate is clean today. It will
 not stay clean: the previous two instances of this class were also repaired by hand, and both
 recurred.
+
+**It did not stay clean for one day.** ADR-0135 was filed, Accepted, added to `docs/adr/README.md`
+and cited by `docs/ROADMAP.md` on 2026-09-11 — and was **absent from §16**, found the next time
+somebody opened that section for an unrelated reason (writing ADR-0136's entry). `pnpm prepush` was
+green throughout, because `check:adr-coverage` still cannot see this file. **Fourth recorded
+instance, and the first where the row predicting the recurrence was one day old.** Repaired by hand
+again, which is exactly the remedy this row says does not hold. The estate is clean as of
+2026-09-11 (all 136 ADR files compared against §16; the two missing were 0135, now repaired, and
+0136, being written at the time).
+
+**Why it was repaired rather than gated, again.** ADR-0136's epic was in its last milestone when
+this surfaced, and widening a shared gate mid-epic is the thing CLAUDE.md §19.1 says stops the work
+until a spec exists. Folding it in would have been the ADR-0105 failure committed inside the epic
+that cites ADR-0105. The argument below is unchanged and now has a fourth data point behind it.
 
 **Found incidentally, which is the part worth keeping.** Nobody was auditing the register — an agent
 writing an unrelated spec (`docs/specs/delivery-gates/`) noticed the citation while reading
@@ -7054,7 +7068,15 @@ python3 -c "import os,re; nums=sorted({m.group(1) for f in os.listdir('docs/adr'
 
 ### 292. The web entry chunk is 372 kB gzip, and every authenticated route is in it
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
+
+**The heading's 372 kB is Vite's build-reporter figure (kB = 1000 bytes) and is NOT comparable
+with the byte counts `bundle-report.json` now carries.** Re-measured 2026-09-11 from the report:
+the entry chunk is **370,899 gzip bytes** and the entry GRAPH — which is the honest first-paint
+quantity, and what `check:bundle-size` gates — is **404,744** across three chunks. Nothing about
+this row's substance changes; the numbers below are kept as taken. The units confusion was found
+at the ADR-0136 gate pass, in a sentence that compared the two instruments as if they were one
+measurement.
 
 **Measured, not estimated.** `pnpm --filter @repo/web build`, 2026-09-10:
 
@@ -7276,3 +7298,33 @@ it; what has NOT been done is reproducing it in a browser by deleting a focused 
 session, which is what would turn "no row is a tab stop" from an argument into a reading. Do that
 before writing the fix — a regression test verified red against the real sequence is worth more than
 one written against the shape.
+
+### 298. Two gate-pass findings recorded rather than folded, and one suite name that stopped describing itself
+
+**Status:** unverified · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (ADR-0136's M5 gate pass) · **Size:** S · **Owner:** repo
+
+Five specialist reviews over the delivery-gates epic produced eleven findings. Nine were folded
+with regression tests verified red first. These two were not, and the reason is the same for both:
+each is a change to a **shared** mechanism, which CLAUDE.md §19.1 makes an ADR-0105 trigger, and
+folding one into the last milestone of an epic is the failure that rule exists to prevent.
+
+**(a) `check:doc-register` runs eight unrelated suites under a name that describes one.** It began
+as the register reader's own tests and is now `doc-register`, `reconcile-due`, `spec-status`,
+`ci-roster`, `commitlint-fixtures`, `pr-title-workflow`, `check-licenses`, `advisory-gates` and
+`check-bundle-size` — chained with `&&`, so the first failure hides the rest, and named for the
+first member. Nothing is uncovered: CI runs the chain. It is the "prose stops describing the code"
+shape this epic's own gates exist to catch, one level up, raised by the M5 test-engineer review.
+The remedy is a name and probably a split (`check:gates`?), which touches the roster gate's own
+population and `prepush.sh`'s derived list — a shared-gate change, hence a row.
+
+**(b) `apps/web/vitest.config.ts` restricts `include` to `src/**`, so nothing under
+`apps/web/scripts/` can be tested there.** This is why `scripts/check-bundle-size.test.mjs` lives
+at the repository root and runs from `check:doc-register` — which works, and is the shape the other
+gate suites take, but means a future author who puts a suite beside the code it tests gets silence
+rather than a failure. Widening the glob is a change to how an entire workspace's tests are
+discovered; measuring what else it would pick up comes first.
+
+**Not deferred, and this row says so with a date rather than a feeling.** Both are small. Both are
+in the class this register records deferring and then discovering two epics later, so: the trigger
+for (a) is the next gate added to the chain, and for (b) the next suite anybody wants to place
+beside non-`src` code.

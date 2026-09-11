@@ -190,6 +190,9 @@ jobs:
       # of a reminder; this is that gate. Deliberately aimed at ROADMAP rather than CLAUDE.md's
       # register, which was complete on all three occasions: only the roadmap rots silently,
       # because nothing downstream breaks when a shipped capability is missing from it.
+      - name: Check ADR coverage
+        run: pnpm check:adr-coverage
+
       # Every package in the resolved tree carries a licence somebody allowed BY NAME. An
       # allow-list, never a deny-list: a deny-list is silent about the licence nobody thought of,
       # which is the one that matters, so anything the policy does not name — a copyleft identifier,
@@ -203,9 +206,6 @@ jobs:
       # where the gate exists because the absence is quiet rather than because something broke.
       - name: Check dependency licences
         run: pnpm check:licenses
-
-      - name: Check ADR coverage
-        run: pnpm check:adr-coverage
 
       # The web container's nginx template, substituted exactly as the container substitutes it.
       # A value that breaks the config parse is a container that never serves a request, and until
