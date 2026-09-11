@@ -2080,7 +2080,18 @@ register exists for.
 
 ### 100. The operator-facing mail signal still has no operator-facing channel
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-08-09 · **Size:** S
+**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-08-09 · **Size:** S
+
+> **Reclassified `open` → `deferred` on 2026-09-11, and the row's own argument for staying open is
+> preserved rather than overruled.** That argument is about not **closing** — "a row closed on an
+> intention is a row that says the signal reaches someone when it may not" — and `deferred` closes
+> nothing. It is this register's word for a decision with a named trigger (ADR-0120), and this row
+> has both, written down before I got here: the decision is the product owner's
+> (_"I'll set them on the host"_, 2026-09-01, with the row stating plainly that **nothing here is
+> owed**), and the trigger is its own numbered closing condition (1) — `MAIL_ALERT_URL` set on the
+> deployed host and observed alerting on an **induced** relay failure, by the two-minute procedure
+> in `docs/DEPLOYMENT.md` "Retiring the cron". Same shape as `#117` and `#154`, reclassified the
+> same day for the same reason: what is owed is an observation nobody in this environment can make.
 
 > **Programme M3-T2/T3 shipped both halves that live in this repository.**
 > `scripts/watch-mail-failures.sh` greps `mail.send_failed` from the API container and POSTs to a
@@ -2840,7 +2851,16 @@ dated flag work precisely because the date was the wrong instrument.
 
 ### 120. Nothing reports `n_dead_tup` at runtime, so a retention drain's bloat is invisible while it happens
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+> **Reclassified `open` → `deferred` on 2026-09-11, on two sentences this row already contains.**
+> _"This is ordinary Postgres behaviour and not a defect in the design"_ and _"there is time, and
+> nothing to do today"_ are a decision, not a backlog item — and the trigger is named in the same
+> paragraph: **the first enablement against a real backlog**, about a week away for `csp_reports`
+> and a year for `mail_events`. The row also forbids acting before then in as many words: _"Do none
+> of them without measuring first"_, because the cheapest-looking remedy (raising `RUN_CAP`) trades
+> a bounded connection hold for a faster vacuum, which is the opposite of what that cap exists for.
+> `open` invites exactly that edit.
 
 > **The title ended "and nothing says so" until 2026-09-09, and that half is false.**
 > `docs/adr/0087-scheduled-retention-sweep.md:244-249` states the behaviour, gives the figures and
