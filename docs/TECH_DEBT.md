@@ -5771,6 +5771,45 @@ panels that must be opened first, so they are outside its reach — not exempted
 rows and therefore does not describe this consumer either. Neither instrument is wrong; both are
 scoped to a population this consumer is not in.
 
+---
+
+**2026-09-11 — the three candidates are costed, and one of them has an empty population.** This row
+said "three candidates, none costed", and its own text said the first step was "worth a `grep`
+before it is worth an argument". Taken.
+
+**Established by reading, not asserted:**
+
+- **`closeButtonSize` has exactly ONE caller in the whole tree** — `navigator-rail.tsx:139`, passing
+  `'icon'`. Every other consumer takes the default.
+- **The four default-takers ARE the four right docks.** `right-docks.ts:14` declares
+  `RIGHT_DOCKS = ['notes', 'floatPaths', 'health', 'revisions']`, which is the row's list exactly,
+  and `docksToClose` enforces **one open at a time**. So the "four panels" is four code sites and
+  never four simultaneous headers.
+- **The sizes**: `icon-sm` is `size-7` (28 px); `icon` is `size-10` with
+  `pointer-coarse:size-(--control-h)` — 40 px fine, 44 px coarse. The row's "+12 px on a mouse"
+  arithmetic is right.
+
+**So candidate 3 — split the variant — has NO population and should be struck rather than weighed.**
+Its case was that `icon-sm` conflates "a control inside a container whose height is fixed elsewhere"
+with "a small control", and only the first earns ADR-0118 D1's exception. That is a true observation
+about the _variant_, and `SheetHeader` is not where it bites: all five of its consumers are **panel
+chrome**, and not one is a dense list row. A coarse-floored small variant would be built for nobody.
+
+**That collapses the choice to 1 versus 2, and 2 is now the cheaper of the two.** If every consumer
+wants `icon`, the prop's single caller becomes redundant and the prop has none — the `icon-lg`
+disposal (ADR-0118 M3) and #149's `MenuItem.itemId` are both precedents for deleting rather than
+debating. Candidate 1 keeps a prop whose only purpose would be to hold the default that caused this.
+
+**What is NOT costed, and is the one thing left.** Where the 12 px lands is **reasoned and not
+measured**: a right dock is a column beside the diagram, so a taller header inside it should cost
+that panel's own content and never the canvas. If that holds, the whole decision is 12 px of panel
+content on whichever single panel is open — materially cheaper than "a visible desktop change to
+four workspace panels" reads. **One browser run settles it**: canvas height with a right dock open,
+`icon-sm` against `icon`, at 1440/1646/1920 — the shape
+`apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts` already uses. It is not taken here
+because the remedy remains a design decision either way, and ADR-0092's dock guarantee was asserted
+in a browser for precisely this class of "obviously it cannot move" reasoning.
+
 ### 279. The reset that closes the split-pair defect has no CSS rule, no caller, and would paint the wrong thing
 
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
