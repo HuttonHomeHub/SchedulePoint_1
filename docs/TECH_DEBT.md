@@ -3397,6 +3397,27 @@ primitive. Check this against ADR-0097 Landing F before acting: that milestone r
 crowding **by subject-labelled actions** rather than by `size="sm"` occurrences and found exactly one
 crowded table, so this may be a knowing exclusion rather than an oversight.
 
+> **Checked 2026-09-11, as the item asks. It splits cleanly: the first half is answered twice over,
+> and the second half is not this table's defect at all.**
+>
+> **The `Menu` half: a knowing exclusion, and Landing F's measurement reproduces.** Counting
+> subject-labelled row actions per file today gives `ResourcesTable` **4** and every other table
+> **2 or fewer** (`ProjectsTable`, `PlansTable`, `ClientsTable`, `CalendarsTable`,
+> `CalendarExceptionsEditor`, `DependencyTable`, `NoteItem` all 2; `BaselinesPanel` 1) — exactly the
+> "one crowded table" Landing F found. And the standard's own subject settles it independently:
+> `docs/UX_STANDARDS.md:124` scopes the rule to **"dense list and tree rows"**, and the screen behind
+> `client-detail` is `ProjectsTable`, a `DataTable`. So the rule does not reach it, and two actions
+> is not crowding. Nothing to do.
+>
+> **The destructive-treatment half survives, and is a PRODUCT-WIDE CONVENTION rather than a defect
+> here.** Read across every row-level Delete in `apps/web/src/features` — `ProjectsTable`,
+> `PlansTable`, `ClientsTable`, `ResourcesTable`, `BaselinesPanel`, `NoteItem` — **all six are
+> `variant="ghost"`**, identical to their `Edit` sibling. So this is not the "one correct pattern
+> applied to a control and not its neighbour" shape this register usually finds; it is one pattern
+> applied consistently everywhere, and whether it is the right one is a design decision across six
+> tables at once. That belongs in a design pass with its own review, not in a one-file edit — which
+> is what the item's own instruction to check first was for.
+
 **e. `/staff` is still unphotographed, and the mechanism is recorded rather than left to be
 rediscovered.** The console is five panels (ADR-0086) that nobody has ever looked at in any theme.
 `shoot.mjs` boots no servers, and `/staff` is gated on the API's `STAFF_EMAILS`. The shot now exists
