@@ -167,6 +167,21 @@ jobs:
       - name: Check the advisory allow-list agrees with the code
         run: pnpm check:advisory-agreement
 
+      # The two rosters agree: every root `check:*` gate runs here, or is exempt with a written
+      # reason in `scripts/ci-roster.json`. This closes `docs/TECH_DEBT.md` #244 — a gate that
+      # exists, passes locally and is run by nothing reads as coverage on every PR that does not
+      # run `pnpm prepush`, and it had happened twice in this file for the same reason.
+      #
+      # A derived loop over `package.json` was REJECTED: it would make every gate's step
+      # identical and unnamed in the CI log, and it would have no way to express the one
+      # deliberate exemption below without inventing a config file anyway. The per-step comments
+      # in this file are load-bearing documentation and a loop deletes all of them.
+      #
+      # The gate's own first run failed on itself — added to `package.json` without this step —
+      # which is the best possible first red run for a check about missing steps.
+      - name: Check every gate runs in CI
+        run: pnpm check:ci-roster
+
       # Every ADR is reachable from the document a reader navigates product direction by.
       # Written because THREE consecutive reconciliation passes found `docs/ROADMAP.md` silent on
       # the newest ADRs — 0067–0073, then 0074–0085, then 0087–0092 — each time found by hand, and

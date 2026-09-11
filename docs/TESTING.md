@@ -371,9 +371,10 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 11  | `pnpm check:debt-status`                                    | you added, closed or edited a `docs/TECH_DEBT.md` row (ADR-0120)                                  |
 | 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or any register gate                                   |
 | 13  | `pnpm check:spec-status`                                    | you added a spec, filed an ADR, or shipped an epic (ADR-0131)                                     |
-| 14  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
+| 14  | `pnpm check:ci-roster`                                      | you added a `check:*` script, renamed one, or changed a CI gate step                              |
+| 15  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
 
-**Step 14 is the only advisory gate, and `prepush.sh` prints it differently.** `check:reconcile-due`
+**Step 15 is the only advisory gate, and `prepush.sh` prints it differently.** `check:reconcile-due`
 exits **2**, not 1: the rule is that **exit 1 is for an obligation whose remedy is an edit to the
 file that failed, and exit 2 for one whose remedy is somebody's judgement** (ADR-0120 D2). A missed
 reconciliation pass is the second kind, and blocking a push on a documentation chore is how a gate
