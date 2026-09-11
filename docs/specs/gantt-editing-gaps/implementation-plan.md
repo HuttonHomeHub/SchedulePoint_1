@@ -368,7 +368,7 @@ Playwright config and no new CI step**, which is deliberate (spec §3 Infrastruc
 
 ---
 
-## Milestone 3 — A typed date pins an activity _(gated on CQ-1; needs an ADR)_
+## Milestone 3 — A typed date pins an activity _(LANDED 2026-09-11 — ADR-0134)_
 
 **Outcome:** a planner types a date into `Start` or `Finish` and the activity is pinned there, with
 a once-per-session explanation of what just happened and an undo entry.
