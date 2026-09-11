@@ -161,6 +161,18 @@ test('#204(c) — a peer flips the scheduling mode while focus sits on Clear vis
   // A peer with no pen must be ABLE to do this, or the hazard does not exist and the row closes.
   expect(flip.ok, `peer PATCH failed: ${JSON.stringify(flip)}`).toBe(true);
 
+  /**
+   * **Count A's plan reads from here on.** This is the discriminator the two earlier versions
+   * lacked: a screen that did not change can mean the client never asked, or that it asked and
+   * the answer did not reach the control. Those are different findings with different owners, and
+   * "the control is still there" reports them identically.
+   */
+  let planRequests = 0;
+  const planUrl = `/api/v1/organizations/${orgSlug}/plans/${planId}`;
+  a.on('request', (req) => {
+    if (req.method() === 'GET' && new URL(req.url()).pathname === planUrl) planRequests += 1;
+  });
+
   // --- A: refetch without touching focus -------------------------------------------------------
   //
   // **The wait is not padding; it is the mechanism.** `createQueryClient` sets
@@ -175,24 +187,44 @@ test('#204(c) — a peer flips the scheduling mode while focus sits on Clear vis
   await a.waitForTimeout(31_000);
 
   /**
-   * **A REAL background→foreground transition, and the first version of this probe got it wrong.**
+   * **Waking the reader's client — and the two previous versions of this both did nothing,
+   * for two different reasons, neither of which was the one recorded here.**
    *
-   * That version kept A in front throughout and dispatched a bare `visibilitychange`, reasoning
-   * that `bringToFront` could restore focus and confound the reading. It reported "no unmount" —
-   * and the trigger had probably never fired: TanStack Query's focus manager refetches on a
-   * **transition** into focus, and a synthetic event on a page that was already focused sets the
-   * same state it already had. Reported as a product finding, that would have been a confident
-   * claim about the product produced by an instrument that did nothing.
+   * What the product actually listens to is one line of `@tanstack/query-core`:
+   * `window.addEventListener('visibilitychange', () => onFocus())`
+   * (`focusManager.js:11-13`). Two consequences settle how this probe must work, and both were
+   * **read from that file rather than assumed**:
    *
-   * So the transition is made real: B is brought to front, then A. That is also the case being
-   * modelled — a planner alt-tabbing back — rather than an approximation of it. Browsers restore
-   * focus to the previously focused element on return, and whether that happened is **recorded
-   * rather than assumed**: `focusAfter` says what actually has focus, so a reader can see the
-   * alt-tab's own effect instead of trusting this comment.
+   * - The listener is on **`window`**, and it calls `onFocus()` on EVERY such event. There is no
+   *   transition tracking at all — `isFocused()` just reads `document.visibilityState`
+   *   (`focusManager.js:56-59`). So version 1's docblock, which blamed "a synthetic event on a
+   *   page that was already focused sets the same state it already had", was wrong about the
+   *   mechanism. Its real failure was almost certainly the target: a bare
+   *   `document.dispatchEvent(new Event('visibilitychange'))` does not bubble, so it never reaches
+   *   a `window` listener. **Measured in Chromium**: `win: 0` after a non-bubbling dispatch on
+   *   `document`, `win: 1` with `{ bubbles: true }`, `win: 2` dispatching on `window`.
+   * - Version 2 replaced it with `bringToFront`, and **in headless Chromium that fires no
+   *   `visibilitychange` at all** — `document.visibilityState` on A stays `"visible"` throughout,
+   *   with an empty event log, in both the separate-context arrangement this probe uses and in one
+   *   shared context. Also measured, not reasoned about.
+   *
+   * So a **headless run cannot produce a real background→foreground transition**, and no amount of
+   * page shuffling will make one. `bringToFront` is kept because it models the case and costs
+   * nothing; the event the library listens to is then dispatched explicitly on `window`. That is
+   * simulation and the write-up must say so — what it establishes is what the product does when
+   * its focus manager wakes, not that a real alt-tab wakes it.
+   *
+   * **And this is why the refetch is counted rather than inferred.** `planRequests` rises only
+   * when A's client actually re-asks the server for the plan. Without it, "the control is still
+   * there" cannot tell a product defect from an instrument that did nothing — which is exactly
+   * what both earlier versions reported.
    */
   await b.bringToFront();
   await b.waitForTimeout(500);
   await a.bringToFront();
+  await a.evaluate(() => {
+    window.dispatchEvent(new Event('visibilitychange'));
+  });
   await a.waitForTimeout(2_000);
 
   /**
@@ -225,18 +257,27 @@ test('#204(c) — a peer flips the scheduling mode while focus sits on Clear vis
   writeMeasurement('techdebt-204c-mode-flip-focus', {
     peerPatch: flip,
     serverModeAfterPatch: serverMode,
+    planReadsByReaderAfterFlip: planRequests,
+    transition: 'simulated — headless Chromium fires no visibilitychange on bringToFront',
     controlStillPresentOnReadersPage: controlStillThere,
     focusBefore: before,
     focusAfter: after,
-    // The verdict, computed rather than left for a reader to infer from three fields. There are
-    // three outcomes and only one of them is the hazard the row describes.
-    verdict: controlStillThere
-      ? 'NO UNMOUNT — the plan is EARLY on the server and the reader still sees the Visual-mode ' +
-        'control. The focus hazard is NOT reachable by this route; what IS true is that the ' +
-        'reader is looking at a control for a mode the plan is no longer in.'
-      : after.isBody
-        ? 'FOCUS DROPPED TO BODY — WCAG 2.4.3, the hazard is real'
-        : `the control unmounted and focus was caught by ${after.tag} "${after.name}" — no drop`,
+    // The verdict, computed rather than left for a reader to infer from four fields. There are
+    // four outcomes and only one of them is the hazard the row describes — and the first of them
+    // is about this probe rather than about the product, which is the distinction the two earlier
+    // versions could not draw.
+    verdict:
+      planRequests === 0
+        ? 'INSTRUMENT DID NOT REACH ITS CONDITION — the reader never re-read the plan, so nothing ' +
+          'here is a statement about the product. The focus manager was not woken.'
+        : controlStillThere
+          ? 'NO UNMOUNT — the reader re-read the plan (' +
+            `${planRequests} GET(s)), the server says EARLY, and the Visual-mode control is still ` +
+            'on screen. The focus hazard is NOT reachable by this route; what IS true is that the ' +
+            'reader is looking at a control for a mode the plan is no longer in.'
+          : after.isBody
+            ? 'FOCUS DROPPED TO BODY — WCAG 2.4.3, the hazard is real'
+            : `the control unmounted and focus was caught by ${after.tag} "${after.name}" — no drop`,
   });
 
   await ctxA.close();

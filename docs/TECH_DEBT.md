@@ -4382,28 +4382,61 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > nothing about that pen, and the first user's next refetch unmounts `Clear visual start` under
 > whatever focus is on it.
 >
-> **Measured 2026-09-11, and (c) is SETTLED: the focus hazard is NOT reachable by this route.**
-> `apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts` drives two Planner sessions: A
-> holds the pen on a Visual-mode plan with an activity selected and focus **on** `Clear visual
-start` (asserted, not assumed); B flips the plan to `EARLY` through the public API holding no
-> pen; A then waits out the 30 s `staleTime` and makes a real background→foreground transition.
+> **Measured 2026-09-11, and (c) is SETTLED the other way: the hazard is REAL and it is a WCAG 2.2
+> §2.4.3 failure, level A.** `apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts`
+> drives two Planner sessions: A holds the pen on a Visual-mode plan with an activity selected and
+> focus **on** `Clear visual start` (asserted, not assumed); B flips the plan to `EARLY` through
+> the public API holding no pen; A's client is then woken after the 30 s `staleTime`.
 >
-> Result: the server reports `EARLY`, and **the control is still on A's screen with focus still on
-> it**. Nothing unmounts, so nothing can drop focus. No WCAG 2.4.3 failure by this route.
+> Reading (`apps/web/measure-output/techdebt-204c-mode-flip-focus.json`):
+> `planReadsByReaderAfterFlip: 1`, `controlStillPresentOnReadersPage: false`,
+> `focusAfter: { tag: "BODY", isBody: true }`. The reader re-read the plan, the control unmounted
+> under their focus, and **focus fell to `<body>`** — the fifth instance of a class this repository
+> has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0096).
 >
-> **The instrument was wrong first, and that is worth carrying.** The first version kept A in front
-> and dispatched a synthetic `visibilitychange`, reasoning that `bringToFront` might restore focus
-> and confound the reading. It returned the same verdict — and the trigger had almost certainly
-> never fired, because TanStack Query's focus manager refetches on a **transition** into focus and
-> a synthetic event on an already-focused page sets the state it already had. Reported then, this
-> would have been a confident claim about the product from an instrument that did nothing. The
-> answer only counts because the second version makes the transition real.
+> **This paragraph said the opposite for one day, and the correction is the transferable part: the
+> instrument was wrong THREE times, and each version's write-up described the previous failure
+> while committing a new one.**
 >
-> **What the reading found instead is filed as #295**: the change does not reach the other reader
-> at all, so they are looking at a Visual-mode control for a plan the server says is Early.
+> - **Version 1** dispatched a synthetic `visibilitychange` on an already-focused page. Its
+>   recorded diagnosis — that TanStack's focus manager "refetches on a **transition** into focus,
+>   and a synthetic event on a page that was already focused sets the same state it already had" —
+>   **is wrong about the mechanism**. `@tanstack/query-core`'s focus manager subscribes with
+>   `window.addEventListener("visibilitychange", listener, false)` and its listener calls
+>   `onFocus()` **unconditionally** (`focusManager.js:11-13`); `isFocused()` merely reads
+>   `globalThis.document?.visibilityState !== "hidden"` (`focusManager.js:56-59`). There is no
+>   transition tracking to fail. Its real failure was almost certainly the **target**: a bare
+>   `document.dispatchEvent(new Event('visibilitychange'))` does not bubble and never reaches a
+>   `window` listener. Measured in Chromium — window-listener count **0** after a non-bubbling
+>   dispatch on `document`, **1** with `{ bubbles: true }`, **2** dispatching on `window`.
+> - **Version 2** replaced it with `b.bringToFront(); a.bringToFront()`, described as making the
+>   transition "real". Measured: **headless Chromium fires no `visibilitychange` at all** on
+>   `bringToFront`, and A's `document.visibilityState` stays `"visible"` throughout with an empty
+>   event log — in both the separate-context arrangement the probe uses and in one shared context.
+>   So the client was never woken, and "the control is still there" was a statement about the
+>   probe.
+> - **What removed the last protection** is the change that reads best in isolation. Version 2 also
+>   moved Guard 2 to the server — from "the control really went" to "the plan really is EARLY" —
+>   on the sound ground that the old guard conflated the reader's page updating with the plan
+>   changing. Sound, and it retired the one assertion that had been catching the instrument's
+>   failure. The reading was then reported as a product finding.
 >
-> Worth stating because it changes who would find it: the remaining path is not something a single
-> planner can do to themselves, so no solo journey will ever reproduce it.
+> **Version 3 counts the refetch instead.** `planReadsByReaderAfterFlip` rises only when A's client
+> actually re-asks the server, so "nothing changed on screen" can no longer be reported without
+> first establishing that the client asked — and its first outcome branch is INSTRUMENT DID NOT
+> REACH ITS CONDITION, which is about the probe and not the product. A headless run cannot produce
+> a real background→foreground transition, so the transition is **simulated** by dispatching on
+> `window` the event the library listens to, and the probe's output says so in a field rather than
+> in a comment.
+>
+> Worth stating because it changes who would find it: this is not something a single planner can do
+> to themselves, so no solo journey will ever reproduce it.
+>
+> **The remedy is a decision and therefore not taken here.** Where focus should go when an unmount
+> is caused by somebody else is a question this product has answered four times for unmounts the
+> reader caused, and never for one they did not — the selection bar is still mounted, so returning
+> focus to it is available, but so is announcing the change rather than moving focus silently. That
+> belongs in a spec (ADR-0105: a component's public contract).
 
 **(d) Two of three lens toggles offered to the product owner for promotion did not exist.** The
 `AskUserQuestion` options named `Critical path`, `Float paths` and `Baseline overlay`. Only the
@@ -4939,6 +4972,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                         | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | --- | --------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 295 | (never a defect) A peer's plan-governance change does not reach another reader's open workspace     | 2026-09-11 | **Withdrawn the day after it was filed: the staleness was the instrument, not the product.** It was raised from a reading of `tech-debt-204c-mode-flip-focus.spec.ts` in which the server said `EARLY` and the reader's screen still showed a Visual-mode control. That probe never woke the reader's client. Measured since: `@tanstack/query-core`'s focus manager listens on `window` for `visibilitychange` and calls `onFocus()` unconditionally (`focusManager.js:11-13`, `focusManager.js:56-59`) — and **headless Chromium fires no `visibilitychange` at all on `bringToFront`**, leaving `document.visibilityState` at `"visible"` with an empty event log, in both the separate-context arrangement the probe used and in one shared context. With the event dispatched on `window` as the library expects, the repaired probe records `planReadsByReaderAfterFlip: 1` and `controlStillPresentOnReadersPage: false`: **the change propagates correctly and the control unmounts**, so there is no screen/record disagreement to fix and nothing to check across the rest of `plan-governance-fields.ts`. What the same reading DOES establish is the opposite finding — focus falls to `<body>` when the control unmounts — which is `#204(c)`, now confirmed there rather than duplicated here. The number is ledgered rather than freed, and the row is recorded as withdrawn rather than deleted quietly, because it was **filed from a probe's verdict without asking whether the probe had reached its condition** — the same omission, one tier up, that the probe itself had committed twice. `#267`'s precedent for a withdrawal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 277 | A citation of a symbol nobody remembers existed is invisible to a grep for deleted names            | 2026-09-11 | **The instrument is measured and REJECTED as a gate, which is what this row asked for.** `scripts/measure-dead-citations.mjs` resolves every backticked identifier in a comment against the identifiers the code actually contains — the instrument `#193` proposes and defers, and the one that found `autoLabelsFit` when a grep for remembered names structurally could not. Measured before deciding, as the row demanded: the naive predicate reports **731 citations across 306 names**; widening the corpus to the API and the packages and requiring a camelCase/PascalCase shape gets it to 245/117; keeping string contents in the corpus (so a discriminant existing only as `'lagAnchor'` resolves) to **179 across 93**. A spot-check of ~20 of those names found **three** genuine stale citations, so a gate would fire 179 times to surface three — ADR-0058's fails-on-day-one shape, and ADR-0081's own rejected gate one subsystem along. **The decisive finding is sharper than the rate, and it was proved rather than argued: the predicate cannot distinguish the defect from its own remedy.** A comment reading "`X` was deleted at ADR-0109 D1" is correct prose and reports identically to one asserting `X` is live — correcting `legendContent` here left the corrected file reporting at the same rank, because the correction must name the dead field in order to say it is gone. That is also why the ten surviving `autoLabelsFit` citations are not a defect any more. The three real finds are fixed: `allDaysWorkCalendar` ×2, a symbol ADR-0036 renamed to `allMinutesWorkCalendar` when the engine moved from working-days to working-minutes, cited by two API docblocks in the present tense — the superseded **unit** handed to a reader chasing the fallback's semantics; `legendContent`, named by `TsldToolbarContext`'s own opening docblock as a member the interface has not had since the legend moved onto the canvas; and `orderedActivities`, a docblock naming a local that is called `ordered`. The harness is kept, run by hand during a `docs/RECONCILE.md` pass, with its four dominant noise categories and its blind spots in its own docblock (ADR-0081's rule), and an empty-population refusal so a sweep that matched nothing cannot read as a clean sweep (ADR-0093).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 250 | `FloatPathsPanel` shaded a missing activity with no reason at all                                   | 2026-09-10 | The row's one-line fix, taken as prescribed: an `sr-only` **sibling** linked by `aria-describedby`, matching `RevisionComparePanel`'s `MovedRow` two directories away rather than inventing a second answer (ADR-0082; ADR-0117's `purpose` distinction is the general form). **Verified red first** — the new case fails `expected null to be truthy` against the original component. Two cases, and the second is the one that matters: the reason must NOT be part of the accessible name, because folded into the button it joins the name and a screen-reader user hears the activity and its refusal as one run-on label — a test asserting only that the sentence exists would pass against exactly that mistake. A **pinned negative** (a live row carries no `aria-describedby`) stops the pair being satisfied by describing every row, which would state a refusal that is not happening. The defect was found by reviewing the SIBLING, not this file: nothing in the repository compares two panels for a rule both should follow, and that remains true.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 230 | A cascade delete's undo truncated the history, and its reason had lapsed                            | 2026-09-10 | **Found already shipped and unclosed — the eighth recorded instance of that shape, and the row's own instruction was to close it.** It read _"Built, not yet merged … Delete this row and ledger it once that is merged and released — not before"_, and all three conditions were met on 2026-09-02: `a356866e` (#460) removed the branch, and `web-v0.125.3` carries both `commands.ts`'s _"the branch is gone"_ recording seam and `use-plan-undo-redo.ts`'s `UNDO_PARENT_DELETED_MESSAGE`/`REDO_PARENT_DELETED_MESSAGE`. Verified against the **release tag** rather than the working tree, because "merged" and "released" are different claims and this row deliberately waited on the second. ADR-0048's amendment is filed (`0048-…:95`, _Register row: #230_). The delay is the interesting part: the row was correct, complete and self-closing for eight days, and nothing observes "a row whose stated close condition is now true" — `check:debt-status` asks whether a row HAS a status, never whether the status is still true, which is the gap `docs/RECONCILE.md`'s pass exists to cover and why it cannot be replaced by a gate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -6982,6 +7016,45 @@ that exposed the class was taken on a phone for curiosity. But the rule this lea
 throttled display can still be handed a confident FAIL about a painter it never measured — the class
 ADR-0130's epic exists to remove, narrowed rather than closed.
 
+### 296. The foot row measures 51 px against an asserted 41, and no gate has ever run that assertion
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (running `measure:toolbar` for #295) · **Size:** S · **Owner:** web
+
+**Observed in a browser, twice, in one run** — `m1-result.spec.ts` M1 (`:112`) and M2 (`:177`) both
+read `[data-activities-bar]`'s height as **51** where each asserts **41**, at every width in their
+case lists, at rest with nothing selected. Two independent fixtures and two independent assertions
+reaching the same number is why this is filed as observed rather than as a flake.
+
+**Ten pixels of diagram, and ADR-0115's equality is the thing that fails.** That decision measured
+the foot row at 41 px in both states at 1920 and 1646 and pinned it as an **equality** precisely
+because the previous bound (`<= 120 px`) could not tell the fixed state from the broken one. The
+row's whole point was that a selection must not cost the canvas height; 51 at rest means the
+baseline itself moved.
+
+**Where to look, stated as where to look rather than as a cause.** `m1-result.spec.ts` was written
+in `d7a269dc` (2026-08-27, ADR-0115). The next commit to touch `plan-facts.tsx` is `4b851eb8`
+(2026-08-28) — _"workspace visual polish — full-bleed shell, **foot band**, dock geometry, fold
+removal"_ — one day later. That is the first candidate and it is **not established**: nobody has
+run the spec at either commit, and diagnosing from a title is the shape this register keeps filing.
+The failure's own DOM snapshot (`test-results/m1-result-M2-…/error-context.md`) shows the facts on
+**two lines** with the pen released, which is a state ADR-0115 explicitly measured as costing
+nothing — so either that property lapsed or the content grew.
+
+**Why nothing reported it, and this is the transferable half.** `measure:toolbar` is a measurement
+config, deliberately outside `prepush.sh` and outside CI (a timing- and layout-sensitive assertion
+in CI is a flake generator, and this repository has said so repeatedly). That reasoning is right
+for a _timing_ measurement and it silently extended to a _geometry equality_ that behaves like a
+gate and is the only cover a shipped invariant has. So an assertion written to catch exactly this
+was never run again, and the number it protects drifted for two weeks with every other gate green.
+Whether such an assertion belongs in a journey rather than a measurement is a decision about a CI
+step and therefore an ADR-0105 trigger, which is why it is not taken here.
+
+**Not diagnosed and not fixed**, because the remedy depends on which of the two it is: a regression
+to repair, or an expectation ADR-0115 stated for a composition that has legitimately changed. Those
+have opposite fixes and picking one from a commit title would be a guess. The reproduction is one
+command — `scripts/e2e-local.sh measure:toolbar` — so whoever picks this up starts from a failing
+assertion rather than a description.
+
 ### 294. A peer's pen request costs the diagram 76–80 px of height
 
 **Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (measuring #287) · **Size:** S · **Owner:** web
@@ -7019,41 +7092,3 @@ records that being load-bearing in eight of ten lock states.
 **What the reading does NOT cover**, stated rather than implied: the Org Admin **override** branch,
 which offers a different control set and may be wider or narrower; one machine, one browser, one
 plan; and only the three widths probed.
-
-### 295. A peer's plan-governance change does not reach another reader's open workspace
-
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (measuring #204(c)) · **Size:** S · **Owner:** web
-
-**Observed, not inferred** (`apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts`). Two
-Planner sessions on one plan. A has it open in **Visual** mode with an activity selected. B changes
-the plan to **Early** through `PATCH …/plans/:planId`, which succeeds — it is "Planner or Org Admin;
-optimistic locking" and `assertHoldsPen` appears nowhere in `apps/api/src/modules/plans/`, so B
-needs no pen and A keeps hers.
-
-A then waits past the client's 30 s `staleTime` and makes a **real** background→foreground
-transition, which is what `refetchOnWindowFocus: true` exists for. The server reports `EARLY`. A's
-screen still shows `Clear visual start` — a control whose entire visibility rule is
-`schedulingMode === 'VISUAL'` (`conflict-remedy.ts:111-115`).
-
-**So the screen and the record disagree, and nothing on screen says so.** A is working in a mode the
-plan is no longer in, and the first thing she will notice is a recalculation that does not do what
-Visual mode does.
-
-**The consequence is mild today and the shape is not.** `visualStart` is advisory and ignored in
-Early mode, so pressing the stale control writes a field the engine will not read rather than
-corrupting anything. What is wrong is the class: this register treats a screen disagreeing with the
-record as worse than either being wrong on its own (ADR-0089's summary-parent case, in those words),
-because the reader has no way to tell.
-
-**Why it was not diagnosed here.** Establishing _why_ the refetch does not land — whether the
-workspace reads `schedulingMode` from a query that is not invalidated, from route-loader data, or
-from a cache key the focus refetch does not cover — is a different piece of work from establishing
-_that_ it does not, and guessing between those three in a register row would be exactly the
-unverified claim this file exists to remove. The probe is committed and re-runnable, so whoever
-picks this up starts from a reproduction rather than a description.
-
-**It generalises past this one field.** `plan-governance-fields.ts` lists `schedulingMode` among a
-set of plan-level settings that change how everyone's numbers are computed — ADR-0073 C3.2 audits
-them precisely because they are "the rules other people's work is judged by". If one of them does
-not propagate, the others are worth checking with it; nothing here establishes that they behave the
-same, and nothing establishes that they differ.
