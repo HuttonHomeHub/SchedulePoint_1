@@ -158,7 +158,18 @@ a product idea that has not yet earned a roadmap line:
 
 Each of these has an **accepted ADR** and no implementation — see
 [ARCHITECTURE.md](ARCHITECTURE.md) §10. They are listed here because the
-decision is made; only the work is outstanding.
+decision is made; only the work is outstanding — **except where a later ADR has
+narrowed one, which the Background-processing entry now states.**
+
+> **All four were re-verified against the code on 2026-09-11**, because this
+> section has twice listed a shipped capability as unbuilt (see both call-outs
+> below) and a third would not be an accident. None of `bullmq`, `ioredis`,
+> `redis`, `@aws-sdk/*` or `@opentelemetry/*` appears in any workspace's
+> `package.json`, and none of `Queue(`, `createClient`, `S3Client`,
+> `PutObjectCommand`, `@opentelemetry` or `trace.getTracer` appears in
+> `apps/api/src`, `apps/web/src` or `packages/*/src`. The two occurrences of the
+> string "BullMQ" are both comments naming it as a future option. So the four
+> gaps are real; what was inaccurate was the framing of one of them.
 
 > **Mail transport was on this list and is not a foundation gap any more.**
 > `SmtpMailService` ships and is selected whenever `MAIL_SMTP_URL` is set;
@@ -185,7 +196,22 @@ decision is made; only the work is outstanding.
 > quietly deleting.
 
 - `M` **Background processing** — BullMQ + Redis (ADR-0009). The candidate first
-  consumer is schedule interchange import, which is synchronous today.
+  consumer is schedule interchange import, which is synchronous today _(verified
+  2026-09-11: no queue, job, enqueue or worker anywhere in
+  `modules/interchange/`, and the controller's `commit` awaits the service
+  directly)_.
+  **Read [ADR-0087](adr/0087-scheduled-retention-sweep.md) D2 before starting
+  this.** That decision **narrowed ADR-0009 rather than superseding it**: the
+  application now runs scheduled work — one `setInterval`, no broker, no queue —
+  and D2 exists precisely so "we have a scheduler" does not become the answer to
+  every background need. It names the six conditions that reopen ADR-0009 as
+  written: **durability across a restart, retry with backoff, exactly-once
+  execution, fan-out to workers, a queue a request can enqueue onto, or visible
+  progress.** An import is such a job by that ADR's own example, so this entry's
+  candidate consumer is the right one — but the line above said "the decision is
+  made; only the work is outstanding", and for this entry that is now only half
+  true. Nobody should start a broker from this bullet without meeting one of the
+  six.
 - `M` **Caching** — Redis, cache-aside (ADR-0010). Measure first: no read path
   has been demonstrated to need it.
 - `M` **Object storage** — S3-compatible abstraction (ADR-0011). No feature
