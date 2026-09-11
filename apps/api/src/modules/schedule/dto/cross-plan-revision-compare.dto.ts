@@ -162,7 +162,12 @@ export class CrossPlanCorrelationDto implements CrossPlanCorrelation {
 
   @ApiProperty({
     type: [CrossPlanCorrelationRowDto],
-    description: 'Uncoded rows from BOTH sides, each naming its plan. Capped the same way.',
+    description:
+      'Uncoded rows from BOTH sides, each naming its plan, within the same `cap` — which is ' +
+      'SPLIT between the sides rather than filled from the old side first, so a side with more ' +
+      'than `cap` uncoded rows can never crowd the other out of the sample entirely. A side that ' +
+      'cannot fill its half yields the remainder, so a one-sided population still shows `cap` ' +
+      'rows. The true totals are `fromUncoded` and `toUncoded`.',
   })
   uncodedRows!: readonly CrossPlanCorrelationRowDto[];
 

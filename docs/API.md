@@ -242,7 +242,12 @@ index still exists rather than trusting it.
 **Read `correlation` first.** It reports `matched`, `fromUnmatched`,
 `toUnmatched`, `fromUncoded`, `toUncoded` — every count including the zeroes,
 because a missing count is indistinguishable from a zero one — plus the rows
-themselves, capped with their true totals. An activity present on one side only
+themselves, capped with their true totals. `uncodedRows` carries both sides
+within **one** cap, and that cap is **split** between them rather than filled
+from the old side first: a side with more than the cap of uncoded rows can never
+crowd the other out entirely, and a side that cannot fill its half yields the
+remainder. The rows exist so a reader can SEE what was left out, which an
+all-one-side sample defeats (`docs/TECH_DEBT.md` #263(f)). An activity present on one side only
 is reported as added or removed, and cross-plan that is **indistinguishable from
 a re-code**; an uncoded row is in **neither** set, because the product does not
 know which it is.
@@ -1190,11 +1195,18 @@ boundary, because at that boundary an absent reading is stored rather than missi
   - **`?include=ghosts`** adds the change picture's geometry: `ghosts` (where the
     **changed** bars were, in their **frozen** lane, including work no longer in
     the plan) and `links` (which links were added, removed or re-authored).
-    Neither is capped, and both are bounded by what CHANGED rather than by the
-    plan. Each carries a companion count — `ghostsUndrawable`, `linksUndrawable`
-    — for what the old side did not record or the picture cannot anchor; those
-    are **facts a client must render**, because a diagram has no
-    "showing N of M".
+    Both are bounded by what CHANGED rather than by the plan, and **both are
+    capped at the same 200** with the pre-cap count beside them —
+    `ghostsTotal`, `linksTotal` — never the client's own arithmetic. Each also
+    carries a companion count — `ghostsUndrawable`, `linksUndrawable` — for what
+    the old side did not record or the picture cannot anchor; those are **facts a
+    client must render**, because a diagram has no "showing N of M", so a picture
+    quietly missing rows is unnoticeable in a way a table's footer is not.
+
+    _(This paragraph said "Neither is capped" until 2026-09-11. It described the
+    state that shipped for one review cycle before two independent reviews caught
+    it — `revision-ghosts.ts` records that history in its own docblock and has
+    sliced to the cap since. `docs/TECH_DEBT.md` #263(e).)_
 
 ## Authentication
 

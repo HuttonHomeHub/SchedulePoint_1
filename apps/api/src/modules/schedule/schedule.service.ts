@@ -227,6 +227,21 @@ type ActivePlan = NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdI
 export const REVISION_ROW_CAP = 200;
 
 /**
+ * Fill one capped sample from two sides so neither can be crowded out (`docs/TECH_DEBT.md` #263(f)).
+ *
+ * Each side is guaranteed **half** the budget when it can use it, and whatever it cannot use passes
+ * to the other — so a one-sided population still fills the cap, and a two-sided one is always
+ * visibly two-sided. The alternative, capping each side at the full budget, doubles the array's
+ * maximum and silently stops the published `cap` from describing the field.
+ */
+export function takeBothSides<T>(from: readonly T[], to: readonly T[], cap: number): T[] {
+  const half = Math.floor(cap / 2);
+  const fromTake = Math.min(from.length, Math.max(half, cap - to.length));
+  const toTake = Math.min(to.length, cap - fromTake);
+  return [...from.slice(0, fromTake), ...to.slice(0, toTake)];
+}
+
+/**
  * A comparison side's identity — a named baseline, or the plan as it stands now.
  *
  * Shared by both comparison routes rather than assembled twice: with two plans in play the LIVE
@@ -2146,10 +2161,22 @@ export class ScheduleService {
         .filter((r) => !fromKeys.has(r.activityId))
         .slice(0, REVISION_ROW_CAP)
         .map((r) => correlationRow(r, toPlanId)),
-      uncodedRows: [
-        ...fromRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, fromPlanId)),
-        ...toRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, toPlanId)),
-      ].slice(0, REVISION_ROW_CAP),
+      // **The one cap is SPLIT between the sides, not filled from the from-side first**
+      // (`docs/TECH_DEBT.md` #263(f)). Concatenating and slicing the join gave a from-side with
+      // more than `cap` uncoded rows a sample containing ZERO to-side rows, while `toUncoded`
+      // reported a non-zero count beside it. Both totals stayed correct, so nothing was
+      // misreported — but the sample a reader is told to use to SEE what was left out could be
+      // entirely one-sided, which is the one job it has.
+      //
+      // Splitting the budget rather than capping each side at `cap` keeps the array within the
+      // `cap` the response already publishes: widening the maximum to 2 x `cap` would make the
+      // number a client is handed stop describing this field. A side that cannot fill its half
+      // yields the remainder to the other, so a from-only plan still shows `cap` rows.
+      uncodedRows: takeBothSides(
+        fromRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, fromPlanId)),
+        toRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, toPlanId)),
+        REVISION_ROW_CAP,
+      ),
       cap: REVISION_ROW_CAP,
     };
 
