@@ -100,8 +100,16 @@ a product idea that has not yet earned a roadmap line:
   shipping it without the mode statement the canvas has beside it would leave a
   planner unable to tell which of two writes their drag just made), the columns
   **chooser's** grid-width memory (T6 names it; the grid has no resize handle,
-  so nothing can set it yet), and a **coarse-pointer** pass —
-  `docs/TECH_DEBT.md` #133. `PROJECT_BRIEF.md` §8's "edit supported" is
+  so nothing can set it yet), and a **coarse-pointer** pass _(the citation here
+  read `docs/TECH_DEBT.md` #133 and is corrected 2026-09-11: that row **closed
+  on 2026-08-28**, and its subject was the merged command **strip**, not this
+  view — its ledger entry reads "Overtaken — ADR-0109 D1 deleted the width
+  ladder and the `⋯`, so nothing can leave the row". So the citation was stale
+  **and** about a different surface. Whether a Gantt-specific coarse pass is
+  owed is deliberately **not asserted here**: ADR-0118 D6 narrowed the
+  house rule to `pointer: coarse` and took the candidate set from 46 to one, and
+  nobody has re-measured this view since. It has no live row, which is the
+  honest state)_. `PROJECT_BRIEF.md` §8's "edit supported" is
   **substantially** met and deliberately not claimed closed.
 - ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
   stale for the FIFTH time — 2026-09-10.** Every tier now exists, including the one this row spent
@@ -198,8 +206,11 @@ narrowed one, which the Background-processing entry now states.**
 > "`common/mail/` is a logging stub" until 2026-08-05, which is the reading that
 > leads someone to build a second mail path — ADR-0058's failure, in the file
 > that decides what gets built next. What remains is operational rather than
-> structural: knowing that a send **failed** after Better Auth's handoff
-> (`docs/TECH_DEBT.md` #94).
+> structural: knowing that a send **failed** after Better Auth's handoff —
+> **`docs/TECH_DEBT.md` #100**, not #94 _(repointed 2026-09-11: #94 closed on
+> 2026-08-08 and its own ledger entry says "Live gap is **#100**", so this
+> sentence named a closed row as the thing that remains; #100 is
+> operator-owned and deferred on a named closing condition)_.
 
 > **The append-only audit log was on this list too, and shipped over a year ago.**
 > `audit_events` has existed since `20260803170000_audit_events`; ADR-0072 made it

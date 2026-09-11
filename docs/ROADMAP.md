@@ -400,8 +400,16 @@ discriminators. Each becomes a spec/plan before build:
   shipped the model: the engine, the driving-resource-calendar resolution and the conformance slice all
   landed in M7.2. What was actually missing was the **web surface** — the type was absent from the
   picker and the engine's `resourceDriverMissing` flag was rendered nowhere — so the feature was
-  complete and unreachable. Both are now closed. Canvas
-  summary/LOE span-bars + navigator visual nesting are a deferred visualisation follow-on (TECH_DEBT #37).
+  complete and unreachable. Both are now closed. _(The sentence that followed read "Canvas
+  summary/LOE span-bars + navigator visual nesting are a deferred visualisation follow-on
+  (TECH_DEBT #37)" and is corrected 2026-09-11: **#37 is closed and ledgered**, and it is wrong
+  twice over. The canvas summary shipped in a **different shape** — ADR-0063 put summaries in a
+  pinned top band as a fourth canvas layer and deliberately lifted them **out** of the scene, so
+  span-bars-inside-the-scene was never the answer — and the Gantt half closed earlier still at
+  ADR-0059 M2. What #37's ledger entry names as actually left is the **activities table's** WBS
+  column, which is neither the canvas nor the navigator. A remediation can go stale by being
+  answered differently rather than by being done, which is that entry's own lesson arriving in a
+  document that cites it.)_
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
