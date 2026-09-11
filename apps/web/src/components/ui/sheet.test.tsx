@@ -151,4 +151,42 @@ describe('SheetHeader', () => {
     render(<SheetHeader title="Plan notes" />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  /**
+   * **The close is the full `icon` size for every consumer, and nothing can opt out**
+   * (`docs/TECH_DEBT.md` #278).
+   *
+   * It used to default to `icon-sm` — `size-7`, 28 px on both pointers — under ADR-0118 D1's second
+   * named exception, which is for a control inside a container whose height is fixed elsewhere. A
+   * dense tree row is such a container; a `px-4 py-2` panel header is not, and the four consumers
+   * taking the default were the four right docks rather than the rail the docblock called the
+   * exception.
+   *
+   * This asserts the **class**, which is unusual here and is the point: the size is the whole
+   * subject, and `size-10` carries `pointer-coarse:size-(--control-h)` with it — the 44 px the
+   * house rule asks for. Asserting the rendered box instead would prove nothing, because jsdom has
+   * no layout. **Verified red** against the pre-#278 component, which rendered `size-7`.
+   *
+   * The second case is the pinned counter-case, and without it the first passes equally against a
+   * component that hard-codes the size and ignores its caller — which is not what shipped either,
+   * since the caller can no longer ask.
+   */
+  it('renders its Close at the `icon` size, not the dense-row exception', () => {
+    render(<SheetHeader title="Plan notes" onClose={vi.fn()} />);
+    const close = screen.getByRole('button', { name: 'Close Plan notes' });
+    expect(close.className).toContain('size-10');
+    expect(close.className).not.toContain('size-7');
+  });
+
+  it('takes no size prop — every consumer gets the same close', () => {
+    // `closeButtonSize` had exactly one caller, passing the value all five consumers wanted, so it
+    // was deleted rather than defaulted the other way. This pins that there is nothing to pass: a
+    // stray extra prop would be a TypeScript error, so the assertion a runtime test can make is
+    // that two headers rendered by different callers agree.
+    const { unmount } = render(<SheetHeader title="Plan notes" onClose={vi.fn()} />);
+    const inPanel = screen.getByRole('button', { name: 'Close Plan notes' }).className;
+    unmount();
+    render(<SheetHeader title="Project Explorer" onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Close Project Explorer' }).className).toBe(inPanel);
+  });
 });
