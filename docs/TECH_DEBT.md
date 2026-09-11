@@ -2452,7 +2452,16 @@ declined as its CQ-2. That needs a review, not a default.
 
 ### 117. CSP report delivery is unverified end to end
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** deferred · **Verified:** 2026-09-11
+
+> **Reclassified `open` → `deferred` on 2026-09-11, on the row's own "How to close it".** That
+> sentence is an **observation on the deployed host** — visit a page and read
+> `GET /api/v1/staff/csp-reports` — and the row establishes, across two attempts, that no test here
+> can stand in for it: the Reporting API uploads out-of-band from the browser process, so
+> Playwright's `page.route` cannot see it at all. There is no work here to do, and building a gate
+> anyway would make it permanently red, which is how gates get deleted rather than fixed
+> (ADR-0058). The trigger is the same as `#100`'s operator half: **the next deploy, plus an
+> operator reading that route**.
 
 > **This row had NO `**Status:**` line at all until 2026-09-01, and `check:debt-status` reported
 > "71 rows (71 with a status, 0 without)" over a document where that was false.** The cause is in
@@ -2461,8 +2470,11 @@ declined as its CQ-2. That needs a review, not a default.
 > to the next `###` and picked up **#118's** status on the way. A9 — the control assertion written
 > to answer "did we read less than we think?" — compares heading COUNTS (71 = 71) and is
 > structurally unable to see a body-boundary defect. That is ADR-0120 D5's class, inside the gate
-> written to close it. The parser fix is filed separately as **#231**; this line closes the hole
-> the gate could not report.
+> written to close it. The parser fix was filed separately as **#231** and **closed on 2026-09-02**
+> under ADR-0124 — it is live at `doc-register.mjs:93-94,:120`, so nothing is outstanding there
+> _(tense corrected 2026-09-11: this read "is filed separately as #231" for nine days after that row
+> closed, which is a filing that reads as pending and is done)_. This line closes the hole the gate
+> could not report.
 
 **Found:** 2026-08-09, while writing the gate that was supposed to verify it (staff console M4).
 
@@ -2514,9 +2526,11 @@ observation on the host, not by a test.
 > `application/reports+json`) — the row understates itself. `nginx.conf:112-115` and `:136` emit both
 > directives, and the read route is `staff.controller.ts:166`.
 >
-> **One footnote is stale in tense:** it says the parser fix "is filed separately as #231", and #231
-> **closed on 2026-09-02** under ADR-0124 — the fix is live at `doc-register.mjs:93-94,:120`. It
-> reads as an outstanding filing and is done.
+> **One footnote was stale in tense** — it said the parser fix "is filed separately as #231" while
+> #231 **closed on 2026-09-02** under ADR-0124, the fix being live at `doc-register.mjs:93-94,:120`.
+> Noticing it on 2026-09-10 and leaving it in place left the row exactly as wrong as not noticing
+> (the ADR-0071 lesson), so it is **corrected in the footnote itself** on 2026-09-11 rather than
+> only described here.
 
 ### 118. Staff-console M6 review findings that were not folded
 
@@ -3161,7 +3175,16 @@ the ADR-0058 rule doing its job on a document written about instruments not bein
 
 ### 154. Three AT verifications are owed, and this row is now where the whole class is filed
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+> **Reclassified `open` → `deferred` on 2026-09-11.** Nothing here is owed _work_; three
+> **observations** are owed, and every one of them requires hardware this environment does not have
+> — the build container runs no screen reader and no OS magnifier, which the row establishes twice
+> and an attempt on 2026-08-28 confirmed by failing to discharge them. The trigger is named and is a
+> person rather than a date: **someone with NVDA or VoiceOver, and an OS zoom, on real hardware**;
+> the row was already flagged to the product owner with the Phase 2 report so it has an owner
+> outside this environment. `open` reads as a queue item somebody here could pick up, and picking it
+> up is what cannot be done — which is how it has twice been re-verified only to be re-deferred.
 
 > **It has grown from two to three, and became a class rather than a row.** Beside the minimap's own
 > two, `docs/TECH_DEBT.md:3591` files another owed listen explicitly as "the #154 shape", and
