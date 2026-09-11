@@ -12,4 +12,6 @@ The refusal itself was right: the engine owns those dates, so a typed date has t
 constraint a drag writes rather than assert an answer the server recomputes. What was wrong is that
 the cells were left lit while that write was refused. They are now ordinary read-only columns.
 
-Typing a date into the Gantt remains unbuilt and is specified separately.
+Typing a date into the Gantt was unbuilt when this landed, and is specified separately — the
+specification was then built in this same release, so the columns are editable again and this
+entry records the interval rather than the end state. See the typed-date entry beside it.
