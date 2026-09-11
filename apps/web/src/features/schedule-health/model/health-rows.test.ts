@@ -99,6 +99,47 @@ describe('buildHealthRows', () => {
     );
     expect(rows.map((r) => r.verdictLabel)).toEqual(['Pass', 'Fail', 'Not assessed', 'Info']);
   });
+
+  /**
+   * #206's sixth finding: the narrowing sentence was keyed on the metric id, so it printed the
+   * scope that was true the day it was written whatever the payload said. These three pin the
+   * relationship instead — the sentence is a function of `detail.narrowing`, and the first case
+   * alone cannot prove that, because it passes equally against a hardcoded string.
+   */
+  function resourcesRow(detail: Record<string, unknown> | null): string | null {
+    const rows = buildHealthRows(
+      report([
+        metric({
+          id: 'RESOURCES',
+          ordinal: 10,
+          name: 'Resources',
+          verdict: 'INFORMATIONAL',
+          threshold: null,
+          measured: { count: 6, denominator: 10, percent: 60, ratio: null },
+          detail,
+        }),
+      ]),
+    );
+    return rows[0]?.caveatSentence ?? null;
+  }
+
+  it("names metric 10's narrowing from the payload's token", () => {
+    expect(resourcesRow({ narrowing: 'RESOURCE_ASSIGNMENT_ONLY' })).toBe(
+      'Reads resource-assignment existence only — not workload or over-allocation.',
+    );
+  });
+
+  it('states that the scope is narrowed — and names the token — when the panel has no wording for it', () => {
+    const sentence = resourcesRow({ narrowing: 'ASSIGNMENT_AND_UNITS' });
+    expect(sentence).toContain('ASSIGNMENT_AND_UNITS');
+    // The decisive half: it must NOT still be claiming the narrowing it was written against.
+    expect(sentence).not.toContain('resource-assignment existence only');
+  });
+
+  it('claims no narrowing at all when the payload names none', () => {
+    expect(resourcesRow(null)).toBeNull();
+    expect(resourcesRow({})).toBeNull();
+  });
 });
 
 describe('healthAnnouncement', () => {

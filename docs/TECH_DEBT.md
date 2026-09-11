@@ -4032,10 +4032,16 @@ the better pattern sitting one directory over.
 
 **Status:** open · **Verified:** 2026-09-09
 
-_Triage 2026-08-28 (Phase 4): (e) closed as STALE — its coverage exists (see the item). The other
-five re-filed consciously: (a) is a distance cost whose order matches the visual arrangement, (b)
-and (d) are refactors of working code, (c) is an instrument-widening task with its own scope, (f)'s
-pairing is gated._
+**Five of the six are resolved; one remains, and it is spec-gated** (swept 2026-09-11, item by
+item). (b), (c) and (d) closed between 2026-08-31 and 2026-09-09, (e) closed as stale and (f) was
+withdrawn when its premise lapsed. **Only (a) is live**, and it is not a coding task: it names no
+remedy, all three candidates are different products, and one of them reverses a decision recorded in
+the file itself. Read (a) and stop — the rest are kept for their reasoning, not as work.
+
+_Triage 2026-08-28 (Phase 4), kept as the record of what was thought then: (e) closed as STALE —
+its coverage exists (see the item). The other five re-filed consciously: (a) is a distance cost
+whose order matches the visual arrangement, (b) and (d) are refactors of working code, (c) is an
+instrument-widening task with its own scope, (f)'s pairing is gated._
 
 **Raised:** 2026-08-27 (ADR-0114 M7) · **Size:** S each · **Owner:** unassigned
 
@@ -4336,11 +4342,36 @@ all six are live:
   > **Still live, and a nearby closure is NOT this one** (re-derived 2026-09-09). All five details
   > are computed API-side (`compute-health.ts:326-329`, `:459-462`, `:510-512`, `:556-562`) and the
   > expanded row renders **offenders only** (`ScheduleHealthPanel.tsx:411-433`). `health-rows.ts`
-  > reads `metric.detail` at exactly one place, `:140-143`, and that is **metric 12** — the vehicle
-  > this item named, carrying none of the five it lists. An earlier pass read that as the item
+  > read `metric.detail` at exactly one place, `:140-143`, and that was **metric 12** — the vehicle
+  > this item named, carrying none of the five it lists. _(The "exactly one place" count is
+  > superseded by the sixth finding's fix below, which adds metric 10's read. The finding itself is
+  > untouched: none of the five details this bullet lists is rendered anywhere.)_ An earlier pass read that as the item
   > closing; it is the vehicle arriving empty, which is the opposite. **A sixth thing was found on
-  > the way**: metric 10's narrowing is a hardcoded string at `health-rows.ts:135-137` while the
-  > docblock at `:33-34` implies it is read from `detail.narrowing`.
+  > the way**: metric 10's narrowing was a hardcoded string at `health-rows.ts:135-137` while the
+  > docblock at `:33-34` implied it is read from `detail.narrowing`.
+  >
+  > **That sixth thing is CLOSED 2026-09-11, and closing it exposed a seventh.** `caveatFor` now
+  > reads the payload's token and maps it to prose, so the panel can no longer keep printing the
+  > narrowing that was true the day the sentence was written; an unrecognised token still says the
+  > scope IS narrowed and names it, because silence there is the absence-a-reader-cannot-detect
+  > shape arriving in the one sentence whose job is to stop a planner believing metric 10 measures
+  > workload. Two of the three cases were **verified red** against the old code (an unknown token,
+  > and no token at all); the third — the known token — passed against both, which is exactly why
+  > it cannot be the discriminator on its own.
+  >
+  > **The seventh: the printed report rendered NO per-row caveat at all.** `caveatSentence` reached
+  > the panel (`ScheduleHealthPanel.tsx:360-361`) and nothing in `HealthPrintDocument.tsx`, so
+  > metric 10's narrowing survived the handover only through the footer's role-invariance clause,
+  > and metric 12's injection figures — the ones ADR-0116 M6 added so the verdict is reproducible
+  > by hand from the sentence alone — did not survive it at all. A **Scope notes** section now
+  > mirrors the existing "Not assessed, and why" section from the same derivation, verified red
+  > with a pinned negative (no heading when no row carries a note).
+  >
+  > **Left alone deliberately**: the footer still restates the narrowing in prose
+  > (`HealthPrintDocument.tsx:127`). Its subject is G4 role-invariance and the narrowing is cited
+  > there as the REASON, not as a scope caveat — rewriting a deliberate G4 sentence to close a
+  > second-copy risk is a larger change than the risk. It is the remaining hardcoded statement of
+  > that fact.
 - **The printed document names the plan but not the organisation or project** — a submission-pack
   page with two plans named "Phase 1" from different projects is ambiguous. The Gantt programme
   shares the gap; fix both from one header convention.

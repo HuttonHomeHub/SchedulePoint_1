@@ -58,6 +58,32 @@ function report(overrides: Partial<ScheduleHealthReport> = {}): ScheduleHealthRe
 }
 
 describe('ScheduleHealthPrintDocument (health M4)', () => {
+  it('carries the same scope notes the panel shows — derived, never restated', () => {
+    const metrics = report().metrics.map((m) =>
+      m.id === 'RESOURCES'
+        ? metric({
+            id: 'RESOURCES',
+            ordinal: 10,
+            name: 'Resources',
+            verdict: 'INFORMATIONAL',
+            threshold: null,
+            measured: { count: 6, denominator: 10, percent: 60, ratio: null },
+            detail: { narrowing: 'RESOURCE_ASSIGNMENT_ONLY' },
+          })
+        : m,
+    );
+    const { container } = render(<ScheduleHealthPrintDocument report={report({ metrics })} />);
+    expect(container.textContent).toContain('Scope notes');
+    expect(container.textContent).toContain(
+      'Reads resource-assignment existence only — not workload or over-allocation.',
+    );
+  });
+
+  it('prints no Scope notes heading when no row carries one — an empty section is a claim of its own', () => {
+    const { container } = render(<ScheduleHealthPrintDocument report={report()} />);
+    expect(container.textContent).not.toContain('Scope notes');
+  });
+
   it('prints all fourteen rows — never a scroll position', () => {
     const { container } = render(<ScheduleHealthPrintDocument report={report()} />);
     expect(container.querySelectorAll('tbody tr')).toHaveLength(14);
