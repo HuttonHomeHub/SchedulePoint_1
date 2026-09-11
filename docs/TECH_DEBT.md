@@ -5125,9 +5125,31 @@ than silently skipped, because ADR-0114 found that _a deferral whose reason has 
 like one whose reason still holds_; this one still holds, and the next reader should not have to
 re-derive that.
 
-### 251. The `aria-disabled` shading recipe is hand-rolled in thirteen places
+### 251. The `aria-disabled` shading recipe is hand-rolled, and closing an ADR-0082 row adds one
 
-**Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
+
+**Re-derived independently 2026-09-11, and the population GREW by two in two days — both times
+because this register closed a row.** Counted by a looser, file-level predicate than the
+2026-09-10 pass used (does the file, comments stripped, write `aria-disabled` **and** carry an
+`sr-only` node linked by `aria-describedby`?): **12 implementations, 31 partial, 10 consumers, 3
+mentions**. The two implementations that are new are `FloatPathsPanel` (`04a3fd92`, 2026-09-10,
+closing `#250`) and `performance-probe-panel` (`c3e3ab8a`, 2026-09-11, closing `#269`) — and the
+commits are the point rather than the count. **ADR-0082's remedy is to hand-roll this recipe one
+more time**, so every row this register closes about a missing reason makes the extraction it asks
+for one file larger. That is a mechanism, not a coincidence, and it is a stronger argument for the
+trigger below than a static count could be.
+
+**Reclassified `open` → `deferred` on this row's own last sentence**, which names a trigger — "the
+next epic that touches three or more of them" — and that is what `deferred` means here (ADR-0120).
+
+**The 31-partial population is deliberately NOT filed as its own row**, despite this row's note that
+it "should be filed on its own terms". A row needs a scope somebody can stand behind, and this one
+cannot have one: whether a shaded control owes a sentence is ADR-0082's per-call-site judgement
+(temporal state the reader caused — no; a state their role imposes — yes), which is not a predicate,
+and my 31 is not the pass's 32 because the two methods differ. Filing a row on a number neither
+method can defend would be the defect this row's own re-derivation block was written to avoid.
+Recorded here so the next reader does not re-open the question and reach the same place.
 
 The M4 component review counted **thirteen** independent implementations of one recipe —
 `aria-disabled` + a click guard + an `sr-only` reason linked by `aria-describedby` — across
@@ -5188,9 +5210,12 @@ and now `RevisionComparePanel`, with no shared hook.
 > larger question the pass uncovered (which of the 32 owe a reason) is a different piece of work that
 > should be filed on its own terms rather than folded in here.
 
-The count is **the reviewer's and has not been re-derived here**, which is why this row is
-`unverified` rather than `open` — a count nobody re-ran is exactly the claim ADR-0076 Class 1 is
-about, and filing it as established would be committing that inside the row recording it.
+The count was **the reviewer's and not re-derived** when this row was filed, which is why it was
+`unverified` then — a count nobody re-ran is exactly the claim ADR-0076 Class 1 is about, and filing
+it as established would have been committing that inside the row recording it. It has since been
+re-derived twice (the 2026-09-10 pass above, and independently on 2026-09-11), so that sentence no
+longer describes this row and is kept in the past tense rather than deleted: the reason the figure
+was withheld is the useful part.
 
 It is pre-existing debt this epic adds one unit to rather than causes. What makes it worth a row is
 that the recipe has already been got wrong twice in this codebase's record (once by omitting the
