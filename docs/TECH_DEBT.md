@@ -2334,11 +2334,27 @@ blocked the epic.
 1. **`ToolbarItemRenderApi` does not expose the resolved `busy`.** M5 widened the registry with
    `isBusy?: (ctx) => boolean`, resolved once in `resolveItems` and read by `ToolbarButton` — but the
    `render` escape-hatch's api object still carries only `disabled`/`disabledReason`/`active`/
-   `itemProps`. No `render` item declares `isBusy` today, so this is latent rather than broken. The
+   `activeKind`/`itemProps` _(five fields, not the four this row listed: `activeKind` joined at
+   ADR-0133 and nobody swept the row — re-derived 2026-09-11)_. No `render` item declares `isBusy` today, so this is latent rather than broken. The
    trap is that `ToolbarItem.isBusy`'s docblock reads as a general contract and does not scope itself
    to plain-button items: the first Tier-2 popover trigger that wants a busy state will silently have
    no way to read it and will re-derive it from `ctx`, which is the two-derivations-of-one-fact
    pattern this same epic eliminated twice elsewhere.
+   > **Half closed 2026-09-11, and the half that is left now has its argument pre-made.** The trap
+   > this item describes is the docblock, and it is scoped: `ToolbarItem.isBusy` now states that it
+   > reaches a plain-button item only and why that is a trap rather than a defect. What re-deriving
+   > it found is sharper than the item: **the case for adding the field is already written thirty
+   > lines below, on `activeKind`** — _"a `render` item paints its own control, so it has to be
+   > handed the same fact a plain command gets, or the ladder holds on eight of the deck's controls
+   > and not the other fifteen — which is this repository's most-recorded defect shape."_ Word for
+   > word the case for `busy`, made for its neighbour and not for it, inside the docblock that names
+   > the shape.
+   >
+   > **Not taken in passing**, and the reason is consistency rather than caution: adding the field
+   > is additive and breaks no consumer, and it is still a change to a shared primitive's public
+   > contract, which is an ADR-0105 trigger — the same test that left `#228`'s `LEGEND_WIDTH_PX`
+   > alone in the other direction. A reader picking this up needs no new argument, only the
+   > decision.
 2. **`EXPORT_LEGEND` is still a hand-authored mirror of the DOM legend** (`render-export-image.ts`,
    already TECH_DEBT #48(e)). This epic **extended** it — adding the Data date entry in the same PR
    as the DOM entry, which is the mitigation the plan called for — rather than fixing the pattern.
