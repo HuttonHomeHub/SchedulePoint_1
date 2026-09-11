@@ -7495,17 +7495,24 @@ suite. A reader who sharded "as far as it goes" would spend eight runners to buy
 > suite much stronger than "different mechanism": splitting it buys **zero** whole-CI wall clock
 > until `quality` moves, and the two measured 682 s and 690 s, effectively tied.
 >
-> **Three samples now, and the heading's number is the outlier.** The same job measured
-> **46 m 32 s** (the reference run this row is built on), **40 m 10 s** (PR #510) and **40 m 15 s**
-> (PR #512) — the last of which _added_ two tests that deliberately wait a real 45-second grace
-> window, so it should have been the slowest and was not. Two of three cluster within five seconds
-> of each other, which makes 46 m 32 s the reading that wants explaining rather than the one to
-> quote. **This row's own title says 46 minutes and is left as written**, because the heading is
-> what the row was filed under and rewriting it would break inbound references — but a reader
-> taking a number from here should take 40 minutes, and a reader making a decision should take
-> none of them. One sample is not a distribution and three barely are; the spec therefore asserts
-> no wall-clock bar anywhere and compares the slowest e2e job against `quality` **within the same
-> run**, which variance cannot invalidate.
+> **Four samples, and the third-sample claim was wrong.** The block above read, for one commit,
+> "three samples now, and the heading's number is the outlier" — that 46 m 32 s wanted explaining
+> because 40 m 10 s (PR #510) and 40 m 15 s (PR #512) clustered within five seconds. **The very
+> next CI run disproved it.** PR #513 — which _is_ the spec making that claim, and changes no test,
+> no workflow and no application code — ran the same job in **47 m 00 s** (run `34654774419`, job
+> `103444663877`, 22:36:58Z → 23:23:58Z), the slowest of the four. So the samples are **46 m 32 s,
+> 40 m 10 s, 40 m 15 s, 47 m 00 s**: a 40–47 minute spread with no outlier and no cluster worth
+> naming, **14.5 %** of the largest.
+>
+> The wrong version is recorded rather than replaced because of what produced it: three points, two
+> of which happened to agree, read as a distribution with an anomaly — and the shape of the error is
+> that a **docs-only** change was the slowest run measured, so the variance cannot be attributed to
+> what a PR contains. **This row's own title says 46 minutes and is left as written**, because the
+> heading is what the row was filed under and rewriting it would break inbound references. The
+> instruction to a reader is unchanged and is now better supported: **take no number from here for a
+> decision.** The spec asserts no wall-clock bar anywhere and compares the slowest e2e job against
+> `quality` **within the same run**, which variance cannot invalidate — that design choice is what
+> survived its own author being wrong about the distribution twice.
 
 **Not built here, deliberately.** Editing the CI workflow is a shared-gate change and therefore
 an ADR-0105 trigger: it needs a spec, not a register row. The row exists so the decision is taken

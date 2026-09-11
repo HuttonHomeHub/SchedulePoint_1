@@ -20,19 +20,19 @@
 Stated first, because §1 is arithmetic and the arithmetic is the whole argument (ADR-0076, and
 `docs/PROCESS.md` "Decision-bearing claims carry their evidence").
 
-| Figure                                              | Source                                                                                                                                         |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Job segment timings (setup / API / pairwise / etc.) | `docs/TECH_DEBT.md` #301, from the per-step timings of run `34613280766`, job `103309069671` (PR #508, all green), 2026-09-11                  |
-| Longest single web suite (185 s, Gantt editing)     | Same run, same table                                                                                                                           |
-| `quality` 12 m 44 s and `image` 2 m 26 s            | Same run, reported in #301                                                                                                                     |
-| `quality` at 11 m 22 s on 2026-08-25                | `docs/TESTING.md` "Before you push", the prepush-cost paragraph                                                                                |
-| Second whole-job sample, 40 m 10 s                  | Product owner, PR #510, 2026-09-11 (segment breakdown **not** captured — see §1.4)                                                             |
-| 44 web suites / 43 named scripts                    | `apps/web/package.json:17-66`, read 2026-09-11                                                                                                 |
-| 44 CI web steps                                     | `.github/workflows/ci.yml:360-857`, counted 2026-09-11                                                                                         |
-| `check-build-contract.mjs` reads one build step     | `scripts/check-build-contract.mjs:130` — a single `RegExp.exec`, not a global match                                                            |
-| `upload-artifact` v4+ rejects duplicate names       | `github.com/actions/upload-artifact` README, fetched 2026-09-11: _"uploading to the same artifact via multiple jobs is not supported with v4"_ |
-| API e2e runs its spec files serially on a shared DB | `apps/api/vitest.e2e.config.mts:22-25` (`fileParallelism: false`, with the reason in the comment)                                              |
-| Playwright runs `workers: 1` and `retries: 2` in CI | `apps/web/playwright.config.ts:10,12`                                                                                                          |
+| Figure                                                   | Source                                                                                                                                                                  |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Job segment timings (setup / API / pairwise / etc.)      | `docs/TECH_DEBT.md` #301, from the per-step timings of run `34613280766`, job `103309069671` (PR #508, all green), 2026-09-11                                           |
+| Longest single web suite (185 s, Gantt editing)          | Same run, same table                                                                                                                                                    |
+| `quality` 12 m 44 s and `image` 2 m 26 s                 | Same run, reported in #301                                                                                                                                              |
+| `quality` at 11 m 22 s on 2026-08-25                     | `docs/TESTING.md` "Before you push", the prepush-cost paragraph                                                                                                         |
+| Whole-job samples 2–4: 40 m 10 s / 40 m 15 s / 47 m 00 s | PRs #510, #512 and #513, 2026-09-11. The fourth is this spec's own CI (run `34654774419`, job `103444663877`) — no segment breakdown captured for any of them; see §1.4 |
+| 44 web suites / 43 named scripts                         | `apps/web/package.json:17-66`, read 2026-09-11                                                                                                                          |
+| 44 CI web steps                                          | `.github/workflows/ci.yml:360-857`, counted 2026-09-11                                                                                                                  |
+| `check-build-contract.mjs` reads one build step          | `scripts/check-build-contract.mjs:130` — a single `RegExp.exec`, not a global match                                                                                     |
+| `upload-artifact` v4+ rejects duplicate names            | `github.com/actions/upload-artifact` README, fetched 2026-09-11: _"uploading to the same artifact via multiple jobs is not supported with v4"_                          |
+| API e2e runs its spec files serially on a shared DB      | `apps/api/vitest.e2e.config.mts:22-25` (`fileParallelism: false`, with the reason in the comment)                                                                       |
+| Playwright runs `workers: 1` and `retries: 2` in CI      | `apps/web/playwright.config.ts:10,12`                                                                                                                                   |
 
 **Two figures in this document are NOT measured and are labelled everywhere they appear:** runner
 queue time (§3, §1.5) and the per-suite durations needed for a balanced assignment (§4.5 — Milestone
@@ -185,14 +185,27 @@ other, which means they are effectively tied and **neither is worth further work
 measurement of both.** This is recorded as the trigger in §4.8 rather than resolved by picking
 whichever sample suits.
 
-### 1.4 What two samples mean, and why no wall-clock bar ships
+### 1.4 What four samples mean, and why no wall-clock bar ships
 
-The reference run's `e2e` job took 2,792 s. The same job on PR #510 took **2,410 s (40 m 10 s)** — a
-spread of 382 s, **13.7 %** of the larger.
+| run                                   | `e2e` job               |
+| ------------------------------------- | ----------------------- |
+| reference (PR #508, `34613280766`)    | 2,792 s (**46 m 32 s**) |
+| PR #510                               | 2,410 s (**40 m 10 s**) |
+| PR #512 (_added_ two 45-second waits) | 2,415 s (**40 m 15 s**) |
+| PR #513 (this spec — docs only)       | 2,820 s (**47 m 00 s**) |
 
-**One sample is not a distribution and two are not much better.** With n = 2 there is no mean worth
-quoting, no p95, and no basis for a tolerance. Three consequences, each of which changes what this
-plan may commit to:
+A 40–47 minute spread of **410 s, 14.5 % of the largest**, with no outlier.
+
+**This section was written at n = 2 and its successor claim at n = 3 was wrong**, which is worth
+keeping rather than tidying. At three samples the reading was "46 m 32 s is the outlier; two of
+three cluster within five seconds" — and the next run, which is **this spec's own CI**, changing no
+test and no workflow, was the slowest of the four. Two lessons, both of which the plan already
+depends on: three points of which two agree is not a distribution with an anomaly, it is three
+points; and the variance **cannot be attributed to what a pull request contains**, since the
+slowest run measured altered nothing that executes.
+
+With n = 4 there is still no mean worth quoting, no p95, and no basis for a tolerance. Three
+consequences, each of which changes what this plan may commit to:
 
 - **No gate in this epic asserts a wall-clock time.** ADR-0058's rule is that a gate failing on day
   one gets deleted rather than fixed; a "CI must finish within 12 minutes" gate would fail on the
@@ -202,13 +215,17 @@ plan may commit to:
 - **Comparisons must be made within one run, not across runs.** Success criterion 1 above compares
   the slowest e2e job against `quality` _in the same run_, which the variance cannot invalidate.
   "Is CI faster than it was?" compared across runs needs several samples before it means anything.
-- **The segment breakdown of the 40 m sample was not captured**, so it is not known whether the
-  382 s landed in the API suite, the web suites, or the setup. That matters: if the variance is
-  concentrated in the web suites, the shard budget in §4.5 has less headroom than it looks. This is
-  named as an assumption, not resolved (§4.10, risk R4).
+- **No segment breakdown was captured for any sample but the reference**, so it is not known
+  whether the 410 s between fastest and slowest lands in the API suite, the web suites, or the
+  setup. That matters: if the variance is concentrated in the web suites, the shard budget in §4.5
+  has less headroom than it looks. This is named as an assumption, not resolved (§4.10, risk R4).
 
-The honest form of the headline is therefore: **~46 min → ~13 min, with a floor set by a job this
-epic does not touch, and a between-run spread comparable to the gap between three shards and four.**
+The honest form of the headline is therefore: **~40–47 min → ~13 min, with a floor set by a job
+this epic does not touch, and a between-run spread (410 s) an order of magnitude larger than the
+gap between three shards and four (16 s).** That ordering is the strongest argument in this
+section: the quantity the shard count is chosen on is smaller than the noise in the quantity a
+reader would use to check the result, which is exactly why success criterion 1 is a within-run
+comparison.
 
 ### 1.5 The unmeasured cost: runner queue time
 
@@ -652,7 +669,7 @@ names the suite. Nothing about what to run locally changes.
 | **Raise Playwright's `workers` above 1 in CI**            | `playwright.config.ts:12` pins `workers: 1` in CI "for determinism", and the suites share one database. Raising it trades the epic's problem for a flake problem, on the one instrument whose green is currently trustworthy.                                                                                                              |
 | **Larger runners**                                        | Not free, and the job is serialisation-bound rather than CPU-bound: with `workers: 1` a bigger box mostly idles.                                                                                                                                                                                                                           |
 | **Compute the packing at run time from a durations file** | Needs either a static matrix that cannot see the computation, or a setup job emitting `fromJSON` output (+1 job, +indirection). And it makes a suite's shard vary between runs, which makes "which shard was that?" harder. The 15.8 % slack (§4.5) means it buys nothing.                                                                 |
-| **A wall-clock gate ("CI under 12 minutes")**             | ADR-0058. Two samples 13.7 % apart; it would fail on a slow runner and be deleted rather than fixed.                                                                                                                                                                                                                                       |
+| **A wall-clock gate ("CI under 12 minutes")**             | ADR-0058. Four samples spanning 14.5 %; it would fail on a slow runner and be deleted rather than fixed.                                                                                                                                                                                                                                   |
 
 ### 4.8 What this deliberately does not touch
 
@@ -693,7 +710,7 @@ Draft outline:
 
 > **ADR-0138 (number to be confirmed at filing) — A shard count is set by where the constraint
 > changes hands.**
-> _Context:_ one job, 46 invocations, 46.5 min; the measured segments; two samples 13.7 % apart.
+> _Context:_ one job, 46 invocations, 40–47 min across four samples; the measured segments.
 > _Options:_ do nothing · N shards for N ∈ {2,3,4,6,8} · merge suites · concurrency within a runner ·
 > a computed packer.
 > _Decision:_ split `e2e` into `e2e-api` + a four-entry `e2e-web` matrix; assignment as a per-step
@@ -722,7 +739,7 @@ rediscover it.)_
 | R1  | A suite has been passing on data an earlier suite left in the shared database, and fails once shards have their own | medium     | high   | Cannot be established by reading. Milestone 3's acceptance is a green run, and a failure here is a **real** finding — a suite that was not self-sufficient. Milestone 2 deliberately carries none of this risk, so a Milestone 3 revert keeps 10.6 min. |
 | R2  | The per-shard assignment is unbalanced and one shard becomes the critical path                                      | medium     | low    | 15.8 % of slack (§4.5); the projection is printed on every gate run; the cost of being wrong is seconds, not redness.                                                                                                                                   |
 | R3  | A retry of a long suite (CI `retries: 2`) blows its shard's 81 s of headroom                                        | medium     | low    | Accepted. One retry of the 185 s suite adds up to 370 s and that shard becomes the critical path **for that run**. No design fixes this; more shards make it less likely and buy nothing else.                                                          |
-| R4  | The 13.7 % between-run variance is concentrated in the web suites, so the real headroom is smaller than projected   | unknown    | low    | The 40 m sample's segments were not captured. Milestone 4 captures segments from three sharded runs. Named as an assumption rather than assumed away.                                                                                                   |
+| R4  | The 14.5 % between-run variance is concentrated in the web suites, so the real headroom is smaller than projected   | unknown    | low    | No segments were captured for samples 2–4. Milestone 4 captures segments from three sharded runs. Named as an assumption rather than assumed away.                                                                                                      |
 | R5  | Seven concurrent jobs queue, eating the saving                                                                      | unknown    | medium | Unmeasurable in advance (§1.5). Milestone 4 records `created_at` → `started_at` for each job. If it dominates, the shard count is the lever and it goes **down**.                                                                                       |
 | R6  | The two setup blocks drift                                                                                          | low        | medium | Loud failure (`MODULE_NOT_FOUND` at `nest build`), plus D5 makes `check:build-contract` assert **every** build step rather than the first.                                                                                                              |
 | R7  | The new gate matches a suite name inside a comment and reports a missing step as wired                              | medium     | high   | Comments stripped before matching, exactly as `check-ci-roster.mjs:136` does, and verified red with a suite named only in a comment. This is the sibling gate's own recorded near-miss.                                                                 |
