@@ -5431,7 +5431,18 @@ write nobody reviewed on its own terms.
 
 ### 255. Six non-blocking findings from the revision-compare gate pass
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+
+> **Reclassified `open` → `deferred` on 2026-09-11, after the item-by-item walk below.** Three of
+> the six are done. The **whole remainder is a decision somebody else takes**, and each names whose:
+> **3** is a component's public contract, which ADR-0105 makes a spec-and-approval change whatever
+> its size; **4** is a visual design decision with no single right answer (separating "incident to
+> my selection" from "changed in the comparison" without reaching for colour alone); **5** is a
+> product decision between clearing the pair on close — removing an overlay a planner may have
+> opened deliberately — and keeping it with a caption, made sharper by ADR-0127 D8b's default-on.
+> The trigger for all three is the same: **the next revision-compare design pass**. `open` reads as
+> three items somebody here could pick up, and picking any of them up is the thing that would be
+> wrong.
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
@@ -5504,7 +5515,15 @@ incidentally. One had been, halfway, which is the case that caveat exists for.
 
 ### 259. Twelve non-blocking findings from the staff performance-probe gate pass
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
+
+> **Reclassified `open` → `deferred` on 2026-09-11, on this row's own closing sentence.** Eight of
+> twelve are closed, 4 belongs to `#271`, and 5 and 6 are records rather than work — so the row
+> stands on **item 10 alone**, and the row states in as many words that what 10 needs is _"somebody
+> choosing which channel owns a run's outcome"_, with all three candidates touching a shared
+> primitive and therefore an ADR-0105 spec. That is a decision with an owner, not a coding task, and
+> the trigger is the next pass over `Panel`'s live-region contract. `open` reads as a twelve-item
+> pile with work left in it; one decision is what is left.
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
