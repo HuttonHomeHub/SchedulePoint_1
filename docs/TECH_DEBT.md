@@ -4602,9 +4602,26 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > elsewhere as the worse defect.
 >
 > The bar is still mounted at the moment the control goes, which is what makes the chosen answer
-> available at all. **Announcement and focus move together**, in that order, for the ADR-0080 reason
-> recorded one epic over: a focus change announces the thing it lands on, so a message spoken first
-> and moved to second is a message overwritten.
+> available at all.
+>
+> > **The ordering sentence here said "announcement and focus move together, in that order" — meaning
+> > announcement FIRST — and it was wrong on the same day it was written (corrected 2026-09-11).** It
+> > cited the ADR-0080 precedent and then drew the opposite conclusion from it, which is ADR-0076
+> > Class 3 inside the sentence recording a decision. Two pieces of evidence, both read rather than
+> > recalled:
+> >
+> > - `TsldPanel.tsx:1029-1033` states the rule and its failure mode in as many words —
+> >   _"Announced INSIDE the focus callback, and that ordering is load-bearing: focusing the listbox
+> >   fires its `onFocus` default-select, which announces the row it lands on. Announced first,
+> >   '2 activities deleted.' is spoken and then immediately overwritten by a row description."_
+> > - `announcer.tsx:14-18` sets the message inside a `requestAnimationFrame`, so a synchronous
+> >   `focus()` after `announce()` lands **before the message exists**. "Announce first" is not a
+> >   worse ordering; it is not buildable in call order.
+> >
+> > So it is **focus, then announce — the announcement inside the focus callback.** The product
+> > owner's decision (move focus to the bar and say why) is unchanged; the order was my gloss on it
+> > and the gloss was the error. Found by the spec pass that was commissioned to design the fix,
+> > which is the process working, one turn later than it should have.
 
 **(d) Two of three lens toggles offered to the product owner for promotion did not exist.** The
 `AskUserQuestion` options named `Critical path`, `Float paths` and `Baseline overlay`. Only the
