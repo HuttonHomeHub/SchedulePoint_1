@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1212 web
 > source files with 42 Playwright suites beside the base journey, and
-> 133 ADRs.
+> 134 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4391,6 +4391,40 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   the two-identical-pictures collision the ladder existed to remove. Open with numbers rather than
   intentions: `docs/TECH_DEBT.md` #286/#287/#288. **The CPM engine is not imported and no migration
   runs** — `apps/web` only, which is what makes the whole epic revertible.
+
+- **ADR-0134** _(Accepted 2026-09-11; the ADR is filed, M3 is building)_ — A typed date writes the
+  constraint a drag writes. The Gantt's `Start` and `Finish` columns print what the CPM engine
+  **computes**, so `cell-commit.ts` refuses both keys by name — correctly — while
+  `GANTT_EDITABLE_COLUMNS` simultaneously listed them, so the cell opened, took a date and refused
+  every value (`docs/TECH_DEBT.md` #290, closed by making them honestly read-only). That dead end is
+  not the capability behind it: the two most obvious cells in a Gantt grid were inert, in the one
+  view a planner hands upward, and both P6 and MS Project let you type into them. The product owner
+  answered the spec's CQ-1 **BUILD** and asked for the ADR **before** the milestone, because "typing
+  a date into a computed column silently pins the activity" is a statement about the schedule rather
+  than a grid repair — the same reason ADR-0052 §3 needed one for the canvas drag.
+  **The decision is that a typed date writes what the equivalent canvas gesture writes**, read off
+  `use-plan-workspace-model.ts` rather than recalled, so a planner who has learnt the diagram has
+  learnt the grid and there are not two answers to drift apart (the ADR-0065 argument). `Start` in
+  **Visual** hand-places — `visualStart` + `durationDays` in one minimal PATCH, **no constraint**,
+  because a hand-placement is advisory and a constraint is not. `Start` in **Early** pins, `SNET` at
+  the typed date with the duration adjusted so the finish stays put, because a computed start can
+  only be moved honestly by pinning it.
+  **`Finish` is the branch a reader expects to be `FNLT` and is not, which is the most important
+  line in the document.** A finish-edge drag "spreads neither field, leaving the stored constraint
+  round-tripped verbatim" — it sets `durationDays` and nothing else — so a typed `Finish` does the
+  same, and its honest consequence is stated rather than left to be discovered: in Early mode with
+  no constraint the start is computed, so a later recalculation can move it and carry the typed
+  finish along. **The typed finish is not a pin**, exactly as the drag's is not, and giving the grid
+  a different answer would invent the second semantic this decision exists to prevent. A
+  `MANDATORY_*` constraint is **never** overwritten from a cell (ADR-0035 §7: it breaks logic by
+  design, and a grid cell is not where that trade is made); one parser, the formatter's inverse; one
+  explanation the first time it happens in a session, one undo entry (ADR-0048), and the bar's
+  existing constraint badge afterwards — a confirmation on every edit was rejected as taxing the
+  common case to guard the rare one. **The CPM engine is not imported and no migration runs**, so
+  the ADR-0034 parity gate is untouched in its honest form: there is nothing here to hold parity
+  _for_. The Visual-mode journey earns its place for a reason beyond symmetry — barely any journey
+  in this repository runs in Visual mode, and ADR-0092 records that gap being exactly where a defect
+  was hiding.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

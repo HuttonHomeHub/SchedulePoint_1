@@ -317,6 +317,20 @@ keep `main` releasable.
   painted 80 px on top of the chart**; the M6 gate pass found a **data-loss** path where arrow keys
   in an open cell moved focus off an unsaved edit. Gantt editing was ADR-0059's deferred M5.
 
+  > **A typed date pins the activity — decided 2026-09-11, building now** (**ADR-0134**,
+  > `docs/specs/gantt-editing-gaps/` M3). The `Start` and `Finish` columns print what the engine
+  > computes, so they were made honestly read-only first — they had been listed as editable while
+  > every value was refused, a dead end filed as `docs/TECH_DEBT.md` #290. The capability behind
+  > that dead end is the one P6 and MS Project both offer, and the product owner chose to build it.
+  >
+  > The decision is that a typed date writes **what the equivalent canvas gesture writes**, so a
+  > planner who has learnt the diagram has learnt the grid: `Start` in Visual mode hand-places
+  > (`visualStart`, no constraint), `Start` in Early mode pins (`SNET` at the typed date), and
+  > `Finish` — the branch a reader expects to be `FNLT` and is not — sets a **duration**, because
+  > that is what a finish-edge drag does. A `MANDATORY_*` constraint is never overwritten from a
+  > cell. One explanation the first time it happens in a session, one undo entry, and the constraint
+  > badge the bar already carries afterwards. The CPM engine is not imported and no migration runs.
+
 ## Delivered — operations & supportability
 
 **A theme this roadmap did not have.** Everything below was built between 2026-08-05 and
