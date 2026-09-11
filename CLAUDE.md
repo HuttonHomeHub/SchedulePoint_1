@@ -4410,7 +4410,7 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   intentions: `docs/TECH_DEBT.md` #286/#287/#288. **The CPM engine is not imported and no migration
   runs** — `apps/web` only, which is what makes the whole epic revertible.
 
-- **ADR-0134** _(Accepted 2026-09-11; the ADR is filed, M3 is building)_ — A typed date writes the
+- **ADR-0134** _(Accepted 2026-09-11; M3 landed the same day in `69207b1d`)_ — A typed date writes the
   constraint a drag writes. The Gantt's `Start` and `Finish` columns print what the CPM engine
   **computes**, so `cell-commit.ts` refuses both keys by name — correctly — while
   `GANTT_EDITABLE_COLUMNS` simultaneously listed them, so the cell opened, took a date and refused
@@ -4438,7 +4438,13 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   design, and a grid cell is not where that trade is made); one parser, the formatter's inverse; one
   explanation the first time it happens in a session, one undo entry (ADR-0048), and the bar's
   existing constraint badge afterwards — a confirmation on every edit was rejected as taxing the
-  common case to guard the rare one. **The CPM engine is not imported and no migration runs**, so
+  common case to guard the rare one.
+  **This entry said "M3 is building" until the 2026-09-11 reconciliation pass, and M3 had shipped in
+  the same pull request** — `cell-commit.ts:204-209` writes exactly the two branches above. A status
+  line describing work as in flight is the one claim a reader cannot check against the code without
+  already knowing the answer, and it is the shape ADR-0058 exists for; the changeset beside it had
+  the sequence right ("the specification was then built in this same release") while the register
+  entry did not. **The CPM engine is not imported and no migration runs**, so
   the ADR-0034 parity gate is untouched in its honest form: there is nothing here to hold parity
   _for_. The Visual-mode journey earns its place for a reason beyond symmetry — barely any journey
   in this repository runs in Visual mode, and ADR-0092 records that gap being exactly where a defect

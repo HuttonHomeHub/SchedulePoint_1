@@ -10,6 +10,81 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-11 — Reconciliation pass: the agents were briefed on a product two versions back
+
+Run because `check:reconcile-due` fired at **exactly** its threshold — eight ADRs (0129–0136) since
+the 2026-09-08 pass, against a threshold of eight. Eight is deliberately a number the gate reaches
+often (ADR-0120 derived it from p75 = 7.50, firing on 3 of 11 historical intervals), and that is
+affordable only because it **warns** rather than blocks.
+
+**Every finding this pass was in `.claude/agents/`, and that is the headline.** Steps 1–5 came back
+essentially clean — the count gates hold, `check:debt-status` covers the register mechanically since
+ADR-0120, the 2026-09-03 verification sweep did the row-by-row, and three spot-checks of register
+rows returned **correct** documents I nearly "fixed". Step 6, the one step with no gate behind it at
+all, returned seven files. The runbook predicted this in as many words — _"an agent asserting a stale
+invariant is worse than one asserting none"_ — and it is the second consecutive pass whose entire
+yield is that step.
+
+**`performance-reviewer.md` held three wrong beliefs about the surface it exists to police**, and two
+of them contradicted each other **inside the same file, six lines apart**. It quoted the 2026-08-03
+readings as current and called the Fit judder "the open question"; six lines later it said the
+ADR-0026 hardware envelope _"has never been measured on real hardware"_. Both cannot be true, and the
+second is simply false — three reading sets now exist (2026-08-03 §9b, 2026-09-08 §9c, and **five
+sittings on 2026-09-10**, `docs/TECH_DEBT.md` #75 item 6), which together withdraw "missed at Fit at
+2,000" and put the gate at **MET**: 60.0 fps at Week at both 500 and 2,000, 32.2 fps at Fit
+fullscreen against a 30 fps floor. What is genuinely unmeasured is the **iPad-class half**, which is
+a much narrower claim than the one the file was making. It also cited **`TECH_DEBT #59` twice as a
+live row** — a number folded into #75 months ago, explicitly so that closing one could not leave the
+other stale, which is the failure the folding was meant to prevent arriving by citation instead.
+
+**And it carried the only surviving copy of a figure this repository had already discredited.** Its
+checklist said _"Respect budgets (~200KB initial, ~150KB/route gzipped)"_. The delivery-gates spec
+(C3, 2026-09-11) rejected that number in writing — _"a number nobody has ever measured"_ — and
+derived the real floor from a build: the entry graph is **404,744 bytes gzip**, roughly **twice** the
+quoted budget. The epic corrected `docs/FRONTEND_QUALITY.md`, shipped `check:bundle-size` to gate it,
+and never looked at the agent quoting the same figure. An agent briefed that way would report the
+shipped application as more than double budget on every review it ever ran.
+
+**`feature-analyst.md` was instructing every new spec to add a feature flag.** Its bullet read _"A
+user-visible surface lands behind a `VITE_*` flag, default-off, with parity suites"_ — and **ADR-0088
+D1 retired that reasoning** on 2026-08-10: Vite inlines `import.meta.env.VITE_*` at build time,
+`docker-publish.yml` passes none, so every published image carries every flag at its default and an
+operator has never been able to switch one off. Eight consecutive epics have shipped **no flag** and
+said so citing that ADR. This is the most consequential of the seven, because it is upstream of every
+other document: it shapes the spec, which shapes the plan, which shapes the code.
+
+The same premise survived in two more files as the phrase **"flag-off parity suites are the rollback
+contract"** (`component-reviewer.md`, `test-engineer.md`). There is no operator rollback for such a
+suite to be the contract _for_, and ADR-0088 measured what one has actually caught here: **once**,
+ever (ADR-0070's `+1d` rounding), against seventeen flags with no off-branch test at all. The rule
+that survives is narrower and still load-bearing — convert or retire the harness **in the same
+commit**, never strand it — so the bullets now say that instead.
+
+Three stale counts, each pointing at a computed gate rather than being re-typed with today's number:
+`test-engineer.md` **"15 Playwright configs"** (wrong by nearly 3×), `database-architect.md` **"27
+real models"** (31), `feature-analyst.md` **"73 ADRs"** (136). ADR-0076 made these a gate precisely
+because a fresh number rots the same way the stale one did; the fix is a pointer at
+`pnpm check:counts`, not a better number. And `security-reviewer.md` knew nothing of
+`pnpm check:licenses`, shipped the same week — including its sharpest rule, that a package under this
+repository's own `@repo/` scope appearing in the resolved tree is a **finding, not a skip**.
+
+**Two findings outside the agents.** `docs/TESTING.md`'s "Before you push" — the canonical pre-push
+runbook, which CLAUDE.md §19.8 points at **by name** — does not mention `pnpm format:check` anywhere,
+and no local gate runs it (`prepush.sh` derives its roster from the `check:*` scripts; the
+lint-staged hook only touches **staged** files). It failed CI twice in one session on 2026-09-11, the
+second time **one commit after the register row recording the gap was filed** (#299). The row existed
+and the runbook it was about had never been told. And `CLAUDE.md`'s **ADR-0134 entry still said "the
+ADR is filed, M3 is building"** for work that had shipped in the same pull request —
+`cell-commit.ts:204-209` writes both branches the ADR specifies. The changeset beside it had the
+sequence right; the register entry did not.
+
+**The negative result is worth recording too.** Step 7 asks for specialist agents over a _real,
+unreviewed_ diff, and there is none: #508 had its four-specialist gate pass, and everything since is
+documentation. Manufacturing a review of already-reviewed code would have produced a line in this
+table and no information. The RECONCILE banner and its newest table row already agreed and the table
+was already sorted newest-first, so the note I was carrying to "fix the unsorted table" was itself
+stale — the fourth correct document this pass nearly corrected.
+
 ## 2026-09-08 — Reconciliation pass: an agent was told the audit log does not exist
 
 Run because `check:reconcile-due` fired (eight ADRs since the 2026-08-30 pass, against a threshold of

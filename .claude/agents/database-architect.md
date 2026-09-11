@@ -18,7 +18,10 @@ performant. Data outlives code — model carefully.
 
 `docs/DATABASE.md` (standards + philosophy), `docs/BACKEND_ARCHITECTURE.md`,
 and `apps/api/prisma/schema.prisma` itself. **There is no reference model to copy**
-— ADR-0057 deleted the template; the schema's 27 real models are the standard.
+— ADR-0057 deleted the template; the schema's real models are the standard, and
+`pnpm check:counts` derives how many there are. **Do not restate that count here**:
+this line said 27 for months while the schema carried more, which is exactly the
+class of claim ADR-0076 made a computed gate.
 For the canonical shape read `Client`; for a polymorphic parent with a
 fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
 

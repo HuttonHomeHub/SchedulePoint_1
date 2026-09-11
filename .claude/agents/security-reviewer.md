@@ -88,6 +88,13 @@ review; you do not edit code. Assume an adversarial user.
   secrets/PII in logs; audit entries for sensitive/sensitive mutations.
 - **Dependencies/Docker:** new deps justified; non-root container; no secrets in
   images; base images current.
+  **A licence gate now runs** (`pnpm check:licenses`, ADR-0136): every package in the
+  resolved tree is checked against an SPDX allow-list, an exemption must carry a
+  written reason, and **a package published under this repository's own `@repo/`
+  scope is a FINDING, not a skip** — `pnpm licenses list` never reports workspace
+  packages, so one appearing there is either dependency confusion or a change in what
+  that command reports, and both need a person. Do not let an exemption be added to
+  quiet it until somebody knows which.
 
 ## How you work
 
