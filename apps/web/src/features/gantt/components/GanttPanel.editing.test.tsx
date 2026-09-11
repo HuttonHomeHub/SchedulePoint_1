@@ -205,30 +205,27 @@ describe('on a plan that has not been calculated', () => {
     expect(cellUnder('Duration')).not.toHaveAttribute('aria-readonly');
 
     /**
-     * **The dates carry NO shading and no reason, and that changed with
-     * `docs/TECH_DEBT.md` #290.**
+     * **The dates are shaded WITH a reason again, and the reason is now true** (ADR-0134).
      *
-     * This used to assert `aria-readonly="true"` with a reason reading "Recalculate…" — shut with
-     * an action rather than a report of unavailability, which is the right shape for a cell that
-     * becomes editable once the action is taken. It never did. `earlyStart`/`earlyFinish` were
-     * listed in `GANTT_EDITABLE_COLUMNS` while `cellWriteFields` returned `null` for every input,
-     * so recalculating only got the planner as far as a cell that opened and refused a correctly
-     * formatted date.
+     * This assertion has been all three states, which is worth keeping rather than tidying:
      *
-     * The columns are now read-only unconditionally, so the promise is **unfulfillable in both
-     * states** and keeping it would announce a false statement to a screen-reader user — the
-     * defect class this register keeps recording, in the one channel with no way to check. Start
-     * and Finish are now ordinary read-only columns, exactly like Float and Predecessors beside
-     * them, and ADR-0082's discriminator agrees: omit when the action does not apply to the
-     * object, shade with a reason only when it is shut by a state the reader can change.
+     * 1. Originally `aria-readonly="true"` with "Recalculate the plan to set dates." — shut with an
+     *    action, the right shape for a cell that becomes editable once the action is taken. Except
+     *    it never did: `earlyStart`/`earlyFinish` sat in `GANTT_EDITABLE_COLUMNS` while
+     *    `cellWriteFields` returned `null` for every input, so recalculating got the planner as far
+     *    as a cell that opened and refused a correctly formatted date (`docs/TECH_DEBT.md` #290).
+     * 2. Then no shading at all, because with the columns read-only unconditionally the promise was
+     *    unfulfillable in BOTH states, and keeping it would announce a false statement to a
+     *    screen-reader user in the one channel with no way to check.
+     * 3. Now shaded with that same sentence, and it is fulfillable: recalculate, and a typed date
+     *    writes the constraint a drag writes.
      *
-     * The gate's `!hasComputedSchedule` branch is deliberately KEPT (`cell-gate.ts:96`) and still
-     * has its own coverage — the `percentComplete` precedent one file over: carrying the answer in
-     * the model means landing the typed-date cell (`docs/specs/gantt-editing-gaps/` M3) is a
-     * column, not a re-decision about which permission it needs.
+     * The gate's `!hasComputedSchedule` branch was deliberately kept through state 2 for exactly
+     * this — carrying the answer in the model meant landing the typed-date cell was a column rather
+     * than a re-decision about which permission it needs.
      */
-    expect(cellUnder('Start')).not.toHaveAttribute('aria-readonly');
-    expect(cellUnder('Start')).not.toHaveAttribute('aria-describedby');
+    expect(cellUnder('Start')).toHaveAttribute('aria-readonly', 'true');
+    expect(cellUnder('Start')).toHaveAccessibleDescription('Recalculate the plan to set dates.');
   });
 });
 

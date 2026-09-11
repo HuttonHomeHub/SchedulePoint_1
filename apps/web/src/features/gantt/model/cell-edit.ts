@@ -247,19 +247,21 @@ export interface GanttGridEditing {
  * were internally correct and defensible; only the relationship was wrong.
  * `cell-commit.test.ts` now asserts it.
  *
- * Three keys are deliberately present in {@link GanttCellKey} and absent here, for two different
- * reasons, and the difference matters to whoever adds one back:
+ * One key is deliberately present in {@link GanttCellKey} and absent here:
  *
  * - `percentComplete` — the grid has no Progress column yet. Carrying it in the model means adding
  *   that column later is a column, not a re-decision about which permission a progress write needs,
  *   and the gate test already covers it so the answer cannot quietly change in between.
- * - `earlyStart` / `earlyFinish` — the grid HAS these columns and they are **read-only**. The
- *   engine owns them, so a typed date must write the CONSTRAINT a drag writes rather than assert an
- *   answer the server recomputes. That is a schedule semantic needing an ADR, and it is
- *   `docs/specs/gantt-editing-gaps/` M3. **Adding either key back without landing that write
- *   re-creates #290**, which is why the assertion exists rather than a comment asking nicely.
+ * `earlyStart` / `earlyFinish` were the two keys #290 was about, and they are **back**, with the
+ * write that makes them honest — ADR-0134, landed in the same commit, never before it. A typed date
+ * writes the constraint a drag writes: an `SNET` in Early mode, a hand-placement in Visual, and a
+ * duration for a typed finish in both. **Adding a key here without a `cellWriteFields` branch that
+ * can accept something re-creates #290**, which is why the assertion exists rather than a comment
+ * asking nicely.
  */
 export const GANTT_EDITABLE_COLUMNS: Partial<Record<string, GanttCellKey>> = {
   name: 'name',
   duration: 'duration',
+  earlyStart: 'earlyStart',
+  earlyFinish: 'earlyFinish',
 };

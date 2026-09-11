@@ -880,6 +880,10 @@ export function ToolbarPlanWorkspace({
     // from the rows rather than a plan flag, so it cannot disagree with what the grid is showing.
     hasComputedSchedule: (model.activities.data ?? []).some((a) => a.earlyStart !== null),
     barDateSource,
+    // The SAME value the canvas is handed (`:1013`), from the one place `schedulingMode` is read.
+    // A typed date means different things in the two modes (ADR-0134 D1/D2), and the two surfaces
+    // reading it separately is how they would come to disagree about what a planner just did.
+    schedulingMode,
     hoursPerDayFor,
     updateFields: updateActivityFields.mutateAsync,
     announce: ganttAnnounce,

@@ -192,7 +192,9 @@ const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: st
   ['--accent', '--muted-foreground', 'a dependency arrow crossing the selected row'],
   // **The Gantt's constraint badge (M5).** A small mark beside a bar saying "this activity is
   // pinned", which sustains awareness after the one-per-session note that explained the moment is
-  // gone. It is a graphical object carrying meaning, so 1.4.11 applies — its own pair rather than
+  // gone. (That note was described here as existing before it did — it was specified, written into
+  // two docblocks as shipped, and built by neither milestone. It exists now, with the typed-date
+  // cell it explains: ADR-0134 D6, `use-gantt-grid-editing.ts`.) It is a graphical object carrying meaning, so 1.4.11 applies — its own pair rather than
   // riding in on the arrows', which is the precedent those tokens set one milestone earlier, and
   // asserted BEFORE the CSS exists.
   ['--background', '--warning-text', 'a constraint badge against the chart ground'],
