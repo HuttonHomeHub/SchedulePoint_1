@@ -1,5 +1,100 @@
 # @repo/web
 
+## 0.126.1
+
+### Patch Changes
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A float-path member that is not in the loaded plan now says why it cannot be opened. The row was
+  shaded and inert with no explanation at all, so a reader met a control that refuses and never says
+  what would make it work. The sentence is attached as a screen-reader sibling rather than folded
+  into the button, so the activity and the reason are heard as two things and not one run-on label.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Gantt: the Start and Finish columns are read-only, instead of opening an editor that refuses every value.
+  
+  Double-clicking either cell on a calculated plan opened an editor, took a keystroke, and answered
+  "That value is not something this cell accepts." to a correctly formatted date — shown and spoken.
+  No value was accepted, so the message read as though the planner had typed the date wrong.
+  
+  The refusal itself was right: the engine owns those dates, so a typed date has to write the
+  constraint a drag writes rather than assert an answer the server recomputes. What was wrong is that
+  the cells were left lit while that write was refused. They are now ordinary read-only columns.
+  
+  Typing a date into the Gantt was unbuilt when this landed, and is specified separately — the
+  specification was then built in this same release, so the columns are editable again and this
+  entry records the interval rather than the end state. See the typed-date entry beside it.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt's Start and Finish cells accept a typed date again, and now actually write one. Typing a
+  start date in Early mode pins the activity there (the same constraint dragging its bar's start edge
+  writes) and shortens the duration so the finish stays put; in Visual mode it hand-places the bar and
+  writes no constraint at all. Typing a finish date changes the duration in both modes and pins
+  nothing — which is exactly what dragging the finish edge does, so the grid and the diagram cannot
+  come to mean different things.
+  
+  The first time it happens in a session the product says what it just did, and every edit is
+  undoable with Ctrl+Z. An activity carrying a mandatory constraint refuses the edit and says where to
+  change it instead, rather than silently replacing a constraint the whole downstream chain depends
+  on.
+  
+  Dates are read in the format the cell displays (`05 Mar 2026`) or the wire format (`2026-03-05`).
+  All-numeric dates like `05/03/2026` are refused on purpose: they mean two different days to two
+  different readers, and a scheduling tool guessing is worse than one asking.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas benchmark: a display that cannot reach the floor now reports INDETERMINATE instead of FAIL.
+  
+  The probe measured the display's idle frame interval, stored it on every reading and printed it in
+  the report — and the judge never read it. So a machine whose display physically cannot produce as
+  many frames as the floor demands was failed for its refresh rate rather than for the painter's cost.
+  
+  Observed on a 30 Hz display: an arithmetic ceiling of 30.3 fps judged against the 500-activity floor
+  of 45 fps, which no painter could ever pass. The verdict now names the ceiling, the floor and the
+  arithmetic, and says the remedy is a display that can answer the question — not a lower floor and
+  not a faster painter.
+  
+  Any throttled display reaches this, not only a phone: Low Power Mode, a laptop on battery, a panel
+  negotiated at 30 Hz, a remote session, or thermal throttling under a long run.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas benchmark: a refusal now shows its whole message, not just the first line.
+  
+  When a reading cannot be judged, the panel printed only the first line of the judge's explanation
+  while the copyable report carried it in full. The dropped part is the part that matters: a
+  non-vacuity refusal ends "This is NOT a pass. A number measured on an almost-empty canvas is a
+  number about the cull" — the sentence whose job is to stop a refusal being read as a clean run.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas benchmark: the comparison-overlay measurement now says where it has got to.
+  
+  That scene announced once for a whole multi-pair run, so anyone relying on the spoken status heard
+  one sentence and then up to twenty-five seconds of nothing — indistinguishable from a run that had
+  died. It now narrates each paired run as it starts, matching what the other scene already did.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas benchmark: a reading that failed to record now says why, and does not offer a retry that cannot work.
+  
+  The panel showed one sentence — "These figures were measured but NOT recorded." — for every
+  failure, beside a live **Retry recording** button. That is right for a dropped connection or a
+  server error, where pressing it is exactly what an operator should do. It was wrong for a rejected
+  reading: the server refuses that body, so the same body is refused again, and the panel was
+  inviting a press that could never succeed with nothing on screen to tell the two apart.
+  
+  The status is now carried into the message, and the button is shaded with a reason where a retry
+  structurally cannot help. A rate limit still offers the retry — it is the one refusal worth
+  pressing again after a wait.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Canvas benchmark: the full-screen measuring canvas now says it is a test picture.
+  
+  A staff member watching an unlabelled schedule paint across the whole screen had nothing telling
+  them it was synthetic, and the obvious reading of an unlabelled plan on a staff console is that it
+  is somebody's real one — which the staff identity structurally cannot reach.
+
+- [#508](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/508) [`69207b1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/69207b1dee52df2b794494e7c5fa9272604944f0) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When somebody else's edit removes a command you were standing on, the plan workspace's toolbars now
+  hand focus back to themselves and say what left and why, instead of dropping it on the page body.
+  That drop was a WCAG 2.4.3 failure and it also silently disabled every keyboard accelerator on the
+  workspace, so the reader was stranded with no visible sign anything had happened. It is reachable
+  whenever a second Planner changes a plan-level setting — for example switching the plan out of
+  Visual mode, which takes `Clear visual start` away — and needs no pen, so it can happen to the
+  person currently editing.
+  
+  The arrow keys now also start from the first command when focus is on a toolbar itself, rather than
+  skipping it.
+
 ## 0.126.0
 
 ### Minor Changes
