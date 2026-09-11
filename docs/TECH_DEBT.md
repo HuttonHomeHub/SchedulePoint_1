@@ -2712,7 +2712,26 @@ bounds a sustained flood and the sweep bounds the residue after one stops.
 
 ### 123. One create-dialog earned-value case failed once in a full run and has not repeated
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** deferred · **Verified:** 2026-09-11
+
+> **Reclassified `open` → `deferred` on 2026-09-11, and the evidence for it is this row's own
+> history.** It has now drawn **three** separate re-verification passes (2026-09-01, 2026-09-10, and
+> the runs below), each of which added a datum the row itself says changes nothing — "an
+> intermittent claim cannot be falsified by a passing run". `open` is what keeps drawing them, and
+> the next pass would be attempt 28 costing a commit to conclude what attempts 6 through 27
+> concluded.
+>
+> `deferred` is not closing it and does not mean stale. It means what this register's vocabulary
+> says (ADR-0120): a **decision with a named trigger** — and both halves are already written here.
+> The decision is the one the 2026-09-01 entry took: stop chasing an unreproducible failure and
+> instead make the next one arrive with evidence, which is what the call-count assertion does. The
+> trigger is **the next occurrence**, and unlike a date somebody hits it rather than having to
+> remember to look.
+>
+> **Attempts 28–37, incidentally rather than as a pass**: `pnpm prepush` ran green ten times on
+> 2026-09-11 in the course of unrelated register work, each run including a full `pnpm test`. That
+> is the exact condition the single failure occurred in, and it is recorded here in one line
+> precisely so it does not become an eleventh entry. Still no reproduction; still not a falsification.
 
 `ActivityCreateDialog.earned-value.test.tsx` → "creates an activity carrying the %-complete type
 and expense (major → minor)" failed exactly once, during a full `pnpm test` on 2026-08-11, and has
