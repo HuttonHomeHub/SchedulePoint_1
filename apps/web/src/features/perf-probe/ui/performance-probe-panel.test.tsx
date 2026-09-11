@@ -432,6 +432,37 @@ describe('PerformanceProbePanel', () => {
     expect(recordMutateAsync).not.toHaveBeenCalled();
   });
 
+  it('names the measuring canvas a test picture, for a sighted reader', async () => {
+    /**
+     * `docs/TECH_DEBT.md` #259 item 9 — specified at
+     * `docs/specs/staff-performance-probe/feature-spec.md:813` and never built.
+     *
+     * Not a WCAG failure: the canvas is `aria-hidden` and the progress sentence is the accessible
+     * channel. It is a sighted-user affordance, and the reason it matters is the surface: a staff
+     * member watching an unlabelled full-screen schedule paint has no reason not to read it as
+     * somebody's real plan — which a `StaffPrincipal` structurally cannot reach (ADR-0086), so the
+     * picture contradicts the console's own guarantee.
+     */
+    let resolveRun: (value: ProbeOutcome) => void = () => {};
+    runProbe.mockReturnValue(
+      new Promise<ProbeOutcome>((resolve) => {
+        resolveRun = resolve;
+      }),
+    );
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // While the overlay is up — it only exists during a run.
+    expect(await screen.findByText(/synthetic test picture/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a real plan/i)).toBeInTheDocument();
+
+    resolveRun(measured('PASS'));
+    // And it goes with the overlay rather than lingering on the panel.
+    await waitFor(() => {
+      expect(screen.queryByText(/synthetic test picture/i)).not.toBeInTheDocument();
+    });
+  });
+
   it('prints the WHOLE refusal, including the sentence that stops it reading as a pass', async () => {
     /**
      * `docs/TECH_DEBT.md` #259 item 12. The alert rendered `message.split('\n')[0]`, so everything

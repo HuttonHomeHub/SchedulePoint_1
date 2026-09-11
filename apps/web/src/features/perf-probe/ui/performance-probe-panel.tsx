@@ -719,6 +719,27 @@ export function PerformanceProbePanel(): React.ReactElement {
             with nothing focusable in it at all — a strictly worse failure than the one being fixed.
           */
           <div className="bg-background/95 fixed inset-0 z-50 flex flex-col">
+            {/*
+              **The caption the spec asked for and nobody built** (`docs/TECH_DEBT.md` #259 item 9;
+              `docs/specs/staff-performance-probe/feature-spec.md:813` — "a visible caption naming
+              it a test picture").
+
+              Not a WCAG failure: the canvas is `aria-hidden` and the progress sentence below is
+              the accessible channel. It is a sighted-user affordance. Without it a staff member
+              watching a full-screen schedule paint has nothing telling them it is synthetic, and
+              the obvious reading of an unlabelled plan on a staff console is that it is somebody's
+              real one — which is exactly what a `StaffPrincipal` structurally cannot reach
+              (ADR-0086), so the picture contradicts the console's own guarantee.
+
+              A plain `<p>` with NO role. The progress line below already sits in the panel's
+              `aria-live` status slot, and a second live region during one run is how a progress
+              announcement overwrites a verdict — the reason the spinner beside it is a bare icon
+              rather than `<Spinner>`.
+            */}
+            <p className="text-muted-foreground px-4 pt-4 text-sm">
+              A synthetic test picture — not a real plan. Nothing here comes from a customer&rsquo;s
+              data.
+            </p>
             <Surface tone="canvas" ref={surfaceRef} className="relative flex-1 overflow-hidden">
               <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
             </Surface>

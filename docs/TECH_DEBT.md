@@ -5238,7 +5238,10 @@ the M7 api review, not by anything failing. The plan is corrected in place; this
 catching up. ADR-0071's rule needs its second half — noticing drift and stepping over it leaves the
 register exactly as wrong as not noticing. 4. **No `hasMore` signal on the history read.** The "no cursor" decision is argued and right for a
 table only a human can write to, but a caller asking for 50 against 200 rows can only infer
-there is more by comparing lengths. 5. **`GET /staff/probe-results` shares every staff member's machine fingerprint with every other
+there is more by comparing lengths. **Checked 2026-09-11: this is `#271`, which owns it** — that row
+settles the cursor-versus-total question from an api review and states why a bare `total` is the
+weaker answer. Left here as a pointer rather than worked twice; two rows for one defect is what the
+Closed-numbers ledger exists to prevent. 5. **`GET /staff/probe-results` shares every staff member's machine fingerprint with every other
 staff member.** Intended, and appropriate for a small allowlisted population; worth revisiting
 if `STAFF_EMAILS` ever grows. 6. **The erasure affordance is structural only.** `recorded_by_label` and `gpu_renderer` are
 nullable so a reading can be scrubbed; no scrub path exists anywhere in the product yet, which
@@ -5253,11 +5256,25 @@ undated-activity skip and to shift the ghost later turned exactly the two cases 
 behaviours red. The stride case asserts **determinism across two calls** rather than a particular
 stride — pinning the constant would make it a copy of the source rather than a test of it — and a
 second case bounds the changed set below half, because a stride selecting most activities would
-quietly reinstate the whole-old-plan overlay ADR-0127 CQ-2 rejected. 8. **`RecordingState` takes three booleans for one mutation status.** TanStack Query already
-exposes it as a single `status`, and the three-boolean signature admits combinations the call
-site happens never to produce. 9. **The spec's "visible caption naming it a test picture"** on the measuring canvas was never
-built. Not a WCAG failure — the canvas is `aria-hidden` and the progress sentence is the
-accessible channel — but a documented sighted-user affordance that does not exist. 10. **Several `Alert`s mount in the same commit as the panel's own live region.** `Alert` carries an
+quietly reinstate the whole-old-plan overlay ADR-0127 CQ-2 rejected. 8. ~~**`RecordingState` takes three booleans for one mutation status**~~ — **closed by
+supersession, and the finding's proposed REMEDY was wrong.** `RecordingState` no longer exists
+anywhere in the tree: `git log -S` puts it in `39de20bc` (the probe epic) and gone by `2fb3be76`
+(the sweep). What replaced it is neither three booleans nor TanStack's single `status` — it is a
+**set of in-flight step keys**, and the docblock says why: _"A sitting has up to four steps and one
+mutation object; `record.isPending` would light every failed step's spinner because one of them is
+in flight, and a reader would be told the panel is retrying readings it has not touched."_ A single
+`status` describes one mutation and there are up to four steps, so collapsing to it would have been
+a different wrong answer. The finding was right that three booleans were wrong and wrong about what
+to replace them with — worth recording, because the remedy is the part a later reader copies. 9. ~~**The spec's "visible caption naming it a test picture"**~~ — **closed 2026-09-11.** Built as
+`docs/specs/staff-performance-probe/feature-spec.md:813` words it. Still not a WCAG failure — the
+canvas is `aria-hidden` and the progress sentence is the accessible channel — and the reason it is
+worth building is the **surface**: a staff member watching an unlabelled full-screen schedule paint
+has no reason not to read it as somebody's real plan, which a `StaffPrincipal` structurally cannot
+reach (ADR-0086). The picture was contradicting the console's own guarantee. A plain `<p>` with **no
+role**, because the progress line already sits in the panel's `aria-live` slot and a second live
+region during one run is how a progress announcement overwrites a verdict — the same reason the
+spinner beside it is a bare icon rather than `<Spinner>`. Verified RED by deleting the element, and
+the case also asserts the caption **goes with the overlay** rather than lingering on the panel. 10. **Several `Alert`s mount in the same commit as the panel's own live region.** `Alert` carries an
 implicit live-region role, so the "one accessible channel" claim in the panel's docblock stops
 holding at the moment a run ends. The content is redundant rather than contradictory.
 
@@ -5310,6 +5327,42 @@ would pass equally against a panel that printed only the last line.
 
 Numbers 1, 2 and 8 are the cheapest; 10 and 11 are the two a real screen-reader user would notice
 first.
+
+---
+
+**2026-09-11 — every entry has now been checked INDIVIDUALLY, which is what this row's own caveat
+asks for. Eight of twelve are closed; four remain and none of the four is a coding task.**
+
+| entry    | state                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| item 1–3 | closed earlier (probe-sweep M4/M7)                                                              |
+| item 7   | **closed** — `revision-diff.test.ts` written, and proved to discriminate by mutating the source |
+| item 8   | **closed by supersession**, and the finding's proposed remedy was wrong                         |
+| item 9   | **closed** — the spec'd caption built, verified red by deleting it                              |
+| item 11  | **closed** — per-pair narration, verified red by removing the call                              |
+| item 12  | **closed** — the whole refusal message printed, not its first line                              |
+| item 4   | **owned by `#271`**, which settles the cursor-versus-total question. A pointer, not work here.  |
+| item 5   | **not a defect**: intended, and conditional on `STAFF_EMAILS` growing.                          |
+| item 6   | **not a gap this epic added**: matches ADR-0085's "decision only, nothing built" status.        |
+| item 10  | **a decision**, and its three candidates all touch a shared primitive (ADR-0105).               |
+
+<!-- prettier-ignore -->
+> **The table above leads with `item N` rather than `N`, and the first draft did not.** The rule is
+> written into this file's own conventions block — a data table in a detailed row must not lead with
+> a bare number, because A6 reads any `| N | … | … |` line as a ledger entry — and it was written an
+> hour before being broken here. The gate caught it, which is the argument for having one: a
+> convention in prose is read by whoever goes looking for it, and that is never the person about to
+> violate it.
+
+**So the row stays open on 10 alone**, since 4 belongs to another row and 5 and 6 are records rather
+than work. What 10 needs is somebody choosing which channel owns a run's outcome — the visible
+result, the live region, or a `Panel` that can suppress its status when its body already announces —
+and every one of those is a change to a shared primitive, which is a spec.
+
+**Two of the eight were more than tidying, and both were invisible to every gate.** Item 12 dropped
+the sentence whose entire job is to stop a refusal being read as a pass, on screen only, while the
+copyable report carried it. Item 11 left a screen-reader user with silence for the length of a run.
+Neither could fail a test, because no test asserted either.
 
 **And one thing the reviews did not find, because it is only visible in a log.** The API e2e run
 prints, twice per run and reproducibly, `a retention sweep failed; the next run will retry it` for
