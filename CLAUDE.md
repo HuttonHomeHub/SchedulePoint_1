@@ -206,7 +206,10 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
   by commitlint (git hook + expected in PR titles).
 - Format: `type(scope): subject` — e.g. `feat(api): add a recurring job scheduler`.
 - Allowed types: `feat, fix, docs, style, refactor, perf, test, build, ci, chore,
-revert`. Scopes: `web, api, config, types, interchange, db, ci, docs, deps, release, repo`.
+revert`. Scopes: `web, api, config, types, interchange, db, ci, docs, deps, deps-dev, release,
+repo` — `deps-dev` is Dependabot's own output for a development-dependency bump
+  (`.github/dependabot.yml` sets `prefix-development`), kept distinct from `deps` because
+  `main`'s history already records which bumps were development-only.
 - Breaking changes: append `!` (`feat(api)!: …`) and a `BREAKING CHANGE:` footer.
 - Subject: imperative mood, lower-case, no trailing period, ≤ 100 chars.
 
