@@ -4273,9 +4273,25 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > nothing about that pen, and the first user's next refetch unmounts `Clear visual start` under
 > whatever focus is on it.
 >
-> What remains is the browser half **only**: whether focus then lands on `<body>` or is caught. It
-> is a two-session fixture, which
-> `apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts` now shows how to build.
+> **Measured 2026-09-11, and (c) is SETTLED: the focus hazard is NOT reachable by this route.**
+> `apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts` drives two Planner sessions: A
+> holds the pen on a Visual-mode plan with an activity selected and focus **on** `Clear visual
+start` (asserted, not assumed); B flips the plan to `EARLY` through the public API holding no
+> pen; A then waits out the 30 s `staleTime` and makes a real background→foreground transition.
+>
+> Result: the server reports `EARLY`, and **the control is still on A's screen with focus still on
+> it**. Nothing unmounts, so nothing can drop focus. No WCAG 2.4.3 failure by this route.
+>
+> **The instrument was wrong first, and that is worth carrying.** The first version kept A in front
+> and dispatched a synthetic `visibilitychange`, reasoning that `bringToFront` might restore focus
+> and confound the reading. It returned the same verdict — and the trigger had almost certainly
+> never fired, because TanStack Query's focus manager refetches on a **transition** into focus and
+> a synthetic event on an already-focused page sets the state it already had. Reported then, this
+> would have been a confident claim about the product from an instrument that did nothing. The
+> answer only counts because the second version makes the transition real.
+>
+> **What the reading found instead is filed as #295**: the change does not reach the other reader
+> at all, so they are looking at a Visual-mode control for a plan the server says is Early.
 >
 > Worth stating because it changes who would find it: the remaining path is not something a single
 > planner can do to themselves, so no solo journey will ever reproduce it.
@@ -6639,3 +6655,41 @@ records that being load-bearing in eight of ten lock states.
 **What the reading does NOT cover**, stated rather than implied: the Org Admin **override** branch,
 which offers a different control set and may be wider or narrower; one machine, one browser, one
 plan; and only the three widths probed.
+
+### 295. A peer's plan-governance change does not reach another reader's open workspace
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (measuring #204(c)) · **Size:** S · **Owner:** web
+
+**Observed, not inferred** (`apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts`). Two
+Planner sessions on one plan. A has it open in **Visual** mode with an activity selected. B changes
+the plan to **Early** through `PATCH …/plans/:planId`, which succeeds — it is "Planner or Org Admin;
+optimistic locking" and `assertHoldsPen` appears nowhere in `apps/api/src/modules/plans/`, so B
+needs no pen and A keeps hers.
+
+A then waits past the client's 30 s `staleTime` and makes a **real** background→foreground
+transition, which is what `refetchOnWindowFocus: true` exists for. The server reports `EARLY`. A's
+screen still shows `Clear visual start` — a control whose entire visibility rule is
+`schedulingMode === 'VISUAL'` (`conflict-remedy.ts:111-115`).
+
+**So the screen and the record disagree, and nothing on screen says so.** A is working in a mode the
+plan is no longer in, and the first thing she will notice is a recalculation that does not do what
+Visual mode does.
+
+**The consequence is mild today and the shape is not.** `visualStart` is advisory and ignored in
+Early mode, so pressing the stale control writes a field the engine will not read rather than
+corrupting anything. What is wrong is the class: this register treats a screen disagreeing with the
+record as worse than either being wrong on its own (ADR-0089's summary-parent case, in those words),
+because the reader has no way to tell.
+
+**Why it was not diagnosed here.** Establishing _why_ the refetch does not land — whether the
+workspace reads `schedulingMode` from a query that is not invalidated, from route-loader data, or
+from a cache key the focus refetch does not cover — is a different piece of work from establishing
+_that_ it does not, and guessing between those three in a register row would be exactly the
+unverified claim this file exists to remove. The probe is committed and re-runnable, so whoever
+picks this up starts from a reproduction rather than a description.
+
+**It generalises past this one field.** `plan-governance-fields.ts` lists `schedulingMode` among a
+set of plan-level settings that change how everyone's numbers are computed — ADR-0073 C3.2 audits
+them precisely because they are "the rules other people's work is judged by". If one of them does
+not propagate, the others are worth checking with it; nothing here establishes that they behave the
+same, and nothing establishes that they differ.
