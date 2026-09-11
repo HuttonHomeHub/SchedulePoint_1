@@ -7648,8 +7648,18 @@ never changed. `GET /commits/{sha}/check-runs` then returns **six** runs for fiv
 cancellation applies to runs that are **in progress**, and this one had finished 44 seconds before
 the edit. There was nothing for it to cancel.
 
-**The correct rule is one clause longer: dedupe by check-run name, keep the most recently started,
-then require every survivor to be `completed` / `success`.** Without that clause a reader following
+**A later push sheds it, and that is what makes the trap narrow and worth naming.** Check runs are
+keyed to a **commit**, so when this branch was pushed again for an unrelated reason the new head
+(`e576fdb1`) carried only passing title runs — verified by asking for both SHAs. The stale failure
+is still on `d98785fe` and always will be; it simply stopped being the head's problem.
+
+So the case that bites is **a title corrected with no new commit** — which is how a title normally
+_is_ corrected, since fixing one requires no push at all. Put the other way round: the stale failure
+disappears only if something unrelated happens to advance the head, so the reader cannot rely on it
+clearing and cannot tell from the list whether it did.
+
+**The correct rule is therefore one clause longer: dedupe by check-run name, keep the most recently
+started, then require every survivor to be `completed` / `success`.** Without that clause a reader following
 §19.9 to the letter either refuses a mergeable PR, or — far worse, and the reason this is filed
 rather than shrugged at — learns that some red checks are fine to wave through, which is precisely
 the habit the section exists to prevent on a repository where nothing else can stop a bad merge.
