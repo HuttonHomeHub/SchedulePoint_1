@@ -252,6 +252,19 @@ test('#204(c) — a peer flips the scheduling mode while focus sits on Clear vis
   // Give the refetch a chance to land and the tree to settle before either reading is taken.
   await a.waitForTimeout(3_000);
   const controlStillThere = (await clear.count()) > 0;
+  /**
+   * **F2, the epic's kill switch, read at the same moment as `focusAfter`.**
+   *
+   * `docs/specs/unmount-focus-handoff/` M0-T1 asks a question this probe had no field for: when
+   * the control goes, does the **bar** go with it? If the whole `role="toolbar"` unmounts then the
+   * case belongs to `SelectionActionsBar`'s existing whole-bar `restoreFocus` cleanup
+   * (`selection-actions.tsx:964-985`) and a shared roving-container hook would be the wrong
+   * remedy — a fifth answer to a case the product already answers.
+   *
+   * Located by role and name, never by copy: the ADR-0099 M5 correction, and the bar's accessible
+   * name is generated from the selected activity.
+   */
+  const barStillThere = (await a.getByRole('toolbar', { name: /^Actions for / }).count()) > 0;
   const after = await activeElement(a);
 
   writeMeasurement('techdebt-204c-mode-flip-focus', {
@@ -260,6 +273,7 @@ test('#204(c) — a peer flips the scheduling mode while focus sits on Clear vis
     planReadsByReaderAfterFlip: planRequests,
     transition: 'simulated — headless Chromium fires no visibilitychange on bringToFront',
     controlStillPresentOnReadersPage: controlStillThere,
+    barStillPresentOnReadersPage: barStillThere,
     focusBefore: before,
     focusAfter: after,
     // The verdict, computed rather than left for a reader to infer from four fields. There are
@@ -276,7 +290,12 @@ test('#204(c) — a peer flips the scheduling mode while focus sits on Clear vis
             'on screen. The focus hazard is NOT reachable by this route; what IS true is that the ' +
             'reader is looking at a control for a mode the plan is no longer in.'
           : after.isBody
-            ? 'FOCUS DROPPED TO BODY — WCAG 2.4.3, the hazard is real'
+            ? 'FOCUS DROPPED TO BODY — WCAG 2.4.3, the hazard is real. ' +
+              (barStillThere
+                ? 'The BAR survived the item (F2 holds): this is the per-item case, and the ' +
+                  'container is there to catch focus.'
+                : 'The WHOLE BAR went (F2 FAILS): this is the container case, which ' +
+                  "`SelectionActionsBar`'s own `restoreFocus` cleanup already owns.")
             : `the control unmounted and focus was caught by ${after.tag} "${after.name}" — no drop`,
   });
 

@@ -117,7 +117,10 @@ redesigned before any product code is written.
   against its tables.
 - **Testing:** n/a.
 - **Development steps:**
-  1. `rg '<Toolbar\b|<Deck\b' apps/web/src --glob '!*.test.*'` — confirm four production mountings.
+  1. `rg '<Toolbar\b|<Deck\b' apps/web/src --glob '!*.test.*'` — confirm the production mountings.
+     **Measured 2026-09-11: there are THREE, not the four this task originally named** — see
+     `m0-measurement.md`. The design is unaffected (§4.2's reopening threshold is one container) and
+     the number is corrected here rather than rounded away.
   2. `rg 'isVisible:' apps/web/src --glob '!*.test.*'` — confirm 17 declarations and re-classify each.
   3. Record any drift in `m0-measurement.md`. **A new production mounting or a new flippable
      predicate changes nothing about the design** — it strengthens it — but an enumeration that shrank
@@ -224,7 +227,7 @@ milestone that does (ADR-0081 §2).
 
 ## Milestone M2 — Both primitives adopt it (user-facing)
 
-**Outcome:** on any of the four production containers, a focused command removed by a peer hands
+**Outcome:** on any of the three production containers (M0-T3 re-derived the count; the spec said four), a focused command removed by a peer hands
 focus to its container instead of to `<body>`. The generic sentence is announced; the _reason_ lands
 at M3.
 **Entry point:** no new control. The capability is reached on the **plan workspace** — the canvas
