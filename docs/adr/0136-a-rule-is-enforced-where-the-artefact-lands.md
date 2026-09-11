@@ -307,6 +307,13 @@ first-time contributors"** is the setting that decides whether a fork's pull req
 postinstall script. All three are owner actions, recorded here so "shipped" does not read as
 "enforced".
 
+**It is exempt from `docs/ROADMAP.md` rather than listed on it**, with `scripts/adr-coverage.json`
+carrying the reason — the same class as ADR-0124 and ADR-0131 a week earlier. A roadmap entry was
+written first and then removed: the plan named the exemption and the departure went unnoticed until
+the plan was re-read, which is this epic's own subject one document along. The argument is the
+exemption string's: a planner cannot act on `check:licenses`, and a roadmap that lists CI gates
+stops being read.
+
 **No product behaviour changes at all.** The CPM engine is not imported, no migration runs, and no
 user-facing surface is touched. `apps/api` and `apps/web/src` contribute **zero files** to the
 diff: the web half is a build hook, a budget file, a gate and one `vite.config.ts` line.

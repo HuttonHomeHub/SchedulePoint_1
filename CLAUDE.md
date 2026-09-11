@@ -4509,8 +4509,11 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   counted neither, which is ADR-0076 Class 1 inside the ADR about Class 1, one paragraph from the
   corrected assertion count it had already fixed for the same reason. The two filed as
   `docs/TECH_DEBT.md` #298 both change shared mechanisms, and folding a shared-gate change into an
-  epic's last milestone is what ADR-0105 exists to stop. #244 and #48(b) close. **The CPM engine is not imported and
-  no migration runs**; `apps/api` and `apps/web/src` contribute zero files to the diff.
+  epic's last milestone is what ADR-0105 exists to stop. #244 and #48(b) close. It is **exempt from
+  `docs/ROADMAP.md` rather than listed on it** (the ADR-0124/ADR-0131 class): a roadmap entry was
+  written and then removed when the plan was re-read, since a planner cannot act on a CI gate.
+  **The CPM engine is not imported and no migration runs**; `apps/api` and `apps/web/src`
+  contribute zero files to the diff.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
