@@ -1,3 +1,5 @@
+import { measureIdleInterval, summariseFrameStamps } from '../model/pacing';
+
 import { scaleScene } from './scale-scene';
 
 import type { GhostBar } from '@/features/tsld/render/lenses';
@@ -74,11 +76,6 @@ export interface DiffCounts {
    */
   visibleBars: number;
   visibleLinks: number;
-}
-
-export function percentile(sorted: number[], p: number): number {
-  const idx = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p));
-  return sorted[idx] ?? 0;
 }
 
 export function iso(dayOffset: number): string {
@@ -221,26 +218,19 @@ export function countVisible(
 }
 
 /**
- * Measure the display's own frame interval with the canvas idle.
+ * The display's own frame interval, **re-exported rather than re-implemented** (#258).
  *
  * Not decoration, and the reason is `measure-draw-in-browser.js`'s: without it there is nothing to
  * call a dropped frame *against*, and a 120 Hz machine and a 60 Hz one would both be scored against
  * 16.7 ms — so the faster machine would be reported as dropping half its frames.
+ *
+ * There was a second implementation here, identical to `model/pacing.ts`'s apart from taking
+ * `frames` as a required argument — and taking its p50 through this file's own percentile, which
+ * used a different index from the other three. So the interval this scene measured and the interval
+ * `runner/run-probe.ts` measures were not computed the same way, on the very quantity that defines
+ * what "dropped" means for each of them.
  */
-export async function measureIdleInterval(frames: number): Promise<number> {
-  const stamps: number[] = [];
-  await new Promise<void>((resolve) => {
-    const tick = (t: number): void => {
-      stamps.push(t);
-      if (stamps.length > frames) resolve();
-      else requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-  const gaps = stamps.slice(1).map((t, i) => t - (stamps[i] ?? t));
-  gaps.sort((a, b) => a - b);
-  return percentile(gaps, 0.5);
-}
+export { measureIdleInterval };
 
 /** One sustained programmatic pan, painted under rAF, reporting how the FRAMES landed. */
 export async function panRun(
@@ -286,19 +276,9 @@ export async function panRun(
     requestAnimationFrame(tick);
   });
 
-  const gaps = stamps.slice(1).map((t, i) => t - (stamps[i] ?? t));
-  // A frame is "dropped" when its interval exceeds 1.5x the display's own — i.e. at least one
-  // whole vsync was missed. Not a fixed 16.7 ms, per `measureIdleInterval`'s docblock.
-  const dropped = gaps.filter((g) => g > idleInterval * 1.5).length;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  const mean = gaps.reduce((s, g) => s + g, 0) / Math.max(1, gaps.length);
-  return {
-    frames: gaps.length,
-    droppedPct: (dropped / Math.max(1, gaps.length)) * 100,
-    intervalP50: percentile(sorted, 0.5),
-    intervalP95: percentile(sorted, 0.95),
-    fps: 1000 / mean,
-  };
+  // One shared rule (#258) — the dropped-frame threshold, the percentile and the gap derivation
+  // all live in `model/pacing.ts` now, so this scene and `canvas-draw` cannot answer differently.
+  return summariseFrameStamps(stamps, idleInterval);
 }
 
 export interface BenchOptions {
