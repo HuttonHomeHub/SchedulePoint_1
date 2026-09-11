@@ -1542,7 +1542,12 @@ file, one layer up.
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+**Reclassified `open` → `deferred` on 2026-09-11, having walked all three.** (b) and (c) are closed.
+(a) is a **named deferral with its trigger already written in this row's own Remediation line** —
+"with the next audit-coverage slice" — because the fix is a fourth chip category, which touches
+ADR-0073 C1's vocabulary and its **derived** cap and so cannot honestly be bolted on alone.
 non-blocking by its reviewer and is recorded rather than rushed, per the ADR-0064/0073 precedent.
 
 - **(a) `AUDIT_ACTION_CATEGORY` files the three new password actions under `sign-ins`**
@@ -2395,12 +2400,39 @@ for a non-writer, so the trigger disappears. ADR-0082 records it as unchanged-by
 component review's point stands: it belongs with `plan-actions-menu.tsx` in #114 as the same
 "no reason to show" shape rather than filed apart from it. Treat #114 as covering all three.
 
-**5. `DeleteActivityFn`'s `| void` branch is vestigial.** Since #113 every real caller resolves the
-object, so `pasteActivitiesCommand`'s runtime `if (result && typeof result === 'object')` guard is
-dead weight. Tightening the type is a small cleanup with no behavioural change.
+**5. ~~`DeleteActivityFn`'s `| void` branch is vestigial.~~ CLOSED 2026-09-11.** The claim was
+checked before it was acted on: `useDeleteActivity` resolves `Promise<{ deleteBatchId: string }>`
+and its own comment records `#113` typing it away from `void`, so the union described a shape the
+product cannot produce. The type is tightened and `pasteActivitiesCommand`'s runtime guard is gone.
+
+> **The compiler found the union's only remaining users, and they were fakes.** Seven test doubles
+> resolved `void` — three in `commands.test.ts`, three in `paste-command.test.ts`, plus one in a
+> sibling harness — every one a convenience fake in a case that ignores the return, not deliberate
+> coverage of a `void` path. So the union was being kept alive by tests modelling a shape `#113`
+> removed, which is this register's "a fixture the real registry does not contain" shape.
+>
+> **Coverage of the real behaviour is unchanged and was verified rather than assumed**: the non-flat
+> batch path is exercised at `paste-command.test.ts:168` with a fake resolving `cascade-batch` and
+> asserts `restoreBatch` receives exactly that. The guard's TRUE arm was covered; only its
+> unreachable FALSE arm and the fakes modelling it are gone. 87 `features/undo-redo` tests pass
+> unchanged.
+>
+> **One over-reach, caught by the compiler in the same pass**: a first edit replaced every
+> `vi.fn(() => Promise.resolve())` in the file, which swept in three `DeleteDependencyFn` fakes that
+> genuinely resolve `void`. Reverted and redone bound to the identifier. A blind find-and-replace on
+> a shape that two different types share is exactly how a cleanup becomes a defect.
 
 **Risk:** (1) and (2) together are a real capability gap for keyboard-driven planners and should be
 taken as one slice. (3)–(5) are consistency and tidiness.
+
+**Walked item by item 2026-09-11, and this row stays `open` deliberately.** (4) was already closed
+and (5) is closed here, but (1) and (2) are **owed capability work with no trigger** — a keyboard
+planner still nudges twelve selected bars one at a time while a mouse drag moves all twelve — so
+`deferred` would be wrong in the way `#93`/`#97`/`#149`/`#155`/`#174`/`#184` were `open` wrongly.
+(3) is narrower than it reads and its blocker has lapsed: the Tooltip primitive now exists
+(ADR-0117), so what survives is one product-wide question — should a shaded LABELLED control's
+reason become a visible tooltip? — which ADR-0082's rule turns on and which the fix-slice epic
+declined as its CQ-2. That needs a review, not a default.
 
 ### 117. CSP report delivery is unverified end to end
 

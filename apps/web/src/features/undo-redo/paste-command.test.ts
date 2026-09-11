@@ -38,7 +38,7 @@ function harness(
     Promise.resolve(created.map((c) => restored(c.id, c.version + 1))),
   );
   // A FLAT paste: every clone is top-level, so `roots === created` and undo takes the batch path.
-  const deleteActivity = vi.fn(() => Promise.resolve());
+  const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
   const command = pasteActivitiesCommand({
     created,
     roots: created,
@@ -118,7 +118,7 @@ describe('pasteActivitiesCommand', () => {
     const command = pasteActivitiesCommand({
       created: [{ id: 'c1', version: 1 }],
       roots: [{ id: 'c1', version: 1 }],
-      deleteActivity: vi.fn(() => Promise.resolve()),
+      deleteActivity: vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' })),
       bulkDelete,
       restoreBatch: vi.fn(() => Promise.resolve([])),
       label: 'Duplicate “Excavate”',
@@ -150,7 +150,7 @@ describe('pasteActivitiesCommand — a band, where the set is not flat', () => {
     const bulkDelete = vi.fn(() =>
       Promise.reject(new Error('SUMMARY_NOT_BULK_ELIGIBLE')),
     ) as unknown as Parameters<typeof pasteActivitiesCommand>[0]['bulkDelete'];
-    const deleteActivity = vi.fn(() => Promise.resolve());
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
     const command = pasteActivitiesCommand({
       created,
       roots: [{ id: 'summary', version: 1 }],

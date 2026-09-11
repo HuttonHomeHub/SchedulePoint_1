@@ -298,8 +298,17 @@ export function updateCommand(params: {
 
 /** `useCreatePlacedActivity().mutateAsync` — a canvas-placed create; resolves to the created row. */
 export type CreatePlacedActivityFn = (input: PlacedActivityInput) => Promise<ActivitySummary>;
-/** `useDeleteActivity().mutateAsync` — soft-deletes an activity by id. */
-export type DeleteActivityFn = (activityId: string) => Promise<{ deleteBatchId: string } | void>;
+/**
+ * `useDeleteActivity().mutateAsync` — soft-deletes an activity by id and resolves the batch it was
+ * deleted in, so an undo can restore exactly what it removed.
+ *
+ * **The `| void` branch is gone** (`docs/TECH_DEBT.md` #116 item 5). It dated from before `#113`
+ * typed the mutation to its body, and the route has answered `200 { deleteBatchId }` since — which
+ * `use-activities.ts:486-488` records at the hook. Carrying the union meant every consumer had to
+ * narrow a case the product could not produce, and `pasteActivitiesCommand` carried a runtime
+ * `typeof result === 'object'` guard for it: dead weight that read as a real branch.
+ */
+export type DeleteActivityFn = (activityId: string) => Promise<{ deleteBatchId: string }>;
 
 /**
  * A small state machine over an entity that either exists (a known live id) or doesn't. Both the
@@ -1100,8 +1109,9 @@ export function pasteActivitiesCommand(params: {
         // band path produces exactly one — and is why a multi-root non-flat paste is not offered.
         batchId = null;
         for (const root of roots) {
-          const result = await deleteActivity(root.id);
-          if (result && typeof result === 'object') batchId = result.deleteBatchId;
+          // No narrowing: `DeleteActivityFn` resolves the batch (#116 item 5). The guard that used
+          // to stand here was for a `void` the route has not returned since `#113`.
+          batchId = (await deleteActivity(root.id)).deleteBatchId;
         }
       }
       live = null;
