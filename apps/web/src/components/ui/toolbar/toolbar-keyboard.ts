@@ -115,3 +115,34 @@ export function containerShouldStandDown(event: {
 }): boolean {
   return event.defaultPrevented || event.nativeEvent.isComposing === true;
 }
+
+/**
+ * **Where a navigation key lands, given where focus is now.** Shared by {@link Toolbar} and
+ * {@link Deck} for the reason the rest of this module is shared: they had the wrap arithmetic
+ * twice, and a rule kept in two places is a rule that will eventually be two rules.
+ *
+ * `from` is `-1` when focus is **on the container itself** rather than on one of its stops. That
+ * state did not exist before the focus handoff (`use-focus-handoff.ts`) and is now the state a
+ * reader is left in whenever a peer's write removes the control they were standing on — so it is
+ * exactly the state their next key press comes from.
+ *
+ * **It resolves to the FIRST stop, not to "one past the current one".** Measured before it was
+ * changed: with focus on the container, ArrowRight landed on the **second** item, because both
+ * primitives clamped `-1` to `0` and then added one. The first command was unreachable by the key
+ * a reader would press first, on the one surface this hook exists to put them on. The plan for that
+ * hook asserted the opposite — that `current === -1` already resolved to the first stop — which is
+ * true of the clamp and false of what the clamp then feeds.
+ *
+ * ADR-0082's ArrowUp defect is the same arithmetic seen from the other end, and is why `-1` must
+ * never fall through to the bare modulo: `(-1 - 1 + n) % n` is `n - 2`, the second-to-last.
+ */
+export function rovingIndexFor(key: string, from: number, count: number): number {
+  if (count === 0) return -1;
+  const last = count - 1;
+  if (key === 'Home') return 0;
+  if (key === 'End') return last;
+  const isNext = key === 'ArrowRight' || key === 'ArrowDown';
+  // Focus is on the container: the sequence starts, it does not continue.
+  if (from < 0) return isNext ? 0 : last;
+  return isNext ? (from + 1) % count : (from - 1 + count) % count;
+}

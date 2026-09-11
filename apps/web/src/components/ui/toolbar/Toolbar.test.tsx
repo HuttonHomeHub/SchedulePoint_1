@@ -459,3 +459,33 @@ describe('Toolbar (APG primitive)', () => {
  * number of passes rather than a chain, and that a context change that alters no width does not
  * multiply them. Both are properties the code has independently of layout.
  */
+
+describe('arrows from the container itself', () => {
+  /**
+   * The state the focus handoff creates: a peer's write removed the control a reader was standing
+   * on, so focus is on the `role="toolbar"` container. Their next key press must reach the FIRST
+   * command — before `rovingIndexFor` it reached the second, measured, because the clamp to `0`
+   * was followed by an increment. Verified red against that arithmetic.
+   */
+  it('lands on the first item, not the second', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" />);
+    const bar = screen.getByRole('toolbar', { name: 'T' });
+    const first = bar.querySelector<HTMLElement>('[data-toolbar-item]')!;
+    bar.focus();
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('lands on the last item going backwards', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" />);
+    const bar = screen.getByRole('toolbar', { name: 'T' });
+    const stops = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')];
+    bar.focus();
+
+    fireEvent.keyDown(bar, { key: 'ArrowLeft' });
+
+    expect(document.activeElement).toBe(stops.at(-1));
+  });
+});

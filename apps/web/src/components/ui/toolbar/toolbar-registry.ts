@@ -417,6 +417,25 @@ export interface ToolbarItem<Ctx> {
   /** Human reason shown/announced when disabled (e.g. "Start editing to add activities"). */
   disabledReason?: (ctx: Ctx) => string | undefined;
   /**
+   * Why this item can VANISH, announced when it is removed while a reader was standing on it
+   * (`use-focus-handoff.ts`, `docs/TECH_DEBT.md` #204(c)).
+   *
+   * **A static string, never `(ctx) => string`, and the asymmetry with `disabledReason` above is
+   * the point rather than an oversight.** A function has no honest moment to run: evaluated at
+   * focus time it describes the world *before* the change, in the present tense, about a fact that
+   * is about to stop being true; evaluated afterwards there is no item left to evaluate against —
+   * it has left the resolved set, which is the premise of the whole mechanism. A sentence about the
+   * **condition** ("This action applies only while the plan is scheduled in Visual mode.") is true
+   * in both worlds, which makes the trap unreachable instead of merely avoided.
+   *
+   * Optional, by product-owner decision: roughly forty registry items would each need a sentence
+   * written before the focus repair could ship, and a rushed sentence is worse than a generic one.
+   * A development-only warning marks each gap the first time it is reached. Without one the reader
+   * is still told what left and where they now are — the WCAG 2.4.3 obligation — and told nothing
+   * about why.
+   */
+  lostReason?: string;
+  /**
    * A description read to assistive tech **on focus**, when the item's own name does not carry a
    * fact a sighted user can already see beside it (ADR-0094 M3-T2).
    *

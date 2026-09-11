@@ -1,6 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { containerShouldStandDown, TOOLBAR_NAV_KEYS, vetoesKey } from './toolbar-keyboard';
+import {
+  containerShouldStandDown,
+  rovingIndexFor,
+  TOOLBAR_NAV_KEYS,
+  vetoesKey,
+} from './toolbar-keyboard';
+import { useToolbarFocusHandoff } from './use-focus-handoff';
 import {
   resolveItems,
   type ResolvedToolbarItem,
@@ -205,17 +211,13 @@ export function Deck<Ctx>({
       if (vetoesKey(event.target, event.key)) return;
       const nodes = focusables();
       if (nodes.length === 0) return;
+      // `-1` — focus is somewhere the deck does not own, including **on the container itself**,
+      // which is where the focus handoff leaves a reader. `rovingIndexFor` starts the sequence from
+      // there rather than continuing it; the old clamp to `0` then added one, so ArrowRight skipped
+      // the first stop. ADR-0082's ArrowUp defect is the same arithmetic from the other end, and is
+      // why `-1` must never reach the bare modulo.
       const current = nodes.findIndex((n) => n === document.activeElement);
-      // `-1` (focus is somewhere the deck does not own) resolves to the first stop rather than to
-      // `nodes.length - 1`, which is what a bare `indexOf` arithmetic would give and is the
-      // ArrowUp-lands-on-the-second-to-last defect ADR-0082 records.
-      const from = current === -1 ? 0 : current;
-      let next = from;
-      if (event.key === 'Home') next = 0;
-      else if (event.key === 'End') next = nodes.length - 1;
-      else if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
-        next = (from + 1) % nodes.length;
-      else next = (from - 1 + nodes.length) % nodes.length;
+      const next = rovingIndexFor(event.key, current, nodes.length);
       event.preventDefault();
       nodes[next]?.focus();
     },
@@ -243,13 +245,30 @@ export function Deck<Ctx>({
     activeId !== null && stopIds.includes(activeId) ? activeId : (stopIds[0] ?? null);
   const tabIndexFor = (id: string): number => (id === rovingId ? 0 : -1);
 
+  // **Deriving the roving stop and catching dropped focus are two different jobs**, and the
+  // derivation above only does the first: it decides which item carries `tabIndex={0}`, never where
+  // the browser's focus ring is. When a peer's write removes the item a reader is standing on, the
+  // ring is already on `<body>` — `docs/TECH_DEBT.md` #204(c). Shared with `Toolbar` for the reason
+  // `toolbar-keyboard.ts` exists: a rule these two primitives each implement drifts the moment one
+  // is fixed.
+  const focusHandoff = useToolbarFocusHandoff({
+    containerRef,
+    resolvedIds: stopIds,
+    toolbarLabel: label,
+    lostReasonFor: (id) => items.find((item) => item.id === id)?.lostReason,
+  });
+
   return (
     <div
       ref={containerRef}
       role="toolbar"
       aria-label={label}
       aria-orientation="horizontal"
+      // Programmatically focusable only — the handoff's destination. A negative tabindex is skipped
+      // by sequential navigation, so the deck still has exactly one Tab stop.
+      tabIndex={-1}
       onKeyDown={onKeyDown}
+      {...focusHandoff}
       // **Two declared rows, as plain `<div>`s inside the one `role="toolbar"`.**
       //
       // Not two toolbars: that would be two Tab stops into one surface. Not a grid: it would align
@@ -356,7 +375,15 @@ export function Deck<Ctx>({
                       >
                         {section.map((r) =>
                           r.item.render ? (
-                            <span key={r.item.id} className="inline-flex items-center">
+                            // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
+                            // `focusables()` queries `[data-toolbar-focusable]` in document order
+                            // and a duplicate marker would put the wrapper in the roving walk. See
+                            // `Toolbar.tsx`'s copy of this wrapper.
+                            <span
+                              key={r.item.id}
+                              data-toolbar-item-scope={r.item.id}
+                              className="inline-flex items-center"
+                            >
                               {r.item.render(context, {
                                 disabled: !r.enabled,
                                 disabledReason: r.disabledReason,
