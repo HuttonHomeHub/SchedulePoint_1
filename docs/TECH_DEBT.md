@@ -7026,6 +7026,20 @@ read `[data-activities-bar]`'s height as **51** where each asserts **41**, at ev
 case lists, at rest with nothing selected. Two independent fixtures and two independent assertions
 reaching the same number is why this is filed as observed rather than as a flake.
 
+**A THIRD reproduction was already in this register and nobody had noticed.** `#294`'s table,
+measured 2026-09-11 by a different spec (`tech-debt-287-pen-foot-row.spec.ts`) on a different
+fixture, records the foot row at **51 px** at both 1646 and 1920 with no pen request outstanding —
+the same number, arrived at independently. That row read it as a baseline and compared the delta
+against it; it never compared the baseline itself against ADR-0115's assertion, so a figure that
+contradicts a pinned equality sat in the register as an unremarkable control. It also reads **87 px
+at 1440**, so whatever is happening is width-dependent and worse narrow.
+
+**That also narrows `#294`'s explanation.** It accounts for the gap by fixture — ADR-0115's
+equality "is true of the state it measures and says nothing about this one" — which is right about
+the request branch and does not survive here: the 41 fails in ADR-0115's **own** at-rest fixture.
+The baseline moved; the request branch is a separate cost on top of a baseline that is already 10 px
+over.
+
 **Ten pixels of diagram, and ADR-0115's equality is the thing that fails.** That decision measured
 the foot row at 41 px in both states at 1920 and 1646 and pinned it as an **equality** precisely
 because the previous bound (`<= 120 px`) could not tell the fixed state from the broken one. The
@@ -7089,6 +7103,13 @@ the row; put the hand-off in the pen's own popover rather than inline; or accept
 already withheld a mode statement per kind for exactly this reason, so there is precedent for
 trimming — but this cluster is the one place the product names _who_ holds the pen, and ADR-0112
 records that being load-bearing in eight of ten lock states.
+
+> **Its "no request" column is a finding in its own right, spotted 2026-09-11 and filed as `#296`.**
+> 51 px at 1646 and 1920 is ADR-0115's pinned **41 px** equality, missed by ten — and this table
+> records it twice while reading it as a baseline. The fixture explanation below is right about the
+> request branch and does not cover that: the 41 fails in ADR-0115's own at-rest fixture too, so
+> this row's 76–80 px sits on top of a baseline that is already over. The two are separable and
+> `#296` owns the baseline half.
 
 **What the reading does NOT cover**, stated rather than implied: the Org Admin **override** branch,
 which offers a different control set and may be wider or narrower; one machine, one browser, one
