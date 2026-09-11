@@ -7624,3 +7624,41 @@ unawaited on purpose.
 The **cheap** alternative — skipping the boot sweep under test — is explicitly **not** recommended:
 it would silence the symptom by removing the only coverage the boot path has, and this repository
 has an ADR about exactly that shape of fix.
+
+### 304. A superseded check run keeps its failure, so CLAUDE.md §19.9's rule refuses a PR that is fine
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (hit while merging PR #514) · **Size:** S · **Owner:** repo
+
+CLAUDE.md §19.9 is this repository's **only** merge gate — `main` carries no branch protection by
+product-owner decision (§8) — and it says to read the check runs for the PR's current head and
+"confirm **every one** is `completed` with `conclusion: success`". Taken literally that is wrong,
+and PR #514 is the worked example.
+
+Its title was 102 characters. `pr-title.yml` failed it correctly at 23:50:36Z. The title was edited
+at ~23:51:20Z, the workflow re-ran on `edited` as designed, and passed at 23:51:25Z. The head SHA
+never changed. `GET /commits/{sha}/check-runs` then returns **six** runs for five checks:
+
+```
+23:50:16Z  completed  failure   run=34659532801  Check the PR title is a Conventional Commit
+23:51:25Z  completed  success   run=34659600215  Check the PR title is a Conventional Commit
+```
+
+**Both persist, and the older one keeps its failure for ever.** `pr-title.yml` does carry a
+`concurrency` group with `cancel-in-progress: true`, which is why this is not a workflow defect:
+cancellation applies to runs that are **in progress**, and this one had finished 44 seconds before
+the edit. There was nothing for it to cancel.
+
+**The correct rule is one clause longer: dedupe by check-run name, keep the most recently started,
+then require every survivor to be `completed` / `success`.** Without that clause a reader following
+§19.9 to the letter either refuses a mergeable PR, or — far worse, and the reason this is filed
+rather than shrugged at — learns that some red checks are fine to wave through, which is precisely
+the habit the section exists to prevent on a repository where nothing else can stop a bad merge.
+
+**A comment in `pr-title.yml` points the same way and is worth a word when this is picked up:**
+_"`edited` is the load-bearing one: without it a corrected title cannot clear the check."_ The edit
+does not clear the check — it adds a second, passing run beside the failed one. That file's own
+"Two blind spots" list does not mention it, and this is a third.
+
+**Not fixed here.** It is a change to CLAUDE.md §19.9 — the merge rule itself — and to a workflow's
+comments, which wants its own small change rather than riding in on a test-isolation PR. The
+mitigation is recorded above and was applied by hand to merge #514.
