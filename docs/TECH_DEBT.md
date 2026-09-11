@@ -1028,7 +1028,15 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
 
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** deferred · **Verified:** 2026-09-11
+
+> **Reclassified `open` → `deferred` on 2026-09-11.** The assessment is complete and the row says
+> so: the finding is a false positive for this call site, the three available workarounds were
+> examined and all three rejected with reasons, and the one part that **was** real — the unbounded
+> size of a hostile server's `code`/`message`/`details` reaching disk — is fixed. What remains is a
+> **repo-admin action in the GitHub UI**: dismiss the alert with the reasoning attached. That is
+> the trigger, and it is not something this environment can do. `open` reads as unfinished analysis,
+> and the analysis is the finished part.
 
 CodeQL flags `writeFileSync(args.out, JSON.stringify(results))` in `apps/seed-cli/src/main.ts` as
 "network data written to file" — the negative tier's report contains the API's own response codes
