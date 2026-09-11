@@ -258,8 +258,18 @@ narrowed one, which the Background-processing entry now states.**
   Breakdown picker, because a checklist that can restructure the tree needs cycle feedback a
   checklist cannot express well. Worth revisiting with a design for that feedback rather than by
   simply widening the list.
-- `S` **A shape cue for the derived Unassigned band bar** (TECH_DEBT #71) and a widened
-  `CheckboxField` for the bulk-selection column (TECH_DEBT #72).
+- `S` ~~**A shape cue for the derived Unassigned band bar** (TECH_DEBT #71)~~ **— DONE
+  2026-09-01**, and a widened `CheckboxField` for the bulk-selection column (TECH_DEBT #72), which
+  is **half done**.
+  _(Corrected 2026-09-11, the **fifth** stale claim this file has been caught on. `#71` is closed
+  and ledgered: the bucket is an unfilled three-sided bracket now, decided by mocking both candidate
+  remedies on a real canvas with a greyscale toggle rather than by reviewing them, after the two
+  specialist reviews disagreed. `#72` is narrowed rather than open-as-written — its **target-size**
+  half closed the same day (both boxes sit in a `size-6` label, 24 × 24 pointer target, painted box
+  unchanged, pinned in `e2e-wbs`), and what survives is the original component finding: the boxes
+  are hand-assembled where `CheckboxField` exists, which needs that primitive widened for a
+  visually-hidden label and trailing row content **before** any of the five call sites move. So this
+  bullet is one item, not two, and the remaining one is a shared-primitive change.)_
 
 ## Engineering / delivery
 
