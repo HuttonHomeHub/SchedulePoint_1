@@ -256,3 +256,37 @@ describe('Deck — the captions are gone and the group names are not', () => {
     expect(reached.size).toBeGreaterThanOrEqual(6);
   });
 });
+
+describe('arrows from the container itself', () => {
+  /**
+   * **The deck's half of the container-focus case.** `Toolbar.test.tsx` got these two and `Deck`
+   * got none — the component gate's finding, and it is this repository's most-recorded defect shape
+   * applied to test coverage rather than to behaviour: the wiring is textually identical, which is
+   * exactly the state in which a later edit to one and not the other goes unnoticed.
+   *
+   * The state is the one the focus handoff creates: a peer's write removed the control a reader was
+   * standing on, so focus is on the `role="toolbar"` container. Verified red against the old
+   * clamp-then-step arithmetic, which landed on the second stop.
+   */
+  it('lands on the first stop, not the second', () => {
+    render(<Deck items={items} context={{}} label="Plan commands" />);
+    const bar = screen.getByRole('toolbar', { name: 'Plan commands' });
+    const first = bar.querySelector<HTMLElement>('[data-toolbar-focusable]')!;
+    bar.focus();
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('lands on the last stop going backwards', () => {
+    render(<Deck items={items} context={{}} label="Plan commands" />);
+    const bar = screen.getByRole('toolbar', { name: 'Plan commands' });
+    const stops = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-focusable]')];
+    bar.focus();
+
+    fireEvent.keyDown(bar, { key: 'ArrowLeft' });
+
+    expect(document.activeElement).toBe(stops.at(-1));
+  });
+});

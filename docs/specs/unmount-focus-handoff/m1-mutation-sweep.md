@@ -46,3 +46,23 @@ The repair is the one this repository keeps arriving at: the verdict now require
 executed a **known population** (`failed + passed === 16`) before it means anything. That guard
 immediately earned its keep twice, reporting `WRONG POPULATION (14 of 15)` and then `(15 of 16)` as
 cases were added — a sweep measuring a suite it did not have would otherwise have read as a result.
+
+## A third thing that is not covered, found by the component gate rather than by the sweep
+
+**Two peer writes removing two _different_ focused items before one frame runs will announce the
+first departure, not the most recent one.** The frame closure destructures its record into locals
+before scheduling, so each removal carries its own sentence; the first frame to run wins the
+`activeElement` guard, focuses the container, and every later frame turns away. Focus lands
+correctly either way — WCAG 2.4.3 is satisfied — but the spoken sentence can name a control that is
+one departure stale.
+
+It is **accepted rather than engineered around**, for three reasons stated plainly: it needs two
+independent peer writes landing inside one animation frame; the remedy (keep the newest record, or
+compose both sentences) adds a second ordering rule to a mechanism whose whole defence against
+becoming a fifth answer is that it has one; and the reader is told the truth about where they are,
+which is the part that matters. It is recorded here rather than in a code comment because it is a
+property of the design, not of a line.
+
+Found by the component review tracing M6 by hand, which is worth noting on its own: that reviewer
+set out to construct a case discriminating the record-clear, could not, and turned up this instead.
+The M6 entry above stands as written, now independently re-derived.

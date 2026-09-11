@@ -1,8 +1,8 @@
 # Implementation Plan: A roving container hands focus back when a peer removes the control you are standing on
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
-- **Status:** Draft
-- **Owner:** unassigned
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted (ADR-0135)**
+- **Status:** Accepted — M0–M3 landed 2026-09-11; M4 is the §19.13 gate pass
+- **Owner:** web
 
 ---
 

@@ -283,7 +283,18 @@ export function Deck<Ctx>({
       // wrapped to two lines before they were declared. The acceptance condition for this milestone
       // was that the existing roving-walk case passes **unchanged** — the ADR-0062 extraction
       // argument applied to a layout change.
-      className={cn('flex flex-col gap-2', className)}
+      className={cn(
+        'flex flex-col gap-2',
+        // **A designed focus state, not an incidental one** (accessibility gate, ADR-0135).
+        // This container became focusable only when the handoff gained somewhere to put focus,
+        // and until then nothing had ever decided what "the toolbar itself is focused" looks
+        // like. The UA outline does paint today — Preflight does not strip it — but that is a
+        // side effect of the state never having been reachable, and a caller's `className` or a
+        // design-system change could suppress it with nothing red to say so. The same treatment
+        // every other focusable in this family uses (`toolbar-styles.ts:179`).
+        'focus-visible:ring-ring outline-none focus-visible:ring-2 focus-visible:ring-inset',
+        className,
+      )}
     >
       {DECK_ROWS.map((row) => (
         <div key={row} data-deck-row={row} className="flex flex-wrap items-start gap-2">

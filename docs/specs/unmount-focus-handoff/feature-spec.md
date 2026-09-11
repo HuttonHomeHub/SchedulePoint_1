@@ -1,6 +1,6 @@
 # Feature Spec: A roving container hands focus back when a peer removes the control you are standing on
 
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0135)
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-11
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #204(c)
