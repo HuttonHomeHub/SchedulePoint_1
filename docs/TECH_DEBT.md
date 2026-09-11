@@ -7563,7 +7563,8 @@ classes that as the non-computable third kind.
 
 **Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (seen in an overnight `scripts/e2e-local.sh api` run) · **Size:** S · **Owner:** api
 
-A green API end-to-end run (635 passed, 1 skipped) also emits **four** of these:
+A green API end-to-end run (635 passed, 1 skipped) also emits one of these — an `ERROR` from the
+runner and a `WARN` from the service, one failure reported at two levels:
 
 ```
 ERROR: a retention sweep failed; the next run will retry it
@@ -7572,17 +7573,37 @@ ERROR: a retention sweep failed; the next run will retry it
   the Engine was empty"
 ```
 
-**The cause looks like teardown rather than the sweep, and the evidence is the table.**
-`RETENTION_TABLES` is `['csp_reports', 'mail_events', 'perf_probe_results']`
-(`retention-policy.ts:25`) and the failures name **only the last one**, every time. "Response from
-the Engine was empty" is what a `$executeRaw` returns when the Prisma engine has gone away
-underneath it, and `RetentionSweepService` clears its interval in `onApplicationShutdown`
-(`:121-123`) — a hook a test's `app.close()` does not necessarily reach, and which in any case
-cannot un-start a sweep already in flight. So: the hourly timer fires during the suite, teardown
-closes the engine part-way through the third table, and the catch block reports a permanent-looking
-failure. **Stated as a hypothesis with its evidence rather than as a diagnosis** — the discriminator
-nobody has run is whether the failures correlate with `afterAll`, which a timestamp comparison would
-settle in minutes.
+**The cause is the unawaited boot sweep racing the test's own teardown**, and it is worth reading
+how this row got there, because the first version of it was wrong in a way that a second run
+disproved in seconds.
+
+That version said "**four** of these" and attributed them to "the hourly timer firing during the
+suite". Both are wrong:
+
+- **The count.** A second run (2026-09-11, 584 s, all green) emitted **one** failure, not four — the
+  ERROR and the WARN above are the same failure logged by the runner and then by the service. The
+  original four was a count of log _lines_ matching loosely, not of failures.
+- **The trigger cannot be the timer.** `retentionSweepIntervalMinutes` is **60** and the suite runs
+  for **10**, so the interval has never once fired inside an API e2e run. It is also `unref()`d
+  (`retention-sweep.service.ts:113`), which is the opposite of what a timer holding the process open
+  would look like.
+
+What actually happens is on the line the first version never opened:
+`onApplicationBootstrap` ends with **`void this.sweepNow()`** (`:118`) — deliberately unawaited, with
+a comment saying why (a large backlog must not delay readiness). So **every app boot starts a sweep
+nothing waits for.** A test that boots an app and closes it promptly tears the Prisma engine down
+while that sweep is still walking `RETENTION_TABLES`; it clears `csp_reports` and `mail_events` and
+dies on `perf_probe_results` — the third and last, every time, which is the table evidence the first
+version read correctly and then explained wrongly.
+
+`onApplicationShutdown` (`:121-123`) clears the interval and **cannot un-start a sweep already in
+flight**, which is why the hook existing does not prevent this.
+
+**It is a race, not a certainty.** The same run logged two boots that reach the sweep: the first
+completed all three tables cleanly (`retention.swept`, 0 deleted, 8/2/… ms), the second failed. So
+"on every run" in this row's own heading is an overstatement carried from the first version; the
+heading is left as filed so inbound references resolve, and the accurate claim is **most runs, one
+failure, always the last table**.
 
 **Why it is worth a row rather than a shrug.** `retention.sweep_failed` is not an arbitrary log
 line: it is the **exact event ADR-0087 M4 built an alert on**, after three consecutive occurrences,
@@ -7591,8 +7612,15 @@ every green run learns to read it as noise, and that is the one reading that mak
 worthless the day it fires for real. The alert is not armed on any host today (`#100`), so nothing
 is currently mis-firing; this is about the signal's credibility, not a live page.
 
-**Not fixed here.** The obvious remedies — not starting the timer when `NODE_ENV` is test, or
-awaiting the in-flight sweep on shutdown — are changes to a service every API e2e suite boots, which
-is the shared-infrastructure shape `#268` records deferring for the same reason. It also deserves
-the discriminator first: a fix aimed at teardown, if the cause is something else, is the inert
-change `#268`'s own history warns about.
+**Not fixed here.** The discriminator this row originally owed is now answered — it is the boot
+sweep, not the timer — so the remedy is no longer a guess: hold the in-flight sweep's promise and
+await it in `onApplicationShutdown`, which is a real improvement in production too, since the same
+race exists whenever a container is recreated mid-sweep (ADR-0047 recreates them unattended). Not
+taken here because it is a change to a service **every** API e2e suite boots, which is the
+shared-infrastructure shape `#268` records deferring for exactly that reason, and because awaiting
+on shutdown needs its own thought about a sweep that is genuinely slow — the boot path was made
+unawaited on purpose.
+
+The **cheap** alternative — skipping the boot sweep under test — is explicitly **not** recommended:
+it would silence the symptom by removing the only coverage the boot path has, and this repository
+has an ADR about exactly that shape of fix.
