@@ -5677,7 +5677,7 @@ passes. That is precisely why it must be a decision and not a reading.
 
 ### 262. A dependency bump changed documented library behaviour, and only a citation gate noticed
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-08 (the cited-package bump) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-08 (the cited-package bump) · **Size:** S · **Owner:** repo
 
 `@tanstack/history` 1.162.2 changed `win.history.go(1)` to **`win.history.go(-delta)`** when rolling
 back a blocked Back. The old code always stepped forward one, which is wrong for a multi-step Back;
@@ -5748,6 +5748,44 @@ cohort), or is bump-triggered re-reading enough given that a library which never
 falsify a claim about it? The second is a real argument and not obviously wrong — the falsifier here
 was a **release**, not the passage of time. That is a decision rather than work, which is why this
 records the number and stops.
+
+---
+
+**2026-09-11 — the sharper question is answered: bump-triggered is ENOUGH, and a time-based re-read
+has no failure mode to catch.** The argument rests on one property of the gate, read rather than
+assumed (`scripts/check-claims.mjs`, pass 2): **every run re-opens every cited file and re-asserts
+the anchor at the cited lines**, for every package whose version matches. It is not a
+registration-time check that then coasts.
+
+From that, the exposure this row measures is not a risk at all:
+
+- A package's bytes cannot change without its version changing — the lockfile pins an integrity hash
+  and pnpm's store is content-addressed — and **even if they somehow did, pass 2 would fail**, because
+  it compares the anchor against the file on disk on every run rather than against a recorded hash.
+- So while `verifiedAgainst` is unchanged and the gate is green, the cited lines hold the same bytes
+  somebody read. **Nothing about the library can have moved under the claim.** The falsifier is a
+  release, which is precisely the event the gate already triggers on — as this row's own exhibit
+  shows: `go(1)` → `go(-delta)` was caught because the version moved, not because anyone noticed a
+  date.
+- The age column therefore measures how long a package has gone without releasing, and a package
+  that has not released cannot have falsified anything. "20 days old" is not staleness; it is
+  quiet.
+
+**What age DOES correlate with is a different class, and a periodic re-read would catch it only by
+accident.** A claim that was **wrong when written** (ADR-0076 Class 3) is not a statement about the
+library's version at all, and re-reading it in six months finds it for the same reason re-reading it
+today would. Buying that with a recurring chore nobody is measured on is the ADR-0058 shape: it gets
+skipped, and its absence is silent.
+
+**One residual is named rather than glossed, and it is human.** The gate's own failure text says
+_"Bumping the version alone makes this gate a rubber stamp"_ — so a bump whose `verifiedAgainst` is
+updated without anybody re-reading defeats it completely, and no amount of time-based prompting
+helps, because that path runs at exactly the moment the prompt would fire anyway.
+
+**Reclassified `open` → `deferred`, with the trigger stated**: reopen if a citation is ever found
+falsified **without** its package's version having changed. That is the observation the argument
+above forbids, so it is the one that would refute it — and unlike a date, somebody hits it rather
+than having to remember to look.
 
 ### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
 
