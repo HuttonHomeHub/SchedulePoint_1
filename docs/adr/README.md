@@ -160,3 +160,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0134](0134-a-typed-date-writes-the-constraint-a-drag-writes.md)                                | A typed date writes the constraint a drag writes                                | Accepted           |
 | [0135](0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md) | A container hands focus back when somebody else removes the control you were on | Accepted           |
 | [0136](0136-a-rule-is-enforced-where-the-artefact-lands.md)                                     | A rule is enforced where the artefact lands, and the roster is derived          | Accepted           |
+| [0137](0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)              | A notification is a record, and the build waits for somebody to notify          | Accepted           |

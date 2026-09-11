@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1218 web
 > source files with 42 Playwright suites beside the base journey, and
-> 136 ADRs.
+> 137 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4537,6 +4537,54 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   written and then removed when the plan was re-read, since a planner cannot act on a CI gate.
   **The CPM engine is not imported and no migration runs**; `apps/api` and `apps/web/src`
   contribute zero files to the diff.
+
+- **ADR-0137** _(Accepted; decision only — nothing is built)_ — A notification is a record, and the
+  build waits for somebody to notify. `docs/BACKLOG.md` carried **Notifications** as an `M` sized as
+  work; the product owner asked for it to be specced, the spec was written, and **its own recipient
+  rule disqualified building it**. That rule is "members holding a write permission, **minus the
+  actor**", and this installation has one member — so the set is empty for every event kind, on
+  every plan, always. The feature would emit **zero rows**, render an empty inbox and send no mail:
+  its behaviour and its absence are identical. **Inert, not weak** — the day a second planner joins,
+  a data-date move or a shared-calendar edit silently re-dates their work with no way for them to
+  learn it happened. **D1 defers the build on a checkable trigger** (a second person holding a write
+  permission in any organisation), deliberately the **same** trigger ADR-0085 names, because both
+  features exist to serve somebody who is not the person who built the product — so one event fires
+  two pieces of designed, unbuilt work. ADR-0085's own closing line is the reason it is a fact and
+  not a feeling: an unconditioned `M` stays exactly one priority below whatever is being done, which
+  is how this row sat for a month on a blocker that had already lapsed.
+  **Three decisions stand whenever it is built**, because each was established by reading rather
+  than by preference. **D2: the notification IS the durable row and any channel is a best-effort
+  pointer to it** — forced, since `MailEvent` records **failures only**, so a mail-only design can
+  never re-show, mark read or honestly describe itself, and a silent failure loses the notification
+  outright; a second argument converges and is stronger, that **membership can be revoked between
+  emission and delivery**, so a mail carrying plan content sits in a mailbox past the org-scope
+  check that would by then refuse it, where a count-and-link cannot. **D3: which events earn one is
+  derived from two tests, not listed** — N1 absence (is the person who needs to know necessarily
+  somewhere else?) and N2 channel (will it arrive while it is still true?) — landing on the audit
+  log's **blast-radius** subset plus hierarchy deletes, which is a good sign the rule is real since
+  it reproduces an existing derived answer from different premises. It is **not** tailing
+  `audit_events`, in both directions: that table permanently excludes content edits, and a
+  notification must be suppressible where an audit row must not.
+  **D4 records that the epic's own premise was disproved.** The backlog row, the product owner's
+  question and the brief to the analyst all framed this as "a peer requests the pen, the holder has
+  45 s, email is too slow" — which implies a faster channel would help. Four constants say
+  otherwise: `canTakeOverNow` returns true on `isHolderInactive(...)` **alone** (the grace clause is
+  an `||` alternative, not a requirement), `LOCK_INACTIVE_AFTER_MS` is 90 s so an absent holder is
+  taken over **without answering**, the client poll tells a present holder within 15 s, and
+  `useLockHeartbeat` **already releases** the pen on unmount and `pagehide` via a keepalive `DELETE`
+  with a 120 s TTL backstop. **There is no state of the world in which mailing the pen holder
+  changes the outcome**; the one residual is a plan open in a background tab, which mail does not
+  serve either. Filed rather than designed around.
+  **The process note is the transferable part**: one agent run produced a spec whose job was to
+  answer _should we build this_, and the answer was no. That is the second time in this register
+  (after ADR-0085) that a full spec's most valuable output was a decision not to proceed — **a spec
+  that declines is not a wasted spec**, and it is far cheaper than the seven milestones it stopped.
+  The spec is not shelved but **loaded**: M0's three falsification bars land before any harness runs,
+  M2 names its entry point (`/me/notifications` off the account chip), and the riskiest task is
+  already isolated — the import producer must **not** sit in its transaction, since phase 2
+  hard-deletes the plan when recalculation fails and the row would outlive its subject. **Nothing is
+  built at all**, so the ADR-0034 parity gate is untouched in its honest form: there is nothing here
+  to hold parity for.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

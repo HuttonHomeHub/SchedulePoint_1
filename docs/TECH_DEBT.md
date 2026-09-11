@@ -6423,7 +6423,13 @@ whether a page was cut rather than to infer it from position, which is what #271
 
 ### 276. A failing gate's log is tailed to 12 lines, and three test files now share one gate
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (devops review, ADR-0131 M3-T1) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-09 (devops review, ADR-0131 M3-T1) · **Size:** S · **Owner:** repo
+
+> **Hit live, 2026-09-11 overnight sweep.** `prepush.sh:108,112` still `tail -12`. A run that
+> failed on `check:counts` printed the FAIL line and twelve lines that did not include the finding,
+> so the gate had to be re-run on its own to learn that two banners said 136 ADRs against 137. The
+> cost is small and real: the gate tells you which check failed and then withholds why, on the one
+> occasion you are reading it.
 
 `scripts/prepush.sh:108,112` truncates a failing gate's captured output to `tail -12`.
 **Re-verified 2026-09-10 at both lines, unchanged.**
@@ -6614,7 +6620,13 @@ the following commit — but "nil this time" is the reason a silent failure surv
 
 ### 281. A long-lived branch with no open pull request gets no CI at all, and `prepush` reads as though it were CI
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
+
+> **Confirmed again, 2026-09-11, by watching it happen.** `.github/workflows/ci.yml:3-7` triggers on
+> `push` to `main` and on `pull_request` only. Two commits sat on this branch with no CI of any kind
+> until a pull request was opened for them, at which point all six checks ran against a head that had
+> been pushed hours earlier. Nothing was wrong with the work, which is the point: the branch looked
+> exactly as it would have if CI had passed on it.
 
 **Measured tonight: fourteen commits reached `origin` and CI ran on none of them.**
 `.github/workflows/ci.yml:3-7` triggers on `push` to **`main`** and on `pull_request` targeting
@@ -7361,7 +7373,16 @@ one written against the shape.
 
 ### 298. Two gate-pass findings recorded rather than folded, and one suite name that stopped describing itself
 
-**Status:** unverified · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (ADR-0136's M5 gate pass) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (ADR-0136's M5 gate pass) · **Size:** S · **Owner:** repo
+
+> **Status corrected from `unverified` to `open`, 2026-09-11 overnight sweep — and the correction is
+> itself a finding.** The row carried `**Status:** unverified` **beside** `**Verified:**
+2026-09-11`, which cannot both be true, and `check:debt-status` passed it: that gate asserts each
+> status is in the vocabulary and never that a status agrees with the fields next to it. Filed as
+> **#302**. Both claims were then checked rather than assumed: (a) `check:doc-register` chains
+> **nine** suites with `&&` — the one it is named for plus the eight this row calls unrelated, so
+> the count reads as wrong and is right; and (b) `apps/web/vitest.config.ts:21` is
+> `include: ['src/**/*.{test,spec}.{ts,tsx}']`. Both hold.
 
 Five specialist reviews over the delivery-gates epic produced eleven findings. Nine were folded
 with regression tests verified red first. These two were not, and the reason is the same for both:
@@ -7520,3 +7541,33 @@ nobody has written the bin-packing. Actions minutes are free on this public repo
 
 Related: `docs/TESTING.md` "Before you push" (the local half runs the same suites one at a
 time, deliberately — the round trip this row is about is CI's).
+
+### 302. A row's status can contradict the fields beside it, and `check:debt-status` passes it
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (overnight register sweep) · **Size:** S · **Owner:** repo
+
+`#298` shipped carrying `**Status:** unverified` and `**Verified:** 2026-09-11` **on the same
+line**. Those cannot both be true: ADR-0120 introduced `unverified` to mean precisely _nobody has
+checked this_, and a verification date is the record that somebody did. The gate reported OK.
+
+**It is not a hole in the gate's coverage — it is outside its subject.** `check-debt-status.mjs`
+asserts that every row carries a status and that the status is one of the vocabulary's words. It
+never compares a status against the other fields on its own line, so no assertion could have fired.
+That is the ADR-0124 shape stated the other way round: _finding is generous, refusing is strict_,
+and here there is no refusing pass at all for this pair.
+
+**Why it matters more than a tidy-up.** `unverified` is the one status that makes a claim about the
+**reader's** obligation rather than the code — it says "do not act on this until somebody checks".
+A row wearing it beside a verification date tells two different people two different things, and
+the one who believes the status does redundant work while the one who believes the date acts on an
+unchecked claim. It is also the cheapest possible drift: nobody edits a status line twice.
+
+**The remedy is a coherence pass, and it is a shared-gate change.** Adding an assertion to
+`check-debt-status.mjs` touches a gate `prepush.sh` derives and CI runs, which is an ADR-0105
+trigger — so it is filed rather than folded into the sweep that found it, the same reasoning
+`#298` records for its own two findings. The rule to encode, once somebody specs it: `unverified`
+and a `**Verified:**` date are mutually exclusive; every other status requires one.
+
+**Blind spot to state up front:** this would catch the contradiction and not the lie. A row whose
+author writes a date without checking anything is invisible to any parser, which is why ADR-0076
+classes that as the non-computable third kind.
