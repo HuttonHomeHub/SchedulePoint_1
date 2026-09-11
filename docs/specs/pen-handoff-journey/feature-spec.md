@@ -1,7 +1,12 @@
 # Feature Spec: A journey that drives the pen changing hands
 
-- **Status:** Draft — awaiting approval before implementation.
-- **Author(s):** feature-analyst (Claude Opus 5)
+- **Status:** Approved — 2026-09-11, by the product owner, taking **CQ-1 Option A**: the journey waits
+  the real 45-second grace window. No product change, no new dependency, no new configuration
+  surface, and the constant under test is the constant that ships. Option B (database access for a
+  Playwright suite) and Option C (making the window configurable) stay rejected for the reasons in
+  §CQ-1 — the first sets a precedent that a journey may reach behind the API, and the second would
+  test a configuration no host runs while deleting half of what US-2 exists to observe.
+- **Author(s):** feature-analyst
 - **Date:** 2026-09-10
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` [#286](../../TECH_DEBT.md) — "No journey drives a peer take-over or an admin override"
 - **Roadmap link:** none — this is register work, not a roadmap theme.

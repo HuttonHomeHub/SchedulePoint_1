@@ -1,6 +1,6 @@
 # Implementation Plan: A journey that drives the pen changing hands
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) — **Draft**, awaiting approval.
+- **Feature spec:** [./feature-spec.md](./feature-spec.md) — **Approved** 2026-09-11, taking CQ-1 Option A: the journey waits the real 45-second grace window.
 - **Status:** Draft | **awaiting approval before implementation**
 - **Owner:** unassigned (web)
 

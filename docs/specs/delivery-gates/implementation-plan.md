@@ -1,8 +1,6 @@
 # Implementation Plan: Delivery gates — four rules this repository states in prose and enforces nowhere
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval before
-  implementation** (the same state its own header holds; `check:spec-status` refuses a plan and a
-  spec that disagree).
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved** 2026-09-11, taking all four critical questions' written defaults.
 - **Status:** Draft — awaiting approval before implementation
 - **Owner:** repo
 

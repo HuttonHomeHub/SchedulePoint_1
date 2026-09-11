@@ -1,7 +1,7 @@
 # Implementation Plan: The Gantt's remaining editing gaps
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — `Draft — awaiting approval before
-implementation`. The two files are one artefact and carry the same state.
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved** 2026-09-11, with CQ-1 answered BUILD (the typed-date cell, which needs its own ADR) and CQ-2 taking its written default (re-defer the start-edge resize).
+  implementation`. The two files are one artefact and carry the same state.
 - **Status:** Draft — awaiting approval before implementation
 - **Owner:** — (unassigned; the product owner approves, then this is picked up)
 

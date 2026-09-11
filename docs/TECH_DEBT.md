@@ -4592,11 +4592,19 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > Worth stating because it changes who would find it: this is not something a single planner can do
 > to themselves, so no solo journey will ever reproduce it.
 >
-> **The remedy is a decision and therefore not taken here.** Where focus should go when an unmount
-> is caused by somebody else is a question this product has answered four times for unmounts the
-> reader caused, and never for one they did not — the selection bar is still mounted, so returning
-> focus to it is available, but so is announcing the change rather than moving focus silently. That
-> belongs in a spec (ADR-0105: a component's public contract).
+> **The remedy is DECIDED, 2026-09-11, by the product owner: move focus to the surrounding
+> selection bar and say why.** Where focus should go when an unmount is caused by somebody else is a
+> question this product has answered four times for unmounts the reader caused, and never for one
+> they did not. Two alternatives were put alongside it and both declined: announcing without moving
+> focus leaves it at `<body>`, so it fixes the silence and not the dead end — every workspace
+> accelerator stays dead until the reader clicks something; and keeping the control on screen shaded
+> would leave a live control for a mode the plan is no longer in, which this register treats
+> elsewhere as the worse defect.
+>
+> The bar is still mounted at the moment the control goes, which is what makes the chosen answer
+> available at all. **Announcement and focus move together**, in that order, for the ADR-0080 reason
+> recorded one epic over: a focus change announces the thing it lands on, so a message spoken first
+> and moved to second is a message overwritten.
 
 **(d) Two of three lens toggles offered to the product owner for promotion did not exist.** The
 `AskUserQuestion` options named `Critical path`, `Float paths` and `Baseline overlay`. Only the

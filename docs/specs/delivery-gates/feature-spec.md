@@ -1,6 +1,10 @@
 # Feature Spec: Delivery gates — four rules this repository states in prose and enforces nowhere
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — 2026-09-11, by the product owner, taking **all four** critical questions'
+  written defaults: CQ-1 adds `deps-dev` to `scope-enum` **and** to `CLAUDE.md` §9's scope list
+  (keeping the dev/prod distinction `main`'s history currently records); CQ-2 sets the bundle budget
+  at the measured floor × 1.05 rounded up to the nearest kB, with the ratio labelled in the file as
+  a judgement rather than a measurement; CQ-3 and CQ-4 as written.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-10
 - **Tracking issue / epic:** _to be created_

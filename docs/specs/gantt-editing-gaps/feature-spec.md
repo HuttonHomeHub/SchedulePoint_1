@@ -1,6 +1,14 @@
 # Feature Spec: The Gantt's remaining editing gaps
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — 2026-09-11, by the product owner, with both critical questions answered.
+  **CQ-1 (the typed-date cell): BUILD it (M3).** A typed date writes the constraint a drag writes —
+  SNET in EARLY, `visualStart` in VISUAL — plus the one-per-session note. This is the one item in
+  this spec that needs an **ADR**, because "typing a date into a computed column silently pins the
+  activity" is a decision about the schedule and not a UI repair; the ADR is written before M3 is
+  built, not after. **CQ-2 (the start-edge resize): takes its written default** — re-defer, with the
+  surviving reason recorded (the Gantt has no drift or `visualConflict` cue at all, so Visual-mode
+  editing there is under-served in general and one more gesture does not fix that), and the
+  Visual-mode-legibility question raised as its own backlog row rather than smuggled in here.
 - **Author(s):** Feature Analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-10
 - **Tracking issue / epic:** —
