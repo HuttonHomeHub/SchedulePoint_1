@@ -6005,7 +6005,12 @@ rejecting its own proposed gate on 129 findings.
 
 ### 278. `SheetHeader`'s close button defaults to the dense-row exception, and four panels are not dense rows
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (register sweep) · **Size:** S · **Owner:** a panel-chrome pass
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-09 (register sweep) · **Size:** S · **Owner:** a panel-chrome pass
+
+**Fully costed as of 2026-09-11 — nothing here is unmeasured any more.** One of the three candidates
+has an empty population and is struck; the remaining choice is 1 vs 2, and the price of either is
+**12 px of scrollable content inside one open dock, and zero canvas**, measured in a browser at
+three widths. What is left is a design decision for the product owner, not investigation.
 
 **ADR-0118 D1's second named exception is applied by CONTAINER in `#215` and by DEFAULT in
 `sheet.tsx`, and those are not the same rule.** `SheetHeader`'s signature is
@@ -6075,15 +6080,41 @@ wants `icon`, the prop's single caller becomes redundant and the prop has none �
 disposal (ADR-0118 M3) and #149's `MenuItem.itemId` are both precedents for deleting rather than
 debating. Candidate 1 keeps a prop whose only purpose would be to hold the default that caused this.
 
-**What is NOT costed, and is the one thing left.** Where the 12 px lands is **reasoned and not
-measured**: a right dock is a column beside the diagram, so a taller header inside it should cost
-that panel's own content and never the canvas. If that holds, the whole decision is 12 px of panel
-content on whichever single panel is open — materially cheaper than "a visible desktop change to
-four workspace panels" reads. **One browser run settles it**: canvas height with a right dock open,
-`icon-sm` against `icon`, at 1440/1646/1920 — the shape
-`apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts` already uses. It is not taken here
-because the remedy remains a design decision either way, and ADR-0092's dock guarantee was asserted
-in a browser for precisely this class of "obviously it cannot move" reasoning.
+**2026-09-11 — the last uncosted thing is MEASURED, and the reasoned answer holds exactly.**
+`apps/web/measure-toolbar/tech-debt-278-dock-header-height.spec.ts` opens the Plan-notes dock on a
+computed plan and forces the close button to 40 px — what `icon` resolves to on a **fine** pointer —
+at 1440, 1646 and 1920. Identical at all three:
+
+| Quantity                | `icon-sm` (shipped) | forced 40 px | delta   |
+| ----------------------- | ------------------- | ------------ | ------- |
+| Close button            | 28 px               | 40 px        | **+12** |
+| Dock header             | 45 px               | 57 px        | **+12** |
+| Dock content (scroller) | 657 px              | 645 px       | **−12** |
+| **Canvas height**       | **702 px**          | **702 px**   | **0**   |
+| Canvas width            | 802/1008/1282 px    | unchanged    | 0       |
+
+**So the whole desktop cost is 12 px of scrollable content, inside whichever single panel is open,
+and the diagram is untouched** — `canvasDelta` is 0 px at every probed width, and the panel's own
+width does not move either (359 px throughout). The content region gives up precisely what the
+header takes, which is C2's prediction to the pixel. That is materially cheaper than this row's
+original "a visible desktop change to four workspace panels", which counted four code sites as four
+simultaneous headers when `docksToClose` permits one.
+
+**Non-vacuity was checked first and the probe fails rather than reporting a reassuring zero**
+(ADR-0093; ADR-0128's INDETERMINATE): the treatment is asserted to have changed both the button and
+the header at each width, and the injected stylesheet is asserted GONE before the next width is
+read — without which every later "before" is a treated reading and all three deltas collapse to
+zero, a broken probe indistinguishable from a clean result. The first run also found that the dock's
+open state is **not URL-backed**, so the obvious reload-to-reset closes the panel and the next width
+would measure a workspace with no dock in it.
+
+**What it does not establish, stated rather than implied.** It measures the fine-pointer box only;
+`icon` carries `pointer-coarse:size-(--control-h)`, so a touch reading is **4 px more again** and
+was not taken. It measures Plan notes alone — the other three docks reach their close through the
+same `SheetHeader`, which is why one reading generalises, and that is an argument rather than a
+measurement. And it changes nothing about the decision itself: **candidate 2 (flip the default,
+delete the prop) remains a design call for the product owner**, now with its price on the page
+instead of an estimate.
 
 ### 279. The reset that closes the split-pair defect has no CSS rule, no caller, and would paint the wrong thing
 
