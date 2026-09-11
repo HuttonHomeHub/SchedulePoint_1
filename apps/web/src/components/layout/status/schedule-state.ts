@@ -64,8 +64,14 @@ export type ScheduleState =
  *
  * It exists because the three states are **not** all distinguishable by asking what is on screen:
  * `current` renders nothing, and "renders nothing" is indistinguishable from "has not painted yet"
- * by any point-in-time read — the trap `revealToolbarCommand`'s docblock records hitting on a slow
- * machine. An attribute that is always present turns a race into a wait.
+ * by any point-in-time read. An attribute that is always present turns that race into a wait.
+ *
+ * _(Corrected 2026-09-11: this sentence credited the trap to "`revealToolbarCommand`'s docblock".
+ * **There is no such symbol** — the `reveal*` family is `revealActivityId`, `revealActivityNotes`,
+ * `revealComments`, `revealNotes` and `revealOffset`, none of them a toolbar-command revealer — and
+ * searching the tree for the wording it attributes finds nothing either. The argument stands on its
+ * own, so the unresolvable citation is removed rather than replaced with a guess at what was
+ * meant.)_
  */
 export function scheduleStateAttr(state: ScheduleState): string {
   return state.kind;

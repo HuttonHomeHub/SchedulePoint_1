@@ -1,4 +1,4 @@
-import { appendFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,13 +49,24 @@ interface Input {
  * absent, so CI is unaffected". CI was affected. A measurement harness must never be able to fail a
  * build over where it puts its own notes.
  *
- * The path is **fixed**, under the OS temp directory. It was briefly configurable through an
- * `M0_REPORT` environment variable, and CodeQL was right to flag that as `js/path-injection`
- * (high): an environment value flowing unchecked into a filesystem write is a real sink, and the
+ * The path is **neither configurable nor fixed**, and those are two different defects — this file
+ * had closed the first and kept the second. It was briefly configurable through an `M0_REPORT`
+ * environment variable, and CodeQL was right to flag that as `js/path-injection` (high): an
+ * environment value flowing unchecked into a filesystem write is a real sink, and the
  * configurability bought nothing — nobody needs to choose where a throwaway measurement log lands.
- * Removing the parameter removes the taint source outright, which beats sanitising it.
+ * Removing the parameter removes the taint source outright, which beats sanitising it. **That
+ * removal stands and must not be undone**: `revision-compare-imported-p2.e2e-spec.ts` copied this
+ * file's shape, reintroduced the override, and had to delete it again for the reason recorded here.
+ *
+ * What the removal left behind was a **fixed name in a world-writable directory** — pre-createable
+ * as a symlink by anybody on the host, which the harness would then follow: a high
+ * `js/insecure-temporary-file` alert (CWE-377), and the one the P2 sibling was reported for while
+ * these two were invisible to it, being older than the diff. The report now lands in this run's own
+ * `mkdtempSync` directory, with the path announced on stdout so nothing is lost by it being
+ * unguessable (`docs/TECH_DEBT.md` #265).
  */
-const REPORT = join(tmpdir(), 'schedulepoint-m0-report.txt');
+const REPORT = join(mkdtempSync(join(tmpdir(), 'sp-m0-attribution-')), 'report.txt');
+process.stdout.write(`report written to ${REPORT}\n`);
 const write = (fn: typeof appendFileSync, body: string): void => {
   try {
     fn(REPORT, body);

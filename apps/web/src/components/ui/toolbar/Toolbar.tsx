@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { containerShouldStandDown, vetoesKey } from './toolbar-keyboard';
+import { containerShouldStandDown, rovingIndexFor, vetoesKey } from './toolbar-keyboard';
 import {
   groupRank,
   partitionBySegment,
@@ -11,6 +11,7 @@ import {
   type ToolbarItem,
 } from './toolbar-registry';
 import { ToolbarButton } from './ToolbarButton';
+import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
 
@@ -172,6 +173,18 @@ export function Toolbar<Ctx>({
     [resolved],
   );
 
+  // **The roving stop is repaired; focus is not.** `effectiveActiveId` below fixes which item
+  // carries `tabIndex={0}` when a predicate hides the one that had it — and that is a different
+  // question from where the browser's focus ring actually IS. If a peer's write removes the item a
+  // reader is standing on, this derivation gives the next Tab a correct destination and the reader
+  // is already on `<body>` (`docs/TECH_DEBT.md` #204(c), measured). The hook answers that half.
+  const focusHandoff = useToolbarFocusHandoff({
+    containerRef,
+    resolvedIds: focusableIds,
+    toolbarLabel: label,
+    lostReasonFor: (id) => items.find((item) => item.id === id)?.lostReason,
+  });
+
   // Derived, not repaired in an effect: an `activeId` naming an item a predicate has since hidden
   // falls back to the first control, so the roving stop can never point at nothing.
   const effectiveActiveId =
@@ -191,13 +204,18 @@ export function Toolbar<Ctx>({
       if (vetoesKey(event.target, key)) return;
       const ids = focusableIds;
       if (ids.length === 0) return;
-      const current = effectiveActiveId ? ids.indexOf(effectiveActiveId) : -1;
-      const from = current === -1 ? 0 : current;
-      let nextIndex = from;
-      if (isNext) nextIndex = (from + 1) % ids.length;
-      else if (isPrev) nextIndex = (from - 1 + ids.length) % ids.length;
-      else if (key === 'Home') nextIndex = 0;
-      else nextIndex = ids.length - 1;
+      // **`-1` means focus is on the CONTAINER, and that is a real state now.** The handoff leaves
+      // a reader there when a peer removes the control they were standing on, so this is where
+      // their next key press comes from; `rovingIndexFor` starts the sequence rather than
+      // continuing it. Previously the clamp turned `-1` into `0` and the arithmetic then added
+      // one, so ArrowRight skipped the first command.
+      const current =
+        event.target === containerRef.current
+          ? -1
+          : effectiveActiveId
+            ? ids.indexOf(effectiveActiveId)
+            : -1;
+      const nextIndex = rovingIndexFor(key, current, ids.length);
       event.preventDefault();
       const nextId = ids[nextIndex]!;
       setActiveId(nextId);
@@ -236,7 +254,16 @@ export function Toolbar<Ctx>({
    */
   const renderItem = (r: (typeof resolved)[number]): React.ReactElement =>
     r.item.render ? (
-      <span key={r.item.id} className="inline-flex items-center">
+      // `data-toolbar-item-scope`, never a second `data-toolbar-item`: `onKeyDown` focuses by
+      // `querySelector('[data-toolbar-item="…"]')` and document order would match this wrapper
+      // first, whose `.focus()` does nothing — silently breaking roving focus on every split
+      // button. A distinct attribute is what lets the handoff attribute a caret's disappearance to
+      // the item that owns it.
+      <span
+        key={r.item.id}
+        data-toolbar-item-scope={r.item.id}
+        className="inline-flex items-center"
+      >
         {r.item.render(context, {
           disabled: !r.enabled,
           disabledReason: r.disabledReason,
@@ -287,9 +314,23 @@ export function Toolbar<Ctx>({
       role="toolbar"
       aria-label={label}
       aria-orientation="horizontal"
+      // Focusable only programmatically: the handoff needs somewhere to put focus when the control
+      // a reader was standing on is removed by somebody else. It adds no Tab stop — a negative
+      // tabindex is skipped by sequential navigation — so the roving model is unchanged.
+      tabIndex={-1}
       onKeyDown={onKeyDown}
+      {...focusHandoff}
       className={cn(
         'flex gap-1',
+        // **A designed focus state, not an incidental one** (accessibility gate, ADR-0135).
+        // This container became focusable only when the handoff gained somewhere to put focus,
+        // and until then nothing had ever decided what "the toolbar itself is focused" looks
+        // like. The UA outline does paint today — Preflight does not strip it — but that is a
+        // side effect of the state never having been reachable, and a caller's `className` or a
+        // design-system change could suppress it with nothing red to say so. The same treatment
+        // every other focusable in this family uses (`toolbar-styles.ts:179`).
+        'focus-visible:ring-ring outline-none focus-visible:ring-2 focus-visible:ring-inset',
+
         // A toolbar WRAPS rather than scrolls. Under the ladder this was `overflow-x-auto`, the
         // least-bad answer once hiding had been ruled out and demotion had run out of things to
         // demote. With no ladder there is nothing to run out of: a line that cannot fit becomes

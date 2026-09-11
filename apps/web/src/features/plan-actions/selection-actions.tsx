@@ -465,6 +465,33 @@ function ConflictRemedyControl({
  * (Edit/Delete) to overflow before the newer ones — accepted, since this floating bar rarely
  * overflows and surfacing the new actions is the goal.
  */
+/**
+ * **Which flippable items carry a `lostReason`, decided one at a time** (`use-focus-handoff.ts`).
+ *
+ * A sentence is added only where it is TRUE of the condition both before and after the change, and
+ * omitted rather than invented everywhere else — the register's most-repeated defect is one correct
+ * pattern applied to a control and not its neighbour, and its mirror is a pattern applied to a
+ * neighbour it was never right for.
+ *
+ * Carries one: `conflict-remedy`, `duplicate`, `duplicate-band`, `dissolve`,
+ * `clear-visual-placement`. Each names a condition of the selected activity or the plan, which is
+ * what a reader needs to hear when it vanishes.
+ *
+ * Deliberately does NOT:
+ *
+ * - `zoom-to-selection` and `isolate-logic` (`canvas !== null`). These leave only when the reader
+ *   themselves switches to the Gantt, which moves focus to the button they pressed — in a different
+ *   container. Nothing else can remove them, so the handoff's premise never holds.
+ * - `edit`. It has no `isVisible` at all since the ADR-0093 M5 pass; it is shaded, not omitted.
+ * - Every flag-gated item in `tsld-toolbar-items.tsx` (`SCHEDULING_MODES_ENABLED`,
+ *   `GANTT_VIEW_ENABLED`, `CANVAS_AUTHORING_ENABLED`, `NOTES_ENABLED`). A `VITE_` constant is
+ *   inlined at build time (ADR-0088 D1), so those predicates are constant for the life of a bundle
+ *   and cannot flip under anybody.
+ * - `next-conflict-status`, which is `presentational` — it never holds a roving stop, so it cannot
+ *   be the thing focus was on.
+ * - `pen` (`penManaged === true`). It survives a peer TAKING the pen; what would remove it is the
+ *   lock feature itself going away mid-session, and any sentence about that would be a guess.
+ */
 export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
   defineToolbar<SelectionBarContext>([
     // ── The conflict remedy (ADR-0094 M4) ───────────────────────────────────────────────────
@@ -502,6 +529,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       // item that renders `null` while claiming a roving stop is worse than one that is absent.
       isVisible: (ctx) =>
         ctx.conflictKey !== null && CONFLICT_REMEDIES[ctx.conflictKey].kind === 'openEditorAt',
+      lostReason: 'This appears only while the selected activity has a conflict to resolve.',
       render: (ctx, api) => <ConflictRemedyControl ctx={ctx} api={api} />,
     },
     {
@@ -674,6 +702,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             penGated: true,
             disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
             isVisible: (ctx: SelectionActionContext) => !ctx.isSummary,
+            lostReason: 'This action does not apply to a WBS summary.',
             onActivate: (ctx: SelectionActionContext) => {
               ctx.onDuplicate();
             },
@@ -690,6 +719,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             penGated: true,
             disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
             isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
+            lostReason: 'This action applies only to a WBS summary.',
             onActivate: (ctx: SelectionActionContext) => {
               ctx.onDuplicateBand();
             },
@@ -715,6 +745,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             // Registered for every selection but only VISIBLE on a summary: `isSummary` is a
             // context fact, so a non-summary selection cannot reach an action that would 422.
             isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
+            lostReason: 'This action applies only to a WBS summary.',
             onActivate: (ctx: SelectionActionContext) => ctx.onDissolve(),
           } satisfies ToolbarItem<SelectionActionContext>,
         ]
@@ -762,6 +793,12 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             // diagram 36 px at 1646 (and it is NOT sufficient: `m0-candidates.spec.ts` shows the
             // bar still wraps at 819.4 px against 775.6 px available).
             isVisible: (ctx: SelectionActionContext) => ctx.clearPlacementApplies,
+            // **The one case this was measured on** (`docs/TECH_DEBT.md` #204(c)). A second Planner
+            // can flip the plan's `schedulingMode` holding no pen, and the reader's next refetch
+            // takes this control out from under their focus ring. A sentence about the CONDITION,
+            // present tense, true both before the flip and after — which is what makes a static
+            // string honest here and a `(ctx) => string` unanswerable.
+            lostReason: 'This action applies only while the plan is scheduled in Visual mode.',
             /**
              * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
              *

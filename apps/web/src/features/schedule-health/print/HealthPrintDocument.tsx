@@ -95,6 +95,29 @@ export function ScheduleHealthPrintDocument({
         </section>
       ) : null}
 
+      {/*
+        The scope notes a row carries on screen (`caveatSentence`) now reach paper too. They were
+        screen-only, so metric 10's narrowing survived the handover solely through the footer's
+        role-invariance clause and metric 12's injection figures — the ones that make its verdict
+        reproducible by hand — did not survive it at all. Same derivation as the panel, so the two
+        renderings cannot drift (ADR-0103's rule, in the direction the register keeps finding it
+        broken: one surface updated and not its neighbour).
+      */}
+      {rows.some((row) => row.caveatSentence !== null) ? (
+        <section>
+          <h2>Scope notes</h2>
+          <ul>
+            {rows
+              .filter((row) => row.caveatSentence !== null)
+              .map((row) => (
+                <li key={row.metric.id}>
+                  <strong>{row.metric.name}:</strong> {row.caveatSentence}
+                </li>
+              ))}
+          </ul>
+        </section>
+      ) : null}
+
       {rows
         .filter((row) => row.metric.offenders.length > 0)
         .map((row) => (

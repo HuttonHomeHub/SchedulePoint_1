@@ -38,6 +38,16 @@ export default {
         'ci',
         'docs',
         'deps',
+        // **`deps-dev` is Dependabot's own output, not a style choice.**
+        // `.github/dependabot.yml` sets `prefix-development: 'chore(deps-dev)'`, so every
+        // development-dependency PR it opens is titled that way — up to ten at once. Without this
+        // entry a PR-title check goes red on day one across every open bot PR, which is verbatim
+        // ADR-0058's "a gate set at a bar it fails on day one gets deleted rather than fixed".
+        //
+        // The distinction is KEPT rather than collapsed to `deps` (product-owner decision, CQ-1):
+        // `main`'s history already records which bumps were development-only, and flattening it
+        // would throw that away to save one line.
+        'deps-dev',
         'release',
         'repo',
       ],

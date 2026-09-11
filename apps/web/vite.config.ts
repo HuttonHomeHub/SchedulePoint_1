@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+import { bundleReportPlugin } from './scripts/bundle-report-plugin';
+
 // The web app's own version, read from its manifest and baked into the bundle at build
 // time as `__APP_VERSION__` (see `src/vite-env.d.ts` / `config/env.ts`). A compile-time
 // constant needs no runtime env var and can never drift from the published package.
@@ -26,7 +28,15 @@ const API_PROXY = {
 // Tailwind CSS v4 is wired in via its first-party Vite plugin (no PostCSS config needed).
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // Writes a size report OUTSIDE `dist/` on every build — never served, and the deployed
+    // artefact is byte-identical with it on or off (asserted, not assumed). `check:bundle-size`
+    // reads it; see the plugin's docblock for why the quantity is the entry GRAPH rather than the
+    // entry chunk.
+    bundleReportPlugin('bundle-report.json'),
+  ],
   // Pre-bundle the shared types package (consumed as compiled JS via the alias
   // below) so the dev server serves an esbuild-bundled chunk instead of routing
   // its file through Vite's Oxc transform — which otherwise walks up to that

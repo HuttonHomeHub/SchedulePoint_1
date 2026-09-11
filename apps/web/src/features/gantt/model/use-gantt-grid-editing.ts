@@ -1,4 +1,4 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, SchedulingMode } from '@repo/types';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 
 import { commitCell, type UpdateActivityFieldsFn } from './cell-commit';
@@ -29,11 +29,43 @@ import type { BarDateSource } from '@/lib/bar-dates';
  * happened to land first. The effect below simply reports the new value and lets the reducer
  * decide — which is why it can depend on the activity list without racing anything.
  */
+/**
+ * **What a typed date just did, said once per session** (ADR-0134 D6).
+ *
+ * The risk this decision creates is a pin a planner did not intend and does not notice. The
+ * mitigation deliberately is NOT a confirmation on every edit — that taxes the ordinary case to
+ * guard the rare one — but one explanation the first time it happens, an undo entry per commit
+ * (ADR-0048), and the constraint badge the bar already carries as the standing signal afterwards.
+ *
+ * **"Session" is the plan-workspace mount**, which is stated here because nothing else defines it:
+ * the flag lives in this hook's own state, so switching plans or reloading starts a new one. That
+ * is the right boundary rather than a convenient one — a planner returning to a plan a week later
+ * has forgotten, and it is the same boundary the ADR-0048 undo stack uses.
+ *
+ * It is appended to the commit's existing confirmation rather than announced separately; see the
+ * call site for why two announcements in one tick is a race whichever order they are written in.
+ */
+function usePinNote(): (key: GanttCellKey) => string {
+  const [explained, setExplained] = useState(false);
+  return useCallback(
+    (key: GanttCellKey) => {
+      if (key !== 'earlyStart' && key !== 'earlyFinish') return '';
+      if (explained) return '';
+      setExplained(true);
+      return key === 'earlyStart'
+        ? ' Typing a start date pins the activity there; the bar shows a constraint mark. Undo with Ctrl+Z.'
+        : ' Typing a finish date changes the duration, keeping the start where it is. Undo with Ctrl+Z.';
+    },
+    [explained],
+  );
+}
+
 export function useGanttGridEditing({
   activities,
   gating,
   hasComputedSchedule,
   barDateSource,
+  schedulingMode,
   hoursPerDayFor,
   updateFields,
   announce,
@@ -45,6 +77,16 @@ export function useGanttGridEditing({
   hasComputedSchedule: boolean;
   /** Which dates the grid is showing — the seed must match what the cell renders. */
   barDateSource: BarDateSource | undefined;
+  /**
+   * The plan's scheduling mode, which decides what a typed `Start` MEANS (ADR-0134 D1/D2):
+   * hand-placed in Visual, pinned as an `SNET` in Early.
+   *
+   * **Passed in, never re-derived here.** `barDateSource` above is already a function of this plus
+   * the Late overlay, and deriving the mode back out of it would be a second answer to a question
+   * the host has already answered — the shape `lib/bar-dates.ts`'s own docblock records shipping
+   * once as `docs/TECH_DEBT.md` #135.
+   */
+  schedulingMode: SchedulingMode;
   hoursPerDayFor: (activity: ActivitySummary) => number | undefined;
   updateFields: UpdateActivityFieldsFn;
   /** The shared polite live region. A committed write that says nothing is invisible to AT. */
@@ -55,6 +97,7 @@ export function useGanttGridEditing({
   recordUpdate: (before: ActivitySummary, after: ActivitySummary) => void;
 }): GanttGridEditing {
   const [state, dispatch] = useReducer(reduceCellEdit, IDLE);
+  const pinNoteFor = usePinNote();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Read straight from the props. An earlier version mirrored `activities` and `state` into refs to
@@ -121,6 +164,8 @@ export function useGanttGridEditing({
       key: current.target.key,
       text: current.text,
       hoursPerDay: hoursPerDayFor(before),
+      schedulingMode,
+      barDateSource: barDateSource ?? 'early',
       update: updateFields,
     });
 
@@ -134,7 +179,14 @@ export function useGanttGridEditing({
       // invisible to a screen-reader user even though it succeeded (WCAG 4.1.3) — `ganttDrag` had
       // announced every move since M3 and this had announced nothing, which is one correct pattern
       // applied to a control and not its neighbour, found by the M6 accessibility gate.
-      announce(`${before.name} updated.`);
+      // **One sentence, composed once**, so the note and the confirmation cannot overwrite each
+      // other. This repository has shipped announcement-overwrite defects twice — most recently
+      // ADR-0080's bulk delete, where the deletion's own sentence was spoken and then immediately
+      // replaced by the row description of whatever focus landed on — and the risk here is the
+      // same shape: the commit's confirmation fires exactly as the ADR-0032 coalesced
+      // recalculation starts its own state changes. Two `announce` calls in one tick is a race
+      // whichever order they are written in, so there is only ever one.
+      announce(`${before.name} updated.${pinNoteFor(current.target.key)}`);
       onCellClosed();
       return;
     }

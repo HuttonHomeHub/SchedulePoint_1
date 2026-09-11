@@ -249,3 +249,46 @@ v1), guest-share exposure (excluded by construction — `GuestPrincipal` cannot 
 
 **The CPM engine is not imported by anything M0–M4 shipped, and no migration runs**, so the
 ADR-0034 recalculation parity gate is untouched by construction.
+
+## Addendum (2026-09-10) — the what-if does NOT run the levelling pass
+
+Recorded rather than rewritten, on the ADR-0026 §9b precedent: the sections above stand as
+written, and this corrects what they omit.
+
+**M6's what-if drops resource levelling, and until now nothing said so.** `getCriticalPathTest`
+destructures `{ activities, edges, options, meta }` from `buildEngineGraph`
+(`schedule.service.ts:953`); that builder also returns
+`leveling: { assignments, resources } | null` (`:1234`, `:1480`), which the what-if never takes.
+`recalculate` does take it and runs `levelSchedule` whenever `plan.levelResources` is true
+(`:410-415`), then persists **that** result.
+
+So on a levelled plan the what-if perturbs a schedule the product does not display. Its control run
+reproduces the pure network dates, so the movement it reports is measured against a baseline the
+planner never sees — **and the answer looks entirely reasonable, because every number in it is
+internally consistent.** That is what makes it worth an addendum rather than a footnote: there is no
+symptom.
+
+**The omission read as a decision because this ADR is otherwise scrupulous about what its
+measurement does and does not cover** — it carries a deliberately weaker parity sentence for this
+very route (D7) and a written non-mutation proof. A reader auditing the endpoint would find a
+careful document that never mentions the gap. `grep -ci "level" docs/adr/0116-*.md` returned **0**.
+
+**The route's own OpenAPI description made the opposite claim**, which is worse than silence: it
+said the what-if "runs the same passes a recalculation would", in the clause justifying the 422
+list. The conclusion held — the calendar errors come from the network pass, which does run — but the
+reason as stated was too broad, and on a levelled plan it is simply false. Both the claim and the
+omission are corrected in `schedule.controller.ts`.
+
+**No gate could have caught it.** The seeded fixture reports `leveledActivityCount: 0` with
+`level_resources = false` and 45 resource assignments, so every test exercising this route runs
+against a plan where the dropped pass is a no-op anyway.
+
+**What is fixed here is the honesty half only.** `docs/TECH_DEBT.md` #248 names two remedies and
+says to do at least one: state the limitation, or thread `graph.leveling` through and level both the
+control and the perturbed pass. The second is the correct one and costs a second pass per side; it
+is a decision about engine work and stays open on that row. Doing the cheap half now is what stops a
+reader trusting the number in the meantime.
+
+Found by two independent reviewers (database-architect and test-engineer) while reviewing the
+revision-compare spec, which proposed to reuse this replay mechanism and would have inherited the
+gap.

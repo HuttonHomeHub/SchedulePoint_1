@@ -331,7 +331,14 @@ export function ResourceStripPanel({
           <details>
             {/* The label branches WITH the table. Naming a resource here when the view is stacked
                 would announce a name the reader is not looking at — and `resourceName` of a
-                sentinel is "Unknown resource", which is worse than saying nothing. */}
+                sentinel is "Unknown resource", which is worse than saying nothing.
+
+                The stacked wording is `Show data table`, NOT the spec's
+                `Show data table (all resources)` — a deliberate divergence recorded here because
+                it was previously undocumented, which is what made it a finding (#228) rather than
+                a choice. The parenthesis restates the picker immediately above it, which already
+                reads "All resources (stacked)"; a disclosure that repeats its own neighbour reads
+                as two controls for two things. */}
             <summary className="text-muted-foreground cursor-pointer text-sm select-none">
               {stackedAll
                 ? 'Show data table'

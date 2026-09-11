@@ -25,6 +25,8 @@
 import { readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+import { parseAdvisoryGates } from './lib/advisory-gates.mjs';
+
 const root = new URL('..', import.meta.url).pathname;
 
 /**
@@ -48,28 +50,17 @@ const read = (p) => {
 };
 
 const prepush = read('scripts/prepush.sh');
-const block = /^ADVISORY_GATES=\(([\s\S]*?)\)\s*$/m.exec(prepush);
-if (!block) {
-  console.error(
-    'check:advisory-agreement: no ADVISORY_GATES=( … ) array found in scripts/prepush.sh.\n' +
-      '    If the advisory mechanism was redesigned, update this check — do not delete it.',
-  );
-  process.exit(1);
-}
-// **Comments are stripped and BOTH quote styles are accepted.** The first version matched
-// double-quoted entries only, so rewriting the array with single quotes — a cosmetic edit that
-// changes nothing in bash — produced an EMPTY declared set and the gate then accused
-// `check:reconcile-due` of being unlisted. It also ended the array at the first `)`, so a `)` inside
-// an in-array comment truncated the capture and silently dropped every gate named on a later line.
-// Both reproduced by the ADR-0124 devops review; both are the shape this gate exists to catch.
-const arrayBody = block[1].replace(/#[^\n]*/g, '');
-const declared = new Set([...arrayBody.matchAll(/"([^"]+)"|'([^']+)'/g)].map((m) => m[1] ?? m[2]));
-if (declared.size === 0) {
-  console.error(
-    'check:advisory-agreement: ADVISORY_GATES parsed to an EMPTY list.\n' +
-      '    An empty list is indistinguishable from a parse failure, and every assertion below is\n' +
-      '    over a list. If no gate is advisory any more, delete this check and the mechanism with it.',
-  );
+
+// **The parse is SHARED, not restated** (`scripts/lib/advisory-gates.mjs`). It lived here until
+// `docs/specs/delivery-gates/` M5, when `check:ci-roster` needed the same answer and a second copy
+// would have been the duplication `docs/TECH_DEBT.md` #244 exists to remove — of the weak version,
+// since this one has been hardened twice. It throws rather than returning an empty set, because an
+// empty list is indistinguishable from a parse failure and every assertion below is over the list.
+let declared;
+try {
+  declared = parseAdvisoryGates(prepush);
+} catch (error) {
+  console.error(`check:advisory-agreement: ${error instanceof Error ? error.message : error}`);
   process.exit(1);
 }
 

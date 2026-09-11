@@ -6,9 +6,17 @@ import { describe, expect, it } from 'vitest';
 /**
  * **Who may paint `bg-card` / `bg-popover` by hand** (ADR-0097 §1.5c).
  *
- * The reset makes `Card` and `Popover` restore the page family for their subtree, which is what
- * keeps ADR-0055's promise that "a Card means the same thing everywhere" true inside a rebinding
- * world. But the plan framed the fix as "Card and Popover become resets" — and the component review
+ * The reset is MEANT to make `Card` and `Popover` restore the page family for their subtree, which
+ * is what would keep ADR-0055's promise that "a Card means the same thing everywhere" true inside a
+ * rebinding world. **It is not built** (`docs/TECH_DEBT.md` #279, measured 2026-09-10): there is no
+ * `[data-surface='card']` or `[data-surface='popover']` rule in `globals.css`, `RESET_TONES` has
+ * zero production callers, and what `<Surface tone="card">` actually renders is
+ * `bg-background text-foreground` — which inside `chrome` resolves to the **chrome** fill and ink,
+ * the opposite of restoring the page family. Read every sentence below about what a reset does as
+ * describing the intended mechanism, not today's behaviour, and see the instruction note before
+ * `ALLOWED` for what to do in the meantime.
+ *
+ * The plan framed the fix as "Card and Popover become resets" — and the component review
  * found that those two fills are **hand-applied at twelve sites that do not go through either
  * primitive**, several of which are not portaled and so really can land inside a scope.
  *
@@ -21,7 +29,15 @@ import { describe, expect, it } from 'vitest';
  * deciding which kind it is.
  *
  * Adding a site means answering one question in the docblock here: does this element ever render
- * inside a `<Surface>`? If it can, it needs `<Surface tone="card">` rather than a raw fill.
+ * inside a `<Surface>`?
+ *
+ * **Until #279 lands, "yes" has no remedy available, and reaching for the one this file used to
+ * name makes things worse.** `<Surface tone="card">` inside a scope paints that scope's fill and
+ * ink, so swapping a raw `bg-card` for it turns a pair that is merely ungated into one that is
+ * actively wrong — with this gate going green over the change. So: add the site to `ALLOWED` with
+ * the containment reason that makes it safe today (it is portalled, it is top-layer, or nothing
+ * renders it inside a `<Surface>`), and if none of those is true, say so in the entry and raise it
+ * on #279 rather than reaching for the reset.
  */
 const ALLOWED = new Set([
   // The primitives themselves — the definition, not a consumer.
@@ -58,7 +74,8 @@ const ALLOWED = new Set([
   // today because nothing yet renders them inside a `<Surface>` — `tabs.tsx` is the activity
   // editor's vertical tabs and the resource strip sits beside the chrome band rather than in
   // it. ADR-0097 D17.2 moves that editor into a docked panel, which is exactly the move that could
-  // put one of them inside a scope; when it does, these become `<Surface tone="card">`.
+  // put one of them inside a scope; when it does, they need the reset #279 describes — which does
+  // not exist yet, so that move is blocked on #279 rather than on an edit here.
   // `plan-workspace-toolbar.tsx` left this list at the workspace visual polish pass (2026-08-28):
   // its three `bg-card` dock wrappers became `<Surface tone="panel">` — item 7's whole subject —
   // which is this gate's staleness assertion doing its job.
@@ -104,9 +121,11 @@ describe('raw reset fills', () => {
     expect(
       unexpected,
       `new hand-applied bg-card / bg-popover:\n${unexpected.join('\n')}\n\n` +
-        'Decide which kind it is. If it can render inside a <Surface>, use <Surface tone="card"> ' +
-        'so the page family is restored for its subtree; if it is portalled or top-layer it is ' +
-        'outside every scope already — add it to ALLOWED with that reason.',
+        'Decide which kind it is. If it is portalled or top-layer it is outside every scope ' +
+        'already — add it to ALLOWED with that reason. If it CAN render inside a <Surface>, do ' +
+        'NOT reach for <Surface tone="card">: the reset is not built (docs/TECH_DEBT.md #279), ' +
+        "so it would paint the enclosing scope's fill and ink and make the pair actively wrong " +
+        'rather than merely ungated. Add it with what makes it safe today, and raise it on #279.',
     ).toEqual([]);
   });
 

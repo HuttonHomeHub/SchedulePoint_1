@@ -13,7 +13,7 @@ import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
 
 import type { ScheduleRepository } from './schedule.repository';
-import { ScheduleService } from './schedule.service';
+import { ScheduleService, takeBothSides } from './schedule.service';
 
 /**
  * **`ScheduleService.crossPlanRevisionCompare` — the seam, not the arithmetic.**
@@ -381,5 +381,58 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
     expect(result.ghosts).toBeDefined();
     expect(result.links).toBeDefined();
     expect(result.changes).toBeUndefined();
+  });
+});
+
+/**
+ * **The uncoded sample is filled from BOTH sides** (`docs/TECH_DEBT.md` #263(f)).
+ *
+ * The defect these pin is not a wrong number — `fromUncoded` and `toUncoded` were always correct.
+ * It is that the ROWS beside those numbers could be entirely one-sided, on the one field whose
+ * stated job is to let a reader SEE what was left out rather than be told a count. A reader with
+ * 250 uncoded rows on the old side and 50 on the new saw 200 old rows, none new, and a non-zero
+ * `toUncoded` above them.
+ */
+describe('takeBothSides (the uncoded sample budget)', () => {
+  const rows = (prefix: string, n: number): string[] =>
+    Array.from({ length: n }, (_, i) => `${prefix}${String(i)}`);
+
+  it('never lets one side crowd the other out of the sample', () => {
+    // The reported case: the from-side alone exceeds the cap.
+    const out = takeBothSides(rows('f', 250), rows('t', 50), 200);
+    expect(out).toHaveLength(200);
+    expect(out.filter((r) => r.startsWith('f'))).toHaveLength(150);
+    // The decisive half. Concatenate-and-slice returns ZERO of these.
+    expect(out.filter((r) => r.startsWith('t'))).toHaveLength(50);
+  });
+
+  it('splits evenly when both sides overflow', () => {
+    const out = takeBothSides(rows('f', 500), rows('t', 500), 200);
+    expect(out.filter((r) => r.startsWith('f'))).toHaveLength(100);
+    expect(out.filter((r) => r.startsWith('t'))).toHaveLength(100);
+  });
+
+  /**
+   * The pinned counter-case. Without it, every assertion above is satisfied by a rule that always
+   * reserves half the budget for a side that has nothing to put in it — which would shrink the
+   * commonest sample (one plan with uncoded rows, the other with none) from 200 rows to 100.
+   */
+  it('yields an unused half to the other side rather than reserving it', () => {
+    expect(takeBothSides(rows('f', 500), [], 200)).toHaveLength(200);
+    expect(takeBothSides([], rows('t', 500), 200)).toHaveLength(200);
+    expect(takeBothSides(rows('f', 10), rows('t', 500), 200)).toHaveLength(200);
+  });
+
+  it('never exceeds the cap the response publishes, whatever the split', () => {
+    for (const [f, t] of [
+      [0, 0],
+      [1, 1],
+      [199, 1],
+      [1, 199],
+      [201, 201],
+      [10_000, 3],
+    ] as const) {
+      expect(takeBothSides(rows('f', f), rows('t', t), 200).length).toBeLessThanOrEqual(200);
+    }
   });
 });

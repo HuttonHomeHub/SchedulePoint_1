@@ -70,11 +70,37 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 ## Bundle size
 
-- **Budgets:** initial (critical-path) JS ≤ ~200KB gzipped; per lazy route chunk
-  ≤ ~150KB gzipped. **These are advisory and unmeasured** — nothing in CI checks
-  a bundle size, and no baseline has been recorded. Enforcing them is a backlog
-  item ([`BACKLOG.md`](BACKLOG.md)); until then, do not claim a change is within
-  budget without measuring it.
+- **The budget is enforced, and it is the measured floor plus 5%** — not the
+  ~200 kB figure this section carried for years, which predates any build being
+  looked at. `apps/web/bundle-budget.json` holds the numbers and
+  `pnpm --filter @repo/web check:bundle-size` compares them to a real artefact on
+  every CI run (`docs/specs/delivery-gates/` M3). ADR-0058: a bar set at an
+  aspiration gets deleted rather than met.
+- **The quantity is the entry GRAPH, not the entry chunk, and the difference is
+  33 kB.** The graph is the entry chunk plus the transitive closure of its
+  **static** imports — everything the browser must parse before it can render.
+  Measured 2026-09-11 by `pnpm --filter @repo/web build`, which now writes
+  `apps/web/bundle-report.json`. **In bytes, because that is what
+  `bundle-budget.json` holds and what the gate compares**: entry chunk 370,899
+  gzip, `paint` 33,477, the Rolldown runtime 368 — **404,744 for the graph**,
+  from 1,393,464 raw. CSS is a further 15,144 gzip from 84,285 raw. So recording
+  the entry chunk alone as "the initial bundle" understates first paint by
+  **33,845 bytes**, the `paint` chunk it statically imports.
+- **The figure this section carried on 2026-09-10 (372.42 kB) is NOT comparable
+  with the one above, and saying so is the correction.** It came from Vite's own
+  build reporter, which prints kB = 1000 bytes; these come from
+  `bundle-report-plugin.ts`. An earlier version of this bullet compared the two
+  as if they were one measurement. Gzip level was checked and is not the cause
+  (level 9 moves these assets ~0.2%), and `pnpm-lock.yaml` is untouched between
+  the two dates, so the vendor chunks did not change. **Quote bytes here**, and
+  compare like with like or not at all.
+- **`jspdf` (125.57 kB gzip) and `html2canvas` (45.51 kB) are confirmed OUTSIDE
+  the entry graph** — verified from Rollup's own static/dynamic import lists
+  rather than inferred from chunk names, which cannot say which kind an import
+  was. They cost the first paint nothing.
+- The remaining gap to any aspirational figure is explained by the bullet below
+  on code splitting rather than by anything being oversized: every authenticated
+  route is in the entry chunk (`docs/TECH_DEBT.md` #292).
 - Prefer platform APIs and small libraries; **justify every new dependency**
   (size, maintenance, tree-shakeability) in the PR.
 - Import icons and utilities by name (tree-shakeable); never import whole
@@ -83,8 +109,16 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 ## Code splitting & lazy loading
 
-- **Route-based splitting by default** — each route is its own chunk; the app
-  shell and critical path stay in the initial bundle.
+- **Route-based splitting is the INTENTION, and is not what the app does today.**
+  This line read "route-based splitting by default — each route is its own chunk"
+  until 2026-09-10, when it was measured. `app/router.tsx` declares 26 routes and
+  has **two** `lazy()` boundaries — `/share` and `/staff` — and `vite.config.ts`
+  sets no `manualChunks`. A production build emits **10 JS chunks**, of which two
+  are route chunks (`share` at 0.30 kB gzip, being only the wrapper, and `staff`
+  at 23.84 kB); the rest are library splits that Rolldown derived from the two
+  dynamic imports. **Every authenticated route — the whole plan workspace — is in
+  the entry chunk.** Aim for the rule above when adding a route; do not read it as
+  a description of the present.
 - **Lazy-load heavy, non-critical UI** (charts, rich editors, rarely-used
   dialogs) behind `React.lazy`/dynamic import with a Suspense fallback.
 - Prefetch likely-next routes on link hover/focus (intent-based).

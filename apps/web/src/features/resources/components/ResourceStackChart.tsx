@@ -1,4 +1,5 @@
 import type { ResourceHistogramBucket } from '@repo/types';
+import { useMemo } from 'react';
 
 import { formatUnits } from './ResourceLoadingTable';
 import { StackLegend } from './StackLegend';
@@ -52,7 +53,10 @@ export function ResourceStackChart({
   buckets: readonly ResourceHistogramBucket[];
 }): React.ReactElement {
   const { segments, bucketTotals, peak } = stacked;
-  const offsets = stackOffsets(stacked, buckets.length);
+  // O(buckets x segments) — roughly 1,600 operations at the dialog's caps. Memoised because it is
+  // free to memoise, not because it was measured to cost anything (#228): the dialog re-renders
+  // rarely and is nowhere near an animation loop.
+  const offsets = useMemo(() => stackOffsets(stacked, buckets.length), [stacked, buckets.length]);
   // A zero peak would divide by zero; an empty plan is handled by the caller, but a plan whose every
   // value is 0 is a real state (assignments with no budgeted units) and must not produce NaN heights.
   const scale = peak > 0 ? PLOT_HEIGHT / peak : 0;

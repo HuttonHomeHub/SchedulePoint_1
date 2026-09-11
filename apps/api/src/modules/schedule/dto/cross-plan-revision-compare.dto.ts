@@ -162,7 +162,12 @@ export class CrossPlanCorrelationDto implements CrossPlanCorrelation {
 
   @ApiProperty({
     type: [CrossPlanCorrelationRowDto],
-    description: 'Uncoded rows from BOTH sides, each naming its plan. Capped the same way.',
+    description:
+      'Uncoded rows from BOTH sides, each naming its plan, within the same `cap` — which is ' +
+      'SPLIT between the sides rather than filled from the old side first, so a side with more ' +
+      'than `cap` uncoded rows can never crowd the other out of the sample entirely. A side that ' +
+      'cannot fill its half yields the remainder, so a one-sided population still shows `cap` ' +
+      'rows. The true totals are `fromUncoded` and `toUncoded`.',
   })
   uncodedRows!: readonly CrossPlanCorrelationRowDto[];
 
@@ -393,18 +398,24 @@ export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
    * What is load-bearing is the SERVICE's typed object literal: `implements` constrains the floor
    * (this class cannot be missing or mistype a member) and says nothing about the ceiling.
    *
-   * **The excess-property check covers less than the sibling's docblock claims, and this says so.**
-   * TypeScript rejects an extra key in an object literal assigned to a declared type, and in each
-   * branch of a ternary assigned as a property value — so `criticalPath` and the required fields
-   * are covered. It does **not** fire inside `...(cond ? { … } : {})`, which is how `changes`,
+   * **The excess-property check used to cover less than the sibling's docblock claimed, and this
+   * said so before it was closed** (`docs/TECH_DEBT.md` #263(c), closed 2026-09-11). TypeScript
+   * rejects an extra key in an object literal assigned to a declared type, and in each branch of a
+   * ternary assigned as a property value — so `criticalPath` and the required fields were always
+   * covered. It does **not** fire inside `...(cond ? { … } : {})`, which is how `changes`,
    * `ghosts`/`ghostsTotal`/`ghostsUndrawable` and `links`/`linksTotal`/`linksUndrawable` are
    * attached. Demonstrated by compiling the shape rather than reasoned about (M4 api review), and
-   * inherited unchanged from the shipped route, which uses the same idiom under the same claim.
+   * inherited unchanged from the shipped route, which used the same idiom under the same claim.
    *
-   * What genuinely covers those seven fields is the **G4-style scan** over this file and the
-   * service's method slice: it reads source text, so a spread branch is not a hiding place for the
-   * concrete harm the check is invoked against — a cost-shaped field making a handover artefact
-   * role-dependent.
+   * Each of those three branches now carries its own `satisfies Pick<CrossPlanRevisionCompare, …>`,
+   * which restores the check per branch in both routes. Proved by injecting a `cost` key into all
+   * six and reading back six `TS2353` errors naming the field and the exact `Pick` — the six were
+   * injected one by one rather than the mechanism being assumed from four of them.
+   *
+   * The **G4-style scan** over this file and the service's method slice remains the independent
+   * cover, and is not made redundant by the `satisfies`: it reads source text, so it catches a
+   * cost-shaped field wherever it is written — including a shape the compiler would accept because
+   * somebody widened the type to admit it.
    */
   static from(model: CrossPlanRevisionCompare): CrossPlanRevisionCompareDto {
     return model;

@@ -195,9 +195,13 @@ export class ActivityRepository {
    * The plan's activities projected to the four columns a lane layout needs — `id`, its current
    * `laneIndex`, the `version` the batch write matches on, and the computed span it is packed by.
    *
-   * Deliberately NOT the full rows, for the reason `findWbsTreeRows` gives one method down: a layout
-   * pass may touch every activity in the plan, and the ~40 columns an `Activity` carries are all
-   * irrelevant to "where should this bar sit". Ordered by id so a caller's input — and therefore the
+   * Deliberately NOT the full rows, for the reason {@link ActivityRepository.findPlanWbsTree} gives:
+   * a layout pass may touch every activity in the plan, and the ~40 columns an `Activity` carries
+   * are all irrelevant to "where should this bar sit". _(Corrected 2026-09-11: this cited
+   * `findWbsTreeRows` "one method down", and it was wrong twice — no such symbol has ever existed,
+   * and one method down is `updatePlacements`. A reader following it landed on an unrelated batch
+   * writer. The real neighbour is four down and is now linked rather than described by position,
+   * which is what goes stale.)_ Ordered by id so a caller's input — and therefore the
    * packer's tie-breaks — never depend on the database's scan order.
    */
   async findLayoutRowsForPlan(

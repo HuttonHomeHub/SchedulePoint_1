@@ -505,7 +505,14 @@ describe('composeListboxRowText', () => {
 });
 
 describe('the comparison overlay’s spoken summary', () => {
-  const ghost = (name: string, removed = false) => ({ name, removed });
+  let nextId = 0;
+  const ghost = (name: string, removed = false) => ({
+    // A distinct id per ghost, because the product's names are NOT unique — only `code` carries a
+    // per-plan unique index. See the duplicate-key case below.
+    activityId: `a${String((nextId += 1))}`,
+    name,
+    removed,
+  });
 
   it('is absent when the overlay draws nothing', () => {
     // A description of a picture nobody is looking at is noise, not an equivalent.
@@ -516,9 +523,28 @@ describe('the comparison overlay’s spoken summary', () => {
     // An activity that merely moved already has a listbox row; a removed one has none, which is
     // the whole reason this list exists (ADR-0122).
     const summary = compareOverlaySummary([ghost('Piling'), ghost('Site hoarding', true)], 0);
-    expect(summary?.removed).toEqual(['Site hoarding']);
+    expect(summary?.removed.map((r) => r.name)).toEqual(['Site hoarding']);
     expect(summary?.heading).toContain('1 moved');
     expect(summary?.heading).toContain('1 removed');
+  });
+
+  it('carries an id per removed activity, so two of one name are two rows', () => {
+    /**
+     * `docs/TECH_DEBT.md` #255 item 6. The removed list was `string[]` of names and the consumer
+     * rendered `key={name}`, so two removed activities sharing a name produced a duplicate React
+     * key — React then treats them as one row and drops the second from the list a screen-reader
+     * user is given, which is the one channel with no way to check.
+     *
+     * **Reachable, not theoretical**: nothing in this product makes an activity name unique. Only
+     * `code` carries a per-plan unique index (`uq_activities_plan_code`), and two removed
+     * "Excavate" rows are exactly what a re-sequenced programme produces.
+     */
+    const summary = compareOverlaySummary([ghost('Excavate', true), ghost('Excavate', true)], 0);
+    expect(summary?.removed).toHaveLength(2);
+    const keys = summary?.removed.map((r) => r.activityId) ?? [];
+    expect(new Set(keys).size).toBe(2);
+    // The NAME is still what a reader hears — the id is a key and never copy.
+    expect(summary?.removed.map((r) => r.name)).toEqual(['Excavate', 'Excavate']);
   });
 
   it('states what it could NOT draw, and why, rather than going quiet', () => {

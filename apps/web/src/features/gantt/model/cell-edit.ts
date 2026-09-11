@@ -238,10 +238,26 @@ export interface GanttGridEditing {
 /**
  * The grid column keys that map to an editable cell.
  *
- * `percentComplete` is deliberately present in {@link GanttCellKey} and absent here: the grid has
- * no Progress column yet. Carrying it in the model means adding that column later is a column, not
- * a re-decision about which permission a progress write needs — and the gate test already covers
- * it, so the answer cannot quietly change in between.
+ * **A column belongs here only if `cellWriteFields` can accept SOMETHING for it.** This list
+ * decides whether a cell opens; it does not decide whether anything can be written, and the two
+ * being decided in different files with nothing comparing them is `docs/TECH_DEBT.md` #290:
+ * `earlyStart`/`earlyFinish` were listed here while the commit path returned `null` for every
+ * input, so the cell opened, took a keystroke, and answered "That value is not something this cell
+ * accepts." to a correctly-formatted date — shown and spoken, live since `web-v0.92.0`. Both files
+ * were internally correct and defensible; only the relationship was wrong.
+ * `cell-commit.test.ts` now asserts it.
+ *
+ * One key is deliberately present in {@link GanttCellKey} and absent here:
+ *
+ * - `percentComplete` — the grid has no Progress column yet. Carrying it in the model means adding
+ *   that column later is a column, not a re-decision about which permission a progress write needs,
+ *   and the gate test already covers it so the answer cannot quietly change in between.
+ * `earlyStart` / `earlyFinish` were the two keys #290 was about, and they are **back**, with the
+ * write that makes them honest — ADR-0134, landed in the same commit, never before it. A typed date
+ * writes the constraint a drag writes: an `SNET` in Early mode, a hand-placement in Visual, and a
+ * duration for a typed finish in both. **Adding a key here without a `cellWriteFields` branch that
+ * can accept something re-creates #290**, which is why the assertion exists rather than a comment
+ * asking nicely.
  */
 export const GANTT_EDITABLE_COLUMNS: Partial<Record<string, GanttCellKey>> = {
   name: 'name',

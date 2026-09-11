@@ -21,6 +21,7 @@ import {
   REVISION_COMPLETION_REASONS,
   REVISION_FREE_CHANGE_CLASSES,
   REVISION_PAID_CHANGE_CLASSES,
+  REVISION_LINK_STATES,
   REVISION_NOT_ASSESSABLE_REASONS,
   REVISION_SETTINGS_VERDICTS,
   REVISION_SIDE_KINDS,
@@ -47,9 +48,11 @@ import {
  * hand-copied, not because anybody preferred it but because no backing tuple existed to derive
  * from. `REVISION_NOT_ASSESSABLE_REASONS` was added rather than the claim softened, and it earned
  * its keep immediately — a third reason joined that union in the same commit and reached both DTOs
- * without either being edited. The `ADDED | REMOVED | CHANGED` link state remains a hand-copied
- * literal, and is named here rather than left as a silent exception to a sentence that says
- * "every".
+ * without either being edited. The `ADDED | REMOVED | CHANGED` link state was left as the last
+ * hand-copied literal and **named** here rather than silently excepted from a sentence that says
+ * "every"; `REVISION_LINK_STATES` closed it on 2026-09-11 (`docs/TECH_DEBT.md` #263(d)), so the
+ * sentence above is now true without a footnote. The wire values did not change — what changed is
+ * that a fourth state would reach this file on its own.
  */
 
 export class RevisionSideDto implements RevisionSide {
@@ -348,7 +351,7 @@ export class RevisionLinkChangeDto implements RevisionLinkChange {
   @ApiProperty({ description: 'Carried because a REMOVED edge is in no live edge list.' })
   predecessorId!: string;
   @ApiProperty() successorId!: string;
-  @ApiProperty({ enum: ['ADDED', 'REMOVED', 'CHANGED'] })
+  @ApiProperty({ enum: REVISION_LINK_STATES })
   state!: RevisionLinkChange['state'];
 }
 
@@ -392,6 +395,14 @@ export class RevisionCompareDto implements RevisionCompare {
    * does not stop a wider value carrying an undeclared field). The guarantee comes from
    * `revisionCompare` building `const result: RevisionCompare = { … }`, where TypeScript's
    * excess-property check on an object literal rejects anything extra at that one site.
+   *
+   * **That was an overclaim until 2026-09-11, and the sibling DTO said so first**
+   * (`docs/TECH_DEBT.md` #263(c)). The declared type checks this literal and each branch of a
+   * ternary assigned as a property value, and does **not** fire inside `...(cond ? { … } : {})` —
+   * which is precisely how the seven optional projection fields are attached. Each of those three
+   * branches now carries its own `satisfies Pick<RevisionCompare, …>`, so the sentence above is
+   * true of the whole shape rather than of the part that never needed it. Verified by injecting a
+   * `cost` key into every branch and reading the six `TS2353` errors back, not by reasoning.
    *
    * That is a service-discipline guarantee standing in for a DTO-boundary one, and it is the only
    * `.from` in this directory that works that way — the siblings copy fields explicitly. It is kept

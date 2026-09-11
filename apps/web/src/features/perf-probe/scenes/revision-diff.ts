@@ -1,3 +1,5 @@
+import { measureIdleInterval, summariseFrameStamps } from '../model/pacing';
+
 import { scaleScene } from './scale-scene';
 
 import type { GhostBar } from '@/features/tsld/render/lenses';
@@ -74,11 +76,6 @@ export interface DiffCounts {
    */
   visibleBars: number;
   visibleLinks: number;
-}
-
-export function percentile(sorted: number[], p: number): number {
-  const idx = Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p));
-  return sorted[idx] ?? 0;
 }
 
 export function iso(dayOffset: number): string {
@@ -221,26 +218,19 @@ export function countVisible(
 }
 
 /**
- * Measure the display's own frame interval with the canvas idle.
+ * The display's own frame interval, **re-exported rather than re-implemented** (#258).
  *
  * Not decoration, and the reason is `measure-draw-in-browser.js`'s: without it there is nothing to
  * call a dropped frame *against*, and a 120 Hz machine and a 60 Hz one would both be scored against
  * 16.7 ms — so the faster machine would be reported as dropping half its frames.
+ *
+ * There was a second implementation here, identical to `model/pacing.ts`'s apart from taking
+ * `frames` as a required argument — and taking its p50 through this file's own percentile, which
+ * used a different index from the other three. So the interval this scene measured and the interval
+ * `runner/run-probe.ts` measures were not computed the same way, on the very quantity that defines
+ * what "dropped" means for each of them.
  */
-export async function measureIdleInterval(frames: number): Promise<number> {
-  const stamps: number[] = [];
-  await new Promise<void>((resolve) => {
-    const tick = (t: number): void => {
-      stamps.push(t);
-      if (stamps.length > frames) resolve();
-      else requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-  const gaps = stamps.slice(1).map((t, i) => t - (stamps[i] ?? t));
-  gaps.sort((a, b) => a - b);
-  return percentile(gaps, 0.5);
-}
+export { measureIdleInterval };
 
 /** One sustained programmatic pan, painted under rAF, reporting how the FRAMES landed. */
 export async function panRun(
@@ -286,19 +276,9 @@ export async function panRun(
     requestAnimationFrame(tick);
   });
 
-  const gaps = stamps.slice(1).map((t, i) => t - (stamps[i] ?? t));
-  // A frame is "dropped" when its interval exceeds 1.5x the display's own — i.e. at least one
-  // whole vsync was missed. Not a fixed 16.7 ms, per `measureIdleInterval`'s docblock.
-  const dropped = gaps.filter((g) => g > idleInterval * 1.5).length;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  const mean = gaps.reduce((s, g) => s + g, 0) / Math.max(1, gaps.length);
-  return {
-    frames: gaps.length,
-    droppedPct: (dropped / Math.max(1, gaps.length)) * 100,
-    intervalP50: percentile(sorted, 0.5),
-    intervalP95: percentile(sorted, 0.95),
-    fps: 1000 / mean,
-  };
+  // One shared rule (#258) — the dropped-frame threshold, the percentile and the gap derivation
+  // all live in `model/pacing.ts` now, so this scene and `canvas-draw` cannot answer differently.
+  return summariseFrameStamps(stamps, idleInterval);
 }
 
 export interface BenchOptions {
@@ -318,6 +298,20 @@ export interface BenchOptions {
    * whose denominator nothing had checked. Found by the M5 component review.
    */
   idleInterval?: number;
+  /**
+   * Called at the start of each pair, so the panel can say where the run has got to
+   * (`docs/TECH_DEBT.md` #259 item 11).
+   *
+   * **This scene narrated ONCE for the whole run** while its sibling `canvas-draw` narrates per
+   * repeat, so a screen-reader user driving a multi-pair `revision-diff` heard one sentence and
+   * then up to twenty-five seconds of nothing — indistinguishable from a run that had died. The
+   * difference was not a decision: `canvas-draw`'s repeat loop lives in the runner, where
+   * `onProgress` is in scope, and this scene's pair loop lives here, where it was not.
+   *
+   * Optional so the CLI driver keeps behaving exactly as it did — it narrates to nobody — which is
+   * the same reason `idleInterval` above is optional.
+   */
+  onPairStart?: (pairIndex: number, pairCount: number) => void;
   /**
    * Asked between pairs. Returning true stops the run where it stands.
    *
@@ -433,6 +427,9 @@ export async function runRevisionDiff(
   const pairs: { baseline: PacingResult; treatment: PacingResult }[] = [];
   for (let p = 0; p < opts.pairs; p += 1) {
     if (opts.shouldStop?.()) break;
+    // Before the pair rather than after it, so the first sentence arrives when the work starts
+    // instead of when it is already done.
+    opts.onPairStart?.(p, opts.pairs);
     // Alternating, same session, baseline first. A container's absolute timings are noise; only a
     // paired difference is quotable (ADR-0100 M0's design, the one that passed).
     const baseline = await panRun(

@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1208 web
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1218 web
 > source files with 42 Playwright suites beside the base journey, and
-> 133 ADRs.
+> 136 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -203,10 +203,17 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full strategy. In short:
 ## 9. Commit standards
 
 - **[Conventional Commits](https://www.conventionalcommits.org/)** are enforced
-  by commitlint (git hook + expected in PR titles).
+  by commitlint — a git hook on every commit, and `.github/workflows/pr-title.yml` on the
+  **pull-request title**, which is the subject that actually lands on `main` under
+  squash-merge and the one message the hook never sees. That workflow checks the title with
+  the ` (#N)` suffix GitHub appends, because a 94-character title is legal and the 101-character
+  commit it becomes is not.
 - Format: `type(scope): subject` — e.g. `feat(api): add a recurring job scheduler`.
 - Allowed types: `feat, fix, docs, style, refactor, perf, test, build, ci, chore,
-revert`. Scopes: `web, api, config, types, interchange, db, ci, docs, deps, release, repo`.
+revert`. Scopes: `web, api, config, types, interchange, db, ci, docs, deps, deps-dev, release,
+repo` — `deps-dev` is Dependabot's own output for a development-dependency bump
+  (`.github/dependabot.yml` sets `prefix-development`), kept distinct from `deps` because
+  `main`'s history already records which bumps were development-only.
 - Breaking changes: append `!` (`feat(api)!: …`) and a `BREAKING CHANGE:` footer.
 - Subject: imperative mood, lower-case, no trailing period, ≤ 100 chars.
 
@@ -4297,6 +4304,43 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   so C2 fired and the run was red for the wrong reason. **The CPM engine is not imported and no
   migration runs** — no product code changes at all.
 
+- **ADR-0132** _(Accepted; landed 2026-09-09)_ — An alert says whether it is an event or a
+  standing condition. `Alert` derived its ARIA live-region role from its `tone` and deliberately
+  `Omit`ted `role` so two call sites could not answer one question differently — **that argument is
+  right and is why this ADR does not overturn it.** What it left out is that `tone` answers _how
+  urgent_ and nothing answered a different question: **is this an event at all?** Six staff-console
+  alerts state **standing conditions of the installation** — no mail transport, retention sweeping
+  disabled, the sweeper overdue — and each renders only once its query settles, so the live region
+  and its content enter the DOM **together**, which is the unreliable case for a live region rather
+  than the silent one, and either way announces a persistent fact as though something had just
+  happened. `alert.tsx`'s own docblock says an Alert is "a message about what just happened", which
+  none of these is. So `purpose: 'event' | 'condition'` is **required with no default** (ADR-0117's
+  shape for ADR-0117's reason): `condition` renders **no `role` at all**, `event` renders exactly
+  today's tone-derived role, and `Omit<…, 'role'>` stands. A default of `'event'` would have touched
+  two files instead of twelve and left the next author reaching this defect by not knowing the
+  question existed — which is how the present ten arose. **D4 says plainly that no WCAG success
+  criterion is failed**, this register having overstated such a citation once (ADR-0082).
+  **Three things found by reading changed the shape of the decision, and all three corrected the
+  note that raised it**: the count was wrong (25 production call sites, not 33 — the extra eight
+  were `render()` calls inside `alert.test.tsx`); there are **six** offending sites and not four,
+  **two of them `role="alert"`**, an assertive region created by data arriving being the worse case
+  and absent from the brief entirely; and two of the six **duplicate a sentence the screen already
+  announces correctly** through `Panel`'s properly-mounted polite region, which is what makes "do
+  nothing" unarguable rather than merely unattractive — those two are also `aria-describedby`
+  targets of the retention table, so they are read on insertion and again on focus. A third
+  duplicate was then found and **recorded rather than acted on**: the ADR's accounting named two and
+  there are three, which changes no decision and would have been wrong to state as two. `NoticeStrip`
+  unification is **refused rather than deferred**, and three `DataTable empty={…}` sites are
+  classified while their _treatment_ is left to the empty-state question. No feature flag (ADR-0088
+  D1). **The CPM engine is not imported and no migration runs.**
+  **This entry was missing from the register until 2026-09-10 — the ADR-0071 failure, one document
+  along.** ADR-0132 was filed, Accepted, in `docs/adr/README.md`, and cited by `docs/ROADMAP.md`,
+  `docs/TECH_DEBT.md`, `docs/DESIGN_SYSTEM.md` and five spec directories, while being absent from
+  this list. `check:adr-coverage` gates the ADR index and `ROADMAP.md` and **structurally cannot see
+  this file**, so nothing failed. Found incidentally by an agent writing an unrelated spec, and
+  repaired in the same pass rather than stepped over; the gap is now `docs/TECH_DEBT.md` #291, and a
+  full comparison of all 133 ADR files against this section found **exactly one** missing.
+
 - **ADR-0133** _(Accepted; M0–M8 landed 2026-09-10)_ — A command surface declares its rows, and the
   pen leads the one it unlocks. Five epics had worked this band and each asked whether the row
   fitted; none asked what it was made of. **The measurement that opened this one is the whole
@@ -4354,6 +4398,122 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   the two-identical-pictures collision the ladder existed to remove. Open with numbers rather than
   intentions: `docs/TECH_DEBT.md` #286/#287/#288. **The CPM engine is not imported and no migration
   runs** — `apps/web` only, which is what makes the whole epic revertible.
+
+- **ADR-0134** _(Accepted 2026-09-11; the ADR is filed, M3 is building)_ — A typed date writes the
+  constraint a drag writes. The Gantt's `Start` and `Finish` columns print what the CPM engine
+  **computes**, so `cell-commit.ts` refuses both keys by name — correctly — while
+  `GANTT_EDITABLE_COLUMNS` simultaneously listed them, so the cell opened, took a date and refused
+  every value (`docs/TECH_DEBT.md` #290, closed by making them honestly read-only). That dead end is
+  not the capability behind it: the two most obvious cells in a Gantt grid were inert, in the one
+  view a planner hands upward, and both P6 and MS Project let you type into them. The product owner
+  answered the spec's CQ-1 **BUILD** and asked for the ADR **before** the milestone, because "typing
+  a date into a computed column silently pins the activity" is a statement about the schedule rather
+  than a grid repair — the same reason ADR-0052 §3 needed one for the canvas drag.
+  **The decision is that a typed date writes what the equivalent canvas gesture writes**, read off
+  `use-plan-workspace-model.ts` rather than recalled, so a planner who has learnt the diagram has
+  learnt the grid and there are not two answers to drift apart (the ADR-0065 argument). `Start` in
+  **Visual** hand-places — `visualStart` + `durationDays` in one minimal PATCH, **no constraint**,
+  because a hand-placement is advisory and a constraint is not. `Start` in **Early** pins, `SNET` at
+  the typed date with the duration adjusted so the finish stays put, because a computed start can
+  only be moved honestly by pinning it.
+  **`Finish` is the branch a reader expects to be `FNLT` and is not, which is the most important
+  line in the document.** A finish-edge drag "spreads neither field, leaving the stored constraint
+  round-tripped verbatim" — it sets `durationDays` and nothing else — so a typed `Finish` does the
+  same, and its honest consequence is stated rather than left to be discovered: in Early mode with
+  no constraint the start is computed, so a later recalculation can move it and carry the typed
+  finish along. **The typed finish is not a pin**, exactly as the drag's is not, and giving the grid
+  a different answer would invent the second semantic this decision exists to prevent. A
+  `MANDATORY_*` constraint is **never** overwritten from a cell (ADR-0035 §7: it breaks logic by
+  design, and a grid cell is not where that trade is made); one parser, the formatter's inverse; one
+  explanation the first time it happens in a session, one undo entry (ADR-0048), and the bar's
+  existing constraint badge afterwards — a confirmation on every edit was rejected as taxing the
+  common case to guard the rare one. **The CPM engine is not imported and no migration runs**, so
+  the ADR-0034 parity gate is untouched in its honest form: there is nothing here to hold parity
+  _for_. The Visual-mode journey earns its place for a reason beyond symmetry — barely any journey
+  in this repository runs in Visual mode, and ADR-0092 records that gap being exactly where a defect
+  was hiding.
+
+- **ADR-0135** _(Accepted 2026-09-11)_ — A container hands focus back when somebody else removes the
+  control you were on. A second Planner changing a plan-level setting while you hold the pen takes a
+  registry item out from under your focus ring, and focus fell to `<body>` — which on the plan
+  workspace also silently disables every keyboard accelerator, since they are a React `onKeyDown` on
+  the workspace root. `Toolbar` and `Deck` share **one** rule (`use-focus-handoff.ts`): record the
+  focused **element** rather than an id — a split-button caret carries no id — capture its label and
+  the reason it went **at focus time**, because by the time it is removed the item has already left
+  the resolved set; yield one `requestAnimationFrame` so anything else that was going to move focus
+  already has; then act only if `document.activeElement` is `null` or `<body>`, so a container never
+  steals focus from a deliberate move. Five registry items carry a reason sentence and the five that
+  deliberately do not are enumerated with their grounds.
+  **Three claims were measured in a browser before any code was written**, and the seam gate found
+  what a human read did not: it proved the hook was **imported** and never that it was **spread onto
+  the container**, so the two-line change that would have disabled the whole feature left it green.
+  A fifth assertion was added and verified red both ways. Two further defects were found on the way
+  — the arrow keys started one command too far along from the handed-back position, invisible until
+  something could focus these containers at all, and the Project Explorer has a worse variant of the
+  same class, filed as `docs/TECH_DEBT.md` #297 rather than folded in. #204(c) closes. **The CPM
+  engine is not imported and no migration runs.**
+
+- **ADR-0136** _(Accepted 2026-09-11)_ — A rule is enforced where the artefact lands, and the roster
+  is derived. Four rules were stated in prose and enforced nowhere, or **enforced only where
+  enforcement does not happen** — the second half being the interesting one. §9 of this file called
+  Conventional Commits "enforced by commitlint (git hook + expected in PR titles)", and commitlint
+  ran in exactly one place: a bypassable local `commit-msg` hook that validates the branch commits a
+  **squash discards**, so the one message that survives into `main`'s history was the one nothing
+  checked at all. There was **no** bundle budget (the published figures admitted in the same
+  paragraph that they were "advisory and unmeasured") and **no** licence check over a tree that
+  ships inside two images on a public registry. And `docs/TECH_DEBT.md` #244 recorded CI's gate
+  roster being hand-written while `prepush.sh` derives its own — a condition that had already failed
+  **twice**, the second time by **moving** to a different gate after the first was fixed, which is
+  why that row refused to close on either and why it insists a fix must name its rule.
+  **They are one epic because #244's gate is the gate that protects the other three**, and that was
+  exercised for real rather than asserted: M1's `check:ci-roster` **refused M4** in the gap between
+  adding the licence script to `package.json` and adding its CI step. The PR-title workflow
+  validates the title as the subject it becomes, ` (#N)` suffix and all — **88 of `main`'s last 100
+  subjects carry it**, and one historic failure is 94 characters as a title and 101 as the commit,
+  legal as typed and illegal as what it becomes. The bundle's subject is the entry **graph** rather
+  than the entry chunk, and the floor is **measured** because the never-measured ~200 kB in the docs
+  would have failed on day one (ADR-0058). Licences are an **allow-list** over the whole tree, with
+  anything unresolvable counting as unknown and unknown failing; measured first at 918 packages and
+  17 identifiers, so `exempt` ships empty as a measurement rather than an oversight.
+  **The instruments were wrong more often than the code, which is the epic's transferable finding.**
+  The mutation sweep reported **nine false greens** before it was made to refuse a verdict unless the
+  number of cases that ran equals the number the suite declares — every one a run that had died
+  loading a reporter this vitest version does not have. It then caught two assertions that did not
+  discriminate: the licence gate's workspace skip could be widened from `@repo/` to every scoped
+  package and stay green, and the rule that a **blank** exemption reason admits nothing had no test
+  at all. Separately, the assertion written to catch a static `jspdf` import **could not fire**,
+  because Rollup **inlines** a statically-imported library into the entry chunk and leaves no chunk
+  carrying that name — found by doing the thing rather than simulating it, and fixed by reading the
+  module graph instead of chunk names. **Two GitHub settings are outside this repository and are
+  therefore not enforced by it**: the `PR title` check must be added to branch protection's required
+  checks on `main`, and "Default to PR title for squash merge commits" confirmed — recorded so
+  "shipped" does not read as "enforced" — joined at the gate pass by a third, "require approval for
+  first-time contributors", which decides whether a fork's PR runs CI at all.
+  **The gate pass earned its place, and three of the four reviews found the same defect
+  independently: the epic's own thesis failing on the epic's own first gate.** The spec said the
+  advisory set is read out of `prepush.sh` and never restated; the shipped roster gate did not read
+  that file at all. Reproduced rather than argued — add the CI step for the advisory gate **and**
+  delete its roster entry, which is the natural pair of edits because an entry reading "need not run
+  in CI" looks redundant the moment it does, and **both** gates report OK while a product-owner
+  decision that this gate warns and never blocks becomes a blocking CI gate. `ci-roster.json`'s own
+  comment claimed that derivation already existed; it did not. Fixing it by **sharing** the parse
+  rather than copying it then revealed that neither of that parse's two recorded hardenings was
+  tested by anything. Two reviews separately blocked on M3 having no committed tests at all — seven
+  assertions verified by hand with nothing left behind, and a cycle guard whose failure mode is a
+  **hang** rather than a red test. And the security review found the licence gate's `@repo/` skip to
+  be an assumption dressed as an assertion: measuring showed `pnpm licenses list` does not report
+  workspace packages at all, so the branch could never fire for one of ours and the only thing it
+  could ever have admitted is a package that is **not** ours wearing our scope. **Four reviews, three
+  blocking, three distinct defects, twelve changes folded and two filed** — counted rather than
+  estimated, because the first draft of the ADR said "five specialists" and "nine findings" and had
+  counted neither, which is ADR-0076 Class 1 inside the ADR about Class 1, one paragraph from the
+  corrected assertion count it had already fixed for the same reason. The two filed as
+  `docs/TECH_DEBT.md` #298 both change shared mechanisms, and folding a shared-gate change into an
+  epic's last milestone is what ADR-0105 exists to stop. #244 and #48(b) close. It is **exempt from
+  `docs/ROADMAP.md` rather than listed on it** (the ADR-0124/ADR-0131 class): a roadmap entry was
+  written and then removed when the plan was re-read, since a planner cannot act on a CI gate.
+  **The CPM engine is not imported and no migration runs**; `apps/api` and `apps/web/src`
+  contribute zero files to the diff.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -1,0 +1,24 @@
+{
+  "_": "Which licences the resolved dependency tree may carry. An ALLOW-LIST, never a deny-list: a deny-list is silent about the licence nobody thought of, which is the one that matters. Whole tree, one tier, blocking (docs/specs/delivery-gates/ CQ-3) — a build tool can contaminate output, so 'it never ships' is not an argument this gate accepts without a written exemption. See scripts/check-licenses.mjs.",
+  "measuredAt": "2026-09-11",
+  "measuredBy": "pnpm licenses list --json (pnpm 10.4.1) — 918 resolved packages, 17 distinct identifiers, none copyleft, none unknown",
+  "allow": {
+    "MIT": "Permissive. 781 packages.",
+    "Apache-2.0": "Permissive with an explicit patent grant. 43 packages.",
+    "ISC": "Permissive, functionally MIT. 39 packages.",
+    "BSD-2-Clause": "Permissive. 14 packages.",
+    "BSD-3-Clause": "Permissive, plus a no-endorsement clause. 13 packages.",
+    "0BSD": "Permissive with no attribution requirement at all. 1 package.",
+    "BlueOak-1.0.0": "Permissive, and deliberately plain-language. 7 packages.",
+    "MIT-0": "MIT without the attribution requirement. 3 packages.",
+    "Unlicense": "Public-domain dedication. 3 packages.",
+    "CC0-1.0": "Public-domain dedication. 2 packages (language-subtag-registry, mdn-data) — both DATA rather than code, which is what CC0 is for.",
+    "Python-2.0": "Permissive. 1 package (argparse).",
+    "Zlib": "Permissive. Appears only inside `MIT AND Zlib` (pako).",
+    "MPL-2.0": "**Weak copyleft, and the only non-obviously-permissive family here, so it is allowed with its reasoning written down rather than waved through.** MPL-2.0 is FILE-level: the obligation attaches to modified MPL files, not to the work that links them. All five packages (axe-core, @axe-core/playwright, lightningcss and its two platform binaries) are consumed unmodified, and SchedulePoint neither vendors nor patches them. If one is ever forked into this repository, that fork carries the obligation and this entry stops covering it.",
+    "CC-BY-4.0": "**Attribution required, and it is a content licence rather than a software one.** One package: caniuse-lite, the browser-support dataset Browserslist reads at BUILD time. Its data does not reach the shipped bundle, and the attribution obligation is discharged by the package remaining in the dependency tree with its own LICENSE file. Recorded rather than assumed: if caniuse data is ever emitted into a user-facing artefact, that is a new question."
+  },
+  "exempt": {
+    "_": "Package name → why this specific package is allowed despite its licence not being in `allow`. Empty today, which is a measurement rather than an oversight: the 2026-09-11 scan found no package with an unknown, missing or disallowed licence. An entry here names who read the package's own repository and when."
+  }
+}

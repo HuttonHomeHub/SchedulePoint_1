@@ -459,3 +459,59 @@ describe('Toolbar (APG primitive)', () => {
  * number of passes rather than a chain, and that a context change that alters no width does not
  * multiply them. Both are properties the code has independently of layout.
  */
+
+describe('arrows from the container itself', () => {
+  /**
+   * The state the focus handoff creates: a peer's write removed the control a reader was standing
+   * on, so focus is on the `role="toolbar"` container. Their next key press must reach the FIRST
+   * command — before `rovingIndexFor` it reached the second, measured, because the clamp to `0`
+   * was followed by an increment. Verified red against that arithmetic.
+   */
+  it('lands on the first item, not the second', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" />);
+    const bar = screen.getByRole('toolbar', { name: 'T' });
+    const first = bar.querySelector<HTMLElement>('[data-toolbar-item]')!;
+    bar.focus();
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('lands on the last item going backwards', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" />);
+    const bar = screen.getByRole('toolbar', { name: 'T' });
+    const stops = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')];
+    bar.focus();
+
+    fireEvent.keyDown(bar, { key: 'ArrowLeft' });
+
+    expect(document.activeElement).toBe(stops.at(-1));
+  });
+});
+
+describe('what the container is, once focus can be on it', () => {
+  /**
+   * **Tab from the container** — the accessibility gate's second nit, and the likeliest second
+   * keystroke after the handoff lands a reader there. Neither tier asserted it.
+   *
+   * jsdom does not implement sequential focus navigation, so this cannot drive a real Tab press.
+   * What it pins is the property that decides where a real Tab goes: the container is not in the
+   * sequence (`tabIndex` is `-1`), the single roving stop inside it is (`tabIndex` is `0`), and it
+   * follows the container in document order — so a browser's next tabbable from the container is
+   * that stop.
+   *
+   * Stated rather than glossed: this is an argument from three facts, not an observation of a key
+   * press, and it is recorded that way for the same reason the AT interleaving is
+   * (`docs/TECH_DEBT.md` #154).
+   */
+  it('is not itself a Tab stop, and contains exactly one', () => {
+    render(<Toolbar items={makeItems()} context={{ count: 1 }} label="T" />);
+    const bar = screen.getByRole('toolbar', { name: 'T' });
+    expect(bar.getAttribute('tabindex')).toBe('-1');
+
+    const stops = [...bar.querySelectorAll<HTMLElement>('[data-toolbar-item]')];
+    expect(stops.filter((el) => el.getAttribute('tabindex') === '0')).toHaveLength(1);
+    expect(bar.contains(stops[0]!)).toBe(true);
+  });
+});

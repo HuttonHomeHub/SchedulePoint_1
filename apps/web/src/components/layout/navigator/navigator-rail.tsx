@@ -136,7 +136,6 @@ export function NavigatorRail({
           }
           onClose={onClose}
           closeLabel="Close Project Explorer"
-          closeButtonSize={'icon' as const}
         />
       ) : (
         // In the drawer the subject's actions get a row of their own beneath the drawer's header,

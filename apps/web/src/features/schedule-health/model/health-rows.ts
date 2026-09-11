@@ -130,10 +130,33 @@ export function buildHealthRows(report: ScheduleHealthReport): HealthRowView[] {
   }));
 }
 
+/**
+ * Metric 10's narrowing sentences, keyed by the token the PAYLOAD carries in `detail.narrowing`
+ * (the server's `RESOURCES_NARROWING`). This is G3's division one step out from numbers: the
+ * payload owns the FACT of which narrowing was applied, this module owns the WORDS for it.
+ *
+ * Keying on the token rather than on `metric.id` is the whole point. A sentence keyed on the id
+ * alone keeps printing whatever narrowing was true the day it was written — change the server's
+ * rule and the panel states the old scope, confidently, with nothing failing anywhere. That is the
+ * absence-a-reader-cannot-detect shape, arriving in the one sentence whose job is to stop a planner
+ * believing this row measures workload.
+ */
+const RESOURCE_NARROWING_SENTENCES: Record<string, string> = {
+  RESOURCE_ASSIGNMENT_ONLY:
+    'Reads resource-assignment existence only — not workload or over-allocation.',
+};
+
 /** The scope caveat a row carries on screen; every NUMBER in it comes from the payload (G3). */
 function caveatFor(metric: HealthMetricResult): string | null {
   if (metric.id === 'RESOURCES' && metric.verdict === 'INFORMATIONAL') {
-    return 'Reads resource-assignment existence only — not workload or over-allocation.';
+    const narrowing = metric.detail?.['narrowing'];
+    // No token ⇒ no claim. The server names one on every INFORMATIONAL metric-10 row
+    // (`compute-health.definition.spec.ts` pins it), so silence here means the server stopped
+    // saying — and inventing a scope sentence is worse than omitting one.
+    if (typeof narrowing !== 'string') return null;
+    // An unrecognised token still says something true: the scope IS narrowed. What it excludes is
+    // not ours to guess, so the token is named rather than described.
+    return RESOURCE_NARROWING_SENTENCES[narrowing] ?? `Reads a narrowed scope only — ${narrowing}.`;
   }
   // The computed what-if (M6): say what was injected and what moved, so the verdict is
   // reproducible by hand from the sentence alone.

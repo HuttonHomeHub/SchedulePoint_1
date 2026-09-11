@@ -91,7 +91,6 @@ export function SheetHeader({
   title,
   onClose,
   closeLabel,
-  closeButtonSize = 'icon-sm',
   actions,
   className,
   titleClassName,
@@ -102,8 +101,6 @@ export function SheetHeader({
   onClose?: () => void;
   /** Accessible name for the Close button. Defaults to `Close <title>`. */
   closeLabel?: string;
-  /** Close-button size — `icon-sm` (default) or `icon` (the navigator rail). */
-  closeButtonSize?: 'icon' | 'icon-sm';
   /** Extra controls rendered before the Close button (e.g. the rail's New-client / Collapse). */
   actions?: React.ReactNode;
   className?: string;
@@ -124,7 +121,21 @@ export function SheetHeader({
           {onClose ? (
             <Button
               variant="ghost"
-              size={closeButtonSize}
+              // **One size, because every consumer wanted the same one** (`docs/TECH_DEBT.md`
+              // #278). This was `closeButtonSize`, defaulting to `icon-sm` (28 px) with `icon` as
+              // the named exception — a default chosen when the navigator rail was the exception
+              // and the panels were the rule. Measured 2026-09-11: the prop had **exactly one
+              // caller**, `navigator-rail.tsx:139`, passing `'icon'`, while the four default-takers
+              // are the four right docks (Plan notes, Float paths, Schedule health, Revision
+              // compare) — none of them a dense list row, and so none of them inside ADR-0118 D1's
+              // second named exception. A prop whose every consumer wants the same value is a
+              // choice nobody makes differently, so it is deleted rather than debated (the
+              // `icon-lg` disposal at ADR-0118 M3, and #149's `MenuItem.itemId`, are the
+              // precedents). Under a coarse pointer this takes those four closes from 28 × 28 to
+              // 44 × 44, against a 44 px house rule; on a mouse each header grows 12 px, which is
+              // the cost the product owner accepted when choosing this over passing the prop at
+              // four sites.
+              size="icon"
               aria-label={closeLabel ?? `Close ${title}`}
               onClick={onClose}
             >

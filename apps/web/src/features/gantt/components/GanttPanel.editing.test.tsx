@@ -203,12 +203,29 @@ describe('on a plan that has not been calculated', () => {
 
     expect(cellUnder('Activity')).not.toHaveAttribute('aria-readonly');
     expect(cellUnder('Duration')).not.toHaveAttribute('aria-readonly');
-    // And the dates are shut with an action, not a report of unavailability.
-    const start = cellUnder('Start');
-    expect(start).toHaveAttribute('aria-readonly', 'true');
-    expect(document.getElementById(start.getAttribute('aria-describedby')!)).toHaveTextContent(
-      /Recalculate/i,
-    );
+
+    /**
+     * **The dates are shaded WITH a reason again, and the reason is now true** (ADR-0134).
+     *
+     * This assertion has been all three states, which is worth keeping rather than tidying:
+     *
+     * 1. Originally `aria-readonly="true"` with "Recalculate the plan to set dates." — shut with an
+     *    action, the right shape for a cell that becomes editable once the action is taken. Except
+     *    it never did: `earlyStart`/`earlyFinish` sat in `GANTT_EDITABLE_COLUMNS` while
+     *    `cellWriteFields` returned `null` for every input, so recalculating got the planner as far
+     *    as a cell that opened and refused a correctly formatted date (`docs/TECH_DEBT.md` #290).
+     * 2. Then no shading at all, because with the columns read-only unconditionally the promise was
+     *    unfulfillable in BOTH states, and keeping it would announce a false statement to a
+     *    screen-reader user in the one channel with no way to check.
+     * 3. Now shaded with that same sentence, and it is fulfillable: recalculate, and a typed date
+     *    writes the constraint a drag writes.
+     *
+     * The gate's `!hasComputedSchedule` branch was deliberately kept through state 2 for exactly
+     * this — carrying the answer in the model meant landing the typed-date cell was a column rather
+     * than a re-decision about which permission it needs.
+     */
+    expect(cellUnder('Start')).toHaveAttribute('aria-readonly', 'true');
+    expect(cellUnder('Start')).toHaveAccessibleDescription('Recalculate the plan to set dates.');
   });
 });
 

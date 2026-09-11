@@ -21,9 +21,82 @@ const base = {
   minVisibleBars: 100,
   minFps: 30,
   gated: true,
+  // 16.67 ms — an ordinary 60 Hz display, so the ceiling is ~60 fps and never binds in the cases
+  // that are about something else. Stated rather than defaulted inside the judge, for the reason
+  // the ceiling case below exists.
+  idleInterval: 1000 / 60,
 };
 
 describe('judgeAbsolute', () => {
+  /**
+   * **The display's own ceiling** (`docs/TECH_DEBT.md` #275).
+   *
+   * Observed, not hypothesised: a run on iOS 18.7 Safari, `web-v0.125.1`, reported an idle frame
+   * interval of 33.00 ms — a 30 Hz display, so an arithmetic ceiling of 30.3 fps. The
+   * 500-activity limb's floor is 45 fps, which that machine **cannot reach whatever the painter
+   * costs**, and the probe called it FAIL — a confidently wrong answer about somebody's hardware,
+   * which is the class ADR-0130's whole epic exists to remove.
+   *
+   * The probe admits such a display on purpose: `MIN/MAX_PLAUSIBLE_INTERVAL_MS` is 3..40, so 33 ms
+   * is inside the plausible band because 30 Hz is a real display and not a broken clock. So
+   * `refuseRun` is right to accept it and the judge was wrong to hold it to an unreachable floor.
+   *
+   * This is #260 mirrored — that was a metric with no room at the CEILING, making a gated delta
+   * arithmetically unfailable; this is no room at the FLOOR, making an absolute gate
+   * arithmetically unpassable.
+   */
+  describe('a floor above the display\u2019s own refresh rate', () => {
+    const THIRTY_HZ = 33;
+
+    it('returns INDETERMINATE rather than FAIL, and names the arithmetic', () => {
+      const r = judgeAbsolute({
+        ...base,
+        idleInterval: THIRTY_HZ,
+        minFps: 45,
+        runs: [at(30), at(30), at(30)],
+      });
+
+      expect(r.verdict).toBe('INDETERMINATE');
+      // The reason must carry BOTH numbers and the word ceiling: a reader on that machine has to be
+      // able to tell "your display cannot answer this" from "your painter is slow", and those are
+      // the only two facts that separate them.
+      expect(r.indeterminateReason).toMatch(/ceiling/i);
+      expect(r.indeterminateReason).toContain('45');
+      expect(r.indeterminateReason).toMatch(/30\.3/);
+    });
+
+    it('does not fire when the display can reach the floor', () => {
+      // Same 30 Hz display, the 2,000-activity floor of 30 fps. The ceiling is 30.3, ABOVE the
+      // floor, so the ceiling rule must not claim it. This run is a genuine FAIL and stays one —
+      // the pinned negative, without which the case above is satisfied by a rule that fires always.
+      const r = judgeAbsolute({
+        ...base,
+        idleInterval: THIRTY_HZ,
+        minFps: 30,
+        runs: [at(29.9), at(29.8), at(29.9)],
+      });
+      expect(r.verdict).toBe('FAIL');
+    });
+
+    it('does not fire on an ordinary display, and leaves PASS alone', () => {
+      const r = judgeAbsolute({ ...base, minFps: 45, runs: [at(58), at(57), at(59)] });
+      expect(r.verdict).toBe('PASS');
+    });
+
+    it('is skipped, not guessed, when the interval is unusable', () => {
+      // A row that records no usable interval cannot have a ceiling computed, and inventing one
+      // would be the defect inverted — a machine failed or excused on a number nobody measured.
+      // The verdict is then whatever it would have been.
+      const r = judgeAbsolute({
+        ...base,
+        idleInterval: Number.NaN,
+        minFps: 45,
+        runs: [at(30), at(30), at(30)],
+      });
+      expect(r.verdict).toBe('FAIL');
+    });
+  });
+
   it('passes a run that clears the floor on every repeat', () => {
     const r = judgeAbsolute({ ...base, runs: [at(58), at(55), at(60)] });
     expect(r.verdict).toBe('PASS');

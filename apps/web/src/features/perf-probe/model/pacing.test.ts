@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MIN_FRAMES_FOR_A_RUN, refuseRun } from './pacing';
+import { MIN_FRAMES_FOR_A_RUN, percentile, refuseRun, summariseFrameStamps } from './pacing';
 
 /**
  * The refusals — which are the product, not the plumbing.
@@ -78,5 +78,80 @@ describe('refuseRun', () => {
     // remedy; the clock sentence describes a symptom, which is the less useful of the two.
     const r = refuseRun({ ...ok, documentHidden: true, idleInterval: 1000 });
     expect(r?.reason).toBe('TAB_HIDDEN');
+  });
+});
+
+/**
+ * **The arithmetic that had four copies and two answers** (`docs/TECH_DEBT.md` #258).
+ *
+ * Neither scene pinned it, which is why the divergence survived: each copy looked reasonable alone
+ * and nothing compared them. These cases exist so that the next edit to the index rule or the
+ * dropped-frame threshold is a decision somebody has to make on purpose.
+ */
+describe('percentile — the ONE index rule', () => {
+  const sorted = Array.from({ length: 600 }, (_, i) => i);
+
+  it('indexes at floor(n · p) — the definition three of the four copies used', () => {
+    expect(percentile(sorted, 0.95)).toBe(570);
+    expect(percentile(sorted, 0.5)).toBe(300);
+  });
+
+  /**
+   * The documented, deliberate property. Against the standard nearest-rank definition
+   * (`ceil(p · n) − 1`) this sits ONE RANK HIGH, so it is never optimistic about a frame interval.
+   * Asserted rather than merely written down: "correcting" it re-bases every reading in
+   * `perf_probe_results`, and that must fail here rather than pass quietly.
+   */
+  it('is exactly one rank above nearest-rank, and that is the choice', () => {
+    const nearestRank = (xs: readonly number[], p: number) =>
+      xs[Math.min(xs.length - 1, Math.ceil(p * xs.length) - 1)];
+    expect(percentile(sorted, 0.95)).toBe((nearestRank(sorted, 0.95) ?? 0) + 1);
+  });
+
+  it('clamps at the top rather than reading past the end, and answers 0 for no samples', () => {
+    expect(percentile([5], 0.95)).toBe(5);
+    expect(percentile([], 0.95)).toBe(0);
+  });
+
+  /**
+   * The divergence itself, as a fixture. The old `revision-diff` copy used `floor((n − 1) · p)`,
+   * and on a tailed distribution the two answers are 12 % apart — which is what makes this a
+   * defect rather than a rounding curiosity.
+   */
+  it('differs materially from the index the fourth copy used', () => {
+    const tailed = Array.from({ length: 600 }, (_, i) => (i < 570 ? 16.7 : 16.7 + (i - 569) * 2));
+    const otherCopy = tailed[Math.min(tailed.length - 1, Math.floor((tailed.length - 1) * 0.95))];
+    expect(percentile(tailed, 0.95)).toBe(18.7);
+    expect(otherCopy).toBe(16.7);
+  });
+});
+
+describe('summariseFrameStamps — the ONE summary', () => {
+  /** Twelve timestamps 16.7 ms apart: eleven gaps, none of them a miss. */
+  const even = Array.from({ length: 12 }, (_, i) => i * 16.7);
+
+  it('derives gaps from the stamps — one fewer than the timestamps given', () => {
+    expect(summariseFrameStamps(even, 16.7).frames).toBe(11);
+  });
+
+  it('calls a frame dropped only past 1.5x the display interval, never at a fixed 16.7 ms', () => {
+    // 24 ms is 1.44x — slow, and NOT a missed vsync. 26 ms is 1.56x, which is.
+    const nearMiss = [0, 24];
+    const miss = [0, 26];
+    expect(summariseFrameStamps(nearMiss, 16.7).droppedPct).toBe(0);
+    expect(summariseFrameStamps(miss, 16.7).droppedPct).toBe(100);
+    // And the threshold is the DISPLAY's, so the same 26 ms gap is fine on a 30 Hz panel.
+    expect(summariseFrameStamps(miss, 33.3).droppedPct).toBe(0);
+  });
+
+  it('reports fps from the mean gap, not from the median', () => {
+    expect(summariseFrameStamps(even, 16.7).fps).toBeCloseTo(1000 / 16.7, 6);
+  });
+
+  it('answers a no-gap run without dividing by zero', () => {
+    const one = summariseFrameStamps([0], 16.7);
+    expect(one.frames).toBe(0);
+    expect(one.droppedPct).toBe(0);
+    expect(one.intervalP95).toBe(0);
   });
 });

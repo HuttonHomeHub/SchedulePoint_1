@@ -439,7 +439,7 @@ export class BaselinesService {
 
   /**
    * Build the working-day calendar variance is measured on (ADR-0024) — the plan's
-   * calendar, or `allDaysWorkCalendar` when it has none or the calendar is
+   * calendar, or `allMinutesWorkCalendar` when it has none or the calendar is
    * missing/soft-deleted. Mirrors `ScheduleService.recalculate` so variance days match
    * the computed dates they diff.
    */

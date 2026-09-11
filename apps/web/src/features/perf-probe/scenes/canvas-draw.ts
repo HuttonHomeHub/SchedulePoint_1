@@ -1,4 +1,5 @@
 import type { PhaseTiming } from '../model/judge';
+import { summariseFrameStamps } from '../model/pacing';
 import type { ScenarioPreset } from '../model/scenarios';
 
 import { scaleScene } from './scale-scene';
@@ -167,10 +168,6 @@ export function minVisibleBarsFor(preset: ScenarioPreset, totalActivities: numbe
     : Math.max(25, Math.floor(totalActivities * 0.05));
 }
 
-const percentile = (sortedAscending: readonly number[], p: number): number =>
-  sortedAscending[Math.min(sortedAscending.length - 1, Math.floor(sortedAscending.length * p))] ??
-  0;
-
 /**
  * One sustained pan, painted under `requestAnimationFrame`.
  *
@@ -209,14 +206,14 @@ export async function runDrawPhase(
     requestAnimationFrame(tick);
   });
 
-  const gaps = stamps.slice(1).map((t, i) => t - (stamps[i] ?? t));
-  const dropped = gaps.filter((g) => g > idleInterval * 1.5).length;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  const mean = gaps.reduce((s, g) => s + g, 0) / Math.max(1, gaps.length);
+  // One shared rule (#258). `frames` is dropped rather than forwarded: `PhaseTiming` has never
+  // carried it and adding it here would flow into `to-probe-body.ts` and the stored row, which is a
+  // schema-shaped change wearing a refactor's clothes.
+  const pacing = summariseFrameStamps(stamps, idleInterval);
   return {
-    droppedPct: (dropped / Math.max(1, gaps.length)) * 100,
-    intervalP50: percentile(sorted, 0.5),
-    intervalP95: percentile(sorted, 0.95),
-    fps: 1000 / mean,
+    droppedPct: pacing.droppedPct,
+    intervalP50: pacing.intervalP50,
+    intervalP95: pacing.intervalP95,
+    fps: pacing.fps,
   };
 }

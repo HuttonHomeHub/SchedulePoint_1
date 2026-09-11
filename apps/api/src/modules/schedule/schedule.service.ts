@@ -227,6 +227,21 @@ type ActivePlan = NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdI
 export const REVISION_ROW_CAP = 200;
 
 /**
+ * Fill one capped sample from two sides so neither can be crowded out (`docs/TECH_DEBT.md` #263(f)).
+ *
+ * Each side is guaranteed **half** the budget when it can use it, and whatever it cannot use passes
+ * to the other — so a one-sided population still fills the cap, and a two-sided one is always
+ * visibly two-sided. The alternative, capping each side at the full budget, doubles the array's
+ * maximum and silently stops the published `cap` from describing the field.
+ */
+export function takeBothSides<T>(from: readonly T[], to: readonly T[], cap: number): T[] {
+  const half = Math.floor(cap / 2);
+  const fromTake = Math.min(from.length, Math.max(half, cap - to.length));
+  const toTake = Math.min(to.length, cap - fromTake);
+  return [...from.slice(0, fromTake), ...to.slice(0, toTake)];
+}
+
+/**
  * A comparison side's identity — a named baseline, or the plan as it stands now.
  *
  * Shared by both comparison routes rather than assembled twice: with two plans in play the LIVE
@@ -950,6 +965,24 @@ export class ScheduleService {
 
     // The same read snapshot `floatPaths` takes: the exact engine-input builder `recalculate`
     // uses, so the what-if can never drift from what a real recalculation would compute.
+    //
+    // **`graph.leveling` is deliberately NOT taken, and that is a KNOWN GAP rather than a
+    // decision** (`docs/TECH_DEBT.md` #248, ADR-0116 addendum 2026-09-10). `buildEngineGraph` also
+    // returns `leveling: { assignments, resources } | null`, and `recalculate` runs
+    // `levelSchedule` with it whenever `plan.levelResources` is true and persists THAT result — so
+    // on a levelled plan this what-if perturbs a schedule the product does not display, and
+    // measures the movement against a baseline the planner never sees.
+    //
+    // The sentence above ("can never drift from what a real recalculation would compute") is
+    // therefore true of the INPUT and not of the passes run over it. It is left standing because it
+    // is the reason the builder is shared at all; this note is what stops it being read as a
+    // guarantee about the output.
+    //
+    // Named here rather than left implicit because the drop was invisible: a destructure that omits
+    // a field looks exactly like a destructure of a type that never had one, every number the route
+    // returns is internally consistent, and the seeded fixture has `level_resources = false`, so no
+    // test could report it. Threading it through and levelling BOTH passes is the correct fix and
+    // is the open half of #248.
     const [{ activities, edges, options, meta }, labelRows] = await Promise.all([
       this.prisma.$transaction((tx) => this.buildEngineGraph(organization.id, plan, dataDate, tx)),
       this.schedule.loadHealthActivities(organization.id, planId),
@@ -1497,7 +1530,7 @@ export class ScheduleService {
    * The plan's working-day calendar for this recalculation, built once (ADR-0024).
    * A null `calendarId`, or a calendar that is missing/soft-deleted (defensive — the
    * delete-in-use guard prevents deleting an in-use calendar), falls back to
-   * `allDaysWorkCalendar`, so the null path is byte-identical to M6 and the golden
+   * `allMinutesWorkCalendar`, so the null path is byte-identical to M6 and the golden
    * suite still holds.
    */
   private async resolveCalendar(
@@ -1830,20 +1863,29 @@ export class ScheduleService {
       },
       // Absent (rather than an empty report) when not asked for, so a caller that did not opt in
       // sees byte-identically what it saw before this existed.
-      ...(changeReport ? { changes: changeReport } : {}),
+      //
+      // **Each branch carries its own `satisfies`, and that is not decoration** (#263(c)). The
+      // declared type on `result` runs an excess-property check on THIS literal and on each branch
+      // of a ternary assigned as a property value — but **not** inside `...(cond ? { … } : {})`, so
+      // the seven optional projection fields were attached through the one idiom the guarantee both
+      // DTOs' docblocks cite does not reach. Demonstrated by compiling the shape rather than
+      // reasoned about (M4 api review). A `satisfies` restores the check per branch.
+      ...(changeReport
+        ? ({ changes: changeReport } satisfies Pick<RevisionCompare, 'changes'>)
+        : {}),
       ...(ghostResult
-        ? {
+        ? ({
             ghosts: ghostResult.ghosts,
             ghostsTotal: ghostResult.total,
             ghostsUndrawable: ghostResult.undrawable,
-          }
+          } satisfies Pick<RevisionCompare, 'ghosts' | 'ghostsTotal' | 'ghostsUndrawable'>)
         : {}),
       ...(linkResult
-        ? {
+        ? ({
             links: linkResult.links,
             linksTotal: linkResult.total,
             linksUndrawable: linkResult.undrawable,
-          }
+          } satisfies Pick<RevisionCompare, 'links' | 'linksTotal' | 'linksUndrawable'>)
         : {}),
       criticalPath: bothScheduled
         ? {
@@ -2128,10 +2170,22 @@ export class ScheduleService {
         .filter((r) => !fromKeys.has(r.activityId))
         .slice(0, REVISION_ROW_CAP)
         .map((r) => correlationRow(r, toPlanId)),
-      uncodedRows: [
-        ...fromRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, fromPlanId)),
-        ...toRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, toPlanId)),
-      ].slice(0, REVISION_ROW_CAP),
+      // **The one cap is SPLIT between the sides, not filled from the from-side first**
+      // (`docs/TECH_DEBT.md` #263(f)). Concatenating and slicing the join gave a from-side with
+      // more than `cap` uncoded rows a sample containing ZERO to-side rows, while `toUncoded`
+      // reported a non-zero count beside it. Both totals stayed correct, so nothing was
+      // misreported — but the sample a reader is told to use to SEE what was left out could be
+      // entirely one-sided, which is the one job it has.
+      //
+      // Splitting the budget rather than capping each side at `cap` keeps the array within the
+      // `cap` the response already publishes: widening the maximum to 2 x `cap` would make the
+      // number a client is handed stop describing this field. A side that cannot fill its half
+      // yields the remainder to the other, so a from-only plan still shows `cap` rows.
+      uncodedRows: takeBothSides(
+        fromRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, fromPlanId)),
+        toRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, toPlanId)),
+        REVISION_ROW_CAP,
+      ),
       cap: REVISION_ROW_CAP,
     };
 
@@ -2324,9 +2378,14 @@ export class ScheduleService {
           : null,
         newSideCarrierName: delta.completion.newSideCarrierName ?? null,
       },
-      ...(changeReport ? { changes: changeReport } : {}),
+      // Each branch carries its own `satisfies` for the sibling's reason (#263(c)): the declared
+      // type on `result` does not excess-property-check inside a conditional spread, which is how
+      // all seven optional projection fields are attached here.
+      ...(changeReport
+        ? ({ changes: changeReport } satisfies Pick<CrossPlanRevisionCompare, 'changes'>)
+        : {}),
       ...(ghostResult
-        ? {
+        ? ({
             // Every DRAWN ghost is matched — an unmatched row has no anchor lane and is counted,
             // never placed — so the anchor id is present by construction here. The `?? ''` is
             // unreachable and is written as a fallback rather than a `!` so a future widening of the
@@ -2337,10 +2396,10 @@ export class ScheduleService {
             })),
             ghostsTotal: ghostResult.total,
             ghostsUndrawable: ghostResult.undrawable,
-          }
+          } satisfies Pick<CrossPlanRevisionCompare, 'ghosts' | 'ghostsTotal' | 'ghostsUndrawable'>)
         : {}),
       ...(linkResult
-        ? {
+        ? ({
             /**
              * **An ADDED or CHANGED link is handed back under the ANCHOR PLAN'S OWN dependency id,
              * and that is a defect this milestone found by reading the painter rather than by
@@ -2368,7 +2427,7 @@ export class ScheduleService {
             })),
             linksTotal: linkResult.total,
             linksUndrawable: linkResult.undrawable,
-          }
+          } satisfies Pick<CrossPlanRevisionCompare, 'links' | 'linksTotal' | 'linksUndrawable'>)
         : {}),
       criticalPath: bothScheduled
         ? {

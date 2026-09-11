@@ -396,10 +396,45 @@ export interface ToolbarItem<Ctx> {
    * "off because you can't do this" and "off because it is happening right now" are different facts,
    * and a busy state conveyed **only** by a spinning {@link icon} would say nothing at all under
    * `prefers-reduced-motion` (the global rule in `globals.css` reduces every animation to 0.01 ms).
+   *
+   * **Scoped: this reaches a PLAIN-BUTTON item only** (`docs/TECH_DEBT.md` #105(1)). The resolution
+   * computes it for every item, and `ToolbarButton` reads it — but
+   * {@link ToolbarItemRenderApi} does not carry it, so a `render` item declaring `isBusy` gets a
+   * resolved value nothing hands it. No `render` item declares one today, which is why this is a
+   * trap rather than a defect: the sentence above reads as a general contract, and the first
+   * Tier-2 popover trigger that wants a busy state will find no way to read it and re-derive it
+   * from `ctx` — two derivations of one fact, which is what the registry exists to prevent.
+   *
+   * **The argument for closing it is already written thirty lines below**, on `activeKind`: _"a
+   * `render` item paints its own control, so it has to be handed the same fact a plain command
+   * gets, or the ladder holds on eight of the deck's controls and not the other fifteen."_ That is
+   * word for word the case for `busy`, made for its neighbour and not for it — this repository's
+   * most-recorded defect shape, sitting inside the docblock that names it. Adding the field is
+   * additive and breaks no consumer, and it is still a change to a shared primitive's public
+   * contract (ADR-0105), so it is named here rather than taken in passing.
    */
   isBusy?: (ctx: Ctx) => boolean;
   /** Human reason shown/announced when disabled (e.g. "Start editing to add activities"). */
   disabledReason?: (ctx: Ctx) => string | undefined;
+  /**
+   * Why this item can VANISH, announced when it is removed while a reader was standing on it
+   * (`use-focus-handoff.ts`, `docs/TECH_DEBT.md` #204(c)).
+   *
+   * **A static string, never `(ctx) => string`, and the asymmetry with `disabledReason` above is
+   * the point rather than an oversight.** A function has no honest moment to run: evaluated at
+   * focus time it describes the world *before* the change, in the present tense, about a fact that
+   * is about to stop being true; evaluated afterwards there is no item left to evaluate against —
+   * it has left the resolved set, which is the premise of the whole mechanism. A sentence about the
+   * **condition** ("This action applies only while the plan is scheduled in Visual mode.") is true
+   * in both worlds, which makes the trap unreachable instead of merely avoided.
+   *
+   * Optional, by product-owner decision: roughly forty registry items would each need a sentence
+   * written before the focus repair could ship, and a rushed sentence is worse than a generic one.
+   * A development-only warning marks each gap the first time it is reached. Without one the reader
+   * is still told what left and where they now are — the WCAG 2.4.3 obligation — and told nothing
+   * about why.
+   */
+  lostReason?: string;
   /**
    * A description read to assistive tech **on focus**, when the item's own name does not carry a
    * fact a sighted user can already see beside it (ADR-0094 M3-T2).

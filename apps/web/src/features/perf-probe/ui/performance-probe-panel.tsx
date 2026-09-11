@@ -719,6 +719,27 @@ export function PerformanceProbePanel(): React.ReactElement {
             with nothing focusable in it at all — a strictly worse failure than the one being fixed.
           */
           <div className="bg-background/95 fixed inset-0 z-50 flex flex-col">
+            {/*
+              **The caption the spec asked for and nobody built** (`docs/TECH_DEBT.md` #259 item 9;
+              `docs/specs/staff-performance-probe/feature-spec.md:813` — "a visible caption naming
+              it a test picture").
+
+              Not a WCAG failure: the canvas is `aria-hidden` and the progress sentence below is
+              the accessible channel. It is a sighted-user affordance. Without it a staff member
+              watching a full-screen schedule paint has nothing telling them it is synthetic, and
+              the obvious reading of an unlabelled plan on a staff console is that it is somebody's
+              real one — which is exactly what a `StaffPrincipal` structurally cannot reach
+              (ADR-0086), so the picture contradicts the console's own guarantee.
+
+              A plain `<p>` with NO role. The progress line below already sits in the panel's
+              `aria-live` status slot, and a second live region during one run is how a progress
+              announcement overwrites a verdict — the reason the spinner beside it is a bare icon
+              rather than `<Spinner>`.
+            */}
+            <p className="text-muted-foreground px-4 pt-4 text-sm">
+              A synthetic test picture — not a real plan. Nothing here comes from a customer&rsquo;s
+              data.
+            </p>
             <Surface tone="canvas" ref={surfaceRef} className="relative flex-1 overflow-hidden">
               <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
             </Surface>
@@ -900,8 +921,24 @@ function ProbeResult({ outcome }: { outcome: ProbeOutcome }): React.ReactElement
               {limb.minFps} fps
             </p>
             {limb.result.kind === 'unjudgeable' ? (
-              <Alert purpose="event" tone="info" className="mt-2">
-                This run cannot be judged. {limb.result.message.split('\n')[0]}
+              <Alert purpose="event" tone="info" className="mt-2 whitespace-pre-line">
+                {/*
+                  **The WHOLE message, not its first line** (`docs/TECH_DEBT.md` #259 item 12).
+                  This was `message.split('\n')[0]`, so everything after the first line was dropped
+                  on screen while the paste-ready report carried it in full.
+
+                  What was being dropped is the part that matters: `NothingToJudgeError`'s
+                  non-vacuity message ends "This is NOT a pass. A number measured on an
+                  almost-empty canvas is a number about the cull" — the one sentence whose job is
+                  to stop a refusal being read as a clean run, which is the mistake ADR-0066
+                  records actually happening.
+
+                  `whitespace-pre-line` rather than mapping to paragraphs: the judge composes these
+                  messages as text with deliberate line breaks and an indented detail line, and
+                  re-flowing them here would be a second opinion about a layout the judge already
+                  has — the same text the report prints.
+                */}
+                This run cannot be judged. {limb.result.message}
               </Alert>
             ) : (
               <LimbVerdict limb={limb} judged={limb.result.judged} />
@@ -1029,17 +1066,54 @@ function SittingResult({
           {step.status === 'not recorded' &&
             step.body !== null &&
             !retrying.has(stepKey(step.step)) && (
+              /**
+               * **The sentence names WHY, and the button is shaded when a retry cannot help**
+               * (`docs/TECH_DEBT.md` #269).
+               *
+               * This said "These figures were measured but NOT recorded." for every failure, beside
+               * a live Retry. Right for a dropped socket or a 500; wrong for a 422, where the
+               * server refuses this body and the same body will be refused again — so an operator
+               * was invited to press a button that cannot work, with nothing on screen letting
+               * them tell the two apart. Every `revision-diff` reading was answered
+               * `422 … property frames should not exist` for the life of that scenario and read
+               * exactly like a network blip.
+               *
+               * The retryable set is decided in `model/store-failure.ts`, not here: it is a
+               * decision (429 is a 4xx and IS worth retrying), and two call sites would answer it
+               * differently eventually.
+               */
               <Alert purpose="event" tone="error">
-                These figures were measured but NOT recorded.{' '}
+                {step.storeFailure?.summary ?? 'These figures were measured but NOT recorded.'}{' '}
                 <Button
                   variant="outline"
                   size="sm"
+                  // **`aria-disabled`, never the native attribute** — a natively disabled button is
+                  // out of the tab order, so the reason linked below becomes unreachable by
+                  // keyboard, which is the defect ADR-0082 exists to stop one layer down.
+                  aria-disabled={step.storeFailure?.retryable === false ? true : undefined}
+                  aria-describedby={
+                    step.storeFailure?.retryBlockedReason != null
+                      ? `${stepKey(step.step)}-retry-blocked`
+                      : undefined
+                  }
                   onClick={() => {
+                    // The guard the shading promises. A shaded control that still fires is a
+                    // shading in appearance only, which is worse than none because it looks
+                    // considered.
+                    if (step.storeFailure?.retryable === false) return;
                     onRetry(stepKey(step.step), step.body as ProbeResultBody);
                   }}
                 >
                   Retry recording
                 </Button>
+                {step.storeFailure?.retryBlockedReason != null ? (
+                  // An `sr-only` SIBLING rather than text folded into the button, or the reason
+                  // joins the accessible name and a screen-reader user hears the action and its
+                  // refusal as one run-on label (ADR-0082, ADR-0117's `purpose` distinction).
+                  <span id={`${stepKey(step.step)}-retry-blocked`} className="sr-only">
+                    {step.storeFailure.retryBlockedReason}
+                  </span>
+                ) : null}
               </Alert>
             )}
         </div>

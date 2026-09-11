@@ -1,6 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { containerShouldStandDown, TOOLBAR_NAV_KEYS, vetoesKey } from './toolbar-keyboard';
+import {
+  containerShouldStandDown,
+  rovingIndexFor,
+  TOOLBAR_NAV_KEYS,
+  vetoesKey,
+} from './toolbar-keyboard';
 import {
   resolveItems,
   type ResolvedToolbarItem,
@@ -9,6 +14,7 @@ import {
 } from './toolbar-registry';
 import { TOOLBAR_INSET_RULE } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
+import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
 
@@ -69,24 +75,32 @@ import { cn } from '@/lib/utils';
  * sections — the coarser boundary being the stronger mark, which is what makes the two read as a
  * hierarchy rather than as two of the same thing.
  *
- * ## What `caption` is called, and why it is not renamed
+ * ## What `caption` was called, and why it is now `name`
  *
- * `DECK_GROUPS[].caption` no longer captions anything: its only consumer is `aria-label`, so it is
- * the group's **accessible name**. The M7 architecture review is right that the field is misnamed
- * and that a name describing a rendering which no longer exists is how a reader concludes the
- * caption is coming back. It is left alone here deliberately — renaming it is a rename of a field
- * in a shared table during a milestone whose subject is documentation, and the cost of doing it in
- * the same commit as nine prose corrections is that a mechanical change hides among them. Filed as
- * `docs/TECH_DEBT.md` #288.
+ * `DECK_GROUPS[].caption` had not captioned anything since M6 deleted the visible spans: its only
+ * consumer is `aria-label`, so it is the group's **accessible name** and nothing else. The M7
+ * architecture review was right that a field named for a rendering which no longer exists is how a
+ * reader concludes the caption is coming back (`docs/TECH_DEBT.md` #288) — the same class as the
+ * stale sentences that milestone swept out of this subsystem, except that those are prose and this
+ * is an identifier, which is why it survived several passes that corrected the words around it.
+ *
+ * **`name` and not `label`**: this file already has `ToolbarItem.label`, meaning the word printed
+ * beside a control, and the subsystem has just been through one collision of exactly that kind (the
+ * registry's `row` band axis against the deck's `row` line axis). `name` is also the ARIA
+ * vocabulary for what `aria-label` sets, so the identifier and its one consumer now agree.
+ *
+ * M7 deferred it so a mechanical rename would not hide among nine prose corrections in one diff,
+ * which is why it is its own commit. `DECK_GROUPS` is module-local, so the change does not leave
+ * this file — the register row's "a rename across a shared table" overstates the blast radius.
  */
 const DECK_GROUPS = [
-  { id: 'view', caption: 'View', row: 'look', members: ['frame', 'lens'] },
-  { id: 'find', caption: 'Find', row: 'look', members: ['find'] },
-  { id: 'author', caption: 'Author', row: 'do', members: ['tools'] },
-  { id: 'plan', caption: 'Plan', row: 'do', members: ['object', 'output', 'help'] },
+  { id: 'view', name: 'View', row: 'look', members: ['frame', 'lens'] },
+  { id: 'find', name: 'Find', row: 'look', members: ['find'] },
+  { id: 'author', name: 'Author', row: 'do', members: ['tools'] },
+  { id: 'plan', name: 'Plan', row: 'do', members: ['object', 'output', 'help'] },
 ] as const satisfies ReadonlyArray<{
   id: string;
-  caption: string;
+  name: string;
   row: DeckRowId;
   members: readonly ToolbarGroupId[];
 }>;
@@ -197,17 +211,13 @@ export function Deck<Ctx>({
       if (vetoesKey(event.target, event.key)) return;
       const nodes = focusables();
       if (nodes.length === 0) return;
+      // `-1` — focus is somewhere the deck does not own, including **on the container itself**,
+      // which is where the focus handoff leaves a reader. `rovingIndexFor` starts the sequence from
+      // there rather than continuing it; the old clamp to `0` then added one, so ArrowRight skipped
+      // the first stop. ADR-0082's ArrowUp defect is the same arithmetic from the other end, and is
+      // why `-1` must never reach the bare modulo.
       const current = nodes.findIndex((n) => n === document.activeElement);
-      // `-1` (focus is somewhere the deck does not own) resolves to the first stop rather than to
-      // `nodes.length - 1`, which is what a bare `indexOf` arithmetic would give and is the
-      // ArrowUp-lands-on-the-second-to-last defect ADR-0082 records.
-      const from = current === -1 ? 0 : current;
-      let next = from;
-      if (event.key === 'Home') next = 0;
-      else if (event.key === 'End') next = nodes.length - 1;
-      else if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
-        next = (from + 1) % nodes.length;
-      else next = (from - 1 + nodes.length) % nodes.length;
+      const next = rovingIndexFor(event.key, current, nodes.length);
       event.preventDefault();
       nodes[next]?.focus();
     },
@@ -235,13 +245,30 @@ export function Deck<Ctx>({
     activeId !== null && stopIds.includes(activeId) ? activeId : (stopIds[0] ?? null);
   const tabIndexFor = (id: string): number => (id === rovingId ? 0 : -1);
 
+  // **Deriving the roving stop and catching dropped focus are two different jobs**, and the
+  // derivation above only does the first: it decides which item carries `tabIndex={0}`, never where
+  // the browser's focus ring is. When a peer's write removes the item a reader is standing on, the
+  // ring is already on `<body>` — `docs/TECH_DEBT.md` #204(c). Shared with `Toolbar` for the reason
+  // `toolbar-keyboard.ts` exists: a rule these two primitives each implement drifts the moment one
+  // is fixed.
+  const focusHandoff = useToolbarFocusHandoff({
+    containerRef,
+    resolvedIds: stopIds,
+    toolbarLabel: label,
+    lostReasonFor: (id) => items.find((item) => item.id === id)?.lostReason,
+  });
+
   return (
     <div
       ref={containerRef}
       role="toolbar"
       aria-label={label}
       aria-orientation="horizontal"
+      // Programmatically focusable only — the handoff's destination. A negative tabindex is skipped
+      // by sequential navigation, so the deck still has exactly one Tab stop.
+      tabIndex={-1}
       onKeyDown={onKeyDown}
+      {...focusHandoff}
       // **Two declared rows, as plain `<div>`s inside the one `role="toolbar"`.**
       //
       // Not two toolbars: that would be two Tab stops into one surface. Not a grid: it would align
@@ -256,7 +283,18 @@ export function Deck<Ctx>({
       // wrapped to two lines before they were declared. The acceptance condition for this milestone
       // was that the existing roving-walk case passes **unchanged** — the ADR-0062 extraction
       // argument applied to a layout change.
-      className={cn('flex flex-col gap-2', className)}
+      className={cn(
+        'flex flex-col gap-2',
+        // **A designed focus state, not an incidental one** (accessibility gate, ADR-0135).
+        // This container became focusable only when the handoff gained somewhere to put focus,
+        // and until then nothing had ever decided what "the toolbar itself is focused" looks
+        // like. The UA outline does paint today — Preflight does not strip it — but that is a
+        // side effect of the state never having been reachable, and a caller's `className` or a
+        // design-system change could suppress it with nothing red to say so. The same treatment
+        // every other focusable in this family uses (`toolbar-styles.ts:179`).
+        'focus-visible:ring-ring outline-none focus-visible:ring-2 focus-visible:ring-inset',
+        className,
+      )}
     >
       {DECK_ROWS.map((row) => (
         <div key={row} data-deck-row={row} className="flex flex-wrap items-start gap-2">
@@ -267,8 +305,12 @@ export function Deck<Ctx>({
                 <div
                   key={group.id}
                   role="group"
-                  aria-label={group.caption}
-                  // **A ROW, caption leading — not a caption stacked above the buttons.**
+                  aria-label={group.name}
+                  // **A ROW, caption leading — not a caption stacked above the buttons.** Read this
+                  // paragraph as history: M6 then deleted the caption outright, so what survives of
+                  // the decision is the row, and the group's name reaches AT through the
+                  // `aria-label` above rather than through anything rendered. Kept because the
+                  // measurement is the reason the deck is one row tall per card at all.
                   //
                   // Measured (`measure-output/m4-vertical-stack.json`): as a stacked card this was 81 px,
                   // of which ~29 was a full-width caption row, and the deck was 170 px because the four
@@ -344,7 +386,15 @@ export function Deck<Ctx>({
                       >
                         {section.map((r) =>
                           r.item.render ? (
-                            <span key={r.item.id} className="inline-flex items-center">
+                            // `data-toolbar-item-scope`, never a second `data-toolbar-item` —
+                            // `focusables()` queries `[data-toolbar-focusable]` in document order
+                            // and a duplicate marker would put the wrapper in the roving walk. See
+                            // `Toolbar.tsx`'s copy of this wrapper.
+                            <span
+                              key={r.item.id}
+                              data-toolbar-item-scope={r.item.id}
+                              className="inline-flex items-center"
+                            >
                               {r.item.render(context, {
                                 disabled: !r.enabled,
                                 disabledReason: r.disabledReason,

@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -24,12 +24,26 @@ import { clearBaselineTree } from './clear-baseline-tree';
  * The run's numbers have to survive vitest's per-task console buffering — the setup run's counts
  * never reached the log, so the assertion was verified and the figures were not.
  *
- * The path is FIXED. It was briefly an env var in the previous epic's harness and CodeQL flagged
- * that as `js/path-injection` (high), correctly: an environment value flowing unchecked into a
- * filesystem write is a real sink. Every write is best-effort and swallowed — a measurement harness
- * must never fail a build over where it puts its notes.
+ * The path is **not configurable, and no longer fixed either** — those are two different defects
+ * and this file had only fixed the first. It was briefly an env var and CodeQL flagged that as
+ * `js/path-injection` (high), correctly: an environment value flowing unchecked into a filesystem
+ * write is a real sink, and the configurability bought nothing. That removal stands and must not be
+ * undone — `revision-compare-imported-p2.e2e-spec.ts` copied this harness's shape, reintroduced the
+ * override, and had to delete it again for the reason already recorded here.
+ *
+ * What survived that removal was a **fixed name in a world-writable directory**, which anybody on
+ * the host can pre-create as a symlink for the harness to follow — a high `js/insecure-temporary-file`
+ * alert (CWE-377), and the one the P2 sibling was actually reported for. The report now lands in this
+ * run's own `mkdtempSync` directory and the path is printed beside it, so nothing is lost by the path
+ * being unguessable (`docs/TECH_DEBT.md` #265).
+ *
+ * Every write is best-effort and swallowed — a measurement harness must never fail a build over
+ * where it puts its notes.
  */
-const REPORT = join(tmpdir(), 'schedulepoint-delta-m0.txt');
+const REPORT = join(mkdtempSync(join(tmpdir(), 'sp-delta-m0-')), 'report.txt');
+// Announced once, because an unguessable path is only free if the reader is told it. The exemplar
+// prints it beside the report; this harness streams line by line, so it prints it first.
+process.stdout.write(`report written to ${REPORT}\n`);
 const say = (line: string): void => {
   try {
     appendFileSync(REPORT, `${line}\n`);

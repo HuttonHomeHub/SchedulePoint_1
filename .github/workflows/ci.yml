@@ -167,6 +167,21 @@ jobs:
       - name: Check the advisory allow-list agrees with the code
         run: pnpm check:advisory-agreement
 
+      # The two rosters agree: every root `check:*` gate runs here, or is exempt with a written
+      # reason in `scripts/ci-roster.json`. This closes `docs/TECH_DEBT.md` #244 — a gate that
+      # exists, passes locally and is run by nothing reads as coverage on every PR that does not
+      # run `pnpm prepush`, and it had happened twice in this file for the same reason.
+      #
+      # A derived loop over `package.json` was REJECTED: it would make every gate's step
+      # identical and unnamed in the CI log, and it would have no way to express the one
+      # deliberate exemption below without inventing a config file anyway. The per-step comments
+      # in this file are load-bearing documentation and a loop deletes all of them.
+      #
+      # The gate's own first run failed on itself — added to `package.json` without this step —
+      # which is the best possible first red run for a check about missing steps.
+      - name: Check every gate runs in CI
+        run: pnpm check:ci-roster
+
       # Every ADR is reachable from the document a reader navigates product direction by.
       # Written because THREE consecutive reconciliation passes found `docs/ROADMAP.md` silent on
       # the newest ADRs — 0067–0073, then 0074–0085, then 0087–0092 — each time found by hand, and
@@ -178,6 +193,20 @@ jobs:
       - name: Check ADR coverage
         run: pnpm check:adr-coverage
 
+      # Every package in the resolved tree carries a licence somebody allowed BY NAME. An
+      # allow-list, never a deny-list: a deny-list is silent about the licence nobody thought of,
+      # which is the one that matters, so anything the policy does not name — a copyleft identifier,
+      # a `WITH` exception this cannot parse, a missing `license` field — is unknown, and unknown
+      # fails. Whole tree, one tier, blocking (`docs/specs/delivery-gates/` CQ-3): a build tool can
+      # contaminate its output, so "it never ships" is an argument accepted only as a written
+      # exemption naming who read the package and when.
+      #
+      # Nothing had ever checked. A dependency arriving under AGPL would have been installed,
+      # bundled and shipped, and failed nothing — the same shape as every other row in this file,
+      # where the gate exists because the absence is quiet rather than because something broke.
+      - name: Check dependency licences
+        run: pnpm check:licenses
+
       # The web container's nginx template, substituted exactly as the container substitutes it.
       # A value that breaks the config parse is a container that never serves a request, and until
       # this existed the ONLY thing in the repository that would notice was the smoke-boot job — a
@@ -188,11 +217,40 @@ jobs:
       - name: Check the nginx template survives substitution
         run: pnpm check:nginx
 
+      # Every browser-side entry point still bundles FOR A BROWSER. Added to CI on 2026-09-10,
+      # and its absence is the whole of `docs/TECH_DEBT.md` #244: this gate is BLOCKING, has been
+      # in `package.json` since #252 built it, and was enforced only by a locally-run
+      # `pnpm prepush` — for the second time, in the same file, for the same reason. #244 was filed
+      # when `check:advisory-agreement` was the missing one; that was added and this one was not,
+      # so the row's condition simply moved to a different gate while the row went on naming the
+      # old one. What it guards is quiet by construction: #252's defect was a Node-only module
+      # pulled into a browser bundle by a barrel re-export, which broke `pnpm measure:draw` for a
+      # day and made NOTHING go red, because no file under `apps/web/src` imports that package.
+      # Adding the step does not close #244 — that row asks for the two ROSTERS to be asserted
+      # equal, since a fix naming one gate decays into a false negative exactly as this one did.
+      - name: Check browser-side entry points bundle for a browser
+        run: pnpm check:browser-safe
+
       - name: Unit tests
         run: pnpm test
 
       - name: Build (api + web)
         run: pnpm build
+
+      # What the browser downloads before it can render anything, against a number somebody chose
+      # deliberately (`docs/specs/delivery-gates/` M3, closing `docs/TECH_DEBT.md` #48(b)).
+      #
+      # The quantity is the entry GRAPH — the entry chunk plus the closure of its STATIC imports —
+      # measured gzipped, because that is what crosses the wire. Dynamic imports are excluded: a
+      # `jspdf` behind an `await import()` costs the first paint nothing, and counting it would make
+      # the number describe a download nobody performs.
+      #
+      # **Not a root `check:*`, deliberately**, which is why `check:ci-roster` does not see it: it
+      # needs a production build, and making a five-second `pnpm prepush` wait thirty seconds for
+      # one is how a gate gets bypassed. It runs here, immediately after the build that produces its
+      # input.
+      - name: Check the web bundle budget
+        run: pnpm --filter @repo/web check:bundle-size
 
   e2e:
     name: End-to-end tests

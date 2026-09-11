@@ -1,9 +1,11 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, SchedulingMode } from '@repo/types';
 
 import type { GanttCellKey } from './cell-edit';
 
 import { durationWriteFields } from '@/features/activities/model/duration-field';
 import { ApiFetchError } from '@/lib/api/client';
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
+import { parseCalendarDate } from '@/lib/format-date';
 
 /**
  * **Turning a typed cell into the write the workspace already makes.**
@@ -51,47 +53,160 @@ export type CellCommitResult =
   { ok: true; activity: ActivitySummary } | { ok: false; failure: CellCommitFailure };
 
 /**
- * The PATCH fragment for one cell, or `null` when the text is not something we should send.
+ * What a cell needs to know beyond its own text.
  *
- * Returning `null` rather than throwing keeps "the planner typed nonsense" a local, recoverable
- * state instead of an exception crossing a component boundary — and it is what
- * `durationWriteFields` already does for the same reason.
+ * The date keys need all three: the mode decides whether a typed `Start` hand-places or pins
+ * (ADR-0134 D1/D2), the source decides which of the three persisted date pairs the cell is showing,
+ * and the activity carries the span the arithmetic keeps one end of.
  */
-export function cellWriteFields(
-  key: GanttCellKey,
-  text: string,
-  hoursPerDay: number | undefined,
-): Record<string, unknown> | null {
+export interface CellWriteContext {
+  activity: ActivitySummary;
+  hoursPerDay: number | undefined;
+  schedulingMode: SchedulingMode;
+  barDateSource: BarDateSource;
+}
+
+/**
+ * The PATCH fragment for one cell, or a **named** refusal.
+ *
+ * It was `Record<string, unknown> | null`, with every refusal collapsing into one sentence at the
+ * call site: _"That value is not something this cell accepts."_ That is adequate for a name or a
+ * percentage, where the only way to fail is to type nonsense, and it is not adequate for a date:
+ * ADR-0134 D4 refuses a perfectly well-formed date on a `MANDATORY_*` activity, and a planner told
+ * only that their value was unacceptable would retype the same value.
+ *
+ * Refusals still travel as values rather than exceptions — "the planner typed nonsense" is a local,
+ * recoverable state, and an exception crossing a component boundary would bypass the cell's own
+ * error display.
+ */
+export type CellWrite =
+  { ok: true; fields: Record<string, unknown> } | { ok: false; reason: string };
+
+/** The sentence a refusal with nothing more specific to say falls back to. */
+const GENERIC_REFUSAL = 'That value is not something this cell accepts.';
+
+const refuse = (reason: string): CellWrite => ({ ok: false, reason });
+const write = (fields: Record<string, unknown>): CellWrite => ({ ok: true, fields });
+
+export function cellWriteFields(key: GanttCellKey, text: string, ctx: CellWriteContext): CellWrite {
   const trimmed = text.trim();
   switch (key) {
     case 'name':
       // The API bounds the length; an empty name is the one case worth refusing here, because it is
       // the one a planner reaches by pressing Enter on a cleared cell rather than by typing.
-      return trimmed === '' ? null : { name: trimmed };
+      return trimmed === '' ? refuse('A name cannot be empty.') : write({ name: trimmed });
 
-    case 'duration':
-      // Exactly one of `durationDays` / `durationMinutes` — sending both is a 422 by design
-      // (`@IsMutuallyExclusiveWith`), which is why this helper returns a union rather than an object
-      // with two optional keys. Reused, not reimplemented: it already carries ADR-0070's rule that
-      // `hoursPerDay` is required to mean anything, and degrades to whole days without it.
-      return durationWriteFields(trimmed, hoursPerDay);
+    // Exactly one of `durationDays` / `durationMinutes` — sending both is a 422 by design
+    // (`@IsMutuallyExclusiveWith`), which is why this helper returns a union rather than an object
+    // with two optional keys. Reused, not reimplemented: it already carries ADR-0070's rule that
+    // `hoursPerDay` is required to mean anything, and degrades to whole days without it.
+    //
+    // The comment sits ABOVE the `case` rather than trailing it: Prettier reflows a trailing
+    // comment on a `case` by folding every following comment line onto it, which produced one
+    // 180-character line with the clauses in the wrong order. Correct code, unreadable comment.
+    case 'duration': {
+      const fields = durationWriteFields(trimmed, ctx.hoursPerDay);
+      return fields === null ? refuse(GENERIC_REFUSAL) : write(fields);
+    }
 
     case 'percentComplete': {
       // A progress write (ADR-0060 Q-C) — not pen-gated, and deliberately a different scope from
       // everything else on the row.
       const value = Number(trimmed.replace(/%$/, ''));
-      if (!Number.isFinite(value) || value < 0 || value > 100) return null;
-      return { percentComplete: value };
+      if (!Number.isFinite(value) || value < 0 || value > 100) {
+        return refuse('Enter a percentage between 0 and 100.');
+      }
+      return write({ percentComplete: value });
     }
 
     case 'earlyStart':
     case 'earlyFinish':
-      // Q2. A typed date writes the CONSTRAINT a drag writes, never a computed column — the engine
-      // owns `earlyStart`, and a client that PATCHed it would be asserting an answer rather than an
-      // input. Wired in M2-T3b with the constraint note; refused here until then rather than sent
-      // somewhere plausible, because a silently-wrong write is worse than a refusal.
-      return null;
+      return dateWriteFields(key, trimmed, ctx);
   }
+}
+
+/** Calendar days between two `YYYY-MM-DD` days. Positive when `to` is later. */
+function calendarDaysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * **A typed date writes what the equivalent canvas gesture writes** — ADR-0134, and every branch
+ * below mirrors `use-plan-workspace-model.ts:1179-1216` rather than inventing a grid semantic.
+ *
+ * The arithmetic is the canvas's too, read from `TsldPanel.tsx:165-168` rather than recalled:
+ * `durationDays = finish − newStart + 1`, **calendar days, inclusive**. It is not a working-day
+ * walk, and it cannot be — the client holds no calendar — which is exactly as true of dragging a
+ * bar's edge today. The engine re-derives the real span on the next recalculation.
+ */
+function dateWriteFields(
+  key: 'earlyStart' | 'earlyFinish',
+  trimmed: string,
+  { activity, schedulingMode, barDateSource }: CellWriteContext,
+): CellWrite {
+  // **The Late overlay is read-only by ADR-0033**, so the dates on screen are not inputs at all —
+  // writing from them would take a planner's typed value and apply it to a different pair of
+  // columns than the ones they were reading. `cell-gate.ts` should already keep the cell shut;
+  // this is the second lock, because "should already" is how #290 shipped.
+  if (barDateSource === 'late') {
+    return refuse('Late dates are a read-only overlay. Turn it off to edit dates.');
+  }
+
+  // **D4 — a `MANDATORY_*` constraint is never overwritten from a cell.** Mandatory constraints
+  // break logic by design (ADR-0035 §7, produce-and-flag), so swapping one for an `SNET` changes
+  // what the whole downstream chain means. That trade belongs on the activity editor, where the
+  // constraint is named and its consequence is on screen — not as the side effect of typing in a
+  // grid. Checked before the parse, so the reason a planner gets is about their activity rather
+  // than about their typing.
+  if (
+    activity.constraintType === 'MANDATORY_START' ||
+    activity.constraintType === 'MANDATORY_FINISH'
+  ) {
+    return refuse(
+      'This activity has a mandatory constraint. Change it in the activity editor, where its effect on the rest of the plan is shown.',
+    );
+  }
+
+  const typed = parseCalendarDate(trimmed);
+  if (typed === null) {
+    return refuse('Enter a date like 05 Mar 2026 or 2026-03-05.');
+  }
+
+  const { start, finish } = barDatesFor(activity, barDateSource);
+  if (start === null || finish === null) {
+    // Before the first recalculation there is no span to hold one end of, so there is no honest
+    // duration to write. Stated rather than guessed at: a `durationDays` invented here would be a
+    // claim about a schedule that does not exist yet.
+    return refuse('This plan has not been calculated yet, so dates cannot be typed in.');
+  }
+
+  if (key === 'earlyFinish') {
+    // **D3 — a typed `Finish` writes a DURATION, in both modes, and no constraint at all.** This
+    // is the branch a reader expects to be `FNLT` and is not. A finish-edge resize "spreads
+    // neither field, leaving the stored constraint round-tripped verbatim"; a typed finish does
+    // the same, so the two surfaces cannot come to mean different things.
+    //
+    // Its honest consequence, which ADR-0134 states rather than leaving to be discovered: in Early
+    // mode with no constraint the start is computed, so a later recalculation can move the start
+    // and carry this finish with it. The typed finish is not a pin — exactly as true of the drag.
+    const durationDays = calendarDaysBetween(start, typed) + 1;
+    if (durationDays < 1) return refuse('The finish cannot be before the start.');
+    return write({ durationDays });
+  }
+
+  const durationDays = calendarDaysBetween(typed, finish) + 1;
+  if (durationDays < 1) return refuse('The start cannot be after the finish.');
+
+  if (schedulingMode === 'VISUAL') {
+    // **D1 — hand-place, and write NO constraint.** A placement is advisory and a constraint is
+    // not; the ADR-0033 effective-Visual pass pins the bar afterwards, exactly as it does for a
+    // reposition drop.
+    return write({ visualStart: typed, durationDays });
+  }
+
+  // **D2 — pin it.** In Early mode the start is computed, so the only honest way to move it is an
+  // `SNET` at the typed date, with the duration adjusted so the finish stays where it was.
+  return write({ constraintType: 'SNET', constraintDate: typed, durationDays });
 }
 
 /**
@@ -126,27 +241,34 @@ export async function commitCell({
   key,
   text,
   hoursPerDay,
+  schedulingMode,
+  barDateSource,
   update,
 }: {
   activity: ActivitySummary;
   key: GanttCellKey;
   text: string;
   hoursPerDay: number | undefined;
+  schedulingMode: SchedulingMode;
+  barDateSource: BarDateSource;
   update: UpdateActivityFieldsFn;
 }): Promise<CellCommitResult> {
-  const fields = cellWriteFields(key, text, hoursPerDay);
-  if (fields === null) {
-    return {
-      ok: false,
-      failure: { message: 'That value is not something this cell accepts.', stale: false },
-    };
-  }
+  const result = cellWriteFields(key, text, {
+    activity,
+    hoursPerDay,
+    schedulingMode,
+    barDateSource,
+  });
+  // **The refusal's own sentence, not a generic one.** ADR-0134 D4 refuses a perfectly
+  // well-formed date on a mandatory-constrained activity; told only that their value was
+  // unacceptable, a planner would retype the same value and meet the same wall.
+  if (!result.ok) return { ok: false, failure: { message: result.reason, stale: false } };
 
   try {
     const updated = await update({
       activityId: activity.id,
       version: activity.version,
-      patch: fields,
+      patch: result.fields,
     });
     return { ok: true, activity: updated };
   } catch (error) {

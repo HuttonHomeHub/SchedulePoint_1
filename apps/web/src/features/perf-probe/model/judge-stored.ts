@@ -80,6 +80,14 @@ export function storedJudgedResult(row: ProbeResultRow): StoredJudged | null {
             minVisibleBars: numberAt(thresholds, 'minVisibleBars') ?? 0,
             minFps,
             gated,
+            // From the stored row, so a reading re-judged from history gets the same ceiling rule
+            // as the run that produced it (`docs/TECH_DEBT.md` #275). NOT `?? 0` like its
+            // neighbours: zero is a plausible-looking number that would make the ceiling infinite
+            // and silently disable the rule, where `NaN` is the honest "this row records no usable
+            // interval" the judge is written to skip on. `idleIntervalMs` is non-nullable on the
+            // API row, so this coalesce is defence against an older shape rather than an expected
+            // path.
+            idleInterval: row.idleIntervalMs ?? Number.NaN,
           });
 
     return row.limbKind === 'difference'

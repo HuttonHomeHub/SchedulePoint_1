@@ -1,11 +1,27 @@
 /**
- * Print styles for the revision comparison. Colours are hard-coded dark-on-white — the documented
- * print exception (the health report and `GanttPrintSurface` precedent): a `@media print` sheet
- * cannot read a runtime token, and paper wants ink whatever theme the app is in.
+ * Print styles for the revision comparison.
+ *
+ * **Paper, ink and muted ink read the SEMANTIC names**, resolved by the `[data-surface="print"]`
+ * scope `lib/print-document.ts` stamps on the one container every print surface mounts through —
+ * the mechanism `PrintSurface.css` and `GanttPrintSurface.css` already use, so all four printed
+ * artefacts are one product rather than four that agree by hand.
+ *
+ * **This sheet used to hard-code them under a comment giving the reason as "a `@media print` sheet
+ * cannot read a runtime token".** That is false, and the same mistaken belief was in the other
+ * three: a `@media print` rule cannot read a runtime *JS value*, but a custom property is CSS and
+ * resolves normally. `PrintSurface.css` moved to the tokens at TECH_DEBT #158 and
+ * `GanttPrintSurface.css` followed; this sheet and `HealthPrintDocument.css` were left, which
+ * silently made their inherited "documented print exception" citation a claim about an exception
+ * nobody was taking any more (`docs/TECH_DEBT.md` #263(k)).
+ *
+ * The values move as well as the names — ink was `#111` against `--print-foreground`'s lighter
+ * grey — and that is the improvement rather than a cost: a literal is invisible to
+ * `token-contrast.test.ts`, which computes ratios between TOKENS, so this sheet's ink was ungated
+ * ink on the one artefact a planner hands to somebody who was not in the room.
  */
 .revision-print {
-  color: #111;
-  background: #fff;
+  color: var(--foreground);
+  background: var(--background);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -22,7 +38,7 @@
 
 .revision-print-meta {
   margin: 0 0 2px;
-  color: #333;
+  color: var(--muted-foreground);
 }
 
 .revision-print-statement {
@@ -32,8 +48,8 @@
 .revision-print-caveat {
   margin: 4px 0;
   padding: 4px 6px;
-  border-left: 3px solid #888;
-  color: #333;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
 }
 
 /* The correlation lists. Tight, because they can be long and they are supporting evidence for the
@@ -57,14 +73,14 @@
 
 .revision-print th,
 .revision-print td {
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid var(--border);
   padding: 2px 4px;
   text-align: left;
   vertical-align: top;
 }
 
 .revision-print th {
-  border-bottom: 1px solid #666;
+  border-bottom: 1px solid var(--foreground);
   font-weight: 600;
 }
 
@@ -77,6 +93,6 @@
 .revision-print-footer {
   margin-top: 10px;
   padding-top: 4px;
-  border-top: 1px solid #666;
-  color: #333;
+  border-top: 1px solid var(--foreground);
+  color: var(--muted-foreground);
 }

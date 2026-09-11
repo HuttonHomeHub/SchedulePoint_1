@@ -171,6 +171,109 @@ function durationCell(page: Page) {
   return ganttRow(page, 'Seeded 0').getByRole('gridcell').nth(2);
 }
 
+/** Put the plan into VISUAL mode through the API, then reload so the client sees it. */
+async function useVisualMode(page: Page, orgSlug: string): Promise<void> {
+  const planId = openPlanId(page);
+  const failure = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const read = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        credentials: 'include',
+      });
+      if (!read.ok) return `plan read: ${read.status}`;
+      const plan = (await read.json()) as { data: { version: number } };
+      const patched = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ schedulingMode: 'VISUAL', version: plan.data.version }),
+      });
+      if (!patched.ok) return `mode patch: ${patched.status} ${await patched.text()}`;
+      return null;
+    },
+    { org: orgSlug, id: planId },
+  );
+  if (failure !== null) throw new Error(failure);
+  await syncClient(page);
+}
+
+/** The stored constraint and placement — the fields a typed date is actually about. */
+async function readSchedulingFields(
+  page: Page,
+  orgSlug: string,
+  name: string,
+): Promise<{
+  constraintType: string | null;
+  constraintDate: string | null;
+  visualStart: string | null;
+  durationDays: number;
+  earlyStart: string | null;
+  earlyFinish: string | null;
+}> {
+  const planId = openPlanId(page);
+  const row = await page.evaluate(
+    async ({ org, id, activityName }: { org: string; id: string; activityName: string }) => {
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities?limit=100`,
+        { credentials: 'include' },
+      );
+      if (!response.ok) return null;
+      const body = (await response.json()) as {
+        data: {
+          name: string;
+          constraintType: string | null;
+          constraintDate: string | null;
+          visualStart: string | null;
+          durationDays: number;
+          earlyStart: string | null;
+          earlyFinish: string | null;
+        }[];
+      };
+      return body.data.find((a) => a.name === activityName) ?? null;
+    },
+    { org: orgSlug, id: planId, activityName: name },
+  );
+  if (row === null) throw new Error(`no activity named ${name}`);
+  return row;
+}
+
+/**
+ * The Start and Finish cells on the first seeded row.
+ *
+ * By index, matching `durationCell` above, because `GANTT_COLUMNS` fixes the order: code(0),
+ * name(1), duration(2), **start(3), finish(4)**, float(5), predecessors(6). The index alone would
+ * be a silent liar if that order changed, so every case below opens the cell and then asserts the
+ * editor's accessible name — `Start, Seeded 0` — which is the real check.
+ */
+function startCell(page: Page) {
+  return ganttRow(page, 'Seeded 0').getByRole('gridcell').nth(3);
+}
+
+function finishCell(page: Page) {
+  return ganttRow(page, 'Seeded 0').getByRole('gridcell').nth(4);
+}
+
+/** `n` calendar days after a `YYYY-MM-DD` day, as `YYYY-MM-DD`. */
+function plusDays(iso: string, n: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * The date the cell would print for a day — so the journey types what a planner sees.
+ *
+ * `en-GB` + UTC, the same two options `formatCalendarDate` is built with. It is restated here
+ * rather than imported because a Playwright `testDir` is its own compilation root; if the two ever
+ * disagree this line is the one to change, and the product's own round-trip is asserted by
+ * `src/lib/format-date.round-trip.test.ts` over every day of a year.
+ */
+function asDisplayed(iso: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${iso}T00:00:00Z`));
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test('a sub-day duration typed into the grid is stored as minutes', async ({ page }) => {
@@ -316,4 +419,128 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
       { timeout: 20_000 },
     )
     .toBe('Piling');
+});
+
+/**
+ * **ADR-0134 — a typed date writes the constraint a drag writes.**
+ *
+ * These are here rather than in a unit test for the reason the duration cases above are: a unit
+ * test asserts the PATCH body this client builds, and only a real server can say the API accepts
+ * it, applies it, and stores what the decision says it should. The write goes through
+ * `useUpdateActivityFields` with the pen enforced and an optimistic `version`, neither of which a
+ * mocked fetch can refuse.
+ *
+ * The Visual case matters disproportionately. `bar-drag.spec.ts:157` is one of only a handful of
+ * journeys in this repository that runs in Visual mode at all, and ADR-0092 records that gap being
+ * the exact place a defect was hiding — a control whose own toggle did nothing, for months.
+ */
+test('a start date typed in EARLY mode pins the activity as an SNET', async ({ page }) => {
+  test.setTimeout(180_000);
+  const orgSlug = await onboard(page, Date.now());
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+  await showGantt(page);
+
+  const before = await readSchedulingFields(page, orgSlug, 'Seeded 0');
+  expect(
+    before.constraintType,
+    'the fixture must start unconstrained, or this proves nothing',
+  ).toBeNull();
+
+  /**
+   * **The date is derived from the fixture's own span, not hardcoded — and the first version of
+   * this test was hardcoded and failed for a reason that turned out to be the product being
+   * right.** It typed `20 Apr 2026`, well past the seeded activity's finish. Under ADR-0134 D2 a
+   * typed start KEEPS the finish and adjusts the duration, exactly as dragging the start edge
+   * does, so a start after the finish is a negative duration and is correctly refused. A date one
+   * day into the span is the shape the decision is about.
+   */
+  const target = plusDays(before.earlyStart!, 1);
+
+  await startCell(page).dblclick();
+  const field = page.getByRole('textbox', { name: /Start, Seeded 0/ });
+  await expect(field).toBeVisible();
+  await field.fill(asDisplayed(target));
+  await field.press('Enter');
+
+  await expect
+    .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).constraintType, {
+      timeout: 20_000,
+    })
+    .toBe('SNET');
+  const after = await readSchedulingFields(page, orgSlug, 'Seeded 0');
+  // The DATE, not just the type — a constraint at the wrong day would satisfy the assertion above.
+  expect(after.constraintDate).toContain(target);
+});
+
+test('a start date typed in VISUAL mode places the bar and writes NO constraint', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const orgSlug = await onboard(page, Date.now());
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+  await useVisualMode(page, orgSlug);
+  await showGantt(page);
+
+  const before = await readSchedulingFields(page, orgSlug, 'Seeded 0');
+  const target = plusDays(before.earlyStart!, 1);
+
+  await startCell(page).dblclick();
+  const field = page.getByRole('textbox', { name: /Start, Seeded 0/ });
+  await expect(field).toBeVisible();
+  await field.fill(asDisplayed(target));
+  await field.press('Enter');
+
+  await expect
+    .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).visualStart, {
+      timeout: 20_000,
+    })
+    .toContain(target);
+  // **The half that makes this a different decision rather than the same one.** A placement is
+  // advisory; a constraint is not. If this ever starts writing one, the two modes have collapsed
+  // into each other and a planner's hand-placed bar has silently become a pin.
+  expect((await readSchedulingFields(page, orgSlug, 'Seeded 0')).constraintType).toBeNull();
+});
+
+test('a finish date typed in EARLY mode writes a duration and pins nothing', async ({ page }) => {
+  test.setTimeout(180_000);
+  const orgSlug = await onboard(page, Date.now());
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+  await showGantt(page);
+
+  const before = await readSchedulingFields(page, orgSlug, 'Seeded 0');
+
+  // Later than today's finish, so the duration must grow — a direction that cannot be confused
+  // with the write doing nothing.
+  const target = plusDays(before.earlyFinish!, 4);
+
+  await finishCell(page).dblclick();
+  const field = page.getByRole('textbox', { name: /Finish, Seeded 0/ });
+  await expect(field).toBeVisible();
+  await field.fill(asDisplayed(target));
+  await field.press('Enter');
+
+  // **D3, the branch a reader expects to be FNLT and is not.** A finish-edge resize spreads neither
+  // field; a typed finish does the same. This asserts the absence as hard as the presence, because
+  // "it also wrote a constraint" is the failure that would look like success on screen.
+  await expect
+    .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).durationDays, {
+      timeout: 20_000,
+    })
+    .not.toBe(before.durationDays);
+  expect((await readSchedulingFields(page, orgSlug, 'Seeded 0')).constraintType).toBeNull();
 });

@@ -317,6 +317,28 @@ keep `main` releasable.
   painted 80 px on top of the chart**; the M6 gate pass found a **data-loss** path where arrow keys
   in an open cell moved focus off an unsaved edit. Gantt editing was ADR-0059's deferred M5.
 
+  > **A typed date pins the activity — shipped 2026-09-11** (**ADR-0134**,
+  > `docs/specs/gantt-editing-gaps/` M3). The `Start` and `Finish` columns print what the engine
+  > computes, so they were made honestly read-only first — they had been listed as editable while
+  > every value was refused, a dead end filed as `docs/TECH_DEBT.md` #290. The capability behind
+  > that dead end is the one P6 and MS Project both offer, and the product owner chose to build it.
+  >
+  > The decision is that a typed date writes **what the equivalent canvas gesture writes**, so a
+  > planner who has learnt the diagram has learnt the grid: `Start` in Visual mode hand-places
+  > (`visualStart`, no constraint), `Start` in Early mode pins (`SNET` at the typed date), and
+  > `Finish` — the branch a reader expects to be `FNLT` and is not — sets a **duration**, because
+  > that is what a finish-edge drag does. A `MANDATORY_*` constraint is never overwritten from a
+  > cell. One explanation the first time it happens in a session, one undo entry, and the constraint
+  > badge the bar already carries afterwards. The CPM engine is not imported and no migration runs.
+  >
+  > The journey that proved it found the product being right rather than wrong: its first version
+  > typed a date past the activity's finish, which under this decision is a negative duration and is
+  > correctly refused — a typed start keeps the finish, exactly as dragging the start edge does. It
+  > also found that a serial suite reporting **"29 passed"** was concealing one failure and two
+  > cases that never ran. And the one-per-session note turned out to have been described as shipped
+  > in two docblocks for a month while nothing implemented it; both are corrected rather than
+  > quietly fixed.
+
 ## Delivered — operations & supportability
 
 **A theme this roadmap did not have.** Everything below was built between 2026-08-05 and
@@ -400,8 +422,16 @@ discriminators. Each becomes a spec/plan before build:
   shipped the model: the engine, the driving-resource-calendar resolution and the conformance slice all
   landed in M7.2. What was actually missing was the **web surface** — the type was absent from the
   picker and the engine's `resourceDriverMissing` flag was rendered nowhere — so the feature was
-  complete and unreachable. Both are now closed. Canvas
-  summary/LOE span-bars + navigator visual nesting are a deferred visualisation follow-on (TECH_DEBT #37).
+  complete and unreachable. Both are now closed. _(The sentence that followed read "Canvas
+  summary/LOE span-bars + navigator visual nesting are a deferred visualisation follow-on
+  (TECH_DEBT #37)" and is corrected 2026-09-11: **#37 is closed and ledgered**, and it is wrong
+  twice over. The canvas summary shipped in a **different shape** — ADR-0063 put summaries in a
+  pinned top band as a fourth canvas layer and deliberately lifted them **out** of the scene, so
+  span-bars-inside-the-scene was never the answer — and the Gantt half closed earlier still at
+  ADR-0059 M2. What #37's ledger entry names as actually left is the **activities table's** WBS
+  column, which is neither the canvas nor the navigator. A remediation can go stale by being
+  answered differently rather than by being done, which is that entry's own lesson arriving in a
+  document that cites it.)_
 
 ### Product features (candidate order — governed by the brief's MoSCoW §8)
 
@@ -593,6 +623,21 @@ discriminators. Each becomes a spec/plan before build:
   diagram, a touch user 16 of 808 — and the coarse axis stops being deferred to a register row that
   closed the day before. The epic also found two defects that are **not** touch defects (#213) and
   an approved plan clause whose own risk table claimed it shipped (#214 — both halves built and closed 2026-09-01, the Gantt half having gone unbuilt a second time).
+
+- **A peer's edit no longer drops your focus on the floor** — **shipped** (ADR-0135, 2026-09-11,
+  the tech-debt drive). A second Planner can change a plan-level setting while you hold the pen,
+  which takes a control out from under your focus ring; focus fell to `<body>`, and on the plan
+  workspace that silently disabled every keyboard accelerator too. `Toolbar` and `Deck` now share
+  one rule: record the focused element, notice it has left a still-mounted container, yield a frame
+  so anything else that was going to move focus already has, then hand focus to the bar and say what
+  went and why. Five registry items carry a reason sentence; the five that deliberately do not are
+  enumerated with their grounds.
+
+  Three claims were **measured in a browser before any code was written**, and one of them could
+  have ended the epic. Two more defects were found on the way: the arrows started one command too
+  far along from the new focus position — invisible until something could focus these containers at
+  all — and the Project Explorer has a worse variant of the same class, filed as its own row rather
+  than folded in (#297). `docs/TECH_DEBT.md` #204(c) closes.
 
 - **The plan workspace's command console** — **shipped** (ADR-0133, 2026-09-10). The band's group
   cards and captions go, its two rows become declared DOM rows rather than a wrap outcome, the

@@ -14,6 +14,13 @@ import type { ActivitySummary } from '@repo/types';
  * written. The note explains the *event*; the badge is the *state*, and without it a planner
  * returning to a plan next week has no way to see which bars are pinned — which is exactly when it
  * matters, because a pinned bar is the one that will not move when the logic says it should.
+ *
+ * **That sentence described the note as shipped for four weeks while nothing implemented it.** It
+ * was specified by the predecessor plan, written into this docblock and into
+ * `token-contrast.test.ts` as an existing thing, and built by neither — a claim about the product
+ * made in two places by the milestone that was going to add it and then did not. It exists now
+ * (`use-gantt-grid-editing.ts`, `usePinNote`), landed with the typed-date cell it explains
+ * (ADR-0134 D6), so the paragraph above is true rather than anticipatory.
  */
 
 /** A label's level of detail. */

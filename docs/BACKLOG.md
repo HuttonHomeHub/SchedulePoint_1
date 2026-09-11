@@ -100,78 +100,70 @@ a product idea that has not yet earned a roadmap line:
   shipping it without the mode statement the canvas has beside it would leave a
   planner unable to tell which of two writes their drag just made), the columns
   **chooser's** grid-width memory (T6 names it; the grid has no resize handle,
-  so nothing can set it yet), and a **coarse-pointer** pass —
-  `docs/TECH_DEBT.md` #133. `PROJECT_BRIEF.md` §8's "edit supported" is
+  so nothing can set it yet), and a **coarse-pointer** pass _(the citation here
+  read `docs/TECH_DEBT.md` #133 and is corrected 2026-09-11: that row **closed
+  on 2026-08-28**, and its subject was the merged command **strip**, not this
+  view — its ledger entry reads "Overtaken — ADR-0109 D1 deleted the width
+  ladder and the `⋯`, so nothing can leave the row". So the citation was stale
+  **and** about a different surface. Whether a Gantt-specific coarse pass is
+  owed is deliberately **not asserted here**: ADR-0118 D6 narrowed the
+  house rule to `pointer: coarse` and took the candidate set from 46 to one, and
+  nobody has re-measured this view since. It has no live row, which is the
+  honest state)_. `PROJECT_BRIEF.md` §8's "edit supported" is
   **substantially** met and deliberately not claimed closed.
-- `M` **Revision Compare — comparing two IMPORTED revisions, which is the half that is left.**
-  **All three tiers now ship, and this entry went stale within hours of the last two — for the
-  second time in two days.** The version before this one said the change list and the change
-  picture were unbuilt and named their blocker as `grep -c 'model BaselineDependency'` returning
-  **0**, "re-verified 2026-09-06". It returns **1**: that grep is what ADR-0126 M5 shipped, the
-  same day, and the entry was re-verified hours before the thing it verified stopped being true.
-  That is this file's own recurring failure — the entry above records four instances of it — so
-  the shipped halves are removed per the convention at the top and only what is genuinely owed is
-  kept.
-  **Shipped:** tier 3's `how much` (ADR-0125), the change list (ADR-0126) and the change picture
-  (ADR-0127, `View ▾ ▸ Compare on diagram`, **off by default**), released `api-v0.59.0` /
-  `web-v0.122.0`.
-  **REFUSED, not deferred — do not re-open it as a scoping decision.** Tier 3's `which change` half
-  attributes the slip to individual edits, and the ADR-0100-pattern gate this entry itself demanded
-  was applied and **failed**: replayed in six orders on the seed catalogue's fixture the same change
-  scored 30, 18, 2 or 0 working days by position alone (12.9 pp spread against a 10 pp bar, unstable
-  top three), while the sum was order-free and stable at 139 d in every permutation. Re-open it only
-  with a design that supplies the ordering the measurement showed is missing.
-  **What is left is the interchange comparison — Rev B against Rev C, both exported from P6.** That
-  is the version somebody pays for, and it is the one thing the three shipped tiers cannot do.
-  **Its blocker is NOT the one the previous text named, and is worth stating precisely because the
-  stale version would send somebody to the schema:** `GET …/schedule/revision-compare` is
-  **plan-nested**, and `RevisionCompareQueryDto` types both `from` and `to` as a baseline **of that
-  plan** (`to` additionally accepting the literal `live`). Two files imported separately land as
-  **two plans** (ADR-0050: "import target is always a new plan"), and nothing in the model lets a
-  comparison span them. So this needs a cross-plan comparison — which is a real design question
-  about identity, since matching an activity across two independent imports cannot use the id and
-  has to use the source code. **That field is `Activity.code`, not `activity_code`** — corrected
-  2026-09-08 by reading the schema, the name this entry used existing nowhere in it, which is the
-  stale-entry failure recorded twice above happening to the entry's own remedy rather than to its
-  problem. Three facts about it shape the design and none was recorded here: `packages/interchange/src/xer-adapter.ts:541`
-  **does** map P6's `task_code` onto it and already reports a finding when absent
-  (`:548`, falling back to the source task id — which makes that code **file-local**, so two exports
-  of one programme need not agree); the column is **nullable**; and **it is UNIQUE per plan**, by
-  `uq_activities_plan_code` — a partial index (`WHERE deleted_at IS NULL AND code IS NOT NULL`)
-  declared in raw SQL at `20260710092048_add_activities/migration.sql:81`.
-  **This paragraph asserted the opposite for one commit, on 2026-09-08, and the method is the
-  transferable part:** the claim was "verified" by grepping `@@unique`/`@unique`, which in this
-  repository structurally cannot see the answer — Prisma cannot express a partial unique, so every
-  one of them lives in `prisma/migrations/` and `schema.prisma` merely comments about them (it does,
-  twice, at `:1325` and `:2563`, and the grep missed those too). A constraint claim here is verified
-  against the migrations, never the schema alone. Caught by the spec agent re-deriving it rather
-  than trusting the brief — which is the rule working, one turn after the same rule caught this
-  entry.
-  So "duplicated within one side" is **not a case to repair; it is a case the database refuses**,
-  and the reject/repair/report contract (ADR-0035) narrows to two cases: a code that is absent, and
-  a code present on one side only — the second being indistinguishable from a re-code, which is the
-  genuinely hard one. Verified 2026-09-06 by reading the controller and
-  the DTO, not the schema.
-  **The measurement this entry said was owed has been TAKEN, and the entry is corrected rather than
-  stepped over — for the third time in three days, in the same file.** It read: the compare overlay
-  ships default-OFF because its paint cost is unanswered, and needs a headed run on the product
-  owner's hardware. That run happened on 2026-09-08, on the ADR-0128 staff panel built for exactly
-  this: at the **Week** framing on 2,000 activities the baseline is 0.19 pp dropped, the treatment
-  0.00 pp at **60.0 fps**, delta **−0.19 pp** against a 2.00 pp bar — and, decisively, the machine's
-  own run-to-run spread is **0.56 pp**, inside the bar, so the instrument could resolve the question
-  the container was disqualified from answering. **PASS on both limbs**, recorded as ADR-0127 D8a,
-  and the product owner then turned the overlay **default-on** (D8b). This is no longer a blocker.
-  **What is still unknown is the Fit framing**, and that is a different claim from the one this
-  paragraph used to make: P3 leaves that framing ungraded by policy, and `docs/TECH_DEBT.md` #260
-  records that at a baseline of 98.33 pp the difference metric has less headroom than the bar, so a
-  delta there is arithmetically incapable of failing. Do not read a Fit number as reassurance.
+- ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
+  stale for the FIFTH time — 2026-09-10.** Every tier now exists, including the one this row spent
+  most of its length arguing was the half that was left.
+
+  **What the entry said was owed, and what is true.** It read _"What is left is the interchange
+  comparison — Rev B against Rev C, both exported from P6. That is the version somebody pays for,
+  and it is the one thing the three shipped tiers cannot do"_, and then correctly named its blocker
+  as identity: the route is plan-nested, two imports land as two plans (ADR-0050), and matching
+  across them cannot use the id. **ADR-0129 built exactly that**, filed at
+  `docs/adr/0129-identity-across-two-imports-is-the-code.md`. Verified 2026-09-10 by finding the
+  parts rather than by reading the ADR: `CrossPlanRevisionCompareController`
+  (`organizations/:orgSlug/cross-plan-revision-compare`, org-scoped because two plan ids leave no
+  honest `:planId`), the web panel, its print document, and `apps/web/e2e-revision-compare`.
+
+  **The entry even researched the design that shipped.** Its last paragraphs settle that the key is
+  `Activity.code`, that the column is nullable, and that `uq_activities_plan_code` makes duplication
+  a case the database refuses rather than one to repair — which is ADR-0129's correlation rule
+  almost verbatim. So this is not an entry that failed to anticipate the work; it is an entry that
+  specified the work, watched it ship, and went on describing it as owed.
+
+  **Why it is rewritten rather than deleted.** Two facts inside it are still load-bearing and live
+  nowhere else. **A re-code is indistinguishable from a removal plus an addition, permanently and by
+  construction** — the row reasoned its way to that before ADR-0129 stated it as a product promise.
+  And its method note stands as the sharpest one in this file: a constraint claim is verified against
+  `prisma/migrations/`, **never** against `schema.prisma`, because Prisma cannot express a partial
+  unique and a grep for `@@unique` structurally cannot see the answer.
+
+  **The pattern is the reason this stays visible.** The entry above records four instances of this
+  file describing shipped work as owed; this is the fifth, and the first where the entry had already
+  been corrected twice _for the same defect_. `docs/BACKLOG.md` decides what gets picked up next, so
+  a stale entry does not merely mislead — it spends somebody's day. Nothing observes it: no gate
+  reads this file, and `check:debt-status` covers `docs/TECH_DEBT.md` alone.
 
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.
 - `M` **Notifications.** Plan changes, pen hand-off requests, and import
-  completion currently surface only in-app. Needs the mail transport (below)
-  first.
+  completion currently surface only in-app. _(Corrected 2026-09-11: **its stated
+  blocker has lapsed, and the pointer no longer resolves.** "Needs the mail
+  transport (below) first" pointed at an entry in Platform foundations that was
+  removed on 2026-08-05 — that section now carries a call-out explaining why —
+  and the transport is real: `common/mail/smtp-mail.service.ts` ships beside
+  `logging-mail.service.ts`, selected purely on `MAIL_SMTP_URL` being set, and
+  the product owner confirmed the deployed host sending on 2026-08-05. So this
+  entry was blocked on something that shipped over a month ago, in the file that
+  decides what gets built next — the **fourth** time this file has said that, and
+  the first where the stale claim was a **dependency** rather than the item
+  itself.)_
+  What it genuinely needs is a decision about **which** events earn a
+  notification and through what channel, which is the ADR-0075 shape one feature
+  along: mail is best-effort and its failure belongs to the operator, so a
+  notification a planner is told was sent is a claim this transport cannot
+  make.
 - `L` **Per-activity plan revision history.** "Who changed this duration?" is
   unanswerable and will stay that way, because the audit log deliberately and
   **permanently** excludes ordinary content edits (ADR-0073 §3): an activity's
@@ -183,12 +175,30 @@ a product idea that has not yet earned a roadmap line:
   a **different feature**, with a different table, a different retention story
   and a different read model (a per-activity timeline, not an organisation
   feed). Worth building on evidence that planners ask for it, not before.
+  _(Re-read 2026-09-11 and it stands, with one thing now true that was not when
+  it was written: the revision-comparison programme — ADR-0125/0126/0127/0129 —
+  answers the **what** half between two named revisions, including logic,
+  constraints, calendar, WBS parent, lane and progress. It answers **who** for
+  nothing, because a baseline snapshot has no actor, so the entry's own headline
+  question is unaffected. Worth knowing before somebody scopes this as "add an
+  actor column": the two halves live in different models.)_
 
 ## Platform foundations not yet built
 
 Each of these has an **accepted ADR** and no implementation — see
 [ARCHITECTURE.md](ARCHITECTURE.md) §10. They are listed here because the
-decision is made; only the work is outstanding.
+decision is made; only the work is outstanding — **except where a later ADR has
+narrowed one, which the Background-processing entry now states.**
+
+> **All four were re-verified against the code on 2026-09-11**, because this
+> section has twice listed a shipped capability as unbuilt (see both call-outs
+> below) and a third would not be an accident. None of `bullmq`, `ioredis`,
+> `redis`, `@aws-sdk/*` or `@opentelemetry/*` appears in any workspace's
+> `package.json`, and none of `Queue(`, `createClient`, `S3Client`,
+> `PutObjectCommand`, `@opentelemetry` or `trace.getTracer` appears in
+> `apps/api/src`, `apps/web/src` or `packages/*/src`. The two occurrences of the
+> string "BullMQ" are both comments naming it as a future option. So the four
+> gaps are real; what was inaccurate was the framing of one of them.
 
 > **Mail transport was on this list and is not a foundation gap any more.**
 > `SmtpMailService` ships and is selected whenever `MAIL_SMTP_URL` is set;
@@ -196,8 +206,11 @@ decision is made; only the work is outstanding.
 > "`common/mail/` is a logging stub" until 2026-08-05, which is the reading that
 > leads someone to build a second mail path — ADR-0058's failure, in the file
 > that decides what gets built next. What remains is operational rather than
-> structural: knowing that a send **failed** after Better Auth's handoff
-> (`docs/TECH_DEBT.md` #94).
+> structural: knowing that a send **failed** after Better Auth's handoff —
+> **`docs/TECH_DEBT.md` #100**, not #94 _(repointed 2026-09-11: #94 closed on
+> 2026-08-08 and its own ledger entry says "Live gap is **#100**", so this
+> sentence named a closed row as the thing that remains; #100 is
+> operator-owned and deferred on a named closing condition)_.
 
 > **The append-only audit log was on this list too, and shipped over a year ago.**
 > `audit_events` has existed since `20260803170000_audit_events`; ADR-0072 made it
@@ -215,7 +228,22 @@ decision is made; only the work is outstanding.
 > quietly deleting.
 
 - `M` **Background processing** — BullMQ + Redis (ADR-0009). The candidate first
-  consumer is schedule interchange import, which is synchronous today.
+  consumer is schedule interchange import, which is synchronous today _(verified
+  2026-09-11: no queue, job, enqueue or worker anywhere in
+  `modules/interchange/`, and the controller's `commit` awaits the service
+  directly)_.
+  **Read [ADR-0087](adr/0087-scheduled-retention-sweep.md) D2 before starting
+  this.** That decision **narrowed ADR-0009 rather than superseding it**: the
+  application now runs scheduled work — one `setInterval`, no broker, no queue —
+  and D2 exists precisely so "we have a scheduler" does not become the answer to
+  every background need. It names the six conditions that reopen ADR-0009 as
+  written: **durability across a restart, retry with backoff, exactly-once
+  execution, fan-out to workers, a queue a request can enqueue onto, or visible
+  progress.** An import is such a job by that ADR's own example, so this entry's
+  candidate consumer is the right one — but the line above said "the decision is
+  made; only the work is outstanding", and for this entry that is now only half
+  true. Nobody should start a broker from this bullet without meeting one of the
+  six.
 - `M` **Caching** — Redis, cache-aside (ADR-0010). Measure first: no read path
   has been demonstrated to need it.
 - `M` **Object storage** — S3-compatible abstraction (ADR-0011). No feature
@@ -241,8 +269,18 @@ decision is made; only the work is outstanding.
   Breakdown picker, because a checklist that can restructure the tree needs cycle feedback a
   checklist cannot express well. Worth revisiting with a design for that feedback rather than by
   simply widening the list.
-- `S` **A shape cue for the derived Unassigned band bar** (TECH_DEBT #71) and a widened
-  `CheckboxField` for the bulk-selection column (TECH_DEBT #72).
+- `S` ~~**A shape cue for the derived Unassigned band bar** (TECH_DEBT #71)~~ **— DONE
+  2026-09-01**, and a widened `CheckboxField` for the bulk-selection column (TECH_DEBT #72), which
+  is **half done**.
+  _(Corrected 2026-09-11, the **fifth** stale claim this file has been caught on. `#71` is closed
+  and ledgered: the bucket is an unfilled three-sided bracket now, decided by mocking both candidate
+  remedies on a real canvas with a greyscale toggle rather than by reviewing them, after the two
+  specialist reviews disagreed. `#72` is narrowed rather than open-as-written — its **target-size**
+  half closed the same day (both boxes sit in a `size-6` label, 24 × 24 pointer target, painted box
+  unchanged, pinned in `e2e-wbs`), and what survives is the original component finding: the boxes
+  are hand-assembled where `CheckboxField` exists, which needs that primitive widened for a
+  visually-hidden label and trailing row content **before** any of the five call sites move. So this
+  bullet is one item, not two, and the remaining one is a shared-primitive change.)_
 
 ## Engineering / delivery
 
@@ -258,14 +296,10 @@ decision is made; only the work is outstanding.
   is a live item again rather than a standing regret. The foundation stays
   platform-neutral (ADR-0018 self-migrating image, ADR-0027 per-package tags,
   GHCR), so this is a decision and an ADR, not a rewrite.
-- `S` **PR-title lint in CI** — commitlint runs as a git hook, so a squash-merge
-  title is only enforced by convention. Belt-and-braces.
 - `S` **Branch-protection & release-bot permissions** documented as code rather
   than configured by hand in the GitHub UI.
-- `S` **Bundle-size budget checks in CI** for the web app.
 - `M` **Performance budget / Lighthouse CI** on the plan workspace — the one
   screen where regressions would actually hurt.
-- `S` **Dependency licence checking in CI.**
 - `M` **Centralise the soft-delete filter** via a Prisma client extension, so it
   is enforced globally rather than repeated per repository. The cost of the
   current approach is that one forgotten `deletedAt: null` leaks deleted rows;

@@ -687,7 +687,7 @@ describe('createActivityCommand', () => {
     const created = activity({ id: 'new-1' });
     const input = { name: 'Excavate', type: 'TASK' as const, durationDays: 5, laneIndex: 2 };
     const createPlaced = vi.fn(() => Promise.resolve(activity({ id: 'new-2' })));
-    const deleteActivity = vi.fn(() => Promise.resolve());
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
     const command = createActivityCommand({ created, input, createPlaced, deleteActivity });
 
     await command.undo();
@@ -704,7 +704,7 @@ describe('createActivityCommand', () => {
 
   it('does not re-delete when already absent, nor re-create when already present', async () => {
     const createPlaced = vi.fn(() => Promise.resolve(activity({ id: 'x' })));
-    const deleteActivity = vi.fn(() => Promise.resolve());
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
     const command = createActivityCommand({
       created: activity({ id: 'c1' }),
       input: { name: 'A', type: 'TASK', durationDays: 1, laneIndex: 0 },
@@ -915,7 +915,7 @@ describe('createLoeSpanCommand', () => {
     const loe = activity({ id: 'loe-1', name: 'Level of effort', type: 'LEVEL_OF_EFFORT' });
     const createPlaced = vi.fn(() => Promise.resolve(activity({ id: 'loe-2' })));
     const createDependency: CreateDependencyFn = vi.fn(() => Promise.resolve(dependency({})));
-    const deleteActivity = vi.fn(() => Promise.resolve());
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
     const command = createLoeSpanCommand({
       loe,
       placedInput,
@@ -953,7 +953,7 @@ describe('createLoeSpanCommand', () => {
   it('is idempotent per direction (no double-delete / double-compose)', async () => {
     const createPlaced = vi.fn(() => Promise.resolve(activity({ id: 'x' })));
     const createDependency: CreateDependencyFn = vi.fn(() => Promise.resolve(dependency({})));
-    const deleteActivity = vi.fn(() => Promise.resolve());
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-1' }));
     const command = createLoeSpanCommand({
       loe: activity({ id: 'loe-1' }),
       placedInput,

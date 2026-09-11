@@ -11,8 +11,17 @@
  *
  * **It is opt-in, not a blanket ban**, because most work legitimately touches the API. The opt-in is
  * `scripts/frontend-only.json` — `active: true` declares an epic in flight and names why, and the
- * epic's own gate pass removes it. `FRONTEND_ONLY=1` in the environment forces the same thing, which
- * is how it is probed locally.
+ * epic's own gate pass is **supposed** to remove it. `FRONTEND_ONLY=1` in the environment forces the
+ * same thing, which is how it is probed locally.
+ *
+ * **Read that "is supposed to" literally: the instruction has failed TWO times out of TWO**
+ * (`docs/TECH_DEBT.md` #194, and see the stale-declaration paragraph below for what each one then
+ * blocked). It is stated here as a record rather than as advice, because a sentence telling the next
+ * reader to remember something is precisely what ADR-0058 says to replace with a mechanism — and
+ * this file has now given that sentence twice while its own history array records it not being
+ * acted on. **Do not read it as a working process.** #194 holds the candidate mechanisms; changing
+ * this gate is a shared-gate change and wants a spec (ADR-0105), which is why the sentence is
+ * corrected here and the mechanism is not smuggled in with it.
  *
  * **Why a repository file rather than a branch name.** It shipped on 2026-08-17 opting in from CI
  * with `contains(github.head_ref, 'gantt')`, and that predicate **could never be true**: this

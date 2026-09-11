@@ -29,9 +29,18 @@ import { RevisionComparePrintDocument } from './RevisionComparePrintDocument';
  * second copy to live.
  *
  * **What it does NOT claim**, stated because a gate whose reach is unwritten gets cited for more
- * than it proves: it checks the SENTENCES both surfaces are built from, not their layout, not their
- * ordering, and not facts either surface renders inline without going through the shared module.
- * The correlation ROW LISTS are one such fact and are asserted separately below.
+ * than it proves: it checks the SENTENCES both surfaces are built from, not their layout, and not
+ * facts either surface renders inline without going through the shared module. The correlation ROW
+ * LISTS are one such fact and are asserted separately below.
+ *
+ * **Ordering used to be on that list, and `docs/TECH_DEBT.md` #263(j) is what that cost.** The two
+ * surfaces agreed on every sentence and disagreed about where two of them go: paper put the re-code
+ * caveat and the measurement frame immediately after the correlation lists, and the screen put them
+ * after the whole delta, above the footer — so a reader told to read the coverage first met the
+ * qualification on it only after scrolling a change list that can run to two hundred rows. The
+ * blind spot was declared in advance here rather than discovered, which is why this is a widening
+ * and not a miss; the ONE ordering relationship that carries meaning is now asserted below, and
+ * general layout is still not claimed.
  */
 
 const CROSS_PLAN: CrossPlanRevisionCompare = {
@@ -240,5 +249,45 @@ describe('the cross-plan comparison says the same things on screen and on paper'
       expect(text).not.toContain('NO_COMMON_ACTIVITIES');
     }
     screen.queryAllByText(/_/); // no-op guard against a bare underscore reaching the DOM
+  });
+
+  /**
+   * **The one ordering relationship that carries meaning** (`docs/TECH_DEBT.md` #263(j)).
+   *
+   * Asserted as a RELATIONSHIP between three nodes rather than as an index, because an index would
+   * pin the whole layout and fail on any unrelated insertion — which is how an ordering assertion
+   * earns a reputation for being noise and gets deleted. What matters is only that the
+   * qualification arrives with the thing it qualifies and before the numbers it qualifies.
+   */
+  const positionOf = (container: HTMLElement, text: string): number => {
+    const nodes = [...container.querySelectorAll('*')];
+    const found = nodes.findIndex(
+      (n) => (n.textContent ?? '').includes(text) && n.children.length === 0,
+    );
+    expect(found, `"${text.slice(0, 40)}…" is not on this surface at all`).toBeGreaterThanOrEqual(
+      0,
+    );
+    return found;
+  };
+
+  it('puts the re-code caveat AFTER the coverage and BEFORE the delta, on both surfaces', () => {
+    for (const container of [renderPanel(CROSS_PLAN), renderPrint(CROSS_PLAN)]) {
+      const coverage = positionOf(container, correlationSentence(CROSS_PLAN.correlation));
+      const caveat = positionOf(container, RECODE_CAVEAT);
+      const delta = positionOf(container, 'the critical path');
+
+      // With the coverage: a reader told to read it first meets its qualification without scrolling.
+      expect(caveat).toBeGreaterThan(coverage);
+      // Before the numbers it qualifies — the half that was false on screen and true on paper.
+      expect(caveat).toBeLessThan(delta);
+    }
+  });
+
+  it('puts the measurement frame with the caveat rather than at the foot', () => {
+    for (const container of [renderPanel(CROSS_PLAN), renderPrint(CROSS_PLAN)]) {
+      const frame = positionOf(container, frameSentence(CROSS_PLAN.frame));
+      const delta = positionOf(container, 'the critical path');
+      expect(frame).toBeLessThan(delta);
+    }
   });
 });

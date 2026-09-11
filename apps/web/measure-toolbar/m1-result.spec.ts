@@ -43,16 +43,53 @@ import { clearMeasurement, writeMeasurement } from './output';
  * assertion is updated to the new truth rather than relaxed — it is still an equality, and it would
  * still fail if either milestone regressed.
  */
+/**
+ * **The foot row's at-rest height, and every pixel of it attributed** (`docs/TECH_DEBT.md` #296).
+ *
+ * These assertions read **41** until 2026-09-11 and the row measures **51**, in this file and in
+ * `tech-debt-287-pen-foot-row.spec.ts`, at every width. It is **not a regression**: it is this
+ * equality outliving the composition it was written for, and the ten pixels are two deliberate,
+ * product-owner-driven changes to `activity-bottom-panel.tsx`'s one `className`, read from the
+ * commits rather than inferred:
+ *
+ * - `d7a269dc` (2026-08-27, ADR-0115) — `border-t px-4`, a 1 px hairline and no vertical
+ *   padding. **41 px**, the number these cases were written against.
+ * - `4b851eb8` (2026-08-28, workspace visual polish) — `border-t-[3px] px-2 py-1.5`. The product
+ *   owner asked for "an orange accent on the top of the bottom toolbar so it ties in with the top
+ *   toolbar" and for the row to stop sitting tighter to its ground than the deck does. Border
+ *   1 → 3 px (**+2**) and `py-1.5` (**+12**). **55 px**.
+ * - `73d390bd` (2026-09-10, ADR-0133) — `py-1.5` → `py-1` (**−4**). **51 px**.
+ *
+ * 41 + 2 + 12 − 4 = 51, and every case below moves by exactly that ten, which is the proof the
+ * change is a **constant applied to both states**: ADR-0115's actual property — that a selection
+ * must not cost the canvas height — is untouched, and only the base moved. The equality is updated
+ * to the new truth rather than relaxed to a bound, for the reason the 1440 comment already gives:
+ * a bound that stops discriminating is worse than a number that has to be re-derived.
+ *
+ * **Why nobody noticed for two weeks.** `activity-bottom-panel.tsx`'s docblock argues the vertical
+ * cost is safe because "`dock.spec.ts`'s guarantees are deltas … which a constant applied to both
+ * states cannot move". True of that file, and **false of this one**, which asserts the absolute.
+ * Two specs pin this row; one was checked.
+ */
+const FOOT_ROW_AT_REST_PX = 51;
+/** A labelled selection's cost on top of the base — 36 px, unchanged across all three commits. */
+const SELECTION_WRAP_PX = 36;
+
 const CASES = [
-  { width: 1920, height: 1080, expectFoot: 41, note: 'was already one line' },
-  { width: 1646, height: 1097, expectFoot: 41, note: 'M1 — was 77' },
+  { width: 1920, height: 1080, expectFoot: FOOT_ROW_AT_REST_PX, note: 'was already one line' },
+  { width: 1646, height: 1097, expectFoot: FOOT_ROW_AT_REST_PX, note: 'M1 — was 77' },
   // **1440 wraps again, and that is a decision rather than a regression.** M1 reached one line at
   // every width by making `Zoom to selection` icon-only. M4 then widened the dock by 231 px, which
   // made the label affordable at 1920 and 1646 — and the product owner chose the label over 36 px
   // of canvas at a width neither of their machines uses. The equality is kept where it holds and
   // the number is stated where it does not, rather than the case being deleted or loosened to a
   // bound that would stop discriminating (the `dock.spec.ts` lesson, one file over).
-  { width: 1440, height: 900, expectFoot: 77, note: 'labelled — 41 at rest, 77 with a selection' },
+  {
+    width: 1440,
+    height: 900,
+    expectFoot: FOOT_ROW_AT_REST_PX + SELECTION_WRAP_PX,
+    note: 'labelled — at rest at the base, one wrap with a selection',
+  },
 ];
 
 test('M1: the object bar on one line at 1646, and honest about 1440', async ({ page }) => {
@@ -174,7 +211,7 @@ test('M2: the chrome scope reaches the foot row and costs it no height', async (
     results.push({ width: c.width, ...read });
 
     expect(read.selected, `${c.width}: at rest, nothing selected`).toBe(0);
-    expect(read.footH, `${c.width}: the row keeps its height`).toBe(41);
+    expect(read.footH, `${c.width}: the row keeps its height`).toBe(FOOT_ROW_AT_REST_PX);
     expect(read.scope, `${c.width}: the row is on the chrome scope`).toBe('chrome');
     expect(read.background, `${c.width}: it paints the band's ground`).toBe(read.bandBackground);
   }

@@ -1,11 +1,23 @@
 /**
- * Print styles for the health report. Colours are hard-coded dark-on-white — the documented print
- * exception (the GanttPrintSurface precedent): a `@media print` sheet cannot read a runtime token,
- * and paper wants ink whatever theme the app is in.
+ * Print styles for the health report.
+ *
+ * **Paper, ink and muted ink read the SEMANTIC names**, resolved by the `[data-surface="print"]`
+ * scope `lib/print-document.ts` stamps on the one container every print surface mounts through.
+ *
+ * **This sheet used to hard-code them, citing "the GanttPrintSurface precedent" and the reason
+ * "a `@media print` sheet cannot read a runtime token".** Both halves had stopped being true: the
+ * reason is false (a `@media print` rule cannot read a runtime *JS value*; a custom property is CSS
+ * and resolves normally), and the precedent had *moved* — `GanttPrintSurface.css` migrated to the
+ * tokens and its own docblock records correcting exactly this belief, leaving this file citing a
+ * file that no longer does what the citation claims. `docs/TECH_DEBT.md` #263(k).
+ *
+ * The values move with the names, which is the improvement: `token-contrast.test.ts` computes
+ * ratios between TOKENS, so hard-coded ink was ungated ink on a document that exists to be handed
+ * to somebody outside the room.
  */
 .health-print {
-  color: #111;
-  background: #fff;
+  color: var(--foreground);
+  background: var(--background);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -22,7 +34,7 @@
 
 .health-print-meta {
   margin: 0 0 2px;
-  color: #333;
+  color: var(--muted-foreground);
 }
 
 .health-print table {
@@ -33,7 +45,7 @@
 
 .health-print th,
 .health-print td {
-  border: 1px solid #999;
+  border: 1px solid var(--border);
   padding: 2px 6px;
   text-align: left;
 }
@@ -56,7 +68,7 @@
 
 .health-print footer {
   margin-top: 10px;
-  border-top: 1px solid #999;
+  border-top: 1px solid var(--border);
   padding-top: 4px;
-  color: #333;
+  color: var(--muted-foreground);
 }

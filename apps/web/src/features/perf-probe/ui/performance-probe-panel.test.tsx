@@ -5,6 +5,8 @@ import type { ProbeOutcome } from '../runner/run-probe';
 
 import { PerformanceProbePanel } from './performance-probe-panel';
 
+import { ApiFetchError } from '@/lib/api/client';
+
 /**
  * The panel's states.
  *
@@ -430,6 +432,77 @@ describe('PerformanceProbePanel', () => {
     expect(recordMutateAsync).not.toHaveBeenCalled();
   });
 
+  it('names the measuring canvas a test picture, for a sighted reader', async () => {
+    /**
+     * `docs/TECH_DEBT.md` #259 item 9 — specified at
+     * `docs/specs/staff-performance-probe/feature-spec.md:813` and never built.
+     *
+     * Not a WCAG failure: the canvas is `aria-hidden` and the progress sentence is the accessible
+     * channel. It is a sighted-user affordance, and the reason it matters is the surface: a staff
+     * member watching an unlabelled full-screen schedule paint has no reason not to read it as
+     * somebody's real plan — which a `StaffPrincipal` structurally cannot reach (ADR-0086), so the
+     * picture contradicts the console's own guarantee.
+     */
+    let resolveRun: (value: ProbeOutcome) => void = () => {};
+    runProbe.mockReturnValue(
+      new Promise<ProbeOutcome>((resolve) => {
+        resolveRun = resolve;
+      }),
+    );
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // While the overlay is up — it only exists during a run.
+    expect(await screen.findByText(/synthetic test picture/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a real plan/i)).toBeInTheDocument();
+
+    resolveRun(measured('PASS'));
+    // And it goes with the overlay rather than lingering on the panel.
+    await waitFor(() => {
+      expect(screen.queryByText(/synthetic test picture/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('prints the WHOLE refusal, including the sentence that stops it reading as a pass', async () => {
+    /**
+     * `docs/TECH_DEBT.md` #259 item 12. The alert rendered `message.split('\n')[0]`, so everything
+     * after the first line was dropped on screen while the paste-ready report carried it in full.
+     *
+     * The dropped part is not decoration. `NothingToJudgeError`'s non-vacuity message ends **"This
+     * is NOT a pass. A number measured on an almost-empty canvas is a number about the cull"** —
+     * the one sentence whose job is to stop a refusal being read as a clean run, which is the
+     * mistake ADR-0066 records actually happening (a 4.6 ms p95 that was about the cull).
+     */
+    const outcome = unjudgeable();
+    if (outcome.kind !== 'measured') throw new Error('unreachable');
+    const limb = outcome.limbs[0];
+    if (!limb) throw new Error('the fixture has no limb');
+    runProbe.mockResolvedValue({
+      ...outcome,
+      limbs: [
+        {
+          ...limb,
+          result: {
+            kind: 'unjudgeable',
+            message:
+              'NON-VACUITY FAILED — the painter did not draw enough.\n' +
+              '  visible bars 12 (need >= 100)\n' +
+              'This is NOT a pass. A number measured on an almost-empty canvas is a number about ' +
+              'the cull.',
+          },
+        },
+      ],
+    });
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // The first line still shows — this must not become a test that only the LAST line survives.
+    expect(await screen.findByText(/the painter did not draw enough/)).toBeInTheDocument();
+    // And the two that were being dropped.
+    expect(screen.getByText(/visible bars 12/)).toBeInTheDocument();
+    expect(screen.getByText(/This is NOT a pass/)).toBeInTheDocument();
+  });
+
   it('sends an unjudgeable limb, because the numbers are real even when the verdict is not', async () => {
     runProbe.mockResolvedValue(unjudgeable());
     render(<PerformanceProbePanel />);
@@ -458,6 +531,63 @@ describe('PerformanceProbePanel', () => {
 
     // The RETRY path is the one that still uses `mutate`: it is the one thing the sweep
     // deliberately does not do for itself.
+    recordMutate.mockClear();
+    fireEvent.click(retry);
+    expect(recordMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('WITHHOLDS the retry on a 422, and says why rather than inviting a press that cannot work', async () => {
+    /**
+     * `docs/TECH_DEBT.md` #269. The panel said one sentence — "These figures were measured but NOT
+     * recorded." — for every failure, beside a live **Retry recording**. That is right for a
+     * dropped socket and wrong for a 422: the server refuses this body, so the same body will be
+     * refused again.
+     *
+     * **This is not hypothetical.** Every `revision-diff` reading was answered
+     * `422 … property frames should not exist` for the whole life of that scenario, and the panel
+     * reported it in the same words it uses for a network blip. The diagnosis came from a journey
+     * reading the response body, never from anything on screen.
+     */
+    recordMutateAsync.mockRejectedValue(new ApiFetchError(422, { code: 'X', message: 'no' }));
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // The status reaches the operator, and so does the fact that a retry is pointless.
+    expect(await screen.findByText(/refused this reading \(422\)/)).toBeInTheDocument();
+
+    // Shaded, not removed (ADR-0082): the affordance stays visible with a reason, so an operator
+    // who has seen it work elsewhere is told why it will not here.
+    const retry = screen.getByRole('button', { name: 'Retry recording' });
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById(retry.getAttribute('aria-describedby') ?? '')).toHaveTextContent(
+      /same reading/i,
+    );
+
+    // And pressing it does nothing — a shaded control that still fires is a shading in appearance
+    // only, which is worse than none because it looks considered.
+    recordMutate.mockClear();
+    fireEvent.click(retry);
+    expect(recordMutate).not.toHaveBeenCalled();
+
+    // The figures survive: a refused store must not throw the measurement away.
+    expect(screen.getByText('PASS')).toBeInTheDocument();
+  });
+
+  it('KEEPS the retry on a 429, which is the one 4xx worth pressing again', async () => {
+    // The pinned counter-case. Without it the assertion above is satisfied by a panel that shades
+    // Retry on every failure, which would break the case the button was written for.
+    recordMutateAsync.mockRejectedValue(
+      new ApiFetchError(429, { code: 'X', message: 'slow down' }),
+    );
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    const retry = await screen.findByRole('button', { name: 'Retry recording' });
+    expect(retry).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(/rate limiting/i)).toBeInTheDocument();
+
     recordMutate.mockClear();
     fireEvent.click(retry);
     expect(recordMutate).toHaveBeenCalledTimes(1);

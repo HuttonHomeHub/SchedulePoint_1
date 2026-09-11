@@ -1,7 +1,7 @@
 # Feature Spec: One day-length rule per quantity — the `RESOURCE_DEPENDENT` day factor
 
 - **Status:** Draft
-- **Author(s):** feature-analyst (Claude Opus 5), for James Ewbank
+- **Author(s):** feature-analyst, for James Ewbank
 - **Date:** 2026-09-10
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #86
 - **Roadmap link:** none — debt-drive work, triggered by ADR-0105 (a register row is not a spec)

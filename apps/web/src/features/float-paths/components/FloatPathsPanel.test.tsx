@@ -215,6 +215,45 @@ describe('FloatPathsPanel', () => {
     expect(onActivate).not.toHaveBeenCalled();
   });
 
+  it('says WHY a member cannot be activated, as a linked sibling and not in the name', () => {
+    // **`docs/TECH_DEBT.md` #250, verified red first**: the row was shaded with `aria-disabled` and
+    // `pointer-events-none opacity-60` and carried NO reason, so a reader met a control that
+    // refuses and never says what would make it work — the ADR-0082 defect, in a panel whose
+    // sibling (`RevisionComparePanel`'s `MovedRow`) had carried the reason since it shipped.
+    //
+    // The name assertion is the half that discriminates, and it is why the reason is a SIBLING
+    // rather than text inside the button: folded in, the sentence joins the accessible name and a
+    // screen-reader user hears the activity and its refusal as one run-on label. A test that only
+    // checked the sentence was present would pass against exactly that mistake.
+    renderPanel({
+      selectedPathIndex: 0,
+      model: model([{ index: 0, relativeFloatMinutes: 0, activityIds: ['t', 'gone'] }]),
+    });
+    const missing = screen.getByRole('button', { name: /not in the loaded activities/i });
+    const reasonId = missing.getAttribute('aria-describedby');
+    expect(reasonId).toBeTruthy();
+    const reason = document.getElementById(reasonId as string);
+    expect(reason).toHaveTextContent(
+      /not in the loaded plan, so it cannot be shown on the diagram/i,
+    );
+    // The reason is NOT part of the name.
+    expect(missing).not.toHaveAccessibleName(/cannot be shown on the diagram/i);
+  });
+
+  it('leaves a member the client DOES hold with no reason attached', () => {
+    // The pinned negative, so the case above cannot be satisfied by describing every row: a
+    // reason on a live row would state a refusal that is not happening.
+    renderPanel({ selectedPathIndex: 0 });
+    const live = screen
+      .getAllByRole('button')
+      .find(
+        (b) =>
+          /Use |Close |Recalculate/.test(b.textContent ?? '') === false &&
+          b.getAttribute('aria-disabled') !== 'true',
+      );
+    expect(live?.getAttribute('aria-describedby') ?? null).toBeNull();
+  });
+
   it('closes from its own header', () => {
     const { panel: p } = renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Close float paths' }));

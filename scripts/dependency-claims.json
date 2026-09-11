@@ -14,12 +14,14 @@
     "@tanstack/history": "1.162.2",
     "@tanstack/router-core": "1.171.28",
     "playwright-core": "1.62.1",
-    "tailwindcss": "4.3.3"
+    "tailwindcss": "4.3.3",
+    "@tanstack/query-core": "5.101.4"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
     "@tanstack/router-core": "@tanstack/react-router",
-    "@tanstack/history": "@tanstack/react-router"
+    "@tanstack/history": "@tanstack/react-router",
+    "@tanstack/query-core": "@tanstack/react-query"
   },
   "claims": [
     {
@@ -1016,6 +1018,28 @@
       "lines": "309-314",
       "anchor": "}, {",
       "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "focusManager.js:11-13",
+      "package": "@tanstack/query-core",
+      "path": "build/modern/focusManager.js",
+      "lines": "11-13",
+      "anchor": "window.addEventListener(\"visibilitychange\", listener, false);",
+      "citedBy": [
+        "apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts",
+        "docs/TECH_DEBT.md"
+      ]
+    },
+    {
+      "ref": "focusManager.js:56-59",
+      "package": "@tanstack/query-core",
+      "path": "build/modern/focusManager.js",
+      "lines": "56-59",
+      "anchor": "return globalThis.document?.visibilityState !== \"hidden\";",
+      "citedBy": [
+        "apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts",
+        "docs/TECH_DEBT.md"
+      ]
     }
   ]
 }
