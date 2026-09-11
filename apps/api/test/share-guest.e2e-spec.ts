@@ -1,6 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -43,6 +44,7 @@ function containsKey(value: unknown, keys: readonly string[]): boolean {
 
 describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
   let app: INestApplication;
+  let throttlerStorage: ThrottlerStorage;
   let prisma: PrismaService;
 
   beforeAll(async () => {
@@ -57,6 +59,7 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    throttlerStorage = app.get<ThrottlerStorage>(ThrottlerStorage);
   });
 
   async function resetDatabase(): Promise<void> {
@@ -122,6 +125,26 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
   });
 
   beforeEach(async () => {
+    /**
+     * **Inoculated against the trap `docs/TECH_DEBT.md` #268 records, before it fires here.**
+     *
+     * `ShareGuestController` carries `@Throttle(GUEST_THROTTLE)` — a tighter per-IP bound than the
+     * global one (ADR-0051 F-M3) — and the whole file runs inside one window against one in-memory
+     * counter, so one test's requests are spent out of the next one's budget. `staff.e2e-spec.ts`
+     * reached that ceiling for real: it passed at 22 tests, and a 23rd pushed **three unrelated
+     * tests** into 429, each failing with a message about its own assertion rather than about the
+     * limit. Three diagnoses were wrong before the shape was visible.
+     *
+     * This suite is not near the ceiling today — four tests against a limit of thirty, counted
+     * rather than assumed — so this is insurance and is written as such. The point is that the
+     * failure, when it arrives, does not name its cause and costs an afternoon.
+     *
+     * **The product bound is untouched.** Every test still runs its own requests under the real
+     * limit; what is removed is one test's spending counting against another's, which
+     * `docs/TESTING.md` already forbids in as many words. Nothing in `apps/api/test` asserts a 429,
+     * so no assertion is disarmed by this.
+     */
+    (throttlerStorage as ThrottlerStorageService).storage.clear();
     await resetDatabase();
   });
 

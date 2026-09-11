@@ -5165,6 +5165,20 @@ suite in `apps/api/test/` that touches `ThrottlerStorage`, and both suites this 
 implication — `share.e2e-spec.ts` and `share-guest.e2e-spec.ts` — still have zero references. The
 trap is set exactly where the row says, and one file is still inoculated against it.
 
+> **Half taken, 2026-09-11 overnight.** `share-guest.e2e-spec.ts` is now inoculated the same way —
+> it is the suite this row named by implication and the one that matters, because
+> `ShareGuestController` carries its own tighter `@Throttle(GUEST_THROTTLE)` (ADR-0051 F-M3) rather
+> than the global bound. **Counted rather than assumed before acting**: that suite runs four tests
+> against a limit of thirty, so it is nowhere near the ceiling and this is insurance, written as
+> such in the file. The product bound is untouched and nothing in `apps/api/test` asserts a 429.
+> `scripts/e2e-local.sh api` after: 635 passed, 1 skipped.
+>
+> **What is left is the half this row actually argues for, and it is a shared-infrastructure
+> change**: nothing DETECTS the condition, so the next suite inherits the trap and pays the three
+> wrong diagnoses again. Both candidate answers — a shared e2e setup, or one owned 429 assertion —
+> change how every API e2e suite is set up, which is an ADR-0105 trigger and wants a spec rather
+> than a quiet edit inside an overnight batch.
+
 **Why it is still a row.** The fix is one file's `beforeEach`, and the same trap is set in every
 other e2e suite that hits a throttled route — `share`, and any later one. Nothing detects the
 condition: a suite silently loses headroom as it grows and then fails somewhere else. Two candidate
@@ -7537,3 +7551,41 @@ and a `**Verified:**` date are mutually exclusive; every other status requires o
 **Blind spot to state up front:** this would catch the contradiction and not the lie. A row whose
 author writes a date without checking anything is invisible to any parser, which is why ADR-0076
 classes that as the non-computable third kind.
+
+### 303. The retention sweep logs an ERROR on every API e2e run, and it is the exact signal the alert watches
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (seen in an overnight `scripts/e2e-local.sh api` run) · **Size:** S · **Owner:** api
+
+A green API end-to-end run (635 passed, 1 skipped) also emits **four** of these:
+
+```
+ERROR: a retention sweep failed; the next run will retry it
+  {"context":"RetentionSweepRunner","event":"retention.sweep_failed","table":"perf_probe_results"}
+  err: PrismaClientUnknownRequestError — "Invalid `prisma.$executeRaw()` invocation: Response from
+  the Engine was empty"
+```
+
+**The cause looks like teardown rather than the sweep, and the evidence is the table.**
+`RETENTION_TABLES` is `['csp_reports', 'mail_events', 'perf_probe_results']`
+(`retention-policy.ts:25`) and the failures name **only the last one**, every time. "Response from
+the Engine was empty" is what a `$executeRaw` returns when the Prisma engine has gone away
+underneath it, and `RetentionSweepService` clears its interval in `onApplicationShutdown`
+(`:121-123`) — a hook a test's `app.close()` does not necessarily reach, and which in any case
+cannot un-start a sweep already in flight. So: the hourly timer fires during the suite, teardown
+closes the engine part-way through the third table, and the catch block reports a permanent-looking
+failure. **Stated as a hypothesis with its evidence rather than as a diagnosis** — the discriminator
+nobody has run is whether the failures correlate with `afterAll`, which a timestamp comparison would
+settle in minutes.
+
+**Why it is worth a row rather than a shrug.** `retention.sweep_failed` is not an arbitrary log
+line: it is the **exact event ADR-0087 M4 built an alert on**, after three consecutive occurrences,
+chosen because "one is not news — the next tick is the retry". A developer who sees it four times in
+every green run learns to read it as noise, and that is the one reading that makes the alert
+worthless the day it fires for real. The alert is not armed on any host today (`#100`), so nothing
+is currently mis-firing; this is about the signal's credibility, not a live page.
+
+**Not fixed here.** The obvious remedies — not starting the timer when `NODE_ENV` is test, or
+awaiting the in-flight sweep on shutdown — are changes to a service every API e2e suite boots, which
+is the shared-infrastructure shape `#268` records deferring for the same reason. It also deserves
+the discriminator first: a fix aimed at teardown, if the cause is something else, is the inert
+change `#268`'s own history warns about.
