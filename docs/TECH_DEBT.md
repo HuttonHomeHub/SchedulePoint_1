@@ -1977,6 +1977,38 @@ number cannot be checked without the list, and the list was never written down. 
 finding**: a row sized `M` on a count nobody can reproduce is one whoever picks it up must re-survey
 before they can scope it, which is most of the work.
 
+> **Surveyed 2026-09-11, and the survey reverses the paragraph above: the original "fifteen"
+> reproduces, and the 55 does not.**
+>
+> **`animate-spin` is 7, not 55** — seven occurrences across four files
+> (`spinner.tsx`, `plan-facts.tsx`, `performance-probe-panel.tsx`, and four in
+> `tsld-toolbar-items.tsx`), and the figure is 7 whether or not tests and `.ts` are included. It is
+> the class **inside the primitive**, so it was never the right quantity anyway. Nothing in the tree
+> counts 55 by any obvious pattern; the nearest is the bare identifier `Spinner`, at 49–50.
+>
+> **The right quantity is `<Spinner` render sites: 28 matches, of which 2 are docblock mentions in
+> `performance-probe-panel.tsx`, so 26 real sites.** Classified by the discriminator
+> `docs/UX_STANDARDS.md:60` actually gives — is the content's **shape known** — they fall in three
+> groups:
+>
+> - **Inline busy on an action — correct as a spinner, nothing owed (7):** `FloatPathsPanel:187`,
+>   `RevisionComparePanel:256/294/425`, `ScheduleHealthPanel:199`,
+>   `ImportScheduleDialog:246/301`.
+> - **A guard or transition, where the shape is NOT yet known (4–5):** `router.tsx:345/362`,
+>   `forgot-password.tsx:42` ("Checking whether you are signed in…"), `audit-log.tsx:78` ("Checking
+>   your access…"), and arguably `staff.tsx:56`.
+> - **First load where the shape IS known — the skeleton candidates (14–15):**
+>   `client-detail.tsx:20`, `project-detail.tsx:43`, `plan-detail.tsx:42`, `staff.tsx:149/302/468/532`
+>   (and `:56` if counted here rather than above), `EarnedValuePanel:122`,
+>   `ScheduleSummaryStrip:54`, `NoteThread:86`, `ActivityMembersPanel:140`,
+>   `CalendarExceptionsEditor:431`, `AcceptInvitationCard:75`, `GuestPlanView:64`.
+>
+> **So the row's original figure was right and the re-verification's objection was not.** Stated
+> carefully, because landing exactly on "fifteen" is the kind of agreement worth distrusting: the
+> **26** and the three-way split are mechanical, and the 14-versus-15 turns on one judgement call
+> (`staff.tsx:56`, the route's own guard) — so read it as "about fifteen, enumerated", which is what
+> the row needed and did not have. What is left is the work itself, not the survey.
+
 `docs/UX_STANDARDS.md:60` asks for a _"Skeleton matching final layout (first load) / inline busy
 (actions)"_ — two answers, with the discriminator being whether the content has a **known shape**,
 not whether something is pending. M7 fixed the one site where the shape was known to a shared
