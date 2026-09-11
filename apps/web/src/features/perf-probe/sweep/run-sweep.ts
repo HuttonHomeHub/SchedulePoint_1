@@ -1,4 +1,5 @@
 import type { ProbeResultBody } from '../api/probe-results';
+import { describeStoreFailure, type StoreFailure } from '../model/store-failure';
 import { toProbeBody } from '../model/to-probe-body';
 import type { ProbeOutcome, RunSize } from '../runner/run-probe';
 
@@ -37,6 +38,16 @@ export interface SweepStepResult {
   readonly outcome: ProbeOutcome | null;
   /** Present only for `not recorded`, so a retry can send exactly what failed. */
   readonly body: ProbeResultBody | null;
+  /**
+   * Why the write failed, and whether a retry could ever clear it — present only for
+   * `not recorded` (`docs/TECH_DEBT.md` #269).
+   *
+   * The catch below used to swallow the error whole, so the panel had one sentence for a dropped
+   * socket and for a 422 alike, and offered the same button for both. Derived once here rather
+   * than in the panel, because "which statuses are retryable" is a decision and two call sites
+   * would eventually answer it differently.
+   */
+  readonly storeFailure: StoreFailure | null;
 }
 
 export interface SweepOutcome {
@@ -109,7 +120,7 @@ export async function runSweep(input: RunSweepInput): Promise<SweepOutcome> {
     // between "you stopped early" and "your tab was in the background".
     if (input.shouldStop()) {
       stopped = true;
-      steps.push({ step, status: 'not taken', outcome: null, body: null });
+      steps.push({ step, status: 'not taken', outcome: null, body: null, storeFailure: null });
       continue;
     }
 
@@ -122,7 +133,7 @@ export async function runSweep(input: RunSweepInput): Promise<SweepOutcome> {
     const body = toProbeBody(outcome, input.machineLabel);
     if (body === null) {
       const status: SweepStepStatus = outcome.kind === 'refused' ? 'refused' : 'not taken';
-      steps.push({ step, status, outcome, body: null });
+      steps.push({ step, status, outcome, body: null, storeFailure: null });
       input.onProgress({ stepIndex: index, stepCount: plan.length, step, status });
       if (outcome.kind === 'cancelled') stopped = true;
       continue;
@@ -132,17 +143,24 @@ export async function runSweep(input: RunSweepInput): Promise<SweepOutcome> {
     // two minutes of measurement should not be lost because the operator closed the tab at 1:50.
     const withSweep: ProbeResultBody = { ...body, sweepId };
     let status: SweepStepStatus;
+    let storeFailure: StoreFailure | null = null;
     try {
       await input.store(withSweep);
       status = 'recorded';
-    } catch {
+    } catch (error) {
       // **Never a throw out of the sweep.** A failed POST is per-step state: the figures are on
-      // screen and retryable, and steps 2–4 have no reason to be abandoned because step 1's write
-      // lost a connection. Swallowed HERE and nowhere else — the panel renders the state.
+      // screen, steps 2–4 have no reason to be abandoned because step 1's write lost a connection.
+      // Swallowed HERE and nowhere else — the panel renders the state.
+      //
+      // **The error is no longer discarded** (`docs/TECH_DEBT.md` #269). This was a bare `catch {}`,
+      // and the comment above said "and retryable" — true of the case it was written for and false
+      // of a 422, which will refuse the identical body every time. Losing the status here is what
+      // left the panel with one sentence for every failure.
       status = 'not recorded';
+      storeFailure = describeStoreFailure(error);
     }
 
-    steps.push({ step, status, outcome, body: withSweep });
+    steps.push({ step, status, outcome, body: withSweep, storeFailure });
     input.onProgress({ stepIndex: index, stepCount: plan.length, step, status });
 
     // A cancellation that still kept limbs is recorded AND ends the sweep (ADR-0081 M3's rule:

@@ -5,6 +5,8 @@ import type { ProbeOutcome } from '../runner/run-probe';
 
 import { PerformanceProbePanel } from './performance-probe-panel';
 
+import { ApiFetchError } from '@/lib/api/client';
+
 /**
  * The panel's states.
  *
@@ -458,6 +460,63 @@ describe('PerformanceProbePanel', () => {
 
     // The RETRY path is the one that still uses `mutate`: it is the one thing the sweep
     // deliberately does not do for itself.
+    recordMutate.mockClear();
+    fireEvent.click(retry);
+    expect(recordMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('WITHHOLDS the retry on a 422, and says why rather than inviting a press that cannot work', async () => {
+    /**
+     * `docs/TECH_DEBT.md` #269. The panel said one sentence — "These figures were measured but NOT
+     * recorded." — for every failure, beside a live **Retry recording**. That is right for a
+     * dropped socket and wrong for a 422: the server refuses this body, so the same body will be
+     * refused again.
+     *
+     * **This is not hypothetical.** Every `revision-diff` reading was answered
+     * `422 … property frames should not exist` for the whole life of that scenario, and the panel
+     * reported it in the same words it uses for a network blip. The diagnosis came from a journey
+     * reading the response body, never from anything on screen.
+     */
+    recordMutateAsync.mockRejectedValue(new ApiFetchError(422, { code: 'X', message: 'no' }));
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // The status reaches the operator, and so does the fact that a retry is pointless.
+    expect(await screen.findByText(/refused this reading \(422\)/)).toBeInTheDocument();
+
+    // Shaded, not removed (ADR-0082): the affordance stays visible with a reason, so an operator
+    // who has seen it work elsewhere is told why it will not here.
+    const retry = screen.getByRole('button', { name: 'Retry recording' });
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById(retry.getAttribute('aria-describedby') ?? '')).toHaveTextContent(
+      /same reading/i,
+    );
+
+    // And pressing it does nothing — a shaded control that still fires is a shading in appearance
+    // only, which is worse than none because it looks considered.
+    recordMutate.mockClear();
+    fireEvent.click(retry);
+    expect(recordMutate).not.toHaveBeenCalled();
+
+    // The figures survive: a refused store must not throw the measurement away.
+    expect(screen.getByText('PASS')).toBeInTheDocument();
+  });
+
+  it('KEEPS the retry on a 429, which is the one 4xx worth pressing again', async () => {
+    // The pinned counter-case. Without it the assertion above is satisfied by a panel that shades
+    // Retry on every failure, which would break the case the button was written for.
+    recordMutateAsync.mockRejectedValue(
+      new ApiFetchError(429, { code: 'X', message: 'slow down' }),
+    );
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    const retry = await screen.findByRole('button', { name: 'Retry recording' });
+    expect(retry).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(/rate limiting/i)).toBeInTheDocument();
+
     recordMutate.mockClear();
     fireEvent.click(retry);
     expect(recordMutate).toHaveBeenCalledTimes(1);

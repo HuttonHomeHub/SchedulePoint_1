@@ -1029,17 +1029,54 @@ function SittingResult({
           {step.status === 'not recorded' &&
             step.body !== null &&
             !retrying.has(stepKey(step.step)) && (
+              /**
+               * **The sentence names WHY, and the button is shaded when a retry cannot help**
+               * (`docs/TECH_DEBT.md` #269).
+               *
+               * This said "These figures were measured but NOT recorded." for every failure, beside
+               * a live Retry. Right for a dropped socket or a 500; wrong for a 422, where the
+               * server refuses this body and the same body will be refused again — so an operator
+               * was invited to press a button that cannot work, with nothing on screen letting
+               * them tell the two apart. Every `revision-diff` reading was answered
+               * `422 … property frames should not exist` for the life of that scenario and read
+               * exactly like a network blip.
+               *
+               * The retryable set is decided in `model/store-failure.ts`, not here: it is a
+               * decision (429 is a 4xx and IS worth retrying), and two call sites would answer it
+               * differently eventually.
+               */
               <Alert purpose="event" tone="error">
-                These figures were measured but NOT recorded.{' '}
+                {step.storeFailure?.summary ?? 'These figures were measured but NOT recorded.'}{' '}
                 <Button
                   variant="outline"
                   size="sm"
+                  // **`aria-disabled`, never the native attribute** — a natively disabled button is
+                  // out of the tab order, so the reason linked below becomes unreachable by
+                  // keyboard, which is the defect ADR-0082 exists to stop one layer down.
+                  aria-disabled={step.storeFailure?.retryable === false ? true : undefined}
+                  aria-describedby={
+                    step.storeFailure?.retryBlockedReason != null
+                      ? `${stepKey(step.step)}-retry-blocked`
+                      : undefined
+                  }
                   onClick={() => {
+                    // The guard the shading promises. A shaded control that still fires is a
+                    // shading in appearance only, which is worse than none because it looks
+                    // considered.
+                    if (step.storeFailure?.retryable === false) return;
                     onRetry(stepKey(step.step), step.body as ProbeResultBody);
                   }}
                 >
                   Retry recording
                 </Button>
+                {step.storeFailure?.retryBlockedReason != null ? (
+                  // An `sr-only` SIBLING rather than text folded into the button, or the reason
+                  // joins the accessible name and a screen-reader user hears the action and its
+                  // refusal as one run-on label (ADR-0082, ADR-0117's `purpose` distinction).
+                  <span id={`${stepKey(step.step)}-retry-blocked`} className="sr-only">
+                    {step.storeFailure.retryBlockedReason}
+                  </span>
+                ) : null}
               </Alert>
             )}
         </div>
