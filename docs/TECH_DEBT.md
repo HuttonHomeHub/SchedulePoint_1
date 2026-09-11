@@ -495,7 +495,7 @@ documented ≤ 10 (ADR-0053 §3).
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-09-10 · **PARKED 2026-09-10** — see the
+**Status:** deferred (on a trigger) · **Verified:** 2026-09-11 · **PARKED 2026-09-10** — see the
 box below. **No longer blocked on the product owner.** Five
 sittings were taken 2026-09-10 (items 6, 6(e), 6(f)). §9's gate is **met at every judgeable point
 that reproduces**, at both scales and both framings. What remains is one attribution (the ~8 ms,
@@ -988,6 +988,66 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 > **What is still owed is unchanged and is not mine to produce**: the outstanding probe presses
 > belong to the product owner, on their own hardware, and the unattributed ~8 ms at the whole-plan
 > framing must not be guessed at. This row and **#261** both stay open on that.
+
+7. **Item 7 — a SECOND MACHINE, 2026-09-11 (product owner, `web` 0.126.0). The first reading
+   in this row from hardware that is not the Dell, and the first at DPR > 1.**
+
+   Every reading above came from one machine: Dell Precision 5690, Intel Arc Pro Graphics, 22
+   threads, 64 GB, **DPR 1**. This is a **Surface Pro**: Qualcomm Adreno X1-85 (ARM, reported by
+   the probe as an `ANGLE … Direct3D11` renderer string), 12 threads, ~16 GiB, **DPR 1.5**,
+   1912×1148 CSS, Edge 152, 60 Hz (idle interval 16.6–16.8 ms), attention held throughout.
+
+   **Read it as a second machine, not a later sitting.** Different GPU vendor, different
+   architecture, a quarter of the memory, half the threads — and **2.38× the device pixels**
+   (4.94 Mpx against 2.07). None of the Fit figures below belongs in a time series with items
+   5 and 6.
+
+   **(a) Week PASSES at both scales, and that is the half that matters.**
+
+   | scenario        | framing | scale | on screen | result                            |
+   | --------------- | ------- | ----- | --------- | --------------------------------- |
+   | `canvas-draw`   | Week    | 500   | 243 bars  | **60.0 fps, 0.00 pp** — PASS (45) |
+   | `canvas-draw`   | Week    | 2000  | 267 bars  | **60.0 fps, 0.00 pp** — PASS (30) |
+   | `revision-diff` | Week    | 2000  | 264 bars  | **delta +0.00 pp** — PASS         |
+
+   60.0 fps mean, slowest 60.0, fastest 60.0, **zero** dropped frames, worst p95 17.60 ms, at
+   both scales. **§9's floor is met with total margin on ARM at DPR 1.5** — on the surface a
+   planner actually works on, on the hardware the product owner actually uses.
+
+   **(b) `revision-diff` at Week is the strongest verdict anywhere in this row**: baseline
+   **0.00 pp with a 0.00 pp run-to-run spread**. ADR-0127 D8 recorded a machine whose no-change
+   baseline moved 0.56 → 1.85 pp and was honestly reported INDETERMINATE; this is the opposite
+   condition, and it independently confirms ADR-0129 P3 on a different GPU vendor.
+
+   **(c) Fit at 2,000 is the worst figure recorded anywhere: 21.5 fps mean (20.8–22.4), 98.52 pp
+   dropped, tail p95 66.60 ms** — roughly 15 fps at the tail, against §9's 30 fps floor.
+   Ungraded **by policy**, not by accident: the probe never grades Fit, because the shipped
+   painter is already known to drop frames at the whole-plan zoom, so a verdict there would be
+   about the bar. Fit/500 is 59.9 fps / 0.37 pp / p95 20.50 ms.
+
+   **Two things this does NOT license anyone to say.** It is **not a regression** — see the
+   machine difference above; no prior Fit reading was taken at DPR > 1 at all. And it is **not
+   "a Surface Pro problem"** — the same painter dropped 10.2 pp at Fit on the Dell at
+   ~1036×600. The direction is consistent on every machine and the magnitude tracks bars drawn
+   and device pixels, which is what every sitting has found.
+
+   **(d) #260 is re-confirmed on a second machine.** `revision-diff` at Fit: baseline **99.63 pp**
+   (spread 1.11), treatment 99.63 pp at 20.6 fps, delta +0.00 pp — **0.37 pp of headroom against
+   a 2.00 pp bar**, so that comparison is arithmetically incapable of failing. #260's exhibit
+   measured 98.33 pp on different hardware. **The ceiling is a property of the framing, not of
+   one machine**, which is what #260 could not establish from one exhibit.
+
+   **(e) One datum bearing on 5(f)'s withdrawn two-term model, offered as a hint and NOT a
+   model.** Within this machine: Week/2000 draws 267 bars at 60.0 fps, Fit/2000 draws 1892 at
+   21.5 — **7.1× the bars for 2.8× the frame time**. Sub-linear, so a per-bar term is real and is
+   not the whole cost. Two points on one machine. Item 5(f) was withdrawn for being built on
+   exactly this much evidence, and this must not rebuild it.
+
+   **(f) #283 matters more here than it did on the Dell, and this reading cannot answer it.** The
+   probe records no power state. A Surface Pro throttles hard on battery, and
+   `attention held throughout` says nothing about the power source — so if this run was on
+   battery, the Fit figure is not the machine's ceiling. #283's trigger ("capture it the next
+   time two readings disagree") has arguably now fired twice.
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
@@ -7360,3 +7420,103 @@ something that is not a root gate is currently invisible to `check:ci-roster` by
 
 **Measured cost of doing nothing:** `pnpm format:check` takes ~19 s on this machine over the whole
 tree, so it is not free to add to a five-second gate — which is itself part of the design question.
+
+### 300. A required-check list written in prose has no observer, and it named a deleted job for months
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (found asking why no ruleset existed) · **Size:** S · **Owner:** repo
+
+**This row is NOT "turn on branch protection" — that is answered.** The product owner
+declined it on 2026-09-11 with the measurement in front of them, and `CLAUDE.md` §8 now
+records the decision and its consequence. The debt is the list, which is live whichever
+way that decision ever goes.
+
+`CONTRIBUTING.md` told a reader to mark **`Verify feature template`** as a required status
+check. **ADR-0057 deleted that job** along with the reference template and
+`scripts/verify-template.sh`; `grep -rn 'Verify feature template' .github/workflows/`
+returns nothing. The list was also missing `Check the PR title is a Conventional Commit`,
+added by ADR-0136 the same day this was found.
+
+**The failure mode is worse than a stale sentence, which is why it is filed rather than
+just fixed.** A required check whose name never reports sits **pending forever**, so
+following that instruction literally makes **every pull request permanently unmergeable,
+with no error naming the cause**. A stale gate goes quiet and is recoverable; a stale
+instruction wedges the repository and the symptom does not point at the document.
+
+**It is #244 and #299's shape a third time**: two rosters that must agree, one of them
+maintained by hand in prose, with nothing comparing them. #244 asserted local gates
+against CI steps; #299 is the converse; this is CI job names against a required-check
+list. All three went stale the same way — a name changed somewhere else.
+
+**The design question, which is why this is a row and not a commit.** The list is
+derivable from `.github/workflows/` — job `name:` values are right there — so a gate
+could assert that every name in `CONTRIBUTING.md`'s block exists. Two things want
+settling first: whether that gate should run at all while protection is **declined**
+(it guards an instruction nobody is following, which is either pointless or exactly
+when drift is invisible), and whether it belongs with `check:ci-roster` rather than as a
+fourth roster gate. Building it is a shared-gate change and therefore an ADR-0105
+trigger.
+
+**Mitigated meanwhile, not left bare**: the section now carries a standing instruction to
+copy job names out of `.github/workflows/` on the day rather than from the list, and
+states the pending-forever failure mode so the next reader cannot repeat it by trusting a
+name.
+
+### 301. Every CI round trip waits 46 minutes on one sequential end-to-end job, and the ceiling on fixing it is not where it looks
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (reconciliation pass) · **Size:** M · **Owner:** repo
+
+`.github/workflows/ci.yml` declares three jobs; `e2e` runs **46 `test:e2e` invocations as
+sequential steps on one runner** and is the critical path of every run. Measured from the
+per-step timings of run `34613280766` (job `103309069671`, PR #508, all green), rather than
+estimated:
+
+| segment                                    | measured               |
+| ------------------------------------------ | ---------------------- |
+| whole `e2e` job                            | **2,792 s (46.5 min)** |
+| setup (checkout → drift check, steps 1–10) | 50 s                   |
+| API end-to-end (step 11)                   | **499 s (8 m 19 s)**   |
+| pairwise differential (step 12)            | 141 s                  |
+| Playwright browser install (step 13)       | 47 s                   |
+| web end-to-end (steps 14–57, 44 suites)    | **2,049 s (34.1 min)** |
+
+For comparison the other two jobs finish in 12 m 44 s and 2 m 26 s, so CI's wall clock **is**
+this job.
+
+**The obvious remedy has a ceiling, and the measurement is what shows where it sits.** Sharding
+the 44 web suites across a `matrix` costs each shard the fixed 97 s (setup + browser install)
+and cannot beat its own longest suite (Gantt editing, **185 s**):
+
+| web shards | per shard | critical path        |
+| ---------- | --------- | -------------------- |
+| two        | 1,122 s   | 18.7 min             |
+| three      | 780 s     | 13.0 min             |
+| **four**   | 609 s     | **11.5 min**         |
+| six        | 438 s     | 11.5 min — no change |
+| eight      | 353 s     | 11.5 min — no change |
+
+(The shard counts are **spelled** rather than written as digits, and that is not a style choice:
+`check:debt-status` A6 reads any table row whose first cell is a bare number as a Closed-numbers
+ledger entry and demands a `YYYY-MM-DD` in the second cell. Written as `| 2 | 1,122 s |` this
+table failed the gate on its first run — correctly, since at that point it **was** indistinguishable
+from a ledger row. Do not "tidy" these back to digits.)
+
+**Beyond four shards nothing improves**, because the API end-to-end + pairwise pair (640 s plus
+setup = 690 s) becomes the critical path and that is one vitest invocation, not 44 steps — so it
+does not split by the same mechanism. The honest summary is that ~46.5 min → ~11.5 min is
+available for a matrix, and everything past that is a **different** piece of work on the API
+suite. A reader who sharded "as far as it goes" would spend eight runners to buy what four buy.
+
+**Not built here, deliberately.** Editing the CI workflow is a shared-gate change and therefore
+an ADR-0105 trigger: it needs a spec, not a register row. The row exists so the decision is taken
+against numbers rather than an impression, and so the ceiling is known before anyone picks a
+shard count.
+
+**What the numbers do not cover**, stated rather than implied: runner queue time (each shard
+waits for its own allocation, and the figures above are execution only); the extra Postgres
+service container per shard (18 s to initialise, inside the 50 s setup); and whether the 44
+suites bin evenly — the longest is 185 s against a 4-shard budget of 609 s, so they can, but
+nobody has written the bin-packing. Actions minutes are free on this public repository
+(CLAUDE.md §19.9), so more runners cost nothing but concurrency.
+
+Related: `docs/TESTING.md` "Before you push" (the local half runs the same suites one at a
+time, deliberately — the round trip this row is about is CI's).

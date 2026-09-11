@@ -305,6 +305,17 @@ exits non-zero if any failed.
 It deliberately excludes the e2e half, which needs a database and a browser and belongs to
 `scripts/e2e-local.sh` — the rows below still say when that is required.
 
+**It also excludes `pnpm format:check`, and that one is not deliberate — run it separately**
+(`docs/TECH_DEBT.md` #299). CI runs it (`.github/workflows/ci.yml:50`) and **no local gate does**:
+`prepush.sh` derives its roster from the `check:*` scripts and `format:check` is not one of them, and
+the lint-staged hook runs `prettier --write` on **staged** files only, so anything Prettier would
+reformat that you have not staged — or that it reformats differently once a neighbouring line
+changes — reaches CI unseen. This is not hypothetical and the interval is the evidence: it failed CI
+twice in one session on 2026-09-11, the second time **one commit after the row recording the gap was
+filed**. Until the roster covers it, the honest instruction is two commands, and this paragraph is
+where that is written down — CLAUDE.md §19.8 points here by name, and this section said nothing about
+it for as long as the gap has existed.
+
 **What it costs, measured 2026-08-25** (one file changed in `apps/web`, turbo warm elsewhere):
 roughly **six minutes**, of which `pnpm test` is **345 s (94%)** — the whole 552-file web unit
 suite, every run — `typecheck` 6.5 s, `lint` 8 s, and every `check:*` gate **together in seconds,

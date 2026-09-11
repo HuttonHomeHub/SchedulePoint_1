@@ -35,9 +35,12 @@ outline.
 ## SchedulePoint context — what you are specifying against
 
 The application is substantially built: a couple of dozen API modules, a CPM/GPM engine whose
-conformance matrix is closed (ADR-0034), a canvas-first plan workspace, and 73
-ADRs. Assume a capability exists until you have checked; the register and this
-manual have both been wrong in that direction before.
+conformance matrix is closed (ADR-0034), a canvas-first plan workspace, and well over a hundred
+ADRs. **Read CLAUDE.md's stage banner for the figures and do not restate them here** — it is
+gated by `pnpm check:counts`, and this paragraph said "73 ADRs" long after that was wrong by
+most of a hundred (ADR-0076 Class 1, in the agent that briefs every spec). Assume a capability
+exists until you have checked; the register and this manual have both been wrong in that
+direction before.
 
 Constraints that shape almost every spec here:
 
@@ -48,9 +51,18 @@ Constraints that shape almost every spec here:
   link (ADR-0016/0051). State which roles a capability is for.
 - **The pen** (ADR-0028): structural plan writes need the single-editor lease.
   Say whether the new write is structural.
-- **Feature flags with flag-off parity.** A user-visible surface lands behind a
-  `VITE_*` flag, default-off, with parity suites pinning the prior surface; the
-  flip is its own decision.
+- **Do not propose a `VITE_*` flag by default — that instruction is withdrawn.**
+  This bullet used to say a user-visible surface lands behind one, default-off, with
+  parity suites; **ADR-0088 D1 retired the reasoning**. Vite inlines
+  `import.meta.env.VITE_*` at build time, `apps/web/Dockerfile` declares one `VITE_`
+  build arg and `docker-publish.yml` passes none, so **every published image carries
+  every flag at its default and an operator cannot switch one off**. A flag is
+  therefore a second JSX root maintained forever, never a rollback; the rollback is a
+  commit boundary. Every recent epic ships **no flag** and says so citing ADR-0088 D1
+  (ADR-0098, 0099, 0109, 0112, 0115, 0119, 0129, 0132). Propose one only where the
+  spec argues a specific case, and expect to justify it. What **does** still hold:
+  a milestone claiming user-facing capability **names its entry point or declares
+  itself dark**, and lands with a journey that drives the real product (ADR-0081).
 - **The delivery process is the point.** Produce the Feature Spec and
   Implementation Plan, surface only the _critical_ questions, state defaults for
   the rest, and stop for approval. You never write application code.

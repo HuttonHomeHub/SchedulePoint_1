@@ -30,9 +30,17 @@ You review; you do not edit code.
   throwaway prototype, recorded as a PASS against a ≤ 16 ms frame, never a budget;
   and ADR-0026 has no §16 — that reference is §9's own unqualified pointer at
   `docs/PROJECT_BRIEF.md` §16 Deployment, for the _hardware envelope_.
-  Real-hardware readings (2026-08-03, 2,016 activities): **3.9 ms p95 at Week zoom
-  with 0/600 frames dropped**, 8.9 ms at Fit with 10.2% dropped. Both PASS §9; the
-  Fit judder is the open question, and it is a frame-pacing one.
+  **Real-hardware readings exist and the gate is MET** — do not describe this as
+  unmeasured, and do not quote the 2026-08-03 set on its own. Three sets now:
+  2026-08-03 (ADR-0026 §9b, laptop, DevTools script), 2026-09-08 (§9c, the ADR-0128
+  staff panel) and **five sittings on 2026-09-10** (`docs/TECH_DEBT.md` #75 item 6),
+  which settle it: **Week is 60.0 fps with 0.00 pp dropped at both 500 and 2,000**
+  — the zoom a planner works at — and **Fit at 2,000 measures 32.2 fps fullscreen**,
+  above §9's 30 fps floor. §9c's single 23.3 fps Fit reading is the one figure in the
+  set **nothing has reproduced**, and #75 item 6 attributes the swing to
+  between-sitting machine state rather than canvas size; three earlier claims were
+  withdrawn with it, including "missed at Fit at 2,000". What survives every sitting
+  is that **cost tracks bars drawn, not plan size** (Week culls 2,160 bars to ~267).
 - **Budgets are gated by call-count tests, not timings** — CI timings are noise.
   If you propose a budget assertion, propose it in that shape.
 - **The render layer is pure**: `features/tsld/render/` imports neither React nor
@@ -40,16 +48,28 @@ You review; you do not edit code.
 - **The hidden pane pauses.** Below `md` the diagram pane stays mounted but an
   IntersectionObserver stands the rAF loop down; a change that defeats that is a
   battery regression on the device most likely to be at that width.
-- **Known and unmeasured:** the ADR-0026 hardware envelope (mid-tier laptop,
-  iPad-class Safari) has never been measured on real hardware — CI cannot stand in
-  for it (TECH_DEBT #59). Don't report a CI timing as if it settled that.
+- **What is still unmeasured is the iPad-class half**, not the envelope. The laptop
+  half of ADR-0026's envelope has been measured three times (above); no reading has
+  ever been taken on iPad-class Safari, and CI cannot stand in for either — a
+  headless runner rasterises Canvas 2D in software, so it measures a path no planner
+  runs. Don't report a CI timing as if it settled anything about hardware.
+  **`TECH_DEBT #59` is a dead number** — it was folded into **#75** as that row's
+  clause 3, precisely so closing one could not leave the other stale. Cite #75.
 
 ## Review checklist
 
 - **Bundle:** any new dependency justified (size, maintenance,
   tree-shakeability)? Imports are by-name (tree-shakeable), not whole-library.
-  No obvious duplication/bloat. Respect budgets (~200KB initial, ~150KB/route
-  gzipped).
+  No obvious duplication/bloat.
+  **The budget is computed, not quoted.** `pnpm --filter @repo/web check:bundle-size`
+  reads `apps/web/bundle-budget.json` — three quantities (the JS entry graph, the
+  ceiling on any one lazy chunk, and render-blocking CSS), each a measured floor
+  times a 1.05 headroom ratio that is a **product-owner judgement and not a
+  measurement**. Read the file for today's figures; do not restate them here, and do
+  not quote "~200KB initial" — this brief did, the real entry graph is roughly
+  **twice** that, and the delivery-gates spec (C3) rejected that figure as one nobody
+  had ever measured before deriving the floor from a build. A raise needs a one-line
+  `raisedBecause`: a budget quietly moved up is a budget that never says no.
 - **Code splitting:** routes lazy-loaded; heavy/non-critical UI (charts, rich
   editors, rarely-used dialogs) behind `React.lazy`/dynamic import with a
   Suspense fallback. Critical path stays lean.

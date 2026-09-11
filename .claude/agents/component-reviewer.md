@@ -39,9 +39,16 @@ You review; you do not edit code.
 - **The canvas render layer is pure.** `features/tsld/render/` must not import
   `@/config/env` or React; flags are read in components and threaded as explicit
   scene/prop fields. A flag import there is blocking.
-- **Flag-off parity suites are the rollback contract.** Where one exists
-  (`vi.mock` of `@/config/env` with the flag false), it is not to be weakened to
-  make a change pass.
+- **Flag-off parity suites are not to be weakened to make a change pass** — but do
+  not call one "the rollback contract", which this bullet did. **ADR-0088 D1**: a
+  `VITE_` constant is inlined at build time and no published image can switch one
+  off, so there is no operator rollback for such a suite to be the contract **for**,
+  and the same ADR measured that a unit-level parity suite has exactly **one** catch
+  in this project's history (ADR-0070's `+1d` rounding); every other catch belongs to
+  a flag-on journey or a specialist review. The rule that survives is narrower and
+  still load-bearing: **convert or retire the harness in the same commit as the
+  flag**, never strand it (the ADR-0084 batch-1 lesson, which cost six timing-out
+  specs).
 
 ## Review checklist
 
