@@ -29,6 +29,19 @@ import { clearDomainData } from './audit-reset';
  * measures neither the write path nor the DTO layer. What it measures is the real thing — a real
  * HTTP `DELETE` and a real HTTP `POST …/restore-batch` through the real guards, the real advisory
  * lock, the real audit write and the real response serialisation, on a real Postgres.
+ *
+ * **And the SHAPE it seeds is not the shape #230 M1 restores** — a second bypass, larger than the
+ * first, which this docblock claimed completeness over while naming only the seeding mechanism
+ * (`docs/TECH_DEBT.md` #239(b)). The subtree is 2,000 flat `TASK` children of one summary with no
+ * dependencies, notes, steps, assignments, share links, project calendars or baselines. So of
+ * `restoreBatch`'s **thirteen** `updateMany` sweeps only the `activity` one matches a row: the
+ * other twelve execute and match nothing, and `restoreLinksInBatch` returns at its first query
+ * rather than running the other two. **What that measures is their fixed cost, not their per-row
+ * cost** — an important distinction, because "never exercised" would understate it and "measures
+ * the restore" would overstate it. A real WBS phase has internal logic and often assignments.
+ * Everything skipped is index-backed (every `delete_batch_id` index is present), so this is
+ * unlikely to move the verdict — the measured restore sits well inside the 5,000 ms condition —
+ * but a later reader must not take the figure as representative of a loaded phase.
  */
 const enabled = Boolean(process.env.DATABASE_URL) && Boolean(process.env.SP_MEASURE);
 const ORIGIN = 'http://localhost:5173';

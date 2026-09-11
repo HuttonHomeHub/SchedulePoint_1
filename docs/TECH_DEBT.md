@@ -1891,7 +1891,15 @@ rather than that any particular gate is present.
 
 ### 239. The plan's members query and its restore both scale with a fetch nobody profiles
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** deferred · **Verified:** 2026-09-11
+
+**(b) closed 2026-09-11 by writing it where its reader is; the row is `deferred` on (a)'s own
+trigger.** (b) was never owed work — it is a caveat on a measurement, and a caveat kept in the debt
+register is one the next person to read that measurement will not see. It now lives in
+`cascade-restore-scale.e2e-spec.ts`'s docblock, which already carried a **"where it bypasses the
+product, stated plainly"** paragraph (ADR-0081's rule) naming only the seeding mechanism — so the
+larger bypass sat outside the paragraph claiming completeness over it. (a) is a declined
+optimisation with an explicit revisit condition, which is what `deferred` means here (ADR-0120).
 
 Two suggestions from that review, recorded rather than acted on because neither is worth its cost
 today. Both were **measured**, not estimated.
@@ -1905,15 +1913,23 @@ correctness-sensitive predicate, to save a few milliseconds of a cost that is it
 fraction of #238's fetch. Revisit only if a profile shows the whole restore near its budget **and**
 this query is a meaningful share of it.
 
-**(b) The scale harness measures an unrepresentative phase.**
+**(b) The scale harness measures an unrepresentative phase.** — **CLOSED 2026-09-11.**
 `apps/api/test/cascade-restore-scale.e2e-spec.ts` seeds 2,000 flat `TASK` children of one summary
-with no dependencies, notes, steps, assignments or baselines — so most of the `updateMany`s
-in `restoreBatch`, and all but the first of `restoreLinksInBatch`'s queries, are never exercised. A
-real WBS phase has internal logic and often assignments. Everything skipped is index-backed (all
-`delete_batch_id` indexes confirmed present), so this is unlikely to move the verdict — the
-measured restore sits well inside its 5,000 ms condition — but the number is not representative of
-the shape #230 M1 actually restores, and saying so is cheaper than letting a later reader assume it
-is.
+with no dependencies, notes, steps, assignments or baselines. **Re-derived against the code before
+moving it**: `restoreBatch` runs **thirteen** `updateMany` sweeps and exactly one — `activity` —
+matches a row here, while `restoreLinksInBatch` returns at its first query rather than running the
+other two. That also **corrects this row's own wording**: the twelve are not "never exercised", they
+execute and match nothing, so the harness measures their fixed cost and not their per-row cost — a
+distinction worth having, because the loose phrasing understates what the figure does cover.
+Everything skipped is index-backed (every `delete_batch_id` index is present), so this is unlikely
+to move the verdict — the measured restore sits well inside its 5,000 ms condition — but the number
+is not representative of the shape #230 M1 actually restores.
+
+The remedy was never to change the harness: it was to stop the next reader taking the figure as
+representative, and that reader is looking at the harness rather than at this register. The caveat
+is now the second paragraph of that file's own **"where it bypasses the product, stated plainly"**
+docblock, which previously named only the `createMany` seeding and therefore claimed a completeness
+it did not have.
 
 > **Four of this row's numbers were invalidated by an unrelated epic, and one of its cross-references
 > stopped resolving** (re-derived 2026-09-10; the substance of both halves survives intact).
