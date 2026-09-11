@@ -7469,6 +7469,30 @@ does not split by the same mechanism. The honest summary is that ~46.5 min → ~
 available for a matrix, and everything past that is a **different** piece of work on the API
 suite. A reader who sharded "as far as it goes" would spend eight runners to buy what four buy.
 
+> **Corrected 2026-09-11 by the spec this row asked for (`docs/specs/ci-sharding/`), and the
+> correction is that the table above measures the wrong quantity for the decision it informs.**
+> "Critical path" here is the slowest **e2e job**, which is the right number for a row about that
+> job and the wrong one for choosing a shard count — because the `quality` job (12 m 44 s) runs
+> alongside and this epic does not touch it. Against **whole-CI wall clock**: one shard 35.8 min,
+> three **13.0**, four **12.7**, and everything beyond four still 12.7. So the honest gap between
+> three shards and four is **16 seconds**, not the 1.5 minutes this table implies, and the reason
+> nothing past four helps is not only that the API suite does not split by the same mechanism —
+> it is that `quality` is underneath both. That also makes the case for deferring the 499 s API
+> suite much stronger than "different mechanism": splitting it buys **zero** whole-CI wall clock
+> until `quality` moves, and the two measured 682 s and 690 s, effectively tied.
+>
+> **Three samples now, and the heading's number is the outlier.** The same job measured
+> **46 m 32 s** (the reference run this row is built on), **40 m 10 s** (PR #510) and **40 m 15 s**
+> (PR #512) — the last of which _added_ two tests that deliberately wait a real 45-second grace
+> window, so it should have been the slowest and was not. Two of three cluster within five seconds
+> of each other, which makes 46 m 32 s the reading that wants explaining rather than the one to
+> quote. **This row's own title says 46 minutes and is left as written**, because the heading is
+> what the row was filed under and rewriting it would break inbound references — but a reader
+> taking a number from here should take 40 minutes, and a reader making a decision should take
+> none of them. One sample is not a distribution and three barely are; the spec therefore asserts
+> no wall-clock bar anywhere and compares the slowest e2e job against `quality` **within the same
+> run**, which variance cannot invalidate.
+
 **Not built here, deliberately.** Editing the CI workflow is a shared-gate change and therefore
 an ADR-0105 trigger: it needs a spec, not a register row. The row exists so the decision is taken
 against numbers rather than an impression, and so the ceiling is known before anyone picks a
