@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { containerShouldStandDown, rovingIndexFor, vetoesKey } from './toolbar-keyboard';
-import { useToolbarFocusHandoff } from './use-focus-handoff';
 import {
   groupRank,
   partitionBySegment,
@@ -12,6 +11,7 @@ import {
   type ToolbarItem,
 } from './toolbar-registry';
 import { ToolbarButton } from './ToolbarButton';
+import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
 

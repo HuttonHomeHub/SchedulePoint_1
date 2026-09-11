@@ -6,7 +6,6 @@ import {
   TOOLBAR_NAV_KEYS,
   vetoesKey,
 } from './toolbar-keyboard';
-import { useToolbarFocusHandoff } from './use-focus-handoff';
 import {
   resolveItems,
   type ResolvedToolbarItem,
@@ -15,6 +14,7 @@ import {
 } from './toolbar-registry';
 import { TOOLBAR_INSET_RULE } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
+import { useToolbarFocusHandoff } from './use-focus-handoff';
 
 import { cn } from '@/lib/utils';
 
