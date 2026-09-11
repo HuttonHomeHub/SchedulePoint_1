@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { addActivity, showActivities, openNewPlan, setPlannedStart, startEditing } from './support';
 
@@ -34,20 +34,31 @@ async function signUp(page: Page, name: string, email: string): Promise<void> {
   await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
 }
 
-test('a Planner requests control and the holder hands the pen over (peer hand-off)', async ({
-  browser,
-}) => {
-  /**
-   * **120 s, matching every other multi-actor journey here.** This drives two whole browser
-   * contexts through two sign-ups, an invitation, a plan, and a full request → hand-off → mirror
-   * cycle, and it had been running just inside Playwright's 30 s default. ADR-0099's heavier plan
-   * mount pushed it over, and the failure was a timeout in the last third rather than anything
-   * disagreeing — established by reading where it stopped (line 154, the second-to-last assertion),
-   * not by assuming. Raising the cap is the honest fix for a fixture that is genuinely long; the
-   * alternative, splitting it, would give up the thing it exists to prove, which is that both ends
-   * of ONE hand-off agree.
-   */
-  test.setTimeout(120_000);
+interface TwoActors {
+  ctxA: BrowserContext;
+  a: Page;
+  ctxB: BrowserContext;
+  b: Page;
+  planUrl: string;
+  orgName: string;
+}
+
+/**
+ * Two real actors in one organisation, with a plan created and nobody holding the pen.
+ *
+ * **Extracted at the `docs/TECH_DEBT.md` #286 slice, and the extraction is a MOVE.** Every
+ * assertion in the hand-off test below is unchanged by it, so that test is the oracle for this
+ * function being correct — the ADR-0078 barrel-preserving argument applied to a fixture rather
+ * than to a module. Three transitions had no client coverage and each needs this same thirty-line
+ * setup; re-typing it three times is how two fixtures drift into describing different worlds.
+ *
+ * **A is the organisation's creator and therefore an Org Admin.** That is not incidental: it is
+ * what makes the override transition reachable at all, since `canTakeOverNow` returns true on
+ * `perms.override` before it looks at a request or a heartbeat. **B is a Planner** — it can
+ * request, and it can take over once grace has elapsed, and it can never override. The two roles
+ * are the two halves of ADR-0028's hand-off model, so one fixture serves every case.
+ */
+async function setUpTwoActors(browser: Browser): Promise<TwoActors> {
   const stamp = Date.now();
   const orgName = `Handoff Co ${stamp}`;
 
@@ -82,6 +93,25 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await b.goto(acceptUrl);
   await b.getByRole('button', { name: /accept and join/i }).click();
   await expect(b).toHaveURL(/\/orgs\//);
+
+  return { ctxA, a, ctxB, b, planUrl, orgName };
+}
+
+test('a Planner requests control and the holder hands the pen over (peer hand-off)', async ({
+  browser,
+}) => {
+  /**
+   * **120 s, matching every other multi-actor journey here.** This drives two whole browser
+   * contexts through two sign-ups, an invitation, a plan, and a full request → hand-off → mirror
+   * cycle, and it had been running just inside Playwright's 30 s default. ADR-0099's heavier plan
+   * mount pushed it over, and the failure was a timeout in the last third rather than anything
+   * disagreeing — established by reading where it stopped (line 154, the second-to-last assertion),
+   * not by assuming. Raising the cap is the honest fix for a fixture that is genuinely long; the
+   * alternative, splitting it, would give up the thing it exists to prove, which is that both ends
+   * of ONE hand-off agree.
+   */
+  test.setTimeout(120_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
 
   // --- A takes the pen ----------------------------------------------------------------------
   await a.bringToFront();
@@ -192,6 +222,185 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
     CROSS_ACTOR,
   );
   await a.keyboard.press('Escape');
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/**
+ * **Admin override — `docs/TECH_DEBT.md` #286, transition 1 of 3.**
+ *
+ * An Org Admin takes the pen from a holder with no request and no waiting. This is the one
+ * transition that bypasses ADR-0028's whole negotiation: `canTakeOverNow` returns true on
+ * `perms.override` **before** it evaluates a request or a heartbeat, so nothing the holder does
+ * affects it. It is also the transition with the sharpest consequence for the other person — they
+ * are editing, and then they are not — which is why the confirm dialog exists and why its body
+ * promises that unsaved work "stays as it was".
+ *
+ * The reason this could never be a unit test: `canOverride` is a server-computed capability on the
+ * lock status, so a mocked status can assert the button renders and can never assert that the
+ * **server agrees** this caller may override. Only a real Org Admin against a real API proves it.
+ */
+test('an Org Admin overrides a peer who is editing, and the peer is told they lost it', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
+
+  // --- B (Planner) takes the pen first, so A has somebody to override -----------------------
+  await b.bringToFront();
+  await b.goto(planUrl);
+  await startEditing(b);
+  await addActivity(b, 'Piling');
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+
+  // --- A (Org Admin) opens the plan and is offered the override, not a request ---------------
+  await a.bringToFront();
+  await a.goto(planUrl);
+  // The discriminator, asserted in BOTH directions. An admin gets `takeOver` ("Take over"); a
+  // Planner in the same position gets `requestControl`. Asserting only the presence of one would
+  // pass against a build that offered every control to everybody, which is the shape of an
+  // authorisation defect rather than a layout one.
+  const overrideBtn = a.getByRole('button', { name: 'Take over', exact: true });
+  await expect(overrideBtn).toBeVisible(CROSS_ACTOR);
+  await expect(a.getByRole('button', { name: 'Request control' })).toHaveCount(0);
+
+  // The admin is told WHY they have a control nobody else has. `adminNote` is appended to
+  // `heldByOther`, so the sentence names the holder and the reason in one breath.
+  await expect(
+    a.getByRole('status').filter({ hasText: /As an admin, you can take over editing\./ }),
+  ).toBeVisible(CROSS_ACTOR);
+
+  // --- The confirmation is a real gate, and cancelling leaves the pen where it was -----------
+  // Asserted because an override is not undoable from this side: once taken, B's pen is gone and
+  // only B can get it back. A confirm dialog that does not actually hold is worse than none.
+  await overrideBtn.click();
+  // `role="alertdialog"`, NOT `dialog` — `ConfirmDialog` sets it (`confirm-dialog.tsx:46`) because
+  // this interrupts to confirm a consequence rather than to host a task. Written as `getByRole
+  // ('dialog')` first, which found nothing: the assertion failed loudly, which is the right way
+  // round, but it is worth naming because a locator reaching for the wrong role and happening to
+  // match something would have asserted against the wrong element entirely.
+  const confirm = a.getByRole('alertdialog');
+  await expect(confirm.getByRole('heading', { name: 'Take over editing?' })).toBeVisible();
+  await expect(confirm).toContainText(/Any change they haven’t saved stays as it was\./);
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+
+  // --- Now confirm it for real ---------------------------------------------------------------
+  await a.bringToFront();
+  await overrideBtn.click();
+  await a.getByRole('alertdialog').getByRole('button', { name: 'Take over', exact: true }).click();
+  await expect(a.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+
+  // --- B is told, in words, that it was taken — not merely left read-only --------------------
+  // This is the `lost` copy (`lock-copy.ts`), and it is the half of the transition that has never
+  // been driven. A peer whose pen vanishes with no sentence cannot tell the difference between
+  // "somebody took this" and "the application broke", and those need different responses.
+  await refetchLock(b);
+  await expect(
+    b
+      .getByRole('status')
+      .filter({ hasText: /Editing control was taken over — you’re now read-only\./ }),
+  ).toBeVisible(CROSS_ACTOR);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
+  await expect(b.getByRole('button', { name: 'New activity' })).toHaveCount(0);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/**
+ * **Take-over after grace, and the waiting state — `docs/TECH_DEBT.md` #286, transitions 2 and 3.**
+ *
+ * A Planner requests control, the holder never answers, and after `LOCK_HANDOFF_GRACE_MS` (45 s,
+ * `plan-lock.policy.ts`) the requester may take the pen. ADR-0135 Option A: **the real 45 seconds
+ * are waited**, not mocked. A faked clock here would prove the component re-renders on a prop
+ * change and would say nothing about the server, which is where `isGraceElapsed` actually lives —
+ * and the server is the only party whose opinion can refuse the take-over.
+ *
+ * **Why the wait is punctuated rather than one long sleep, which is the whole correctness argument
+ * of this test.** `canTakeOverNow` is a disjunction: grace elapsed after a request **or** the
+ * holder being inactive for `LOCK_INACTIVE_AFTER_MS` (90 s). Both routes light the same control and
+ * `lockCopy.canTakeOver` deliberately covers both, so a test that simply waits cannot say which
+ * branch it exercised — and a backgrounded tab pauses the holder's heartbeat, which makes the
+ * inactivity branch the *likely* one rather than a remote possibility. So A is brought to the front
+ * on every tick, keeping its heartbeat fresh, and the assertion is bounded well under 90 s. If the
+ * grace branch were broken this test fails rather than quietly passing on the other one.
+ */
+test('a requester takes the pen once grace elapses, and the silent holder is told', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
+
+  // --- A takes the pen and then simply stops answering ---------------------------------------
+  await a.bringToFront();
+  await a.goto(planUrl);
+  await startEditing(a);
+  await addActivity(a, 'Formwork');
+
+  // --- B requests control ---------------------------------------------------------------------
+  await b.bringToFront();
+  await b.goto(planUrl);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await expect(b.getByRole('status').filter({ hasText: /Requested — waiting/i })).toBeVisible();
+
+  // --- The WAITING state: the control exists, names itself, and refuses ------------------------
+  // This is the state ADR-0028 designed and nothing had ever driven. It matters because the
+  // alternative designs both fail a reader: hiding the button gives a requester no idea anything
+  // will ever change, and enabling it early makes the grace window a decoration. A disabled
+  // control with the same label is the honest middle — it says what is coming and declines now.
+  const takeOverNow = b.getByRole('button', { name: 'Take over now' });
+  await expect(takeOverNow).toBeVisible();
+  await expect(takeOverNow).toBeDisabled();
+
+  // --- Wait out the real grace window, keeping the holder demonstrably alive -------------------
+  // Six ticks of 9 s = 54 s, comfortably past the 45 s grace and comfortably short of the 90 s
+  // inactivity threshold that would otherwise be an alternative explanation for what happens next.
+  // **Verified non-vacuous, 2026-09-11.** Cutting this loop to a single 9 s tick turns the
+  // `toBeEnabled` assertion below red — "element is not enabled" at that line, with the other four
+  // tests still passing. So the test genuinely depends on the grace window elapsing rather than on
+  // the button merely existing, and it cannot be satisfied by the inactivity branch inside 54 s.
+  // That check is the difference between a journey and a decoration, and this register records
+  // enough tests that passed for the wrong reason to make it worth the two minutes.
+  for (let tick = 0; tick < 6; tick += 1) {
+    await refetchLock(a); // brings A to front: its heartbeat interval resumes and stays current
+    await a.waitForTimeout(9_000);
+  }
+
+  // --- Grace has elapsed: the same control is now live, and says who it takes from -------------
+  await refetchLock(b);
+  await expect(takeOverNow).toBeEnabled(CROSS_ACTOR);
+  await expect(
+    b.getByRole('status').filter({ hasText: /You can take over editing from Holder\./ }),
+  ).toBeVisible(CROSS_ACTOR);
+  // "Holder", not "Holder A" — `firstName` again, the same rule the hand-off test pins. Asserted
+  // here too because this sentence is produced by a different branch of `lock-view.ts`, and one
+  // branch rendering a full name while its sibling renders a first name is exactly the
+  // one-pattern-applied-to-a-control-and-not-its-neighbour shape this register keeps recording.
+
+  await takeOverNow.click();
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+  // **`showActivities` first, and the reason is a real asymmetry rather than a quirk of this test.**
+  // The activities panel defaults collapsed (ADR-0113 measured that as a planner's own choice) and
+  // `New activity` lives inside it (`CreateActivityButton.tsx:46`). A holder who has just ADDED an
+  // activity has an expanded panel as a side effect; a reader who has only watched has not — so
+  // asserting this without expanding passes for the first actor and fails for the second, which is
+  // exactly what happened on this test's first run. The hand-off test above is immune only because
+  // it expands B's panel forty lines earlier to reach a row menu.
+  await showActivities(b);
+  await expect(b.getByRole('button', { name: 'New activity' })).toBeVisible();
+
+  // --- A, who never answered, is told what happened -------------------------------------------
+  // The silent holder is the case most likely to be surprised, and the least likely to be watching.
+  await refetchLock(a);
+  await expect(
+    a
+      .getByRole('status')
+      .filter({ hasText: /Editing control was taken over — you’re now read-only\./ }),
+  ).toBeVisible(CROSS_ACTOR);
+  await expect(a.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
 
   await ctxA.close();
   await ctxB.close();
