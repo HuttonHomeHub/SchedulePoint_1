@@ -432,6 +432,46 @@ describe('PerformanceProbePanel', () => {
     expect(recordMutateAsync).not.toHaveBeenCalled();
   });
 
+  it('prints the WHOLE refusal, including the sentence that stops it reading as a pass', async () => {
+    /**
+     * `docs/TECH_DEBT.md` #259 item 12. The alert rendered `message.split('\n')[0]`, so everything
+     * after the first line was dropped on screen while the paste-ready report carried it in full.
+     *
+     * The dropped part is not decoration. `NothingToJudgeError`'s non-vacuity message ends **"This
+     * is NOT a pass. A number measured on an almost-empty canvas is a number about the cull"** —
+     * the one sentence whose job is to stop a refusal being read as a clean run, which is the
+     * mistake ADR-0066 records actually happening (a 4.6 ms p95 that was about the cull).
+     */
+    const outcome = unjudgeable();
+    if (outcome.kind !== 'measured') throw new Error('unreachable');
+    const limb = outcome.limbs[0];
+    if (!limb) throw new Error('the fixture has no limb');
+    runProbe.mockResolvedValue({
+      ...outcome,
+      limbs: [
+        {
+          ...limb,
+          result: {
+            kind: 'unjudgeable',
+            message:
+              'NON-VACUITY FAILED — the painter did not draw enough.\n' +
+              '  visible bars 12 (need >= 100)\n' +
+              'This is NOT a pass. A number measured on an almost-empty canvas is a number about ' +
+              'the cull.',
+          },
+        },
+      ],
+    });
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // The first line still shows — this must not become a test that only the LAST line survives.
+    expect(await screen.findByText(/the painter did not draw enough/)).toBeInTheDocument();
+    // And the two that were being dropped.
+    expect(screen.getByText(/visible bars 12/)).toBeInTheDocument();
+    expect(screen.getByText(/This is NOT a pass/)).toBeInTheDocument();
+  });
+
   it('sends an unjudgeable limb, because the numbers are real even when the verdict is not', async () => {
     runProbe.mockResolvedValue(unjudgeable());
     render(<PerformanceProbePanel />);

@@ -900,8 +900,24 @@ function ProbeResult({ outcome }: { outcome: ProbeOutcome }): React.ReactElement
               {limb.minFps} fps
             </p>
             {limb.result.kind === 'unjudgeable' ? (
-              <Alert purpose="event" tone="info" className="mt-2">
-                This run cannot be judged. {limb.result.message.split('\n')[0]}
+              <Alert purpose="event" tone="info" className="mt-2 whitespace-pre-line">
+                {/*
+                  **The WHOLE message, not its first line** (`docs/TECH_DEBT.md` #259 item 12).
+                  This was `message.split('\n')[0]`, so everything after the first line was dropped
+                  on screen while the paste-ready report carried it in full.
+
+                  What was being dropped is the part that matters: `NothingToJudgeError`'s
+                  non-vacuity message ends "This is NOT a pass. A number measured on an
+                  almost-empty canvas is a number about the cull" — the one sentence whose job is
+                  to stop a refusal being read as a clean run, which is the mistake ADR-0066
+                  records actually happening.
+
+                  `whitespace-pre-line` rather than mapping to paragraphs: the judge composes these
+                  messages as text with deliberate line breaks and an indented detail line, and
+                  re-flowing them here would be a second opinion about a layout the judge already
+                  has — the same text the report prints.
+                */}
+                This run cannot be judged. {limb.result.message}
               </Alert>
             ) : (
               <LimbVerdict limb={limb} judged={limb.result.judged} />

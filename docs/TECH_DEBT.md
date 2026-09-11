@@ -5242,9 +5242,18 @@ there is more by comparing lengths. 5. **`GET /staff/probe-results` shares every
 staff member.** Intended, and appropriate for a small allowlisted population; worth revisiting
 if `STAFF_EMAILS` ever grows. 6. **The erasure affordance is structural only.** `recorded_by_label` and `gpu_renderer` are
 nullable so a reading can be scrubbed; no scrub path exists anywhere in the product yet, which
-matches ADR-0085's "decision only, nothing built" status rather than being a gap this epic added. 7. **`scenes/revision-diff.ts`'s pure helpers (`changedSet`, `countVisible`) have no unit test**,
-unlike the parallel canvas-draw module, whose equivalents do. They need no canvas, so the gap
-looks like inconsistency rather than necessity. 8. **`RecordingState` takes three booleans for one mutation status.** TanStack Query already
+matches ADR-0085's "decision only, nothing built" status rather than being a gap this epic added. 7. ~~**`scenes/revision-diff.ts`'s pure helpers (`changedSet`, `countVisible`) have no unit
+test**~~ — **closed 2026-09-11.** `revision-diff.test.ts` now exists beside its sibling, with
+eleven cases. Both helpers are load-bearing for whether a _reading_ means anything — `changedSet`
+decides what the overlay draws and the probe's non-vacuity floors are checked against
+`countVisible`'s output — so a defect in either produces a confident number about a picture that
+was never painted, which is precisely the ADR-0066 failure the floors exist to prevent. **The
+tests were verified to discriminate rather than merely to pass**: mutating the source to drop the
+undated-activity skip and to shift the ghost later turned exactly the two cases written for those
+behaviours red. The stride case asserts **determinism across two calls** rather than a particular
+stride — pinning the constant would make it a copy of the source rather than a test of it — and a
+second case bounds the changed set below half, because a stride selecting most activities would
+quietly reinstate the whole-old-plan overlay ADR-0127 CQ-2 rejected. 8. **`RecordingState` takes three booleans for one mutation status.** TanStack Query already
 exposes it as a single `status`, and the three-boolean signature admits combinations the call
 site happens never to produce. 9. **The spec's "visible caption naming it a test picture"** on the measuring canvas was never
 built. Not a WCAG failure — the canvas is `aria-hidden` and the progress sentence is the
@@ -5272,8 +5281,17 @@ holding at the moment a run ends. The content is redundant rather than contradic
     ledger exists to prevent — the register disagreeing with itself about what a number means._
 
 11. **`revision-diff` narrates progress once for a whole multi-pair run** where `canvas-draw`
-narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds. 12. **The on-screen "cannot be judged" alert prints only the first line** of the judge's message,
-dropping the closing "This is NOT a pass" sentence that the paste-ready report does carry.
+narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds. 12. ~~**The on-screen "cannot be judged" alert prints only the first line**~~ — **closed
+2026-09-11.** It rendered `message.split('\n')[0]`, so everything after the first line was dropped
+on screen while the paste-ready report carried it whole. The dropped part is the part that matters:
+`NothingToJudgeError`'s non-vacuity message ends _"This is NOT a pass. A number measured on an
+almost-empty canvas is a number about the cull"_ — the one sentence whose job is to stop a refusal
+being read as a clean run, which is the mistake ADR-0066 records **actually happening**. Now renders
+the whole message with `whitespace-pre-line` rather than re-flowing it into paragraphs: the judge
+composes these as text with deliberate breaks and an indented detail line, and re-laying them out
+here would be a second opinion about a layout the judge already has. Verified RED first, and the
+case asserts the **first** line still shows as well as the two that were dropped — without that it
+would pass equally against a panel that printed only the last line.
 
 Numbers 1, 2 and 8 are the cheapest; 10 and 11 are the two a real screen-reader user would notice
 first.
