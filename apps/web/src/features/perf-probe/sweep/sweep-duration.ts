@@ -40,9 +40,16 @@ function phasesPerRepeat(scenarioId: string): number {
  * The frame rate a step is assumed to hold, for estimation only.
  *
  * The whole-plan framing is slower, and by a lot: the same machine that holds 60 fps at the working
- * zoom measured 23.3 fps at Fit (`docs/TECH_DEBT.md` #75 item 5). Using one figure for both would
+ * zoom measures 32.2 fps at Fit (`docs/TECH_DEBT.md` #75 item 6). Using one figure for both would
  * make the sweep's estimate wrong by nearly a minute, which is the difference between a number an
  * operator can plan around and one they learn to ignore.
+ *
+ * **The 25 is deliberately left below the measurement, and this comment cited 23.3 until
+ * 2026-09-12.** That reading is the one figure in #75's set nothing has reproduced, withdrawn by
+ * #261 as contaminated by machine state rather than by canvas size. Raising the constant to the
+ * reproducing 32.2 would SHORTEN the estimate, and the paragraph above says which way this is
+ * allowed to be wrong: an operator told two minutes who waits four stops trusting the number. So
+ * the citation is corrected and the value is not, on purpose.
  */
 function assumedFps(preset: string): number {
   return preset === 'fit' ? 25 : 60;

@@ -18,6 +18,14 @@ const DAY = 24 * HOUR;
 const TABLE_LABELS: Record<string, string> = {
   csp_reports: 'Policy violation reports',
   mail_events: 'Mail events',
+  // Added 2026-09-12, after the console was PHOTOGRAPHED for the first time (`#165(e)`) and this
+  // row read `perf_probe_results` beside two human names. The table joined the server's
+  // `RETENTION_TABLES` at ADR-0128 and nothing here was extended with it — the same omission the
+  // API's own `retention.configured` boot line made and had already fixed, one workspace over.
+  // The fallback below worked exactly as designed; what is missing is anything that NOTICES a
+  // table arriving without a label, and the vocabulary is closed and enumerable on the server but
+  // not shared, so a gate for it needs `@repo/types` (`#310`).
+  perf_probe_results: 'Performance readings',
 };
 
 export function tableLabel(table: string): string {

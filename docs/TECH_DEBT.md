@@ -3566,6 +3566,57 @@ indistinguishable from coverage, which is the failure W1 exists to correct. What
 generated per-run one. That is a second onboarding path, not a shot entry, which is why it is filed
 rather than done inside a catalogue-only slice.
 
+> **The console has now been LOOKED AT (2026-09-12), and the mechanism is still owed.** Driven by a
+> one-off probe in a scratchpad — deliberately not committed, because the deliverable here is
+> pictures and not a harness — against a real API booted with this config's allowlist, at 1646 and
+> 1920, full page. What it cost is the finding that makes (e) bigger than "a second onboarding
+> path": **the guard demands `emailVerified` unconditionally** (`staff.guard.ts:117`), and a fresh
+> sign-up is unverified, so a committed mechanism needs an SMTP sink and a followed link — which is
+> `playwright.account.config.ts`'s whole apparatus — or the harness gains database access it has
+> never had. The probe cheated with one `UPDATE users SET email_verified = true`; a shot entry
+> cannot. **So the honest shape of (e) is a fourth onboarding path with a mail sink, or a decision
+> that `/staff` is photographed by its journey rather than by the catalogue.**
+>
+> **Two things the pictures showed, both now fixed, and neither visible to any gate here.**
+>
+> 1. The Retention table printed **`perf_probe_results`** — a raw Postgres identifier — beside
+>    "Policy violation reports" and "Mail events". Filed as **`#310`** with its mechanism, because
+>    the fallback that produced it is correct by design and the missing piece is anything that
+>    notices a table arriving unlabelled.
+> 2. The Performance panel's comparability caveat — **the one paragraph on the installation whose
+>    job is to stop an operator drawing a wrong conclusion from a number** — cited 23.3 fps at
+>    1912×1068 against 39.5 fps at 1016×636 and a 4.3 ms-per-megapixel coefficient derived from that
+>    pair, presented as "enough to decide a verdict". `#261` **withdrew** that pair two days before
+>    this photograph: the 23.3 reading is the one figure in the set nothing has reproduced, and the
+>    register says in as many words that it must not be quoted on its own. Replaced with the
+>    within-sitting pair that survives **because** no machine-state confound is possible (35.2 fps
+>    at 1912×948 against 32.2 at 1920×1080), with no coefficient derived from two points. The same
+>    citation was in four more places — two docblocks, a test comment and the sweep's `assumedFps`
+>    — and all four are corrected; `assumedFps`'s **value** is deliberately left at 25, because
+>    raising it to the reproducing figure would SHORTEN the estimate and that comment already says
+>    which way it is allowed to be wrong.
+>
+> The second is the useful one: the withdrawal landed in the register and in `CLAUDE.md` and reached
+> none of the five places the product says it. Nothing could have caught that — a number in a
+> sentence is correct markup, `check:claims` watches dependencies rather than this register, and the
+> journey's own assertion was pinned to `per megapixel`, so it would have gone red for the
+> **correction** rather than for the defect. It now asserts the rule instead of the figure.
+>
+> **Two observations deliberately NOT filed, one of which corrected my own count.** **Seven**
+> `Staff activity` rows land per page load — six `panel read` plus `session started` — so the
+> panel's first page is mostly the reader's own arrival. That is ADR-0086 D5 working as designed (a
+> read IS the privileged act here) and ADR-0087 M3 already costed a second route in exactly this
+> currency. This said "six rows, five panel reads" until the 1920 photograph was read beside the
+> 1646 one: the narrower shot cut the list off, and I counted the visible rows. An off-by-one from
+> reading one picture, in the paragraph reporting what pictures found — so the correction is kept
+> rather than quietly applied.
+>
+> And the console is a **hand-rolled page frame** (`staff.tsx:81`, `mx-auto max-w-4xl space-y-6
+p-6`) rather than the ADR-0097/0098 archetype, because all five panels predate the archetypes by
+> ten days and nothing has revisited them. Not filed: the measure it lands on is defensible, and
+> changing the frame of five panels is a design pass with a ux review, not a consequence of
+> labelling a table.
+
 > **Item (b) misdescribes the control, and did so when the row was filed** (2026-09-03 sweep). It
 > says `Outcome` is "plain text" beside `Show`'s chips, with no stated reason. `AuditFilterBar.tsx`
 > renders Outcome as a **`SegmentedControl`** — an APG radiogroup — with the reason written above
@@ -6939,6 +6990,51 @@ gate that ADR-0127 P3's "N" clause depends on, which is a behaviour change weari
 
 Related: #75 (whose item 5(b)/(d) argument rests on this column), #261 (the other parameter that made
 readings incomparable), ADR-0128 (the decision the column serves).
+
+### 310. The retention panel's table labels are a partial map with a silent fallback
+
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (photographing the staff console, `#165(e)`) · **Size:** S · **Owner:** web
+
+`retention-copy.ts`'s `TABLE_LABELS` named **two** of the sweep's **three** tables, so the Retention
+panel printed `perf_probe_results` — a raw Postgres identifier — in a column whose other two rows
+read "Policy violation reports" and "Mail events". The label is added; **the mechanism that let it
+happen is not fixed, which is what this row is for.**
+
+**Nothing was wrong in either file.** `tableLabel` falls back to the raw name **by design**, under a
+comment saying a table added without a label "should read as unpolished, never as nameless" — which
+is the right fallback and is exactly what a reader saw. `perf_probe_results` joined the server's
+`RETENTION_TABLES` at ADR-0128, and the label map one workspace away was not extended with it.
+
+**It is the same omission the API had already made and already fixed.** `retention-sweep.service.ts`
+records, in its own comment, that the `retention.configured` boot line "was silently one short" for
+the same reason and was corrected — so one side of this feature learnt the lesson and its neighbour
+did not hear about it. That is the register's commonest shape, across a workspace boundary rather
+than across two files.
+
+**Why there is no gate yet, and what one needs.** The vocabulary is **closed and enumerable on the
+server** — `retention-policy.ts` declares `RETENTION_TABLES` as a `const` tuple with a
+`RetentionTable` type, and the staff DTO already publishes it as an OpenAPI `enum` — but the web's
+own `RetentionTable` is a **row shape** with `table: string`, so the compiler cannot demand
+totality and a `Record<string, string>` cannot be made total. The three candidates:
+
+1. **Share the tuple through `@repo/types`** and make `TABLE_LABELS` a total
+   `Record<RetentionTable, string>`. The only option where the compiler does the work, and the only
+   one where adding a table to the sweep **cannot** compile until it has a name. It is a change to a
+   shared package's public surface plus an `apps/api` import, which is ADR-0105's territory.
+2. **A web-side test listing the three names.** Cheap, and it is a second statement of a vocabulary
+   the server owns — so it goes stale in the one direction that matters: silently, when a fourth
+   table joins.
+3. **Make the fallback loud in development** (the ADR-0121 painter precedent, which throws on an
+   unresolved fill). Does not need the vocabulary at all, and only fires for somebody who opens the
+   panel in a dev build.
+
+Option 1 is the answer and option 3 is the cheap partial. Neither is taken here, because the
+photograph's job was to find this and a shared-package change inside a copy fix is the drive-by
+ADR-0105 exists to stop.
+
+**Interim:** `retention-copy.test.ts` now asserts **all three** labels rather than one, so the
+existing hole cannot reopen — and that is deliberately not presented as covering the class: a fourth
+table would arrive with nothing failing.
 
 ### 289. NestJS 12 breaks the API e2e bootstrap, and Dependabot titles it as routine
 

@@ -257,9 +257,17 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await expect(retention.getByText('Policy violation reports')).toBeVisible();
   await expect(retention.getByText('Mail events')).toBeVisible();
   // The third table, which the staff performance probe added. It appears here without any edit to
-  // the panel — the rows are derived from the API's list — and the label falls back to the raw
-  // table name if nobody supplies one, which is why the name is asserted rather than assumed.
-  await expect(retention.getByText('perf_probe_results')).toBeVisible();
+  // the panel — the rows are derived from the API's list.
+  //
+  // **This asserted `perf_probe_results` until 2026-09-12, and its own comment explained why: the
+  // label "falls back to the raw table name if nobody supplies one, which is why the name is
+  // asserted rather than assumed".** Both halves were true and the conclusion was backwards — it
+  // pinned the unpolished fallback as the expectation, so the one gate that drives this panel
+  // against a real API was protecting the defect. Found by PHOTOGRAPHING the console (`#165(e)`),
+  // not by anything failing; the label is now in `retention-copy.ts` and the mechanism that let it
+  // be missing is `#310`. This is the same shape `#165` records in `app-shell.test.tsx` — an
+  // area's own suite using the broken state as its fixture — one tier out, in a journey.
+  await expect(retention.getByText('Performance readings')).toBeVisible();
   // Each configured period as the API reports it, and scoped to ITS OWN ROW. Not `/\d+ days/` — a
   // regex would pass on whatever number arrived, including a default the server is not using.
   //
@@ -269,7 +277,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // journey, and the failure names a number rather than the table it belongs to.
   await expect(rowFor(retention, 'Policy violation reports').getByText('30 days')).toBeVisible();
   await expect(rowFor(retention, 'Mail events').getByText('365 days')).toBeVisible();
-  await expect(rowFor(retention, 'perf_probe_results').getByText('365 days')).toBeVisible();
+  await expect(rowFor(retention, 'Performance readings').getByText('365 days')).toBeVisible();
   // The sweep runs at boot (`onApplicationBootstrap`), so by the time a browser has signed up,
   // verified an address and signed in twice, this process HAS swept — which makes the "not swept
   // yet" wording the wrong assertion here and the presence of a real last-run line the right one.
@@ -482,7 +490,12 @@ test('a staff member reaches the console; a member cannot tell it exists', async
       described += `${(await target.textContent()) ?? ''}\n`;
     }
 
-    expect(described, 'the shared comparability caveat').toContain('per megapixel');
+    // **The RULE, not a figure.** This asserted `per megapixel` until 2026-09-12, so it was pinned
+    // to a coefficient derived from a reading #261 has since withdrawn — and the assertion would
+    // have gone red for the correction rather than for a regression. What it exists to prove is
+    // that the shared caveat is among the descriptions the table names, which the rule's own words
+    // carry (`docs/TECH_DEBT.md` #165(e)).
+    expect(described, 'the shared comparability caveat').toContain('same canvas size');
     // And the block's OWN facts, which differ per sitting and are what decide whether the numbers
     // in this particular table mean anything.
     expect(described, "this sitting's own machine facts").toContain('CI container');

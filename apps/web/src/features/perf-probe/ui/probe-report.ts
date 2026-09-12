@@ -118,9 +118,11 @@ function contextLines(sitting: Sitting): string[] {
     // print on each reading's own block below. Leaving them here would have labelled a whole
     // sitting with whichever reading sorted first, and nothing in the block would look wrong.
     // **`varies` rather than one reading's figure**, when a sitting holds readings taken at more
-    // than one canvas. #261 records the same plan on the same machine measuring 23.3 fps at
-    // 1912x1068 and 39.5 fps at 1016x636, so stating one of two here would settle by accident the
-    // confound this line exists to expose. Each reading prints its own below.
+    // than one canvas. #261 measures 35.2 fps at 1912x948 against 32.2 fps at 1920x1080 INSIDE one
+    // sitting, so stating one of two here would settle by accident the confound this line exists to
+    // expose. Each reading prints its own below. (This cited that row's 23.3-against-39.5 pair until
+    // 2026-09-12; #261 withdrew it as contaminated by machine state rather than size. The surviving
+    // figure is smaller and still decides nothing by itself, which is the whole point of `varies`.)
     `  viewport   ${
       context.viewport === null
         ? 'varies between readings — see each below'

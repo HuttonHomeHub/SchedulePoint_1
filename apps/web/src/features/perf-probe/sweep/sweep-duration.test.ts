@@ -28,8 +28,10 @@ describe('the sweep duration estimate', () => {
   });
 
   it('costs the whole-plan framing higher than the working zoom', () => {
-    // The same machine measured 60.0 fps at Week and 23.3 at Fit (`docs/TECH_DEBT.md` #75 item 5).
-    // One figure for both would put the sweep's estimate nearly a minute out.
+    // The same machine measures 60.0 fps at Week and 32.2 at Fit (`docs/TECH_DEBT.md` #75 item 6).
+    // One figure for both would put the sweep's estimate nearly a minute out. (This cited item 5's
+    // 23.3, withdrawn by #261 on 2026-09-12 as contaminated by machine state; the assertion is
+    // about the ORDER of the two, which every reading in the set agrees on.)
     const plan = sweepPlan();
     const week = plan.find((s) => s.preset === 'week');
     const fit = plan.find((s) => s.preset === 'fit');

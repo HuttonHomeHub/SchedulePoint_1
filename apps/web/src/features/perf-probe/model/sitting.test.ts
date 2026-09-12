@@ -297,8 +297,10 @@ describe('S2 — a sitting read from history carries every field the live report
   });
 
   it('refuses to state one canvas for a sitting whose readings were taken at two', () => {
-    // #261 records the same plan on the same machine measuring 23.3 fps at 1912x1068 and 39.5 fps
-    // at 1016x636 — the most decision-relevant confound in the register. A sitting can hold two
+    // #261 measures 35.2 fps at 1912x948 against 32.2 fps at 1920x1080 inside one sitting — the
+    // most decision-relevant confound in the register. (This cited that row's 23.3-against-39.5
+    // pair until 2026-09-12, which #261 withdrew as contaminated by machine state rather than by
+    // size; the assertion below is unchanged, on evidence that survives.) A sitting can hold two
     // canvases now that M6-T4 re-runs a missing reading under the same `sweep_id`, and stating the
     // first row's figure would settle that confound by accident. `null` means "more than one",
     // which is a different fact from "unknown", and every reading carries its own.
