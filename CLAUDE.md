@@ -2752,8 +2752,17 @@ progress` off the command surface because **an object action belongs on the obje
   near-white ground while the halo carried every assertion. Nothing about that gate changes. The
   instrument was widened first — **12 → 25 shots**, including the **exported PNG itself**, whose
   absence is what let `docs/TECH_DEBT.md` #158 ship: twelve screens photographed and never once what
-  the product _produces_. **#158 stays open**, because the light theme hides its symptom and not its
-  cause. The `auth` scope was **re-measured** rather than assumed — 17 of 31 tokens differ, 14
+  the product _produces_. #158 was left open **by this ADR's decision**, because the light theme
+  hides its symptom and not its cause — and it **closed the same day**, once its remedy was
+  re-measured and rejected: freezing `resolvePrintPalette` to its literals would have shipped white
+  ink at 3.56:1 on the commonest bar in any programme, making the deliverable worse than the state
+  the row was filed against while reading as compliance with the register
+  (`docs/DECISIONS.md`, 2026-08-21, "A debt register entry can prescribe a fix that has gone
+  stale"). **This line read "#158 stays open" until 2026-09-12**, three weeks after the ledger
+  recorded it closed, and the cost is not hypothetical: it sent this session looking for open export
+  work that did not exist. ADR-0102 §273's own "stays open by design" correctly stands unrewritten
+  (§6); the manual is the copy that has to keep up, and `check:adr-coverage` structurally cannot see
+  this file (#291). The `auth` scope was **re-measured** rather than assumed — 17 of 31 tokens differ, 14
   perceptibly — and survives on its values, its original ADR-0077 §2 reason having lapsed at
   ADR-0097. Seven claims are recorded as corrected in the ADR's own closing section, including two
   inherited from the brief and one where a correct measurement produced a wrong inference.
