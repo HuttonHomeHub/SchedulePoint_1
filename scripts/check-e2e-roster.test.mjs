@@ -14,8 +14,8 @@
  * logic it was named for and would have stayed green through the regression its own docblock
  * described; the sibling gates in this directory take this shape for that reason.
  *
- * **E4 and E5 are absent because the shards are** (Milestone 3). A case pinning a rule the product
- * does not have yet asserts nothing.
+ * **E4 and E5 arrived with the shards** (Milestone 3). They were deliberately absent from M1,
+ * because a case pinning a rule the product does not have yet asserts nothing.
  *
  * Run standalone: `node scripts/check-e2e-roster.test.mjs`
  */
@@ -24,7 +24,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { declaredSuites, invocationsIn, project, runGate } from './check-e2e-roster.mjs';
+import {
+  declaredSuites,
+  invocationsIn,
+  project,
+  runGate,
+  shardsOf,
+  stepsIn,
+} from './check-e2e-roster.mjs';
 
 /** Build a throwaway repository root from a `{ 'path/from/root': contents }` map. */
 function tree(files) {
@@ -41,6 +48,18 @@ const pkg = (...scripts) =>
   JSON.stringify({ scripts: Object.fromEntries(scripts.map((s) => [s, 'playwright test'])) });
 
 const workflow = (body) => `name: CI\njobs:\n  e2e:\n    steps:\n${body}`;
+
+/** A workflow with one unsharded job and one four-way sharded job. */
+const sharded = (webBody, shards = '[1, 2, 3, 4]') =>
+  `name: CI\njobs:\n  e2e-api:\n    steps:\n` +
+  step('@repo/api', 'test:e2e') +
+  step('@repo/api', 'test:e2e:pairwise') +
+  `  e2e-web:\n    strategy:\n      matrix:\n        shard: ${shards}\n    steps:\n${webBody}`;
+
+/** A web suite step carrying a shard condition. */
+const shardStep = (script, shard) =>
+  `      - name: Web end-to-end tests (${script})\n        if: \${{ matrix.shard == ${shard} }}\n` +
+  `        run: pnpm --filter @repo/web ${script}\n`;
 const step = (filter, script, title = 'End-to-end tests') =>
   `      - name: ${title}\n        run: pnpm --filter ${filter} ${script}\n`;
 
@@ -225,6 +244,106 @@ it('matches the command, not the step title', () => {
     '      - name: Web end-to-end tests (minimap)\n        run: pnpm --filter @repo/web test:e2e:staff\n',
   );
   assert.deepEqual(found, [{ workspace: '@repo/web', script: 'test:e2e:staff' }]);
+});
+
+// ------------------------------------------------------------------------------ E4 / E5
+
+/** The two web suites every sharded fixture below declares. */
+const webPkg = () => ({ 'apps/web/package.json': pkg('test:e2e', 'test:e2e:minimap') });
+
+it('the sharded positive case — every suite conditioned on a declared shard PASSES', () => {
+  check(
+    {
+      ...webPkg(),
+      'apps/api/package.json': pkg('test:e2e', 'test:e2e:pairwise'),
+      '.github/workflows/ci.yml': sharded(
+        shardStep('test:e2e', 1) + shardStep('test:e2e:minimap', 3),
+      ),
+    },
+    0,
+  );
+});
+
+it('E4 — a suite step in a sharded job with NO condition FAILS', () => {
+  // Nothing else would notice. The run is green; the suite simply runs on all four shards, and the
+  // wall clock the shards exist to cut gets paid anyway.
+  check(
+    {
+      ...webPkg(),
+      'apps/api/package.json': pkg('test:e2e', 'test:e2e:pairwise'),
+      '.github/workflows/ci.yml': sharded(
+        shardStep('test:e2e', 1) + step('@repo/web', 'test:e2e:minimap'),
+      ),
+    },
+    1,
+  );
+});
+
+it('E5 — a condition naming a shard the matrix does not declare FAILS', () => {
+  // The condition never fires, so the suite never runs, and every check stays green. This is the
+  // silence the whole gate is about, arriving through the newest door.
+  check(
+    {
+      ...webPkg(),
+      'apps/api/package.json': pkg('test:e2e', 'test:e2e:pairwise'),
+      '.github/workflows/ci.yml': sharded(
+        shardStep('test:e2e', 1) + shardStep('test:e2e:minimap', 5),
+      ),
+    },
+    1,
+  );
+});
+
+it('a shard condition in a job with NO matrix FAILS', () => {
+  // `matrix.shard` is undefined there, so the condition can never be true. The mirror of E4, and
+  // the one a copy-paste between jobs produces.
+  check(
+    base({
+      '.github/workflows/ci.yml': workflow(
+        step('@repo/web', 'test:e2e') +
+          shardStep('test:e2e:minimap', 1) +
+          step('@repo/api', 'test:e2e') +
+          step('@repo/api', 'test:e2e:pairwise'),
+      ),
+    }),
+    1,
+  );
+});
+
+it('the matrix values are READ, so a different shard count is not a stale assertion', () => {
+  // Hard-coding [1,2,3,4] would make changing the count quietly WRONG rather than red. Here the
+  // matrix declares two shards and a step on shard 2 is therefore legal.
+  check(
+    {
+      ...webPkg(),
+      'apps/api/package.json': pkg('test:e2e', 'test:e2e:pairwise'),
+      '.github/workflows/ci.yml': sharded(
+        shardStep('test:e2e', 1) + shardStep('test:e2e:minimap', 2),
+        '[1, 2]',
+      ),
+    },
+    0,
+  );
+});
+
+it("stepsIn reads each step OWN condition, never the previous step's", () => {
+  // A backwards search from the command finds the preceding step's `if:` when this one has none,
+  // which turns E4 into a coin toss that happens to be right most of the time.
+  const body = shardStep('test:e2e', 1) + step('@repo/web', 'test:e2e:minimap');
+  const steps = stepsIn(body);
+  assert.deepEqual(
+    steps.map((s) => [s.script, s.shard]),
+    [
+      ['test:e2e', '1'],
+      ['test:e2e:minimap', null],
+    ],
+  );
+});
+
+it('shardsOf returns null for a job with no matrix, not an empty list', () => {
+  // null means "not sharded"; [] would mean "sharded into nothing" and must not be the same value.
+  assert.equal(shardsOf('    steps:\n' + step('@repo/web', 'test:e2e')), null);
+  assert.deepEqual(shardsOf('    strategy:\n      matrix:\n        shard: [1, 2]\n'), ['1', '2']);
 });
 
 // --------------------------------------------------------------------------- the derivations
