@@ -59,11 +59,18 @@ const ITERATIONS = 25;
 /**
  * The end-to-end pass runs fewer iterations than the harness, deliberately.
  *
- * Twenty-five HTTP round trips over a 2,000-row payload is minutes of wall clock on top of an
- * already-long probe, and the estimator's own trap is what decides the floor: with 7 samples
- * `sorted[floor(0.95 n)]` IS the maximum, which is the defect this file records once already. With
- * 15 it is `sorted[14]` — still the last element — so the count is raised to 21, where the p95
- * index is 19 and one cold sample cannot become the verdict.
+ * **The count is 21 because of the estimator, and the cost clause below was wrong** — corrected
+ * 2026-09-12 (`docs/TECH_DEBT.md` #266). The estimator's trap is what decides the floor and that
+ * reasoning stands: with 7 samples `sorted[floor(0.95 n)]` IS the maximum, which is the defect this
+ * file records once already; with 15 it is `sorted[14]`, still the last element; at 21 the p95 index
+ * is 19 and one cold sample cannot become the verdict.
+ *
+ * What was wrong is the premise beside it — that "twenty-five HTTP round trips over a 2,000-row
+ * payload is minutes of wall clock on top of an already-long probe". **Measured: the whole file,
+ * both passes, is 20.45 s** (25 harness iterations and 21 round trips, p50 ~155 ms each), so
+ * twenty-five round trips are about four seconds. The four saved are worth nothing; keeping 21 is
+ * worth everything, for the estimator reason alone. Recorded rather than deleted because a decision
+ * resting on two legs, one of them false, reads as better supported than it is.
  */
 const ROUTE_ITERATIONS = 21;
 

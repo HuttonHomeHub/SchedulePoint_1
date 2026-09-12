@@ -6607,6 +6607,40 @@ differential has one, so it runs deliberately and its wall-clock is attributed t
 see. That is the remaining work; it is small, and it is worth doing before the next probe copies this
 one's shape.
 
+> **2026-09-12 — "minutes of wall clock" was never measured, and it is 20 seconds.** Run alone
+> against a real database on this container: **20.45 s** reported by vitest (18.57 s of test time),
+> **22 s** wall including process start. The measurement was NOT degraded — the probe printed its
+> full report: 2,016 correlated rows, 2,968 change rows, 25 harness iterations (p50 153.6 / p95
+> 202.4 ms) and 21 end-to-end round trips (p50 158.7 / p95 213.2 ms), both against the 250 ms
+> reference. So it did everything this row says it does, in a twentieth of the time this row says
+> it takes.
+>
+> **Three figures follow, and they change what the remaining work is worth.** Against tonight's
+> whole API suite (599.69 s on the same container, same session) the probe is **3.4 %**. On a CI
+> runner it is ≈ **23 s**, transferring by the only ratio available — ADR-0138 measured that job at
+> 662–677 s where this container runs it in 599.69 s, so ≈ 1.10–1.13× — and that is an estimate
+> stated as one, not a reading. And it uses **2.3 % of its own 900-second timeout**, which this row
+> lists beside "minutes" in a way that reads as though the measurement approaches it.
+>
+> **The row made two arguments and only one survives.** The cost argument collapses: 20 s does not
+> justify a new script, a new CI step and the ADR-0105 spec that step triggers. The **attribution**
+> argument stands — it is still "a report nobody reads on a run nobody triggered", and a reader
+> cannot see its wall-clock attributed to anything — but that is a discoverability nit at 20 s, not
+> the "small and worth doing" priority this row assigns on the strength of an unmeasured cost.
+>
+> **This is ADR-0076 Class 3 inside a row whose own subject is unchecked measurement claims** — and
+> the row records exactly that happening once already, in the fix that shipped saying the cost was
+> "~3x this one test's runtime, paid knowingly" without asking what the runtime was permitted to be.
+> Same shape, one paragraph down, in the opposite direction.
+>
+> **The row STAYS OPEN**, on attribution alone, and the decision is still the product owner's: the
+> remedy is a CI step whatever the cost turns out to be. What changes is that they can now decide
+> against a number. The `ROUTE_ITERATIONS` note below is unaffected.
+>
+> _(Also checked: this is not the one test file tonight's full API run reported as skipped. Its only
+> guard is `describe.skipIf(!hasDatabase)` and the suite runs with `DATABASE_URL` set, so it cannot
+> be — established from the guard, not from the run's output, which does not name the file.)_
+
 **Also worth carrying: `ROUTE_ITERATIONS` is 21, so the p95 index is 19 — the second-worst sample.**
 The file's own docblock explains the count was raised from 7 so that "one cold sample cannot become
 the verdict", which was the right fix for the estimator being a literal maximum and still leaves the
