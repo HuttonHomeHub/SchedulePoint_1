@@ -6969,7 +6969,7 @@ mechanism).
 
 ### 283. The performance probe does not record power state, and on an integrated GPU that decides readings
 
-**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** S ·
+**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (#75 item 6(e)) · **Size:** M ·
 **Owner:** repo
 
 > **Not scheduled — product-owner decision, 2026-09-10.** This row explains something real and
@@ -6994,6 +6994,27 @@ mechanism).
 `apps/web/src/features/perf-probe/model/device.ts:61-71` captures viewport, DPR, GPU renderer, thread
 count, device memory, display interval, attention and motion preference. It does not capture whether
 the machine is on mains, and there is no `getBattery()` call anywhere under `features/perf-probe/`.
+
+> **Trigger 3 FIRED on 2026-09-12 and the row was still not taken — because trigger 3's economics
+> are wrong.** The probe was opened that evening (six files under `features/perf-probe/`, correcting
+> a withdrawn measurement this row's own neighbour #75 had already retracted). Acting on the trigger
+> then would have revealed what "a small addition to `readDevice()`" leaves out: **every device fact
+> on `PerfProbeResult` is its own column** — `viewport_width`, `device_pixel_ratio`,
+> `hardware_concurrency`, `device_memory_gb`, `gpu_renderer`, `idle_interval_ms` — and this field is
+> **useless unless stored**, since its whole stated purpose is comparing a reading against one taken
+> on another day. So the errand is capture **plus a nullable column, a migration, the DTO, a
+> mandatory `database-architect` engagement (§19.3, no exceptions) and an ADR-0105 spec** — not a
+> small addition alongside something else. `Size` moves **S → M** accordingly.
+>
+> **The same correction applies to `#284`, and `#270` already had it right.** All three are the probe
+> wanting a new recorded quantity, and all three cost a column, because **the probe's value is
+> cross-sitting comparison and cross-sitting comparison means storage**. `#270` is sized as "a
+> milestone-sized slice rather than a follow-up commit" and says so; these two said `S` and read as
+> follow-ups. That is the `#285` shape — a deferral whose stated economics do not hold — found the
+> same way, by checking a trigger against a real touch instead of trusting the sentence beside it.
+>
+> Nothing about the trigger itself changes: it is still right that this is cheaper alongside other
+> work. What changes is what "alongside" has to be big enough to carry.
 
 Every reading this repository holds was taken on a **laptop with an integrated adapter** — the row
 that matters says so in terms: _"the **integrated** adapter, which is what the browser chose on a
@@ -7023,12 +7044,19 @@ that makes readings incomparable).
 ### 284. `on screen` means two different things depending on which scenario printed it
 
 **Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the five-sitting probe set) ·
-**Size:** S · **Owner:** repo
+**Size:** M · **Owner:** repo
 
 > **PARKED 2026-09-10 with the probe.** It misleads a reader of probe output and nothing else — the
 > judging is unaffected and conservative. **Trigger:** the probe is next opened for any reason, or
 > somebody compares `revision-diff` limbs across viewports and reaches the wrong conclusion about
 > bars drawn. Bundle it with #283, which is the same file and the same errand.
+>
+> **The trigger fired on 2026-09-12 and this was still not taken; see `#283` for why, because the
+> reason is shared.** Computing the culled count is client-side and cheap; making it comparable
+> across **stored** sittings is a column, which is `#270`'s shape exactly — and `#270` is the one of
+> these three sized honestly, as "a milestone-sized slice rather than a follow-up commit". `Size`
+> moves **S → M**: the partial, report-only fix is small, and the fix that serves the purpose is
+> not.
 
 Every probe limb prints `on screen  N bars at X px/day`, and #75 item 5(d) records **why** that line
 exists: ADR-0128's central finding is that painter cost tracks **bars drawn**, not plan size, and the
