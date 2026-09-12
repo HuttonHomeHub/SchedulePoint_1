@@ -8009,6 +8009,33 @@ copy job names out of `.github/workflows/` on the day rather than from the list,
 states the pending-forever failure mode so the next reader cannot repeat it by trusting a
 name.
 
+> **SECOND INSTANCE, 2026-09-12 — one day later, and the mitigation above is what kept it
+> honest rather than what prevented it.** ADR-0138 sharded the end-to-end job, so
+> `End-to-end tests` — the single name this list carried — stopped existing, replaced by
+> `End-to-end tests (API)` and four `End-to-end tests (web shard N)`. The list went from
+> naming a job ADR-0057 deleted to naming a job ADR-0138 split, **within the same week, by
+> the same mechanism, with nothing connecting either change to this paragraph.** That is
+> the row's own prediction ("a name changed somewhere else") landing on a one-day horizon,
+> and it is the strongest argument the design question below has.
+>
+> **The list was not FALSE, and the distinction is the useful part.** It is date-qualified
+> — "the jobs that existed on 2026-09-11" — and on that date it was exactly right, so a
+> careful reader was never misled about a name. What the date-qualifier cannot cover is the
+> **count**: five entries against ten check runs, because a matrix job contributes one
+> required check **per matrix value**. A reader glancing at it would configure five and
+> leave four shards unrequired, and a date on the heading does not warn about that.
+>
+> **Repaired from measurement rather than from the workflow file**: the ten names are read
+> off a real pull-request head via `get_check_runs`, which is the list GitHub would be asked
+> to match — `.github/workflows/` does not show that `Analyze (javascript-typescript)` and
+> `CodeQL` both report, nor expand the shard matrix. Two consequences a reader would not
+> guess are now stated with it (per-matrix-value naming; `fail-fast` being off, so requiring
+> one shard would pass a run whose other three never executed).
+>
+> **The design question is unchanged and still an ADR-0105 trigger** — nothing here builds
+> the gate. What changes is the evidence for it: the manual list has now drifted twice in
+> four days, and both times the cause was an epic that had no reason to look here.
+
 ### 302. A row's status can contradict the fields beside it, and `check:debt-status` passes it
 
 **Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (overnight register sweep) · **Size:** S · **Owner:** repo
