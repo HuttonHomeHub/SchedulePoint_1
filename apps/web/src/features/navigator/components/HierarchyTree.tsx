@@ -11,6 +11,7 @@ import { treeKeydown, type NodeKind, type TreeNodeData, type VisibleRow } from '
 
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem } from '@/components/ui/menu';
+import { useToolbarFocusHandoff } from '@/components/ui/toolbar/use-focus-handoff';
 import { cn } from '@/lib/utils';
 
 /** Long-press duration (ms) that opens the row-actions menu on touch. */
@@ -178,6 +179,44 @@ export function HierarchyTree({
     rangeExtractor,
   });
 
+  /**
+   * **The tab stop is not the focus ring, and `#297` only repaired the first.**
+   *
+   * A row can leave `rows` while the browser's focus is physically on it — a synthetic `loading`
+   * row keyed `${parentId}:loading` is focusable and is guaranteed to be unmounted when its fetch
+   * resolves; a real node goes the same way on a collapse or a peer's delete. Neither existing
+   * effect can help: `pendingFocus` is keyed on `focusedKey`, which does not change here, and
+   * `afterDelete` fires only for this rail's own delete. Measured, focus landed on `<body>` with
+   * the tab stop perfectly correct — WCAG 2.2 §2.4.3, level A (`docs/TECH_DEBT.md` #305).
+   *
+   * `useToolbarFocusHandoff` is the mechanism, reused rather than reimplemented for the
+   * `use-focus-handoff.ts:8-10` reason: this repository has recorded a keyboard rule copied into a
+   * second place and then fixed in only one of them in five consecutive epics. Its logic is generic
+   * over a container + the ids it renders as stops — nothing in it is toolbar-specific — so the
+   * **name** is now imprecise and the name is deliberately left alone: renaming or moving an
+   * exported hook changes a component's public contract, which is an ADR-0105 trigger that would
+   * take an `S` register row to a full spec. Recorded in #305 rather than done quietly.
+   *
+   * Two honest limits, both stated in #305 rather than papered over:
+   *
+   * - The sentence is composed by the hook, so a resolved placeholder announces "Loading… is no
+   *   longer available. Focus moved to Project Explorer." Every clause is true and it discharges
+   *   the 2.4.3 obligation, but the *useful* sentence for that case names the children that
+   *   arrived — which is ADR-0029 §202-203's lazy-load announcement, specified and never built
+   *   (`useAnnounce` has no other reference under `features/navigator`).
+   * - `afterDelete`'s root branch already focuses this container synchronously, so by the hook's
+   *   yielded frame `document.activeElement` is not `<body>` and it correctly stands down. The two
+   *   do not fight, and route 2 of #305 is therefore left as a benign residual: a stale
+   *   `focusedKey` is now resolved away by `resolvedFocusedKey`, so DOM focus on the container and
+   *   the row holding the tab stop are no longer able to disagree about a row that is gone.
+   */
+  const rowKeys = useMemo(() => rows.map((row) => row.key), [rows]);
+  const focusHandoff = useToolbarFocusHandoff({
+    containerRef: scrollRef,
+    resolvedIds: rowKeys,
+    toolbarLabel: 'Project Explorer',
+  });
+
   // Focus the acting row only right after a keyboard move set it (never on background
   // data loads, which would steal focus back into the tree).
   useEffect(() => {
@@ -322,6 +361,7 @@ export function HierarchyTree({
       aria-label="Project Explorer"
       tabIndex={-1}
       onKeyDown={onKeyDown}
+      {...focusHandoff}
       className="h-full overflow-y-auto py-1 outline-none"
     >
       <div role="presentation" style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>

@@ -235,6 +235,48 @@ describe('HierarchyTree', () => {
     expect(stops).toHaveLength(1);
   });
 
+  /**
+   * **#305 — the tab stop is repaired and FOCUS is not.** `#297` fixed which row carries
+   * `tabIndex={0}` when `focusedKey` goes stale; it deliberately did not touch where the browser's
+   * focus ring is. The same sequence comes apart: the loading row genuinely holds DOM focus, it is
+   * unmounted when its fetch resolves, and focus falls to `document.body`.
+   *
+   * `pendingFocus` cannot catch it — that effect is keyed on `focusedKey`, which does NOT change
+   * here, and the row's ref was deleted on unmount, so even a re-run would call `.focus()` on
+   * nothing. **WCAG 2.2 §2.4.3 Focus Order (level A)** — the citation this codebase already assigns
+   * to this shape (`use-focus-handoff.ts:17`), not §2.1.1, which is `#297`'s and a different
+   * failure.
+   *
+   * **Verified red against the pre-fix component: `activeElement` was `BODY`.**
+   */
+  it('hands focus back to the tree when a focused row is removed under it (#305)', async () => {
+    let releaseProjects!: (value: ProjectSummary[]) => void;
+    holdProjects = new Promise<ProjectSummary[]>((resolve) => {
+      releaseProjects = resolve;
+    });
+
+    renderTree();
+    const client = await screen.findByRole('treeitem', { name: /Northgate/ });
+    fireEvent.click(client); // expand: the child fetch is held, so a `loading` row renders
+
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+    // The placeholder really does hold focus — asserted, because if it does not then the case
+    // below proves nothing about a row being removed from under a focus ring (the ADR-0093 shape).
+    await waitFor(() => {
+      expect(document.activeElement).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    releaseProjects(projects);
+    await screen.findByRole('treeitem', { name: /Fit-out/ });
+
+    // Focus must not be left on `<body>`. The tree container is the destination the shared
+    // hand-off mechanism uses, so the reader's next Tab or arrow key still reaches the diagram.
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+    });
+    expect(screen.getByRole('tree')).toContainElement(document.activeElement as HTMLElement);
+  });
+
   it('deep-links: a plan route auto-reveals and marks its ancestor path', async () => {
     params = { planId: 'pl1' };
     renderTree();
