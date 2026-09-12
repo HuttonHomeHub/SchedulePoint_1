@@ -122,8 +122,29 @@ export function HierarchyTree({
     [rows, selection],
   );
   // The single tab stop: the focused row, else the selected row, else the first row.
+  //
+  // **Resolve before falling back, or the chain short-circuits on a key naming nothing.**
+  // `??` yields its left side for any non-null value, so a `focusedKey` whose row has since
+  // left `rows` used to win the chain outright: `activeIndex` went to -1, `isActive` was false
+  // for EVERY row, nothing carried `tabIndex={0}`, and the container is itself `tabIndex={-1}`
+  // — so the Project Explorer dropped out of the Tab sequence altogether (WCAG 2.2 §2.1.1).
+  // Reached without a peer or a second session: a synthetic `loading` row is focusable and
+  // keyed `${parentId}:loading`, so arrowing onto a placeholder and letting its fetch resolve
+  // is enough (`docs/TECH_DEBT.md` #297; the suite's #297 case measured 0 stops).
+  //
+  // `Toolbar.tsx`'s `effectiveActiveId` and `Deck.tsx`'s `rovingId` resolve the same way, each
+  // after the same defect. They are deliberately NOT extracted into one helper: those two are
+  // two-rung (`id ∈ ids ? id : first`) and this is three-rung, and — the load-bearing half —
+  // the three never have to AGREE with one another, so the ADR-0065 "two implementations drift
+  // invisibly" argument does not transfer. Three local derivations of one rule, not one rule
+  // copied three times.
+  const resolvedFocusedKey =
+    focusedKey !== null && rows.some((row) => row.key === focusedKey) ? focusedKey : null;
   const activeKey =
-    focusedKey ?? (selectedIndex >= 0 ? rows[selectedIndex]!.key : null) ?? rows[0]?.key ?? null;
+    resolvedFocusedKey ??
+    (selectedIndex >= 0 ? rows[selectedIndex]!.key : null) ??
+    rows[0]?.key ??
+    null;
   const activeIndex = useMemo(
     () => rows.findIndex((row) => row.key === activeKey),
     [rows, activeKey],
