@@ -385,6 +385,42 @@ ADR-0062 component gate as a suggestion — deliberately not rushed inside the e
 > concurrent …" e2e test — renaming does not make the HTTP harness able to race, and now there is
 > somewhere better to put it.
 
+> **2026-09-12 — the technique had a SECOND precedent a month older, in the same directory, and
+> neither knew about the other.** `csp-report.e2e-spec.ts`'s burst case (landed `862b232e`,
+> 2026-08-10, a month before `wbs-reparent-race.e2e-spec.ts` on 2026-09-11) resolves
+> `CspReportService` off the Nest container and fires **sixteen** concurrent `record()` calls with
+> `Promise.all` — driving the race below HTTP, which is exactly the remedy this row calls its first
+> and still-open one. So "the technique is now proven and written down" is true of the **barrier at
+> the read seam**, which is genuinely new, and understates the estate on the plainer half.
+>
+> **The two records give DIFFERENT reasons for bypassing HTTP, and both are observations of this
+> harness rather than one claim seen twice.** This row measured two mirror requests failing to
+> overlap — the second beginning ~15 ms after the first had committed, at N = 2. The CSP case
+> records that **sixteen** concurrent Supertest requests reset the connection and, worse, leaked
+> their in-flight writes past `beforeEach` into the following test, "so the harness was measuring
+> itself". A reader picking up this row now has a low-N and a high-N failure mode, which is a
+> stronger statement than either alone.
+>
+> **And the pattern has now caught a real production defect, which is the best argument this row
+> has.** The CSP burst case is what reported `expected 15 to be 16` when `#311`'s residual race was
+> live — a genuine one-in-sixteen loss in shipped code, in a subsystem with no advisory lock at all.
+> That is not a demonstration written to prove a technique; it is the technique finding something
+> nobody was looking for.
+>
+> **Two candidate findings were checked here and did NOT survive, recorded because the checking is
+> the point.** (a) The row says "the four existing" and the 2026-09-01 remedy says "All three are
+> now named" — that reads as an internal contradiction and is not one: there are four such cases,
+> and `activities.e2e-spec.ts` was done at the measurement, so "three" is the later batch. (b) A
+> first probe read the 14 lines above each `it(` and reported `activities.e2e-spec.ts` as carrying
+> no scope note, contradicting the other three files that say it does — the note is real and sits
+> at `:939-947`, heading the whole `describe`, about 270 lines above the case. The probe was too
+> narrow, not the file wrong. **The trigger is unchanged** (the next change to any of those locks);
+> nothing here makes the remaining paths covered.
+>
+> Fixed in passing: the scope note shipped **truncated** in two of the four files, ending
+> `"its three siblings did not,."` — a sentence cut mid-clause, in a comment this row sends readers
+> to.
+
 The WBS re-parent path takes the plan advisory lock so two mirror re-parents cannot both pass a
 still-acyclic ancestor walk (ADR-0038 invariant (a), fixed in the WBS-improvements M0). The natural
 regression test — two mirror `PATCH`es fired with `Promise.all`, the shape used by
