@@ -7136,10 +7136,17 @@ the Gantt, the canvas painter's host, every dialog — is in the entry chunk**, 
 in downloads the whole application before the sign-in form paints. The sentence is corrected in
 place.
 
-**The heavy things are already lazy and are NOT the problem.** `jspdf` (129.66 kB gzip) and
-`html2canvas` (46.82 kB) sit behind the export path exactly as ADR's export stage intended, and
-`paint` is its own chunk. Removing them from the entry is done. What is in the entry is the
-application.
+**Two of the three heavy things are already lazy. `paint` is NOT, and this paragraph said it was.**
+`jspdf` (128,584 bytes gzip) and `html2canvas` (46,603) sit behind the export path exactly as the
+export stage intended. **`paint` does not** — `bundle-report.json` records it `inEntryGraph: true`,
+which `bundle-report-plugin.ts:37` defines as reachable through **static** imports only, and the
+path is `TsldCanvas.tsx:46`'s plain `from '../render/paint'`. It is a separate chunk because the
+lazy staff probe also reaches it, so Rolldown hoisted it out — which is why "its own chunk" reads as
+"already lazy" and is not. **33,478 gzip bytes, 8.3% of the entry graph, is TSLD painter code
+downloaded by every stranger who loads a login form**; in the all-lazy probe it leaves the graph and
+shrinks to 8,124. `docs/FRONTEND_QUALITY.md:85-88` already had this right; this row did not
+(corrected 2026-09-12, `docs/specs/route-code-splitting/m0-measurement.md` §4). The rest of the
+paragraph stands: what is in the entry is the application.
 
 **Do not read 372 against 200 as a regression.** The ~200 kB figure is not a measurement and never
 was — it predates anybody looking at a build, which is why `FRONTEND_QUALITY.md` labelled the
@@ -7147,9 +7154,10 @@ budgets "advisory and unmeasured" in the same breath. This row records **the fir
 so there is no earlier number to have regressed from, and no claim here that 372 is too big — only
 that the two figures have never been compared and now have been.
 
-**What NOT to do with it.** Setting the budget is `docs/specs/delivery-gates/` M3, which is written
-and awaiting approval, and ADR-0058's rule is that a bar goes at the measured floor rather than at
-an aspiration — so this number is an input to that decision, not a target to code against. Splitting
+**What NOT to do with it.** Setting the budget was `docs/specs/delivery-gates/` M3 — **it shipped**
+(ADR-0136), so `apps/web/bundle-budget.json` and `check:bundle-size` exist and this sentence's
+"awaiting approval" is stale (corrected 2026-09-12). ADR-0058's rule is that a bar goes at the
+measured floor rather than at an aspiration — so this number is an input to that decision, not a target to code against. Splitting
 the authenticated routes is the obvious remedy and is **not** obviously right: TanStack Router
 prefetches on intent, the app is a persistent shell (ADR-0029) whose routes share most of their
 code, and a split that moves 300 kB out of the entry and then fetches it on the first navigation may
@@ -7157,9 +7165,27 @@ buy a faster sign-in and a slower first plan open. **Measure the LCP effect befo
 the product owner's own hardware, the way every other performance question in this repository has
 been settled.
 
-**Why it was never noticed.** Nothing in CI checks a bundle size (`#48(b)`, `docs/BACKLOG.md`), and
-the one document that would have told a reader the splitting story asserted a strategy the code does
-not implement — so a reader auditing bundle health would have found a plausible answer and stopped.
+**Why it was never noticed — and the first half of this is no longer true.** Nothing in CI checked a
+bundle size when this row was raised (`#48(b)`); ADR-0136 closed that, and `ci.yml:270` now runs
+`check:bundle-size` after the build, so that sub-item is discharged (corrected 2026-09-12).
+
+> **A correction inside the correction, recorded because it is the shape this register exists to
+> catch.** The first version of this paragraph said "**#48 no longer exists as a row**". It does —
+> as a **compact-table** row (`| 48 |`), whose own text already reads "(b) perf/devops — CLOSED
+> 2026-09-11". The claim was relayed from a review rather than checked, in an edit whose subject is
+> stale claims; `grep '^### 48\.'` finds nothing and `grep '^| 48 '` finds it, so a scan for the
+> detailed form is exactly how a reader concludes a live row is gone. ADR-0076 Class 2.
+> What stands is the second half: the one document that would have told a reader the splitting story
+> asserted a strategy the code does not implement, so a reader auditing bundle health would have found
+> a plausible answer and stopped. **That document had TWO copies of the sentence and this row fixed
+> one** — `FRONTEND_ARCHITECTURE.md:151-153` still said "Routes are lazy by default (per-route
+> chunks)" until 2026-09-12, in the Routing section a reader opens first. The ADR-0071 shape: repairing
+> one copy leaves the other exactly as wrong.
+
+**The route count in this row was 26 and is 23 registered routes / 22 screen components**
+(`app/router.tsx`), re-counted 2026-09-12. The remedy, its measured floor (**157,483 gzip bytes**,
+−61.1%) and the shell trade-off are
+[`docs/specs/route-code-splitting/`](specs/route-code-splitting/).
 
 ### 293. The probe's ceiling rule has no margin, so a floor at the display's ceiling is a coin toss
 
@@ -7324,6 +7350,53 @@ predictions as committed before the run.
 **What the reading does NOT cover**, stated rather than implied: the Org Admin **override** branch,
 which offers a different control set and may be wider or narrower; one machine, one browser, one
 plan; and only the three widths probed.
+
+### 309. `check:claims` cannot see a dependency cited by a `.ts` path, and its admission test is now met
+
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (registering the route-splitting spec's citations) · **Size:** S · **Owner:** repo
+
+`scripts/lib/citation-patterns.mjs` sets `CITED_EXTENSIONS = ['js', 'mjs', 'cjs', 'css', 'd.ts']`.
+**`.ts` is deliberately excluded**, and the docblock gives the reason and the admission test: `.ts`
+is 3,801 matching lines across 315 files, "essentially all this repository citing itself", and
+**"No dependency here is cited by a `.ts` path."**
+
+That last sentence stopped being true on 2026-09-12. `docs/specs/route-code-splitting/feature-spec.md`
+cited `router-core/src/load-client.ts:43-48` and `:1462` — a dependency's TypeScript **source**, which
+`@tanstack/router-core` ships. So the file's own D2 admission test ("a dependency in this tree ships
+files with it, a citation exists or is imminent, and the first-run cost has been measured") is met on
+its first two limbs for the first time.
+
+**The failure is silent in both directions**, which is the shape this gate has now had **seven**
+recorded holes of: an unregistered `.ts` citation is never demanded, and a register entry for one
+reads as uncited. That is exactly how it surfaced — two entries were added and `check:claims` reported
+them "registered but no longer cited anywhere" while the citations sat in the file.
+
+**And the truncation makes it worse than a plain miss.** The basename class admits `.` but **not
+`-`**, and `/` is deliberately absent so a leading path falls away. So `load-client.ts:1462` would be
+read as `client.ts:1462` if `.ts` were admitted naively — and `client.ts` **collides with two
+repo-owned files** (`apps/web/src/lib/api/client.ts`, `packages/seed-http/src/client.ts`), so the
+own-file filter would skip it **entirely and silently**. Admitting `.ts` without also admitting `-`
+to the basename class would therefore produce a third, quieter hole rather than close one — which is
+`docs/TECH_DEBT.md` #124's "an instrument reported something, so nobody looked" in a new costume.
+
+**Worked around, not closed.** The two citations were repointed at `dist/esm/load-client.js:10-12` and
+`:671-672` — the same facts in a file the gate does scan, verified line-by-line against the pinned
+`@tanstack/router-core@1.171.28` — so nothing in the spec rests on an unprotected claim today. The
+workaround only holds while a dependency's compiled output happens to carry the fact being cited.
+
+**What would close it.** Admit `.ts` to `CITED_EXTENSIONS` **and** `-` to the basename class in the
+same commit, then measure the first-run cost the way D2 requires (the 3,801-line figure is the reason
+for the exclusion and must be re-derived, not quoted — it predates `packages/` and the journey
+directories joining the walk). Expect the own-file filter to absorb most of it and expect the
+`client.ts`-class collisions to need naming. **This is a shared-gate change, so it is an ADR-0105
+trigger and needs the spec** — which is why it was filed rather than folded into the epic that found
+it, per the #298/#299/#300 precedent.
+
+Related: #101 (the basename blind spot, still open for root-level markdown), #183 (the
+case-sensitivity hole), #240 (the extraction's move into `citation-patterns.mjs`), #178/#181 (two
+installed versions, and a `ref` carrying no version — both live here: the `load-client.js`
+`defaultPendingComponent` line is **672** in 1.171.28 and **666** in 1.171.22, so this citation is
+version-sensitive and the register cannot say so).
 
 ### 306. `useToolbarFocusHandoff` has a third consumer, and neither its name nor its gate knows
 

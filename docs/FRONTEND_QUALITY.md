@@ -93,8 +93,13 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
   as if they were one measurement. Gzip level was checked and is not the cause
   (level 9 moves these assets ~0.2%), and `pnpm-lock.yaml` is untouched between
   the two dates, so the vendor chunks did not change. **Quote bytes here**, and
-  compare like with like or not at all.
-- **`jspdf` (125.57 kB gzip) and `html2canvas` (45.51 kB) are confirmed OUTSIDE
+  compare like with like or not at all. _The two figures in the next bullet were
+  KiB under a `kB` label until 2026-09-12 — this rule failing two lines below
+  itself. `check:bundle-size`'s own output does the same (it prints
+  `395.31 kB` for 404,797 bytes, i.e. bytes/1024), which is the third convention
+  in circulation and the one a reader trusts most; it is `docs/TECH_DEBT.md`
+  #292's units paragraph arriving inside the gate._
+- **`jspdf` (128,584 bytes gzip) and `html2canvas` (46,603) are confirmed OUTSIDE
   the entry graph** — verified from Rollup's own static/dynamic import lists
   rather than inferred from chunk names, which cannot say which kind an import
   was. They cost the first paint nothing.
