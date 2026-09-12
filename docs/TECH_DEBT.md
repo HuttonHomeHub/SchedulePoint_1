@@ -5275,6 +5275,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                           | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | --- | ----------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 285 | The command deck wears cards inside a band the foot wears bare                                        | 2026-09-12 | **Found already built, by reading the code its own remedy named.** Two of its three steps shipped in the console epic: M1 deleted the deck's group box — the `border` plus `px-2 py-1.5` — and the `chrome` variant with it, and M7 built the `inset-y-1/5` group seam. So `Deck.tsx` no longer calls `toolbarCardVariants` at all and the selection bar is its only remaining consumer (`toolbar-styles.ts:110`, whose docblock records both moves). The third step was **reversed**: the product-owner decision this row recorded was "bare, captions kept", and M6 deleted the captions after re-measuring — the row's own reflow finding does not survive the caption-**leading** row M1 introduced (`Deck.tsx:316-320`); the naming residual that deletion left was itself filed and closed as #288. The 28 px this row measured is the same figure `toolbar-styles.ts`'s own docblock records M1 recovering — 14 px per deck line, across two lines — so the prize was collected by somebody else and nobody came back to the row. (Not re-measured here: the claim is read out of the code's own record rather than asserted fresh, and closing the row needs no new number.) That is ADR-0114's lesson exactly — a deferral whose reason has lapsed reads exactly like one whose reason still holds — and the row was audit-proof against every instrument here, because its `deferred` status and named trigger are both correct statements about a row whose subject no longer exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 297 | A stale `focusedKey` can leave the Project Explorer with no tab stop at all                           | 2026-09-12 | **Reproduced before it was fixed, by a cheaper route than the row proposed.** The row suggested deleting a focused row from a second session; a synthetic `loading` row is focusable and keyed `${parentId}:loading`, so arrowing onto a placeholder and letting its fetch resolve is enough — no peer, no second session. Measured **0 elements with `tabIndex=0`**, verified red first, now 1. Fix: resolve `focusedKey` against `rows` before the `??` chain can short-circuit on it (`HierarchyTree.tsx`). WCAG 2.2 §2.1.1, confirmed independently by the accessibility review rather than asserted. **The row's own mechanism split does not survive that route**: it says "nothing is removed under the focus ring", and the placeholder IS removed under it — so one sequence exhibits both this and the focus gap now filed as #305.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 301 | Every CI round trip waits 46 minutes on one sequential end-to-end job                                 | 2026-09-12 | **Closed by building the remedy** (`docs/specs/ci-sharding/`, ADR-0138). The measurement, the scored projections and the corrected ceiling are in [`docs/specs/ci-sharding/m4-measurement.md`](specs/ci-sharding/m4-measurement.md) — follow that, not this line. Headline: **40–47 min → 12.2–12.3 min** (n = 2), and the critical path is now `quality`, a job the epic never touched. The row is deleted rather than kept-and-marked because the register's own rule says so and `check:debt-status` A2 has no `closed` in its vocabulary — the approved plan said to keep it, and the plan was wrong about this file (recorded in that document's §6).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 304 | A superseded check run keeps its failure, so §19.9's rule refuses a PR that is fine                   | 2026-09-12 | **Filed and closed within two hours, on evidence from the PR that filed it.** PR #514's own 102-character title failed `pr-title.yml`; the corrected title added a passing run beside the failed one on the unchanged head, so "every check is success" was false for a mergeable PR. `CLAUDE.md` §19.9 now says to dedupe by check-run name and keep the most recently started; `pr-title.yml` gains it as a third blind spot, and the comment claiming `edited` "clears the check" is corrected — it does not clear it, it adds a green run beside it. Matters because §8 leaves `main` unprotected, so §19.9 is the only merge gate there is.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -6939,106 +6940,6 @@ gate that ADR-0127 P3's "N" clause depends on, which is a behaviour change weari
 Related: #75 (whose item 5(b)/(d) argument rests on this column), #261 (the other parameter that made
 readings incomparable), ADR-0128 (the decision the column serves).
 
-### 285. The command deck wears cards inside a band the foot wears bare
-
-**Status:** deferred (on a trigger) · **Raised:** 2026-09-10 (the deck surface studies) · **Size:** S ·
-**Owner:** web
-
-> **Decided and NOT built — product-owner decision, 2026-09-10: bare, captions kept, a hairline
-> between groups.** Captured here on the standing instruction that proposed work is never lost.
-> **Trigger:** `Deck.tsx` or `toolbar-styles.ts` is next touched for any reason, or the product owner
-> asks. It is one variant switch and one class, so it is cheaper alongside something else than as
-> its own errand.
-
-**The complaint** was that the top of the plan workspace "doesn't quite belong" while the foot bar
-does. **The first diagnosis put to the product owner was wrong, and is recorded before the right
-one.** It framed the choice as _dark band vs light deck_ — and the deck is already navy, inside the
-same `<Surface tone="chrome">` as the header and the foot (`chrome-band.tsx:74`; the deck portals
-into that band's `rows` slot). I misread the product owner's screenshot, then two of my own
-photographs, in the same direction; four DOM and CSS reads disagreed with my eyes and I trusted my
-eyes. **Bytes settled it**: in the harness's own `plan-workspace.png` the gap between the deck's cards
-is RGB (20, 33, 61), identical to the foot bar, and a card interior is (31, 44, 70) — the 5 % tint.
-That is ADR-0076 Class 3 inside a choice put to somebody else, the #204 shape, and the rule it leaves
-is short: **a colour read off a downscaled full-page render is not evidence; sample the pixel.**
-
-**What actually differs, measured.** The deck's four groups are tinted (`bg-foreground/5`),
-1 px-bordered (`border-border/60`), rounded (`rounded-md`) boxes with `px-2 py-1.5` — the
-`toolbarCardVariants` **`boxed`** variant (`toolbar-styles.ts:119-150`). The foot's selection bar uses
-the same CVA's **`bare`** variant — no box at all — and the foot's facts sit bare on the band. So the
-deck is the only chrome surface in the shell wearing boxes, and header + deck form a **180 px navy
-slab** at both 1920 and 1646 (header 40 + deck 108) against a ~50 px strip below. Boxes inside a
-band, and a lot of band: that is the mismatch.
-
-**Four studies, rendered over the harness's own programme with CSS injected after paint — the tree
-was never touched — and measured rather than described:**
-
-| variant                 | band height | canvas returned | what the picture shows                                           |
-| ----------------------- | ----------- | --------------- | ---------------------------------------------------------------- |
-| baseline (shipped)      | 180 px      | —               | four tinted, bordered cards on navy                              |
-| **bare, captions kept** | **152 px**  | **+28 px**      | one continuous band; `FIND` / `PLAN` lose their leading boundary |
-| bare, no captions       | 152 px      | +28 px          | **reflows** — `Add·Link·Select·Arrange` jump up beside search    |
-| cards, no captions      | 180 px      | 0 px            | the same reflow, inside boxes                                    |
-
-Identical at 1920 and 1646. The 28 px is the cards' padding and borders across two rows, verified
-in bytes (card interior 31,44,70 → 20,33,61 in the bare study).
-
-**The caption finding is the one the heights table cannot show.** Removing the captions returns
-0 px — they sit beside their controls, not above them — but their **width** is what holds two
-groups per row: without it `flex-wrap` re-pairs "look" (`VIEW`+`FIND`) with "do"
-(`AUTHOR`+`PLAN`), authoring commands migrate onto the search line, and `PLAN` sits alone on row
-two. So "decide captions from the studies" resolved to **keep them**, and the bare study's one
-weakness — `FIND` and `PLAN` butting against the previous group with nothing but the caption to mark
-the seam — is answered by a hairline, not by boxes.
-
-**The change, when built.**
-
-1. `apps/web/src/components/ui/toolbar/Deck.tsx` — the group wrapper's
-   `className={toolbarCardVariants()}` becomes `toolbarCardVariants({ chrome: 'bare' })`. The
-   variant, its docblock and its second consumer already exist; nothing is added to the primitive.
-2. A hairline between consecutive groups, in the section idiom the deck already uses
-   (`Deck.tsx:268`, `border-border/50 ml-1 border-l pl-2`), applied to each group after the first.
-   Decorative — WCAG 1.4.11-exempt — so no contrast pair moves.
-3. Re-run: `e2e-workspace-fit` (the §2.5.8 sweep; controls keep `min-h-(--control-h)` because the
-   padding removed is the card's, outside them — verify, do not assume), `dock.spec.ts` (the foot's
-   41 px equality is untouched by construction and should stay so), **the base journey** (the ADR-0096
-   rule: change a screen, run it), and `shoot.mjs --only plan-workspace` for parity. Run the
-   accessibility reviewer over the deck render: no keyboard or ARIA contract changes, so §19.13 does
-   not fire, but it is a shared primitive's rendering and the review is cheap.
-4. A dated `docs/DECISIONS.md` entry, because ADR-0114 M6's measurement table recorded the _card_
-   choice (the selection bar declining the deck's geometry); this is the same argument run the other
-   way — the deck adopting the bar's bareness — and it should be findable from there.
-
-**ADR-0105:** no new user-facing entry point, no Playwright config or CI step, no change to a
-component's public contract (an existing variant is selected), no shared gate, no schema. A register
-row is the right instrument; the decision entry in step 4 is the record.
-
-**To re-render the studies** (no script is committed — the seed lives in `shoot.mjs` and a copy would
-drift): run `node apps/web/scripts/shoot.mjs --only plan-workspace`, then apply these to the page
-(DevTools or an `after` hook), where `D` is `[role="toolbar"][aria-label="Plan commands"]`:
-
-```css
-/* bare */
-D > [role='group'] {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-}
-/* no captions */
-D > [role='group'] > span[aria-hidden='true'] {
-  display: none;
-}
-/* group hairline */
-D > [role='group'] + [role='group'] {
-  border-left: 1px solid var(--border);
-  padding-left: 0.5rem;
-}
-```
-
-Related: ADR-0109 D1 (the cards were inherited from the old Flask app with the wrap), ADR-0114 M6
-(the measurement that made the selection bar bare), ADR-0115 (the foot row joining the chrome scope
-— this is the same argument one row up), `toolbar-styles.ts` (`toolbarCardVariants`, both variants).
-
 ### 289. NestJS 12 breaks the API e2e bootstrap, and Dependabot titles it as routine
 
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (driving dependabot #482) ·
@@ -7815,7 +7716,7 @@ classes that as the non-computable third kind.
 
 ### 303. The retention sweep logs an ERROR on every API e2e run, and it is the exact signal the alert watches
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (seen in an overnight `scripts/e2e-local.sh api` run) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-11 (seen in an overnight `scripts/e2e-local.sh api` run) · **Size:** M · **Owner:** api
 
 A green API end-to-end run (635 passed, 1 skipped) also emits one of these — an `ERROR` from the
 runner and a `WARN` from the service, one failure reported at two levels:
@@ -7901,3 +7802,45 @@ unawaited on purpose.
 The **cheap** alternative — skipping the boot sweep under test — is explicitly **not** recommended:
 it would silence the symptom by removing the only coverage the boot path has, and this repository
 has an ADR about exactly that shape of fix.
+
+> **The remedy named above is the WRONG HOOK, established 2026-09-12 by reading the installed
+> `@nestjs/core@11.1.29` rather than by trying it.** `onApplicationShutdown` is the **last** hook
+> Nest calls, and `PrismaService.$disconnect()` runs in the **first**
+> (`prisma.service.ts:51-52`, `onModuleDestroy`). `close()` is literally
+> `callDestroyHook()` → `callBeforeShutdownHook()` → `dispose()` → `callShutdownHook()`
+> (`nest-application-context.js:119-125`; the signal path at
+> `nest-application-context.js:201-204` is the same order), so a
+> sweep awaited in `onApplicationShutdown` is awaited **after** the engine it needs has gone. The
+> row's own diagnosis is right and its prescription cannot work.
+>
+> **And it would have looked as though it worked**, which is why this is worth a paragraph rather
+> than a one-word edit. The defect is a race: a developer who implemented the stated fix would see
+> the ERROR disappear from some runs — the sweep usually finishes inside the extra time an awaited
+> hook chain buys, whether or not anything is awaiting it — and would reasonably call it closed.
+>
+> **`onModuleDestroy` is the only hook that precedes the disconnect, and there the order is an
+> implementation detail rather than a contract.** `callDestroyHook` takes the distance-sorted module
+> list and **reverses** it (`nest-application-context.js:252-258`), so among two modules both
+> imported directly by `AppModule` the later import destroys first — `OperationalModule`
+> (`app.module.ts:108`) before `PrismaModule` (`:105`). That ordering is what a correct fix would
+> rest on, and nothing documents it or watches it.
+>
+> **The cheaper variant — a `stopping` flag, so a failure during shutdown is logged as abandoned
+> rather than failed — does not work either, and the reason is the same ordering.** If
+> `PrismaModule` destroyed first, the in-flight query rejects during its `await $disconnect()` and
+> `sweepNow`'s catch runs **before** our hook sets the flag. A flag set at shutdown cannot classify
+> a failure that shutdown has already caused.
+>
+> **So the size moves S → M and the remedy is specified rather than recommended.** Either the fix
+> depends on that ordering — in which case the dependency is registered (done: both citations above
+> are in `scripts/dependency-claims.json`, so a `@nestjs/core` bump fails `check:claims`, which is
+> exactly when it needs re-reading) and it needs an observer, because its failure mode is a log line
+> that nothing asserts on — or it must not depend on hook ordering at all, which means the sweep
+> itself becomes cancellable and the runner learns to stop between tables. `#289` is the reason this
+> is not academic: a NestJS 12 bump is already queued, and it is the one change that would move the
+> order back without failing anything.
+>
+> **What a gate would need**, since today's evidence is a human reading a 600-second log: an API e2e
+> case that boots an app, closes it, and asserts `retention.sweep_failed` was not emitted — which
+> needs the suite to capture Pino output, and nothing in it does yet. That is the whole reason this
+> stays a row: the fix is now cheap and **proving** it is not.
