@@ -3,12 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HierarchyTree } from './HierarchyTree';
 import {
   NavigatorCrudProvider,
   type AfterDeleteSignal,
   type NavigatorCrudApi,
 } from '../lib/navigator-crud-context';
+
+import { HierarchyTree } from './HierarchyTree';
 
 // The virtualizer measures a scroll element, which jsdom reports as 0×0 (so it would
 // window every row out). It is battle-tested and exercised end-to-end by the Playwright
