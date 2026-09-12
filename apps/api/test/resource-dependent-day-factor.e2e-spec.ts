@@ -226,4 +226,133 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     );
     expect(byName.get('Crane lift')?.earlyFinish).toBe(byName.get('Task twin')?.earlyFinish);
   });
+
+  /**
+   * **M0-T2 — duration days and float days are not on the same day length, and a driver is not
+   * required for it.**
+   *
+   * `schedule.repository.ts:756-759` states the property this pins, in its own comment: the float
+   * columns are converted _"on the activity's OWN calendar … Same factor as its duration, so '3 days
+   * of work with 1 day of float' is one consistent statement."_ Measured, it is not one statement.
+   *
+   * ## What was observed, at the storage layer
+   *
+   * With the plan on an 8 h calendar (`hours_per_day_minutes = 480`) and `Task twin` an ORDINARY
+   * task with no resource, no driver and no calendar of its own:
+   *
+   * | column                  | value  |
+   * | ----------------------- | ------ |
+   * | `duration_minutes`      | 2400   |
+   * | `total_float`           | **2**  |
+   * | plan `hours_per_day`    | 480    |
+   * | early finish → late finish | 2026-01-05 → 2026-01-10 (**5 days**) |
+   *
+   * `durationDays` reads back as **5** (2400 / 480). The slack window is **5 days**. So on the
+   * activity's own 480-minute day the float should read 5 and reads 2; 2 is what 1440 gives
+   * (2400 / 1440 = 1.67, rounded). **The pair "5 days of duration, 2 days of float" is not
+   * expressible on any single day length** — on 480 the float is 5, on 1440 the duration is 1.67.
+   *
+   * ## What this does NOT establish, stated rather than implied
+   *
+   * It does not identify the mechanism. Two readings fit the numbers: the float minutes are 2,400
+   * and were divided by 1440, or the engine measured the slack on a 24-hour axis and divided
+   * coherently by 1440 — in which case the field is correct in its own terms and simply reported in
+   * a different unit from its neighbour. **The observable defect is the same either way** (one DTO,
+   * two day lengths), and which one it is decides M1's shape, so it is left to M1 rather than
+   * guessed here.
+   *
+   * ## Why it widens `docs/TECH_DEBT.md` #86
+   *
+   * That row, and this spec, attribute the duration/float disagreement to the **driving resource's**
+   * calendar — `schedule.service.ts:428` passing the driver-aware `graph.calIdByActivity`. `Task
+   * twin` has no assignment at all, so whatever is happening here needs no driver. #86's scope is
+   * wider than it says.
+   *
+   * `Crane lift` is included because it is the case the spec predicts, and its float is
+   * **factor-invariant in this fixture** (8 days of slack reads 8 on both 480 and 1440), so it
+   * cannot discriminate — which is precisely why the plain task is the assertion that matters. Left
+   * in and labelled, rather than dropped, so a later reader does not re-derive it.
+   */
+  it('reports duration days and float days on different day lengths — with no resource involved', async () => {
+    const actor = await adminWithOrg();
+    const eightHourDay = await calendar(actor, 'Crew (8h)', 8);
+    const roundTheClock = await calendar(actor, 'Crane (24h)', 24);
+    const planId = await planOn(actor, eightHourDay);
+
+    const make = async (name: string, days: number, type?: string): Promise<string> =>
+      (
+        await actor.agent
+          .post(`${org}/plans/${planId}/activities`)
+          .send({ name, durationDays: days, ...(type ? { type } : {}) })
+          .expect(201)
+      ).body.data.id as string;
+
+    // `Long pole` sets the project finish, so everything else has slack. Without it the floats are
+    // all zero and every assertion below is vacuously satisfied (the ADR-0093 shape).
+    const longPole = await make('Long pole', 10);
+    const task = await make('Task twin', 5);
+    const driven = await make('Crane lift', 5, 'RESOURCE_DEPENDENT');
+    const finish = await make('Finish', 1);
+
+    const crane = await actor.agent
+      .post(`${org}/resources`)
+      .send({ name: 'Crane', kind: 'EQUIPMENT', calendarId: roundTheClock })
+      .expect(201);
+    await actor.agent
+      .post(`${org}/activities/${driven}/assignments`)
+      .send({ resourceId: crane.body.data.id, budgetedUnits: 1, isDriving: true })
+      .expect(201);
+
+    for (const predecessorId of [longPole, task, driven]) {
+      await actor.agent
+        .post(`${org}/plans/${planId}/dependencies`)
+        .send({ predecessorId, successorId: finish, type: 'FS' })
+        .expect(201);
+    }
+
+    await actor.agent.post(`${org}/plans/${planId}/schedule/recalculate`).expect(200);
+
+    const list = await actor.agent.get(`${org}/plans/${planId}/activities`).expect(200);
+    const byName = new Map(
+      (
+        list.body.data as {
+          name: string;
+          durationDays: number;
+          durationMinutes: number;
+          totalFloat: number | null;
+          earlyFinish: string | null;
+          lateFinish: string | null;
+        }[]
+      ).map((a) => [a.name, a]),
+    );
+
+    const twin = byName.get('Task twin');
+    // **Float first, and not zero** — the plan's own stated risk for this task. A zero-float
+    // fixture makes everything below true for the wrong reason.
+    expect(twin?.totalFloat).toBeGreaterThan(0);
+
+    // The slack window is five days of an all-days calendar: 5 Jan to 10 Jan.
+    expect(twin?.earlyFinish).toBe('2026-01-05');
+    expect(twin?.lateFinish).toBe('2026-01-10');
+
+    // Duration is converted on the plan's 8 h day: 2,400 / 480 = 5.
+    expect(twin?.durationMinutes).toBe(2400);
+    expect(twin?.durationDays).toBe(5);
+
+    // And the float over that same five-day window reads 2, which 480 cannot produce.
+    // **Characterisation, not desired behaviour**: on the activity's own day length this is 5, and
+    // that is the number M1/M2 have to change.
+    expect(twin?.totalFloat).toBe(2);
+
+    // The incoherence, as one statement a reader can check: the float, taken at the duration's own
+    // factor, does not describe the window the dates show.
+    const twinFloatMinutesAtOwnFactor = (twin?.totalFloat ?? 0) * 480;
+    expect(twinFloatMinutesAtOwnFactor).toBe(960);
+    expect(twinFloatMinutesAtOwnFactor).not.toBe(2400); // the five-day window at 480
+
+    // The driven activity, for completeness and labelled as non-discriminating: 8 days of slack
+    // reads 8 on either factor, so this pins the spec's predicted case without proving it.
+    expect(byName.get('Crane lift')?.totalFloat).toBe(8);
+    expect(byName.get('Crane lift')?.durationDays).toBe(5);
+  });
 });

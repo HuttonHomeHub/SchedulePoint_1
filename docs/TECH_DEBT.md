@@ -1227,6 +1227,36 @@ expected to take.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
+> **M0-T2 TAKEN 2026-09-12, and it WIDENS this row rather than confirming it. The driver is not
+> required for the duration/float disagreement.**
+>
+> Measured at the storage layer through the public REST API
+> (`docs/specs/resource-dependent-day-factor/m0-measurements.md`), with the plan on an 8 h calendar
+> and the subject an **ordinary task with no resource, no driver and no calendar of its own**:
+> `duration_minutes` **2400**, plan `hours_per_day_minutes` **480**, slack window **5 days**
+> (2026-01-05 → 2026-01-10) — and `total_float` **2**. `durationDays` reads back 5 (2400 / 480), so
+> on the activity's own day length the float should read 5; 2 is what 1440 produces. **"5 days of
+> duration, 2 days of float" is not expressible on any single day length**, which is precisely what
+> `schedule.repository.ts:756-759` says cannot happen, in its own comment.
+>
+> This row and its spec both attribute the disagreement to the **driving resource's** calendar
+> (`schedule.service.ts:428` passing the driver-aware `graph.calIdByActivity`). That subject has no
+> assignment at all. **So the remedy cannot be only "teach the driver-aware rule to the other
+> sites"**, and the epic's shape is worth reconsidering before M1 rather than after.
+>
+> The mechanism is deliberately NOT claimed: two readings fit the numbers (float minutes of 2,400
+> divided by 1440, or a slack measured on a 24-hour axis and divided coherently by 1440 — correct in
+> its own terms and merely reported in a different unit from its neighbour). The observable defect is
+> identical either way; the discriminator is which factor `resolveDayFactors` received, which is
+> M1's first question.
+>
+> Two further notes. **The `RESOURCE_DEPENDENT` case cannot discriminate in that fixture** — 8 days
+> of slack reads 8 on both 480 and 1440 — so the plain task is the assertion that carries the weight,
+> the opposite of what the plan expected. And **M0-T1 was already built** (`ec1227a8`, 2026-09-10)
+> when the plan was written asking for it; re-run 2026-09-12, still green, so the write-path defect
+> is still live. M0-T3 (the deployed-row count) and M0-T4 (the query cost) remain owed and are
+> explicitly not takeable from a container — see the measurements file for why.
+
 **Status:** open · **Verified:** 2026-09-10 · **Severity RAISED — it writes** (see the 2026-09-10
 note; the "display only" framing below is false) · **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
 inherited it rather than introducing it.
