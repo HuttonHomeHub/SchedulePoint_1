@@ -449,6 +449,12 @@ discriminators. Each becomes a spec/plan before build:
   inbox. It is **inert rather than weak** — the day a second planner joins it becomes one of the more
   valuable items here. Deliberately the same trigger as ADR-0085's privacy operations, because both
   exist to serve people who are not the person who built the product.
+  **Its three critical questions were answered on 2026-09-12** and the answers are recorded in the
+  spec: no subscription model (recipients are write-permission holders minus the actor), and inbox
+  first with mail as a later milestone behind preferences. **The trigger has still not fired** — but
+  asked whether to build ahead of it or invite first, the product owner chose to **invite the second
+  person first**, so the event is now expected rather than hypothetical, and it releases ADR-0085
+  with it.
   _(The epic was opened on the pen hand-off and that premise was **disproved** while specifying it:
   a peer takes the pen from an absent holder on inactivity alone, without needing an answer. See
   ADR-0137 D4.)_

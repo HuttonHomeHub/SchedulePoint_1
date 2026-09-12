@@ -161,6 +161,27 @@ See the user-flow diagram in §4.
 
 ### Open questions
 
+**ANSWERED by the product owner, 2026-09-12. The three CRITICAL questions below are kept as written
+rather than rewritten, because the reasoning each carries is what the answer was chosen against.**
+
+| Question                                                | Answer                                                                                                                                                                | What it settles                                                                                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **CQ-1** — the pen hand-off gets nothing from this epic | not put; ADR-0137 D4 had already **disproved the premise** (a peer takes the pen from an absent holder on inactivity alone, so no faster channel changes the outcome) | nothing owed; the residual background-tab case stays filed                                                                        |
+| **CQ-2** — who receives a plan-governance notification  | **(a) members holding a write permission, minus the actor**                                                                                                           | **no subscription model.** Viewer excluded; the audience is the people who author, because the event re-interprets authored work  |
+| **CQ-3** — does mail ship in the first release          | **(a) inbox first; mail is M5, behind preferences at M4**                                                                                                             | `MailEvent` records failures only, so the product cannot honestly claim a message was sent until a durable row exists to point at |
+
+**And the ordering question, which was not in this spec and outranks all three.** ADR-0137 D1 defers
+the build on a **checkable fact** — a second person holding a write permission in any organisation.
+"Prepare for it" is not that fact: with one member the CQ-2 recipient set is **empty**, so the
+feature would emit zero rows, render an empty inbox and be indistinguishable from its own absence.
+Put to the product owner as an ordering choice, the answer was **invite the second person first**.
+
+So **the trigger has still not fired**, and this epic does not start until it does — but the event
+that fires it is now expected rather than hypothetical, and it fires **ADR-0085 (privacy operations)
+at the same moment**, which is exactly why D1 chose the same trigger for both.
+
+_(The original text follows unchanged.)_
+
 Three are **CRITICAL** — their answers change the design or the scope. Everything else has a stated
 default and is not blocking.
 
