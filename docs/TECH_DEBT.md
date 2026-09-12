@@ -1889,16 +1889,31 @@ it returns the **whole rest of the line** including the other fields, which ever
 today parsing past by accident.
 
 `check-debt-status.mjs` reads exactly two fields through `fieldValue`: `Status` and `Verified`.
-`Status` is written at column 0 on all 66 detailed rows and is read correctly. `Verified` is written
+`Status` is written at column 0 on every detailed row and is read correctly. `Verified` is written
 **only inline**, in the header block's `**Status:** … · **Verified:** … · **Size:** …` form — and
-`fieldValue` anchors on `^`, so it returns `null` for every one of the six rows that carry a date.
+`fieldValue` anchors on `^`, so it returns `null` for every row that carries a date.
 Of the two fields the gate reads, one is 100% readable and the other is 0% readable.
 
-So **A8 has never been able to fire**, and the contradiction it names is in the register right now:
-`#117` reads `**Status:** unverified · **Verified:** 2026-09-01`, which is precisely the "one of the
-two is wrong" case A8 was written to refuse. Measured rather than reasoned about — a script over the
-real document reports `fieldValue` seeing `Verified` on **0** rows, and a whole-line scan finding it
-on **6**, one of them `unverified`.
+So **A8 has never been able to fire.** Measured rather than reasoned about — a script over the real
+document reports `fieldValue` seeing `Verified` on **0** rows and a whole-line scan finding it on
+many.
+
+> **Re-derived 2026-09-12, and the finding stands while every figure and the exhibit have moved.**
+> `fieldValue` now reads `Status` on **102 of 102** rows and `Verified` on **0 of 102**, with **96**
+> rows carrying a `**Verified:**` date — against this row's original "66 detailed rows" and "six
+> rows that carry a date". The ratio is the claim and it is unchanged at sixteen times the
+> population; the absolute numbers are removed above rather than restated, because they are what
+> went stale, and `check:counts` does not gate this row.
+>
+> **The live exhibit is gone, and how it went is the interesting part.** This row cited `#117`
+> reading `**Status:** unverified · **Verified:** 2026-09-01` as the contradiction "in the register
+> right now". `#117` now reads `**Status:** deferred · **Verified:** 2026-09-11`: somebody corrected
+> it by hand in an ordinary sweep. So the register healed the instance while the gate that exists to
+> refuse it still cannot fire — which is the weaker half of ADR-0058's own argument showing up as
+> evidence. A reader who checked this row by grepping for `unverified` today would find only prose
+> quoting it (three sites, all of them rows _about_ this contradiction) and could reasonably conclude
+> the row was wrong, or that A8 works. **Neither is true**, and that is why the exhibit is recorded
+> as withdrawn rather than deleted.
 
 **Two assertions in the same file disagree about the document's shape, and the one that disagrees is
 the silent one.** A2 splits the status value on `[\s·—|]` before checking the vocabulary, so it was
