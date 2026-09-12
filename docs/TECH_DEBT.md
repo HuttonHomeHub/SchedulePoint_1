@@ -5165,6 +5165,20 @@ suite in `apps/api/test/` that touches `ThrottlerStorage`, and both suites this 
 implication — `share.e2e-spec.ts` and `share-guest.e2e-spec.ts` — still have zero references. The
 trap is set exactly where the row says, and one file is still inoculated against it.
 
+> **Half taken, 2026-09-11 overnight.** `share-guest.e2e-spec.ts` is now inoculated the same way —
+> it is the suite this row named by implication and the one that matters, because
+> `ShareGuestController` carries its own tighter `@Throttle(GUEST_THROTTLE)` (ADR-0051 F-M3) rather
+> than the global bound. **Counted rather than assumed before acting**: that suite runs four tests
+> against a limit of thirty, so it is nowhere near the ceiling and this is insurance, written as
+> such in the file. The product bound is untouched and nothing in `apps/api/test` asserts a 429.
+> `scripts/e2e-local.sh api` after: 635 passed, 1 skipped.
+>
+> **What is left is the half this row actually argues for, and it is a shared-infrastructure
+> change**: nothing DETECTS the condition, so the next suite inherits the trap and pays the three
+> wrong diagnoses again. Both candidate answers — a shared e2e setup, or one owned 429 assertion —
+> change how every API e2e suite is set up, which is an ADR-0105 trigger and wants a spec rather
+> than a quiet edit inside an overnight batch.
+
 **Why it is still a row.** The fix is one file's `beforeEach`, and the same trap is set in every
 other e2e suite that hits a throttled route — `share`, and any later one. Nothing detects the
 condition: a suite silently loses headroom as it grows and then fails somewhere else. Two candidate
@@ -7481,17 +7495,24 @@ suite. A reader who sharded "as far as it goes" would spend eight runners to buy
 > suite much stronger than "different mechanism": splitting it buys **zero** whole-CI wall clock
 > until `quality` moves, and the two measured 682 s and 690 s, effectively tied.
 >
-> **Three samples now, and the heading's number is the outlier.** The same job measured
-> **46 m 32 s** (the reference run this row is built on), **40 m 10 s** (PR #510) and **40 m 15 s**
-> (PR #512) — the last of which _added_ two tests that deliberately wait a real 45-second grace
-> window, so it should have been the slowest and was not. Two of three cluster within five seconds
-> of each other, which makes 46 m 32 s the reading that wants explaining rather than the one to
-> quote. **This row's own title says 46 minutes and is left as written**, because the heading is
-> what the row was filed under and rewriting it would break inbound references — but a reader
-> taking a number from here should take 40 minutes, and a reader making a decision should take
-> none of them. One sample is not a distribution and three barely are; the spec therefore asserts
-> no wall-clock bar anywhere and compares the slowest e2e job against `quality` **within the same
-> run**, which variance cannot invalidate.
+> **Four samples, and the third-sample claim was wrong.** The block above read, for one commit,
+> "three samples now, and the heading's number is the outlier" — that 46 m 32 s wanted explaining
+> because 40 m 10 s (PR #510) and 40 m 15 s (PR #512) clustered within five seconds. **The very
+> next CI run disproved it.** PR #513 — which _is_ the spec making that claim, and changes no test,
+> no workflow and no application code — ran the same job in **47 m 00 s** (run `34654774419`, job
+> `103444663877`, 22:36:58Z → 23:23:58Z), the slowest of the four. So the samples are **46 m 32 s,
+> 40 m 10 s, 40 m 15 s, 47 m 00 s**: a 40–47 minute spread with no outlier and no cluster worth
+> naming, **14.5 %** of the largest.
+>
+> The wrong version is recorded rather than replaced because of what produced it: three points, two
+> of which happened to agree, read as a distribution with an anomaly — and the shape of the error is
+> that a **docs-only** change was the slowest run measured, so the variance cannot be attributed to
+> what a PR contains. **This row's own title says 46 minutes and is left as written**, because the
+> heading is what the row was filed under and rewriting it would break inbound references. The
+> instruction to a reader is unchanged and is now better supported: **take no number from here for a
+> decision.** The spec asserts no wall-clock bar anywhere and compares the slowest e2e job against
+> `quality` **within the same run**, which variance cannot invalidate — that design choice is what
+> survived its own author being wrong about the distribution twice.
 
 **Not built here, deliberately.** Editing the CI workflow is a shared-gate change and therefore
 an ADR-0105 trigger: it needs a spec, not a register row. The row exists so the decision is taken
@@ -7537,3 +7558,117 @@ and a `**Verified:**` date are mutually exclusive; every other status requires o
 **Blind spot to state up front:** this would catch the contradiction and not the lie. A row whose
 author writes a date without checking anything is invisible to any parser, which is why ADR-0076
 classes that as the non-computable third kind.
+
+### 303. The retention sweep logs an ERROR on every API e2e run, and it is the exact signal the alert watches
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (seen in an overnight `scripts/e2e-local.sh api` run) · **Size:** S · **Owner:** api
+
+A green API end-to-end run (635 passed, 1 skipped) also emits one of these — an `ERROR` from the
+runner and a `WARN` from the service, one failure reported at two levels:
+
+```
+ERROR: a retention sweep failed; the next run will retry it
+  {"context":"RetentionSweepRunner","event":"retention.sweep_failed","table":"perf_probe_results"}
+  err: PrismaClientUnknownRequestError — "Invalid `prisma.$executeRaw()` invocation: Response from
+  the Engine was empty"
+```
+
+**The cause is the unawaited boot sweep racing the test's own teardown**, and it is worth reading
+how this row got there, because the first version of it was wrong in a way that a second run
+disproved in seconds.
+
+That version said "**four** of these" and attributed them to "the hourly timer firing during the
+suite". Both are wrong:
+
+- **The count.** A second run (2026-09-11, 584 s, all green) emitted **one** failure, not four — the
+  ERROR and the WARN above are the same failure logged by the runner and then by the service. The
+  original four was a count of log _lines_ matching loosely, not of failures.
+- **The trigger cannot be the timer.** `retentionSweepIntervalMinutes` is **60** and the suite runs
+  for **10**, so the interval has never once fired inside an API e2e run. It is also `unref()`d
+  (`retention-sweep.service.ts:113`), which is the opposite of what a timer holding the process open
+  would look like.
+
+What actually happens is on the line the first version never opened:
+`onApplicationBootstrap` ends with **`void this.sweepNow()`** (`:118`) — deliberately unawaited, with
+a comment saying why (a large backlog must not delay readiness). So **every app boot starts a sweep
+nothing waits for.** A test that boots an app and closes it promptly tears the Prisma engine down
+while that sweep is still walking `RETENTION_TABLES`; it clears `csp_reports` and `mail_events` and
+dies on `perf_probe_results` — the third and last, every time, which is the table evidence the first
+version read correctly and then explained wrongly.
+
+`onApplicationShutdown` (`:121-123`) clears the interval and **cannot un-start a sweep already in
+flight**, which is why the hook existing does not prevent this.
+
+**It is a race, not a certainty.** The same run logged two boots that reach the sweep: the first
+completed all three tables cleanly (`retention.swept`, 0 deleted, 8/2/… ms), the second failed. So
+"on every run" in this row's own heading is an overstatement carried from the first version; the
+heading is left as filed so inbound references resolve, and the accurate claim is **most runs, one
+failure, always the last table**.
+
+**Why it is worth a row rather than a shrug.** `retention.sweep_failed` is not an arbitrary log
+line: it is the **exact event ADR-0087 M4 built an alert on**, after three consecutive occurrences,
+chosen because "one is not news — the next tick is the retry". A developer who sees it four times in
+every green run learns to read it as noise, and that is the one reading that makes the alert
+worthless the day it fires for real. The alert is not armed on any host today (`#100`), so nothing
+is currently mis-firing; this is about the signal's credibility, not a live page.
+
+**Not fixed here.** The discriminator this row originally owed is now answered — it is the boot
+sweep, not the timer — so the remedy is no longer a guess: hold the in-flight sweep's promise and
+await it in `onApplicationShutdown`, which is a real improvement in production too, since the same
+race exists whenever a container is recreated mid-sweep (ADR-0047 recreates them unattended). Not
+taken here because it is a change to a service **every** API e2e suite boots, which is the
+shared-infrastructure shape `#268` records deferring for exactly that reason, and because awaiting
+on shutdown needs its own thought about a sweep that is genuinely slow — the boot path was made
+unawaited on purpose.
+
+The **cheap** alternative — skipping the boot sweep under test — is explicitly **not** recommended:
+it would silence the symptom by removing the only coverage the boot path has, and this repository
+has an ADR about exactly that shape of fix.
+
+### 304. A superseded check run keeps its failure, so CLAUDE.md §19.9's rule refuses a PR that is fine
+
+**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (hit while merging PR #514) · **Size:** S · **Owner:** repo
+
+CLAUDE.md §19.9 is this repository's **only** merge gate — `main` carries no branch protection by
+product-owner decision (§8) — and it says to read the check runs for the PR's current head and
+"confirm **every one** is `completed` with `conclusion: success`". Taken literally that is wrong,
+and PR #514 is the worked example.
+
+Its title was 102 characters. `pr-title.yml` failed it correctly at 23:50:36Z. The title was edited
+at ~23:51:20Z, the workflow re-ran on `edited` as designed, and passed at 23:51:25Z. The head SHA
+never changed. `GET /commits/{sha}/check-runs` then returns **six** runs for five checks:
+
+```
+23:50:16Z  completed  failure   run=34659532801  Check the PR title is a Conventional Commit
+23:51:25Z  completed  success   run=34659600215  Check the PR title is a Conventional Commit
+```
+
+**Both persist, and the older one keeps its failure for ever.** `pr-title.yml` does carry a
+`concurrency` group with `cancel-in-progress: true`, which is why this is not a workflow defect:
+cancellation applies to runs that are **in progress**, and this one had finished 44 seconds before
+the edit. There was nothing for it to cancel.
+
+**A later push sheds it, and that is what makes the trap narrow and worth naming.** Check runs are
+keyed to a **commit**, so when this branch was pushed again for an unrelated reason the new head
+(`e576fdb1`) carried only passing title runs — verified by asking for both SHAs. The stale failure
+is still on `d98785fe` and always will be; it simply stopped being the head's problem.
+
+So the case that bites is **a title corrected with no new commit** — which is how a title normally
+_is_ corrected, since fixing one requires no push at all. Put the other way round: the stale failure
+disappears only if something unrelated happens to advance the head, so the reader cannot rely on it
+clearing and cannot tell from the list whether it did.
+
+**The correct rule is therefore one clause longer: dedupe by check-run name, keep the most recently
+started, then require every survivor to be `completed` / `success`.** Without that clause a reader following
+§19.9 to the letter either refuses a mergeable PR, or — far worse, and the reason this is filed
+rather than shrugged at — learns that some red checks are fine to wave through, which is precisely
+the habit the section exists to prevent on a repository where nothing else can stop a bad merge.
+
+**A comment in `pr-title.yml` points the same way and is worth a word when this is picked up:**
+_"`edited` is the load-bearing one: without it a corrected title cannot clear the check."_ The edit
+does not clear the check — it adds a second, passing run beside the failed one. That file's own
+"Two blind spots" list does not mention it, and this is a third.
+
+**Not fixed here.** It is a change to CLAUDE.md §19.9 — the merge rule itself — and to a workflow's
+comments, which wants its own small change rather than riding in on a test-isolation PR. The
+mitigation is recorded above and was applied by hand to merge #514.
