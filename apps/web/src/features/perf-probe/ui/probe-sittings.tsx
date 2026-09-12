@@ -60,11 +60,28 @@ export function ProbeSittings({
         ADR-0073 C2.5's accessibility gate made about a safety note reachable only by reading
         serially.
       */}
+      {/*
+        **The evidence changed on 2026-09-12; the rule did not.** This paragraph used to cite
+        23.3 fps at 1912×1068 against 39.5 fps at 1016×636, and a 4.3 ms-per-megapixel coefficient
+        derived from that pair. `docs/TECH_DEBT.md` #261 has since withdrawn it: the 23.3 reading
+        is the one figure in the whole set that nothing has reproduced (the same geometry measured
+        32.2 fps two days later on more pixels), so the pair was never a clean size comparison —
+        it was one sitting against another with an unrecorded variable between them (#283). The
+        register says in as many words that 23.3 must not be quoted on its own.
+
+        So the screen built to stop an operator drawing a wrong conclusion from a number was
+        quoting a withdrawn one, on the one surface where the reader has nothing else to check it
+        against. Found by photographing the console for the first time (`#165(e)`) — no gate here
+        could see it, because a number in a sentence is correct markup.
+
+        What replaces it is the pair that survives BECAUSE it was taken inside a single sitting, so
+        no machine-state confound is possible, and no coefficient is derived from two points.
+      */}
       <p id={COMPARABILITY_ID} className="text-muted-foreground mb-3 text-sm">
-        A reading is only comparable to another taken at the same canvas size. The painter costs
-        roughly 4.3&nbsp;ms per megapixel, which is enough to decide a verdict: the same plan on the
-        same machine measured 23.3&nbsp;fps at 1912×1068 and 39.5&nbsp;fps at 1016×636 minutes
-        apart. Compare readings whose canvas figures match, and read the display interval and
+        A reading is only comparable to another taken at the same canvas size, and the difference is
+        not a rounding term: measured inside one sitting, the same plan on the same machine drew at
+        35.2&nbsp;fps at 1912×948 and 32.2&nbsp;fps at 1920×1080 — about 3&nbsp;fps for 14% more
+        area. Compare readings whose canvas figures match, and read the display interval and
         attention facts before explaining an outlier.
       </p>
 
@@ -271,10 +288,12 @@ function SittingFacts({ sitting, id }: { sitting: Sitting; id: string }): React.
     <dl id={id} className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
       <Fact term="Machine" value={c.machineLabel ?? c.gpu ?? '(masked or not recorded)'} />
       {/*
-        **`varies between readings` rather than one of them.** `docs/TECH_DEBT.md` #261 records the
-        same plan on the same machine measuring 23.3 fps at 1912x1068 and 39.5 fps at 1016x636, so
-        printing one figure over a sitting that holds two would settle the most decision-relevant
-        confound in the register by accident. Each reading then carries its own in the table.
+        **`varies between readings` rather than one of them.** `docs/TECH_DEBT.md` #261 measures
+        35.2 fps at 1912x948 against 32.2 fps at 1920x1080 inside one sitting, so printing one
+        figure over a sitting that holds two would settle the most decision-relevant confound in
+        the register by accident. Each reading then carries its own in the table. (This cited that
+        row's 23.3-against-39.5 pair until 2026-09-12; #261 withdrew it as contaminated by machine
+        state rather than by size.)
       */}
       <Fact
         term="Canvas"

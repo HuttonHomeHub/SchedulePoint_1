@@ -98,18 +98,38 @@ export class CspReportService {
     for (const report of reports) {
       try {
         const dedupeHash = dedupeHashOf(report);
-        // **Raw SQL, and `now()` on BOTH branches — which is the fix for a defect that lost
-        // reports.** The Prisma `upsert` this replaced was correct about the unique index and wrong
-        // about the clock: `first_seen_at` was stamped by the engine as it built the INSERT, while
-        // the DO UPDATE branch used a `new Date()` taken ~1 ms EARLIER in this process. The loser
-        // of an insert race therefore tried to write a `last_seen_at` older than the winner's
-        // `first_seen_at`, `ck_csp_reports_seen_order` refused it, and the write was swallowed.
+        // **Raw SQL with a MONOTONE `last_seen_at` — and the second half of a fix whose first half
+        // claimed to be the whole of it.** The Prisma `upsert` this replaced was correct about the
+        // unique index and wrong about the clock: `first_seen_at` was stamped by the engine as it
+        // built the INSERT, while the DO UPDATE branch used a `new Date()` taken ~1 ms EARLIER in
+        // this process. The loser of an insert race therefore tried to write a `last_seen_at` older
+        // than the winner's `first_seen_at`, `ck_csp_reports_seen_order` (`last_seen_at >=
+        // first_seen_at`) refused it, and the write was swallowed.
         //
-        // Measured before the fix: a burst of 16 concurrent reports of a NEW violation recorded
+        // Measured before that fix: a burst of 16 concurrent reports of a NEW violation recorded
         // `count = 1` — fifteen lost. Repeats against an existing row were always fine, so the loss
         // fell entirely on a violation's FIRST burst: exactly when a newly-shipped policy breaks
         // something for several people at once, and exactly the count that decides whether to
-        // enforce. One database clock removes the whole class.
+        // enforce.
+        //
+        // **This comment then said "one database clock removes the whole class", and that was
+        // FALSE** (`docs/TECH_DEBT.md` #311). `now()` is TRANSACTION START time, so two concurrent
+        // statements do not share a reading of it: a transaction that began at `.071` can lose the
+        // insert race to one that began at `.072` and then try to write `last_seen_at = .071` onto
+        // a row whose `first_seen_at` is `.072`. The class was narrowed from fifteen lost to one,
+        // not removed — and CI caught it on 2026-09-12, with the constraint violation in the
+        // Postgres log beside the test's own `expected 15 to be 16`.
+        //
+        // So the update is **clamped to the row it is updating** rather than trusting any clock:
+        // `GREATEST(clock_timestamp(), first_seen_at)` cannot invert whatever the two transactions'
+        // timings are. `clock_timestamp()` rather than `now()` because it reads the clock AT the
+        // statement, which is also the truer value for "last seen"; the `GREATEST` is what makes it
+        // provable rather than argued, and it costs nothing.
+        //
+        // Proven both ways in `psql` before the change, by writing a row whose `first_seen_at` is
+        // ahead of the loser's clock: today's statement is refused by the constraint
+        // (`first_seen_at` 19:30:11.471 against `last_seen_at` 19:30:10.471 — the same shape CI
+        // logged), and the clamped one records `count = 2` with the ordering intact.
         await this.prisma.$executeRaw`
           INSERT INTO csp_reports (
             id, dedupe_hash, effective_directive, blocked_uri, document_uri,
@@ -118,11 +138,13 @@ export class CspReportService {
           ) VALUES (
             gen_random_uuid(), ${dedupeHash}, ${report.effectiveDirective}, ${report.blockedUri},
             ${report.documentUri}, ${report.disposition}, ${report.sourceFile},
-            ${report.lineNumber}, ${report.columnNumber}, 1, now(), now()
+            ${report.lineNumber}, ${report.columnNumber}, 1, clock_timestamp(), clock_timestamp()
           )
           ON CONFLICT (dedupe_hash) DO UPDATE SET
             count = csp_reports.count + 1,
-            last_seen_at = now(),
+            -- Clamped, not merely stamped: see the paragraph on #311 above. A bare clock here is
+            -- what lost one report in sixteen for a month.
+            last_seen_at = GREATEST(clock_timestamp(), csp_reports.first_seen_at),
             -- Last-writer-wins on the three non-key columns: they are not part of the identity, and
             -- one worked example of where the code was is all they need to be. COALESCE so a later
             -- report that omitted them cannot erase what an earlier one supplied.

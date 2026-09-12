@@ -131,8 +131,11 @@ export interface SittingLimb {
    * The canvas this reading was taken at.
    *
    * On the limb as well as the sitting, because it is the single most decision-relevant confound
-   * in the register (`docs/TECH_DEBT.md` #261: the same plan on the same machine measured 23.3 fps
-   * at 1912x1068 and 39.5 fps at 1016x636) and because a sitting can no longer promise it is
+   * in the register (`docs/TECH_DEBT.md` #261: measured inside one sitting, the same plan on the
+   * same machine drew at 35.2 fps at 1912x948 and 32.2 fps at 1920x1080 — this comment cited that
+   * row's 23.3-against-39.5 pair until 2026-09-12, and #261 has withdrawn it as contaminated by
+   * machine state; the conclusion below is unchanged, on evidence that survives) and because a
+   * sitting can no longer promise it is
    * constant — M6-T4 re-runs a missing reading under the SAME `sweep_id`, and nothing stops the
    * operator resizing the window in between. The sitting states it when its readings agree and
    * says so when they do not; a row that differs is flagged against the sitting's.

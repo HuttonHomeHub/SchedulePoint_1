@@ -110,35 +110,50 @@ export function AuditFilterBar({
       </div>
 
       {/*
-        `TextField`, not a hand-assembled label + input. The first version of this file wrote both
-        by hand — the idiom TECH_DEBT #42 records being written 33 times before the primitives
-        existed — and got the token wrong on the way: it used `bg-background` where the `Input`
-        primitive uses `bg-field`. Those are different tokens, rebound separately per surface scope
-        (ADR-0055), so the hand-rolled version would have painted the wrong colour the moment this
-        bar sat inside a chrome or panel surface, with nothing to catch it: both are semantic
-        tokens, so the colour-literal lint rule sees nothing wrong.
+        **One range, one flex item** (`docs/TECH_DEBT.md` #165(b)). `From` and `To` were siblings of
+        everything else in the wrapping row, so the wrap split them: measured at 1646, row 1 held
+        `Show` (591 px), `Outcome` (235) and `From` (153) while `To` (153) dropped to row 2 beside
+        `Clear filters` — the two halves of ONE decision at opposite ends of two rows, with four
+        group labels at three vertical positions.
+        **The bar cannot be given more room, and that was measured rather than assumed**: it is
+        1104 px wide at 1646, 1280 AND 1920 — constant — against 1254 px of items plus 96 px of
+        gaps, so it is ~246 px over at every width in the range and no viewport fixes it. ADR-0104
+        widening `<main>` by ~298 px on this screen changed nothing here, which is why #165(b) said
+        to re-shoot before designing.
+        Wrapping the pair keeps two rows and the same height, and makes each row a whole group.
       */}
-      <TextField
-        label="From"
-        type="date"
-        value={value.from}
-        max={value.to === '' ? undefined : value.to}
-        onChange={(event) => {
-          onChange({ from: event.target.value });
-        }}
-      />
+      <div className="flex items-end gap-x-6">
+        {/*
+          `TextField`, not a hand-assembled label + input. The first version of this file wrote both
+          by hand — the idiom TECH_DEBT #42 records being written 33 times before the primitives
+          existed — and got the token wrong on the way: it used `bg-background` where the `Input`
+          primitive uses `bg-field`. Those are different tokens, rebound separately per surface scope
+          (ADR-0055), so the hand-rolled version would have painted the wrong colour the moment this
+          bar sat inside a chrome or panel surface, with nothing to catch it: both are semantic
+          tokens, so the colour-literal lint rule sees nothing wrong.
+        */}
+        <TextField
+          label="From"
+          type="date"
+          value={value.from}
+          max={value.to === '' ? undefined : value.to}
+          onChange={(event) => {
+            onChange({ from: event.target.value });
+          }}
+        />
 
-      <TextField
-        label="To"
-        type="date"
-        value={value.to}
-        // The native bounds stop an inverted range being *composed* rather than reporting it after
-        // the fact. The API refuses one regardless — this is the courtesy, not the guard.
-        min={value.from === '' ? undefined : value.from}
-        onChange={(event) => {
-          onChange({ to: event.target.value });
-        }}
-      />
+        <TextField
+          label="To"
+          type="date"
+          value={value.to}
+          // The native bounds stop an inverted range being *composed* rather than reporting it after
+          // the fact. The API refuses one regardless — this is the courtesy, not the guard.
+          min={value.from === '' ? undefined : value.from}
+          onChange={(event) => {
+            onChange({ to: event.target.value });
+          }}
+        />
+      </div>
 
       <Button
         type="button"

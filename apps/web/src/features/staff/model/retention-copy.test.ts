@@ -327,6 +327,15 @@ describe('tableLabel', () => {
     expect(tableLabel('mail_events')).toBe('Mail events');
   });
 
+  // Every table the sweep covers, not a sample. `perf_probe_results` shipped unlabelled and
+  // rendered as a raw Postgres identifier on the panel for as long as the sweep has covered it,
+  // which is what a one-table case cannot catch (`#165(e)`, `#310`).
+  it('names every swept table', () => {
+    expect(tableLabel('csp_reports')).toBe('Policy violation reports');
+    expect(tableLabel('mail_events')).toBe('Mail events');
+    expect(tableLabel('perf_probe_results')).toBe('Performance readings');
+  });
+
   it('falls back to the raw name rather than to a blank', () => {
     // A table added without a label should read as unpolished, never as nameless.
     expect(tableLabel('something_new')).toBe('something_new');
