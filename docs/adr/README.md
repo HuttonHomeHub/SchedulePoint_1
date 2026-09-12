@@ -161,3 +161,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0135](0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md) | A container hands focus back when somebody else removes the control you were on | Accepted           |
 | [0136](0136-a-rule-is-enforced-where-the-artefact-lands.md)                                     | A rule is enforced where the artefact lands, and the roster is derived          | Accepted           |
 | [0137](0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)              | A notification is a record, and the build waits for somebody to notify          | Accepted           |
+| [0138](0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md)                      | A shard count is set by where the constraint changes hands                      | Accepted           |

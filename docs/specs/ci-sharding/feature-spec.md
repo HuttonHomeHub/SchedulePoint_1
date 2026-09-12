@@ -1,9 +1,10 @@
 # Feature Spec: Sharding the end-to-end CI job
 
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0138, 2026-09-12)
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-09-11
-- **Tracking issue / epic:** none yet — raised as `docs/TECH_DEBT.md` #301
+- **Tracking issue / epic:** raised as `docs/TECH_DEBT.md` #301, now deleted and ledgered; the
+  measurement that replaced it is [`./m4-measurement.md`](./m4-measurement.md)
 - **Roadmap link:** none. This is a tooling decision about how the repository works on itself; the
   ADR it produces takes a `scripts/adr-coverage.json` exemption in the class ADR-0124 / ADR-0131 /
   ADR-0136 already occupy. A planner cannot act on a CI job.
@@ -219,6 +220,10 @@ consequences, each of which changes what this plan may commit to:
   whether the 410 s between fastest and slowest lands in the API suite, the web suites, or the
   setup. That matters: if the variance is concentrated in the web suites, the shard budget in §4.5
   has less headroom than it looks. This is named as an assumption, not resolved (§4.10, risk R4).
+  **Resolved in M4** ([`./m4-measurement.md`](./m4-measurement.md) §5.3): it is **not** concentrated
+  in the web suites. Four measurements of each segment put the web total at 1,616–2,049 s (21 %) and
+  the API suite + pairwise at 426–640 s (33 %), so every segment swings by a comparable fraction and
+  the shard budget's headroom is as it looked. The reference run was a high draw across the board.
 
 The honest form of the headline is therefore: **~40–47 min → ~13 min, with a floor set by a job
 this epic does not touch, and a between-run spread (410 s) an order of magnitude larger than the
@@ -754,18 +759,27 @@ CLAUDE.md §16's register** although it is filed, Accepted, in `docs/adr/README.
 It is not this epic's to fix; it is flagged so the next reconciliation pass does not have to
 rediscover it.)_
 
+> **That paragraph is WRONG, and it is corrected in place rather than deleted because the corrected
+> version is the more instructive one.** ADR-0137 is at `CLAUDE.md:4541`. Its register entry landed
+> in `3c4a6161` at 22:50 on 2026-09-11; the claim above was written in `0825fe0a` at 00:30 on
+> 2026-09-12 — **100 minutes later, against a tree that already contained it**, by the same hand in
+> the same session. It is ADR-0076 Class 3 — a decision-bearing claim asserted and never checked —
+> occurring inside a paragraph whose entire subject is that class. Nobody would catch it by reading,
+> because it reads as diligence; it took one `grep`. Recorded in ADR-0138's "What this epic got
+> wrong" as finding 8.
+
 ### 4.10 Risks
 
-| #   | Risk                                                                                                                | Likelihood | Impact | Mitigation                                                                                                                                                                                                                                              |
-| --- | ------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | A suite has been passing on data an earlier suite left in the shared database, and fails once shards have their own | medium     | high   | Cannot be established by reading. Milestone 3's acceptance is a green run, and a failure here is a **real** finding — a suite that was not self-sufficient. Milestone 2 deliberately carries none of this risk, so a Milestone 3 revert keeps 10.6 min. |
-| R2  | The per-shard assignment is unbalanced and one shard becomes the critical path                                      | medium     | low    | 15.8 % of slack (§4.5); the projection is printed on every gate run; the cost of being wrong is seconds, not redness.                                                                                                                                   |
-| R3  | A retry of a long suite (CI `retries: 2`) blows its shard's 81 s of headroom                                        | medium     | low    | Accepted. One retry of the 185 s suite adds up to 370 s and that shard becomes the critical path **for that run**. No design fixes this; more shards make it less likely and buy nothing else.                                                          |
-| R4  | The 14.5 % between-run variance is concentrated in the web suites, so the real headroom is smaller than projected   | unknown    | low    | No segments were captured for samples 2–4. Milestone 4 captures segments from three sharded runs. Named as an assumption rather than assumed away.                                                                                                      |
-| R5  | Seven concurrent jobs queue, eating the saving                                                                      | unknown    | medium | Unmeasurable in advance (§1.5). Milestone 4 records `created_at` → `started_at` for each job. If it dominates, the shard count is the lever and it goes **down**.                                                                                       |
-| R6  | The two setup blocks drift                                                                                          | low        | medium | Loud failure (`MODULE_NOT_FOUND` at `nest build`), plus D5 makes `check:build-contract` assert **every** build step rather than the first.                                                                                                              |
-| R7  | The new gate matches a suite name inside a comment and reports a missing step as wired                              | medium     | high   | Comments stripped before matching, exactly as `check-ci-roster.mjs:136` does, and verified red with a suite named only in a comment. This is the sibling gate's own recorded near-miss.                                                                 |
-| R8  | The gate passes because it found nothing                                                                            | low        | high   | Non-empty population assertion (ADR-0093), and a pinned positive case. `check-ci-roster.mjs:281-283` and `e2e-sweep.sh:91-100` both carry this for the same reason.                                                                                     |
+| #   | Risk                                                                                                                | Likelihood | Impact | Mitigation                                                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | A suite has been passing on data an earlier suite left in the shared database, and fails once shards have their own | medium     | high   | Cannot be established by reading. Milestone 3's acceptance is a green run, and a failure here is a **real** finding — a suite that was not self-sufficient. Milestone 2 deliberately carries none of this risk, so a Milestone 3 revert keeps 10.6 min.                |
+| R2  | The per-shard assignment is unbalanced and one shard becomes the critical path                                      | medium     | low    | 15.8 % of slack (§4.5); the projection is printed on every gate run; the cost of being wrong is seconds, not redness.                                                                                                                                                  |
+| R3  | A retry of a long suite (CI `retries: 2`) blows its shard's 81 s of headroom                                        | medium     | low    | Accepted. One retry of the 185 s suite adds up to 370 s and that shard becomes the critical path **for that run**. No design fixes this; more shards make it less likely and buy nothing else.                                                                         |
+| R4  | The 14.5 % between-run variance is concentrated in the web suites, so the real headroom is smaller than projected   | unknown    | low    | **RESOLVED in M4, and the answer is no** ([`./m4-measurement.md`](./m4-measurement.md) §5.3): web total 1,616–2,049 s (21 %) against API suite + pairwise 426–640 s (33 %), four measurements each — every segment swings comparably, so the headroom is as projected. |
+| R5  | Seven concurrent jobs queue, eating the saving                                                                      | unknown    | medium | Unmeasurable in advance (§1.5). Milestone 4 records `created_at` → `started_at` for each job. If it dominates, the shard count is the lever and it goes **down**.                                                                                                      |
+| R6  | The two setup blocks drift                                                                                          | low        | medium | Loud failure (`MODULE_NOT_FOUND` at `nest build`), plus D5 makes `check:build-contract` assert **every** build step rather than the first.                                                                                                                             |
+| R7  | The new gate matches a suite name inside a comment and reports a missing step as wired                              | medium     | high   | Comments stripped before matching, exactly as `check-ci-roster.mjs:136` does, and verified red with a suite named only in a comment. This is the sibling gate's own recorded near-miss.                                                                                |
+| R8  | The gate passes because it found nothing                                                                            | low        | high   | Non-empty population assertion (ADR-0093), and a pinned positive case. `check-ci-roster.mjs:281-283` and `e2e-sweep.sh:91-100` both carry this for the same reason.                                                                                                    |
 
 ### 4.11 Database changes
 

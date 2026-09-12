@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1218 web
 > source files with 42 Playwright suites beside the base journey, and
-> 137 ADRs.
+> 138 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4586,6 +4586,64 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   built at all**, so the ADR-0034 parity gate is untouched in its honest form: there is nothing here
   to hold parity for.
 
+- **ADR-0138** _(Accepted; M0–M4 landed 2026-09-12)_ — A shard count is set by where the constraint
+  changes hands. CI's `e2e` job ran **46 `test:e2e` invocations as sequential steps on one runner**
+  and was the critical path of every round trip, at **40–47 min across four samples** — on a
+  repository whose only merge gate is a person reading check runs (§19.9; `main` carries no branch
+  protection, §8), that is the cost of every correction however small. **The reason it needed an ADR
+  rather than a workflow edit is that the obvious remedy has a ceiling nobody was looking at.**
+  `docs/TECH_DEBT.md` #301 filed the problem against the slowest **end-to-end job** — the right
+  quantity for a row about that job and the wrong one for choosing a shard count, because `quality`
+  runs alongside and this epic does not touch it. Against **whole-CI wall clock** three shards buy
+  13.0 min and four buy 12.7: a gap of **sixteen seconds**, and past four nothing improves at all.
+  So the question is not how far this shards but **where the constraint changes hands**, which was
+  knowable before a line was written.
+  **Measured: 40–47 min → 29.6 min (two jobs) → 12.2–12.3 min (four shards, n = 2)**, 3.3–3.8×
+  against the range rather than a point, with the slowest end-to-end job below the **same run's**
+  `quality` in both — 662 against 735, and 677 against 731 — a **within-run** comparison that
+  between-run variance cannot move. **Which** end-to-end job is slowest changes between the two runs,
+  which is §1.3's prediction landing rather than noise: at four shards the API job and the worst
+  shard are neck and neck and the constraint has passed to `quality`. Runner queue time, the spec's
+  named honest unknown, measures **1–4 s per job**, so the stated lever (fewer shards) never had to
+  fire. The assignment is derived (longest-processing-time-first, name tie-break) and
+  **checked by a second derivation** — `check:e2e-roster` recomputes the four totals from `ci.yml`'s
+  own conditions — because an eyeballed assignment has no such property. It stays a **per-step
+  `if:`** rather than a suite list in the matrix, since those 44 steps carry load-bearing comments a
+  list of script names carries none of (the ADR-0136 ruling, extended from gate steps to suite
+  steps). **No gate asserts a wall-clock time anywhere** (ADR-0058: two of the slowest samples
+  changed no test and no workflow), and a suite with no recorded duration is charged the **largest**
+  measured, never zero — a zero lets a new suite ride free in a packing. It also closed a hole that
+  predated the sharding: nothing had ever asserted `ci.yml`'s 44 steps matched `package.json`'s 44
+  scripts, and neither existing gate could see it in either direction, `check:counts` counting
+  `e2e-*` **directories** — a different quantity, since two suites share `./e2e-account`.
+  **What is worth reading is the eight recorded failures, because instruments and documents were
+  wrong more often than the code.** The gate printed a correct-looking summary **with two regex bugs
+  in it**, the second being the fix for the first and wrong in a way that looks right (`[ \t]+(?!run:|- )`
+  backtracks one space so the lookahead lands on a space); neither was visible against the real
+  workflow, which cannot exhibit either. A mutation sweep found **two assertions that could not
+  fail**, one of them with a docblock stating the wrong reason for the guard it described.
+  `check-build-contract` read only the **first** build step — created and found inside the same
+  milestone, proven by deleting a package and watching it print `Build contract OK`. **M2 shipped a
+  defect**: a `timeout-minutes: 30` described in its own commit as "a runaway guard, not a bar"
+  cancelled a healthy job at 30m08s, because the spec derived 30 against the **end** state and was
+  silent about the intermediate one it projects at 35.8 min **in the same document** — so D5 makes a
+  timeout per-job and derived from that job's own duration. **The approval gate fired and the
+  re-derivation it produced was wrong in the other direction**: two single-sample estimates, one
+  17 % high and one 31 % low, from a spread now measured at **21 % on the web total and up to 27 % on
+  a single shard between two runs of the same commit** — the conservative budget held (556 s against 593) and the re-derivation would have been exceeded, which is an argument for packing from a
+  pessimistic sample rather than tuning to the latest one. The same number is why refining the
+  bin-packing is not worth doing: the packed spread is **17 s** against a measured 123–156 s.
+  disputed number was out by 17 % while the one that did not (bounded by `quality`) was out by 3 %,
+  which is a property of the inputs rather than luck. **The approved plan's own closing instruction
+  was wrong about this repository** — it said to keep #301 and mark it `closed`, and
+  `check:debt-status` A2 has no `closed` in its vocabulary — so the row is deleted and ledgered with
+  the ledger entry pointing at the measurement. **And the spec created a drift finding in the act of
+  flagging one**: §4.9 records, carefully, that ADR-0137 is absent from this register, and it is not
+  — the entry landed 100 minutes before the claim was written, by the same hand in the same session,
+  which is ADR-0076 Class 3 inside a paragraph whose subject is that class. Corrected in place
+  rather than deleted. **The CPM engine is not imported and no migration runs**; `apps/` contributes
+  zero files to the epic's diff.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -4897,6 +4955,14 @@ When operating in this repo, Claude Code should:
    read the check runs for the PR's **current head** (`get_check_runs`), **dedupe
    by check-run name keeping the most recently started**, and confirm every
    survivor is `completed` with `conclusion: success`.
+
+   **The list is ten entries since ADR-0138** — `quality`, `e2e-api`, four
+   `e2e-web` shards, `image`, the PR-title check and two CodeQL runs — where
+   before that epic it was six (`ci.yml` declared three jobs, not seven). That
+   makes reading it before merge slightly longer and no less necessary: four of
+   the ten are shards of what used to be one check, and `fail-fast` is off
+   precisely so a second red shard is visible rather than cancelled. **"The
+   end-to-end check is green" is no longer a single fact.**
 
    **The dedupe clause is not tidiness.** One SHA can carry two runs of the same
    check, and the older one keeps its conclusion for ever. PR #514 is the worked

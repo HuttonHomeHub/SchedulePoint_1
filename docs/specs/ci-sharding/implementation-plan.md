@@ -1,7 +1,7 @@
 # Implementation Plan: Sharding the end-to-end CI job
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval.**
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted, shipped.**
+- **Status:** Accepted — shipped (ADR-0138, 2026-09-12). M0–M4 landed.
 - **Owner:** repo
 
 ---
