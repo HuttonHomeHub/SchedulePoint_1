@@ -281,7 +281,7 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
   //
   // The lock's real gate is the unit suite, which asserts the acquisition itself and its ordering
   // and fails when either is taken away. `activities.e2e-spec.ts`'s WBS block has carried this note
-  // since the measurement; its three siblings did not,.
+  // since the measurement; its three siblings did not, and this is one of them.
   it('rejects the mirror insert that would close a cycle, leaving the graph acyclic', async () => {
     const { actor, planId, a, b } = await setup();
     const base = `/api/v1/organizations/acme/plans/${planId}/dependencies`;

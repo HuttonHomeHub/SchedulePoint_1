@@ -236,7 +236,7 @@ describe.skipIf(!hasDatabase)('Cross-plan dependencies API (e2e)', () => {
   //
   // The lock's real gate is the unit suite, which asserts the acquisition itself and its ordering
   // and fails when either is taken away. `activities.e2e-spec.ts`'s WBS block has carried this note
-  // since the measurement; its three siblings did not,.
+  // since the measurement; its three siblings did not, and this is one of them.
   it('rejects the mirror cross-plan create that would close a plan-level cycle, whichever wins', async () => {
     const { actor, u, d } = await setup();
     // upPlan → downPlan and downPlan → upPlan raced together: the org lock orders them; the loser's

@@ -31,6 +31,20 @@ import type { PrismaService } from '../src/prisma/prisma.service';
  * `ActivitiesService.update` calls, each opening its own interactive transaction (#70 records two
  * of those measured interleaving correctly), with a **barrier at the read seam**.
  *
+ * **This is not the first file here to drive concurrency below HTTP, and the older one records a
+ * DIFFERENT reason** (noticed 2026-09-12; neither referenced the other until then).
+ * `csp-report.e2e-spec.ts`'s burst case has resolved its service off the container and fired
+ * sixteen concurrent `record()` calls since 2026-08-10 — a month before this file — because
+ * sixteen concurrent Supertest requests reset the connection and leaked their in-flight writes past
+ * `beforeEach` into the following test. That is a high-N failure of the harness; #70's own
+ * measurement is a low-N one (two requests that never overlap). Both are true of this harness, and
+ * a reader choosing where to put a race test wants both. What is new HERE is the barrier, not the
+ * idea of calling the service directly.
+ *
+ * **And the older one has already caught a production defect**, which is the strongest argument for
+ * the pattern: it is what reported `expected 15 to be 16` while `docs/TECH_DEBT.md` #311's residual
+ * race was live — a real one-in-sixteen loss, in a subsystem holding no advisory lock at all.
+ *
  * ## Why the barrier is the whole design, and what it proves
  *
  * `ActivityRepository.findActiveByIdInOrg` is wrapped so that the first in-transaction call for one
