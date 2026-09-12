@@ -46,6 +46,15 @@ import { report } from './lib/doc-register.mjs';
 
 const NAME = 'check:e2e-roster';
 
+/**
+ * Suite seconds one web shard may hold before the web side takes the critical path back.
+ *
+ * Derived, not chosen: the API job measured 690 s end to end (499 s API e2e + 141 s pairwise + 50 s
+ * setup) and a web shard pays 97 s of fixed cost (setup + browser install), so `690 − 97 = 593`.
+ * **Printed, never asserted** — see the summary below.
+ */
+const SHARD_BUDGET_SECONDS = 593;
+
 /** The gate's own source, so the CLI guard below matches what the suite imports. */
 export const SELF = 'scripts/check-e2e-roster.mjs';
 
@@ -67,6 +76,42 @@ export function declaredSuites(pkgJson) {
   return Object.keys(pkgJson.scripts ?? {})
     .filter((name) => name === 'test:e2e' || name.startsWith('test:e2e:'))
     .sort();
+}
+
+/**
+ * Split a workflow into `{ name, body }` per job, so a rule can be scoped to the job it is about.
+ *
+ * Needed because E4 asks a question about **the matrix job** rather than about the file: a step in
+ * `e2e-api` must NOT carry a shard condition, and a step in `e2e-web` must. Without the split the
+ * gate would have to assume which workspace is sharded, which is exactly the restatement E5's own
+ * risk note warns against.
+ */
+export function jobsIn(stripped) {
+  const jobsAt = stripped.indexOf('\njobs:\n');
+  if (jobsAt < 0) return [];
+  const body = stripped.slice(jobsAt);
+  const starts = [...body.matchAll(/\n {2}([a-z][a-z0-9-]*):\n/g)];
+  return starts.map((m, i) => ({
+    name: m[1],
+    body: body.slice(m.index, i + 1 < starts.length ? starts[i + 1].index : undefined),
+  }));
+}
+
+/**
+ * The shard values a job's matrix declares, or `null` when it declares none.
+ *
+ * **Read from the workflow, never restated in this file.** Hard-coding `[1, 2, 3, 4]` would mean
+ * that changing the shard count makes this gate quietly WRONG rather than red — the same failure
+ * `check-ci-roster.mjs` avoids by reading the advisory set out of `prepush.sh` rather than keeping
+ * its own copy.
+ */
+export function shardsOf(jobBody) {
+  const m = /matrix:\s*\n\s+shard:\s*\[([^\]]*)\]/.exec(jobBody);
+  if (m === null) return null;
+  return m[1]
+    .split(',')
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
 }
 
 /**
@@ -92,6 +137,40 @@ export function invocationsIn(stripped) {
       /--filter\s+(@repo\/\w+)\s+(?:run\s+)?(test:e2e(?::[a-z0-9-]+)?)(?![:\w-])/g,
     ),
   ].map((m) => ({ workspace: m[1], script: m[2] }));
+}
+
+/**
+ * Each end-to-end step in a job body, paired with the shard its `if:` names (or `null`).
+ *
+ * The `if:` is read from the SAME step — anchored between this step's `- name:` and its `run:` —
+ * rather than by searching backwards from the command, because a backwards search finds the
+ * PREVIOUS step's condition when this one has none, which turns E4 from an assertion into a coin
+ * toss that happens to be right most of the time.
+ *
+ * **The lookahead sits before the indent, and that took two attempts.** The middle group must not
+ * run past the end of its own step; if it does, a conditioned step followed by an unconditioned one
+ * returns a SINGLE result carrying the first step's shard and the second step's script, and E4 then
+ * reports nothing wrong about a suite that runs on every shard.
+ *
+ * The first fix was `[ \t]+(?!run:|- )`, which does not work and looks like it does: `[ \t]+` is
+ * greedy but backtracks, so it gives back one space, the lookahead then sits on a space rather than
+ * on `-`, and the line is consumed anyway. Written as `(?![ \t]*(?:run:|- ))` the test is made at
+ * the line's start and there is nothing to backtrack into.
+ *
+ * Both versions were caught by the E4 fixture failing, never by reading the expression — and the
+ * gate had already printed a correct-looking summary against the real workflow with both bugs
+ * present, because the real workflow has a condition on every step and so cannot exhibit either.
+ */
+export function stepsIn(jobBody) {
+  return [
+    ...jobBody.matchAll(
+      /- name:[^\n]*\n(?<mid>(?:(?![ \t]*(?:run:|- ))[^\n]*\n)*)[ \t]+run:[^\n]*--filter\s+(?<ws>@repo\/\w+)\s+(?:run\s+)?(?<script>test:e2e(?::[a-z0-9-]+)?)(?![:\w-])/g,
+    ),
+  ].map((m) => ({
+    workspace: m.groups?.ws ?? '',
+    script: m.groups?.script ?? '',
+    shard: /matrix\.shard\s*==\s*(\w+)/.exec(m.groups?.mid ?? '')?.[1] ?? null,
+  }));
 }
 
 /**
@@ -197,6 +276,42 @@ export function runGate(root) {
     }
   }
 
+  // ---- E4 / E5 — the shard dimension. Deliberately absent while there were no shards to assert
+  // about; present now that Milestone 3 has created some.
+  for (const job of jobsIn(stripped)) {
+    const shards = shardsOf(job.body);
+    for (const step of stepsIn(job.body)) {
+      if (shards === null) {
+        // A job with no matrix must not carry shard conditions: `matrix.shard` is undefined there,
+        // so the condition can never be true and the suite silently never runs.
+        if (step.shard !== null) {
+          problems.push(
+            `job '${job.name}' declares no matrix, but its '${step.script}' step is conditioned ` +
+              `on shard ${step.shard}. That condition can never be true, so the suite never runs.`,
+          );
+        }
+        continue;
+      }
+      if (step.shard === null) {
+        // **E4 — a suite step in a sharded job with no condition runs on EVERY shard.** Nothing
+        // else would notice. The run is green; it is merely four times the work, and the wall
+        // clock the shards exist to cut gets paid anyway.
+        problems.push(
+          `job '${job.name}' is sharded, but its '${step.script}' step declares no shard ` +
+            `condition, so it runs on all ${String(shards.length)} shards.`,
+        );
+      } else if (!shards.includes(step.shard)) {
+        // **E5 — a condition naming a shard the matrix does not declare never fires.** The suite
+        // stops running and every check stays green, which is the exact silence this gate exists
+        // to break.
+        problems.push(
+          `job '${job.name}' runs '${step.script}' on shard ${step.shard}, which its matrix does ` +
+            `not declare (it declares ${shards.join(', ')}), so that suite never runs.`,
+        );
+      }
+    }
+  }
+
   // The projection, printed and never asserted. Absent durations print as "unavailable" rather than
   // as a zero, because a zero reads as a measurement.
   let durations = null;
@@ -220,6 +335,25 @@ export function runGate(root) {
           : '') +
         '.';
 
+  // **Per-shard totals, printed and never asserted** — the balance is a projection from committed
+  // durations, and a projection is only as fresh as its durations, so asserting on it would turn a
+  // stale file into a false failure. There is slack to absorb a poor packing anyway: the budget is
+  // 593 s per shard before the web side takes the critical path back from `e2e-api`, against a
+  // perfect four-way pack of 512 s. The assignment has to be not-terrible, not optimal.
+  let balance = '';
+  const sharded = jobsIn(stripped).find((j) => shardsOf(j.body) !== null);
+  if (sharded !== undefined && durations !== null) {
+    const shards = shardsOf(sharded.body) ?? [];
+    const known = Object.values(durations.seconds?.web ?? {});
+    const worst = known.length > 0 ? Math.max(...known) : 0;
+    const totals = shards.map((shard) =>
+      stepsIn(sharded.body)
+        .filter((step) => step.shard === shard && step.workspace === '@repo/web')
+        .reduce((sum, step) => sum + (durations.seconds?.web?.[step.script] ?? worst), 0),
+    );
+    balance = ` Shards: ${totals.map((t) => `${String(t)} s`).join('/')} (budget ${String(SHARD_BUDGET_SECONDS)} s).`;
+  }
+
   return report({
     name: NAME,
     problems,
@@ -228,7 +362,7 @@ export function runGate(root) {
     population: declared.size,
     summary:
       `${web.length} web + ${api.length} API end-to-end suites, each run by exactly one CI step.` +
-      `${estimate} ${provenance}`,
+      `${estimate}${balance} ${provenance}`,
   });
 }
 
