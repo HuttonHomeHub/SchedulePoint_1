@@ -6829,10 +6829,37 @@ whether a page was cut rather than to infer it from position, which is what #271
 > cost is small and real: the gate tells you which check failed and then withholds why, on the one
 > occasion you are reading it.
 
+> **2026-09-12 — the chain is TWELVE, not three, one day after this row was verified at three.**
+> `check:doc-register` now runs `doc-register`, `check-reconcile-due`, `check-spec-status`,
+> `check-ci-roster`, `check-e2e-roster`, `commitlint-fixtures`, `pr-title-workflow`,
+> `check-licenses`, `advisory-gates`, `build-steps`, `check-bundle-size` and `e2e-durations` — nine
+> added by ADR-0136 and ADR-0138 within the last two days, each correctly and none of them looking
+> at this row. **Measured on a green run: 110 lines of output** against a 12-line tail.
+>
+> **Which sharpens the failure mode into a countable one.** Every file runs all its cases, prints a
+> summary, then exits non-zero (`process.exit(failures === 0 ? 0 : 1)` — checked in the new ones,
+> not assumed from the old), so `&&` stops at the failure and the failing file's output is last.
+> Its **summary survives** the tail; what scrolls off is the `✗ <case>` line, whenever the failing
+> case sits more than ~11 cases from that file's end. **Five of the twelve print more than eleven
+> per-case lines** and are therefore exposed: `check-e2e-roster` (21), `check-ci-roster` (18),
+> `commitlint-fixtures` (17), `check-bundle-size` (13), `check-licenses` (12). The reader gets
+> `FAIL — 17/18 passed` and no name.
+>
+> **One clause of this row is overstated and is corrected rather than left.** It says a reader
+> "cannot tell from `prepush` output alone which stage even ran". Each file's summary names itself
+> and is the last thing it prints, so the failing **stage** is always identifiable; what is lost is
+> the failing **case**, and the fact that the earlier stages passed. That is a smaller loss than the
+> sentence claims and still the loss the row is about.
+>
+> **Still not changed here, for the reason below** — `prepush.sh` is a shared gate — and the remedy
+> menu is unchanged. What changes is its urgency: the trade "widen the tail vs. a second CI step"
+> was costed against three files and is now being paid against twelve.
+
 `scripts/prepush.sh:108,112` truncates a failing gate's captured output to `tail -12`.
 **Re-verified 2026-09-10 at both lines, unchanged.**
-`check:doc-register` now chains **three** independent test files with `&&` —
-`doc-register.test.mjs`, `check-reconcile-due.test.mjs` and `check-spec-status.test.mjs`. Each keeps
+`check:doc-register` chained **three** independent test files with `&&` when this was written —
+`doc-register.test.mjs`, `check-reconcile-due.test.mjs` and `check-spec-status.test.mjs` (see the
+2026-09-12 note above: it is twelve today). Each keeps
 running past a failing case (`process.exitCode = 1` rather than throwing) and prints its own named
 summary, so **CI is unaffected**: the full log carries every `✗ <case>` line and every summary line,
 and which file failed is unambiguous.
