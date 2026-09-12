@@ -280,14 +280,14 @@ give one name to read at the cost of a sixth job and a `needs:` graph whose own 
 
 **Non-critical, defaults stated, no answer needed:**
 
-| Question                                          | Default                                                                                                     |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Should the pairwise differential get its own job? | **No.** Costed at 81 s of whole-CI saving for one more runner, and zero once `quality` is the floor (§4.8). |
-| `fail-fast` on the matrix?                        | **`false`** — a run that stops at the first red shard costs another round trip to learn the rest (§4.4 D6). |
-| Per-job `timeout-minutes`?                        | **30**, on each e2e job. A runaway guard against a hung web server, not a performance bar (§4.4 D6).        |
-| Does the balance projection become a gate?        | **No** — printed in the gate's summary, never asserted (§4.5 D8).                                           |
-| Merge small suites to reduce the count?           | **No** — rejected; it renames `web:<suite>` targets and destroys per-suite flag pinning (§4.7).             |
-| Do the 44 per-step comments survive?              | **Yes, verbatim, in place.** This is a hard constraint on the design, not an aspiration (§4.3).             |
+| Question                                          | Default                                                                                                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Should the pairwise differential get its own job? | **No.** Costed at 81 s of whole-CI saving for one more runner, and zero once `quality` is the floor (§4.8).                                            |
+| `fail-fast` on the matrix?                        | **`false`** — a run that stops at the first red shard costs another round trip to learn the rest (§4.4 D6).                                            |
+| Per-job `timeout-minutes`?                        | **Above that job's own duration** — 30 on `e2e-api` and on a sharded `e2e-web`, 60 while `e2e-web` is unsharded. A runaway guard, not a bar (§4.4 D6). |
+| Does the balance projection become a gate?        | **No** — printed in the gate's summary, never asserted (§4.5 D8).                                                                                      |
+| Merge small suites to reduce the count?           | **No** — rejected; it renames `web:<suite>` targets and destroys per-suite flag pinning (§4.7).                                                        |
+| Do the 44 per-step comments survive?              | **Yes, verbatim, in place.** This is a hard constraint on the design, not an aspiration (§4.3).                                                        |
 
 ---
 
@@ -388,7 +388,7 @@ moves steps between shards. No gate forces this; the summary line is what prompt
 | A `test:e2e` step in the matrix job carries **no** shard condition | Gate fails. Without this, the step runs on **all four** shards — four times the cost and four chances to flake, with nothing looking wrong.                                                                                                            |
 | Two suites share a `testDir`                                       | Legal and present today: `account` and `account-verify` both use `./e2e-account` (`playwright.account-verify.config.ts:24`). This is why the roster derives from **scripts**, never from directories.                                                  |
 | A suite is retried (CI `retries: 2`)                               | Its shard simply takes longer. One retry of the 185 s Gantt-editing suite adds up to 370 s, which alone exceeds that shard's 81 s of headroom — see §4.10 risk R3. Accepted; it costs that run, not the design.                                        |
-| A shard hangs (a web server never comes up)                        | `timeout-minutes: 30` ends it. Without it, the GitHub default is 360 minutes.                                                                                                                                                                          |
+| A shard hangs (a web server never comes up)                        | `timeout-minutes` ends it — 30 on a sharded job, 60 while `e2e-web` is unsharded (§4.4 D6). Without it, the GitHub default is 360 minutes.                                                                                                             |
 | One shard red, three green                                         | All four report (`fail-fast: false`). The check-run list shows exactly which.                                                                                                                                                                          |
 | All four shards upload a report artefact                           | Names must differ, or the second upload **errors** (upload-artifact v4+, §0). Handled by §4.4 D7.                                                                                                                                                      |
 | A fork PR                                                          | Unchanged by this epic. The `permissions: contents: read` block is job-agnostic and the matrix inherits it. ADR-0136 records that "require approval for first-time contributors" is a GitHub setting outside this repository, and it stays outside it. |
@@ -431,18 +431,18 @@ rule:
 
 ### 2.7 Error scenarios
 
-| Scenario                                 | Detection             | Result                                                                | Exit |
-| ---------------------------------------- | --------------------- | --------------------------------------------------------------------- | ---- |
-| Suite declared, no CI step               | `check:e2e-roster` E1 | Names the suite and both remedies; blocks `pnpm prepush` and CI       | 1    |
-| CI step names a non-existent suite       | E2                    | Names the step; blocks                                                | 1    |
-| Suite assigned twice                     | E3                    | Names both shards; blocks                                             | 1    |
-| Step with no shard condition             | E4                    | Names the step and says it will run on every shard; blocks            | 1    |
-| Shard condition outside the matrix       | E5                    | Names the step and the declared matrix values; blocks                 | 1    |
-| Zero suites found (broken derivation)    | E6, population check  | "The derivation is broken, not the estate"; blocks                    | 1    |
-| `#` inside a quoted string in `ci.yml`   | E7                    | Refuses to judge and says why                                         | 1    |
-| One shard's tests fail                   | GitHub                | That check run is red; the other three complete                       | —    |
-| Shard hangs                              | `timeout-minutes: 30` | Job cancelled, check run red, log available                           | —    |
-| Two shards upload the same artefact name | upload-artifact v4+   | **Prevented by design** (§4.4 D7); if it regressed, a red upload step | —    |
+| Scenario                                 | Detection             | Result                                                                                                                                                                                   | Exit |
+| ---------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Suite declared, no CI step               | `check:e2e-roster` E1 | Names the suite and both remedies; blocks `pnpm prepush` and CI                                                                                                                          | 1    |
+| CI step names a non-existent suite       | E2                    | Names the step; blocks                                                                                                                                                                   | 1    |
+| Suite assigned twice                     | E3                    | Names both shards; blocks                                                                                                                                                                | 1    |
+| Step with no shard condition             | E4                    | Names the step and says it will run on every shard; blocks                                                                                                                               | 1    |
+| Shard condition outside the matrix       | E5                    | Names the step and the declared matrix values; blocks                                                                                                                                    | 1    |
+| Zero suites found (broken derivation)    | E6, population check  | "The derivation is broken, not the estate"; blocks                                                                                                                                       | 1    |
+| `#` inside a quoted string in `ci.yml`   | E7                    | Refuses to judge and says why                                                                                                                                                            | 1    |
+| One shard's tests fail                   | GitHub                | That check run is red; the other three complete                                                                                                                                          | —    |
+| Shard hangs                              | `timeout-minutes`     | Job cancelled, check run red, log available. The value is per job and above that job's own duration (§4.4 D6) — 30 was below `e2e-web`'s in M2 and cancelled a healthy run at 30 m 08 s. | —    |
+| Two shards upload the same artefact name | upload-artifact v4+   | **Prevented by design** (§4.4 D7); if it regressed, a red upload step                                                                                                                    | —    |
 
 ---
 
@@ -572,10 +572,32 @@ protecting half of what it names, which is the exact class ADR-0136 and ADR-0124
 `fail-fast: false` because a matrix that cancels its siblings on the first red turns one round trip
 into two, which is the cost this whole epic is about; `e2e-sweep.sh:58-69` records the same lesson
 one layer out (a sweep that names every failure beats one that stops at the first).
-`timeout-minutes: 30` is a **runaway guard, not a performance bar** — the distinction matters for
-ADR-0058, because a bar tuned close to the measurement fails on a slow day and gets deleted. 30 min
-against a ~11 min projection is loose on purpose; GitHub's default of 360 min is the thing being
-prevented.
+`timeout-minutes` is a **runaway guard, not a performance bar** — the distinction matters for
+ADR-0058, because a bar tuned close to the measurement fails on a slow day and gets deleted.
+GitHub's default of 360 min is the thing being prevented.
+
+**The guard is per JOB, not per epic, and this section said otherwise until the split was run.** It
+specified "**30**, on each e2e job", derived as "loose on purpose" against "a ~11 min projection" —
+which is the END state: a sharded web job at ~618 s and the API job at ~690 s. It is silent about the
+**intermediate** state M2 creates, where `e2e-web` is still unsharded and **§1.3 of this same
+document projects it at 2,146 s = 35.8 min**. A guard of 30 sits _below_ that projection, so it is a
+bar by arithmetic, in a document that contains both numbers.
+
+That is not a hypothesis. On the first CI run of M2, `End-to-end tests (web)` was **cancelled at
+30 m 08 s** — the guard firing on a job doing exactly what it was designed to do. The failure is the
+ADR-0076 Class 3 shape: two numbers in one document, each correct, never compared.
+
+So the values are derived per job from that job's own expected duration:
+
+| job                       | expected           | guard  | margin |
+| ------------------------- | ------------------ | ------ | ------ |
+| `e2e-api`                 | **measured** 643 s | 30 min | 2.8×   |
+| `e2e-web` (M2, unsharded) | projected ~2,146 s | 60 min | 1.7×   |
+| `e2e-web` (M3, sharded)   | projected ~618 s   | 30 min | 2.9×   |
+
+60 also clears the ~42 min that the worst measured between-run variance (17 %) implies for a 36 min
+job, so it is a guard on the slowest plausible run rather than on the median one. It returns to 30
+with the shards, which is where §4.4 D6's original derivation was right all along.
 
 **D7 — per-shard artefact names, and the hand-maintained path list goes.** The upload step becomes:
 

@@ -273,8 +273,10 @@ jobs:
     name: End-to-end tests (API)
     runs-on: ubuntu-latest
     # A runaway guard, not a bar. Nothing here asserts a wall-clock time (the epic forbids it:
-    # five samples of the pre-split job span 40-47 minutes), but a hung browser should surrender its
-    # runner and leave a readable log rather than sit until the platform's own limit.
+    # seven samples of the pre-split job span 39-47 minutes), but a hung browser should surrender
+    # its runner and leave a readable log rather than sit until the platform's own limit of 360.
+    #
+    # 30 against a MEASURED 643 s (10 m 43 s) is 2.8x — loose on purpose.
     timeout-minutes: 30
     # A disposable PostgreSQL for API end-to-end tests (Supertest).
     services:
@@ -378,10 +380,21 @@ jobs:
   e2e-web:
     name: End-to-end tests (web)
     runs-on: ubuntu-latest
-    # A runaway guard, not a bar. Nothing here asserts a wall-clock time (the epic forbids it:
-    # five samples of the pre-split job span 40-47 minutes), but a hung browser should surrender its
-    # runner and leave a readable log rather than sit until the platform's own limit.
-    timeout-minutes: 30
+    # A runaway guard, not a bar — and 30 would have been a bar, which is not a hypothetical:
+    # this job was CANCELLED at 30 m 08 s on the first run of the milestone that split it.
+    #
+    # `docs/specs/ci-sharding/feature-spec.md` §4.4 D6 says 30 "on each e2e job", and derives it as
+    # "loose on purpose" against "a ~11 min projection". That derivation is sound for the END state
+    # — a sharded web job is ~618 s and the API job ~690 s — and silent about THIS state, where the
+    # web job is still unsharded and the same document's own §1.3 model projects it at 2,146 s =
+    # 35.8 min. The guard was below the projection in the spec that contains both numbers, and
+    # nobody put them side by side.
+    #
+    # So the rule is per JOB and not per epic: a runaway guard must sit comfortably above the
+    # duration of the job it guards. 60 against ~36 min projected is 1.7x, and above the 42 min the
+    # worst measured between-run variance (17%) would imply. It returns to 30 when the shards land
+    # and this job's own duration falls to ~10 min.
+    timeout-minutes: 60
     # A disposable PostgreSQL. The web job needs one too: Playwright starts the API itself from
     # its `webServer` block, so this job runs the full stack and the API needs a database. Nothing
     # is trimmed from the setup below as an optimisation — `prisma:deploy` included.
