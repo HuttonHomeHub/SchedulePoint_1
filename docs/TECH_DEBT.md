@@ -1103,11 +1103,19 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 **Status:** open · **Verified:** 2026-09-09
 
 > **Re-verified 2026-08-08 — half of this is done.** The triple `activityRect` computation was fixed
-> by the per-frame `RectCache` (`render/render-model.ts:446`, consumed at `paint.ts:793`), and
-> `render/paint-frame.ts:47-54` now says in its own docblock that the remaining hoist "reduces to a
-> one-line move". **Still open:** `crossedLanes` computed twice per edge
-> (`render-model.ts:784,884`), and no flag-off Playwright config exists. Do **not** re-do the rect
-> hoist — and per ADR-0078 §3, do not do the remaining one _inside_ a refactor.
+> by the per-frame `RectCache` (`render/geometry.ts:481`, declared on `rectCache` at
+> `render/paint-frame.ts:69` and consumed from `paint.ts:855`), and `render/paint-frame.ts` says in
+> its own docblock that the remaining hoist "reduces to a one-line move". **Still open:**
+> `crossedLanes` computed twice per edge (`render/link-routing.ts:191` and `:291`, the function at
+> `:142`), and no flag-off Playwright config exists. Do **not** re-do the rect hoist — and per
+> ADR-0078 §3, do not do the remaining one _inside_ a refactor.
+>
+> **Citations repointed 2026-09-12; the diagnosis is untouched.** ADR-0078 S1 decomposed the
+> painter, so `render-model.ts` is now **128 lines** and the three citations above pointed at 446,
+> 784 and 884 of it. **One of the four was worse than stale**: `paint.ts:793` still exists — that
+> file is 2,593 lines — and reads `ctx.setLineDash(dash)`, nothing to do with the rect cache. A
+> citation that resolves and is wrong is the failure mode `#246` describes and the one no cheap
+> check can see; it was found by opening the line, not by counting them.
 
 Five specialist reviews ran over the combined authoring + routing diff. Every **blocking** finding
 was fixed with a regression test (see `docs/DECISIONS.md`), as was one non-blocking one — the
@@ -1825,6 +1833,42 @@ changes to how the register is written, so both need the spec ADR-0105 requires.
 **And this sweep's own result could not be recorded in the field meant for it** — see `#247`. The
 `Verified:` field is written inline and read at column 0, so `A8` has never fired and the sixteen
 rows this sweep checked and found accurate carry no machine-readable trace of having been checked.
+
+---
+
+> **2026-09-12 — "roughly half" measured, and the number kills the cheap gate for a DIFFERENT reason
+> than this row gives.** Every `file.ext:NNN` in this register was resolved mechanically (basenames
+> against `git ls-files`, then the line against the file's length). **259 citation-shaped matches;
+> 217 resolve and sit in range.** Of the 42 that do not: **25 are registered dependency citations**
+> — `sign-up.mjs`, `nest-application-context.js`, `focusManager.js` and the rest — correctly absent
+> from this repository and gated by `check:claims` against `scripts/dependency-claims.json`, so not
+> rot at all; **13 are ambiguous basenames** a scan cannot resolve to one file (`#101`'s blind spot,
+> measured here for the first time); **2 are scan artefacts** (this row's own `file.ts:123` example,
+> and `#309`'s prose _about_ a citation it repointed). That leaves **2 genuinely broken in-repo
+> citations out of ~219 — 0.9 %**, both in `#76`, both into `render-model.ts`, which ADR-0078 S1
+> decomposed from ~900 lines to **128**.
+>
+> **This does not refute "roughly half", and the measurement says why it cannot.** The same `#76`
+> sentence cites `paint.ts:793`; that line **exists** — the file is 2,593 lines — and reads
+> `ctx.setLineDash(dash)`. The scan scored it OK. So the rot this row is about is **semantic, not
+> positional**, and a mechanical pass is blind to exactly the cases that mislead a reader: a stale
+> line that happens to still be inside a long file is the common case, not the exception.
+>
+> **The consequence is a correction to this row's own reasoning.** It rejects the obvious gate
+> because it "would fire constantly and be silenced, which is ADR-0058's fails-on-day-one shape".
+> Measured, such a gate fires on **two** citations today — it would not be noisy, it would be
+> **nearly vacuous**, passing over every citation that rotted in place. That is a better argument
+> for the same conclusion, and it strengthens the cite-by-**symbol** option this row already
+> prefers: a symbol either exists or does not, and `RectCache` and `crossedLanes` were both found in
+> seconds by name after their line numbers had been meaningless for a month.
+>
+> **Three false-positive classes in the probe itself, recorded because each nearly produced a wrong
+> number.** A first pass anchored on `apps/|packages|scripts|docs` reported **33** citations and
+> **zero** broken — this register cites by **basename**, so a path-anchored scan sees almost none of
+> it. Then a placeholder in prose counted as a citation, and prose _describing_ a citation counted
+> as one — the scan-matching-prose class this repository has now recorded five times. The probe was
+> a scratchpad script and is **not** committed: it is a measurement, not a gate, and `#246`'s open
+> question is unchanged and still needs the spec ADR-0105 requires.
 
 ### 248. The DCMA what-if drops the levelling pass, and nothing says so
 
