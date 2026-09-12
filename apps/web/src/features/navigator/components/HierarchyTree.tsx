@@ -191,24 +191,54 @@ export function HierarchyTree({
    *
    * `useToolbarFocusHandoff` is the mechanism, reused rather than reimplemented for the
    * `use-focus-handoff.ts:8-10` reason: this repository has recorded a keyboard rule copied into a
-   * second place and then fixed in only one of them in five consecutive epics. Its logic is generic
-   * over a container + the ids it renders as stops — nothing in it is toolbar-specific — so the
-   * **name** is now imprecise and the name is deliberately left alone: renaming or moving an
-   * exported hook changes a component's public contract, which is an ADR-0105 trigger that would
-   * take an `S` register row to a full spec. Recorded in #305 rather than done quietly.
+   * second place and then fixed in only one of them in five consecutive epics. The discriminator
+   * for reuse-versus-a-third-local-copy is **not** "does the code look similar" — the
+   * `resolvedFocusedKey` block twenty lines up deliberately keeps three local derivations of the
+   * roving-stop rule — it is **does correctness depend on cross-consumer agreement**. A WCAG
+   * obligation does; a private index derivation does not.
    *
-   * Two honest limits, both stated in #305 rather than papered over:
+   * Its logic is generic over a container + the ids it renders as stops, so the **name**,
+   * the directory and the `toolbarLabel` option are all now imprecise. That is left alone
+   * deliberately: renaming or moving an exported hook changes a component's public contract, which
+   * is an ADR-0105 trigger that would take an `S` register row to a full spec. Filed as
+   * `docs/TECH_DEBT.md` **#306** rather than asserted here — a source comment is not a register
+   * entry, and this docblock claimed "recorded in #305" when #305 says nothing about it, which is
+   * the ADR-0076 Class 3 shape inside the fix for a defect found the same way.
+   *
+   * **This wiring is invisible to `focus-handoff-seam.structural.test.ts`**, whose `PRIMITIVES` is
+   * `['Toolbar.tsx', 'Deck.tsx']` under `components/ui/toolbar/`. ADR-0135's own Consequences
+   * predicted a third adopter would be — so unlike its two siblings, the only thing protecting this
+   * spread is the unit case below it. Also `#306`.
+   *
+   * Three limits. Only the first is stated in #305; the other two were established by the reviews
+   * this change ran before shipping (§19.13) and are recorded here because they were not known
+   * when the row was written:
    *
    * - The sentence is composed by the hook, so a resolved placeholder announces "Loading… is no
-   *   longer available. Focus moved to Project Explorer." Every clause is true and it discharges
-   *   the 2.4.3 obligation, but the *useful* sentence for that case names the children that
-   *   arrived — which is ADR-0029 §202-203's lazy-load announcement, specified and never built
-   *   (`useAnnounce` has no other reference under `features/navigator`).
-   * - `afterDelete`'s root branch already focuses this container synchronously, so by the hook's
-   *   yielded frame `document.activeElement` is not `<body>` and it correctly stands down. The two
-   *   do not fight, and route 2 of #305 is therefore left as a benign residual: a stale
-   *   `focusedKey` is now resolved away by `resolvedFocusedKey`, so DOM focus on the container and
-   *   the row holding the tab stop are no longer able to disagree about a row that is gone.
+   *   longer available. Focus moved to Project Explorer." (reproduced verbatim by the
+   *   accessibility review, not predicted). Every clause is true and it discharges the 2.4.3
+   *   obligation, but the *useful* sentence for that case names the children that arrived — which
+   *   is ADR-0029 §202-203's lazy-load announcement, specified and never built (`useAnnounce` has
+   *   no other reference under `features/navigator`).
+   * - **Route 2 of #305 — `afterDelete`'s root branch — is benign, and NOT for the reason this
+   *   docblock first gave.** It said the two mechanisms race and `afterDelete` wins. There is no
+   *   race. Traced in real Chromium: opening the delete confirmation refocuses the row
+   *   (`menu.tsx:167`) and then `showModal()` (`dialog.tsx:70`) moves focus into the dialog, which
+   *   blurs the row with a **non-null `relatedTarget`** — exactly the condition
+   *   `use-focus-handoff.ts:206-212` treats as a real move, clearing the record. By the time the
+   *   delete confirms there is nothing left for the hook to act on. The fragility that hides is
+   *   worth knowing: `NavigatorCrud` conditionally RENDERS `ConfirmDialog` (`navigator-crud.tsx:170`),
+   *   so closing it unmounts the node without calling native `.close()`. Were it ever refactored to
+   *   toggle `open` instead, `.close()` would restore focus to the row and the effect ordering this
+   *   docblock wrongly claimed would suddenly decide the outcome — untested, in either direction.
+   * - The hand-off emits no announcement on that path, which costs nothing: `confirmDelete` already
+   *   announces `<Kind> “<name>” deleted.` (`navigator-crud.tsx:108`), a better sentence than the
+   *   generic one.
+   *
+   * `labelOf` reaches a tree row's name through its `textContent` fallback, since no ancestor here
+   * carries `data-toolbar-item`. Correct today and fragile: a row that grows a second visible text
+   * node would silently concatenate into the announced name, and nothing asserts the composed
+   * sentence against a decorated row.
    */
   const rowKeys = useMemo(() => rows.map((row) => row.key), [rows]);
   const focusHandoff = useToolbarFocusHandoff({
