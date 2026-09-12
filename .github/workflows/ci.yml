@@ -182,6 +182,23 @@ jobs:
       - name: Check every gate runs in CI
         run: pnpm check:ci-roster
 
+      # **CI runs the end-to-end suites the repository declares, and no others.**
+      # `docs/specs/ci-sharding/` M1. `check:ci-roster` above reads root `check:*` gates and stops
+      # there; `check:counts` counts `e2e-*` DIRECTORIES, which is a different quantity (two suites
+      # share `./e2e-account`), so that count can be right while a suite is unwired. Neither can see
+      # this in either direction, and the 44 web steps below agreed with `apps/web/package.json`'s
+      # 44 scripts by hand until this landed.
+      #
+      # It matches on the COMMAND each step runs, never on the step's title: a title is prose and
+      # gets reworded. It needs no database and no browser, which is why it belongs in `quality`.
+      #
+      # What it deliberately does NOT do: assert any wall-clock time. It prints a projection from
+      # `scripts/e2e-durations.json` and asserts nothing about it — five samples of the end-to-end
+      # job span 40–47 minutes and the two slowest changed no test at all, so a duration gate would
+      # fail on a slow runner and be deleted rather than fixed (ADR-0058).
+      - name: Check every end-to-end suite runs in CI
+        run: pnpm check:e2e-roster
+
       # Every ADR is reachable from the document a reader navigates product direction by.
       # Written because THREE consecutive reconciliation passes found `docs/ROADMAP.md` silent on
       # the newest ADRs — 0067–0073, then 0074–0085, then 0087–0092 — each time found by hand, and
