@@ -148,9 +148,19 @@ and components. Deleting a feature should mean deleting one folder.
   a screen must always pass them. See `routes/calendars.tsx` / `routes/resources.tsx`.
 - **Guards.** `beforeLoad` on the `_authed` layout enforces authentication and
   redirects unauthenticated users to sign-in with a `redirect` param.
-- **Code splitting.** Routes are lazy by default (per-route chunks); the shell
-  and critical path stay in the initial bundle. See
-  [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md).
+- **Code splitting.** **Not implemented yet, and this bullet asserted the opposite
+  for the project's life.** Of 23 registered routes exactly **two** are lazy
+  (`/share`, `/staff`), `vite.config.ts` sets no `manualChunks`, and every
+  authenticated screen — the plan workspace, the Gantt, the canvas host, every
+  dialog — is in the entry chunk, so a visitor downloads the whole application
+  before the sign-in form paints. Measured 2026-09-12: **404,797 gzip bytes** in
+  the entry graph, of which **33,478 is TSLD painter code** reached statically
+  from `TsldCanvas.tsx:46`.
+  `docs/TECH_DEBT.md` #292 corrected this same sentence in
+  [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md) and **left this copy standing** —
+  the ADR-0071 shape, in the Routing section a reader opens first. The rule that
+  replaces it, and the measured floor it can reach, are in
+  [`specs/route-code-splitting/`](specs/route-code-splitting/).
 
 ## Data fetching & caching (ADR-0004)
 

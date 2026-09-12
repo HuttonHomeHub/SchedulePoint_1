@@ -1040,6 +1040,60 @@
         "apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts",
         "docs/TECH_DEBT.md"
       ]
+    },
+    {
+      "ref": "router.d.ts:98-113",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.d.ts",
+      "lines": "98-113",
+      "anchor": "defaultPendingMs?: number;",
+      "citedBy": [
+        "docs/specs/route-code-splitting/feature-spec.md",
+        "docs/specs/route-code-splitting/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "lazyRouteComponent.js:37-44",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/lazyRouteComponent.js",
+      "lines": "37-44",
+      "anchor": "if (isModuleNotFoundError(error)",
+      "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
+    },
+    {
+      "ref": "lazyRouteComponent.js:51",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/lazyRouteComponent.js",
+      "lines": "51",
+      "anchor": "lazyComp.preload = load;",
+      "citedBy": [
+        "docs/specs/route-code-splitting/feature-spec.md",
+        "docs/specs/route-code-splitting/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "index.d.ts:12",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/index.d.ts",
+      "lines": "12",
+      "anchor": "export { lazyRouteComponent } from './lazyRouteComponent.js';",
+      "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
+    },
+    {
+      "ref": "load-client.js:10-12",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/load-client.js",
+      "lines": "10-12",
+      "anchor": "return route.options[type]?.preload?.();",
+      "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
+    },
+    {
+      "ref": "load-client.js:671-672",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/load-client.js",
+      "lines": "671-672",
+      "anchor": "route.options.pendingComponent ?? router.options.defaultPendingComponent",
+      "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
     }
   ]
 }
