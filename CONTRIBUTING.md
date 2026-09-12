@@ -93,12 +93,29 @@ along with the reference template it verified. Correct when written, a trap by t
 anyone followed it, and nothing connected the deletion to the instruction.
 
 - **Require a pull request before merging** (no direct pushes to `main`).
-- **Require status checks to pass.** The jobs that existed on 2026-09-11 were:
+- **Require status checks to pass.** The check runs a real pull-request head carried on
+  **2026-09-12** were these **ten** — read off `get_check_runs`, not off the workflow files,
+  because that is what GitHub would be asked to match:
   - `Format, lint, typecheck & unit tests`
-  - `End-to-end tests`
+  - `End-to-end tests (API)`
+  - `End-to-end tests (web shard 1)`, `(web shard 2)`, `(web shard 3)`, `(web shard 4)`
   - `Build & smoke-boot images`
   - `Check the PR title is a Conventional Commit`
-  - `Analyze (javascript-typescript)` (CodeQL)
+  - `Analyze (javascript-typescript)` and `CodeQL` (two runs, both reported)
+
+  **This list changed within one day of being written, which is the argument for not
+  trusting it.** It said `End-to-end tests` — one name — until 2026-09-12, and ADR-0138
+  sharded that job into an API job and four web shards **the same week the list was
+  repaired for naming a job ADR-0057 had deleted**. Nothing connected the shard split to
+  this paragraph either; `docs/TECH_DEBT.md` #300 is the record and now carries this as its
+  second instance.
+
+  Two consequences a reader would not guess. **A matrix job contributes one required check
+  per matrix value**, so the four shards are four names and not one — add a fifth shard and
+  the list is silently short again. And **`fail-fast` is off** on that matrix deliberately,
+  so a second red shard stays visible rather than being cancelled; requiring only one of
+  them would pass a pull request whose other three shards never ran.
+
 - **Require branches to be up to date before merging** (so checks run against
   the post-merge tree).
 - **Require conversation resolution.** An approving review needs a **second person**; with
