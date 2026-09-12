@@ -269,9 +269,13 @@ jobs:
       - name: Check the web bundle budget
         run: pnpm --filter @repo/web check:bundle-size
 
-  e2e:
-    name: End-to-end tests
+  e2e-api:
+    name: End-to-end tests (API)
     runs-on: ubuntu-latest
+    # A runaway guard, not a bar. Nothing here asserts a wall-clock time (the epic forbids it:
+    # five samples of the pre-split job span 40-47 minutes), but a hung browser should surrender its
+    # runner and leave a readable log rather than sit until the platform's own limit.
+    timeout-minutes: 30
     # A disposable PostgreSQL for API end-to-end tests (Supertest).
     services:
       postgres:
@@ -353,8 +357,11 @@ jobs:
       - name: Check schema/migration drift
         run: pnpm --filter @repo/api prisma:check-drift
 
-      # API e2e (Supertest) and web e2e (Playwright) run sequentially — they
-      # share the test database, so running them in parallel could race.
+      # **These no longer run sequentially with the web suites, and that is the point of the
+      # split.** This comment used to say they must, because the two shared one test database.
+      # `services:` is per JOB, so `e2e-api` and `e2e-web` each get their own disposable Postgres
+      # and there is nothing left to race: the constraint the sequencing existed to satisfy was
+      # co-location, and the split removes it rather than working around it.
       - name: API end-to-end tests
         run: pnpm --filter @repo/api test:e2e
 
@@ -367,6 +374,96 @@ jobs:
       # shard it rather than shortening it.
       - name: Pairwise differential (seed catalogue)
         run: pnpm --filter @repo/api test:e2e:pairwise
+
+  e2e-web:
+    name: End-to-end tests (web)
+    runs-on: ubuntu-latest
+    # A runaway guard, not a bar. Nothing here asserts a wall-clock time (the epic forbids it:
+    # five samples of the pre-split job span 40-47 minutes), but a hung browser should surrender its
+    # runner and leave a readable log rather than sit until the platform's own limit.
+    timeout-minutes: 30
+    # A disposable PostgreSQL. The web job needs one too: Playwright starts the API itself from
+    # its `webServer` block, so this job runs the full stack and the API needs a database. Nothing
+    # is trimmed from the setup below as an optimisation — `prisma:deploy` included.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://app:app@localhost:5432/app_test?schema=public
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The Playwright API web server runs the compiled app (`nest start` →
+      # `node dist/main.js`), which resolves `@repo/types` to its built output
+      # (`exports.default` → `dist/`). Unlike the Turbo-driven `quality` job,
+      # this job runs those steps directly, so it must build the shared packages
+      # first — otherwise the web e2e web server crashes with MODULE_NOT_FOUND.
+      #
+      # EVERY package `apps/api` or `apps/web` imports must be listed. A local
+      # checkout hides an omission, because a `dist/` built by an earlier run is
+      # still lying there; CI starts clean and fails at `nest build` instead
+      # (`@repo/layout` was missed exactly this way — ADR-0019 build contract).
+      #
+      # `@repo/seed` was missed exactly the same way, and this comment predicted
+      # it word for word. The staff performance probe moved the scale scene into
+      # `apps/web/src`, so the web app imports `@repo/seed/scale` — and only the
+      # CSP suite noticed, because it is the one config that serves a PRODUCTION
+      # build. Every other suite runs the dev server, where the package's
+      # `development` export condition resolves to `src/` and no `dist/` is
+      # needed. Locally the omission is invisible for the reason above: a
+      # `dist/` from an earlier `pnpm build` is still lying there.
+      #
+      # `@repo/engine-conformance` comes with it, and the ADR-0019 gate is what
+      # said so: promoting `@repo/seed` to a real dependency made its own
+      # dependency transitively an app's, and `check:build-contract` refused the
+      # push until this line named it. That gate could not have caught the
+      # original omission, because the promotion M1-T5 specified had been
+      # skipped — so as far as the contract was concerned `apps/web` depended on
+      # neither. Ordered before `@repo/seed`, which imports it.
+      - name: Build shared packages
+        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build && pnpm --filter @repo/engine-conformance build && pnpm --filter @repo/seed build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @repo/api prisma:generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @repo/api prisma:deploy
+
+      # Schema ↔ migration lock-step. The migrations have just been applied to
+      # a pristine database, so diffing that database against the datamodel
+      # answers one question: does `schema.prisma` describe what the migrations
+      # actually build? A non-empty diff means someone edited the model without
+      # writing the matching migration (or wrote one that drifted) — caught here
+      # rather than at `prisma migrate dev` on the next contributor's machine.
+      # Objects Prisma cannot express (partial indexes/uniques, CHECK and
+      # EXCLUDE constraints — this repo has many, by convention in raw SQL) are
+      # invisible to both sides of the diff, so they neither pass nor trip it;
+      # they stay documented in the model comments instead (TECH_DEBT #54).
+      - name: Check schema/migration drift
+        run: pnpm --filter @repo/api prisma:check-drift
 
       - name: Install Playwright browsers
         run: pnpm --filter @repo/web exec playwright install --with-deps

@@ -3,10 +3,16 @@
  * The ADR-0019 build contract, as a computed gate.
  *
  * A shared workspace package ships COMPILED output, so every app that imports one at runtime has
- * to build it before building itself. That obligation lives in three hand-maintained places — the
+ * to build it before building itself. That obligation lives in several hand-maintained places — the
  * app's Dockerfile `deps` stage (which COPYs the package manifest so pnpm can resolve the
- * workspace link), the same Dockerfile's `build` stage, and the CI e2e job's "Build shared
- * packages" step, which runs those commands directly rather than through Turbo.
+ * workspace link), the same Dockerfile's `build` stage, and **every** CI "Build shared packages"
+ * step, which run those commands directly rather than through Turbo.
+ *
+ * **"Every" is load-bearing and was once "the".** There was one such step until
+ * `docs/specs/ci-sharding/` M2 split the end-to-end work into `e2e-api` and `e2e-web`, and this
+ * gate read the first with a non-global `exec`. Deleting `@repo/layout` from the second step left
+ * it printing `Build contract OK`. Both are asserted now, independently, and the occurrence count
+ * is in each finding so a reader can see how many were judged.
  *
  * Adding a package and forgetting one of them is invisible locally: a developer's checkout already
  * has a `dist/` from an earlier build, so everything resolves. CI starts clean and fails inside
@@ -41,6 +47,8 @@
  * it is what stopped this gate being rewritten around the wider, wrong rule.
  */
 import { readFileSync } from 'node:fs';
+
+import { buildStepsIn, missingFrom } from './lib/build-steps.mjs';
 
 /** Apps whose Dockerfile carries a build contract, and the file that carries it. */
 const APPS = [
@@ -125,16 +133,31 @@ for (const app of APPS) {
   }
 }
 
-// The e2e job runs the build commands directly (no Turbo), so it needs the union of both apps'.
+// The end-to-end jobs run the build commands directly (no Turbo), so each needs the union of both
+// apps' shared packages.
+//
+// **EVERY such step is checked, not the first.** This used a single non-global `exec`, which was
+// correct only while exactly one job built shared packages. `docs/specs/ci-sharding/` M2 split the
+// end-to-end work into `e2e-api` and `e2e-web`, so there are now two — and the blind version was
+// verified: with `@repo/layout` deleted from the SECOND step, this gate printed
+// "Build contract OK — 5 shared package(s) built by every consumer". A gate that names a contract
+// and checks half of it is worse than none, because it is quoted.
+//
+// The remedy is deliberately NOT to exempt the second step. Every occurrence is asserted
+// independently, and the count is reported so a reader can see how many were judged.
 const ci = read(CI_WORKFLOW);
-const buildStep = /- name: Build shared packages\n\s+run: (?<run>.*)\n/u.exec(ci)?.groups?.run;
-if (buildStep === undefined) {
+const buildSteps = buildStepsIn(ci);
+if (buildSteps.length === 0) {
+  // The population rule (ADR-0093). Zero build steps must not read as "every package is built":
+  // with no occurrences the loop below is vacuously satisfied and the gate would report success
+  // over a workflow that builds nothing.
   problems.push(`${CI_WORKFLOW}: no "Build shared packages" step found — has it been renamed?`);
 } else {
-  for (const dep of [...required].sort()) {
-    if (!buildStep.includes(`pnpm --filter ${dep} build`)) {
+  for (const [index, buildStep] of buildSteps.entries()) {
+    for (const dep of missingFrom(buildStep, required)) {
       problems.push(
-        `${CI_WORKFLOW}: "Build shared packages" does not build ${dep}, which an app depends on.`,
+        `${CI_WORKFLOW}: "Build shared packages" (occurrence ${index + 1} of ` +
+          `${buildSteps.length}) does not build ${dep}, which an app depends on.`,
       );
     }
   }
