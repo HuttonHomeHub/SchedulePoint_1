@@ -2109,10 +2109,32 @@ check, "Checking your access…"). A skeleton in either place promises a shape t
 guesses one and is wrong half the time — including on a refusal branch, where the settled layout is
 a sentence.
 
-**Unverified:** the four `staff.tsx` spinners and the six panel spinners were classified from
-surrounding context in a grep pass, not by opening each file whole. If any turns out to be a
-`DataTable`-shaped list it belongs with M7's fix rather than here — checking that is the first task
-of whatever picks this up.
+~~**Unverified:** the four `staff.tsx` spinners and the six panel spinners were classified from
+surrounding context in a grep pass, not by opening each file whole.~~ **Done 2026-09-12** — this was
+the row's own stated first task, and the answer changes the scope in both directions.
+
+- **The six panels are correctly classified.** `NoteThread`, `CalendarExceptionsEditor`,
+  `GuestPlanView`, `FloatPathsPanel`, `ScheduleSummaryStrip`, `ActivityMembersPanel`,
+  `ScheduleHealthPanel` and `EarnedValuePanel` contain **zero** `<DataTable>` between them (one
+  `<Spinner>` each). None belongs with M7's fix; all are genuine skeleton candidates.
+- **Three of the four `staff.tsx` sites DO settle into a `DataTable`** — mail failures (`:218`),
+  retention by table (`:362`) and unverified accounts (`:558`). So the row's hypothesis was right
+  about the shape and **wrong about the conversion being free**, which is the part worth carrying.
+- **It is not free, and the reason is not a defect.** Each of those three passes
+  `query={{ isPending: false, … }}` — which looks like the loading state hard-coded away and is
+  **honest in context**: every one sits inside a `{data !== undefined && …}` gate, so by the time
+  the table renders the data is present. The section-level `<Spinner>` above it is doing the work
+  `DataTable`'s own skeleton would do. Converting means restructuring the section so the table
+  renders _during_ pending, and deciding what the `<dl>` of `Stat`s above it shows meanwhile — a
+  per-section design call, not a rewiring. (An earlier reading of this as "hard-coding the loading
+  state away" was too strong and is corrected here rather than left in the commit log.)
+- **One site has no bucket in the three-way split.** The mail-health section (`:149`) settles into a
+  `<dl>` of `Stat`s **and** a `DataTable`, so it is neither purely bespoke nor purely list-shaped —
+  a mixed section wants the skeleton decision made for both halves at once.
+
+So M7's primitive is **available at three of the fifteen and free at none of them**, and the work
+that remains is still the page-level pattern this row identifies. What is removed is the risk that a
+chunk of it was already solved.
 
 ### 99. `/request-password-reset` leaks account existence through timing
 
