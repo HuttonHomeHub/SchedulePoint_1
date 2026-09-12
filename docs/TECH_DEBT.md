@@ -1307,6 +1307,30 @@ expected to take.
 > identical either way; the discriminator is which factor `resolveDayFactors` received, which is
 > M1's first question.
 >
+> > **ANSWERED 2026-09-12 by experiment, not by reading — M0-T2b, same document.** The question was
+> > put to the product rather than the source: `Task twin`'s fixture with ONE difference, a second
+> > five-day task carrying the plan's own 8 h calendar **explicitly** on `activities.calendar_id`
+> > instead of inheriting it. Same window (asserted equal), same 2,400 duration minutes, same 5
+> > `durationDays`. **The inheriting twin reads `total_float` 2; the explicit twin reads 5.** Two
+> > identical activities, two different floats. The three possible outcomes were written into the
+> > test's docblock **before** the run, so the result could not be read backwards.
+> >
+> > **The 24-hour-axis reading is disproved**: on that reading a five-day window is 7,200 minutes and
+> > the explicit twin would read **15**. It reads 5 — so the engine's slack is 2,400 minutes and the
+> > explicit activity was divided by 480, which leaves 1440 as the only divisor that takes the
+> > inheriting one to 2. **The factor is the defect**, and it reaches an activity with no resource, no
+> > driver and no calendar of its own.
+> >
+> > The code agrees and is corroboration rather than the finding: `resolveDayFactors` maps a `null`
+> > calendar id to `DEFAULT_HOURS_PER_DAY_MINUTES`, and an activity inheriting its plan's calendar
+> > carries `null`. **That function's docblock states the invariant that fails** — "the unit and the
+> > schedule agree" holds only when the PLAN has no calendar either, which is the one case this row
+> > is not about.
+> >
+> > **What it does not settle**: where the fix belongs. Resolving the inherited calendar into
+> > `calIdByActivity`, or defaulting to the plan's factor rather than 1440, are different changes
+> > with different blast radii — M1's choice, and still the product owner's to approve.
+>
 > Two further notes. **The `RESOURCE_DEPENDENT` case cannot discriminate in that fixture** — 8 days
 > of slack reads 8 on both 480 and 1440 — so the plain task is the assertion that carries the weight,
 > the opposite of what the plan expected. And **M0-T1 was already built** (`ec1227a8`, 2026-09-10)

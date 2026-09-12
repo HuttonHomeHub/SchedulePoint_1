@@ -55,6 +55,48 @@ received, which is M1's first question.
 8 on both 480 and 1440, so the case the spec predicts is pinned without being proved. The plain task
 is the assertion that carries weight — the opposite of what the plan expected.
 
+## M0-T2b — the discriminator M0-T2 left open, ANSWERED by experiment
+
+M0-T2 recorded two readings that both fit `Task twin` reading `2`, said the discriminator "is which
+factor `resolveDayFactors` actually received", and assigned it to M1. It can be asked of the product
+instead of the source, and the answer needs no deployed database and no special hardware.
+
+**The experiment.** `Task twin`'s fixture with ONE difference: a second five-day task carries the
+plan's own 8 h calendar **explicitly** on `activities.calendar_id` rather than inheriting it. Same
+duration, same predecessor shape, same slack window — the two differ only in whether the column is
+set. **The three outcomes were written into the test's docblock before the run**, so the result
+could not be read backwards into whichever story fitted.
+
+| activity          | `calendar_id` | `duration_minutes` | `durationDays` | `total_float` |
+| ----------------- | ------------- | ------------------ | -------------- | ------------- |
+| `Inheriting twin` | NULL          | 2400               | 5              | **2**         |
+| `Explicit twin`   | the 8 h id    | 2400               | 5              | **5**         |
+
+Same plan, same calendar in effect, same window (`earlyFinish` and `lateFinish` asserted equal),
+same duration in minutes and in days. **Two identical activities, two different floats.**
+
+**So the mechanism is the factor, and the 24-hour-axis reading is disproved.** Had the engine
+measured the slack on a 24-hour axis, 5 days of window would be 7,200 minutes and the explicit twin
+would read **15**; it reads 5, so the engine's slack is **2,400 minutes** and `Explicit twin` was
+divided by **480**. `Inheriting twin`, from the same 2,400, reached 2 — which only 1440 produces.
+
+**The code agrees, and is quoted as corroboration rather than as the finding.**
+`schedule.service.ts`'s `resolveDayFactors` maps `calId === null` to
+`DEFAULT_HOURS_PER_DAY_MINUTES`. An activity inheriting its plan's calendar carries `null`, so it
+takes the 24-hour constant while the plan's own day is 480.
+
+**And that function's docblock states the invariant that fails.** It says an activity with no
+calendar "takes the 24-hour constant, which is also what `buildPlanCalendar` falls back to, so the
+unit and the schedule agree". That holds only when the **plan** has no calendar either. Give the
+plan an 8 h calendar — the case this whole row is about — and the two stop agreeing, which is
+exactly what the table above measures.
+
+**What this does NOT establish.** It does not say where the fix belongs: resolving the inherited
+calendar into `calIdByActivity`, or defaulting to the plan's factor rather than to 1440, are
+different changes with different blast radii, and choosing between them is M1's. It also leaves
+`#86`'s original driver-aware case unproved — `Crane lift` still cannot discriminate in this
+fixture, as M0-T2 records.
+
 ## M0-T3 — NOT taken, and it cannot be taken from here
 
 The task asks for a count "against the **deployed** database". This session has only a local test

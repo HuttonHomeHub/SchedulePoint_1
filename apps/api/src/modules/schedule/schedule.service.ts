@@ -340,6 +340,19 @@ export class ScheduleService {
    * One lookup for every DISTINCT calendar in the plan, not one per activity — a 2,000-activity plan
    * on three calendars costs three rows. An activity with no calendar takes the 24-hour constant,
    * which is also what `buildPlanCalendar` falls back to, so the unit and the schedule agree.
+   *
+   * **That last clause is FALSE when the plan has a calendar, and it is `docs/TECH_DEBT.md` #86's
+   * mechanism** (measured 2026-09-12, `docs/specs/resource-dependent-day-factor/m0-measurements.md`
+   * §M0-T2b). An activity inheriting its plan's calendar carries `null` here and so takes 1440,
+   * while the schedule it is measured against runs on the plan's day — 480 for an 8 h calendar. The
+   * experiment is two five-day tasks in one plan, identical but for `activities.calendar_id` being
+   * set explicitly on one: `total_float` reads **5** on the explicit one and **2** on the inheriting
+   * one. The invariant holds only when the PLAN has no calendar either, which is the one case #86 is
+   * not about.
+   *
+   * **Left as characterisation, deliberately.** Where the fix belongs — resolving the inherited
+   * calendar into `calIdByActivity`, or defaulting to the plan's factor rather than to 1440 — is a
+   * choice with different blast radii and belongs to that row's M1, not to a comment.
    */
   private async resolveDayFactors(
     calIdByActivity: ReadonlyMap<string, string | null>,
