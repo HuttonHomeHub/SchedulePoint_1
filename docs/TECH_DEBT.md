@@ -7494,6 +7494,30 @@ scoped to `src/components/ui/toolbar/`, and all five of its assertions (`:38`, `
 protected by one unit case alone. A future refactor could drop `{...focusHandoff}` from the tree and
 only that case would notice.
 
+**(c) The exposure is INVERTED between the consumers, and that is the sharper finding.** Added
+2026-09-12 by the spec pass (`docs/specs/focus-handoff-consumer-census/`), verified here by
+mutation rather than accepted:
+
+Nothing asserts that `Toolbar` or `Deck` is **wired**. `use-focus-handoff.test.tsx:81-127` mounts a
+**synthetic** harness, and all five container-focus cases in the primitives' own suites
+(`Toolbar.test.tsx:474`, `:485`, `:508-514`; `Deck.test.tsx:275`, `:286`) call `bar.focus()`
+directly, so none of them exercises the spread. Measured: deleting `{...focusHandoff}` from
+`Toolbar.tsx` leaves **164 of 165 tests passing** — the single failure is
+`focus-handoff-seam.structural.test.ts`'s assertion 2, and **every behavioural case is green**.
+
+So each consumer is covered by exactly the instrument the other two lack:
+
+| consumer            | structural gate | behavioural test                                    |
+| ------------------- | --------------- | --------------------------------------------------- |
+| `Toolbar.tsx`       | **yes**         | no — its cases focus the bar directly               |
+| `Deck.tsx`          | **yes**         | no — same                                           |
+| `HierarchyTree.tsx` | **no** (b)      | **yes**, red-verified against the pre-fix component |
+
+That makes assertion 2 the gate's most load-bearing assertion rather than its third, and it means
+**the newest consumer is the only one whose wiring is proved by behaviour** — while being the only
+one the gate cannot see. Neither half of that is an accident of this row; both were true before it
+was filed.
+
 This is **not a regression introduced by #305's fix**: ADR-0135's own Consequences section predicted
 it in as many words — _"a third primitive would be invisible to it"_ — and accepted it as a known
 gap. What changed is that the gap is now real rather than hypothetical.
