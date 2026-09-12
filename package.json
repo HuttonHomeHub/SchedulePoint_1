@@ -18,7 +18,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
     "typecheck": "turbo run typecheck",
-    "check:doc-register": "node scripts/lib/doc-register.test.mjs && node scripts/check-reconcile-due.test.mjs && node scripts/check-spec-status.test.mjs && node scripts/check-ci-roster.test.mjs && node scripts/commitlint-fixtures.test.mjs && node scripts/pr-title-workflow.test.mjs && node scripts/check-licenses.test.mjs && node scripts/lib/advisory-gates.test.mjs && node scripts/check-bundle-size.test.mjs",
+    "check:doc-register": "node scripts/lib/doc-register.test.mjs && node scripts/check-reconcile-due.test.mjs && node scripts/check-spec-status.test.mjs && node scripts/check-ci-roster.test.mjs && node scripts/commitlint-fixtures.test.mjs && node scripts/pr-title-workflow.test.mjs && node scripts/check-licenses.test.mjs && node scripts/lib/advisory-gates.test.mjs && node scripts/check-bundle-size.test.mjs && node scripts/e2e-durations.test.mjs",
     "check:debt-status": "node scripts/check-debt-status.mjs",
     "check:reconcile-due": "node scripts/check-reconcile-due.mjs",
     "check:doc-links": "node scripts/check-doc-links.mjs",
