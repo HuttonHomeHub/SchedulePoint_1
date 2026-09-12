@@ -4894,8 +4894,30 @@ When operating in this repo, Claude Code should:
    database is available and always has been** — that gap was a process gap, not
    a tooling one.
 9. **A GitHub `check_suite` event is not proof that CI passed.** Before merging,
-   read the check runs for the PR's **current head** (`get_check_runs`) and
-   confirm every one is `completed` with `conclusion: success`.
+   read the check runs for the PR's **current head** (`get_check_runs`), **dedupe
+   by check-run name keeping the most recently started**, and confirm every
+   survivor is `completed` with `conclusion: success`.
+
+   **The dedupe clause is not tidiness.** One SHA can carry two runs of the same
+   check, and the older one keeps its conclusion for ever. PR #514 is the worked
+   example: a 102-character title failed `pr-title.yml` at 23:50:36Z, the title was
+   edited at ~23:51:20Z, the workflow re-ran on `edited` exactly as designed and
+   passed at 23:51:25Z — and both runs sat on the unchanged head, one green, one
+   red. That workflow's `concurrency` group with `cancel-in-progress: true` did not
+   help, and correctly so: cancellation applies to runs that are **in progress**,
+   and this one had finished 44 seconds before the edit.
+
+   Without the clause, "every one is success" is **false for a PR that is
+   perfectly mergeable** — so a reader either refuses it, or learns that some red
+   checks are fine to wave through, which is the habit this whole section exists
+   to prevent.
+
+   A later push sheds the stale run, because check runs are keyed to a **commit**
+   — which is what makes the trap narrow and worth stating rather than harmless.
+   The case that bites is a title corrected with **no new commit**, and that is how
+   a title normally is corrected, since fixing one requires no push at all. So the
+   stale failure clears only when something unrelated happens to advance the head,
+   and the list itself never says which situation you are in.
 
    **This is the repository's only merge gate, which is why it is a rule and not
    fussiness.** `main` carries no branch protection, by decision (§8), so nothing on

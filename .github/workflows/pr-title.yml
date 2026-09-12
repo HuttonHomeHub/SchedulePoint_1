@@ -24,18 +24,25 @@
 # happens before bash parses the script, so a title containing `"; curl …` would execute. Via `env:`
 # it is a value, not source text.
 #
-# Two blind spots, stated rather than implied:
+# Three blind spots, stated rather than implied:
 #
 #   1. The **release PR** ("chore(release): version packages") carries no checks at all — a tag or PR
 #      created with the default `GITHUB_TOKEN` cannot start another workflow run. Its title is a
 #      constant and is pinned in `scripts/commitlint-fixtures.test.mjs` instead.
 #   2. The squash dialog is **editable at merge time**, after this check has passed. Nothing in a
 #      repository can prevent that; branch protection and habit are the answer.
+#   3. A corrected title **does not clear the failed run** — it adds a passing one beside it. Check
+#      runs are keyed to a commit, and correcting a title involves no commit, so one SHA ends up
+#      carrying both conclusions for ever. The `concurrency` group below does not help and should
+#      not: it cancels runs that are still IN PROGRESS, and the failed one has usually finished
+#      seconds earlier. Whoever reads these before merging must dedupe by name and keep the most
+#      recently started (CLAUDE.md §19.9, `docs/TECH_DEBT.md` #304).
 name: PR title
 
 on:
   pull_request:
-    # `edited` is the load-bearing one: without it a corrected title cannot clear the check.
+    # `edited` is the load-bearing one: without it a corrected title gets no passing run at all.
+    # It does not CLEAR the failed one — see blind spot 3 above — it adds a green run beside it.
     # `ready_for_review` because a draft's title is usually the one that needs fixing.
     types: [opened, edited, reopened, synchronize, ready_for_review]
     branches: [main]
