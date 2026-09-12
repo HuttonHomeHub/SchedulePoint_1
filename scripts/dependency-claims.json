@@ -15,7 +15,8 @@
     "@tanstack/router-core": "1.171.28",
     "playwright-core": "1.62.1",
     "tailwindcss": "4.3.3",
-    "@tanstack/query-core": "5.101.4"
+    "@tanstack/query-core": "5.101.4",
+    "@nestjs/core": "11.1.29"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -1097,6 +1098,30 @@
       "lines": "671-672",
       "anchor": "route.options.pendingComponent ?? router.options.defaultPendingComponent",
       "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
+    },
+    {
+      "ref": "nest-application-context.js:119-125",
+      "package": "@nestjs/core",
+      "path": "nest-application-context.js",
+      "lines": "119-125",
+      "anchor": "await this.callBeforeShutdownHook(signal);",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "nest-application-context.js:201-204",
+      "package": "@nestjs/core",
+      "path": "nest-application-context.js",
+      "lines": "201-204",
+      "anchor": "await this.callShutdownHook(signal);",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "nest-application-context.js:252-258",
+      "package": "@nestjs/core",
+      "path": "nest-application-context.js",
+      "lines": "252-258",
+      "anchor": "await (0, hooks_1.callModuleDestroyHook)(module);",
+      "citedBy": ["docs/TECH_DEBT.md"]
     }
   ]
 }

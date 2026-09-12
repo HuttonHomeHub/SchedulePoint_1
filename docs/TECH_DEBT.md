@@ -7815,7 +7815,7 @@ classes that as the non-computable third kind.
 
 ### 303. The retention sweep logs an ERROR on every API e2e run, and it is the exact signal the alert watches
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (seen in an overnight `scripts/e2e-local.sh api` run) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-11 (seen in an overnight `scripts/e2e-local.sh api` run) · **Size:** M · **Owner:** api
 
 A green API end-to-end run (635 passed, 1 skipped) also emits one of these — an `ERROR` from the
 runner and a `WARN` from the service, one failure reported at two levels:
@@ -7901,3 +7901,45 @@ unawaited on purpose.
 The **cheap** alternative — skipping the boot sweep under test — is explicitly **not** recommended:
 it would silence the symptom by removing the only coverage the boot path has, and this repository
 has an ADR about exactly that shape of fix.
+
+> **The remedy named above is the WRONG HOOK, established 2026-09-12 by reading the installed
+> `@nestjs/core@11.1.29` rather than by trying it.** `onApplicationShutdown` is the **last** hook
+> Nest calls, and `PrismaService.$disconnect()` runs in the **first**
+> (`prisma.service.ts:51-52`, `onModuleDestroy`). `close()` is literally
+> `callDestroyHook()` → `callBeforeShutdownHook()` → `dispose()` → `callShutdownHook()`
+> (`nest-application-context.js:119-125`; the signal path at
+> `nest-application-context.js:201-204` is the same order), so a
+> sweep awaited in `onApplicationShutdown` is awaited **after** the engine it needs has gone. The
+> row's own diagnosis is right and its prescription cannot work.
+>
+> **And it would have looked as though it worked**, which is why this is worth a paragraph rather
+> than a one-word edit. The defect is a race: a developer who implemented the stated fix would see
+> the ERROR disappear from some runs — the sweep usually finishes inside the extra time an awaited
+> hook chain buys, whether or not anything is awaiting it — and would reasonably call it closed.
+>
+> **`onModuleDestroy` is the only hook that precedes the disconnect, and there the order is an
+> implementation detail rather than a contract.** `callDestroyHook` takes the distance-sorted module
+> list and **reverses** it (`nest-application-context.js:252-258`), so among two modules both
+> imported directly by `AppModule` the later import destroys first — `OperationalModule`
+> (`app.module.ts:108`) before `PrismaModule` (`:105`). That ordering is what a correct fix would
+> rest on, and nothing documents it or watches it.
+>
+> **The cheaper variant — a `stopping` flag, so a failure during shutdown is logged as abandoned
+> rather than failed — does not work either, and the reason is the same ordering.** If
+> `PrismaModule` destroyed first, the in-flight query rejects during its `await $disconnect()` and
+> `sweepNow`'s catch runs **before** our hook sets the flag. A flag set at shutdown cannot classify
+> a failure that shutdown has already caused.
+>
+> **So the size moves S → M and the remedy is specified rather than recommended.** Either the fix
+> depends on that ordering — in which case the dependency is registered (done: both citations above
+> are in `scripts/dependency-claims.json`, so a `@nestjs/core` bump fails `check:claims`, which is
+> exactly when it needs re-reading) and it needs an observer, because its failure mode is a log line
+> that nothing asserts on — or it must not depend on hook ordering at all, which means the sweep
+> itself becomes cancellable and the runner learns to stop between tables. `#289` is the reason this
+> is not academic: a NestJS 12 bump is already queued, and it is the one change that would move the
+> order back without failing anything.
+>
+> **What a gate would need**, since today's evidence is a human reading a 600-second log: an API e2e
+> case that boots an app, closes it, and asserts `retention.sweep_failed` was not emitted — which
+> needs the suite to capture Pino output, and nothing in it does yet. That is the whole reason this
+> stays a row: the fix is now cheap and **proving** it is not.
