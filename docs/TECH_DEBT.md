@@ -102,6 +102,19 @@ Headings are `### <number>. <title>`, always — so a row is a **child** of this
 written `## ` is a **sibling** of `## Detailed items`, which puts it outside the section that
 contains it.
 
+**A row number may carry a letter, and this sentence said otherwise until 2026-09-12.** Three rows
+are `### 118a.`, `### 118b.` and `### 119a.` — sub-rows created when a split row had to keep both
+halves citable. `check:debt-status` reads them correctly, because ADR-0124's rule makes finding
+generous; nothing fails, and that is the problem. **A reader or a tool that builds `\d+\.` from the
+word "always" silently skips those three** — measured: a scan written from this sentence returned
+**99 rows where the gate counts 102**, with no error and no gap a reader would notice. Anything
+matching a row number here wants `\d+[a-z]?\.`.
+
+Two scans failed that way in one session, which is why this is written down rather than remembered:
+the other filtered on `**Size:**` and `**Owner:**`, fields **many rows omit**, and reported "the
+product-facing queue is blocked" — a statement about the query, delivered as a statement about the
+register, which hid #86 (a live wrong write) for most of a night.
+
 **A table inside a detailed row must not lead with a bare number.** `check:debt-status`'s A6 reads
 any `| N | … | … |` line as a Closed-numbers ledger entry and checks its third cell is a date, and
 it cannot tell a ledger row from a data table in a detailed row — so a table of widths keyed
@@ -7806,6 +7819,29 @@ chosen because "one is not news — the next tick is the retry". A developer who
 every green run learns to read it as noise, and that is the one reading that makes the alert
 worthless the day it fires for real. The alert is not armed on any host today (`#100`), so nothing
 is currently mis-firing; this is about the signal's credibility, not a live page.
+
+> **Third observation, 2026-09-12 — and it moves two of this row's numbers.** A green
+> `scripts/e2e-local.sh api` run (**636 passed, 1 skipped, 56 files**) emitted **two** failures, not
+> one, from **two distinct app boots** (PIDs 17864 and 17887, 2.2 s apart), each logged once by the
+> runner as `ERROR` and once by the service as `WARN` — four lines, two failures. Both named
+> `perf_probe_results`, which is the third and last of `RETENTION_TABLES` and matches this row's
+> diagnosis exactly.
+>
+> What changes: **`retention.swept` appeared ZERO times.** The paragraph above describes a run where
+> "the first completed all three tables cleanly … the second failed", and reads as though a clean
+> sweep is the usual case with the failure as the exception. In this run **no boot sweep completed at
+> all**. So the accurate claim is narrower than either version: _at least one and sometimes every_
+> boot that reaches the sweep dies on the last table, and a clean completion is not guaranteed in a
+> given run.
+>
+> That strengthens the credibility argument rather than weakening it. A developer watching this suite
+> sees `retention.sweep_failed` **twice per run with nothing successful beside it** — so the event
+> ADR-0087 M4 alerts on after three consecutive occurrences is, in the one place engineers actually
+> read these logs, indistinguishable from background noise. Two per run reaches the alert's own
+> threshold in two runs.
+>
+> Observed while running the suite for an unrelated change (#86's M0-T2), and reported before this
+> row was found rather than after — which is why it is recorded here rather than filed again.
 
 **Not fixed here.** The discriminator this row originally owed is now answered — it is the boot
 sweep, not the timer — so the remedy is no longer a guess: hold the in-flight sweep's promise and
