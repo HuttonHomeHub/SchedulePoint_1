@@ -64,6 +64,175 @@ import { clearMeasurement, writeMeasurement } from './output';
 
 const WIDTHS = [1440, 1646, 1920] as const;
 
+/**
+ * **`docs/TECH_DEBT.md` #294 — costing the four options, at the product owner's own width.**
+ *
+ * That row is explicit that its remedy "is a design decision rather than a defect fix. Four
+ * options, none costed." The product owner asked for all four costed before choosing. This is
+ * that costing, and it deliberately measures **upper bounds** rather than proposals.
+ *
+ * **Why upper bounds, and why that is the honest design.** Option (a) is "shorten the two labels",
+ * and costing it properly would mean inventing replacement copy and then measuring my own
+ * invention. Instead each option is driven to the most it could possibly buy — both labels
+ * emptied, the sentence removed, both removed — so a **zero** result eliminates that option
+ * outright without anyone having to agree on wording first. A non-zero result says how much is
+ * available and turns the copy into a separate, smaller question.
+ *
+ * **Why it has to be measured at all, rather than reasoned from widths.** ADR-0115 D7: a wrapping
+ * row breaks between ITEMS, not by total width. Freeing 164 px there bought **zero** height, and
+ * one 46 px rename bought a whole line at two widths. So no option's saving follows from how much
+ * width it removes, and eight consecutive epics on this surface had a size expectation
+ * contradicted by their own measurement.
+ *
+ * **The predictions, written before the run** (`scratchpad/294-expectation.md`, and repeated here
+ * so the file carries its own record): (a) 0 px, (b) one line back, (c) the whole 76 px, (d) 0 by
+ * definition. Falsification: if (b) AND (c) both return 0, the sentence and buttons are not what
+ * makes the second line and the row's diagnosis needs re-reading before anything is built.
+ *
+ * **What this does NOT establish.** A DOM mutation measures the layout consequence of an occupant
+ * set, not a built feature: a real popover adds its own trigger, and real shortened labels may
+ * re-wrap inside their button. Every mutation is applied and reverted inside ONE `evaluate`, so
+ * React cannot re-render between the change and the reading. The census is reported rather than
+ * assumed, because this repository has a recorded case of a probe styling the wrong node
+ * (ADR-0119) and one that measured the bars instead of the pills (ADR-0106).
+ */
+interface OptionCost {
+  readonly label: string;
+  readonly height: number;
+  readonly savedVsBaseline: number;
+  readonly applied: boolean;
+  readonly note?: string;
+}
+
+interface CostingReading {
+  readonly error?: string;
+  readonly baselineHeight?: number;
+  readonly census?: readonly string[];
+  readonly options?: readonly OptionCost[];
+}
+
+async function costHandoffOptions(page: Page): Promise<CostingReading> {
+  return page.evaluate((): CostingReading => {
+    const round = (n: number) => Math.round(n * 10) / 10;
+    const row = document.querySelector<HTMLElement>('[data-activities-bar]');
+    if (!row) return { error: 'no [data-activities-bar]' };
+
+    const height = () => round(row.getBoundingClientRect().height);
+    const baseline = height();
+
+    // Report what is actually in the row, so a zero reading can be told from a mis-aimed probe.
+    const census = [...row.querySelectorAll<HTMLElement>('button, [role="status"], [role="group"]')]
+      .map((el) => {
+        const name = (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 48);
+        return `${el.tagName.toLowerCase()}[${el.getAttribute('role') ?? '-'}] "${name}"`;
+      })
+      .slice(0, 24);
+
+    const byName = (name: string): HTMLElement | undefined =>
+      [...row.querySelectorAll<HTMLElement>('button')].find(
+        (b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim() === name,
+      );
+    // `Hand over` / `Keep editing` are read off tsld-toolbar-items.tsx, not guessed — the comment
+    // at the C3 control below records an earlier version guessing `Dismiss` and timing out.
+    const handOver = byName('Hand over');
+    const keepEditing = byName('Keep editing');
+    // The pen's sentence: a status region that is not one of the buttons. Longest wins, because a
+    // short one is a count or a badge rather than the ten-lock-state sentence ADR-0112 measured.
+    const sentence = [...row.querySelectorAll<HTMLElement>('[role="status"]')]
+      .filter((el) => !el.closest('button'))
+      .sort((x, y) => (y.textContent ?? '').length - (x.textContent ?? '').length)[0];
+
+    const options: OptionCost[] = [];
+    const measureWith = (label: string, mutate: () => () => void, note?: string): void => {
+      const revert = mutate();
+      const h = height();
+      revert();
+      options.push({
+        label,
+        height: h,
+        savedVsBaseline: round(baseline - h),
+        applied: true,
+        ...(note === undefined ? {} : { note }),
+      });
+    };
+
+    if (handOver && keepEditing) {
+      measureWith(
+        '(a) shorten both labels — UPPER BOUND, emptied',
+        () => {
+          const a0 = handOver.textContent;
+          const k0 = keepEditing.textContent;
+          handOver.textContent = '';
+          keepEditing.textContent = '';
+          return () => {
+            handOver.textContent = a0;
+            keepEditing.textContent = k0;
+          };
+        },
+        'both labels emptied, so this is the most any rewording could buy',
+      );
+    } else {
+      options.push({
+        label: '(a) shorten both labels',
+        height: baseline,
+        savedVsBaseline: 0,
+        applied: false,
+        note: `buttons not found: handOver=${String(Boolean(handOver))} keepEditing=${String(Boolean(keepEditing))}`,
+      });
+    }
+
+    if (sentence) {
+      measureWith(
+        '(b) move the sentence out of the row',
+        () => {
+          const prev = sentence.style.display;
+          sentence.style.display = 'none';
+          return () => {
+            sentence.style.display = prev;
+          };
+        },
+        `sentence removed: "${(sentence.textContent ?? '').trim().slice(0, 60)}"`,
+      );
+    } else {
+      options.push({
+        label: '(b) move the sentence out of the row',
+        height: baseline,
+        savedVsBaseline: 0,
+        applied: false,
+        note: 'no non-button [role="status"] found inside the row',
+      });
+    }
+
+    if (sentence && handOver && keepEditing) {
+      measureWith(
+        '(c) hand-off into the pen popover — UPPER BOUND',
+        () => {
+          const prev = [sentence.style.display, handOver.style.display, keepEditing.style.display];
+          sentence.style.display = 'none';
+          handOver.style.display = 'none';
+          keepEditing.style.display = 'none';
+          return () => {
+            sentence.style.display = prev[0] ?? '';
+            handOver.style.display = prev[1] ?? '';
+            keepEditing.style.display = prev[2] ?? '';
+          };
+        },
+        'sentence and both buttons removed; a real popover would add its own trigger back',
+      );
+    }
+
+    options.push({
+      label: '(d) accept it',
+      height: baseline,
+      savedVsBaseline: 0,
+      applied: true,
+      note: 'the baseline, by definition',
+    });
+
+    return { baselineHeight: baseline, census, options };
+  });
+}
+
 async function signUp(page: Page, name: string, email: string): Promise<void> {
   await page.goto('/sign-up');
   await page.getByLabel('Full name').fill(name);
@@ -240,6 +409,13 @@ test('#287 — the pen foot row with a hand-off outstanding and an activity sele
     await a.waitForTimeout(250);
     readings[`w${String(width)}_request_outstanding`] = await readFootRow(a);
   }
+
+  // --- #294: cost the four options, at the product owner's own width --------------------------
+  // Same fixture, same state (request outstanding, activity selected) — a second two-context setup
+  // would measure a different plan and cost three minutes to do it.
+  await a.setViewportSize({ width: 1646, height: 900 });
+  await a.waitForTimeout(250);
+  readings['w1646_handoff_option_costs'] = await costHandoffOptions(a);
 
   // --- C3's control: the same page with no hand-off outstanding --------------------------------
   // **`Keep editing`, not `Dismiss`** — read off `tsld-toolbar-items.tsx:2136`, which names the
