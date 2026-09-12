@@ -11,6 +11,8 @@ import {
 
 import { HierarchyTree } from './HierarchyTree';
 
+import { AnnouncerProvider } from '@/components/ui/announcer';
+
 // The virtualizer measures a scroll element, which jsdom reports as 0×0 (so it would
 // window every row out). It is battle-tested and exercised end-to-end by the Playwright
 // journeys; here we stub it to a pass-through that renders every row, so this suite
@@ -362,6 +364,129 @@ describe('HierarchyTree', () => {
         .getAllByRole('treeitem')
         .filter((row) => row.getAttribute('tabindex') === '0');
       expect(stops).toHaveLength(1);
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'offsetParent', descriptor);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'offsetParent');
+    }
+  });
+
+  /**
+   * **ADR-0029 §202-203's lazy-load announcement — specified, never built, now built**
+   * (`docs/TECH_DEBT.md` #307(b)). Before this the only way a keyboard or AT user learnt an
+   * expansion had resolved was to be standing on the placeholder when it vanished.
+   *
+   * **The `offsetParent` stub is load-bearing and the reason is the same as the #305 route-2 case
+   * above.** Only the VISIBLE rail may speak — the shell mounts two trees sharing one expansion
+   * set — and the discriminator is a layout box, which jsdom does not have. Without the stub this
+   * assertion tests nothing, because no instance would ever announce.
+   *
+   * Asserted through a real `AnnouncerProvider`, not a spy on `useAnnounce`: the live region's
+   * text is what a reader actually receives, and `announce` clears then sets inside a
+   * `requestAnimationFrame` (`announcer.tsx:16-19`), so a spy would pass on a message that never
+   * reached the DOM.
+   */
+  it('announces a lazy-load outcome with its count (#307)', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetParent');
+    Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+      configurable: true,
+      get(): Element {
+        return document.body;
+      },
+    });
+
+    try {
+      let releaseProjects!: (value: ProjectSummary[]) => void;
+      holdProjects = new Promise<ProjectSummary[]>((resolve) => {
+        releaseProjects = resolve;
+      });
+
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      sessionStorage.clear();
+      render(
+        <QueryClientProvider client={client}>
+          <AnnouncerProvider>
+            <HierarchyTree orgSlug="acme" />
+          </AnnouncerProvider>
+        </QueryClientProvider>,
+      );
+
+      fireEvent.click(await screen.findByRole('treeitem', { name: /Northgate/ }));
+      // Nothing is announced while it is still in flight — the placeholder is the visible signal.
+      expect(screen.getByTestId('announcer')).toHaveTextContent('');
+
+      releaseProjects(projects);
+      await screen.findByRole('treeitem', { name: /Fit-out/ });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('announcer')).toHaveTextContent('1 project loaded.');
+      });
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'offsetParent', descriptor);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'offsetParent');
+    }
+  });
+
+  /**
+   * **The loading→settled EDGE, which the case above does not pin** (`docs/TECH_DEBT.md` #307(b)).
+   *
+   * Found by mutation rather than by design: replacing `previous.get(id) === 'loading' && settled`
+   * with a bare `settled` left the whole suite green. That defect matters — a group that is merely
+   * still loaded would re-announce on every background refetch, so a planner leaving the rail open
+   * would hear "1 project loaded" repeatedly with nothing having changed.
+   *
+   * Collapsing and re-expanding is the cheapest way to reach it: the second expansion is served
+   * from the query cache, so the group never returns to `loading` and must therefore say nothing.
+   */
+  it('does not re-announce a group that never returned to loading (#307)', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetParent');
+    Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+      configurable: true,
+      get(): Element {
+        return document.body;
+      },
+    });
+
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      sessionStorage.clear();
+      render(
+        <QueryClientProvider client={client}>
+          <AnnouncerProvider>
+            <HierarchyTree orgSlug="acme" />
+          </AnnouncerProvider>
+        </QueryClientProvider>,
+      );
+
+      // Load the client's projects, then the project's plans, so the live region's last message is
+      // about PLANS. That is what makes the absence of a second projects announcement observable:
+      // the region keeps its last text, so "nothing was said" cannot be asserted as emptiness.
+      fireEvent.click(await screen.findByRole('treeitem', { name: /Northgate/ }));
+      const project = await screen.findByRole('treeitem', { name: /Fit-out/ });
+      await waitFor(() =>
+        expect(screen.getByTestId('announcer')).toHaveTextContent('1 project loaded.'),
+      );
+      fireEvent.click(project);
+      await screen.findByRole('treeitem', { name: /Overall Schedule/ });
+      await waitFor(() =>
+        expect(screen.getByTestId('announcer')).toHaveTextContent('1 plan loaded.'),
+      );
+
+      // Collapse the project first, so only the CLIENT's group is in play on the re-expansion and
+      // the assertion cannot be satisfied by a plans announcement landing last.
+      fireEvent.click(screen.getByRole('treeitem', { name: /Fit-out/ }));
+      fireEvent.click(screen.getByRole('treeitem', { name: /Northgate/ }));
+      await waitFor(() =>
+        expect(screen.queryByRole('treeitem', { name: /Fit-out/ })).not.toBeInTheDocument(),
+      );
+
+      // Re-expand: the projects are cached, so the group never returns to `loading` and must say
+      // nothing. Broken (a bare `settled` test) this announces "1 project loaded." again.
+      fireEvent.click(screen.getByRole('treeitem', { name: /Northgate/ }));
+      await screen.findByRole('treeitem', { name: /Fit-out/ });
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+
+      expect(screen.getByTestId('announcer')).toHaveTextContent('1 plan loaded.');
     } finally {
       if (descriptor) Object.defineProperty(HTMLElement.prototype, 'offsetParent', descriptor);
       else Reflect.deleteProperty(HTMLElement.prototype, 'offsetParent');

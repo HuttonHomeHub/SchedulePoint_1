@@ -7453,7 +7453,7 @@ gap. What changed is that the gap is now real rather than hypothetical.
 
 Related: #305 (the fix that created this), ADR-0135 (the mechanism and its predicted gap), #204(c).
 
-### 307. The Explorer's lazy-load placeholder is focusable and announces nothing
+### 307. The Explorer's lazy-load placeholder is focusable, and whether it should be
 
 **Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (carried over from #305, whose two "things to settle" these are) · **Size:** S · **Owner:** web
 
@@ -7471,26 +7471,68 @@ Letting `focusRow` skip a transient placeholder while a real sibling exists woul
 of both earlier rows. It does not close either, and the **root** case has to stay focusable: when the
 whole client list is loading or empty, that row is the only row there is.
 
-**(b) ADR-0029 §202-203 specified a polite announcement for lazy-load outcomes and it was never
-built.** The clause is explicit — _"lazy-load outcomes and errors are announced via the existing
-`useAnnounce()` polite live region (WCAG 4.1.3), e.g. '12 projects loaded'"_ — and `useAnnounce` has
-**no reference anywhere under `features/navigator`** (checked, not recalled).
+**(b) ADR-0029 §202-203's announcement — BUILT 2026-09-12, and this half is closed.** The clause was
+explicit — _"lazy-load outcomes and errors are announced via the existing `useAnnounce()` polite live
+region (WCAG 4.1.3), e.g. '12 projects loaded'"_ — and `useAnnounce` had **no reference anywhere under
+`features/navigator`** (checked, not recalled).
+
+> It now does. `useHierarchyTree` takes an optional `onLazyLoadOutcome` callback and reports
+> **transitions, not states**, so a consumer needs no memory of what it has already said;
+> `HierarchyTree` announces them. Three decisions are worth carrying: the child kind comes from
+> **which collection the parent was in** (`expandedClientIds` hold clients, so their children are
+> projects) so it is right by construction rather than looked up in `rows`, where a parent scrolled
+> out of the virtualized window would give the wrong answer; an empty result says **"No projects."**
+> rather than "0 projects loaded", which reads as a failure; and **only the visible rail speaks**,
+> because the shell mounts two trees sharing one expansion set, discriminated by `offsetParent` (the
+> `afterDelete` precedent).
+>
+> **Two things were got wrong on the way and both were caught by a tool rather than a reading.**
+> The first version computed the transition during render, reading and writing a ref inside a
+> `useMemo` — `react-hooks` rejects that as _"Cannot access refs during render"_, and rightly: a
+> render React discards would still have consumed the transition, and StrictMode's double render
+> would consume it twice. Its docblock had **justified** render-time computation on the ground that
+> an effect keyed on `childrenByParent` would re-run on every background refetch. That objection is
+> real and the conclusion was wrong; the answer is to key the effect on a **scalar signature** of
+> `parentId:status:count`, which is the `afterDelete?.seq` pattern already in `HierarchyTree.tsx`.
+>
+> The second is the sharper one. **Mutation testing found the loading→settled edge unprotected**:
+> replacing `previous.get(id) === 'loading' && settled` with a bare `settled` left the whole suite
+> green, and that defect would re-announce on every background refetch — a planner leaving the rail
+> open hearing "1 project loaded" repeatedly with nothing having changed. A second case now pins it
+> (collapse, re-expand from cache, assert the region still reads the PLANS message, so "nothing was
+> said" is observable rather than asserted as emptiness — the live region keeps its last text, so a
+> naive empty-string assertion cannot express it and `toHaveTextContent('')` always matches
+> anyway). Verified to fail against that exact mutation, and against nothing else in the suite.
+>
+> **What is NOT tested, stated rather than implied:** with `offsetParent` stubbed — which a jsdom
+> test must do, since jsdom performs no layout — BOTH mounted trees satisfy the guard. So the unit
+> case pins the announcement and the guard's load-bearingness (removing either fails it, verified
+> both ways) and **cannot** pin "exactly once with two rails mounted". That is a question about two
+> layout boxes and belongs to a journey.
 
 > **The citation in this row is corrected from #305's, which was off by one line.** #305 cited
 > "§203-204"; `grep -n "Announcements:" docs/adr/0029-persistent-hierarchy-navigator.md` puts the
 > bullet at **202**, running to 203. Minor, and recorded because a one-line-off citation is how
 > ADR-0076 Class 2 starts, and this one was propagated into a source docblock before being caught.
 
-**The two are coupled, which is why they share a row.** (b) is the reason (a) is defensible today: the
-_only_ way anybody currently learns a fetch is in flight is by landing on the placeholder, so
-removing its focusability without building the announcement would remove the one signal there is. Do
-(b) first, or do both.
+**The coupling is why (b) went first, and it has now inverted.** (b) was the reason (a) was
+defensible: the _only_ way anybody learnt a fetch had resolved was to be standing on the placeholder
+when it vanished, so removing its focusability would have removed the one signal there was. **That
+signal now exists independently**, which is what makes (a) answerable — and the answer is not obvious
+in the other direction either, because the placeholder is still the only thing that says a fetch is
+_in flight_ rather than _finished_. A reader who expands and waits has nothing until the outcome
+lands. So (a) is a real product question now rather than a blocked one: **does a transient status row
+deserve a keyboard stop, given the outcome is announced but the wait is not?**
 
-**What would close it.** Announce the outcome per level (`n projects loaded`, `couldn't load`) through
-the existing `useAnnounce`, then decide (a) with the signal in place. Note the announcement is also
-the _useful_ sentence #305's hand-off cannot produce: a resolved placeholder currently announces
-"Loading… is no longer available. Focus moved to Project Explorer." — true, and about mechanics rather
-than about the children that arrived.
+**What would close it.** Decide (a) with the signal now in place. Two live options, neither free: let
+`focusRow` skip a transient placeholder while a real sibling exists (the **root** case must stay
+focusable — when the whole client list is loading that row is the only row there is), or keep it and
+announce the _start_ of a fetch too, which risks two announcements per expansion on a fast network.
+
+**One thing (b) improved beyond its own scope**: a resolved placeholder used to announce only
+`"Loading… is no longer available. Focus moved to Project Explorer."` — true, and about mechanics
+rather than about the children that arrived, which #305 recorded as a stated limit. The outcome
+sentence now lands alongside it, so the reader gets the fact as well as the mechanics.
 
 Related: #305, #297, ADR-0029 §202-203, ADR-0082.
 

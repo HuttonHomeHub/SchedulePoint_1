@@ -4,11 +4,12 @@ import { Building2, CalendarRange, ChevronRight, Folder, MoreHorizontal } from '
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useExpansionState, type UseExpansionState } from '../hooks/use-expansion-state';
-import { useHierarchyTree } from '../hooks/use-hierarchy-tree';
+import { useHierarchyTree, type LazyLoadOutcome } from '../hooks/use-hierarchy-tree';
 import { useNavigatorCrud, type NodeActionTarget } from '../lib/navigator-crud-context';
 import { nodeActions } from '../lib/tree-actions';
 import { treeKeydown, type NodeKind, type TreeNodeData, type VisibleRow } from '../lib/tree-model';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem } from '@/components/ui/menu';
 import { useToolbarFocusHandoff } from '@/components/ui/toolbar/use-focus-handoff';
@@ -100,11 +101,52 @@ export function HierarchyTree({
   // instance so both rails and the CRUD coordinator agree on what's open.
   const localExpansion = useExpansionState(orgSlug);
   const expansion = expansionProp ?? localExpansion;
-  const tree = useHierarchyTree(orgSlug, expansion);
+  // Declared here rather than beside the other refs, because the lazy-load callback below closes
+  // over it to decide whether this instance is the visible rail.
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * **ADR-0029 §202-203's lazy-load announcement, built at last** (`docs/TECH_DEBT.md` #307).
+   *
+   * That clause is explicit — _"lazy-load outcomes and errors are announced via the existing
+   * `useAnnounce()` polite live region (WCAG 4.1.3), e.g. '12 projects loaded'"_ — and nothing
+   * implemented it: `useAnnounce` had no reference anywhere under `features/navigator`. So the only
+   * way a keyboard or AT user learnt that an expansion had resolved was to be standing on the
+   * placeholder when it vanished, which is the accidental signal #307 records and the reason that
+   * row keeps the placeholder focusable for now.
+   *
+   * **Only the visible rail speaks.** The shell mounts two `HierarchyTree`s — the pinned rail and
+   * the drawer — sharing one expansion set (ADR-0029 Phase 2), so both see the same transition and
+   * announcing from both would say everything twice. The discriminator is the `afterDelete`
+   * precedent below: an off-screen instance's rows have no layout box, so `offsetParent` is null.
+   * jsdom performs no layout either, which is why the test for this stubs it — the same stub the
+   * #305 route-2 case needs, for the same reason.
+   *
+   * **The single-instance property is therefore NOT unit-tested, and saying so is the point.** With
+   * `offsetParent` stubbed, BOTH mounted trees satisfy the guard, so a jsdom test can prove that the
+   * visible rail speaks and cannot prove the hidden one stays quiet. What is pinned is the
+   * announcement and the guard's load-bearingness (removing either fails the case); "exactly once
+   * with two rails mounted" is a question about two layout boxes and belongs to a journey.
+   *
+   * The count is spoken because it is the fact a reader cannot otherwise get: a row appearing is
+   * visible, "eleven of them" is not. An empty result says so in words rather than announcing
+   * "0 projects loaded", which reads as a failure.
+   */
+  const announce = useAnnounce();
+  const announceLazyLoad = useCallback(
+    (outcome: LazyLoadOutcome): void => {
+      if (scrollRef.current?.offsetParent == null) return;
+      const plural = outcome.childKind === 'project' ? 'projects' : 'plans';
+      if (outcome.failed) announce(`Couldn’t load ${plural}.`);
+      else if (outcome.count === 0) announce(`No ${plural}.`);
+      else announce(`${outcome.count} ${outcome.count === 1 ? outcome.childKind : plural} loaded.`);
+    },
+    [announce],
+  );
+  const tree = useHierarchyTree(orgSlug, expansion, announceLazyLoad);
   const { rows, selection } = tree;
   const crud = useNavigatorCrud();
   const navigate = useNavigate();
-  const scrollRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   const pendingFocus = useRef(false);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
