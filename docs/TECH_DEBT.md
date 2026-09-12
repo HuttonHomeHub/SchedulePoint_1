@@ -7371,13 +7371,29 @@ recorded holes of: an unregistered `.ts` citation is never demanded, and a regis
 reads as uncited. That is exactly how it surfaced — two entries were added and `check:claims` reported
 them "registered but no longer cited anywhere" while the citations sat in the file.
 
-**And the truncation makes it worse than a plain miss.** The basename class admits `.` but **not
-`-`**, and `/` is deliberately absent so a leading path falls away. So `load-client.ts:1462` would be
-read as `client.ts:1462` if `.ts` were admitted naively — and `client.ts` **collides with two
-repo-owned files** (`apps/web/src/lib/api/client.ts`, `packages/seed-http/src/client.ts`), so the
-own-file filter would skip it **entirely and silently**. Admitting `.ts` without also admitting `-`
-to the basename class would therefore produce a third, quieter hole rather than close one — which is
-`docs/TECH_DEBT.md` #124's "an instrument reported something, so nobody looked" in a new costume.
+> **THE PARAGRAPH THAT WAS HERE WAS FALSE, AND IT WAS THIS ROW'S HEADLINE CLAIM.** It said the
+> basename class "admits `.` but **not** `-`", so admitting `.ts` would truncate `load-client.ts` to
+> `client.ts` and collide with two repo-owned files. **The class is `[a-zA-Z0-9.-]`**
+> (`citation-patterns.mjs:68`, and `[a-z0-9.-]` for the prose form at `:71`) — the hyphen is there,
+> `citation-patterns.test.mjs:82-91` already asserts `some-file.<ext>:12-14` matches, and **30 of
+> the 108 registered refs carry a hyphen**, `load-client.js:141-145` among them. Had the class
+> lacked `-`, the gate would have been loudly broken in thirty places.
+>
+> The error was reading this register's own history backwards: the third-hole entry records the
+> class as having **been** `[a-z0-9-]+`, and the **dot** was the 2026-08-08 fix. The hyphen was
+> there first. So there is nothing to add, and a commit "adding `-`" would assert a defect that
+> never existed. Found by the spec pass, which checked the claim instead of inheriting it — and it
+> was checkable from the register being edited, since a hyphenated ref sits eight lines from where
+> this row was inserted.
+
+**The collision class is real, live TODAY, and not a consequence of admitting anything.** It sits in
+the already-admitted `d.ts` class. `check-claims.mjs:217-221` states — "**checked, not assumed**" —
+that "none of the registered packages ships a `globals.css` or a `vite-env.d.ts`". **That sentence is
+now false**: `@tanstack/router-core` is registered and ships `src/vite-env.d.ts` in both installed
+copies, and we own `apps/web/src/vite-env.d.ts`, so a citation into the dependency's copy would be
+skipped **entirely and silently** by the own-basename filter. That is
+`docs/TECH_DEBT.md` #124's "an instrument reported something, so nobody looked" — inside the
+docblock that claims to have bounded it.
 
 **Worked around, not closed.** The two citations were repointed at `dist/esm/load-client.js:10-12` and
 `:671-672` — the same facts in a file the gate does scan, verified line-by-line against the pinned

@@ -1085,7 +1085,10 @@
       "path": "dist/esm/load-client.js",
       "lines": "10-12",
       "anchor": "return route.options[type]?.preload?.();",
-      "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
+      "citedBy": [
+        "docs/specs/route-code-splitting/feature-spec.md",
+        "docs/specs/route-code-splitting/implementation-plan.md"
+      ]
     },
     {
       "ref": "load-client.js:671-672",

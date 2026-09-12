@@ -114,7 +114,7 @@ journey (ADR-0081 §2).
 ##### Task M0-T4 — Register the router citations against the version `apps/web` resolves
 
 - **Description:** the spec cites `lazyRouteComponent.js:51`, `:37-44`,
-  `router-core/dist/esm/router.d.ts:98-113` and `router-core/src/load-client.ts:43-48`. ADR-0076
+  `router-core/dist/esm/router.d.ts:98-113` and `router-core/dist/esm/load-client.js:10-12`. ADR-0076
   Class 2 requires each to be registered in `scripts/dependency-claims.json` with
   package@version + path + anchor.
 - **Complexity:** S
