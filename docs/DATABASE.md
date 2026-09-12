@@ -1609,6 +1609,40 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   when a newly-shipped policy breaks something for several people at once. The constraint is kept
   because it is true and because it is what surfaced the defect; **the fix is in the producer**
   (let the database stamp both instants).
+
+  > **Two sentences above are WRONG, and they are the remedy rather than the diagnosis — corrected
+  > 2026-09-12, `docs/TECH_DEBT.md` `#311`.** "The same statement written by hand with `now()` on
+  > both branches records all 16 with zero errors" and "let the database stamp both instants" are
+  > both false, in the reassuring direction. **`now()` is TRANSACTION START time**, so two
+  > concurrent statements are two transactions and do not share a reading of it: one that began at
+  > `.071` can lose the insert race to one that began at `.072` and then try to write
+  > `last_seen_at = .071` onto a row whose `first_seen_at` is `.072` — the same inversion, one
+  > database clock notwithstanding. It narrowed the loss from **fifteen in sixteen to one in
+  > sixteen** and left it live for a month, until CI's API e2e job reported `expected 15 to be 16`
+  > with this constraint's violation four lines away in the Postgres log.
+  >
+  > **The measurement is the part worth learning from.** "Records all 16 with zero errors" was a
+  > real reading of a real statement; it is unsound because the residual defect loses **one report
+  > in sixteen**, so a single passing run is the expected outcome either way. A race wants a
+  > verdict built from repeats or from reasoning about the clock, not one observation.
+  >
+  > What the producer does now is **clamp rather than stamp** —
+  > `last_seen_at = GREATEST(clock_timestamp(), csp_reports.first_seen_at)`, with
+  > `clock_timestamp()` on the insert branch as well. `clock_timestamp()` reads the clock AT the
+  > statement, which is also the truer value for "last seen"; the `GREATEST` is what makes the
+  > ordering provable rather than argued, because it cannot invert whatever the two transactions'
+  > timings turn out to be. Proven both ways in `psql` before the change. **The constraint and the
+  > column are unchanged**, so this is a correction to prose about existing schema and not a schema
+  > change — `database-architect` is not engaged, and that is a statement rather than an omission.
+  >
+  > **It is here at all because `#311`'s own closing sweep did not reach it.** That sweep asked
+  > where else this clock could invert a pair of timestamps — `ON CONFLICT` appears in exactly one
+  > file in `apps/api`, and this is the only timestamp-ordering check constraint in the schema, both
+  > asked of the database rather than grepped — and it was correctly scoped to the **mechanism**. It
+  > did not cover the **prose describing the mechanism**, of which there were three copies: the
+  > service's comment (corrected with the fix), the regression test's comment, and this paragraph,
+  > which is the one a reader consults to learn what the constraint means.
+
 - **`disposition` is nullable, and the null is the interesting case.** `enforce` vs `report` is
   the difference between "this **did** break" and "this **would have**", which is the whole
   transition the table informs. It is **absent by format, not by accident**: the Reporting API
@@ -1710,9 +1744,11 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   number outside `int4` fails at **cast** time, before any CHECK can see it. (5) The write
   swallows its own failure, because the endpoint answers 204 whatever happens and a rejected
   insert must never become a response — which is what converts every constraint on this table
-  from a guard into a silent delete. (6) **Both timestamps must be stamped by the database**, or
-  the first simultaneous burst of a new violation records one report and loses the rest; see
-  `ck_csp_reports_seen_order` above.
+  from a guard into a silent delete. (6) **Both timestamps must be stamped by the database, and
+  the update branch must be CLAMPED to the row it is updating** — or the first simultaneous burst
+  of a new violation loses reports. Stamping alone is necessary and **not sufficient**: `now()` is
+  transaction-start time, which narrows the loss rather than removing it. See the corrected
+  paragraph under `ck_csp_reports_seen_order` above, and `docs/TECH_DEBT.md` `#311`.
 - **The one thing to check before any of the above matters.** `app.use(json())` parses only
   `application/json`, and browsers post CSP reports as `application/csp-report` (report-uri) and
   `application/reports+json` (Reporting API). Measured against the real route: both real content

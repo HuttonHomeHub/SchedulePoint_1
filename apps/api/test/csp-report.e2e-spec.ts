@@ -159,11 +159,28 @@ describe.skipIf(!hasDatabase)('CSP report sink (e2e)', () => {
     // violation's FIRST burst — exactly when a newly-shipped policy breaks something for several
     // people at once, and exactly the count that decides whether to enforce.
     //
-    // The cause was two clocks in one statement: `first_seen_at` stamped by the Prisma engine as it
-    // built the INSERT, `last_seen_at` a `new Date()` taken a millisecond earlier in the process.
-    // The loser of the insert race wrote a `last_seen_at` older than the winner's `first_seen_at`,
-    // `ck_csp_reports_seen_order` refused it, and the endpoint swallowed the failure. Measured
-    // before the fix: 16 concurrent reports recorded `count = 1`.
+    // **There were TWO causes, a month apart, and this comment named only the first for that month.**
+    // Both invert `ck_csp_reports_seen_order` (`last_seen_at >= first_seen_at`) on the loser of the
+    // insert race, whose write the endpoint then swallows to answer 204.
+    //
+    // 1. Two clocks in one statement: `first_seen_at` stamped by the Prisma engine as it built the
+    //    INSERT, `last_seen_at` a `new Date()` taken a millisecond earlier in this process.
+    //    Measured before the fix: 16 concurrent reports recorded `count = 1` — fifteen lost.
+    // 2. `now()` is TRANSACTION START time, so moving both to one database clock did NOT make the
+    //    two branches agree. A transaction that began at `.071` can lose the race to one that began
+    //    at `.072` and then try to write `.071` onto a row whose `first_seen_at` is `.072`. That
+    //    narrowed the loss from fifteen to one and left it live for a month
+    //    (`docs/TECH_DEBT.md` #311); the remedy CLAMPS rather than stamps —
+    //    `GREATEST(clock_timestamp(), csp_reports.first_seen_at)`.
+    //
+    // **So a failure here is the signal, not noise — read it before re-running.** Cause 2 loses one
+    // report in sixteen, so it surfaces as `expected 15 to be 16` on contended runs only, which in
+    // a suite this register records as intermittently flaky (`#119a`) is indistinguishable from the
+    // flake until somebody reads the Postgres log beside it. **A green local run proves nothing
+    // here, and that is measured rather than argued**: this case passed three times running while
+    // the defect was live, which is why cause 2 was settled in `psql` instead. CI is what captured
+    // it, because CI keeps the Postgres log beside the test output and no local run does. If this
+    // assertion is ever off by one, look for a constraint violation before assuming the harness.
     // Driven at the SERVICE rather than through HTTP, deliberately. Sixteen concurrent supertest
     // requests reset the connection and — worse — their in-flight writes leaked past `beforeEach`
     // into the following test, so the harness was measuring itself. The defect is in the statement,
