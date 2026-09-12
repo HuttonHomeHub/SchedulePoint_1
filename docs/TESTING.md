@@ -608,7 +608,7 @@ there, then prove the thing you expect to be missing is missing.
 
 ## CI
 
-Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
+Three kinds of job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
 
 - **quality** — format check, lint, typecheck, **doc-link check**, **playbook
   check**, `pnpm test`, then build. This is where the unit suites and the whole
@@ -621,8 +621,9 @@ Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   no longer exists sends a reader to seed nothing, and a plan with no row gets
   seeded and demonstrates nothing (ADR-0066 M5.3). `pnpm check:build-contract`
   asserts the ADR-0019 obligation that every `@repo/*` an app depends on at
-  runtime is COPYd and built in that app's Dockerfile **and** in the e2e job's
-  direct "Build shared packages" step. That one exists because a local checkout
+  runtime is COPYd and built in that app's Dockerfile **and** in **every** e2e
+  job's direct "Build shared packages" step — plural since ADR-0138 split the
+  job in two, and the gate read only the first of them until M2 caught it. That one exists because a local checkout
   cannot see the failure: the package already has a `dist/` from an earlier
   build, so the omission only appears on a clean machine — `@repo/layout`
   (ADR-0069) shipped that way and turned up as `Cannot find module` inside
@@ -652,13 +653,29 @@ Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   runs. `check:reconcile-due` is **deliberately not here**: it is advisory, and
   listing it would make it blocking by the back door.
   **None of these checks needs a database.**
-- **e2e** — provisions a Postgres service, generates the Prisma client, applies
-  migrations (`prisma migrate deploy`), checks for schema/migration drift, runs
-  the API Supertest suite, then runs each Playwright suite as its own step
-  (default, plus one per feature flag).
+- **e2e-api** — provisions a Postgres service, generates the Prisma client,
+  applies migrations (`prisma migrate deploy`), checks for schema/migration
+  drift, runs the API Supertest suite and then the pairwise differential.
+- **e2e-web** — the same setup plus a Playwright browser install, then each web
+  suite as its own step (default, plus one per feature flag), **spread across
+  four shard jobs** (ADR-0138). Each shard gets its own disposable Postgres, so
+  there is nothing between them to race.
 
-A third job, **image**, builds and smoke-boots the container images. All must
+A further job, **image**, builds and smoke-boots the container images. All must
 pass before merge.
+
+**Reading a red end-to-end check.** The check name gives you the shard — _End-to-end tests (web
+shard 3)_ — and the failing **step** inside it names the suite, exactly as it did when there was one
+job. The Playwright report artefact is per-shard (`playwright-report-shard-3`), because
+`upload-artifact` v4 refuses two uploads sharing a name and four shards uploading one name would
+turn a green test run red at the upload step. `fail-fast` is **off**: a red shard does not cancel
+the other three, because the whole value of sharding is lost if one failure hides what the rest
+would have said.
+
+**Nothing about the local workflow changed, and that is deliberate.** No suite was renamed, merged
+or regrouped, so `scripts/e2e-local.sh web:<suite>` and `scripts/e2e-sweep.sh` are byte-identical to
+what they were before the split — checked, not asserted. Locally the suites still run one at a time
+against one database; the round trip the sharding is about is CI's.
 
 ## Definition of done (testing)
 

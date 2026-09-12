@@ -1,9 +1,10 @@
 # Feature Spec: Sharding the end-to-end CI job
 
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0138, 2026-09-12)
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-09-11
-- **Tracking issue / epic:** none yet — raised as `docs/TECH_DEBT.md` #301
+- **Tracking issue / epic:** raised as `docs/TECH_DEBT.md` #301, now deleted and ledgered; the
+  measurement that replaced it is [`./m4-measurement.md`](./m4-measurement.md)
 - **Roadmap link:** none. This is a tooling decision about how the repository works on itself; the
   ADR it produces takes a `scripts/adr-coverage.json` exemption in the class ADR-0124 / ADR-0131 /
   ADR-0136 already occupy. A planner cannot act on a CI job.
@@ -753,6 +754,15 @@ CLAUDE.md §16's register** although it is filed, Accepted, in `docs/adr/README.
 `docs/ROADMAP.md:438`. That is precisely the ADR-0132 finding — `docs/TECH_DEBT.md` #291 — recurring.
 It is not this epic's to fix; it is flagged so the next reconciliation pass does not have to
 rediscover it.)_
+
+> **That paragraph is WRONG, and it is corrected in place rather than deleted because the corrected
+> version is the more instructive one.** ADR-0137 is at `CLAUDE.md:4541`. Its register entry landed
+> in `3c4a6161` at 22:50 on 2026-09-11; the claim above was written in `0825fe0a` at 00:30 on
+> 2026-09-12 — **100 minutes later, against a tree that already contained it**, by the same hand in
+> the same session. It is ADR-0076 Class 3 — a decision-bearing claim asserted and never checked —
+> occurring inside a paragraph whose entire subject is that class. Nobody would catch it by reading,
+> because it reads as diligence; it took one `grep`. Recorded in ADR-0138's "What this epic got
+> wrong" as finding 8.
 
 ### 4.10 Risks
 
