@@ -5213,6 +5213,7 @@ One line each. The story lives where the link points, not here.
 | 297 | A stale `focusedKey` can leave the Project Explorer with no tab stop at all                           | 2026-09-12 | **Reproduced before it was fixed, by a cheaper route than the row proposed.** The row suggested deleting a focused row from a second session; a synthetic `loading` row is focusable and keyed `${parentId}:loading`, so arrowing onto a placeholder and letting its fetch resolve is enough — no peer, no second session. Measured **0 elements with `tabIndex=0`**, verified red first, now 1. Fix: resolve `focusedKey` against `rows` before the `??` chain can short-circuit on it (`HierarchyTree.tsx`). WCAG 2.2 §2.1.1, confirmed independently by the accessibility review rather than asserted. **The row's own mechanism split does not survive that route**: it says "nothing is removed under the focus ring", and the placeholder IS removed under it — so one sequence exhibits both this and the focus gap now filed as #305.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 301 | Every CI round trip waits 46 minutes on one sequential end-to-end job                                 | 2026-09-12 | **Closed by building the remedy** (`docs/specs/ci-sharding/`, ADR-0138). The measurement, the scored projections and the corrected ceiling are in [`docs/specs/ci-sharding/m4-measurement.md`](specs/ci-sharding/m4-measurement.md) — follow that, not this line. Headline: **40–47 min → 12.2–12.3 min** (n = 2), and the critical path is now `quality`, a job the epic never touched. The row is deleted rather than kept-and-marked because the register's own rule says so and `check:debt-status` A2 has no `closed` in its vocabulary — the approved plan said to keep it, and the plan was wrong about this file (recorded in that document's §6).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 304 | A superseded check run keeps its failure, so §19.9's rule refuses a PR that is fine                   | 2026-09-12 | **Filed and closed within two hours, on evidence from the PR that filed it.** PR #514's own 102-character title failed `pr-title.yml`; the corrected title added a passing run beside the failed one on the unchanged head, so "every check is success" was false for a mergeable PR. `CLAUDE.md` §19.9 now says to dedupe by check-run name and keep the most recently started; `pr-title.yml` gains it as a third blind spot, and the comment claiming `edited` "clears the check" is corrected — it does not clear it, it adds a green run beside it. Matters because §8 leaves `main` unprotected, so §19.9 is the only merge gate there is.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 305 | The Project Explorer has no focus hand-off when a row disappears under a live focus ring              | 2026-09-12 | **Closed by adopting the mechanism rather than writing a fourth focus effect.** `HierarchyTree`'s container spreads `useToolbarFocusHandoff` — one line, `{...focusHandoff}`, verified red against that exact line (`activeElement` was `document.body`). WCAG 2.2 §2.4.3. **Route 2 was closed by being disproved, not fixed**: the row called `afterDelete`'s root branch an unobserved mismatch, and the accessibility review traced it in real Chromium — opening the delete confirmation refocuses the row and `showModal()` then blurs it with a non-null `relatedTarget`, which clears the hook's record, so nothing is left to race. **The fix's own docblock first claimed the opposite mechanism** (an effect-ordering race that does not exist) and is corrected; the fragility it hid — that this holds only while `ConfirmDialog` unmounts rather than toggling `open` — is recorded there. The two questions the row flagged as "neither a blocker on its own" survive as #307, and the naming/gate consequences of the reuse as #306.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 244 | CI's gate roster is hand-written while `prepush.sh` derives its own                                   | 2026-09-11 | **Closed by the RULE, not by a step** (`docs/specs/delivery-gates/` M1). `pnpm check:ci-roster` asserts the two rosters agree in BOTH directions, with the one advisory exemption carried in `scripts/ci-roster.json` as a named entry and its reason — the `adr-coverage.json` idiom this row asked for. Adding a step was explicitly not the fix: that repairs today's instance and leaves the mechanism, which is how the condition moved from `check:advisory-agreement` to `check:browser-safe` while the row went on naming the old one. **The trap the row warns about turned out to be LIVE, on the one script it matters for**: the row's own recommended remedy was a grep of `ci.yml` for each gate's name, and run today that reports `check:reconcile-due` as covered — its only occurrence in the whole file being the comment at `:75-77` saying it is _deliberately absent_. So the naive check passes over the single genuine absence in the roster by reading the sentence that documents it, which makes **R6** (a comment cannot satisfy the roster) load-bearing rather than defensive; four gate names sit inside comments in that file today. **The gate's first run failed on itself**, added to `package.json` without its CI step — the best available first red run for a check about missing steps. Nine mutations verified red, including **R5** (the gate must not restate the roster it derives; four gates in this repository have matched their own prose) and **R8** (a `#` inside a quoted string makes it REFUSE rather than misread its subject). **The spec's parser decision is reversed with a better reason than the plan anticipated**: §4.1 D3 chose a YAML parse because `yaml` "is already in the lockfile" — it is, transitively through `@changesets/cli`, and it is **not importable from the root** (`import('yaml')` throws `ERR_MODULE_NOT_FOUND` under pnpm's strict layout, measured). The stronger reason is that a YAML parse would not have removed the work: it hands back a `run:` block's body with its **shell** comments intact, so the stripping is needed either way — the parser solves the easy half and leaves the half that is the defect.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 286 | No journey drives a peer take-over or an admin override                                               | 2026-09-11 | Closed by `apps/web/e2e-edit/pen-handoff.spec.ts`, which now drives all three uncovered transitions against a real API with the pen enforced: **admin override** (its confirm dialog asserted to hold — Cancel leaves the pen where it was, since an override cannot be undone from the overriding side), and **take-over after grace**, which also covers the **waiting** state and the **lost** sentence. ADR-0135 Option A — the real 45 s are waited, not mocked. **Verified red** by cutting the wait to one 9 s tick: `toBeEnabled` fails while the other four tests pass, so it depends on the window elapsing rather than on the button existing. The wait is punctuated, bringing the holder to the front each tick, because `canTakeOverNow` is a disjunction and a plain sleep would let the 90 s inactivity branch light the same control — `lockCopy.canTakeOver` covers both deliberately, so the test could not otherwise say which it exercised. Two defects in the new tests were found by running them: the confirm dialog is `role="alertdialog"` not `dialog` (`confirm-dialog.tsx:46`), and `New activity` sits inside the activities panel, which defaults collapsed (ADR-0113) — so the assertion passed for the actor who had just added an activity and failed for the one who had only watched. Neither is reachable from a unit test, which is what this row existed to say. Fixture extracted to one `setUpTwoActors`; the pre-existing hand-off test's assertions are unchanged and are the oracle for that move (ADR-0078).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 278 | `SheetHeader`'s close button defaulted to the dense-row exception, and four panels are not dense rows | 2026-09-11 | **Candidate 2, chosen by the product owner from three costed options: the default flips to `icon` and the prop is DELETED.** The measurement is what made that the obvious one rather than the boldest — `closeButtonSize` had **exactly one caller** (`navigator-rail.tsx:139`) and it passed `'icon'`, the value all five consumers wanted, so the prop was a choice nobody made differently; flipping the default left it with no caller at all. Deleted rather than defaulted the other way, on the `icon-lg` disposal (ADR-0118 M3) and `MenuItem.itemId` (`#149`) precedents. The four default-takers are the four right docks — Plan notes, Float paths, Schedule health, Revision compare — and none is a dense list row, so none was ever inside ADR-0118 D1's second named exception; the one consumer that overrode it was the one the docblock called the exception. Under a coarse pointer those four closes go 28 × 28 → 44 × 44 against the house rule. **The cost is the fine pointer and it was accepted knowingly**: each of those headers grows 12 px on a mouse, against zero canvas, measured in a browser at three widths before the choice was put. Two cases added to `sheet.test.tsx`, the first **verified red** against the pre-change component (`expected … to contain 'size-10'`), the second a pinned counter-case asserting two callers get the same close — without which the first passes equally against a component that ignores its caller. The row's own note that no gate can see these closes still stands: they sit inside panels the coarse sweep never opens, which is why the pin is a unit assertion on the class rather than a box measurement jsdom cannot make.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -7324,61 +7325,132 @@ predictions as committed before the run.
 which offers a different control set and may be wider or narrower; one machine, one browser, one
 plan; and only the three widths probed.
 
-### 305. The Project Explorer has no focus hand-off when a row disappears under a live focus ring
+### 306. `useToolbarFocusHandoff` has a third consumer, and neither its name nor its gate knows
 
-**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (the accessibility review of
-`#297`'s fix, which measured it) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (the component review of #305's fix, which measured both halves) · **Size:** S · **Owner:** web
 
-`#297` repaired which row carries `tabIndex={0}` when `focusedKey` goes stale. **It deliberately did
-not touch where the browser's focus ring actually is**, and measurement during that review shows the
-two come apart in the same sequence:
+`#305` was fixed by adopting `components/ui/toolbar/use-focus-handoff.ts` on the Project Explorer's
+`role="tree"` container. That was the right call — ADR-0135 D1 exists because "was focus dropped, and
+what do we do about it" must be identical everywhere for a WCAG obligation to be reliably met — but
+it leaves two things wrong, and **the first was almost papered over with a false claim**.
 
-```
-BEFORE resolve, activeElement: <div role="treeitem" aria-disabled="true" …>   ← the loading row
-AFTER  resolve, activeElement: BODY                                            ← document.body
-tabIndex=0 rows: [ 'Northgate' ]                                               ← the fix working
-```
+**(a) The name, the directory and the option are all now imprecise.** The hook is
+`useToolbarFocusHandoff`, lives under `components/ui/toolbar/`, and takes `toolbarLabel` — which a
+tree passes `'Project Explorer'` to. Nothing in its logic is toolbar-specific; it is generic over a
+container plus the ids it renders as stops.
 
-So the tab stop is correct and focus is on `<body>`. **WCAG 2.2 §2.4.3 Focus Order (level A)** — the
-citation this codebase already assigns to this shape (`use-focus-handoff.ts:17`, `#204(c)`), kept
-deliberately rather than reaching for §2.1.1 again, which is `#297`'s and a different failure.
+It was **deliberately not renamed**: renaming or moving an exported hook that three production
+components import changes a component's public contract, which CLAUDE.md §19.1 / ADR-0105 makes a
+full-spec trigger, and #305 is an `S`. The review also checked the tempting alternative and rejected
+it on its merits rather than on the trigger — a `components/ui/` move with a re-export touches three
+call sites' import paths for zero behavioural gain and leaves a forwarding shim that tends to become
+permanent.
 
-**Two routes, one missing mechanism.**
+> **The reason this is a row and not a comment.** #305's fix shipped a docblock reading _"Recorded in
+> #305 rather than done quietly"_, and **#305 says nothing about any of this** — it argues only that
+> the mechanism is "not toolbar-specific in its logic" as a reason to reuse it. A claim that a thing
+> is recorded, where it is not, is the ADR-0076 Class 3 shape arriving inside the fix for a defect
+> found the same way. The register's own precedent for this situation is #298/#299/#300: an
+> ADR-0105-trigger-worthy improvement found mid-change is **filed**, not asserted in a source
+> comment, because nothing makes a comment discoverable to whoever triages debt next.
 
-1. **A row removed while focused.** A synthetic `loading` row is focusable and keyed
-   `${parentId}:loading`; when its fetch resolves the element is unmounted under the focus ring.
-   `pendingFocus` (`HierarchyTree.tsx:183-188`) cannot help — it is keyed on `focusedKey`, which does
-   not change here, and the ref was deleted on unmount. A real node removed by a collapse or a peer's
-   delete is the same shape.
-2. **`afterDelete`'s root branch** (`HierarchyTree.tsx:195-202`). Deleting a root-level client makes
-   `target` the tree container, which is permanently `tabIndex={-1}` and carries **no `onFocus`** —
-   only rows do (`:394`). So it moves DOM focus and never re-syncs `focusedKey`, leaving real focus on
-   an element disconnected from whichever row now holds the tab stop, with nothing observing the
-   mismatch. Not a zero-tab-stop route post-`#297`, which is why it is here and not there.
+**(b) The structural gate cannot see the third adopter.**
+`focus-handoff-seam.structural.test.ts:27` is `const PRIMITIVES = ['Toolbar.tsx', 'Deck.tsx']`,
+scoped to `src/components/ui/toolbar/`, and all five of its assertions (`:38`, `:45`, `:61`, `:84`,
+`:91`) are `it.each(PRIMITIVES)`. `HierarchyTree.tsx` is invisible to every one of them — so
+`Toolbar` and `Deck` each get a unit test **and** a structural gate, and the Explorer's spread is
+protected by one unit case alone. A future refactor could drop `{...focusHandoff}` from the tree and
+only that case would notice.
 
-**The mechanism already exists and is not toolbar-specific in its logic**:
-`components/ui/toolbar/use-focus-handoff.ts` is generic over a `containerRef` + resolved ids (record
-the focused element, detect it left the container, yield one rAF, focus the container and announce).
-Adopting it beats a fourth bespoke effect beside `pendingFocus` and `afterDelete`. **ADR-0135 is the
-precedent and §19.13 the obligation** — this is a shared primitive's focus model, so the
-accessibility review happens before it ships, not at a later gate pass.
+This is **not a regression introduced by #305's fix**: ADR-0135's own Consequences section predicted
+it in as many words — _"a third primitive would be invisible to it"_ — and accepted it as a known
+gap. What changed is that the gap is now real rather than hypothetical.
 
-**Two things to settle when this is picked up, neither a blocker on its own.**
+**What would close it.** Two independent pieces, either order:
 
-- **Should a transient state row take the roving stop at all?** ADR-0082's "a shaded item keeps its
-  focus so its reason stays reachable" does **not** transfer cleanly: a `loading` row is not a
-  withheld command with a durable reason, it is status text guaranteed to vanish. Letting
-  `focusRow` skip a transient placeholder while a real sibling exists shrinks this row's surface
-  (though it does not close it — real-node removal still needs the hand-off). The **root** case is
-  different and probably must stay focusable: when the whole client list is loading or empty that row
-  is the only row there is.
-- **ADR-0029 §203-204 specified a polite live-region announcement for lazy-load outcomes
-  ("12 projects loaded") and it was never built** — `useAnnounce` has zero references under
-  `features/navigator`. So today the only way anyone learns a fetch is in flight is by landing on the
-  placeholder, which is an accidental argument for keeping it focusable rather than a designed one.
+- Derive the gate's roster instead of listing it (the ADR-0073 C4 rule, which this repository applies
+  to `prepush.sh`, `check:ci-roster` and the scene-parity gate already): find the consumers by
+  scanning for the import, so the next adopter is covered the day it is written. Note the assertion
+  about a "DISTINCT marker attribute" (`:91`) is toolbar-shaped and a tree consumer has no marker at
+  all, so a derived roster needs that assertion to be conditional on the consumer declaring one —
+  which is a real design question, not a list edit.
+- Rename to `useFocusHandoff` / `containerLabel` under `components/ui/`, as one mechanical commit with
+  no forwarding shim. **That is the ADR-0105 trigger**, so it needs the spec, and it is worth doing
+  only alongside (or after) the roster change — renaming without it just moves the invisible file.
 
-Related: `#297` (closed 2026-09-12, the derivation), `#204(c)` and ADR-0135 (the same class in
-`Toolbar`/`Deck`).
+Related: #305 (the fix that created this), ADR-0135 (the mechanism and its predicted gap), #204(c).
+
+### 307. The Explorer's lazy-load placeholder is focusable and announces nothing
+
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (carried over from #305, whose two "things to settle" these are) · **Size:** S · **Owner:** web
+
+`#305`'s focus hand-off is fixed and these two survive it. They are one subject: **what the Project
+Explorer tells and offers a keyboard or AT user while a level is loading.**
+
+**(a) Should a transient state row take the roving tab stop at all?** A synthetic `loading` row is
+focusable and keyed `${parentId}:loading` (`tree-model.ts:58`), which is how both #297 and #305 were
+reproduced without a peer or a second session — arrow onto the placeholder, let the fetch resolve.
+ADR-0082's "a shaded item keeps its focus so its reason stays reachable" does **not** transfer, and
+the accessibility review of #305 agreed on the reason rather than the conclusion: a loading row has no
+operable withheld command whose reason must stay reachable, it is status text guaranteed to vanish.
+
+Letting `focusRow` skip a transient placeholder while a real sibling exists would shrink the surface
+of both earlier rows. It does not close either, and the **root** case has to stay focusable: when the
+whole client list is loading or empty, that row is the only row there is.
+
+**(b) ADR-0029 §202-203 specified a polite announcement for lazy-load outcomes and it was never
+built.** The clause is explicit — _"lazy-load outcomes and errors are announced via the existing
+`useAnnounce()` polite live region (WCAG 4.1.3), e.g. '12 projects loaded'"_ — and `useAnnounce` has
+**no reference anywhere under `features/navigator`** (checked, not recalled).
+
+> **The citation in this row is corrected from #305's, which was off by one line.** #305 cited
+> "§203-204"; `grep -n "Announcements:" docs/adr/0029-persistent-hierarchy-navigator.md` puts the
+> bullet at **202**, running to 203. Minor, and recorded because a one-line-off citation is how
+> ADR-0076 Class 2 starts, and this one was propagated into a source docblock before being caught.
+
+**The two are coupled, which is why they share a row.** (b) is the reason (a) is defensible today: the
+_only_ way anybody currently learns a fetch is in flight is by landing on the placeholder, so
+removing its focusability without building the announcement would remove the one signal there is. Do
+(b) first, or do both.
+
+**What would close it.** Announce the outcome per level (`n projects loaded`, `couldn't load`) through
+the existing `useAnnounce`, then decide (a) with the signal in place. Note the announcement is also
+the _useful_ sentence #305's hand-off cannot produce: a resolved placeholder currently announces
+"Loading… is no longer available. Focus moved to Project Explorer." — true, and about mechanics rather
+than about the children that arrived.
+
+Related: #305, #297, ADR-0029 §202-203, ADR-0082.
+
+### 308. `scripts/e2e-local.sh measure:<name>` cannot run one spec, so nobody uses it
+
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (three failed hand-rolled runs in one session) · **Size:** S · **Owner:** repo
+
+`scripts/e2e-local.sh` exists because a run that cannot be trusted is worse than no run, and its
+`measure:*` target was added for exactly that reason: its own comment records that _"every measurement
+run in this repository has been launched by a hand-rolled script that exported DATABASE_URL and hoped
+Postgres was already up"_, and that on 2026-08-25 it was not, so an M0 run died with `P1001`.
+
+**The target forwards no arguments.** `scripts/e2e-local.sh:207-211` is
+`pnpm --filter @repo/web "measure:${name}"` with no `"$@"`, and each `measure:*` script is a bare
+`playwright test --config …`. `measure-toolbar/` holds **36 spec files** (counted, not estimated), so
+there is no way to run one of them: the choice is all 36, or hand-roll.
+
+**So the safe path is unusable for the commonest case, and people take the unsafe one — which is not
+hypothetical.** Reproducing #294's costing on 2026-09-12 needed a single measure spec, the safe target
+could not do it, and the hand-rolled run then failed three times on precisely the environment
+concerns that target exists to handle: a missing `DATABASE_URL` (the measure config starts its own web
+server), a guessed Postgres port (**5432**, not 5433), and Playwright's default headless-shell path not
+existing because the installed browser is **chromium-1194** (resolve with
+`ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome | head -1`). Every one of those is something
+`e2e-local.sh` already knows.
+
+**What would close it.** Forward trailing arguments to Playwright — `measure:<name> [-- <args>]` →
+`pnpm --filter @repo/web "measure:${name}" -- "$@"` — so `measure:toolbar -- tech-debt-287` runs one
+spec with the bootstrap intact. Check the `web:<suite>` branch (`:194`) for the same gap while there.
+
+**Precedent for why this class matters**: `web:wsb` once printed "Done", exited clean and ran
+**nothing** — a target that looks like it worked is the failure this script was written to remove, and
+a target nobody can use for the common case gets routed around instead.
 
 ### 298. Two gate-pass findings recorded rather than folded, and one suite name that stopped describing itself
 

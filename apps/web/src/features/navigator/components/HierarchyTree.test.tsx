@@ -3,6 +3,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  NavigatorCrudProvider,
+  type AfterDeleteSignal,
+  type NavigatorCrudApi,
+} from '../lib/navigator-crud-context';
+
 import { HierarchyTree } from './HierarchyTree';
 
 // The virtualizer measures a scroll element, which jsdom reports as 0×0 (so it would
@@ -81,6 +87,10 @@ const plans: PlanSummary[] = [
 // #297's reproduction needs a child fetch held OPEN, so the tree renders its synthetic
 // `loading` row and a reader can put the roving focus on it before it is replaced. Null
 // (the default) keeps every other case on the immediate path it already had.
+//
+// #305 reuses this fixture verbatim rather than introducing its own. That is deliberate: the
+// same sequence produces both defects (a stale tab stop and a dropped focus ring), so a second
+// deferred-fetch harness would be a second chance to get the reproduction subtly wrong.
 let holdProjects: Promise<ProjectSummary[]> | null = null;
 
 const route = (path: string): Promise<unknown> => {
@@ -105,6 +115,33 @@ function renderTree() {
       <HierarchyTree orgSlug="acme" />
     </QueryClientProvider>,
   );
+}
+
+// A tree wrapped in the CRUD seam, so `afterDelete` can be bumped between renders. The default
+// `renderTree` above leaves the seam unprovided, which yields the context's INERT value — correct
+// for every other case here, and the reason `afterDelete` had no coverage at all.
+let crudQueryClient: QueryClient;
+
+function crudTree(afterDelete: AfterDeleteSignal | null): React.ReactElement {
+  const api: NavigatorCrudApi = {
+    canWrite: true,
+    onNodeAction: () => {},
+    onCreateClient: () => {},
+    afterDelete,
+  };
+  return (
+    <QueryClientProvider client={crudQueryClient}>
+      <NavigatorCrudProvider value={api}>
+        <HierarchyTree orgSlug="acme" />
+      </NavigatorCrudProvider>
+    </QueryClientProvider>
+  );
+}
+
+function renderCrudTree(afterDelete: AfterDeleteSignal | null) {
+  crudQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  sessionStorage.clear();
+  return render(crudTree(afterDelete));
 }
 
 beforeEach(() => {
@@ -233,6 +270,102 @@ describe('HierarchyTree', () => {
 
     const stops = screen.getAllByRole('treeitem').filter((element) => element.tabIndex === 0);
     expect(stops).toHaveLength(1);
+  });
+
+  /**
+   * **#305 — the tab stop is repaired and FOCUS is not.** `#297` fixed which row carries
+   * `tabIndex={0}` when `focusedKey` goes stale; it deliberately did not touch where the browser's
+   * focus ring is. The same sequence comes apart: the loading row genuinely holds DOM focus, it is
+   * unmounted when its fetch resolves, and focus falls to `document.body`.
+   *
+   * `pendingFocus` cannot catch it — that effect is keyed on `focusedKey`, which does NOT change
+   * here, and the row's ref was deleted on unmount, so even a re-run would call `.focus()` on
+   * nothing. **WCAG 2.2 §2.4.3 Focus Order (level A)** — the citation this codebase already assigns
+   * to this shape (`use-focus-handoff.ts:17`), not §2.1.1, which is `#297`'s and a different
+   * failure.
+   *
+   * **Verified red against the pre-fix component: `activeElement` was `BODY`.**
+   */
+  it('hands focus back to the tree when a focused row is removed under it (#305)', async () => {
+    let releaseProjects!: (value: ProjectSummary[]) => void;
+    holdProjects = new Promise<ProjectSummary[]>((resolve) => {
+      releaseProjects = resolve;
+    });
+
+    renderTree();
+    const client = await screen.findByRole('treeitem', { name: /Northgate/ });
+    fireEvent.click(client); // expand: the child fetch is held, so a `loading` row renders
+
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+    // The placeholder really does hold focus — asserted, because if it does not then the case
+    // below proves nothing about a row being removed from under a focus ring (the ADR-0093 shape).
+    await waitFor(() => {
+      expect(document.activeElement).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    releaseProjects(projects);
+    await screen.findByRole('treeitem', { name: /Fit-out/ });
+
+    // Focus must not be left on `<body>`. The tree container is the destination the shared
+    // hand-off mechanism uses, so the reader's next Tab or arrow key still reaches the diagram.
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+    });
+    expect(screen.getByRole('tree')).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  /**
+   * **#305 route 2 — `afterDelete`'s root branch, and the reason it needs a stub to test at all.**
+   *
+   * Deleting a root-level client makes `afterDelete.parentId` null, so `HierarchyTree` re-homes
+   * focus onto the tree container rather than a parent row. The container is permanently
+   * `tabIndex={-1}` and carries no `onFocus`, so `focusedKey` never re-syncs — which is what #305
+   * raised as a mismatch between the focus ring and the row holding the tab stop.
+   *
+   * **Post-#297 that mismatch can no longer name a row that is gone**, because `resolvedFocusedKey`
+   * drops a `focusedKey` absent from `rows` before it reaches the fallback chain. This case pins
+   * both halves of that claim: focus lands on something real, and exactly one row still carries the
+   * tab stop. It is the evidence for the docblock's "benign residual" — which was a conclusion
+   * asserted from reading before this existed, and #305 itself does not say it.
+   *
+   * **The stub is load-bearing, and finding out why corrected the claim.** The effect is guarded on
+   * `target.offsetParent !== null` so the off-screen rail instance cannot fight the visible one for
+   * focus — and jsdom performs no layout, so `offsetParent` is `null` for every attached element
+   * (asserted directly before writing this). Without the stub the whole branch is INERT under
+   * jsdom: a test would pass while exercising nothing, which is the shape this suite's own #305
+   * case guards against one defect along.
+   */
+  it('re-homes focus to the tree when a root delete removes the focused row (#305 route 2)', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetParent');
+    Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+      configurable: true,
+      get(): Element {
+        return document.body;
+      },
+    });
+
+    try {
+      const { rerender } = renderCrudTree(null);
+      const client = await screen.findByRole('treeitem', { name: /Northgate/ });
+
+      fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+      await waitFor(() => expect(document.activeElement).toBe(client));
+
+      rerender(crudTree({ seq: 1, parentId: null }));
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(screen.getByRole('tree'));
+      });
+      // The tab stop stays coherent: `resolvedFocusedKey` resolves a key naming a gone row away,
+      // so the chain falls through to a real row instead of leaving the tree with none (#297).
+      const stops = screen
+        .getAllByRole('treeitem')
+        .filter((row) => row.getAttribute('tabindex') === '0');
+      expect(stops).toHaveLength(1);
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'offsetParent', descriptor);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'offsetParent');
+    }
   });
 
   it('deep-links: a plan route auto-reveals and marks its ancestor path', async () => {
