@@ -141,4 +141,25 @@ describe('AuditFilterBar (ADR-0073 C1)', () => {
       expect(control.getAttribute('tabindex')).not.toBe('-1');
     }
   });
+
+  it('keeps the date range in one wrapping group', () => {
+    // **A DOM-structure assertion for a layout defect, deliberately** (`docs/TECH_DEBT.md`
+    // #165(b)). The defect was that `From` and `To` were flex siblings of everything else in a
+    // wrapping row, so the wrap split them — measured at 1646, row 1 ended with `From` and `To`
+    // dropped to row 2 beside Clear filters, the two halves of one decision at opposite ends of
+    // two rows. jsdom has no layout and can never see that; what it CAN see is the fact underneath
+    // it, which is that the two fields share a parent no other control is in.
+    setup();
+    const from = screen.getByLabelText('From').closest('div');
+    const to = screen.getByLabelText('To').closest('div');
+    expect(from).not.toBeNull();
+    expect(to).not.toBeNull();
+    // Each `TextField` owns a wrapper, so the shared ancestor is one level up from those.
+    const group = from?.parentElement;
+    expect(group).not.toBeNull();
+    expect(group).toBe(to?.parentElement);
+    // And it holds ONLY the range: a group that had grown to include the chips or Clear filters
+    // would satisfy the line above while re-creating the defect it guards.
+    expect(group?.children).toHaveLength(2);
+  });
 });

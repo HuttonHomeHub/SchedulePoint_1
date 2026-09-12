@@ -3524,6 +3524,46 @@ same line, then `To` and `Clear filters` wrapping below — four group labels at
 vertical positions. Adjacent groups are also styled differently for no stated reason: `Show` is
 chips, `Outcome` is plain text.
 
+> **RE-SHOT AND HALF FIXED, 2026-09-12. The wrap is closed; the styling half is not, and the
+> re-shoot's own instruction turned out to matter for a reason it did not predict.**
+>
+> The re-shoot was asked for because (a) widened `<main>`, and what it established is that **widening
+> `<main>` changed nothing here**: the bar is **1104 px wide at 1646, 1280 AND 1920 — constant** —
+> against 1254 px of items plus 96 px of `gap-x-6`, so it is ~246 px over at every width in the
+> range. There is no viewport that fixes it, which is the fact the whole item needed and which no
+> amount of looking at one screenshot would have given.
+>
+> **Row composition, measured before and after:**
+>
+> |        | row 1                                       | row 2                                     | bar height |
+> | ------ | ------------------------------------------- | ----------------------------------------- | ---------- |
+> | before | `Show` 591 · `Outcome` 235 · **`From` 153** | **`To` 153** · `Clear filters` 122        | 124 px     |
+> | after  | `Show` 591 · `Outcome` 235                  | **`From`+`To` 330** · `Clear filters` 122 | **122 px** |
+>
+> One `<div className="flex items-end gap-x-6">` around the two date fields, so the range is a
+> single flex item and the wrap can no longer split it. **Four group labels at three vertical
+> positions become four at two**, the two halves of one decision are adjacent, and the bar is 2 px
+> SHORTER rather than taller — the 56 px date row no longer shares a line with 54 px groups.
+> Identical at 1646 and 1280.
+>
+> **What is NOT fixed, and why it is not a one-file edit.** `Outcome` is a `SegmentedControl` (an
+> APG radiogroup — the 2026-09-03 correction below), and at rest its unselected options render
+> `text-muted-foreground` with no border or fill, so beside five bordered `ToggleChip`s they read as
+> three static words. The photograph confirms it exactly. Giving the group a visible container is a
+> change to a **shared primitive** whose other consumer is the plan workspace's mode row
+> (ADR-0119), so it needs a contrast pair, an accessibility review and a look at that surface — a
+> design-system decision, not a consequence of ungrouping a date range.
+>
+> **And one finding was nearly filed from an eyeball and disproved by a probe.** The org switcher
+> appeared in the picture to carry a heavy amber border — `--chrome-primary`, reserved for the
+> primary action — which would have been a real defect. Sampled instead: `activeElement` is `BODY`,
+> the select's border is `oklch(0.62 0.02 264)` at 1px, `outline: none`, `box-shadow: none`. The
+> amber is ADR-0077's 3 px header seam running immediately beneath it. That is #285's own rule
+> applied to its author — _a colour read off a downscaled render is not evidence; sample the pixel_ —
+> and the second instrument correction of this pass: the measurement harness first reported **four**
+> rows for a two-row picture, because it grouped by `top` and the bar is `items-end`, so a 56 px
+> field and a 54 px group on one visual row have tops 2 px apart.
+
 **c. `All events shown` is a filled dark button that is not an action.** It is a status, rendered in
 the same treatment as `Change password` and `New project`. ADR-0099's status bar exists because
 _"`Recalculate` stops being a button pretending to be a status"_; this is that, one screen along.
