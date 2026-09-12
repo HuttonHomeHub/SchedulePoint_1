@@ -7096,6 +7096,34 @@ evidence: `prepush` was green while three journeys touching the changed surface 
 all, and they had to be run by hand (`e2e-public`, `e2e-staff`, `e2e-account` — all three passed,
 which is luck confirming a judgement rather than a process).
 
+> **2026-09-12 — the diagnosis holds and THREE of this row's numbers do not, including one that
+> contradicts `#299`.** All measured against the tree, not re-read.
+>
+> **`prepush` does not run format, and `#299` is the row that says so.** `scripts/prepush.sh`
+> contains **zero** occurrences of the string `format`; that is why `pnpm format:check` has to be
+> run separately. This row opens "`pnpm prepush` runs format, lint, typecheck, …" — so the register
+> holds two rows disagreeing about the same script, one of them created specifically to record the
+> gap the other denies. The `#93`/`#267` shape, between rows rather than inside one.
+>
+> **Nineteen `check:*` gates, not sixteen.** A full run prints **22** steps: `lint`, `typecheck`,
+> `test`, and 19 `check:*`. ADR-0136 and ADR-0138 added several between them, and `prepush.sh`
+> derives its list from `package.json`, so the number moves without anybody editing this row.
+>
+> **CI is four declared jobs and ten check runs, not "six checks" and not one `e2e` job.**
+> `ci.yml` declares `quality`, `e2e-api`, `e2e-web` (a **4-way matrix**) and `image` — seven job
+> instances — and a pull-request head carries ten check runs once the PR-title check and the two
+> CodeQL runs are counted. ADR-0138 split the single `e2e` job this row describes; the note above
+> saying "all six checks ran" was true on 2026-09-11 and is not now.
+>
+> **None of that weakens the row — it sharpens it.** The gap between a green `prepush` and a green
+> CI is the row's entire subject, and the gap is **wider** than the text says: the local gate is one
+> step smaller than claimed in one direction (no format) and three larger in another (19 gates), and
+> the remote side is five end-to-end jobs rather than one. A reader estimating "how much does
+> `prepush` not cover" from this paragraph would get every term wrong.
+>
+> The remedy is unchanged and still unbuilt: `ci.yml` and `prepush.sh` are both shared gates, so
+> ADR-0105 fires.
+
 **The two failure modes are different and only one is loud.** A branch that breaks something CI would
 catch reveals it at the next pull request, in a batch, with fourteen commits to bisect — annoying but
 self-correcting. The quiet one is a session that runs `prepush`, sees "All green", and reports the
