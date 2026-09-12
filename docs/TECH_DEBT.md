@@ -6036,6 +6036,28 @@ real one, and the remedy — not starting a sweep the process cannot finish — 
 `RetentionSweepService`, not a `catch`. The cost today is a scary line in a test log. The trigger to
 do it is a fourth table, or anyone mistaking this for a production failure.
 
+> **This item was filed a second time as `#303`, two days later, and `#303` is now the authoritative
+> row for it** (2026-09-12). The two describe one defect — same message, same table, same boot-sweep
+> race — and nothing connected them: neither cited the other, and `#303`'s own history records being
+> **wrong twice** about the cause (a count of four, then the hourly timer) before arriving at the
+> diagnosis this item had established on day one, by evidence rather than assumption. **This item
+> also had the better remedy shape.** `#303` prescribed awaiting the in-flight sweep in
+> `onApplicationShutdown`, which was proven on 2026-09-12 to be the wrong hook — Prisma
+> `$disconnect`s in `onModuleDestroy`, the FIRST hook Nest calls, and `onApplicationShutdown` is the
+> last — while "not starting a sweep the process cannot finish" needs no hook ordering at all and is
+> the one remedy that survives.
+>
+> **The duplication is the transferable part**, and nothing in this repository can see it: a gate-pass
+> row is a bag of items with one heading, so an item inside it is invisible to anybody searching the
+> register by symptom. The cost was two days of independent re-diagnosis, two of them wrong.
+>
+> Its neighbour below is the other half of the same lesson. The `retention.configured` fix recorded
+> there — the boot line naming two tables when there were three — has an **exact web-side twin**
+> that survived six weeks longer: `retention-copy.ts`'s `TABLE_LABELS` named the same two of three,
+> so the Retention panel printed `perf_probe_results` at a reader. Found on 2026-09-12 by
+> photographing the console (`#165(e)`), fixed, mechanism filed as `#310`. One omission, two
+> workspaces, two instruments, six weeks apart.
+
 Reading that same log **did** find a real one, which is fixed rather than filed: the
 `retention.configured` boot line named two tables and not the third, so the one place an operator is
 told the effective periods was silently short by one — for a number ADR-0087 records as
@@ -8039,3 +8061,23 @@ has an ADR about exactly that shape of fix.
 > case that boots an app, closes it, and asserts `retention.sweep_failed` was not emitted — which
 > needs the suite to capture Pino output, and nothing in it does yet. That is the whole reason this
 > stays a row: the fix is now cheap and **proving** it is not.
+>
+> **AND THIS ROW IS A SECOND FILING. `#259` recorded the same defect two days earlier and had it
+> right** (found 2026-09-12, by reading `#259` for an unrelated reason). Same message, same table,
+> same boot-sweep race — and that item **established** the cause rather than assuming it: the
+> statement runs clean standalone, a two-file run sweeps the table in 2 ms, and `Database connection
+closed` immediately precedes every failure. This row meanwhile was wrong twice on the way there,
+> first about the count and then about the hourly timer.
+>
+> **`#259`'s remedy is also the better one and is adopted here.** It says: _not starting a sweep the
+> process cannot finish_ — a lifecycle change, not a `catch`. That needs **no hook ordering at all**,
+> so it is immune to the trap above, survives a NestJS 12 bump (`#289`) and does not rest on a
+> `@nestjs/core` implementation detail. The `onModuleDestroy` route stays documented because a reader
+> who reaches for the obvious fix must be told why it is not `onApplicationShutdown`; it is no longer
+> the recommendation.
+>
+> **Neither row cited the other, and nothing here could see the duplication**: `#259` is a
+> twelve-finding gate-pass row, so an item inside it is invisible to anybody searching the register by
+> symptom. The cost was two days of independent re-diagnosis, two versions of it wrong. That is the
+> `#312` shape one level along — a register whose own contents are not resolvable by the thing they
+> are about.
