@@ -7233,7 +7233,7 @@ ADR-0130's epic exists to remove, narrowed rather than closed.
 
 ### 294. A peer's pen request costs the diagram 76–80 px of height
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (measuring #287) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-11 (measuring #287) · **Size:** S · **Owner:** web
 
 **Measured, on the reading #287 asked for** (`apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts`),
 with an activity selected and a peer's request outstanding:
@@ -7273,6 +7273,52 @@ records that being load-bearing in eight of ten lock states.
 > added deliberately across `4b851eb8` and `73d390bd`, with the assertion never updated — so this
 > row's 76–80 px is a **separate** cost measured on top of a base that was correctly 51 all along.
 > The numbers in this table stand; only the reading of the baseline column changes.
+
+**The four options are now COSTED** (2026-09-12, product owner's request: "cost all four, then you
+choose"). Measured at **1646**, request outstanding, activity selected, activities panel collapsed —
+by extending the same fixture rather than standing up a second one. The row is **three lines** in
+this state (51 → 87 → 127), which is what makes the table read the way it does:
+
+| option                               | row height | buys      | kind            |
+| ------------------------------------ | ---------- | --------- | --------------- |
+| (d) accept it                        | 127 px     | 0         | the baseline    |
+| (a) shorten both labels              | 87 px      | **40 px** | **upper bound** |
+| (b) move the sentence out of the row | 87 px      | **40 px** | deterministic   |
+| (c) hand-off into the pen popover    | 51 px      | **76 px** | **upper bound** |
+
+**Read (a) and (c) as ceilings, not offers.** Each option was driven to the most it could possibly
+buy — both labels **emptied**, the sentence removed, both removed — deliberately, because costing
+(a) as written would have meant inventing replacement copy and then measuring my own invention. A
+zero would have killed an option outright with nobody agreeing wording first. Nothing returned zero,
+so the ceilings are what stand: **(a) reaches 40 px only if the buttons become icon-only** (real
+shortened copy buys somewhere in 0–40, and `Hand over` / `Keep editing` are already short), and
+**(c)'s 76 px does not include the popover trigger a real implementation puts back.** Only **(b) is
+deterministic** — removing that sentence always buys the line.
+
+**The prediction written before the run was wrong about (a)**, recorded rather than quietly
+corrected: 0 px predicted, **40 px measured**. The reasoning was ADR-0115 D7 — a wrapping row breaks
+between items, not by total width, so a few characters seemed unlikely to remove a break point. Here
+it does. D7 is not refuted; it cuts both ways, and which way is not predictable from the width, which
+is the whole argument for measuring rather than reasoning. (b) and (c) landed as predicted.
+
+**What each option costs the reader, which the pixels do not say.** The sentence measured here is
+_"Peer is asking to edit this plan."_ — it **names who is asking**, and ADR-0112 records that as
+load-bearing in eight of ten lock states. So (b) buys its line by removing the one thing that
+identifies the requester. (c) buys the most and puts a decision under a **45 s** timer
+(`LOCK_HANDOFF_GRACE_MS`) behind an extra click. (a) buys the same line as (b) at no informational
+cost — but only at its ceiling, i.e. icon-only, and this repository has the primitive for that
+(ADR-0117's `useTooltip`, built for exactly icon-only controls). Whether `Hand over` survives as an
+icon under time pressure is a design judgement and is the product owner's.
+
+**Still not fixed here** — the costing does not choose. What has changed is that the choice is now
+between measured quantities instead of four uncosted sentences.
+
+**What the costing does NOT establish**, stated rather than implied: a DOM mutation measures the
+layout consequence of an **occupant set**, not a built feature — a real popover adds its trigger,
+real shortened labels may re-wrap inside their button. One machine, one browser, one plan, one
+width, and the peer-request branch only. The reproduction, the harness and the conditions are in
+`apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts`, whose docblock carries the
+predictions as committed before the run.
 
 **What the reading does NOT cover**, stated rather than implied: the Org Admin **override** branch,
 which offers a different control set and may be wider or narrower; one machine, one browser, one
