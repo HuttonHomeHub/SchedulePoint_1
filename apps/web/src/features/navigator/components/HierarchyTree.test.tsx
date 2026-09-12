@@ -78,9 +78,14 @@ const plans: PlanSummary[] = [
 // Each level of the tree pages through its list endpoint (`apiFetchAllPages`) so a client/project/
 // plan past the server's default 20-row page still appears; the single-node reads use `apiFetch`.
 // One router serves both.
+// #297's reproduction needs a child fetch held OPEN, so the tree renders its synthetic
+// `loading` row and a reader can put the roving focus on it before it is replaced. Null
+// (the default) keeps every other case on the immediate path it already had.
+let holdProjects: Promise<ProjectSummary[]> | null = null;
+
 const route = (path: string): Promise<unknown> => {
   if (path.endsWith('/clients')) return Promise.resolve(clients);
-  if (path.includes('/clients/c1/projects')) return Promise.resolve(projects);
+  if (path.includes('/clients/c1/projects')) return holdProjects ?? Promise.resolve(projects);
   if (path.includes('/projects/p1/plans')) return Promise.resolve(plans);
   if (path.endsWith('/plans/pl1')) return Promise.resolve(plans[0]);
   if (path.endsWith('/projects/p1')) return Promise.resolve(projects[0]);
@@ -105,6 +110,7 @@ function renderTree() {
 beforeEach(() => {
   navigate.mockClear();
   params = {};
+  holdProjects = null;
 });
 
 describe('HierarchyTree', () => {
@@ -189,6 +195,44 @@ describe('HierarchyTree', () => {
     // And navigating did NOT also toggle the branch under the reader (stopPropagation's job on
     // the pointer path; on the keyboard path Enter simply never toggles any more).
     expect(project).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  /**
+   * **#297 — a stale `focusedKey` can leave the tree with no tab stop at all.** `activeKey` is
+   * `focusedKey ?? selected ?? first`, and `??` short-circuits on any non-null left side —
+   * including a key no row carries any more. `isActive` is then false for EVERY row, nothing
+   * gets `tabIndex={0}`, and the `role="tree"` container is itself `tabIndex={-1}`, so the
+   * Project Explorer drops out of the Tab sequence entirely.
+   *
+   * The register row proposed reproducing this by deleting a focused row from a second session.
+   * This is the same defect reached without one: a synthetic `loading` row is keyed
+   * `${parentId}:loading` (`tree-model.ts:58`) and is FOCUSABLE (`role="treeitem"`,
+   * `tabIndex={isActive ? 0 : -1}`), so arrowing onto a placeholder and letting its fetch resolve
+   * leaves `focusedKey` naming a key that no longer exists. A slow network and an eager ArrowDown
+   * is all it takes.
+   *
+   * **Verified red against the pre-fix derivation: 0 tab stops.**
+   */
+  it('keeps exactly one tab stop when a focused loading row resolves away (#297)', async () => {
+    let releaseProjects!: (value: ProjectSummary[]) => void;
+    holdProjects = new Promise<ProjectSummary[]>((resolve) => {
+      releaseProjects = resolve;
+    });
+
+    renderTree();
+    const client = await screen.findByRole('treeitem', { name: /Northgate/ });
+    fireEvent.click(client); // expand: the child fetch is held, so a `loading` row renders
+
+    // Drive the roving model with the tree's OWN key, not `element.focus()` — see the #143 case
+    // above for why that distinction matters in this harness.
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+
+    // The fetch resolves and the placeholder is replaced, so `focusedKey` now names nothing.
+    releaseProjects(projects);
+    await screen.findByRole('treeitem', { name: /Fit-out/ });
+
+    const stops = screen.getAllByRole('treeitem').filter((element) => element.tabIndex === 0);
+    expect(stops).toHaveLength(1);
   });
 
   it('deep-links: a plan route auto-reveals and marks its ancestor path', async () => {
