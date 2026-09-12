@@ -355,4 +355,93 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(byName.get('Crane lift')?.totalFloat).toBe(8);
     expect(byName.get('Crane lift')?.durationDays).toBe(5);
   });
+
+  /**
+   * **The discriminator M0-T2 left open, answered by experiment rather than by reading.**
+   *
+   * `m0-measurements.md` records two readings that both fit `Task twin` reading `2`: the float
+   * minutes are 2,400 and were divided by **1440**, or the engine measured the slack on a 24-hour
+   * axis and divided coherently. It says the discriminator "is which factor `resolveDayFactors`
+   * actually received", and deliberately does not guess.
+   *
+   * This asks the product instead of the source. The fixture is `Task twin`'s, with ONE difference:
+   * a second task carries the plan's own 8 h calendar **explicitly** on the activity rather than
+   * inheriting it. Nothing else changes — same duration, same predecessor shape, same window — so
+   * the two differ only in whether `activities.calendar_id` is set.
+   *
+   * The three outcomes are distinct and were written down before the run:
+   *
+   * - explicit reads **5** → the engine's slack really is 2,400 minutes, the explicit activity was
+   *   divided by 480, and the inheriting one was therefore divided by **1440**. The factor is the
+   *   defect, and it reaches an activity with no resource, no driver and no calendar of its own.
+   * - explicit reads **2** as well → the factor is NOT what separates them, and the 24-hour-axis
+   *   reading survives.
+   * - explicit reads **15** → the slack is 7,200 minutes, i.e. measured on a 24-hour axis.
+   *
+   * **Characterisation, not desired behaviour** — like its sibling above. Whatever it records is
+   * today's output, and the number M1 has to change.
+   */
+  it('discriminates the factor: the same task with the plan calendar set EXPLICITLY', async () => {
+    const actor = await adminWithOrg();
+    const eightHourDay = await calendar(actor, 'Crew (8h)', 8);
+    const planId = await planOn(actor, eightHourDay);
+
+    const make = async (name: string, days: number, calendarId?: string): Promise<string> =>
+      (
+        await actor.agent
+          .post(`${org}/plans/${planId}/activities`)
+          .send({ name, durationDays: days, ...(calendarId ? { calendarId } : {}) })
+          .expect(201)
+      ).body.data.id as string;
+
+    // Same shape as the case above: a long pole so nothing has zero float (the ADR-0093 trap).
+    const longPole = await make('Long pole', 10);
+    const inheriting = await make('Inheriting twin', 5);
+    const explicit = await make('Explicit twin', 5, eightHourDay);
+    const finish = await make('Finish', 1);
+
+    for (const predecessorId of [longPole, inheriting, explicit]) {
+      await actor.agent
+        .post(`${org}/plans/${planId}/dependencies`)
+        .send({ predecessorId, successorId: finish, type: 'FS' })
+        .expect(201);
+    }
+
+    await actor.agent.post(`${org}/plans/${planId}/schedule/recalculate`).expect(200);
+
+    const list = await actor.agent.get(`${org}/plans/${planId}/activities`).expect(200);
+    const byName = new Map(
+      (
+        list.body.data as {
+          name: string;
+          durationDays: number;
+          durationMinutes: number;
+          totalFloat: number | null;
+          earlyFinish: string | null;
+          lateFinish: string | null;
+        }[]
+      ).map((a) => [a.name, a]),
+    );
+
+    const inh = byName.get('Inheriting twin');
+    const exp = byName.get('Explicit twin');
+
+    // Non-vacuity FIRST: both must have real float over the same window, or the comparison below
+    // is between two zeroes and says nothing.
+    expect(inh?.totalFloat).toBeGreaterThan(0);
+    expect(exp?.totalFloat).toBeGreaterThan(0);
+    expect(inh?.earlyFinish).toBe(exp?.earlyFinish);
+    expect(inh?.lateFinish).toBe(exp?.lateFinish);
+
+    // And both are five days of work on the plan's 8 h day, so any difference in float is not a
+    // difference in duration.
+    expect(inh?.durationMinutes).toBe(2400);
+    expect(exp?.durationMinutes).toBe(2400);
+    expect(inh?.durationDays).toBe(5);
+    expect(exp?.durationDays).toBe(5);
+
+    // The observation. See the docblock for what each value would mean.
+    expect(inh?.totalFloat).toBe(2);
+    expect(exp?.totalFloat).toBe(5);
+  });
 });
