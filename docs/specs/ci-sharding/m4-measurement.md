@@ -69,7 +69,9 @@ clock.
    path, which is the thing the epic was for.
 2. **`check:e2e-roster` verified red against each defect it names before it is armed.** Met — eight
    mutations at M1, four more at M3 when E4/E5 landed, each caught by the assertion written for it.
-   Recorded in those milestones' commits.
+   Recorded in PR #516 and PR #518 — cited by pull request rather than by commit on purpose,
+   because a squash-merge discards the branch commits those mutation sweeps were described in,
+   so a SHA here would be a dangling citation the moment git collected it.
 3. **`scripts/e2e-local.sh` and `scripts/e2e-sweep.sh` byte-unchanged.** Met, and checked rather
    than asserted: `git diff 97a1236e~1..HEAD -- scripts/e2e-local.sh scripts/e2e-sweep.sh` is empty
    across the whole epic. The local workflow did not change, because no suite was renamed, merged or
@@ -187,6 +189,31 @@ one job), 1,955 s and 1,752 s (the two sharded runs, summed across shards). A ra
 **21 % of the largest**, with the packing derived from the top of it. That is the same conclusion §4
 reaches from a different direction, and it is the single most useful number in this document for
 anyone re-deriving a shard count later.
+
+### 5.3 Where the between-run variance lives (§1.4's last bullet, R4) — in both segments
+
+§1.4 named this and left it open in as many words: _"no segment breakdown was captured for any
+sample but the reference, so it is not known whether the 410 s between fastest and slowest lands in
+the API suite, the web suites, or the setup"_ — and flagged that if the variance were concentrated
+in the web suites, the shard budget would have less headroom than it looks.
+
+It is **not** concentrated there. Four measurements of each segment, all from step timestamps:
+
+| segment                       | samples                          | range         | spread   |
+| ----------------------------- | -------------------------------- | ------------- | -------- |
+| web suites (total, 44 suites) | 2,049 / 1,616 / 1,955 / 1,752 s  | 1,616–2,049 s | **21 %** |
+| API suite + pairwise          | 640 / 618 / 426 / 484 s          | 426–640 s     | **33 %** |
+| per-shard fixed cost          | 86–112 s across eight shard-runs | 86–112 s      | 23 %     |
+
+So the 410 s is not a web-suite effect that would eat the shard budget; every segment measured
+swings by a comparable fraction, and the fixed cost — the term the model predicted best — swings
+as much proportionally as the suites do. **The reference run was a high draw across the board**,
+which is why §4's instruction is "re-measure `W`" rather than "re-measure the slow suites".
+
+Two things that follow. The shard budget's headroom is as it looked, so nothing about D1 changes.
+And the **API-suite trigger in §7 must be read as a range, not a number**: at 426–640 s that suite
+is not a stable quantity either, so "`quality` below 690 s in two consecutive runs" is the trigger
+precisely because it is the comparison that does not depend on this variance.
 
 ## 6. Deviations from the approved plan, and why
 

@@ -92,6 +92,14 @@ runs. It does not dominate, so the stated lever (fewer shards) never had to fire
 than over-read: public repository, no competing run in flight, `cancel-in-progress` capping
 self-contention. A second contributor running concurrent PRs is the condition to re-measure.
 
+**A named open assumption is closed, and its answer was not the worried one.** §1.4 left it unknown
+whether the 410 s between the fastest and slowest pre-epic run lands in the web suites, the API
+suite or the setup, and flagged that if it were the web suites the shard budget would have less
+headroom than it looked. Four measurements of each segment say it is in **all** of them — web total
+1,616–2,049 s (21 %), API suite + pairwise 426–640 s (33 %), per-shard fixed cost 86–112 s (23 %).
+The reference run was a high draw across the board, which is why the instruction to a future reader
+is "re-measure `W`" rather than "re-measure the slow suites".
+
 **Refining the packing is now known to be below the noise.** Packed spread **17 s**; measured
 suite-time spread **156 s and 123 s** across the two runs — and the same shard, on the same commit
 thirteen minutes later, swings by up to **27 %**. The web total itself is measured four times at
