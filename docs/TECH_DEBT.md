@@ -4446,6 +4446,13 @@ parenthesis exists)_:
 Both times it did what its own docblock says a stale declaration does — **it did not go quiet, it
 went wrong about a different change**, citing a parity argument that was not that change's.
 
+> **Still twice, checked 2026-09-12 — recorded because a clean check that leaves no trace gets
+> repeated** (`#246`'s own reason for listing what it found accurate). `scripts/frontend-only.json`
+> reads `active: false`, its `history` array holds **2** entries, and the `reason` field carries the
+> corrected count rather than the "three" it went on asserting for six days. So there has been no
+> third arming, and the correction this row made has held. Nothing else changes: the remedy is still
+> a sentence, and building a mechanism for it is still a shared-gate change.
+
 **The remedy in place is a sentence**, in the gate's own docblock: _"the epic's own gate pass removes
 it"_. That sentence has been read by at least two closing passes and acted on by neither, including
 the reconciliation pass of 2026-08-25, whose whole subject was documents that outlive their truth.
@@ -4476,7 +4483,7 @@ instance is not also fixed by writing a fourth sentence.
 
 _Filed 2026-08-26 by the reconciliation pass, from a false pass it produced._
 
-`check:frontend-only` diffs `origin/main...HEAD` (`check-frontend-only.mjs:93`) — **committed HEAD,
+`check:frontend-only` diffs `origin/main...HEAD` (`check-frontend-only.mjs:102`) — **committed HEAD,
 not the working tree.** So running `pnpm prepush` on an uncommitted tree asks the question of the
 _previous_ commit, and answers about work that is not the work in hand.
 
@@ -4498,7 +4505,7 @@ with `#194` because both are about this gate, and both should be settled in one 
 ---
 
 > **Re-derived 2026-09-10 and STILL TRUE, with one qualification that changes how to read it.**
-> `check-frontend-only.mjs:93` still diffs `${BASE}...HEAD` with `BASE = 'origin/main'` (`:48`), and
+> `check-frontend-only.mjs:102` still diffs `${BASE}...HEAD` with `BASE = 'origin/main'` (`:57`), and
 > the file contains no `porcelain`, no `dirty` and no `status --` — the cheap fix has not landed. It
 > remains the **only** diffing gate: every other `check-*.mjs` that touches git uses `git ls-files`
 > (`check-claims.mjs`, `check-reconcile-due.mjs`), which is a related but different blind spot —
@@ -4506,10 +4513,28 @@ with `#194` because both are about this gate, and both should be settled in one 
 > reconciliation counts disagree by one until it is committed.
 >
 > **The qualification: the gate is currently inert.** `scripts/frontend-only.json` is
-> `"active": false`, and `check-frontend-only.mjs:80-86` exits 0 with a "skipped" message long
+> `"active": false`, and `check-frontend-only.mjs:89-95` exits 0 with a "skipped" message long
 > before it reaches the diff. So the blind spot exists in the mechanism and cannot bite until the
 > next frontend-only epic arms the declaration — worth knowing before anyone tries to reproduce the
 > false pass and concludes the row is stale.
+
+> **Re-derived 2026-09-12: the diagnosis is unchanged and all FOUR of this row's citations had
+> moved.** The diff is at `:102` (was `:93`, cited twice), `BASE` at `:57` (was `:48`), and the skip
+> branch at `:89-95` (was `:80-86`). Repointed above by reading the file, not by adding an offset.
+> Everything they support still holds: the gate diffs `${BASE}...HEAD`, contains no `porcelain`, no
+> `dirty` and no `status --`, and `scripts/frontend-only.json` is still `"active": false` — so the
+> blind spot is real and unreachable until an epic arms it.
+>
+> **It is `#246`'s thesis landing on its neighbour, one day after both were verified.** That row
+> measures broken in-repo citations at 0.9 % by the only test a machine can apply — does the line
+> still exist — and all four of these still exist, in a 120-line file. They point at the wrong
+> lines, which is exactly the failure mode `#246` says no cheap check can see.
+>
+> **Also confirmed while here, so the next sweep need not**: `check:frontend-only` is still the ONLY
+> gate that diffs. Two scripts invoke git for content at all — this one, and
+> `check-reconcile-due.mjs`, which uses `ls-files`, `log --diff-filter=A` and
+> `rev-parse --is-shallow-repository`. ADR-0136 and ADR-0138 added six gates between them and not one
+> of them diffs, so "the blast radius is one script today" is still exact.
 
 ### 197. Three rules with two or three implementations each, agreeing by discipline
 
