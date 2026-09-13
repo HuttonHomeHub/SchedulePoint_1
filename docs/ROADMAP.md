@@ -817,6 +817,22 @@ discriminators. Each becomes a spec/plan before build:
   cannot be removed: matching on code cannot tell a **re-coded** activity from one removed and
   another added.
 
+- **Float reads in the same days as the duration beside it** — **shipping** (ADR-0139). An activity
+  that inherits its plan's calendar — the default, since a calendar is only named on an activity
+  when somebody wants a different one — had its float converted against a **24-hour** day while its
+  duration was converted against the plan's real one. The same bar reported five days of work and
+  two days of float over a five-day window. It now reports five and five. **No date moves and no
+  work moves**: the engine computes in minutes and was always right, so only the day-denominated
+  read-out changed — and it changed **upward**, because the product had been understating slack
+  rather than inventing it. **A stock plan is unaffected**, since a calendar of full working days
+  derives a 24-hour standard day for which the old conversion was already correct; what is affected
+  wholesale is any plan on a shorter working day, **which every schedule imported from P6 is**. So
+  the defect sat precisely on the on-ramp from the tool this product exists to replace. One
+  consequence is stated rather than left to surprise anybody: comparing a baseline captured before
+  this release against live afterwards shows float as having changed, because the baseline froze the
+  old figure — true today of any edit to a calendar's hours-per-day, and recorded as
+  `docs/TECH_DEBT.md` #318 rather than fixed here.
+
 ## Guiding constraints
 
 - Keep `main` releasable; ship thin vertical slices.

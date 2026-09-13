@@ -478,6 +478,74 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(afterMetric.measured?.count).toBe(1);
   });
 
+  /**
+   * **The corrected float reaches a guest (M2, the inherited-plan-calendar epic).**
+   *
+   * The guest view is the one server surface an outsider sees, and it reads the **persisted**
+   * `total_float` — so it inherits whatever the recalculation wrote, with no second conversion of
+   * its own. That is exactly why it is worth a case: the fix is in what `resolveDayFactors` is
+   * handed, four call frames away, and nothing about the guest path would look wrong if it were
+   * still 1440.
+   *
+   * **The explicit twin is the control, and it is not decoration.** A test that recalculates and
+   * reads back through the same API is self-consistent if the rule collapses on BOTH sides — the
+   * property that hid `#86` for a year, recorded in its own M5 note. Two activities differing only
+   * in whether `calendar_id` is set must read the same float, and a build that reverted the fix
+   * would show 2 against 5 here.
+   */
+  it('gives a guest the corrected float, with an explicit twin as the control', async () => {
+    const actor = await adminWithOrg();
+    const eightHourDay = await calendar(actor, 'Crew (8h)', 8);
+    const planId = await planOn(actor, eightHourDay);
+
+    const make = async (name: string, days: number, calendarId?: string): Promise<string> =>
+      (
+        await actor.agent
+          .post(`${org}/plans/${planId}/activities`)
+          .send({ name, durationDays: days, ...(calendarId ? { calendarId } : {}) })
+          .expect(201)
+      ).body.data.id as string;
+
+    // A long pole so nothing sits at zero float — a zero-float fixture makes the comparison below
+    // true for the wrong reason (the ADR-0093 trap).
+    const longPole = await make('Long pole', 10);
+    const inheriting = await make('Inheriting twin', 5);
+    const explicit = await make('Explicit twin', 5, eightHourDay);
+    const finish = await make('Finish', 1);
+
+    for (const predecessorId of [longPole, inheriting, explicit]) {
+      await actor.agent
+        .post(`${org}/plans/${planId}/dependencies`)
+        .send({ predecessorId, successorId: finish, type: 'FS' })
+        .expect(201);
+    }
+
+    await actor.agent.post(`${org}/plans/${planId}/schedule/recalculate`).expect(200);
+
+    const share = await actor.agent
+      .post(`${org}/plans/${planId}/shares`)
+      .send({ label: 'QS' })
+      .expect(201);
+    const token = (share.body.data.url as string).split('#')[1];
+    expect(token).toBeTruthy();
+
+    const guest = await request(server())
+      .get('/api/v1/share/activities')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const rows = new Map(
+      (guest.body.data as { name: string; totalFloat: number | null }[]).map((a) => [a.name, a]),
+    );
+
+    // Five days of slack on the plan's 8 h day, for BOTH — which is the fix.
+    expect(rows.get('Inheriting twin')?.totalFloat).toBe(5);
+    expect(rows.get('Explicit twin')?.totalFloat).toBe(5);
+    // The control: binding the calendar explicitly is no longer a difference a reader can see.
+    expect(rows.get('Inheriting twin')?.totalFloat).toBe(rows.get('Explicit twin')?.totalFloat);
+    // And the number this surface served until 2026-09-13, pinned so a revert is loud here too.
+    expect(rows.get('Inheriting twin')?.totalFloat).not.toBe(2);
+  });
+
   it('agrees when the two calendars agree — so a green run cannot mean the fixture stopped discriminating', async () => {
     // Without this the case above passes equally against a build where the driving calendar is
     // never resolved at all, which is a different defect wearing the same result.
@@ -559,7 +627,7 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
    * cannot discriminate — which is precisely why the plain task is the assertion that matters. Left
    * in and labelled, rather than dropped, so a later reader does not re-derive it.
    */
-  it('reports duration days and float days on different day lengths — with no resource involved', async () => {
+  it('reports duration days and float days on the SAME day length — with no resource involved', async () => {
     const actor = await adminWithOrg();
     const eightHourDay = await calendar(actor, 'Crew (8h)', 8);
     const roundTheClock = await calendar(actor, 'Crane (24h)', 24);
@@ -625,16 +693,21 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(twin?.durationMinutes).toBe(2400);
     expect(twin?.durationDays).toBe(5);
 
-    // And the float over that same five-day window reads 2, which 480 cannot produce.
-    // **Characterisation, not desired behaviour**: on the activity's own day length this is 5, and
-    // that is the number M1/M2 have to change.
-    expect(twin?.totalFloat).toBe(2);
+    // **And the float over that same window now reads 5, on the same 480 the duration used.**
+    // It read **2** until 2026-09-13 — the same 2,400 minutes of slack divided by 1440 instead of
+    // 480 — which is the incoherence this case was written to characterise. The old number is
+    // asserted as a counter-fact below rather than left in a comment, because a comment cannot go
+    // red if the sentinel confusion is reintroduced.
+    expect(twin?.totalFloat).toBe(5);
+    expect(twin?.totalFloat).not.toBe(2);
 
-    // The incoherence, as one statement a reader can check: the float, taken at the duration's own
-    // factor, does not describe the window the dates show.
+    // **The coherence, as one statement a reader can check**, and the inverse of what stood here.
+    // The float taken at the duration's own factor now DOES describe the window the dates show:
+    // 5 Jan to 10 Jan is five days, and five days at 480 is the 2,400 minutes of slack the engine
+    // computed. The line below asserted `not.toBe(2400)` this morning.
     const twinFloatMinutesAtOwnFactor = (twin?.totalFloat ?? 0) * 480;
-    expect(twinFloatMinutesAtOwnFactor).toBe(960);
-    expect(twinFloatMinutesAtOwnFactor).not.toBe(2400); // the five-day window at 480
+    expect(twinFloatMinutesAtOwnFactor).toBe(2400); // the five-day window at 480
+    expect(twinFloatMinutesAtOwnFactor).not.toBe(960); // what 1440 used to produce
 
     // The driven activity. `totalFloat` was ALREADY driver-aware — the recalculation resolves each
     // activity's scheduling calendar (ADR-0039 §4) — which is why it reads 8 here both before and
@@ -675,8 +748,21 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
    *   reading survives.
    * - explicit reads **15** → the slack is 7,200 minutes, i.e. measured on a 24-hour axis.
    *
-   * **Characterisation, not desired behaviour** — like its sibling above. Whatever it records is
-   * today's output, and the number M1 has to change.
+   * **INVERTED 2026-09-13, exactly as the line it replaces promised.** It read _"characterisation,
+   * not desired behaviour — whatever it records is today's output, and the number M1 has to
+   * change"_. M1 landed and the number changed: the inheriting twin read **2** and now reads **5**,
+   * level with its explicitly-bound twin. So a green run here now means the two agree, which is the
+   * opposite of what it meant this morning.
+   *
+   * The old number is kept in the assertion below rather than deleted, because the PAIR is the
+   * evidence: 2 was 2,400 minutes divided by 1440, 5 is the same 2,400 divided by 480, and nothing
+   * about the schedule moved between them. The first of the three outcomes above is the one that
+   * held, and it is left standing — it is the reasoning that identified the factor as the defect.
+   *
+   * **What M1 changed is not this function's arithmetic but which map reaches it.**
+   * `resolveDayFactors` still maps `null` to 1440; it is now handed `dayFactorCalIdByActivity`, in
+   * which an inheriting activity's `null` has already been resolved to the plan's calendar by
+   * `schedulingCalendarId`. The engine's own port map is untouched, which is why no date moves here.
    */
   it('discriminates the factor: the same task with the plan calendar set EXPLICITLY', async () => {
     const actor = await adminWithOrg();
@@ -737,8 +823,16 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(inh?.durationDays).toBe(5);
     expect(exp?.durationDays).toBe(5);
 
-    // The observation. See the docblock for what each value would mean.
-    expect(inh?.totalFloat).toBe(2);
+    // **The twins now agree, which is the whole of M1.** Both are five days of work with the same
+    // slack, measured on the same 8 h day — so binding the plan's calendar explicitly, or leaving it
+    // to inherit, is no longer a difference a planner can see in a float column.
+    expect(inh?.totalFloat).toBe(5);
     expect(exp?.totalFloat).toBe(5);
+    expect(inh?.totalFloat).toBe(exp?.totalFloat);
+
+    // The number this case pinned until 2026-09-13, asserted as a counter-fact rather than left in
+    // a comment: 2 is the same 2,400 minutes of slack divided by 1440 instead of 480. A comment
+    // cannot go red if somebody reintroduces the sentinel confusion; this can.
+    expect(inh?.totalFloat).not.toBe(2);
   });
 });
