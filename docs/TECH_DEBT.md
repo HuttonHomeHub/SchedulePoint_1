@@ -3992,6 +3992,17 @@ while the one at the longer wait did not, which is the wrong way round for a loa
 **Distinct from `#119a`**, which is the **API** e2e suite and a different signature entirely; this is
 the web suite, on Firefox, in the shared sign-up preamble.
 
+**Whoever picks this up cannot reproduce it locally, and that is a property of the environment
+rather than a gap in the row.** Both failures were `[firefox]`. The base config declares three
+projects (`chromium`, `firefox`, `webkit`, `playwright.config.ts:21-32`), but `/opt/pw-browsers`
+holds **only chromium** — verified by listing it — and `scripts/e2e-local.sh web` therefore runs
+`--project=chromium`, with a comment saying so and calling cross-browser CI's job. So the
+documented local pre-push gate (CLAUDE.md §19.8, and ADR-0096's _"change a screen, run the base
+journey"_) **structurally cannot produce this failure**, and could never have caught it. That is
+not an argument against either rule — it is the reason the trace matters so much here: iterating
+on the real configuration means installing Firefox in the dev container or waiting on CI, and a
+green local run says nothing about this class.
+
 **And it may fire `#121`'s trigger.** `e2e/dependencies.spec.ts` is one of the four base-journey
 files that row wants converted to acquire the pen, and `#121`'s trigger is _"the next time a
 base-journey editing spec needs changing for any reason"_. If this turns out to be test-side,
