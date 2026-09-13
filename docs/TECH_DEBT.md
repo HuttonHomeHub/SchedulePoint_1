@@ -295,7 +295,7 @@ rules exist because that is true of any machine nobody chose.
 
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 The activity DTO returns `null` for a cost field that is **unset** and `null` for one the caller
 **may not read** — the two are indistinguishable on the wire. So the tabbed activity editor
@@ -338,6 +338,19 @@ other is a client bug in a different file.
 > assertion has to be deleted deliberately, which is the moment a reader meets #62.
 >
 > This is ADR-0058's move applied to a rule the row had already written down and left to memory.
+
+> **Re-derived 2026-09-13, every claim exact — recorded because a clean check that leaves no trace
+> gets repeated** (`#246`'s rule, and `#247`'s finding that the `Verified:` field is the only trace
+> anything reads). The coincidence still holds **and now holds by construction rather than by
+> coincidence of two lists**: `COST_READ` and `HIERARCHY_WRITE` are named `const` arrays spread into
+> exactly `PLANNER` and `ORG_ADMIN`, and `activity:update` is one of `HIERARCHY_WRITE`'s 32 members.
+> The guard is live (`org-permissions.spec.ts`, the coupling `it` plus the positive case above it
+> that keeps it from passing vacuously), and the second consumer is real —
+> `use-plan-workspace-model.ts:486` derives `canReadCost: canWrite`, and
+> `ActivityEditorDialog.tsx:853` forwards `gating.cost.readable` under a comment naming this row.
+> **Nothing here changes**: the DTO still cannot distinguish "unset" from "may not read", which is
+> the architectural gap, and the guard converts a silent client defect into a red build rather than
+> closing it.
 
 ### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
