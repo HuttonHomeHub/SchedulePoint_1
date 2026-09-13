@@ -342,7 +342,7 @@ altogether; doing this first and that second would rewrite the same file twice.
 
 ### 69. Two idioms for editing a row in place
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 `AssignmentRow` saves each field with its own inline button; `DependencyTable` opens a dialog per
 row. Both are defensible on their own and they now sit in **adjacent** tabs of one editor _(this
@@ -355,6 +355,12 @@ inconsistency is visible in a way it was not when each lived in its own pop-out.
 **What would close it:** pick one row-edit idiom and state it in `docs/DESIGN_SYSTEM.md` (the
 list/manage archetype is the natural home), then move whichever surface loses. Raised by the
 ADR-0062 component gate as a suggestion — deliberately not rushed inside the epic that noticed it.
+
+> **Both citations re-derived and exact** (2026-09-13). `ActivityEditorDialog.tsx:563` is still the
+> Logic tab's registration and `:575` still Resources, so "adjacent tabs" holds. The file has not
+> been touched since 2026-09-01, which is another data point for `#246`'s mechanism: a line citation
+> moves only when an edit lands above it. Nothing about the row's argument changes and its remedy —
+> pick one row-edit idiom and state it in `docs/DESIGN_SYSTEM.md` — is unchanged.
 
 ### 70. The API e2e harness cannot reproduce a same-plan write race
 
@@ -8345,7 +8351,7 @@ a target nobody can use for the common case gets routed around instead.
 
 ### 298. Two gate-pass findings recorded rather than folded, and one suite name that stopped describing itself
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (ADR-0136's M5 gate pass) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-11 (ADR-0136's M5 gate pass) · **Size:** S · **Owner:** repo
 
 > **Status corrected from `unverified` to `open`, 2026-09-11 overnight sweep — and the correction is
 > itself a finding.** The row carried `**Status:** unverified` **beside** `**Verified:**
@@ -8381,6 +8387,39 @@ discovered; measuring what else it would pick up comes first.
 in the class this register records deferring and then discovering two epics later, so: the trigger
 for (a) is the next gate added to the chain, and for (b) the next suite anybody wants to place
 beside non-`src` code.
+
+> **(a)'s trigger has FIRED — three times, in two days, and nothing recorded it** (2026-09-13). The
+> chain is **twelve** suites, not nine: `check-e2e-roster`, `build-steps` and `e2e-durations` joined
+> it with ADR-0138, after this row was verified on 2026-09-11. Counted from the script itself, in
+> order: `doc-register`, `reconcile-due`, `spec-status`, `ci-roster`, **`e2e-roster`**,
+> `commitlint-fixtures`, `pr-title-workflow`, `check-licenses`, `advisory-gates`, **`build-steps`**,
+> `check-bundle-size`, **`e2e-durations`**.
+>
+> **The row's argument is strengthened, not weakened.** It called the name wrong for nine members and
+> it is now wrong for twelve, growing by a third in forty-eight hours; `&&` still hides every failure
+> after the first, so a break in `e2e-durations` is reported as `check:doc-register` failing.
+>
+> **And the trigger firing unnoticed is the second-order finding.** A trigger of the form "the next
+> time somebody adds one" is only as good as somebody noticing, and three people in a row did not —
+> which is the same instrument failure as `#291`'s hand comparison, one document over. The honest
+> consequence is narrow: the remedy is still a shared-gate change (ADR-0105), so this does **not**
+> license building it here. What changes is the row's standing — it is no longer "deferred on a
+> trigger", it is "deferred, trigger fired, awaiting a decision".
+>
+> **(b) is unchanged and exact**: `apps/web/vitest.config.ts:21` is still
+> `include: ['src/**/*.{test,spec}.{ts,tsx}']`, and its trigger has not fired.
+
+> **Swept the whole class rather than stopping here, because one fired trigger says nothing about
+> the others.** Twelve open rows mention a trigger. Nine were checked in the same pass and hold —
+> `#121`, `#200`, `#215`, `#229`, `#268`, `#281`, `#293`, `#303` and this row's (b). The other three
+> (`#116`, `#228`, `#306`) turn out not to carry a conditional trigger at all: each says "this fires
+> an **ADR-0105** trigger", meaning it already needs a spec, which is a standing state rather than a
+> condition that can fire. **So exactly one of twelve has fired, and it is (a).**
+>
+> **The sweep's first instrument was wrong, which is worth one sentence.** Its regex required
+> `the trigger for` on one line, and this row writes that phrase across a line break — so the pass
+> that found this finding could not see the row it found it in. Widened, the population went 3 → 12.
+> A generous reader and a control, per `#246`.
 
 ### 299. `pnpm format:check` runs in CI and is in no local gate, so formatting is only ever found after a push
 
