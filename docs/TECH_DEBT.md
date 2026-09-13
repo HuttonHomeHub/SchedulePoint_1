@@ -1654,7 +1654,7 @@ planCalendarId` — the same rule. Two server rules both claim to name "the acti
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 > **Narrowed 2026-08-08.** The row says a fix should "cover the invitation accept path at the same
 > time". That path is **already safe**: `AcceptInvitationCard.tsx:243-256` requires a real button
@@ -1740,6 +1740,22 @@ verify/invite stays this row's own, separate remediation.
 > Confirmed accurate: the invitation path is safe behind a real button press
 > (`AcceptInvitationCard.tsx`, the `Button` spanning `:243-259`), and the web half does strip the
 > token from the address bar (`routes/reset-password.tsx:46`, `replace: true`).
+
+> **Spot-checked again 2026-09-13; nothing changes and the caveat above is better calibrated than a
+> second look.** Both citations resolve (`AcceptInvitationCard.tsx:243-256` is the `<Button
+onClick={… accept.mutate(token) …}>`; `better-auth.ts:249-250` is the send seam), the flag reads
+> `false` at all three declaration sites, and the invitation path is unchanged. A re-reader is likely
+> to talk themselves **out** of the Class 2 finding, because the docblock two lines above the citation
+> says _"Better Auth owns the token's minting, expiry and single-use, and this app only carries the
+> URL"_ — which makes the pointer defensible and does **not** rescue the parenthetical, since a reader
+> sent to those lines to see "Better Auth's own route" still finds no route. That happened here, so it
+> is written down rather than re-derived a third time.
+>
+> One thing to add to the gating question: enabling the flag is **not** blocked by its own
+> precondition. `env.validation.ts:323-328` refuses `AUTH_REQUIRE_EMAIL_VERIFICATION=true` without
+> `MAIL_SMTP_URL` in production, and CLAUDE.md §17 records the deployed host as having a real
+> transport configured and sending. So the switch is satisfiable today, which is what makes "is it
+> armed?" a live question for the badge rather than a formality.
 
 ### 89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
 
