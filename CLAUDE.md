@@ -5085,6 +5085,21 @@ When operating in this repo, Claude Code should:
    `edited`, editing a title creates a run with **no new commit**, and the head
    therefore never moves.
 
+   **A third orientation is `cancelled`, and it is the easiest to wave away.** PR
+   #571 (2026-09-13) carried two runs of that same check on one head: run
+   `34749224798` created 09:16:36 and **cancelled**, run `34749233467` created
+   09:16:54 and **successful**, both `pull_request` on `e8fecae9`. Two events
+   landed eighteen seconds apart — a push and a body edit, and the run API records
+   only `pull_request`, not which action produced which, so do not read an order
+   into it — and `cancel-in-progress: true` killed the one still running. The door
+   is therefore wider than a title edit: **any two `pull_request` events close
+   together** do it, and the workflow's own docblock discusses that concurrency
+   group only as ineffective, never as a producer of a third conclusion.
+   `total_count` reads **11** where the repository has ten checks. It matters because `cancelled` is neither of the two
+   conclusions above: it is not `success`, so an undeduped pass **refuses a
+   perfectly mergeable PR** and sends the reader looking for a failure that never
+   happened. The dedupe handles it; nothing else does.
+
    A later push sheds the stale run, because check runs are keyed to a **commit**
    — which is what makes the trap narrow and worth stating rather than harmless.
    The case that bites is a title corrected with **no new commit**, and that is how

@@ -4094,6 +4094,36 @@ closure failing at once, in **one job, one shard, one browser**:
 49 of 51 tests passed. The PR under test changed `docs/TECH_DEBT.md` and nothing else — zero files
 under `apps/` — so the change cannot be the cause.
 
+**Re-derived the same day, and the remedy this row proposes mostly EXISTS.** Three corrections, all
+from counting rather than reading.
+
+**The population is 64, not 61, and the 61 is withdrawn.** `grep -r 'create your organisation'
+apps/web/e2e*` returns 64 sites; one is not an assertion (`e2e-account/verification.spec.ts:95`, the
+locator argument of a multi-line `expect`), none is negative, and **4** carry `{ timeout: 15_000 }`.
+The method that produced 61 was not written down, which is why it could not be checked — the
+failure this register keeps recording, in a figure four hours old.
+
+**The split is the finding, not the total.** **29 of the 64 are in a suite's own `support.ts`**, one
+per flag-on suite, inside an `onboard(page, stamp)` helper — so most of the estate **already has**
+the shared helper this row's remedy paragraph proposes building, at one wait per suite. The other 35
+are hand-rolled in spec bodies, and **13 of those are the base journey**, which is the one suite with
+no `support.ts` at all (`apps/web/e2e/` holds `combobox.ts` and `workspace.ts` and no onboard
+helper). That is also the suite the failure happened in.
+
+**So the ADR-0105 assessment below is too pessimistic and is corrected.** Adding an `onboard()` to
+`apps/web/e2e/` is not a change to "how every e2e suite is set up" — it is one directory adopting a
+pattern **29 of its neighbours already use**, with no new config, no CI step, no shared gate and no
+component contract. No trigger fires. What would fire one is a single helper shared **across** all
+30 suites, and that is a different and larger proposal than the gap actually needs. The useful work
+here is one suite, and it is the one that failed.
+
+**And the first of the two escape routes below is unavailable in this environment**, verified by
+trying it once: `npx playwright install firefox` is refused by the egress proxy — `403 request
+blocked: no rule or allowlist entry allows host "playwright.download.prss.microsoft.com"`. The
+proxy's own documentation says not to retry a policy denial, so "install Firefox in the dev
+container" is not a path from here at all and CI is the only one. That does not change the row; it
+means a reader who follows its first suggestion will spend seven minutes finding this out.
+
 **The spread was never measured when `#182` closed, and it is the finding.** Counted today across
 every e2e suite, the same positive assertion appears at **61 sites**. **Four** carry
 `{ timeout: 15_000 }` — `e2e/clients.spec.ts:27`, `e2e/dependencies.spec.ts:31` and `:98`, and
@@ -4120,6 +4150,37 @@ trace named below is still the first task.
 **What that measurement DID establish, and it is useful here:** a base-journey test issues its
 requests in a **4.8–6.8 second burst** and then spends the rest of its twenty seconds idle. Whatever
 is costing `dependencies.spec.ts:98` more than 15 s, it is not a queue of its own requests.
+
+**The wait is measured, and it removes "marginal" from the vocabulary of this row.** Ten runs of
+`e2e/dependencies.spec.ts` locally (chromium, `--repeat-each=5 --workers=1 --trace on`, all ten
+green), with the interval taken from each trace's own action log rather than from a stopwatch —
+`before`/`after` events for the `create an account` click and the `create your organisation`
+`expect`:
+
+| quantity                | ms                                       |
+| ----------------------- | ---------------------------------------- |
+| heading wait, n = 10    | min **207**, median **227**, max **324** |
+| the click that precedes | 55–124                                   |
+
+**So the 5 s default is about 15× the observed worst case and the widened 15 s is about 46×.** A
+margin of that size does not get eaten by CI load; a 46× overrun is a different event from a slow
+one. Three consecutive failures at 15 s therefore almost certainly mean **the browser was never on
+the onboarding screen** — sign-up issued no session and the client pushed `/verify-email`, or the
+`_authed` guard bounced to `/sign-in`, or the form never submitted — all of which render a different
+screen, at which point no timeout is long enough. That is consistent with the un-widened neighbour
+recovering on a retry: an intermittent session outcome recovers, a slow machine does not
+selectively.
+
+**What this does NOT establish**, because the gap between the two environments is the whole
+difficulty here: it is idle-machine chromium, and the failures were firefox under four-shard CI
+load. The claim is about the **size of the margin**, not about CI's absolute timings. But a margin
+has to shrink by more than an order of magnitude before a timeout explanation becomes available at
+all, and nothing about a 4-shard runner does that to a 227 ms wait.
+
+**Two responses are now off the table rather than merely doubted.** Widening the timeout again — the
+row already said the evidence did not support it, and 46× says why. And the rate-limit mechanism,
+ruled out in `#314`. The trace remains the first task; what it should be read for is **which screen
+the browser was on**, not how long anything took.
 
 **What is NOT established, stated plainly because the remedy depends on it.** Why
 `dependencies.spec.ts:98` failed three consecutive times at 15 s is **unknown**. Three-for-three at
