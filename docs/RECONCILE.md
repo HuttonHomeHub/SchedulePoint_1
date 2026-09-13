@@ -193,6 +193,40 @@ application features are implemented yet" while 23 feature modules shipped.
 Mark anything aspirational as **_not yet built_** rather than deleting the
 standard: the standard is still what we want when the work lands.
 
+### 5a. Read the day-one files that set global policy
+
+The failure mode step 5 names for documents has a code twin: **a cross-cutting
+default written on the first day, correct then, never revisited while the
+project learnt better.** It is invisible to every gate — the file compiles, its
+tests pass, and its docblock still describes what it does. It is also invisible
+to ordinary review, because nobody opens a file nothing is changing.
+
+The query is cheap and its signal is narrow:
+
+```bash
+git ls-files apps/web/src apps/api/src packages |
+  while read f; do
+    [ "$(git rev-list --count HEAD -- "$f")" = 1 ] &&
+      echo "$(git log -1 --format=%ad --date=short -- "$f")|$f"
+  done | sort
+```
+
+**Do not read all of it** — 541 files under `apps/web/src` alone have one commit,
+and most legitimately landed once and are right. The set worth reading is the
+intersection with **files that set policy for everything else**: the query
+client, the error boundary, the providers, the auth client, the global guards,
+the shared validation. On 2026-09-13 that was seven files across both apps, and
+two of the seven were findings (`docs/TECH_DEBT.md` #314):
+
+- `lib/query/query-client.ts` — one commit, `56a82ca5`, 2026-07-09 — never
+  retries any 4xx, which `store-failure.ts` had named two days earlier as
+  _"precisely the trap"_ because 429 is the one 4xx worth retrying.
+- `components/error-boundary.tsx` — also one commit — and the router's
+  `defaultErrorComponent`, which shares its heading and offers no way out.
+
+The other five were sound, and the two API guards' registration-order comment was
+**accurate**, which is worth recording so the query is not re-run on them.
+
 ### 6. Check the exemplars and the agents
 
 - [`REFERENCE_FEATURE.md`](REFERENCE_FEATURE.md) names three real modules as

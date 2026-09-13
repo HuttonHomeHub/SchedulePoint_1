@@ -4076,9 +4076,13 @@ list is shared by convention, not by a gate, and the gate is not obvious — a c
 call sites would sweep in every legitimate one inside a test body. Worth a thought, not worth a bad
 rule.
 
-### 313. The sign-up→onboarding wait is widened at 4 of 61 sites, and a widened one still failed
+### 313. The sign-up→onboarding wait is widened at 4 of 64 sites, and a widened one still failed
 
 **Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
+
+**The heading read "4 of 61" until 2026-09-13** — the figure is 64, re-derived below, and the
+heading is corrected here rather than only in the body, because a heading is what a reader takes
+away from a list of rows.
 
 `#182` was closed on 2026-08-28 by giving _"three base-journey sign-up specs"_ an explicit
 `{ timeout: 15_000 }` with the reason written at each site. Today's run shows both halves of that
@@ -9152,6 +9156,44 @@ not structure, which is why `118a`/`118b`/`119a` were promoted to real headings 
 not. Resolving only the **exact lettered heading** fails nine of ten citations that are mostly
 legitimate. The honest shape is probably "the base must resolve, and a lettered citation against a
 closed base is reported separately" — but that is a decision, and it is why this stays filed.
+
+**A FIFTH decision, measured 2026-09-13: a markdown intra-document anchor is indistinguishable from
+a citation to a bare-number sweep.** A heading link
+of the form `(#44-interchange-adr-0050)` is a `#`, digits and a word boundary — exactly what this
+row's own resolver looks for. Counted across `CLAUDE.md` and `docs/`: **115 anchor-shaped sites in
+40 files, 61 distinct leading numbers.** They damage the count in both directions, and the second
+is the dangerous one:
+
+- **5 of the 61 resolve to nothing** — `0`, `22`, `24`, `44`, `460` — so a sweep reports them as
+  dangling citations that no reader ever wrote. `#22` and `#24` are on the twelve, so even this
+  row's "stable invariant" is not purely citations: **3 of `#22`'s sites are anchors**, not
+  references to the register at all.
+- **56 of the 61 collide with a real row** — `#75`, `#291`, `#299` and fifty-three others. There the
+  sweep produces a number that looks right and is wrong: a spec's §75 heading link is credited to
+  the register row numbered 75. **Nothing about the output says anything happened.**
+
+The fix is cheap and is a decision rather than a regex: an occurrence preceded by `(` and followed
+by `-` is a link fragment, not a citation. It joins the four above — the `#83` collision, the
+quoted-historical-sentence question, the PR-number discriminator and the lettered-citation
+question — as things to settle before the gate is written.
+
+**And this row's `#44` paragraph falsified itself by being written.** It says — "checked, not
+assumed" — that _"`#44` never appears bare anywhere in `docs/` or `CLAUDE.md`, in any context"_,
+where "bare" means unlettered. That sentence contains a bare `#44`. There are exactly **two** bare
+occurrences in the tree today: this one, and the anchor at
+`docs/specs/calendar-hours-per-day/schema-design.md:557`, which is not a citation at all. So a
+bare-number sweep now reports `#44` and the reader finds only the row discussing itself. The claim
+was true when written and its recording made it false — the same shape as this row's own "that total
+is stale by the act of writing it down", one paragraph along.
+
+**What is NOT corrected here, deliberately.** Re-running a bare-number sweep today gives **99**
+plain sites for the twelve against this row's **67**, with `#25` at 23 against its 18 and `#54` at
+20 against its 15. That is a disagreement about **method**, not about the register: a count that
+excludes a row's discussion of itself and one that includes it are different quantities, and this
+row's own instrument correction records how easy that is to get wrong. **The 67 stands until
+somebody reproduces the method that produced it** — measuring with a fresh instrument and then
+correcting the old number is how `#247`'s A9 came to agree with itself. What is re-derived exactly,
+by both, is the part the row says to re-derive: **twelve distinct numbers, the same twelve.**
 
 **An instrument note, since this row already carries one.** The three lettered headings are also why
 this annotation's own resolvable set was three short of the gate's: `check-debt-status.mjs` reads
