@@ -4791,7 +4791,7 @@ with `#194` because both are about this gate, and both should be settled in one 
 
 ### 197. Three rules with two or three implementations each, agreeing by discipline
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 _Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
 already asymmetric. **Item 1 closed 2026-08-28** (fix-slice M-A); item 3's `usePopoverPanel` copy
@@ -4852,7 +4852,7 @@ Take them in the order above.
 
 ### 200. Two named-slot registries, one of them the better pattern, neither shared
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 **Filed 2026-08-26** (the one-row header, from the component review). **Not a defect — both are
 correct and tested.** A duplication that will charge the next named slot a tax it need not pay.
@@ -5442,7 +5442,7 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
 
 ### 215. Dense rows are 28 px on touch, and their height is a JavaScript constant
 
-**Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
 
 **ADR-0118 D1's second named exception, filed rather than solved.** `Button`'s `icon-sm` stays
 28 × 28 on both pointers, and the five of its consumers that sit in a dense row stay with it
@@ -5803,7 +5803,7 @@ nothing saying which.
 
 ### 268. An e2e suite's coverage was bounded by a throttle counter it shared between tests
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo
 
 `apps/api/test/staff.e2e-spec.ts` reached the ceiling of `StaffController`'s
 `@Throttle({ default: { limit: 30, ttl: 60_000 } })` and nobody knew, because the symptom does not
@@ -7090,6 +7090,12 @@ re-derive the diagnosis from four confusing failures.
 > suites across four CI jobs **without changing the roster** — the most recent commit touching the
 > `test:e2e:*` list is PR #476, well before that epic. **Not re-checked:** the `e2e-undo`
 > non-reproducing failure, which needs a sweep to observe.
+>
+> **Its `**Verified:**` header is deliberately left at 2026-09-10.** This block is an avowed
+> partial re-check, and `**Verified:**` is a claim about the WHOLE row — so moving it to match
+> this date would assert something this block says it did not do. Recorded because the opposite
+> reading is the obvious one: see `#302`, where the general rule was measured, drafted, and then
+> rejected on exactly this row.
 
 ### 266. A measurement probe still runs its full 900-second measurement in the blocking e2e job
 
@@ -7186,7 +7192,7 @@ moment anybody re-armed a gate on it.
 
 ### 271. The probe history is one capped page and says so only in words, because the read returns no total
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
 
 `staff-probe.service.ts:136-141` reads the newest 50 rows — `take: DEFAULT_LIMIT`, `DEFAULT_LIMIT`
 being 50 at `:14` — with **no total, no cursor and no more-pages flag**. So a client cannot tell
@@ -7236,14 +7242,28 @@ The client-side number is deliberately absent from the copy: the browser is not 
 writing "50" into a sentence in `apps/web` would be a constant that goes stale the day the server's
 does — the kind of second statement of one fact this register keeps recording.
 
+**Re-checked 2026-09-13: accurate, and a clean check is recorded so the next sweep does not repeat
+it.** `DEFAULT_LIMIT` is still `50` at `staff-probe.service.ts:14`, `list()` still reads
+`take: limit` with no second query, and the "no total, no cursor and no more-pages flag" half was
+verified by searching the service for `count(`, `cursor`, `hasMore`, `nextCursor` and `total` —
+**none of them appears**, so the claim is exact rather than approximately right.
+
+**It is also a confirming instance of `#246`'s born-stale mechanism, from the safe side.** That row
+now records that a citation written in the same commit as an edit to the cited file is wrong 69% of
+the time. This row's citation was introduced by `cb38638a`, which **did not touch**
+`staff-probe.service.ts` — and it resolves exactly, two days later. The 85% of citations written
+outside such a commit are the ones that survive, and this is one of them.
+
 ### 272. A step can be stored having measured half of itself, and nothing in the vocabulary can say so
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** M · **Owner:** web
 
 `canvas-draw` measures two scales in one step. `runAbsoluteLimbs` can complete the first and be
 stopped inside the second, and ADR-0130 D2 says the completed limb is kept — correctly, that is the
-whole of M3. But `SweepStepStatus` has four values (`recorded` / `not recorded` / `refused` /
-`not taken`) and none of them means **"recorded, and short a limb"**, so that step is `recorded`.
+whole of M3. But `SweepStepStatus` has six values, of which four are terminal (`recorded` /
+`not recorded` / `refused` / `not taken`; `waiting` and `running` are in-flight and a finished sweep
+leaves none behind) — and none of the six means **"recorded, and short a limb"**, so that step is
+`recorded`. (This read "four values" until 2026-09-13; see below.)
 
 Three consequences follow, and the third is the one that matters. `missingSteps` does not offer it
 (its status is not `refused` or `not taken`), so **Run the missing measurements** cannot take the
@@ -7266,9 +7286,34 @@ table). ADR-0105 says that stops a tech-debt-sized change. `run-sweep.test.ts`'s
 single-limb, so this case is untested as well as unsurfaced — a two-limb partial fixture is the
 first thing whatever spec picks this up should write.
 
+**Re-checked 2026-09-13. The argument is exactly right and the count is wrong: `SweepStepStatus` has
+SIX values, not four.**
+
+`run-sweep.ts:23-29` declares `waiting`, `running`, `recorded`, `not recorded`, `refused` and
+`not taken`. The four this row names are the **terminal** ones — the statuses a stored step can
+carry — and `waiting`/`running` are in-flight states a finished sweep never leaves behind. So the
+shorthand is defensible and the sentence as written is not: a reader who checks finds six, and has
+no way to tell a deliberate narrowing from a stale row. Corrected above to say **six values, of
+which four are terminal**.
+
+**Everything the row concludes survives, and was re-verified rather than assumed.** None of the six
+means "recorded, and short a limb" — the two extra values are the least likely of all to, since
+neither describes a step that finished. `missingSteps` (`run-sweep.ts:187-189`) still filters on
+`step.status === 'refused' || step.status === 'not taken'`, so a step stored `recorded` with one
+limb missing is still not offered by **Run the missing measurements**, which is the third
+consequence and the one the row says matters.
+
+**It is NOT an instance of `#246`'s born-stale mechanism, and the check that would have been easy to
+skip is the one that settles it.** `cb38638a` wrote this claim and **did** touch `run-sweep.ts`,
+which is the at-risk shape exactly — but the enum had **six values before that commit and six
+after**, and the commit does not touch the declaration at all. So this is a plain miscount
+(ADR-0076 Class 3: a claim asserted without checking), not a displacement, and not drift either:
+it was never four. Recorded that way because "born stale" is becoming a tempting label tonight, and
+a mechanism that explains everything explains nothing.
+
 ### 273. The oldest-block truncation rule rests on a premise the resume feature removed
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** S · **Owner:** web
 
 `probe-sittings.tsx` withholds the "N were refused or never taken" claim from the **oldest** block
 on screen, because that is the one the 50-row page boundary can cut (`docs/TECH_DEBT.md` #271). The
@@ -7287,6 +7332,18 @@ of React state lifetime, not by the reason the comment gave. The comment now say
 **It becomes reachable the moment a resume can be started from the stored history**, which is a
 natural companion to #271's cursor. Whatever picks that up owns this: the honest fix is to know
 whether a page was cut rather than to infer it from position, which is what #271 builds.
+
+**Re-checked 2026-09-13: accurate on every limb, including the one that is easiest to let rot.** The
+premise still holds for the reason this row gives rather than the reason the original comment gave:
+`performance-probe-panel.tsx:399` reads the resumed sitting's id from `resume.sweepId` — the panel's
+**in-memory** outcome — so it is session-scoped and a sitting's rows are minutes apart.
+`probe-sittings.tsx` still passes `mayBeTruncated={index === sittings.length - 1}`, i.e. the oldest
+block only, and its comment still states the narrowing in its own words rather than asserting the
+withdrawn "adjacent in time" reason.
+
+Nothing here has moved, and the trigger has not fired: a resume still cannot be started from the
+stored history. Recorded as a clean check because this row's whole subject is a premise that was
+true for the wrong reason once already.
 
 ### 276. A failing gate's log is tailed to 12 lines, and three test files now share one gate
 
@@ -9014,6 +9071,49 @@ file**. Two register-accuracy defects from one change, and neither is a coding m
 what a commit large enough to span three ADRs does to the prose written alongside it. Recorded as an
 observation rather than a rule — one commit is not a population, and the remedy ("smaller commits")
 is not this row's to propose.
+
+**A third coherence pair — and checking it properly turned a clean assertion into a rejected one.
+The reason is worth more than the assertion would have been.**
+
+The two halves measured above compare the status **word** against the **`Verified:` field**. A third
+pair looks unchecked: **`Verified:` against the row's own body.** A row annotated _"Re-derived
+2026-09-13"_ whose header still says `Verified: 2026-09-09` appears to say it was last checked four
+days before the newest thing written in it. Nothing looks at that.
+
+**Measured: 32 rows, as a census rather than a sample.** All 32 were opened and the offending line
+read, to separate a real mismatch from a date merely quoted in passing. **All 32 carry a dated
+annotation of their own** — _"Re-derived 2026-09-12"_ (`#247`, `#195`), _"CLOSED 2026-09-11"_
+(`#116`, `#206`, `#228`), _"swept 2026-09-11"_ (`#202`) — newer than their own header. Zero false
+positives on that predicate.
+
+**And then the assertion fails, on a row this pass had already written.** `#264`'s annotation says,
+in its own words, _"this is a partial re-check, not a re-run of the sweep"_. Bumping its `Verified:`
+to match would assert the **whole row** was checked that day, which is false — so the gate would not
+repair `#264`, it would **corrupt** it.
+
+**The two fields mean different things, and that is the finding.** `**Verified:**` is a claim about
+the **whole row**; a dated annotation is a claim about **one thing in it**. The pair is therefore a
+contradiction only when the annotation's scope is the whole row — and **scope is prose**. A gate
+asserting `Verified ≥ newest date in body` is not computable in the sense that matters: it would
+fire on careful rows and be silenced by bumping a field that then means less than it did. It would
+push hardest on exactly the authors who wrote down that their check was partial. **Rejected**, and
+this is the same shape as `#312`'s "base + part is not computable" — a pair that looks decidable
+until you ask what one half actually claims.
+
+**What this pass did instead, stated so the numbers are not mistaken for a repair.** Five of the 32
+were created tonight by the annotation pass that wrote this row's own re-derivation. Four — `#197`,
+`#200`, `#215`, `#268` — carry annotations that re-derive what the row claims, so their headers are
+**moved to 2026-09-13**. The fifth, `#264`, is **deliberately left at 2026-09-10**, and its
+annotation now says why: a partial re-check does not earn a whole-row date. The remaining 27 are
+untouched, because each needs the same judgement and a sweep that applied one rule to all of them
+would be the defect this paragraph just rejected.
+
+**The residual is real and smaller than it looked.** A reader still cannot tell a stale header from a
+deliberately-unmoved one without reading the annotation. The cheap honest fix is not a gate but a
+convention — say _"partial"_ where it is partial, which `#264` already did and is why this was
+catchable at all. Whether that earns a field of its own is a question for whoever specs the coherence
+pass; it is **not** the third assertion, and bundling it as one would ship a gate that makes the
+register less true.
 
 ### 303. The retention sweep logs an ERROR on every API e2e run, and it is the exact signal the alert watches
 
