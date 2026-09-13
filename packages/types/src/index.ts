@@ -386,10 +386,15 @@ export interface ActivitySummary {
   description: string | null;
   type: ActivityType;
   /**
-   * Working days **on this activity's own calendar** (ADR-0068) — an eight-hour calendar counts 480
-   * working minutes to the day, not 1440 — rounded from the stored minutes. Milestones are 0, and so
-   * is anything shorter than half a day: read {@link ActivitySummary.durationMinutes} for the exact
-   * value.
+   * Working days **on the calendar this activity SCHEDULES on** (ADR-0068, corrected by
+   * `docs/TECH_DEBT.md` #86) — an eight-hour calendar counts 480 working minutes to the day, not
+   * 1440 — rounded from the stored minutes. Milestones are 0, and so is anything shorter than half a
+   * day: read {@link ActivitySummary.durationMinutes} for the exact value.
+   *
+   * For a `RESOURCE_DEPENDENT` activity that is its **driving resource's** calendar, not its own —
+   * which is the calendar the work actually happens on, and the one its float is already measured
+   * in. Before 2026-09-13 this read on the activity's own calendar, so a driven activity could
+   * report a duration and a float derived on two different day lengths.
    */
   durationDays: number;
   /**
@@ -433,6 +438,19 @@ export interface ActivitySummary {
    * activity inside a 5-day plan works across weekends.
    */
   calendarId: string | null;
+  /**
+   * The calendar this activity's **driving resource** works to (ADR-0039 §4), or `null`.
+   *
+   * `null` for every activity that is not `RESOURCE_DEPENDENT`, and for one whose driver is missing
+   * or inherits. Derived on read — it is never stored on the activity.
+   *
+   * It is here because the client cannot resolve it otherwise: assignments are fetched per activity
+   * (`GET activities/:id/assignments`), so a table, a Gantt grid or a lag field would need one
+   * request per row to learn which day length a duration is measured in (`docs/TECH_DEBT.md` #86,
+   * CQ-3). A resource's calendar is always ORG-scoped, so it is guaranteed to be in the
+   * project-usable calendar list every one of those surfaces already holds.
+   */
+  drivingResourceCalendarId: string | null;
   /**
    * WBS parent (ADR-0038, M5-epic §24): the `id` of the `WBS_SUMMARY` activity this one rolls up into,
    * or null for a top-level activity. The parent tree is an adjacency list, kept acyclic and same-plan by

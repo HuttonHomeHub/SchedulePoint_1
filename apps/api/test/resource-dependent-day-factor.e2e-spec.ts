@@ -185,9 +185,11 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(byName.get('Task twin')?.earlyFinish).toBe('2026-01-05');
 
     // And the resource-dependent one spends the SAME 2,400 minutes at 24 h/day — under two days.
-    // **This is the defect, and it is the number M2 has to change**: a planner asked for five days
-    // of crane time and the programme reserves less than two, with every read-out still saying `5d`
-    // because `minutesToDays(2400, 480)` returns 5 on the way back out.
+    // **This was the defect and M2 fixed the read half**: a planner asked for five days of crane
+    // time and the programme reserves less than two. Until 2026-09-13 every read-out still said
+    // `5d`, because `minutesToDays(2400, 480)` returned 5 on the way back out; it now converts on
+    // the crane's calendar and says `2d`, which is what the dates below have always shown.
+    // The dates themselves are unchanged by M2 and are asserted here for exactly that reason.
     expect(byName.get('Crane lift')?.earlyFinish).toBe('2026-01-02');
     expect(byName.get('Crane lift')?.earlyFinish).not.toBe(byName.get('Task twin')?.earlyFinish);
   });
@@ -350,10 +352,21 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(twinFloatMinutesAtOwnFactor).toBe(960);
     expect(twinFloatMinutesAtOwnFactor).not.toBe(2400); // the five-day window at 480
 
-    // The driven activity, for completeness and labelled as non-discriminating: 8 days of slack
-    // reads 8 on either factor, so this pins the spec's predicted case without proving it.
+    // The driven activity. `totalFloat` was ALREADY driver-aware — the recalculation resolves each
+    // activity's scheduling calendar (ADR-0039 §4) — which is why it reads 8 here both before and
+    // after M2, and why it was never the half that needed fixing.
     expect(byName.get('Crane lift')?.totalFloat).toBe(8);
-    expect(byName.get('Crane lift')?.durationDays).toBe(5);
+
+    // **This number changed at M2, and the change is the point (CQ-1, accepted 2026-09-13).**
+    // It read `5` until then, because the duration was converted on the activity's OWN 8 h calendar
+    // while the work is done on the crane's 24 h one. 2,400 minutes at 1440 is 1.67 days, which
+    // rounds to 2 — so the read-out now says what the programme actually reserves instead of
+    // repeating the number that was typed before the crane existed.
+    //
+    // No stored minute moved and no date moved: `durationMinutes` is still 2,400 and `earlyFinish`
+    // is still 2 Jan. Only the day-denominated READ-OUT changed, from a wrong number to a right one.
+    expect(byName.get('Crane lift')?.durationMinutes).toBe(2400);
+    expect(byName.get('Crane lift')?.durationDays).toBe(2);
   });
 
   /**

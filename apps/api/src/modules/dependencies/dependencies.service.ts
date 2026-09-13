@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type LagCalendarSource, type Activity } from '@prisma/client';
+import { Prisma, type ActivityType, type LagCalendarSource, type Activity } from '@prisma/client';
 import { DEPENDENCY_CONFLICT_MESSAGES, type PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
@@ -15,6 +15,7 @@ import { HierarchyLifecycleService } from '../../common/hierarchy/hierarchy-life
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
 import { daysToMinutes } from '../activities/day-factor';
+import { loadDrivingCalendarMap } from '../activities/driving-calendars';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -82,26 +83,45 @@ export class DependenciesService {
    */
   private async withLagDayFactors<
     T extends {
+      organizationId: string;
       planId: string;
       lagCalendar: LagCalendarSource;
-      predecessor: { calendarId: string | null };
-      successor: { calendarId: string | null };
+      predecessorId: string;
+      successorId: string;
+      predecessor: { calendarId: string | null; type: ActivityType };
+      successor: { calendarId: string | null; type: ActivityType };
     },
   >(rows: readonly T[]): Promise<WithLagDayFactor<T>[]> {
     if (rows.length === 0) return [];
     const planCalendars = await this.plans.findCalendarIds(rows.map((row) => row.planId));
     // Every row in one of these reads belongs to one plan, so a single calendar id covers the page.
     const planCalendarId = planCalendars[0]?.calendarId ?? null;
-    return attachLagDayFactors(this.calendars, rows, planCalendarId);
+    // Asked of THIS PAGE's endpoints, not of the plan: a page with no RESOURCE_DEPENDENT endpoint
+    // needs no driver read at all, so the common plan pays nothing (`docs/TECH_DEBT.md` #86).
+    const hasDrivenEndpoint = rows.some(
+      (row) =>
+        row.predecessor.type === 'RESOURCE_DEPENDENT' ||
+        row.successor.type === 'RESOURCE_DEPENDENT',
+    );
+    const driving = await loadDrivingCalendarMap(
+      this.prisma,
+      rows[0]!.organizationId,
+      rows[0]!.planId,
+      hasDrivenEndpoint,
+    );
+    return attachLagDayFactors(this.calendars, rows, planCalendarId, driving);
   }
 
   /** {@link withLagDayFactors} for one relationship. */
   private async withLagDayFactor<
     T extends {
+      organizationId: string;
       planId: string;
       lagCalendar: LagCalendarSource;
-      predecessor: { calendarId: string | null };
-      successor: { calendarId: string | null };
+      predecessorId: string;
+      successorId: string;
+      predecessor: { calendarId: string | null; type: ActivityType };
+      successor: { calendarId: string | null; type: ActivityType };
     },
   >(row: T): Promise<WithLagDayFactor<T>> {
     const [decorated] = await this.withLagDayFactors([row]);
@@ -225,6 +245,14 @@ export class DependenciesService {
             reason: DEPENDENCY_CONFLICT.CYCLE_DETECTED,
           });
         }
+        // Only read when an endpoint actually defers to a driver (`docs/TECH_DEBT.md` #86). Inside
+        // the transaction, so the calendar the lag is converted on is the one this write sees.
+        const drivingOnCreate = await loadDrivingCalendarMap(
+          tx,
+          organization.id,
+          plan.id,
+          predecessor.type === 'RESOURCE_DEPENDENT' || successor.type === 'RESOURCE_DEPENDENT',
+        );
         const created = await this.dependencies.create(
           {
             organizationId: plan.organizationId,
@@ -247,8 +275,13 @@ export class DependenciesService {
                         this.calendars,
                         {
                           lagCalendar: dto.lagCalendar ?? 'PROJECT_DEFAULT',
+                          predecessorType: predecessor.type,
                           predecessorCalendarId: predecessor.calendarId,
+                          predecessorDrivingCalendarId:
+                            drivingOnCreate.get(dto.predecessorId) ?? null,
+                          successorType: successor.type,
                           successorCalendarId: successor.calendarId,
+                          successorDrivingCalendarId: drivingOnCreate.get(dto.successorId) ?? null,
                           planCalendarId: plan.calendarId,
                         },
                         tx,
@@ -335,12 +368,23 @@ export class DependenciesService {
     // against the option it is switching TO (ADR-0068 §4).
     if (dto.lagDays !== undefined) {
       const plan = await this.loadActivePlan(existing.planId, organization.id);
+      const drivingOnUpdate = await loadDrivingCalendarMap(
+        this.prisma,
+        organization.id,
+        existing.planId,
+        existing.predecessor.type === 'RESOURCE_DEPENDENT' ||
+          existing.successor.type === 'RESOURCE_DEPENDENT',
+      );
       patch.lagMinutes = daysToMinutes(
         dto.lagDays,
         await resolveLagDayFactorMinutes(this.calendars, {
           lagCalendar: patch.lagCalendar ?? existing.lagCalendar,
+          predecessorType: existing.predecessor.type,
           predecessorCalendarId: existing.predecessor.calendarId,
+          predecessorDrivingCalendarId: drivingOnUpdate.get(existing.predecessorId) ?? null,
+          successorType: existing.successor.type,
           successorCalendarId: existing.successor.calendarId,
+          successorDrivingCalendarId: drivingOnUpdate.get(existing.successorId) ?? null,
           planCalendarId: plan.calendarId,
         }),
       );

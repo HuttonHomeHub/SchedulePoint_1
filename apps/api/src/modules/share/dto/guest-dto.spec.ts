@@ -85,6 +85,7 @@ function activityRow(): WithDayFactor<Activity> {
     deletedAt: null,
     deleteBatchId: null,
     // Attached by the service (ADR-0068). 1440 keeps this fixture's arithmetic exactly as it was.
+    drivingResourceCalendarId: null,
     dayFactorMinutes: 1440,
   };
 }

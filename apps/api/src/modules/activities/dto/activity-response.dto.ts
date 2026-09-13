@@ -177,6 +177,19 @@ export class ActivityResponseDto implements ActivitySummary {
     nullable: true,
     type: String,
     description:
+      "The calendar this activity's driving resource works to (ADR-0039 §4), or null. Null for " +
+      'every activity that is not RESOURCE_DEPENDENT, and for one whose driver is missing or ' +
+      'inherits. Derived on read, never stored. Day-denominated fields on a driven activity are ' +
+      'measured on THIS calendar rather than `calendarId`, which is why it is exposed: a client ' +
+      'cannot resolve it without one assignments request per row.',
+  })
+  drivingResourceCalendarId!: string | null;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
       'WBS parent (ADR-0038): the WBS_SUMMARY activity this rolls up into, or null for top-level.',
   })
   parentId!: string | null;
@@ -404,6 +417,7 @@ export class ActivityResponseDto implements ActivitySummary {
       // Stored in working-minutes (ADR-0036). Both are exposed: days for every existing client,
       // minutes so a sub-day value survives the round trip instead of reading back rounded.
       durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
+      drivingResourceCalendarId: entity.drivingResourceCalendarId,
       durationMinutes: entity.durationMinutes,
       durationType: entity.durationType,
       constraintType: entity.constraintType,

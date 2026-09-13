@@ -36,6 +36,7 @@ import {
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
+import { loadDrivingCalendarMap } from '../activities/driving-calendars';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { classifyRevisionChanges } from '../baselines/revision-changes';
 import { correlateByCode, correlateEdges } from '../baselines/revision-correlate';
@@ -881,7 +882,18 @@ export class ScheduleService {
     // independent PK reads against the same small table, so they share one round trip rather than
     // running sequentially (the M5 backend-performance review's one suggestion, folded).
     const [withFactors, planFactor] = await Promise.all([
-      attachDayFactors(this.calendars, activityRows, new Map([[planId, plan.calendarId]])),
+      (async () =>
+        attachDayFactors(
+          this.calendars,
+          activityRows,
+          new Map([[planId, plan.calendarId]]),
+          await loadDrivingCalendarMap(
+            this.prisma,
+            organization.id,
+            planId,
+            activityRows.some((row) => row.type === 'RESOURCE_DEPENDENT'),
+          ),
+        ))(),
       resolveDayFactorMinutes(this.calendars, {
         activityCalendarId: null,
         planCalendarId: plan.calendarId,
@@ -1006,6 +1018,12 @@ export class ScheduleService {
       this.calendars,
       labelRows,
       new Map([[planId, plan.calendarId]]),
+      await loadDrivingCalendarMap(
+        this.prisma,
+        organization.id,
+        planId,
+        labelRows.some((row) => row.type === 'RESOURCE_DEPENDENT'),
+      ),
     );
     const byId = new Map(withFactors.map((r) => [r.id, r]));
 

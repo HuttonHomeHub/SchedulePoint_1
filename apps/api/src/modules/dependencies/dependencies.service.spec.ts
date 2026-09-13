@@ -156,8 +156,10 @@ function dependency(): DependencyWithEndpoints {
     deleteBatchId: null,
     // `calendarId` rides on the endpoint join because a lag's day factor is resolved from the
     // end its `lagCalendar` names (ADR-0068 §4). null = inherits the plan's.
-    predecessor: { id: PRED_ID, code: null, name: 'Pred', calendarId: null },
-    successor: { id: SUCC_ID, code: null, name: 'Succ', calendarId: null },
+    // `type` rides on the same join for the same reason: which calendar an endpoint SCHEDULES on
+    // is type-gated (`docs/TECH_DEBT.md` #86). TASK is the shape these assertions were written for.
+    predecessor: { id: PRED_ID, code: null, name: 'Pred', calendarId: null, type: 'TASK' as const },
+    successor: { id: SUCC_ID, code: null, name: 'Succ', calendarId: null, type: 'TASK' as const },
   };
 }
 
