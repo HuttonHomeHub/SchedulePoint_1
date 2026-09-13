@@ -4094,6 +4094,36 @@ closure failing at once, in **one job, one shard, one browser**:
 49 of 51 tests passed. The PR under test changed `docs/TECH_DEBT.md` and nothing else — zero files
 under `apps/` — so the change cannot be the cause.
 
+**Re-derived the same day, and the remedy this row proposes mostly EXISTS.** Three corrections, all
+from counting rather than reading.
+
+**The population is 64, not 61, and the 61 is withdrawn.** `grep -r 'create your organisation'
+apps/web/e2e*` returns 64 sites; one is not an assertion (`e2e-account/verification.spec.ts:95`, the
+locator argument of a multi-line `expect`), none is negative, and **4** carry `{ timeout: 15_000 }`.
+The method that produced 61 was not written down, which is why it could not be checked — the
+failure this register keeps recording, in a figure four hours old.
+
+**The split is the finding, not the total.** **29 of the 64 are in a suite's own `support.ts`**, one
+per flag-on suite, inside an `onboard(page, stamp)` helper — so most of the estate **already has**
+the shared helper this row's remedy paragraph proposes building, at one wait per suite. The other 35
+are hand-rolled in spec bodies, and **13 of those are the base journey**, which is the one suite with
+no `support.ts` at all (`apps/web/e2e/` holds `combobox.ts` and `workspace.ts` and no onboard
+helper). That is also the suite the failure happened in.
+
+**So the ADR-0105 assessment below is too pessimistic and is corrected.** Adding an `onboard()` to
+`apps/web/e2e/` is not a change to "how every e2e suite is set up" — it is one directory adopting a
+pattern **29 of its neighbours already use**, with no new config, no CI step, no shared gate and no
+component contract. No trigger fires. What would fire one is a single helper shared **across** all
+30 suites, and that is a different and larger proposal than the gap actually needs. The useful work
+here is one suite, and it is the one that failed.
+
+**And the first of the two escape routes below is unavailable in this environment**, verified by
+trying it once: `npx playwright install firefox` is refused by the egress proxy — `403 request
+blocked: no rule or allowlist entry allows host "playwright.download.prss.microsoft.com"`. The
+proxy's own documentation says not to retry a policy denial, so "install Firefox in the dev
+container" is not a path from here at all and CI is the only one. That does not change the row; it
+means a reader who follows its first suggestion will spend seven minutes finding this out.
+
 **The spread was never measured when `#182` closed, and it is the finding.** Counted today across
 every e2e suite, the same positive assertion appears at **61 sites**. **Four** carry
 `{ timeout: 15_000 }` — `e2e/clients.spec.ts:27`, `e2e/dependencies.spec.ts:31` and `:98`, and
