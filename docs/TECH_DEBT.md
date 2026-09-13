@@ -2052,6 +2052,28 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 > prefers: a symbol either exists or does not, and `RectCache` and `crossedLanes` were both found in
 > seconds by name after their line numbers had been meaningless for a month.
 >
+> **A comment-only change is not address-safe, and `#234` supplies the control (2026-09-13).** That
+> row was surveyed on 2026-09-11 with **26 `<Spinner` sites enumerated by file and line** — the
+> largest single citation set in this register, and therefore the cleanest natural experiment it has
+> produced. Two days later **25 still resolve**. Three of the cited files were edited in between:
+>
+> | file                       | commit     | lines added | where                                 | citations | outcome    |
+> | -------------------------- | ---------- | ----------- | ------------------------------------- | --------- | ---------- |
+> | `FloatPathsPanel`          | `69207b1d` | **+19**     | `:376`, `:409` — below `:187`         | 1         | held       |
+> | `RevisionComparePanel`     | `69207b1d` | **+9**      | `:482`, `:648` — below `:256/294/425` | 3         | held       |
+> | `CalendarExceptionsEditor` | `66233907` | **+2**      | `:304` — **above** `:431`             | 1         | **rotted** |
+>
+> **Magnitude is irrelevant; position is everything.** The two files that gained nineteen and nine
+> lines kept every citation; the file that gained **two** lost its. That is this row's mechanism —
+> _an edit above it_ — confirmed against a control rather than inferred from the cases that broke.
+>
+> **And the edit that did the damage changed no code at all.** `66233907` is a comment-only commit
+> (verified: zero non-comment lines in its diff for that file) whose subject was **correcting a
+> stale docblock** — a documentation pass, in a session whose subject is documentation drift,
+> invalidating a carefully-enumerated citation in a different row of the same register. So the cost
+> of address-style citations cannot be managed by being careful about code: **a documentation fix is
+> a line-shifting edit like any other**, and it is the one nobody thinks to check afterwards.
+
 > **The comparison is four claims, not two, and the model that separates them is the size of the
 > invalidating set (2026-09-13).** `ec1227a8` at 07:05 on 2026-09-10 wrote four checkable claims
 > across two rows. `73d390bd` at **21:19 the same day** killed two of them and left two exact. All
@@ -2499,7 +2521,7 @@ it did not have.
 
 ### 234. Fifteen page and panel loading states are spinners where the shape is known
 
-**Status:** open · **Verified:** 2026-09-10 · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass
+**Status:** open · **Verified:** 2026-09-13 · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass
 
 **Re-verified 2026-09-10, and the row's own count is NOT reproducible from it**: it says "fifteen"
 and enumerates none, while `animate-spin` appears **55** times across non-test `.tsx`. Those are not
@@ -2533,8 +2555,17 @@ before they can scope it, which is most of the work.
 >   `client-detail.tsx:20`, `project-detail.tsx:43`, `plan-detail.tsx:42`, `staff.tsx:149/302/468/532`
 >   (and `:56` if counted here rather than above), `EarnedValuePanel:122`,
 >   `ScheduleSummaryStrip:54`, `NoteThread:86`, `ActivityMembersPanel:140`,
->   `CalendarExceptionsEditor:431`, `AcceptInvitationCard:75`, `GuestPlanView:64`.
+>   `CalendarExceptionsEditor:433`, `AcceptInvitationCard:75`, `GuestPlanView:64`.
 >
+> **Re-derived 2026-09-13: every count reproduces and 25 of the 26 citations still resolve.**
+> `<Spinner` is **28** matches, `animate-spin` **7**, the bare identifier **49** — the survey's
+> figures exactly, two days on. The single exception is `CalendarExceptionsEditor`, whose Spinner
+> moved `:431` → `:433`; it is repointed above, and _why_ it moved is the useful part, recorded in
+> `#246`.
+>
+> **So this row now needs no re-survey to be picked up**, which was the whole complaint the
+> 2026-09-10 paragraph raised. The enumeration is the asset; it survived a release.
+
 > **So the row's original figure was right and the re-verification's objection was not.** Stated
 > carefully, because landing exactly on "fifteen" is the kind of agreement worth distrusting: the
 > **26** and the three-way split are mechanical, and the 14-versus-15 turns on one judgement call
