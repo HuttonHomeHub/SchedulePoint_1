@@ -4619,6 +4619,18 @@ is closed by the same epic's M-C._
 All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
 Take them in the order above.
 
+> **Both surviving counts re-derived and both exact** (2026-09-13). Item 3 is still **four**
+> implementations of the capture-phase Escape + outside-pointerdown contract — `menu.tsx`,
+> `combobox.tsx`, `use-popover-panel.tsx`, `tooltip.tsx`, and no others in `apps/web/src`. Item 2 is
+> still **three** reason-first `aria-describedby` compositions; `ToolbarPopover` and `scope-save-bar`
+> carry the dangling-reference guard but compose no ordering, so they are not a fourth and a fifth.
+>
+> **One thing checked because it looked like a defect and is not.** `ToolbarButton` composes twice —
+> reason-first at `:97`, then joins the tooltip's own description **ahead** of that at `:140`, which
+> would invert the rule this item states as load-bearing. It cannot be reached: `tipPurpose` carries
+> `&& !disabled`, and the reason id is set only when `disabled`, so the tooltip description and the
+> reason are mutually exclusive by construction. Recorded so the next reader does not re-open it.
+
 ---
 
 > **One citation corrected, and it weakens the row's own reasoning** (2026-09-03 sweep). Item 3
@@ -4674,6 +4686,14 @@ the better pattern sitting one directory over.
 > coincidence, of a different set. The "eleven test call sites" figure is also historical — the test
 > side is now absorbed by `test-chrome-host.tsx` iterating `CHROME_SLOT_NAMES`, so three test files
 > reference these props. **The production-side threading tax the row is actually about is unchanged.**
+
+> **The trigger has NOT fired, re-derived after ADR-0133** (2026-09-13). `CHROME_SLOT_NAMES` is still
+> `['rows', 'identity', 'mode', 'status']` — no fifth chrome slot — and there are still exactly
+> **two** named-slot registries, `chrome-slot.tsx` and `plan-slot-host.tsx` (`PlanSlotName` is
+> `'facts' | 'pen'`); `test-chrome-host.tsx` is the harness, not a third. ADR-0133 moved the pen's
+> verb, badge and sentence between the deck and the foot row without adding a slot. Worth knowing
+> because the row is a **trigger**, not a task: it costs nothing until somebody adds the fifth, and
+> nothing automatic will tell them.
 
 ### 202. Six non-blocking findings from the foot-row gate pass
 
@@ -5228,7 +5248,7 @@ reason is that **their containers are sized independently of them**.
 
 **M3 tried the obvious thing and it was wrong.** Giving `icon-sm` a `pointer-coarse` floor made
 every one of those buttons 44 px inside a container that did not grow. The sharpest case:
-`HierarchyTree.tsx:26` is `const ROW_HEIGHT = 28` — a **JavaScript constant** feeding both the
+`HierarchyTree.tsx:28` is `const ROW_HEIGHT = 28` — a **JavaScript constant** feeding both the
 absolute row style and the virtualizer's `estimateSize` — so a 44 px button centred in a 28 px row
 overflows 8 px into the row above and 8 px into the row below, on a list whose rows are packed edge
 to edge and whose trigger is `[@media(pointer:coarse)]:opacity-100`, i.e. permanently visible on
@@ -5265,6 +5285,14 @@ itself and the gate that excuses it. Corrected in place. Re-derived at the same 
 **five** `size="icon-sm"` call sites, and a **sixth** consumer that reaches the variant as
 `SheetHeader`'s default and is not a dense row at all — filed as **#278**, because the exception this
 row defends is about containers and that one is about a default.
+
+> **Re-derived and exact but for one line** (2026-09-13). Nine `icon-sm` consumer files besides
+> `button.tsx`; the five dense-row consumers are exactly the five named; `SPINE_WIDTH = 34`
+> (`explorer-column.tsx:25`) and `GANTT_ROW_HEIGHT = 28` (`GanttPanel.tsx:81`) both hold.
+> `ROW_HEIGHT` had moved `:26` → `:28`, corrected above — the constant's **value** is unchanged, so
+> nothing about the diagnosis moves. `button.tsx:52` cites the same constant without a line number
+> and is therefore still right, which is the argument for citing a symbol rather than a position
+> wherever the file is being edited.
 
 ### 216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
 
@@ -5475,7 +5503,7 @@ again the next time a layer gets its own ref.
 
 ### 229. Two latent primitive keyboard residuals, carried out of #196
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-08-31 (register verification sweep) · **Size:** XS each
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-31 (register verification sweep) · **Size:** XS each
 
 #196 closed on its headline — the `preventDefault` + `stopPropagation` ordering, and the third and
 fourth clamp copies moving to `overlay-position.ts`. These two survived it, and are recorded rather
@@ -5485,7 +5513,7 @@ than lost with the row:
   is exactly what ADR-0082 stopped `Menu` doing, for the reason that a shaded option's REASON then
   becomes unreachable by keyboard. Latent only because no production caller sets
   `ComboboxOption.disabled` today; the day one does, the defect is live and nothing reports it.
-- **`menu.tsx:188`'s outside-pointerdown handler does not exclude its own trigger**, so a press on
+- **`menu.tsx:189`'s outside-pointerdown handler does not exclude its own trigger**, so a press on
   the trigger closes and reopens rather than toggling.
 
 **Verified 2026-09-01, and BOTH are bigger than "XS each".**
@@ -5496,10 +5524,10 @@ than lost with the row:
   the empty-state test (`:545`) — and `:261`'s own comment says counting non-selectable rows "would
   be a lie". So the fix is **splitting navigable from selectable**, a refactor of the primitive's
   internals rather than a one-line change.
-- The menu half is real (`menu.tsx:189` closes on any pointerdown outside the panel, and the trigger
+- The menu half is real (`menu.tsx:190` closes on any pointerdown outside the panel, and the trigger
   is outside it) — but **the obvious fix is wrong**. Excluding `restoreFocusRef.current` fails,
-  because that ref is not always the opener: `selection-actions.tsx:320` and
-  `tsld-toolbar-items.tsx:707,875` pass `mainButtonRef`, and `tsld-toolbar-authoring.test.tsx:263`
+  because that ref is not always the opener: `selection-actions.tsx:329` and
+  `tsld-toolbar-items.tsx:770,945` pass `mainButtonRef`, and `tsld-toolbar-authoring.test.tsx:263`
   records why — for a split button the **caret** opens the menu and is `tabIndex={-1}`, so the
   focus-restore target is the main button instead. Excluding it would stop a press on the main
   button (a separate command) from closing the menu, and still not fix the caret. The correct fix
@@ -5510,6 +5538,39 @@ than lost with the row:
 (and component-reviewer) BEFORE either ships — that rule exists because this exact class shipped
 wrong twice in two days (#189, then #192 inside its fix). They belong with #197's shared-contract
 slice rather than alone.
+
+> **Five of the six citations were wrong, and only one of them had DRIFTED** (2026-09-13). That
+> distinction is the finding, and the first draft of this note got it wrong by assuming the usual
+> cause. Checked against `ec1227a8`, the commit that set this row's previous `Verified: 2026-09-10`:
+>
+> - `menu.tsx:188` and `:189` — **already wrong that day**. That file has not been touched since
+>   2026-09-01, and at `ec1227a8` those lines already read `};` and `const onPointer` exactly as they
+>   do now. `:188` is the **closing brace of the _keydown_ handler**, so a reader following it landed
+>   on a different listener entirely.
+> - `tsld-toolbar-items.tsx:707` — **already wrong that day** (a docblock line about the withdrawn
+>   mode statement).
+> - `tsld-toolbar-items.tsx:875` — imprecise that day (it pointed at `const mainButtonRef = useRef(…)`,
+>   the declaration, not the `restoreFocusRef=` pass this row is about), then moved to `:945`.
+> - `selection-actions.tsx:320` — **correct that day**, and the only genuine drift: the file was
+>   edited on 2026-09-11 and the line is now `:329`.
+>
+> So a verification pass bumped this row's date without resolving three of the five citations under
+> it. `#246`'s thesis says a diagnosis survives while its citations decay; this is the sharper case —
+> **a citation can be wrong at the moment somebody writes "Verified"**, and re-reading the prose is
+> what a verification feels like, so nothing about the act catches it. The diagnosis was re-derived
+> from the code here and is intact: `combobox.tsx:223` still assigns `-1`, `:235` still filters
+> `>= 0`, and `:245`/`:261`/`:271` are exact — the combobox half needed no correction at all.
+>
+> **The latency claim is the one that mattered and it holds**: no production caller sets
+> `ComboboxOption.disabled`. Checked against all five call sites — `PlanCalendarPicker`,
+> `ActivityCombobox`, `ActivityCalendarField`, `ActivityResourcesPanel`, `ResourceFormDialog` —
+> every `disabled` in them is the **control-level** prop, not the option-level one. So the defect is
+> still latent, which is what the row says nothing would report.
+>
+> None of this was self-inflicted by the 2026-09-13 toolbar commit in this register: its lowest
+> touched line in `tsld-toolbar-items.tsx` is 2167 (`git diff -U0`), and it does not touch `menu.tsx`
+> or `selection-actions.tsx` at all. And every one of
+> these lines still **exists** — which is why a mechanical similarity measure cannot see any of them.
 
 ### 270. The frame count a run actually achieved is measured, carried, and then discarded
 
@@ -6718,6 +6779,16 @@ lock taken by `e2e-local.sh` for the life of a run, or simply a check for a runn
 Filed rather than built because the correct remedy is a small design decision (which resource is the
 lock on, and what does a caller see when it is held) and this row exists so the next person does not
 re-derive the diagnosis from four confusing failures.
+
+> **Three of the row's mechanical claims re-derived, all exact** (2026-09-13; this is a partial
+> re-check, not a re-run of the sweep). The port guard is still ports-only and still lists 3000 and
+> 5173 (`scripts/e2e-local.sh:132-137`); nothing checks the shared Postgres for **exclusivity** —
+> `pg_isready` proves only that it is _up_, which is the row's point; and the `43 of 44` denominator
+> is still right, because `e2e-sweep.sh` derives `web` plus every `test:e2e:*` script and
+> `apps/web/package.json` declares 43 of those beside the base journey. ADR-0138 sharded these
+> suites across four CI jobs **without changing the roster** — the most recent commit touching the
+> `test:e2e:*` list is PR #476, well before that epic. **Not re-checked:** the `e2e-undo`
+> non-reproducing failure, which needs a sweep to observe.
 
 ### 266. A measurement probe still runs its full 900-second measurement in the blocking e2e job
 
