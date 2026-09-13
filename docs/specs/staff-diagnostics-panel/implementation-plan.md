@@ -1,7 +1,8 @@
 # Implementation Plan: The staff diagnostics panel
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Draft, awaiting approval.
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Approved (2026-09-13; CQ-1 both
+  counts, D-A first; CQ-2 accepted on the three-clause contract).
+- **Status:** Approved
 - **Owner:** —
 
 > **The deliverable is a NUMBER, not a panel.** ADR-0128's closing line — _"#75 is not closed by this

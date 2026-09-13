@@ -1,6 +1,6 @@
 # Feature Spec: The staff diagnostics panel — an aggregate that never returns a row
 
-- **Status:** Draft
+- **Status:** Approved
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-13
 - **Tracking issue / epic:** —
@@ -219,6 +219,34 @@ screen says "Not found" (`apps/web/src/routes/staff.tsx:65-78`). Nothing changes
 | SC-7 | Every staff route stays audited, including this one.                                                                                                  | The route census's seventh assertion (`audit-coverage.structural.spec.ts:489-504`) — derived from the path, so it covers this route the day it is written. |
 
 ### Open questions
+
+> **BOTH CRITICAL QUESTIONS ANSWERED by the product owner, 2026-09-13. Recorded here rather than
+> only in the conversation that produced them, because a spec whose blocking questions live
+> somewhere else is a spec the next reader cannot act on.**
+>
+> **CQ-1 → BOTH, D-A first.** The analyst's recommendation, taken as given. D-A closes #86's owed
+> M0-T3; D-B measures a half that is still live. The registry is therefore exercised by the first
+> milestone rather than asserted, which is the stronger reading of decision 2 — D-B is not a
+> speculative diagnostic, it is the same register row.
+>
+> **D-B's premise was re-verified before this was asked, and it is stronger than F5 claimed.** F5
+> was a reading (the analyst could run nothing). The twin experiment it says would settle the
+> question **already exists as a committed e2e case** —
+> `apps/api/test/resource-dependent-day-factor.e2e-spec.ts`, _"discriminates the factor: the same
+> task with the plan calendar set EXPLICITLY"_ — asserting `totalFloat` **2** on the inheriting twin
+> against **5** on the explicit one, over an asserted-equal window with identical 2,400 duration
+> minutes. Re-run against `api-v0.62.0`: **passes.** So the divergence is characterised, executing
+> and green, which is also why nothing flagged it while #86 shipped. M0-T4 step 1 does not need to
+> re-establish this; it needs only to decide where the fix belongs.
+>
+> **CQ-2 → ACCEPTED, on the three-clause contract exactly** (§4.2): aggregate scalars only, **no
+> caller input ever**, closed registry. The looser "aggregates over customer data are fine" reading
+> was offered and declined, on this spec's own argument that it does not survive contact — without
+> the no-input clause, adding an organisation filter later is a one-line change that turns the
+> endpoint into a differencing oracle and nothing would refuse it. That clause therefore ships as
+> gate S-2 and not as a convention, and the honest strength of the whole is the one §4.2 states: a
+> declared contract held by a reviewable seam plus four gates, **not** a compile error. ADR-0086's
+> closing paragraph makes the new ADR mandatory, so M1 files it.
 
 **CRITICAL — CQ-1. Which count does the panel ship: D-A, D-B, or both?**
 F5 establishes that the brief's query counts the half of #86 that M2 fixed, while a second,
