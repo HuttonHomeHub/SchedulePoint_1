@@ -3455,6 +3455,28 @@ dated flag work precisely because the date was the wrong instrument.
 > **remedy 1 only**: `n_dead_tup` / `pg_stat_user_tables` appear **nowhere** in `apps/api/src` or
 > `apps/web/src`, and `RetentionTableDto` exposes `oldestAt`/`oldestAgeDays`/`overdue` and no bloat
 > figure — so an operator watching a drain cannot see it happening.
+>
+> **Re-derived 2026-09-13: the two hard claims are exact, and the sentence they support overstates
+> by one step.** `n_dead_tup` / `pg_stat_user_tables` still appear **zero** times across
+> `apps/api/src` and `apps/web/src`, and `RetentionTableDto` still carries no bloat figure — both
+> checked by running, not reading.
+>
+> What moved is the last clause. That DTO has **eight** fields, not the three listed —
+> `table`, `retentionDays`, `oldestAt`, `oldestAgeDays`, `overdue`, `lastDeleted`, `cappedOut`,
+> `failed` — and one of the omitted three changes the sentence. `cappedOut`'s own OpenAPI
+> description reads _"Whether the last run hit the per-run cap, so a backlog remains that later runs
+> will take."_ That **is** a drain-in-progress signal.
+>
+> So, precisely: an operator **can** see a backlog exists (`oldestAgeDays`, derived from the data,
+> so true on a replica that has just booted) and **can** see the last run capped out (`cappedOut`,
+> though that comes from the in-memory `RetentionStatusStore` and resets on restart, so it is not
+> durable). What they **cannot** see is the **bloat the drain is creating**. They can see that it is
+> happening; they cannot see what it is costing.
+>
+> **Why this is worth a correction rather than pedantry:** remedy 1's value is magnitude, not
+> existence. A reader taking "cannot see it happening" at face value scopes it as "give the operator
+> a drain indicator" — and one already ships. The row stays `deferred`, and its trigger (the first
+> enablement against a real backlog) is unchanged.
 
 Measured, not suspected. The backend-performance review seeded `csp_reports` to 500,000 rows
 (~207 MB), vacuumed, then drove a full `RUN_CAP`-bounded drain — 50 sequential 1,000-row batches,
@@ -4542,6 +4564,26 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 > test files (the row said 552, the 2026-09-03 sweep said 600) and **16** `check:*` gates (the row
 > said ten, the sweep said fourteen) — which is why the standing advice below is stronger than when
 > it was written, not weaker: sixteen gates still cost seconds between them.
+>
+> **And both counts drifted a THIRD time, measured 2026-09-13 — in the paragraph above, which
+> exists to record them drifting twice.** `check:*` gates in the root `package.json` are **19**, not
+> 16, and `apps/web` `*.test.ts(x)` files are **645**, not 626. So the series run ten → fourteen →
+> sixteen → **nineteen**, and 552 → 600 → 626 → **645**. (645 is the like-for-like figure: `626`
+> counted the `*.test.*` shape, and the Playwright `*.spec.ts` under `apps/web/e2e*/` are a
+> different suite that `pnpm test` does not run. Including them gives 758, a different quantity
+> rather than a better one.)
+>
+> **This is decay, not a born-stale claim, and the distinction is worth the sentence** because the
+> three new gates arrived from a commit already indicted for the other kind. `check:ci-roster` and
+> `check:licenses` landed 2026-09-11 (`69207b1d`), `check:e2e-roster` 2026-09-12 (`97a1236e`) — all
+> **after** this paragraph wrote "16" on 2026-09-09. `69207b1d` is the commit `#291` records
+> producing three claims that were false in their own commit; this is not a fourth of those. It did
+> not write a wrong claim, it made a neighbour's true one wrong — which no re-read of that commit's
+> own diff would ever surface.
+>
+> **The conclusion is unchanged and is kept:** nineteen gates still cost seconds between them, so
+> the standing advice stands. Only the population moved. Confirmed from a real run rather than from
+> the manifest — `prepush` executed all **19** on 2026-09-13.
 
 _Filed 2026-08-25 by the reconciliation pass, at the product owner's request to check whether we
 over-test locally._
