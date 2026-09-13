@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router';
 import { Suspense, lazy } from 'react';
 
+import { RouteErrorScreen } from '@/app/route-error-screen';
 import { Spinner } from '@/components/ui/spinner';
 import {
   ACCOUNT_SETTINGS_ENABLED,
@@ -509,16 +510,7 @@ export const router = createRouter({
   stringifySearch: stringifySearchStrings,
   defaultPreload: 'intent',
   scrollRestoration: true,
-  defaultErrorComponent: () => (
-    <div className="flex min-h-dvh items-center justify-center p-6 text-center">
-      <div className="max-w-md">
-        <h1 className="text-xl font-semibold">Something went wrong</h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          We couldn&rsquo;t load this page. Please try again.
-        </p>
-      </div>
-    </div>
-  ),
+  defaultErrorComponent: RouteErrorScreen,
 });
 
 declare module '@tanstack/react-router' {

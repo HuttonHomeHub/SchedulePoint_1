@@ -17,6 +17,8 @@
  * remove this: the next one will look identical.
  */
 
+import { RETRYABLE_4XX, isRetryableStatus, readErrorStatus } from '@/lib/api/retryable-status';
+
 /** What the panel needs to know about a failed write. Derived once, never re-derived at a call site. */
 export interface StoreFailure {
   /** The HTTP status, or `null` when the request never got an answer (a dropped socket, offline). */
@@ -35,43 +37,23 @@ export interface StoreFailure {
 }
 
 /**
- * **Which statuses are retryable is a DECISION, and #269 says so** — it is the reason that row
- * exists rather than being a fast-follow. It is small and closed, and it is written here rather
- * than in the panel so there is one answer:
- *
- * - **No status at all** — the request never reached an answer. Retryable: this is the original
- *   case, a dropped socket or a sleeping laptop.
- * - **5xx** — the server failed on a body it accepted the shape of. Retryable.
- * - **429** — a 4xx, and the one 4xx that IS worth retrying, after a wait. Named explicitly
- *   because a blanket "4xx cannot be retried" rule would get this one wrong, which is precisely
- *   the trap #269 flags.
- * - **408 / 425** — the request timed out or arrived too early; both are about timing rather than
- *   content, so the same body can succeed.
- * - **Every other 4xx** — the server refuses THIS body. A retry sends the same body and will be
- *   refused identically.
- *
- * A status outside 4xx and 5xx cannot reach here (a 2xx does not throw, a 3xx is followed), and is
- * treated as retryable rather than asserted away: an unrecognised failure is one nobody has
- * reasoned about, and offering the cheap action beats withholding it on a guess.
+ * **Which statuses are retryable is a DECISION, and `#269` says so** — it is the reason that row
+ * exists rather than being a fast-follow. It now lives in `lib/api/retryable-status.ts`, because
+ * it turned out to be the APP's rule and not this panel's: `lib/query/query-client.ts` had shipped
+ * the opposite answer under a docblock asserting 4xx are never transient (`docs/TECH_DEBT.md`
+ * #314). Read the statuses and their reasons there; this file is the panel's copy layer over it.
  */
-const RETRYABLE_4XX = new Set([408, 425, 429]);
-
 export function describeStoreFailure(error: unknown): StoreFailure {
-  // Structural rather than `instanceof ApiFetchError`: this must also survive whatever a fetch
-  // rejection or a future client wrapper throws, and the only thing it needs is a numeric `status`.
-  // `'status' in error` narrows, so no assertion is required to read it.
-  const status =
-    typeof error === 'object' &&
-    error !== null &&
-    'status' in error &&
-    typeof error.status === 'number'
-      ? error.status
-      : null;
+  const status = readErrorStatus(error);
+  // Derived ONCE from the shared rule rather than written as a literal in each branch below: the
+  // branches exist to choose the operator's sentence, and a literal per branch is how the copy and
+  // the behaviour drift apart without anything failing.
+  const retryable = isRetryableStatus(status);
 
   if (status === null) {
     return {
       status: null,
-      retryable: true,
+      retryable,
       summary:
         'These figures were measured but NOT recorded — the request never reached the server.',
       retryBlockedReason: null,
@@ -81,7 +63,7 @@ export function describeStoreFailure(error: unknown): StoreFailure {
   if (status >= 500) {
     return {
       status,
-      retryable: true,
+      retryable,
       summary: `These figures were measured but NOT recorded — the server answered ${String(status)}.`,
       retryBlockedReason: null,
     };
@@ -90,7 +72,7 @@ export function describeStoreFailure(error: unknown): StoreFailure {
   if (status === 429) {
     return {
       status,
-      retryable: true,
+      retryable,
       summary:
         'These figures were measured but NOT recorded — the server is rate limiting this console. ' +
         'Waiting a moment and retrying should work.',
@@ -101,7 +83,7 @@ export function describeStoreFailure(error: unknown): StoreFailure {
   if (RETRYABLE_4XX.has(status)) {
     return {
       status,
-      retryable: true,
+      retryable,
       summary: `These figures were measured but NOT recorded — the request timed out (${String(status)}).`,
       retryBlockedReason: null,
     };
@@ -110,7 +92,7 @@ export function describeStoreFailure(error: unknown): StoreFailure {
   if (status >= 400) {
     return {
       status,
-      retryable: false,
+      retryable,
       summary:
         `These figures were measured but NOT recorded — the server refused this reading ` +
         `(${String(status)}). Retrying would send the same reading and be refused again, so the ` +
@@ -123,7 +105,7 @@ export function describeStoreFailure(error: unknown): StoreFailure {
 
   return {
     status,
-    retryable: true,
+    retryable,
     summary: `These figures were measured but NOT recorded — the server answered ${String(status)}.`,
     retryBlockedReason: null,
   };
