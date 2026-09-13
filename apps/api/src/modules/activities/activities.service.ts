@@ -27,7 +27,6 @@ import {
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { formatCalendarDate, parseCalendarDate } from '../../common/validation/calendar-date';
 import { BATCH_TRANSACTION_TIMEOUT_MS, PrismaService } from '../../prisma/prisma.service';
-import { loadDrivingCalendarMap, loadDrivingCalendarMapForRows } from './driving-calendars';
 import { auditActor } from '../audit/audit-actor';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
@@ -47,6 +46,7 @@ import {
   resolveSchedulingDayFactorMinutes,
   type WithDayFactor,
 } from './day-factor';
+import { loadDrivingCalendarMap, loadDrivingCalendarMapForRows } from './driving-calendars';
 import type { BulkDeleteActivitiesDto } from './dto/bulk-delete-activities.dto';
 import type { CreateActivityDto } from './dto/create-activity.dto';
 import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';

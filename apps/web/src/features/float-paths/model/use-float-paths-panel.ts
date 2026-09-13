@@ -16,7 +16,7 @@ import {
 } from './float-path-rows';
 
 import { FLOAT_PATHS_ENABLED } from '@/config/env';
-import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
+import { activityDayFactorFrame, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
 export interface UseFloatPathsPanelInput {
   orgSlug: string;
@@ -122,6 +122,10 @@ export function useFloatPathsPanel({
       effectiveHoursPerDay([...calendars], {
         activityCalendarId: targetActivity?.calendarId ?? '',
         ...(planCalendarId === null ? {} : { planCalendarId }),
+        // Relative float is measured in the activity's own scheduling calendar (ADR-0035 §23), which
+        // is the driving resource's for a driven activity (#86) — and it sits beside
+        // `activity.totalFloat`, which the server already converts that way.
+        frame: activityDayFactorFrame(targetActivity),
       }),
     [calendars, targetActivity, planCalendarId],
   );

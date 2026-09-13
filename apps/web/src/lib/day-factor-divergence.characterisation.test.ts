@@ -13,13 +13,17 @@ import { durationWriteFields } from '@/features/activities/model/duration-field'
  * calendar regardless."_ That sentence is why the row stayed a low priority. It is false, and this
  * file is the executable form of why.
  *
- * ## This is CHARACTERISATION, not desired behaviour
+ * ## INVERTED on 2026-09-13, exactly as the line below used to promise
  *
- * Every expectation below pins what the product does **today**, including the wrong number. When M2
- * of the spec lands, `expect(2400)` becomes `expect(7200)` and this docblock's framing inverts.
- * A reader who finds this file green has learnt that the defect is still present, not that it is
- * fixed — which is the opposite of what a green test usually means, so it is said here rather than
- * left to be inferred.
+ * This file was written as characterisation: every expectation pinned what the product did
+ * **today**, including the wrong number, and its docblock said _"when M2 of the spec lands,
+ * `expect(2400)` becomes `expect(7200)` and this docblock's framing inverts"_. M2 landed and that
+ * is what happened, so a green run now means the defect is **gone** rather than present.
+ *
+ * The old numbers are kept beside the new ones rather than deleted, because the pair is the proof:
+ * `own` still returns 8 and 2,400 — which is correct, and is what the assignment join lag is
+ * deliberately measured on (ADR-0071 §1) — while `scheduling` returns 24 and 7,200. One helper, two
+ * frames, and the defect was that every caller silently got the first.
  *
  * ## What it proves, and what it deliberately does not
  *
@@ -29,7 +33,8 @@ import { durationWriteFields } from '@/features/activities/model/duration-field'
  * `durationMinutes` the create and edit dialogs submit. Wrong factor in, wrong quantity of work
  * stored.
  *
- * **NOT proved here, and it is the other half of the claim** (spec task M0-T1, still owed): that the
+ * **NOT proved here, and it is the other half of the claim** (spec task M0-T1, since taken in
+ * `apps/api/test/resource-dependent-day-factor.e2e-spec.ts`): that the
  * engine then spends those minutes at the driving resource's 1440/day, making the bar 1.67 days
  * long rather than 5. That needs a real database and a recalculate, because it is a fact about
  * `schedule.service.ts:1277-1287` resolving the driving calendar and `resolveDayFactors` converting
@@ -73,16 +78,33 @@ function calendar(id: string, hoursPerDay: number): CalendarSummary {
 
 const CALENDARS = [calendar(ACTIVITY_CALENDAR, 8), calendar(DRIVING_RESOURCE_CALENDAR, 24)];
 
-describe('the RESOURCE_DEPENDENT day factor diverges from the rule that schedules it (#86)', () => {
-  it('resolves the ACTIVITY’s calendar, with no way to express the driving resource’s', () => {
-    // The helper's whole parameter list. There is no third argument, and that is the defect in one
-    // line: `schedule.service.ts:1277-1287` resolves driving-resource → activity → plan, and this
-    // signature can express only the last two, so the first rung is unreachable rather than wrong.
+const DRIVEN = {
+  kind: 'scheduling',
+  type: 'RESOURCE_DEPENDENT',
+  drivingResourceCalendarId: DRIVING_RESOURCE_CALENDAR,
+} as const;
+
+describe('the RESOURCE_DEPENDENT day factor now follows the rule that schedules it (#86)', () => {
+  it('resolves the DRIVING RESOURCE’s calendar when asked for the scheduling frame', () => {
+    // The rung that used to be unreachable. `schedule.service.ts` resolves driving-resource →
+    // activity → plan, and the helper's signature could express only the last two — so the defect
+    // was never a wrong branch, it was a missing one.
     const factor = effectiveHoursPerDay(CALENDARS, {
       activityCalendarId: ACTIVITY_CALENDAR,
+      frame: DRIVEN,
     });
 
-    expect(factor).toBe(8);
+    expect(factor).toBe(24);
+
+    // And the other frame still answers 8, which is not a leftover: the assignment join lag is
+    // deliberately measured on the activity's own calendar even here (ADR-0071 §1 / ADR-0035 §34).
+    // Both numbers are correct; what was wrong was having one way to ask.
+    expect(
+      effectiveHoursPerDay(CALENDARS, {
+        activityCalendarId: ACTIVITY_CALENDAR,
+        frame: { kind: 'own' },
+      }),
+    ).toBe(8);
     // The pinned counter-fact: the driving resource's calendar IS in the list the surface holds, so
     // the obstacle is the signature and not the data. Without this, a green run above is equally
     // consistent with "the driving calendar was never available", which is a different and much
@@ -90,27 +112,33 @@ describe('the RESOURCE_DEPENDENT day factor diverges from the rule that schedule
     expect(CALENDARS.find((c) => c.id === DRIVING_RESOURCE_CALENDAR)?.hoursPerDay).toBe(24);
   });
 
-  it('WRITES the wrong quantity of work — #86’s "display only" is false', () => {
+  it('WRITES the quantity of work the planner meant — #86’s "display only" was false', () => {
     const factor = effectiveHoursPerDay(CALENDARS, {
       activityCalendarId: ACTIVITY_CALENDAR,
+      frame: DRIVEN,
     });
 
     // `durationWriteFields` is what `ActivityCreateDialog` and `ActivityEditorDialog` both submit.
     // A planner types five days of work.
     const written = durationWriteFields('5d', factor);
 
-    // 5 × 8 × 60. The engine will spend these on the DRIVING resource's calendar at 1440/day, i.e.
-    // 1.67 days — and the read comes back `minutesToDays(2400, 480)` = 5, so the field and the table
-    // both say `5d`. A schedule-affecting write with a fully self-consistent read-back, which is
-    // exactly why this has never been reported.
-    expect(written).toEqual({ durationMinutes: 2400 });
+    // 5 × 24 × 60. The engine spends these on the DRIVING resource's calendar at 1440/day, so the
+    // bar is five days long — which is what was asked for.
+    expect(written).toEqual({ durationMinutes: 7200 });
 
-    // What the same five days would be if the factor came from the calendar the activity is
-    // actually scheduled on. Asserted rather than left in a comment, because this is the number M2
-    // has to produce and a comment cannot go red.
-    const scheduling = durationWriteFields('5d', 24);
-    expect(scheduling).toEqual({ durationMinutes: 7200 });
-    expect(written).not.toEqual(scheduling);
+    // The number this file used to pin, kept as the counter-fact. 5 × 8 × 60 is what the activity's
+    // own calendar produces, the engine spent it at 1440/day making a 1.67-day bar, and the read
+    // came back `minutesToDays(2400, 480)` = 5 — self-consistent, which is exactly why nobody ever
+    // reported it. A comment cannot go red, so it is asserted.
+    const own = durationWriteFields(
+      '5d',
+      effectiveHoursPerDay(CALENDARS, {
+        activityCalendarId: ACTIVITY_CALENDAR,
+        frame: { kind: 'own' },
+      }),
+    );
+    expect(own).toEqual({ durationMinutes: 2400 });
+    expect(written).not.toEqual(own);
   });
 
   it('coincides when the two calendars agree — so a green run cannot mean the fixture stopped discriminating', () => {
@@ -120,6 +148,7 @@ describe('the RESOURCE_DEPENDENT day factor diverges from the rule that schedule
     const sameLength = [calendar(ACTIVITY_CALENDAR, 24), calendar(DRIVING_RESOURCE_CALENDAR, 24)];
     const factor = effectiveHoursPerDay(sameLength, {
       activityCalendarId: ACTIVITY_CALENDAR,
+      frame: DRIVEN,
     });
 
     expect(factor).toBe(24);

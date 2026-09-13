@@ -66,7 +66,7 @@ import {
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel } from '@/features/wbs';
-import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
+import { activityDayFactorFrame, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import {
   buildReport,
   describeUnsavedWork,
@@ -301,13 +301,26 @@ export function ActivityEditor({
   // re-reads it once the calendar list lands, so a sub-day duration is never shown (or saved) as
   // its rounded day. The seed factor deliberately reads the SAVED calendar, not a watched one —
   // nothing is watched yet at this point in the render.
-  const seedFactor = effectiveHoursPerDay(calendars, {
+  //
+  // **Two rules, so two values** (`docs/TECH_DEBT.md` #86). This was one `seedFactor` serving both
+  // the duration seed and the Resources tab's join-lag prop, and those are measured on different
+  // calendars for a driven activity: a duration measures the WORK (the driving resource's calendar,
+  // ADR-0039 §4) and the join lag is deliberately framed on the activity's OWN (ADR-0071 §1).
+  // Before this split the single value was the second answer, which made the duration seed wrong.
+  const seedFrame = activityDayFactorFrame(activity);
+  const durationSeedFactor = effectiveHoursPerDay(calendars, {
     activityCalendarId: activity?.calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
+    frame: seedFrame,
+  });
+  const joinLagFactor = effectiveHoursPerDay(calendars, {
+    activityCalendarId: activity?.calendarId ?? '',
+    ...(planCalendarId === undefined ? {} : { planCalendarId }),
+    frame: { kind: 'own' },
   });
   const general = useScopeForm(
     activityGeneralSchema,
-    (a) => seedGeneral(a, seedFactor),
+    (a) => seedGeneral(a, durationSeedFactor),
     activity,
     open,
   );
@@ -349,6 +362,11 @@ export function ActivityEditor({
   const hoursPerDay = effectiveHoursPerDay(calendars, {
     activityCalendarId: scopeCalendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
+    // The Duration field and the Progress tab's remaining both measure the WORK, so they read on the
+    // calendar the activity schedules on (#86). The calendar id is the WATCHED one — a planner can
+    // change calendar and duration in one edit — while the type and driver come from the saved row,
+    // because neither is editable here.
+    frame: seedFrame,
   });
   // Hoisted rather than inlined, for the same reason as in `ActivityCreateDialog`: an arrow rebuilt
   // per render defeats the React Compiler's memoization downstream of it.
@@ -834,12 +852,12 @@ export function ActivityEditor({
                     planId={planId}
                     activityId={activity.id}
                     activityDurationType={activity.durationType}
-                    // The join lag's day↔minute factor (ADR-0071 M4). Deliberately `seedFactor` — the
+                    // The join lag's day↔minute factor (ADR-0071 M4). Deliberately `joinLagFactor` — the
                     // SAVED calendar — and not the `hoursPerDay` the duration field uses: that one
                     // follows the Scheduling tab's pending selection, which is right for a duration
                     // saved alongside it and wrong for an assignment write that does not carry the
                     // calendar at all.
-                    {...(seedFactor === undefined ? {} : { activityHoursPerDay: seedFactor })}
+                    {...(joinLagFactor === undefined ? {} : { activityHoursPerDay: joinLagFactor })}
                     isMilestone={isMilestoneType(activity.type)}
                     canWrite={gating.resources.writable}
                     // Shaded with the reason, never hidden — the same seam the Logic tab uses one

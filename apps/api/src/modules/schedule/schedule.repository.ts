@@ -12,8 +12,8 @@ import {
 } from '@prisma/client';
 
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
-import { loadDrivingResourceCalendarRows } from '../activities/driving-calendars';
 import { PrismaService } from '../../prisma/prisma.service';
+import { loadDrivingResourceCalendarRows } from '../activities/driving-calendars';
 
 import type { CriticalityRule } from './criticality-rule';
 import { MINUTES_PER_DAY } from './day-compat-calendar';

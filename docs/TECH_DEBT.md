@@ -1432,6 +1432,33 @@ expected to take.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
+> **M1–M4 LANDED 2026-09-13. The defect is fixed on both sides; M5 (the gate pass) is what remains.**
+>
+> One rule served two quantities, so it is two named rules with no default between them —
+> `ownCalendarId` / `schedulingCalendarId` on the server, a `DayFactorFrame` discriminator on the
+> client, the same vocabulary both sides. The compiler then asked all twelve server sites and all
+> twelve client sites which quantity they meant, which is how the work was scoped rather than
+> guessed; each answer carries its reason at the call site.
+>
+> **The product-owner decision (CQ-1, 2026-09-13) is that one number changes for readers**: a driven
+> activity whose resource works to a different calendar reports a different `durationDays` — the
+> epic's own fixture goes from a five-day crane lift to a two-day one. No stored minute moved and no
+> date moved; the read-out now says what the programme actually reserves. CQ-2 (the assignment join
+> lag stays on the activity's own calendar) and CQ-3 (`drivingResourceCalendarId` on the activity
+> read) shipped as recommended; CQ-4 has a guest adopt the corrected figure without learning a
+> resource is why.
+>
+> **Two characterisation suites inverted, exactly as each had promised in its own docblock**, and
+> that is the closest thing to proof this row has: `day-factor-divergence.characterisation.test.ts`
+> said "when M2 lands, `expect(2400)` becomes `expect(7200)` and this docblock's framing inverts",
+> and it did. Both keep the old number beside the new one, because the pair is the evidence.
+>
+> **Still owed:** M0-T3 (a count of affected rows against the DEPLOYED database — one query, and it
+> cannot be taken from a test database whose answer is structurally zero) and M0-T4's timing limb.
+> M0-T4's second falsification condition — 0 ms on a plan with no `RESOURCE_DEPENDENT` row — was
+> answered **structurally instead**: the driver read is skipped when the rows in hand contain no
+> driven activity, which is a stronger answer than a stopwatch on hardware that cannot produce one.
+
 > **M0-T2 TAKEN 2026-09-12, and it WIDENS this row rather than confirming it. The driver is not
 > required for the duration/float disagreement.**
 >
