@@ -1104,6 +1104,14 @@
       "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
     },
     {
+      "ref": "route.d.ts:438-444",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/route.d.ts",
+      "lines": "438-444",
+      "anchor": "reset: () => void;",
+      "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
       "ref": "nest-application-context.js:119-125",
       "package": "@nestjs/core",
       "path": "nest-application-context.js",

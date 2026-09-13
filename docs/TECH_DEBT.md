@@ -4346,9 +4346,36 @@ to `#269`, which is the copy the decision was written to avoid; (3) leave the de
 `sessionQueryOptions` and `organizationsQueryOptions` their own predicate, which fixes the guard and
 leaves every other query wrong. (1) is the answer.
 
-**A separate half, not folded in:** even with the retry, an exhausted bucket that is still exhausted
-after the backoff lands on `defaultErrorComponent` with no way out. That screen offering a reload is
-its own small piece of work and does not need this decision first.
+**A separate half, upgraded the same day from "add a button" to "one of two screens is missing what
+its twin has".** Even with the retry, an exhausted bucket still exhausted after the backoff lands on
+`defaultErrorComponent` with no way out. Reading the day-one cross-cutting files turned that from a
+design question into an inconsistency:
+
+| screen                                               | heading                  | body                                                        | action              |
+| ---------------------------------------------------- | ------------------------ | ----------------------------------------------------------- | ------------------- |
+| `components/error-boundary.tsx` (`AppErrorBoundary`) | **Something went wrong** | "An unexpected error occurred. Reloading usually fixes it." | a **Reload** button |
+| `app/router.tsx:512-520` (`defaultErrorComponent`)   | **Something went wrong** | "We couldn't load this page. Please try again."             | **nothing**         |
+
+Same heading, two screens, and the one **without** the action is the one on the `_authed` guard path
+— the commoner failure. Its copy is also a **false instruction**: it tells the reader to try again on
+a screen that offers no way to.
+
+**And the router hands it the recovery function, which this app discards.**
+`ErrorComponentProps` is `{ error, info?, reset: () => void }`
+(`@tanstack/router-core@1.171.28`, `dist/esm/route.d.ts:438-444`), and
+`defaultErrorComponent: () => (…)` takes no props at all. So the remedy is not a new affordance; it
+is `reset` (optionally with `router.invalidate()`, which retries the loaders without a page load) or
+the twin's `window.location.reload()`.
+
+**Two things that were written above as reasons to defer no longer are.** The ADR-0108 interaction is
+not novel — `AppErrorBoundary`'s Reload has fired `beforeunload` since that guard shipped, and that is
+accepted. And "a new user-facing entry point" is the wrong description of adding to one screen the
+control its sibling already has. What genuinely remains a decision is **which** of `reset` and a full
+reload it should be, and they are not equivalent: `reset` keeps the tab (and any unsaved work in a
+dialog behind the boundary), a reload discards it and asks ADR-0108's guard first.
+
+`AppErrorBoundary` is untouched since `56a82ca5` too, which is how the pair came to differ: both were
+right when written, and only one was revisited.
 
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
