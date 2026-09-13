@@ -282,9 +282,22 @@ export interface ToolbarItem<Ctx> {
    */
   order: number;
   /**
-   * How much this row wants to keep the item: **higher survives longer, lowest goes into the `⋯`
-   * first.** Separate from `order` because they answer different questions — `order` is *where does
-   * this sit*, `priority` is *what can this row afford to lose*. A zoom control is worth more than a
+   * **INERT since ADR-0109 D1 — nothing reads this field** (`docs/TECH_DEBT.md` #193). A command
+   * surface wraps rather than hiding, so there is no budget, no demotion pass and no `⋯`; both
+   * comparators that order this surface key on `groupRank`, then `order`, then declaration index.
+   * The field's only reader is {@link priorityOf}, which has no caller. **Setting it on a new item
+   * changes nothing** — if you want an item to sit elsewhere, that is `order`.
+   *
+   * It is kept rather than removed for the reason the ten live declarations are: the ladder
+   * machinery was deliberately kept (ADR-0110 M5), and if a demotion pass returns, the ranks those
+   * items carry are the considered answers to defects a flag-on journey found — see
+   * `tsld-toolbar-items.tsx`'s `next-conflict` and the four `-100` items. Removing it is a separate
+   * decision (ADR-0105), not a tidy-up.
+   *
+   * **What it meant while it was live**, which is what the ranks in the registry still encode:
+   * how much this row wanted to keep the item — higher survived longer, lowest went into the `⋯`
+   * first. Separate from `order` because they answer different questions — `order` is *where does
+   * this sit*, `priority` was *what can this row afford to lose*. A zoom control is worth more than a
    * link to the keyboard-shortcuts sheet even though it sits further left.
    *
    * **Defaults to `-order`, not `order`**, which is the only default that reads correctly *and*
@@ -745,13 +758,23 @@ export function priorityOf<Ctx>(item: ToolbarItem<Ctx>): number {
  * **Nothing demotes on width any more, and `priority` no longer decides what a planner can reach.**
  * `computeOverflow` was deleted at ADR-0091 M7 in favour of `computeLadder` (`toolbar-ladder.ts`),
  * and ADR-0109 D1 then deleted **that** too: a command surface wraps rather than hiding, so there
- * is no budget, no demotion and no `⋯`. `priority` survives only as ordering within a group.
+ * is no budget, no demotion and no `⋯`. **`priority` survives as nothing at all**: both sorts
+ * that order this surface — `resolveToolbarItems` (`:690-695`) and `Toolbar`'s own grouping pass
+ * (`Toolbar.tsx:235-237`) — key on `groupRank`, then `order`, then declaration index. Neither
+ * mentions `priority`; its only reader is `priorityOf`, which has no caller.
  *
- * Both halves of this docblock have now been stale in turn. It was written because ADR-0091 M7
+ * This paragraph's opening claim had already been stale twice before that. It was written because ADR-0091 M7
  * *extended* `computeOverflow` with a new parameter and gave it three new tests hours before making
  * it unreachable — a component review found it still exported, still tested, and still describing
  * how the running component fed it. The replacement sentence then outlived its own subject by a day
  * short of a week, citing `toolbar-ladder.ts` after that file was deleted. Corrected by the
  * 2026-08-25 reconciliation pass; kept rather than deleted because a reader meeting `priority` still
  * needs to be told it is not the demotion key, which is the one thing both versions got right.
+ *
+ * **The sentence corrected above was the THIRD, and it is the instructive one** (2026-09-13,
+ * `docs/TECH_DEBT.md` #193). The first two were citations that outlived their subject, which a
+ * reader can catch by resolving a name against the tree. This one instead *asserted a residual
+ * role the field does not have* — ordering within a group is `order`, one field along — and there
+ * is no dangling name to resolve, so it reads as diligence. Established by reading both
+ * comparators, not by anything failing.
  */

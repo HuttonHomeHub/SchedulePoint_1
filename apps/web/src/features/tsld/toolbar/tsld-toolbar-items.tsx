@@ -2164,7 +2164,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     row: 'strip' as const,
     tier: 2 as const,
     order: 13,
-    // Navigation survives longest on Row 1 — see ADR-0090 D3 / `priority`.
+    // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). Kept as the
+    // considered rank if a demotion pass returns. It meant: navigation survives longest on Row 1
+    // — ADR-0090 D3, a rule about a row that no longer exists.
     priority: 100,
     label: 'Go to today',
     icon: <LocateFixed className="size-4" />,
@@ -2173,6 +2175,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'comments',
     group: 'object' as const,
     row: 'strip' as const,
+    // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
+    // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
+    // is kept as the considered answer if a demotion pass ever returns; everything below
+    // describes the deleted ladder and is history, not behaviour.
+    //
     // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
     // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
     // measured: the strip laid out wider than its container at 1280. Something has to demote first,
@@ -2244,6 +2251,13 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     tier: 1 as const,
     order: 2,
     /**
+     * **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The surface
+     * wraps rather than hiding, so there is no budget, no demotion and no `⋯`, and the defect
+     * described below cannot currently occur — it needed a row that drops a command. The rank is
+     * kept rather than deleted because it is the considered answer if a demotion pass returns, and
+     * because that answer was found by a journey rather than by reading. Everything from here down
+     * describes the deleted ladder.
+     *
      * **A command outranks the read-out that describes it** (ADR-0094 M5).
      *
      * Without this the flag-on journey found the epic's purpose inverting the moment it applied:
@@ -2283,6 +2297,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     id: 'export',
     group: 'output' as const,
     row: 'strip' as const,
+    // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
+    // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
+    // is kept as the considered answer if a demotion pass ever returns; everything below
+    // describes the deleted ladder and is history, not behaviour.
+    //
     // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
     // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
     // measured: the strip laid out wider than its container at 1280. Something has to demote first,
@@ -3003,6 +3022,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'analysis',
       group: 'object',
       row: 'strip',
+      // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
+      // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
+      // is kept as the considered answer if a demotion pass ever returns; everything below
+      // describes the deleted ladder and is history, not behaviour.
+      //
       // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
       // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
       // measured: the strip laid out wider than its container at 1280. Something has to demote first,
@@ -3039,6 +3063,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       id: 'calendar',
       group: 'object',
       row: 'strip',
+      // **INERT since ADR-0109 D1: nothing reads `priority`** (`docs/TECH_DEBT.md` #193). The
+      // surface wraps rather than hiding, so there is no budget, no demotion and no `⋯`. The rank
+      // is kept as the considered answer if a demotion pass ever returns; everything below
+      // describes the deleted ladder and is history, not behaviour.
+      //
       // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
       // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
       // measured: the strip laid out wider than its container at 1280. Something has to demote first,

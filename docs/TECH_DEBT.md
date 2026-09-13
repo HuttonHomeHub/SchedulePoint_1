@@ -4316,7 +4316,7 @@ of the gate that catches what a reviewer cannot see.
 
 ### 193. Four toolbar exports have no production caller, and are deliberately kept
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 > **The docblock half of this row is CLOSED (2026-09-09).** All four named docblocks and both named
 > residues were corrected, and the last one this row identified — `toolbar-registry.test.ts`'s
@@ -4418,6 +4418,50 @@ and should be corrected whether or not the code goes. Decide the two questions s
 > `computeLadder`'s companion lookup" — a surviving citation of deleted machinery, sitting a few lines
 > above the correction that was supposed to catch it. This row's own failure mode, one line from its
 > own fix.
+
+#### The four are still exact, and the row's method could not see the larger instance (2026-09-13)
+
+**Re-derived, and the corrected list of four is unchanged** — `priorityOf` has no reference of any
+kind including tests, `partitionByTier` and `resolveLayoutMode` are test-only, and
+`TOOLBAR_LAYOUT_HYSTERESIS_PX` is read only inside `resolveLayoutMode`. That is a checked negative:
+ADR-0133 reworked this exact surface on 2026-09-10, the day after the previous verification, and
+moved none of them.
+
+**What the re-derivation found is one field along, and it is bigger than the four exports.**
+`ToolbarItem.priority` is read by nothing. Both comparators that order this surface —
+`resolveToolbarItems` and `Toolbar`'s own grouping pass — key on `groupRank`, then `order`, then
+declaration index; the field's only reader is `priorityOf`, which has no caller. Yet **ten registry
+items in `tsld-toolbar-items.tsx` declare a `priority`**, and **six comment blocks beside them
+described the `⋯` and the demotion ladder as live mechanisms** — four of them the same text repeated.
+One of those six is the considered fix for a real, journey-found defect (`next-conflict` raised
+90 → 110 at Graphite M5, because the ladder had demoted it and kept `zoom-out`, reinstating
+ADR-0094 M2's finding). That remedy is now inert.
+
+**The worst site was the field's own type docblock** — the thing every author of a new registry item
+reads — which opened "higher survives longer, lowest goes into the `⋯` first" in the present tense.
+All seven are corrected; none of the ranks is deleted, because removing them is the separate decision
+this row already isolates.
+
+**Why this row's own instrument was blind to it.** The row's transferable point is that a `grep` for
+known-deleted names cannot find a citation of a name nobody remembers existed. This is the same blind
+spot one layer in: the search was for **export names**, and `priority` is a **field on a
+declaration** — a live symbol, spelled correctly, in code that compiles, describing a mechanism that
+does not exist. Neither the name-based grep nor `#277`'s resolve-every-backticked-identifier
+direction would flag it, because every identifier in those comments resolves.
+
+**And the correction paragraph beside `priorityOf` carried a third stale claim, of a new kind.** It
+closed "`priority` survives only as ordering within a group" — false; ordering within a group is
+`order`. Its own two previous versions were citations that outlived their subject, which a reader can
+catch by resolving a name against the tree. This one **asserted a residual role the field does not
+have**, so there was nothing dangling to resolve and it read as diligence. A correction that invents
+a smaller job for the thing it is retiring is harder to catch than the staleness it replaced.
+
+**Also corrected: the row's closing argument is weaker than it states.** `components/ui/toolbar/index.ts`
+is an explicit named re-export list and contains **none of the four** — they are module-level exports
+reachable only by deep import from inside that directory. So "removing an export is a public-contract
+change (ADR-0105)" overstates it, exactly as the row already corrected once for
+`TOOLBAR_LAYOUT_BANDS`. The keep-decision may still be right on ADR-0110 M5's grounds; the
+public-contract half of the reason is not load-bearing. Established by reading the barrel.
 
 ### 194. "The epic's own gate pass removes it" has now failed twice as an instruction
 
