@@ -4223,7 +4223,7 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 
 ### 191. The local pre-push gate is one expensive step, and it is `pnpm test`
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 > **The title said "8 minutes and 96% of it is two steps" until 2026-09-09, and that is now false.**
 > `eslint --cache --cache-strategy content` landed in all nine lint scripts (`apps/web/package.json`,
@@ -4313,6 +4313,45 @@ of the gate that catches what a reviewer cannot see.
 > are corrected — `CLAUDE.md` now says it **derives** them without a number, because the list is
 > derived and a hard count in prose beside a growing set is ADR-0076 Class 1 by construction; that
 > figure had already been wrong twice.
+
+> **Both counts have drifted a THIRD time** (2026-09-13). There are **19** `check:*` gates, not 16 —
+> ADR-0136 added four and ADR-0138 added `check:e2e-roster` — and **645** web unit test files, not 626. Counted from `package.json`'s own `check:` scripts and from `apps/web/src`, and cross-checked
+> against a real `pnpm prepush` log, which printed all 19.
+>
+> **The timings were NOT re-measured and are not corrected**, which matters for how the table is
+> read: `10.4 s` was ten gates and now names ten of nineteen, so the gates' share is understated by
+> roughly half of a small number. `pnpm test` is still the dominant term by construction — the suite
+> grew.
+>
+> **And the growth had outrun `docs/TESTING.md`'s step table**, which calls itself the reference for
+> what each gate is and when it applies and listed **13 of the 19** — missing `doc-links`,
+> `adr-coverage`, `flags`, `surface-contract`, `browser-safe` and `advisory-agreement`. Nobody was
+> left unprotected, because `pnpm prepush` derives its roster and runs all of them; but a reader
+> asking that table "I filed an ADR, what do I run?" was pointed at `check:counts` and not at
+> `check:adr-coverage`. Reconciled here — all 19 are listed, with the reason written above the
+> table, which is the same reason the paragraph already there gives for the script existing.
+>
+> **One observation this row had not made, and it is about ORDER rather than cost.**
+> `docs/TESTING.md` introduces its step table with _"each step is cheaper than the one after it
+> … so a failure should surface at the earliest step that can see it"_ — and `prepush.sh` runs
+> `lint` → `typecheck` → **`test`** → all 19 `check:*` gates, in that order (read from the script
+> and confirmed against a real run's output). So the nineteen cheapest gates run **last**: a
+> `check:doc-links` failure costs about **1.0 s** to detect (measured 2026-09-13, three runs:
+> 1053 / 1061 / 1006 ms, `pnpm` startup included) and is not reached until after this row's
+> measured ~345 s of unit tests. The stated principle is inverted for exactly the steps it fits
+> best.
+>
+> **What reordering would and would not buy, stated rather than implied.** On a green run it buys
+> **nothing** — every step runs either way and the total is identical. It buys time only on a red
+> run whose cause is a cheap gate, and how often that is has **not** been measured. So this is an
+> observation, not a recommendation with a number behind it. It is also a change to a shared gate,
+> which is an ADR-0105 trigger, so it is recorded here rather than taken.
+>
+> **This is the row's own lesson landing on it a third time.** The 2026-09-03 sweep's remedy was
+> exactly right and was applied one document too narrowly: `CLAUDE.md` was changed to say "derives
+> them" **without a number**, and the two counts inside this row were left as numbers. A count in
+> prose beside a growing set goes stale whoever writes it, and the register is not exempt from the
+> rule it wrote for the manual.
 
 ### 193. Four toolbar exports have no production caller, and are deliberately kept
 
