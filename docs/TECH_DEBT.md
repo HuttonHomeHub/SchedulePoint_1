@@ -6152,7 +6152,7 @@ is how a figure survives six weeks past being wrong.
 
 ### 256. Every e2e reset hand-orders the whole schema, and five had it wrong
 
-**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-13 · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
 
 **Reclassified `open` → `deferred` on 2026-09-11, on this row's own last sentence.** The five
 orderings are fixed; what remains is a design question the row deliberately files rather than
@@ -6191,6 +6191,36 @@ the specs' resets are not all whole-schema — several deliberately keep organis
 between cases, so a single `clearAll` would change what they test; and a cycle in the FK graph needs
 an answer rather than a crash. Worth doing when a sixth table joins the pattern, or sooner if
 another unexplained cross-spec FK failure appears.
+
+**Re-checked 2026-09-13. Both counts hold, the trigger has not fired, and the row's own class
+argument can now carry a number.**
+
+**41 and 17, unchanged.** `clearBaselineTree` is used by 17 files. The 41 took four attempts, which
+is the part worth recording: _"e2e specs still call `deleteMany` directly"_ has at least four
+plausible readings, and they give **44** (any `.ts` under `apps/api/test`), **42** (`*.e2e-spec.ts`
+anywhere under it), **27** (those not also using the helper) and **41** (`*.e2e-spec.ts` at the top
+level, excluding `test/pairwise/`). Only the last reproduces the row. It is the right number under
+its own predicate and **the predicate is not written down**, so my first reading reported drift that
+does not exist — `#251`'s lesson arriving from the other side. An unstated predicate does not only
+risk being wrong; it costs the next reader four greps when it is **right**, and invites a false
+drift report on the way. Written down here so the next check is one command.
+
+**The trigger has not fired.** It reads _"when a sixth table joins the pattern, or sooner if another
+unexplained cross-spec FK failure appears"_. One migration has landed since this row was verified —
+`20260909120000_perf_probe_sweep_columns` — and it adds columns to an existing table rather than a
+model, so no table has joined; and no cross-spec FK failure has been reported. Checked rather than
+assumed, because `#298` and `#249` both had triggers that had fired unnoticed.
+
+**And the class is bigger than the row could say.** It argues there is _"no reason to think
+`cross_plan_dependencies` is the last table this happens to"_ without a figure. There is one:
+**17 models carry two or more `onDelete: Restrict` foreign keys** — `Activity` seven,
+`CrossPlanDependency` five, `Plan` / `Resource` / `ResourceAssignment` / `Note` three each, and
+eleven more with two. Every one of them is a table a hand-written topological sort can get wrong in
+the same way, and the sort is copied once per spec. That is the strongest argument on this row for
+the DMMF-derived `clearAll` it files, and it was available to be counted the whole time.
+
+Still **deferred** on the row's own trigger, and the remedy is unchanged: the two hard parts (resets
+that deliberately preserve rows, and a cycle in the FK graph) are design questions, not a helper.
 
 ### 257. ADR-0086 D6 records a staff write that was never built
 
@@ -7859,6 +7889,54 @@ open, and the collision class adds a third. What changes is that **the backfill 
 and should go first** — a gate armed before it fails on twelve pre-existing rows and lands straight
 back in ADR-0058's deletion path.
 
+**A thirteenth number, and a whole class the sweep above could not see (2026-09-13).** Every figure
+above counts **bare** citations — `#25`, `#54`. The register is also cited in **lettered** form, and
+`#(\d+)(?![0-9A-Za-z_-])` excludes those by construction, so they were invisible to the measurement
+that produced the twelve. Counted separately: **27 lettered citation sites across 10 distinct
+numbers**, and exactly one of them — `#118a` — resolves to a lettered row that exists.
+
+| citation | sites | base row resolves to                             |
+| -------- | ----- | ------------------------------------------------ |
+| `#25a`   | 8     | **nothing** (`#25` is one of the twelve)         |
+| `#165a`  | 6     | a detailed row with no lettered parts            |
+| `#17a`   | 3     | a compact-table row                              |
+| `#30d`   | 3     | the **ledger** — the row is closed               |
+| `#161c`  | 2     | the **ledger** — the row is closed               |
+| `#44b`   | 1     | **nothing — a thirteenth dangling number**       |
+| `#31a`   | 1     | the **ledger** — the row is closed               |
+| `#97b`   | 1     | a detailed row with no lettered parts            |
+| `#24c`   | 1     | **nothing** (`#24` is one of the twelve)         |
+| `#118a`  | 1     | `### 118a.` — the only one that resolves exactly |
+
+**`#44` never appears bare anywhere in `docs/` or `CLAUDE.md`, in any context** — checked, not
+assumed. Its only citation is `activity-editor-logic-resources-convergence/feature-spec.md:292`, as
+`TECH_DEBT #44b`, so a sweep keyed on bare numbers cannot report it at any threshold. **And it was
+deleted by `bd011eb9` as well**, live from 2026-07-18 until that commit — so the count above should
+read **thirteen**, and the drift-control commit left thirteen cited numbers dangling rather than
+twelve. The figure was a property of the regex as much as of the register, which is the same lesson
+the false-positive table teaches from the other end.
+
+**`#25` is the worst citation in this file by some distance: 18 bare sites plus 8 lettered is 26,
+every one resolving to nothing**, and two of the bare ones are in ADRs that are never rewritten.
+If the backfill above is done in one pass, this is the row to get right.
+
+**This adds a FOURTH decision the gate cannot make for itself**, beside the `#83` collision, the
+quoted-historical-sentence question and the PR-number discriminator: **what does a lettered citation
+resolve against?** Three answers, none free. Resolving to the **base row** passes `#165a` and `#97b`,
+which point at parts of rows that have no parts — a silent miss of exactly `#60`'s shape. Resolving
+to **base + part** is not computable: a row's parts are prose (`(a)`, `**(b)**`, "its second half"),
+not structure, which is why `118a`/`118b`/`119a` were promoted to real headings and nine others were
+not. Resolving only the **exact lettered heading** fails nine of ten citations that are mostly
+legitimate. The honest shape is probably "the base must resolve, and a lettered citation against a
+closed base is reported separately" — but that is a decision, and it is why this stays filed.
+
+**An instrument note, since this row already carries one.** The three lettered headings are also why
+this annotation's own resolvable set was three short of the gate's: `check-debt-status.mjs` reads
+`^#?(\d+)([a-z]?)[.\s—-]` and counts **103** detailed rows where the sweep above counted 100. It
+changes none of the findings — none of the three is among the twelve, checked — but a resolver that
+disagrees with the register's own armed gate about how many rows exist is a resolver to reconcile
+before arming, not after.
+
 ### 289. NestJS 12 breaks the API e2e bootstrap, and Dependabot titles it as routine
 
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (driving dependabot #482) ·
@@ -8687,7 +8765,7 @@ name.
 
 ### 302. A row's status can contradict the fields beside it, and `check:debt-status` passes it
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (overnight register sweep) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-11 (overnight register sweep) · **Size:** S · **Owner:** repo
 
 `#298` shipped carrying `**Status:** unverified` and `**Verified:** 2026-09-11` **on the same
 line**. Those cannot both be true: ADR-0120 introduced `unverified` to mean precisely _nobody has
@@ -8714,6 +8792,58 @@ and a `**Verified:**` date are mutually exclusive; every other status requires o
 **Blind spot to state up front:** this would catch the contradiction and not the lie. A row whose
 author writes a date without checking anything is invisible to any parser, which is why ADR-0076
 classes that as the non-computable third kind.
+
+**Re-derived 2026-09-13, and the proposed rule is SHIPPABLE — which is the finding, because the
+neighbouring proposal in `#312` is not.** Both halves of the rule this row asks for were run against
+the register:
+
+- **`unverified` beside a `**Verified:**` date — zero.** This row's only exhibit is gone. `#298` was
+  **born** with the contradiction in `69207b1d`, and `3c4a6161` removed it — **both on 2026-09-11**,
+  the day this row was raised. `#298` today reads `open · Verified: 2026-09-13`. Nothing recorded
+  either the birth or the repair, and the repair was incidental: the row was annotated for an
+  unrelated reason and the status line came with it.
+- **A status other than `unverified` with no `**Verified:**` field at all — two.** `#110`
+  (`deferred (on a measured trigger)`) and `#225` (`deferred`). Both are genuinely unverified rows
+  wearing a verified-looking status, which is the same defect this row describes with the fields the
+  other way round.
+
+**Two findings, one edit.** Contrast `#312`, whose gate reports **40** on the same day: a coherence
+pass here fails on two rows and can be armed the moment they are fixed, so this one does not need
+the report-only-then-repair-then-arm sequence ADR-0120 needed. That is the difference between a rule
+whose population somebody measured before proposing it and one whose population nobody did.
+
+**One implementation note for whoever specs it, because getting it wrong would contradict A2.**
+`#110`'s status is `deferred (on a measured trigger)` and passes correctly: `check-debt-status.mjs:212`
+takes the **first whitespace-delimited token**, so the parenthetical is tolerated by design. A
+coherence assertion must reuse that same extraction, or it will disagree with A2 about what the
+status even is — and disagree only on rows whose author added a qualifier, which is the population
+most likely to be doing something unusual.
+
+**A structural oddity found on the way, filed here rather than as its own row because nothing is
+broken by it.** `## Closed numbers` is at `docs/TECH_DEBT.md:5778`, and **37 detailed `### N.` rows
+live after it** — `#249`, `#251`, `#256`, `#257` and the rest. Since they are `###` under a `##`,
+markdown nests them: 37 live, open rows are children of a section headed _Closed numbers_. The gate
+is unaffected and correctly counts **103** detailed rows, because it reads headings globally rather
+than scoping by section — but ADR-0124 made `sections()` end a section at the same level **or
+shallower**, so any future section-scoped reader of this file inherits the whole 3,090-line tail as
+"Closed numbers". Worth knowing before writing one.
+
+**And the gate's own report banner is stale in the direction that misleads an investigator.**
+`check-debt-status.mjs:314` prints `check:debt-status — REPORT ONLY (not yet armed; see M4)`. It has
+been armed since **2026-08-30**, when `0d0a6dc7` added the `check:debt-status` key to
+`package.json` — and `prepush.sh` derives its roster from those keys, so it blocks today and printed
+`ok` on this pass. The false line is on the `--report` path, i.e. it greets exactly the reader who
+ran the gate to find out what it does. ADR-0076 Class 3, in a gate's own output rather than a
+document.
+
+**One commit is behind an unusual share of tonight's findings, which is worth a sentence on its
+own.** `69207b1d` — _"four delivery gates, the Gantt's typed dates, and a focus-hand-off"_, carrying
+ADR-0134, ADR-0135 and ADR-0136 — both **created** `#298` wearing this row's contradiction and wrote
+`#249`'s "nothing in that pass touched `plan-workspace-toolbar.tsx`" **in a commit that touched that
+file**. Two register-accuracy defects from one change, and neither is a coding mistake: they are
+what a commit large enough to span three ADRs does to the prose written alongside it. Recorded as an
+observation rather than a rule — one commit is not a population, and the remedy ("smaller commits")
+is not this row's to propose.
 
 ### 303. The retention sweep logs an ERROR on every API e2e run, and it is the exact signal the alert watches
 
