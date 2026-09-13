@@ -1735,7 +1735,9 @@ verify/invite stays this row's own, separate remediation.
 > `GET /api/auth/reset-password/:token` redirecting with the raw token is the same shape.
 > `scripts/dependency-claims.json` has **no** entry for either, so `check:claims` cannot see them and
 > a bump would move both silently. Registering them needs the claims read against the installed
-> package, which is a task and not an edit — recorded rather than done here.
+> package, which is a task and not an edit — recorded rather than done here. **`#99` is the worked
+> example** (re-derived 2026-09-13): three citations of the same kind into the same package, all
+> registered and therefore gated, so the destination is in this file rather than only described.
 >
 > Confirmed accurate: the invitation path is safe behind a real button press
 > (`AcceptInvitationCard.tsx`, the `Button` spanning `:243-259`), and the web half does strip the
@@ -2735,7 +2737,7 @@ chunk of it was already solved.
 
 ### 99. `/request-password-reset` leaks account existence through timing
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 The endpoint is uniform in **everything the caller can read** — same status, same body, whether the
 address exists or not (ADR-0074, and the property `sendPasswordReset` holds rather than borrows).
@@ -2767,6 +2769,27 @@ use it.
 at 10 s, so the observable gap went from "up to ten minutes" to "up to ten seconds". A smaller
 worst case is not a smaller signal: a few hundred milliseconds is comfortably measurable over the
 network, and the gap is _reliable_ rather than noisy because it tracks a real network operation.
+
+> **Re-derived 2026-09-13, exact — and this row is the worked example `#88` needs.** Everything the
+> row asserts about our own code holds: `SEND_TIMEOUT_MS = 10_000` (`smtp-mail.service.ts:71`), and
+> `advanced.backgroundTasks.handler` is still unconfigured, asserted by two comments and by there
+> being no other mention of it in `apps/api/src`.
+>
+> **The part worth carrying is the contrast.** All three of this row's dependency-internals
+> citations are **registered** in `scripts/dependency-claims.json` — `create-context.mjs:220` and
+> `email-verification.mjs:104-116` verbatim, and the 2026-09-03 correction's `password.mjs` branch
+> among eleven registered refs into that file. So they are gated by `check:claims` and were verified
+> against the installed package rather than asserted. `#88` makes claims of exactly the same kind
+> (`better-auth.ts:249-250`'s "bare acting GET", and `GET /api/auth/reset-password/:token`
+> redirecting with the raw token) and has **no** entry for either. Two security rows, one file, same
+> class of claim, opposite treatment — and this one shows the destination, which is what that row's
+> _"a task and not an edit"_ was missing.
+>
+> **The register currently describes the code that ships**, which is not automatic (ADR-0107 #178):
+> `verifiedAgainst.better-auth` is `1.7.1`, both workspaces declare `^1.7.1`, and only `1.7.1` is
+> installed. So the split-estate failure #178 describes — a claims register green against a version
+> the application no longer runs — is not live today. That is a property of the current tree, not a
+> guarantee, and it is the thing to re-check first if these citations ever start looking wrong.
 
 **Options, in the order they should be considered:**
 
