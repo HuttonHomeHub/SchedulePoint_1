@@ -1735,7 +1735,9 @@ verify/invite stays this row's own, separate remediation.
 > `GET /api/auth/reset-password/:token` redirecting with the raw token is the same shape.
 > `scripts/dependency-claims.json` has **no** entry for either, so `check:claims` cannot see them and
 > a bump would move both silently. Registering them needs the claims read against the installed
-> package, which is a task and not an edit — recorded rather than done here.
+> package, which is a task and not an edit — recorded rather than done here. **`#99` is the worked
+> example** (re-derived 2026-09-13): three citations of the same kind into the same package, all
+> registered and therefore gated, so the destination is in this file rather than only described.
 >
 > Confirmed accurate: the invitation path is safe behind a real button press
 > (`AcceptInvitationCard.tsx`, the `Button` spanning `:243-259`), and the web half does strip the
@@ -2031,6 +2033,24 @@ three was wrong by decay:
 misdescribed a control that had rendered as a segmented radiogroup for eighteen days before the row
 was filed, and `#75`'s headline finding was retracted by the very ADR it exists to correct — with
 the withdrawn version still propagated into `CLAUDE.md` and a guide two days later.
+
+> **Two more, and they change what the class means (2026-09-13).** `#211`'s 2026-09-11 pass
+> re-derived its items entry by entry and produced **two citations that were wrong on the day**:
+> _"nothing in `apps/web/src` sets `showLabel: 'never'` (both matches are comments)"_ against seven
+> matches of which four are code, and `plan-workspace-toolbar.tsx:1900-1911` for a shortcuts-sheet
+> mount that sat at `:1937` that morning. Both were checked at `69207b1d^` — the commit immediately
+> after — and neither had moved, so decay is excluded rather than assumed.
+>
+> **What is new is not the count but the author.** The first two instances are rows wrong when
+> originally filed; these were produced by a **re-derivation**, which is the activity this row
+> prescribes as the remedy. So born-stale is not a property of hurried original authorship that
+> verification removes — verification commits it too, and at the same rate as anything else.
+> **"Re-derived 2026-09-11" is a claim about effort, not a warrant on the evidence beneath it.**
+>
+> The consolation is the one this row already argues: **all four conclusions survived**. The
+> icon-only branch really is dormant, the sheet really is mounted once above both views. The
+> diagnoses were right and the evidence offered for them was not — which is the row's thesis
+> holding in the one place it would be most embarrassing to find an exception.
 
 **Why this is a row and not a fixed thing.** The obvious remedy — gate the citations the way
 `check:claims` gates dependency citations — does not transfer. Those are pinned by package version
@@ -2735,7 +2755,7 @@ chunk of it was already solved.
 
 ### 99. `/request-password-reset` leaks account existence through timing
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 The endpoint is uniform in **everything the caller can read** — same status, same body, whether the
 address exists or not (ADR-0074, and the property `sendPasswordReset` holds rather than borrows).
@@ -2767,6 +2787,27 @@ use it.
 at 10 s, so the observable gap went from "up to ten minutes" to "up to ten seconds". A smaller
 worst case is not a smaller signal: a few hundred milliseconds is comfortably measurable over the
 network, and the gap is _reliable_ rather than noisy because it tracks a real network operation.
+
+> **Re-derived 2026-09-13, exact — and this row is the worked example `#88` needs.** Everything the
+> row asserts about our own code holds: `SEND_TIMEOUT_MS = 10_000` (`smtp-mail.service.ts:71`), and
+> `advanced.backgroundTasks.handler` is still unconfigured, asserted by two comments and by there
+> being no other mention of it in `apps/api/src`.
+>
+> **The part worth carrying is the contrast.** All three of this row's dependency-internals
+> citations are **registered** in `scripts/dependency-claims.json` — `create-context.mjs:220` and
+> `email-verification.mjs:104-116` verbatim, and the 2026-09-03 correction's `password.mjs` branch
+> among eleven registered refs into that file. So they are gated by `check:claims` and were verified
+> against the installed package rather than asserted. `#88` makes claims of exactly the same kind
+> (`better-auth.ts:249-250`'s "bare acting GET", and `GET /api/auth/reset-password/:token`
+> redirecting with the raw token) and has **no** entry for either. Two security rows, one file, same
+> class of claim, opposite treatment — and this one shows the destination, which is what that row's
+> _"a task and not an edit"_ was missing.
+>
+> **The register currently describes the code that ships**, which is not automatic (ADR-0107 #178):
+> `verifiedAgainst.better-auth` is `1.7.1`, both workspaces declare `^1.7.1`, and only `1.7.1` is
+> installed. So the split-estate failure #178 describes — a claims register green against a version
+> the application no longer runs — is not live today. That is a property of the current tree, not a
+> guarantee, and it is the thing to re-check first if these citations ever start looking wrong.
 
 **Options, in the order they should be considered:**
 
@@ -5946,7 +5987,7 @@ all six are live:
 
 ### 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
-**Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
 long-press listener cleanup, both landed with the pass) · **Size:** S ×2 · **Owner:** web
@@ -5959,6 +6000,7 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   the product mentions the gesture. It degrades gracefully (a tap still fires the command exactly
   as before), so this is an unadvertised affordance rather than a defect; the right home is
   whatever touch-help surface exists when one does.
+
   > **Re-derived entry by entry 2026-09-11, and two clauses sharpen.** First, the gesture **is**
   > documented — `docs/UX_STANDARDS.md:102-104,127` and `docs/DESIGN_SYSTEM.md:1001` all describe
   > it — so the accurate finding is that no **user-facing** surface names it, which is what the
@@ -5983,6 +6025,35 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   > this is a pointer gesture. Re-derived at the same time — `HierarchyTree` carries a **second**
   > unadvertised long-press (`:16`, `:114`, `:203`, `:360`, `:385`) for row menus, so the class has
   > two members and not one.
+
+  > **Re-derived again 2026-09-13, and the 2026-09-11 pass's own evidence is wrong in two places
+  > while both of its conclusions survive.** That is this register's born-stale class (`#246`), and
+  > it is worth recording because the wrong citations were produced **by a re-derivation** — the
+  > activity meant to catch exactly this — so "re-derived" is not a quality stamp on the evidence
+  > under it.
+  >
+  > **1. The `showLabel: 'never'` count.** The pass wrote _"nothing in `apps/web/src` sets
+  > `showLabel: 'never'` (both matches are comments)"_. There are **seven** matches, and **four are
+  > code** — `Toolbar.test.tsx:124,133,167,244` — with three comments rather than two. Measured at
+  > `69207b1d^`, immediately before that day's commit: **the same seven, the same split.** So it was
+  > wrong when written, not moved since. **The conclusion holds**: all four code matches are test
+  > fixtures, so no _production_ item sets it and `ToolbarButton`'s icon-only branch really is
+  > dormant. The claim to make is "no production item", which is what the pass meant and not what it
+  > checked.
+  >
+  > **2. `plan-workspace-toolbar.tsx:1900-1911`** does not contain the shortcuts-sheet mount and
+  > never did: `<PlanShortcutsHelp` sits at **`:1941`** today and at **`:1937`** at `69207b1d^`,
+  > while `:1900-1911` was the export-error banner on both sides. **The conclusion holds** — the
+  > sheet is mounted once for the whole workspace above both views, which is the fact the struck
+  > clause turned on; only the line range was invented.
+  >
+  > **Everything else re-derives exact**, including the parts easiest to get wrong:
+  > `render-export-image.ts:190` is `const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;` (a
+  > **basename-only** citation, `#101`'s blind spot — it resolves, and a reader guessing a directory
+  > will not find it), `export-image.test.ts:286-298` is the `it('reserves EXPORT_MARKER_ROW by
+default, in both extents')` case down to the phrase this row quotes, and
+  > `tsld-toolbar-items.tsx:1984` is the `useTooltip({` of the bespoke undo/redo pair.
+
 - **A no-marks export shows a blank 22 px paper strip with no separator closing it off** (ux).
   `EXPORT_MARKER_ROW` is reserved unconditionally (deliberate — geometry stability, see
   DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
