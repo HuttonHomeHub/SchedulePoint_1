@@ -385,6 +385,37 @@ This narrows the unaudited surface; it does not close it, and saying otherwise w
 
 ### Next in this theme
 
+> **Swept 2026-09-13: nothing in this list is next, and the three items fail in three different
+> ways.** Annotated rather than deleted, because each reason is worth a reader's time.
+>
+> **The retention sweep SHIPPED a month ago**, and the bullet's supporting claim is the load-bearing
+> error: _"there is no scheduler in this application"_ is false and has been since **2026-08-10**
+> ([ADR-0087](adr/0087-scheduled-retention-sweep.md)). Verified by running rather than by reading —
+> `common/operational/retention-sweep.service.ts:104` runs a `setInterval`, and
+> `common/operational/retention-policy.ts:25` reads
+> `RETENTION_TABLES = ['csp_reports', 'mail_events', 'perf_probe_results']`, so **both named periods
+> are enforced** and a third table has joined them. Armed by default — `RETENTION_SWEEP_ENABLED`
+> defaults `'true'` (`config/env.validation.ts:154-156`) — which is worth stating because its
+> sibling is the opposite: ADR-0096's hierarchy expiry ships **off** (`RETENTION_HIERARCHY_ENABLED`),
+> so "retention is enforced" is true of these three tables and false of deleted plans. Two further
+> schedulers exist beside it (`heartbeat.service.ts:64`, `hierarchy-expiry.service.ts:118`).
+>
+> That false clause is the dangerous half rather than the stale priority: **ADR-0087 D2 exists
+> precisely so that "we have a scheduler" does not become the answer to every background need**, and
+> it names six conditions that reopen ADR-0009. A reader who believes this bullet would either
+> rebuild the sweep or reach for a broker, and D2 is the thing standing between those two mistakes.
+>
+> **The other two are `deferred`, not open** — both reclassified on 2026-09-11 and neither checked
+> against this list since. `#100` (wire `MAIL_ALERT_URL`) and `#117` (verify CSP delivery end to end)
+> are **observations on the deployed host**, which is why they are deferred: no amount of work in
+> this repository closes either. The bullets correctly call them "compose edits on a host"; what
+> they do not say is that this makes them nobody's next task.
+>
+> **What this section leaves genuinely open is `#118a`**, which it never named: the sweep may not
+> touch `audit_events`, so ADR-0085 D3's own 12-month `auth.*` period stays unenforced — deliberately,
+> because the table refuses `DELETE` by `ENABLE ALWAYS` triggers and ADR-0085 D1 declined to trade
+> that guarantee away. That is the live residue of the item this list still calls first.
+
 - **Wire the two receivers.** `MAIL_ALERT_URL` and a dead-man's-switch check are compose edits on
   the host. Until they exist the signals reach nobody, which is the failure `#100` records.
 - **Verify CSP delivery end to end** (`docs/TECH_DEBT.md` #117) — closable only by deploying,
