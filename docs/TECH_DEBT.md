@@ -1203,7 +1203,7 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 > **Re-verified 2026-08-08 — half of this is done.** The triple `activityRect` computation was fixed
 > by the per-frame `RectCache` (`render/geometry.ts:481`, declared on `rectCache` at
@@ -1270,6 +1270,31 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
 > classifies that flag **Class B — formally kept**, and ADR-0088 records unit-level flag-off parity
 > suites having exactly one catch in the project's history. Building a flag-off harness for a
 > guard-only flag is a harder sell than it was when this was filed.
+
+> **Re-derived 2026-09-13. Both items still exact, and the second premise is weaker on a third limb
+> the row had not measured.** All six citations resolve verbatim — `crossedLanes` declared at
+> `link-routing.ts:142` and called at `:191` (inside `routeOrthogonal`, `:150`) and `:291` (inside
+> `bundleCorridors`), with **no third call site anywhere**, so "twice per edge" is exact; and
+> `geometry.ts:481` / `paint-frame.ts:69` / `paint.ts:855` are the `RectCache` type, its `PaintFrame`
+> field and the destructure that reads it. That is a **clean check recorded so the next sweep does not
+> repeat it** (`#246`'s own rule), and it is the first re-derivation of the 2026-09-12 repointing —
+> one day is thin evidence, so read it as "not yet rotted", not as proof the repointing was durable.
+>
+> **The third limb: the configuration a flag-off harness would cover cannot be produced by any
+> published image.** Verified rather than cited — `apps/web/Dockerfile` declares exactly one `VITE_`
+> build arg (`VITE_API_URL`), `docker-publish.yml` passes **no** build-args at all, and
+> `.dockerignore` strips `**/.env` and `**/.env.*`. So this is not only a guard-only Class B flag with
+> one recorded catch in project history; the harness would assert behaviour **no shipped bundle
+> exhibits**, which is the shape ADR-0088 calls _worse than covering a rollback path_. It is still
+> reachable in a local dev build, so the item is narrowed to a developer-only configuration rather
+> than refuted — which is why it is left open for the product owner rather than struck here.
+>
+> **One asymmetry the row does not state, because it names only one flag.** The epic is ADR-0064
+> **and** ADR-0065, and while `VITE_CANVAS_AUTHORING_FLOW` has three pins (all `'true'`, the no-op
+> class ADR-0088 measured at 135), `VITE_CANVAS_LINK_ROUTING` has **zero pins of any value** in any
+> Playwright config and appears in no `.env.example`. The open bullet is about the two-click link
+> **pick**, which is ADR-0064, so naming that flag is correct — but a reader costing "add a flag-off
+> config" should know the routing half has no harness pin at all to build from.
 
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
@@ -2027,6 +2052,29 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 > prefers: a symbol either exists or does not, and `RectCache` and `crossedLanes` were both found in
 > seconds by name after their line numbers had been meaningless for a month.
 >
+> **The comparison is four claims, not two, and the model that separates them is the size of the
+> invalidating set (2026-09-13).** `ec1227a8` at 07:05 on 2026-09-10 wrote four checkable claims
+> across two rows. `73d390bd` at **21:19 the same day** killed two of them and left two exact. All
+> four were right when written, and neither commit was about the other's subject:
+>
+> | claim                                          | shape                               | invalidated by                | outcome      |
+> | ---------------------------------------------- | ----------------------------------- | ----------------------------- | ------------ |
+> | `#204`: `selection-actions.tsx:844`            | an **address**                      | any edit above it in the file | dead in 14 h |
+> | `#118`: "the matrix's **32** pairs"            | a **total of a growing population** | any addition anywhere in it   | dead in 14 h |
+> | `#118`: "**17** anchor on `--background`"      | a **subset count**                  | additions to that subset only | exact        |
+> | `#204`: "thirteen entries, **none** `'never'`" | a **universal property**            | an addition that violates it  | exact        |
+>
+> That refines this row's own mechanism — _"a line citation moves only when an edit lands above
+> it"_ — into something that covers counts as well as lines: **a claim dies when its invalidating
+> set is touched, and the citation styles differ only in how large that set is.** So the guidance is
+> not "prefer symbols to lines"; it is **prefer the narrowest invalidating set that still says what
+> you mean**.
+>
+> The `#118` case makes that concrete in a way a symbol rule could not: the added row is a **duplicate
+> of a pair already in `TEXT_PAIRS`**, so distinct `(fill, ink)` pairs stayed at **30** across the
+> edit. The same fact written as "30 distinct pairs" would have survived; written as "32 pairs" it
+> did not. One measurement, three phrasings, two of which rot.
+
 > **A second controlled comparison, and the first measured half-life (2026-09-13).** `#204`(a)'s
 > re-derivation put **two** citations in one sentence, written by one hand in one commit: a line
 > (`selection-actions.tsx:844` reads `showLabel: 'always'`) and an identity (_not one of that file's
@@ -3173,7 +3221,7 @@ observation on the host, not by a test.
 
 ### 118. Staff-console M6 review findings that were not folded
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 Six specialists reviewed the combined M1–M5 diff. Eight blocking findings were folded with
 regression tests verified red first (the denial audit row, the missing `nextCursor`, the undeclared
@@ -3280,6 +3328,15 @@ per-pair scope filter in `TEXT_PAIRS`. That is a change to a shared gate (ADR-01
 > every particular, including the part that matters most: the naive addition really does go red at
 > 2.00:1 in `chrome` and `brand`, and it really is **latent** — re-measured with the gate itself,
 > and a spec claim that it was live was checked and withdrawn.
+>
+> **Re-derived 2026-09-13: `17` is still exact, `32` is now `33`, and the drift is instructive rather
+> than a typo.** Both figures were right when written — measured at `ec1227a8` the matrix held
+> **32 rows, 17 of them anchored on `--background`**. `73d390bd` (ADR-0133) then added one
+> `NON_TEXT_PAIRS` entry — `--primary`/`--primary-foreground`, _"the focus indicator on a
+> control filled with --primary"_ — so it is **33 rows** today. The `17` survives because the
+> new row does not
+> anchor on `--background`, and the derived `34` survives with it. The figure is annotated rather
+> than rewritten, because which of the two rotted is the point — see `#246`.
 
 > **The "answer one question for three rows" argument has lapsed, and following it now misleads**
 > (2026-09-09). This paragraph ended _"the same shape as **#231** and **#227**: three deferred edits
