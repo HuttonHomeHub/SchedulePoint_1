@@ -4076,9 +4076,13 @@ list is shared by convention, not by a gate, and the gate is not obvious — a c
 call sites would sweep in every legitimate one inside a test body. Worth a thought, not worth a bad
 rule.
 
-### 313. The sign-up→onboarding wait is widened at 4 of 61 sites, and a widened one still failed
+### 313. The sign-up→onboarding wait is widened at 4 of 64 sites, and a widened one still failed
 
 **Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
+
+**The heading read "4 of 61" until 2026-09-13** — the figure is 64, re-derived below, and the
+heading is corrected here rather than only in the body, because a heading is what a reader takes
+away from a list of rows.
 
 `#182` was closed on 2026-08-28 by giving _"three base-journey sign-up specs"_ an explicit
 `{ timeout: 15_000 }` with the reason written at each site. Today's run shows both halves of that
