@@ -5066,6 +5066,25 @@ When operating in this repo, Claude Code should:
    checks are fine to wave through, which is the habit this whole section exists
    to prevent.
 
+   **And the same trap has a second orientation, which is the dangerous one.** PR
+   #558 (2026-09-13) carried two runs of that check on one head: `103673366836`
+   started 04:35:09 on the **push** and passed, validating the title as it then
+   stood; the title was edited at ~04:36, `103673491177` started 04:39:23 on the
+   **edit**, and for three minutes it was `queued` while the older one sat there
+   green.
+
+   So #514 is stale-**red** beside current-green, and #558 is stale-**green**
+   beside current-pending. The first merely blocks a reader. The second would let
+   one through: a naive "is there a success for each name?" pass sees a success for
+   every check and merges on a run that validated **a title the pull request no
+   longer has** — and under squash-merge that title is the commit subject that
+   lands on `main`, which is the one thing `pr-title.yml` exists to check.
+
+   Dedupe-by-most-recently-started is what separates them, and it is the only thing
+   that does. Both arise identically, so neither is a one-off: the workflow runs on
+   `edited`, editing a title creates a run with **no new commit**, and the head
+   therefore never moves.
+
    A later push sheds the stale run, because check runs are keyed to a **commit**
    — which is what makes the trap narrow and worth stating rather than harmless.
    The case that bites is a title corrected with **no new commit**, and that is how
