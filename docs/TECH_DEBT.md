@@ -2034,6 +2034,24 @@ misdescribed a control that had rendered as a segmented radiogroup for eighteen 
 was filed, and `#75`'s headline finding was retracted by the very ADR it exists to correct — with
 the withdrawn version still propagated into `CLAUDE.md` and a guide two days later.
 
+> **Two more, and they change what the class means (2026-09-13).** `#211`'s 2026-09-11 pass
+> re-derived its items entry by entry and produced **two citations that were wrong on the day**:
+> _"nothing in `apps/web/src` sets `showLabel: 'never'` (both matches are comments)"_ against seven
+> matches of which four are code, and `plan-workspace-toolbar.tsx:1900-1911` for a shortcuts-sheet
+> mount that sat at `:1937` that morning. Both were checked at `69207b1d^` — the commit immediately
+> after — and neither had moved, so decay is excluded rather than assumed.
+>
+> **What is new is not the count but the author.** The first two instances are rows wrong when
+> originally filed; these were produced by a **re-derivation**, which is the activity this row
+> prescribes as the remedy. So born-stale is not a property of hurried original authorship that
+> verification removes — verification commits it too, and at the same rate as anything else.
+> **"Re-derived 2026-09-11" is a claim about effort, not a warrant on the evidence beneath it.**
+>
+> The consolation is the one this row already argues: **all four conclusions survived**. The
+> icon-only branch really is dormant, the sheet really is mounted once above both views. The
+> diagnoses were right and the evidence offered for them was not — which is the row's thesis
+> holding in the one place it would be most embarrassing to find an exception.
+
 **Why this is a row and not a fixed thing.** The obvious remedy — gate the citations the way
 `check:claims` gates dependency citations — does not transfer. Those are pinned by package version
 and anchor text; a register row cites this repository's own moving files, where a line number is
