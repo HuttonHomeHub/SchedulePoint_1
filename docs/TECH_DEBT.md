@@ -1862,7 +1862,7 @@ reading as owed work, which is the drift class this register exists to catch.
 
 ### 242. `/forgot-password?email=` is a specified capability with no producer
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 **Found:** 2026-09-02, while scoping #96 — by asking which of the eighteen search params the
 application itself writes, and finding that this one is not among them.
@@ -1901,6 +1901,32 @@ analogy does not hold. That one has real producers (Better Auth's verification r
 sign-up's own `callbackURL`); nothing composes a forgot-password redirect at all. A specification
 inherited from a neighbouring row is the same shape as a docblock inherited from a neighbouring
 file, one layer up.
+
+> **Re-derived 2026-09-13, every claim exact — and the analogy's producer is misattributed in a way
+> that makes the row's own cost analysis sharper.** The diagnosis holds in full: `feature-spec.md:805`
+> is the table row specifying _"prefill from `?email=`"_, `forgot-password.tsx:30` reads it, and the
+> only two `<Link to="/forgot-password">` sites (`sign-in.tsx:35`, `reset-password.tsx:58`) were read
+> in full and **neither passes `search`**. Nothing else in `apps/web/src` or `apps/api/src` mentions
+> the route at all beyond the router and four docblocks.
+>
+> **The correction:** this row credits the working `/verify-email?email=` to _"Better Auth's
+> verification redirect, and sign-up's own `callbackURL`"_. The `callbackURL` is
+> `VERIFIED_CALLBACK_URL = '/verify-email?verified=1'` (`use-session.ts:197`) — a **different
+> parameter**. The sole writer of `?email=` is `sign-up.tsx:32`, a `router.history.push` composing the
+> URL at the point of navigation from an address `SignUpForm` hands up through
+> `onSuccess(outcome, email)`.
+>
+> **That matters because it is option (a)'s mechanism, already shipped one file away**, so whoever
+> specs this is not designing from nothing. But the precedent is **partial, and the gap is where this
+> row says it is**: `SignUpForm` exposes its address on **success**, and the forgot-password link is
+> pressed _instead of_ submitting, so a live read is needed rather than a completion callback.
+>
+> **The live read also already exists — inside the wrong boundary.** `SignInForm.tsx:53` renders
+> `<ResendVerificationButton email={getValues('email')} />`, reading its own current field value and
+> handing it to a sibling control for exactly this class of purpose. So the missing piece is neither
+> the read nor the composition; it is only that the link sits **outside** the form, which is what
+> makes it a public-contract change — the row's reason, confirmed, with the remaining work smaller
+> and more precisely located than it states. Nothing here decides between the two options.
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
