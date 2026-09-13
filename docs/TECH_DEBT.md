@@ -7655,7 +7655,7 @@ table would arrive with nothing failing.
 
 ### 312. The Closed-numbers ledger has holes, and nothing checks that a cited number resolves
 
-**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (sweeping CLAUDE.md's register-status claims) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-12 (sweeping CLAUDE.md's register-status claims) · **Size:** M · **Owner:** repo
 
 **Two numbers resolved to nothing, and the ledger's own preamble names this failure in its own
 words** — _"It also keeps inbound references resolvable. ADRs are never rewritten (CLAUDE.md §6) and
@@ -7693,6 +7693,100 @@ dangling as well — the ledger's own three named examples — which would have 
 finding and was wrong: the number column is padded (`| 29  |`) and the pattern was `^\| N \|`. Caught
 by noticing that the three examples the preamble chose were exactly the three that failed, which is
 too neat to be true. The corrected pattern leaves two.
+
+**Re-derived 2026-09-13. The population is twelve rather than two, the diagnosis above is the wrong
+one, and there is a second failure class the proposed gate is structurally blind to.**
+
+This row swept `CLAUDE.md` for its own **status claims** — 22 sites — and found two dangling
+numbers. The population its own proposed gate would read was never derived. Derived: **3,793
+citation sites across 305 distinct numbers**, against a resolvable set of **295** (100 detailed
+rows, 43 compact-table rows, 152 ledger entries — the three sets are pairwise disjoint, checked).
+
+**That total is stale by the act of writing it down, which is worth one sentence.** Re-deriving
+after this annotation landed returns **3,840** — the 47 extra sites are the `#N` mentions in the
+paragraphs below. A register that measures itself moves its own measurement, so the total is a
+figure of the moment and only the _dangling_ count is a stable invariant to re-derive against: that
+one is **12 distinct at 67 sites** both before and after, checked.
+
+**Twelve numbers cited as register rows resolve to nothing, at 67 sites**: `#19`, `#22`, `#24`,
+`#25`, `#26`, `#27`, `#36`, `#39`, `#50`, `#52`, `#54`, `#61`. `#25` is cited **18 times**
+(including ADR-0028 and ADR-0048), `#54` **15 times** (including `docs/DATABASE.md`). An ADR is
+never rewritten, so none of those can be repaired at source.
+
+**All twelve predate the ledger, so "nothing noticed" is not what happened.** Each was a live row in
+a real snapshot, established by replaying the register through all 209 of its own commits. All
+twelve were deleted by **one commit** — `bd011eb9`, 2026-07-28, _"docs: rebaseline the repository on
+the system that exists, and gate the drift"_, which is the **ADR-0058 commit**: the drift-control
+pass took the register from 60 live rows to 42 and left twelve numbers cited across `docs/`. The
+ledger was created in `8781957f` on **2026-08-03**, six days later; `git merge-base --is-ancestor`
+confirms the deletion is its ancestor. Nobody broke the rule — **the rule did not exist yet.**
+
+**And a backfill WAS attempted, which is the part worth keeping.** The first draft of this paragraph
+said the ledger "was never backfilled", and checking disproved it: it was created holding **eight
+entries, six of them backfilled** — `#29` (closed 2026-07-30), `#77`, `#79`, `#80`, `#82`
+(2026-08-01) and `#78` (2026-08-02), all closed before the ledger existed. Somebody did look
+backwards. **They reached 2026-07-30 and stopped, two days short of `bd011eb9`.** So the defect is
+not absence of care but a backfill whose horizon fell just the wrong side of the single commit that
+made the largest hole — and the fix is the same either way: finish it, once, rather than watch for
+it.
+
+**The second class: a number can be silently reused, and two were.** Freeing a number makes it look
+available — the hazard the ledger preamble names, citing `#83` as _the_ instance. Sweeping every
+number's heading across every snapshot and keeping only those that went **absent** between two
+dissimilar titles (an in-place rewrite is not a collision; the register's own rules encourage one,
+and `#64`, `#120` and `#154` are correctly excluded by that test) leaves **two more**:
+
+- **`#61`** held _"`Toolbar`'s `showLabel={r.item.tier === 1}` conflates priority with presentation"_
+  (2026-07-27), was deleted by `bd011eb9`, and came back the next day as _"The
+  resource-assignment routes assert the plan edit-lock but never declare it"_ (`8a9ae730`,
+  2026-07-29) before being deleted again the same day. Its **eight surviving citations split across
+  both subjects**: four point at the toolbar row (`ADR-0031:76`, `DESIGN_SYSTEM.md:244`,
+  `DECISIONS.md:1452`, `graphite/m5-command-strip.md:55`), three at the resource-assignment row
+  (`activity-editor-logic-resources-convergence` feature-spec `:390`, `:691`, plan `:419`), one is a
+  bare list entry that could be either.
+- **`#60`** held _"The toolbar's 'Calendar…' dialog now holds 7 unrelated settings sections"_, was
+  deleted by the same commit, and returned hours later as _"The Gantt's scroll behaviour is
+  unmeasured on real hardware"_ — **which is what `#60` still is today.**
+
+`#60` is the worse shape and the reason this is worth a paragraph: **a dangling citation announces
+itself; a collided one does not.** A reader following a pre-2026-07-28 `#60` lands on a live,
+plausible, entirely unrelated row and has no signal that anything is wrong. The gate this row
+proposes — _does every `#N` resolve?_ — answers **yes** for `#60` and is structurally incapable of
+seeing it. Detecting that class needs the citation's **date** compared against the number's
+lifetime, which is a different instrument.
+
+**The row's own two examples split on the same clock, and only one is the failure it describes.**
+`#31` was a live compact-table row through **2026-08-17** and deleted after that — genuinely after
+the ledger existed, so a real lapse, at a measured **26 days** to notice (2026-08-17 → 2026-09-12).
+This row says "six and seven weeks"; six weeks before 2026-09-12 is 2026-08-01, the week the
+**twelve** went, not the week `#31` went. What that figure was measured from is not recoverable, so
+it is recorded as a discrepancy rather than corrected. `#55` is stranger: **no snapshot in the
+register's entire history has it as a live row** — and neither does `#83`, the collision the
+preamble treats as established fact. That is not evidence either never existed: this repository
+squash-merges, so a row created and deleted inside one pull request is invisible to every snapshot.
+**Absence is unprovable by this method**, and that blind spot is worth more than either answer.
+
+**The gate this row calls "computable in a few lines" fails on day one as specified.** Run as
+written — every `#N` in `docs/` or `CLAUDE.md` must resolve — it reports **40 distinct numbers at
+136 sites**. Excluding markdown heading anchors (`#0-corrections-to-the-brief`,
+`#22-the-two-exceptions`) and pure-digit hex colours (`#333`, `#666`, `#999`, `#123456`) leaves
+**39 at 128**. The remaining 27 false positives are overwhelmingly **pull-request numbers** —
+`#482`, `#508`, `#514`, `#347`/`#349`/`#351` — which are lexically identical to a register citation
+and outnumber the true findings better than two to one. At a 69% false-positive rate the gate is
+unshippable in ADR-0058's sense: it fails on day one, so it gets deleted rather than fixed.
+
+**The discriminator is proximity, not line presence, and the difference is load-bearing.** Requiring
+the register to be named _on the same line_ still admits `#508`, because one line of
+`docs/specs/ci-sharding/feature-spec.md` carries a `docs/TECH_DEBT.md #301` citation **and** a
+`(PR #508)` aside — a line-level test cannot separate two citations sharing a line. Requiring the
+`#N` to be preceded by `TECH_DEBT` / `tech-debt` / `debt register` **within 24 characters** lands on
+exactly the twelve, 67 sites, no false positives. So the gate is buildable; it is simply not the
+gate this row describes, and that gap is the finding.
+
+**Still a shared gate and still not built here** (ADR-0105); the two decisions this row names remain
+open, and the collision class adds a third. What changes is that **the backfill is not a gate change
+and should go first** — a gate armed before it fails on twelve pre-existing rows and lands straight
+back in ADR-0058's deletion path.
 
 ### 289. NestJS 12 breaks the API e2e bootstrap, and Dependabot titles it as routine
 
