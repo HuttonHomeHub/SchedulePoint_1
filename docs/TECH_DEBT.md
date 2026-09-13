@@ -171,11 +171,12 @@ own slice without re-opening anything S4 shipped.
 
 ### 60. The Gantt's scroll behaviour is unmeasured on real hardware
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 The Gantt's substrate decision (ADR-0059 §1) rests on one claim: the live node count is bounded by
 the viewport, not by the plan. That claim **is** measured — the flag-on Playwright journey
-(`apps/web/e2e-gantt/gantt-scale.spec.ts`) seeds two plans an order of magnitude apart through the
+(`apps/web/e2e-gantt/gantt-scale.spec.ts`) seeds two plans a factor of three apart (100 and 300;
+this read "an order of magnitude apart" until 2026-09-13 — see below) through the
 API and asserts they render the identical row window, in a real browser, with the real virtualizer.
 It is a structural assertion and it means the same thing on every machine.
 
@@ -223,6 +224,42 @@ measured on a runner would be noise dressed as a guarantee.
 > three times"), from `FIRST_FILL = 100` to `TOPPED_UP = 300` (`:45-46`) — a factor of **three**. The
 > spec's own comment says three. And the stale `#59` reference the footnote corrects here **still
 > stands uncorrected in the code**, at `gantt-scale.spec.ts:30`.
+
+**Re-derived 2026-09-13. The gap is still open and still correctly diagnosed; one phrase overstates
+the evidence, and the remedy's shape has changed while its cost has not.**
+
+**The structural half is exactly as described.** `apps/web/e2e-gantt/gantt-scale.spec.ts` seeds two
+plan sizes through the API and asserts the row window is **identical** at both (`:87`), is **smaller
+than the plan** (`:88`), and that the grid still declares the full size in `aria-rowcount` (`:92`).
+That is machine-independent and means the same thing everywhere, as the row says.
+
+**But "an order of magnitude apart" is threefold.** `FIRST_FILL = 100`, `TOPPED_UP = 300` — and they
+have been since `ad3e1f9b` on 2026-07-28, **the same commit that wrote this sentence**. Never
+tenfold, so this is not drift: it was wrong on arrival, in its own commit, exactly as `#246`
+describes — and in a form that sweep **structurally cannot find**, because nothing moved. A line
+citation goes stale when an edit lands above it; a **characterisation** goes stale by being written,
+and only a reader who opens the file will ever know. The row's argument is untouched (a viewport-
+bounded window is bounded at any ratio) and the phrase is corrected above to what the spec does.
+
+**The remedy is better-shaped than this row could know, and no cheaper.** It asks for a manual
+DevTools session on a mid-tier laptop. Since then ADR-0128 and ADR-0130 built exactly the missing
+apparatus: a probe that runs in the **operator's own browser**, judges against a stated bar, refuses
+when the machine is unsuitable, and **stores the reading** so two are comparable — which is what a
+one-off DevTools note never is. Answering this question through that panel would produce a durable
+judged reading instead of a sentence in an ADR.
+
+**It is not, however, a registry entry, and the first version of this paragraph said it was.**
+Checked: `SCENARIOS` holds exactly two members, `canvas-draw` and `revision-diff`, and **no Gantt
+scenario exists anywhere** in `features/perf-probe`. More to the point `runProbe` takes a
+`canvas: HTMLCanvasElement`, calls `getContext('2d')` on it, and hard-imports `buildDrawScene` /
+`framingFor` / `runDrawPhase` from `scenes/canvas-draw` — so it is a canvas driver, not a generic
+one. A Gantt limb needs the runner generalised **and** a scene that scrolls a virtualized DOM list,
+which is a different mechanism from a rAF pan over a 2D context. Real work, correctly shaped, and
+still nobody's current milestone.
+
+Unchanged: still deliberately **not** a CI gate, for the reason the row already gives — a millisecond
+threshold measured on a shared runner is noise dressed as a guarantee, and the probe's own refusal
+rules exist because that is true of any machine nobody chose.
 
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
 
@@ -487,7 +524,7 @@ ADR-0063 M6 component and UX gates.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 > **Narrowed 2026-08-09 (programme M5), and the largest input changed.** This row asked what happens
 > when a writer waits on a plan lock held by a long transaction. The longest such transaction — a
@@ -547,6 +584,34 @@ documented ≤ 10 (ADR-0053 §3).
 >
 > One citation nit: `prisma.service.ts` lives at `apps/api/src/**prisma**/`, not under `common/`, so
 > a reader grepping the path this row implies finds nothing.
+
+**Re-derived 2026-09-13: both figures exact, the citation resolves, and the subject is still
+genuinely unmeasured — including by the instrument that was built since.**
+
+**The two numbers this row turns on are right.** `prisma.service.ts:25` declares
+`TRANSACTION_TIMEOUT_MS = 15_000` and `:36` declares `BATCH_TRANSACTION_TIMEOUT_MS = 60_000`, and the
+60 s ceiling is applied at exactly **two** bulk call sites — `activities.service.ts:1355` and
+`hierarchy-expiry.service.ts:315` — so "the bulk paths override to 60 s" is plural for the right
+reason. `#109` resolves (compact table).
+
+**And the probe built since does NOT close this one**, which is worth saying because a sibling row
+was re-checked an hour ago and the answer there was the opposite. ADR-0128/0130's harness measures
+**dropped frames in a browser**; it has no notion of a database, a transaction or an advisory lock —
+its only `lock`-shaped identifier is `retryBlockedReason`, about a failed POST. So `#60`'s remedy is
+now better-shaped by that work and this row's is untouched by it. Two rows, same vintage, same
+"unmeasured on real hardware" phrasing, and the new apparatus is relevant to one and irrelevant to
+the other. Worth not generalising from the first to the second.
+
+**An instrument note, because this is the fourth time tonight.** The 60 s claim first appeared to
+fail: `grep -rnE 'timeout:\s*60_?000'` over `apps/api/src` returns **nothing**, because the value is
+a named constant and the call sites pass `BATCH_TRANSACTION_TIMEOUT_MS`. A first grep has now
+misled this pass four times — a literal that is a constant here, a lettered citation form on `#312`,
+a wrongly-resolved referent on `#308` and `#101`. In every case the register was right and the
+search was too narrow. That is the inverse of what a verification pass expects to find, and it is
+the reason to run a second, differently-shaped query before writing the word "drifted".
+
+Unchanged: the wall-clock hold time on a seeded 2,000-activity plan, and how a concurrent writer
+behaves against it, is still the row's actual subject and still nobody has measured it.
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
