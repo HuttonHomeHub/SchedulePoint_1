@@ -3570,7 +3570,7 @@ double-submit apart from a slow one. Left open rather than guessed at.
 
 ### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 `apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the
 whole base journey, so its six editing specs — `activities.spec.ts`, `baselines.spec.ts`,
@@ -3611,6 +3611,23 @@ dated flag work precisely because the date was the wrong instrument.
 > in `scripts/flag-retirement.json` **alongside** a permanent `keep`. That reads as scheduled
 > retirement work, and ADR-0088 D4 says it will never happen — a queue and a decision wearing the
 > same clothes, which is the shape ADR-0073 C3.4 deleted `PENDING_COVERAGE` for.
+
+> **Re-derived 2026-09-13, exact in every particular again — and this row's TRIGGER may have just
+> fired.** The pins are at `playwright.config.ts:66-67` under a comment naming this row; the six
+> tests are still 1/1/2/2 across `activities`, `baselines`, `dependencies` and `schedule`; none of
+> those four nor `e2e/workspace.ts` contains any pen acquisition; `playwright.edit.config.ts` exists;
+> `use-plan-workspace-model.ts:180` is the `derivePlanGating(` call. The `batch`-beside-`keep`
+> observation holds too — both flags read `class: B` with a permanent `keep` **and** a batch
+> (`batch-3` and `batch-2`).
+>
+> **The trigger is _"the next time a base-journey editing spec needs changing for any reason"_, and
+> `#313` is such a reason.** That row was filed today for a failure in `e2e/dependencies.spec.ts:98`
+> — one of this row's own four files. Whether it fires depends on where `#313`'s remedy lands, which
+> is not yet known because its trace has not been read: an app-side cause touches no spec, a
+> test-side one touches this exact file. **So the two should be picked up together, and whoever
+> opens `dependencies.spec.ts` for `#313` should convert it to acquire the pen while they are in
+> there** — that is the whole point of a trigger phrased as "for any reason", and it is the cheapest
+> this conversion will ever be.
 
 ### 120. Nothing reports `n_dead_tup` at runtime, so a retention drain's bloat is invisible while it happens
 
@@ -3974,6 +3991,11 @@ while the one at the longer wait did not, which is the wrong way round for a loa
 
 **Distinct from `#119a`**, which is the **API** e2e suite and a different signature entirely; this is
 the web suite, on Firefox, in the shared sign-up preamble.
+
+**And it may fire `#121`'s trigger.** `e2e/dependencies.spec.ts` is one of the four base-journey
+files that row wants converted to acquire the pen, and `#121`'s trigger is _"the next time a
+base-journey editing spec needs changing for any reason"_. If this turns out to be test-side,
+convert the file while it is open; if it is app-side, nothing here fires.
 
 **Why it is worth a row rather than a re-run.** The preamble is shared by 61 sites, so whatever this
 is, it is the single most-executed piece of test code in the estate, and a flake there taxes every
