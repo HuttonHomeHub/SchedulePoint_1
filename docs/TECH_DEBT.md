@@ -5523,6 +5523,34 @@ trap is set exactly where the row says, and one file is still inoculated against
 > change how every API e2e suite is set up, which is an ADR-0105 trigger and wants a spec rather
 > than a quiet edit inside an overnight batch.
 
+> **2026-09-13 — "any later one" is now THREE, and the tightest ceiling in the system sits on an
+> uninoculated suite.** Counted rather than assumed, the row's own method. There are **five**
+> throttled routes across four controllers, not the two this row contemplates:
+>
+> | route                | limit         | suite                               | requests | inoculated |
+> | -------------------- | ------------- | ----------------------------------- | -------- | ---------- |
+> | `staff`              | 30 / 60 s     | `staff.e2e-spec.ts`                 | —        | **yes**    |
+> | `share-guest`        | `GUEST_*`     | `share-guest.e2e-spec.ts`           | 4 tests  | **yes**    |
+> | `csp-report`         | 60 / 60 s     | `csp-report.e2e-spec.ts`            | **9**    | no         |
+> | `float-paths`        | 20 / 60 s     | `schedule.e2e-spec.ts`              | **10**   | no         |
+> | `critical-path-test` | **14** / 60 s | `schedule-health-check.e2e-spec.ts` | **3**    | no         |
+>
+> **Two things in that table are worth more than the totals.** `float-paths` is at **half its
+> ceiling** — 8 calls through `floatPathsUrl` plus 2 direct — in `schedule.e2e-spec.ts`, one of the
+> largest and most frequently extended suites here; `staff` tripped at 23 against 30, i.e. 77 %, so
+> this is the nearest approach of the three and it is in the suite most likely to grow. And
+> `CRITICAL_PATH_TEST_THROTTLE` is **14**, less than half the bound that actually bit, on a suite
+> ADR-0116 M6 added days ago with three requests in it.
+>
+> **What is NOT established, and it decides whether any of this bites**: whether a suite's requests
+> fall inside one 60-second window. `staff`'s 22 tests did. `schedule.e2e-spec.ts` is far longer and
+> its ten may well straddle windows, in which case the counter never accumulates. So read the column
+> as **exposure, not prediction** — nothing is failing today, and this is insurance exactly as the
+> 2026-09-11 half-fix was.
+>
+> The remedy is unchanged: both candidates still change how every API e2e suite is set up, so
+> ADR-0105 still fires and this still wants a spec rather than three more `beforeEach` edits.
+
 **Why it is still a row.** The fix is one file's `beforeEach`, and the same trap is set in every
 other e2e suite that hits a throttled route — `share`, and any later one. Nothing detects the
 condition: a suite silently loses headroom as it grows and then fails somewhere else. Two candidate
