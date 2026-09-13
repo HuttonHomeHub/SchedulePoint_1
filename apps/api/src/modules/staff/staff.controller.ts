@@ -71,12 +71,24 @@ import { StaffGuard } from './staff.guard';
     'Uniform refusal for every non-staff caller. Never 403: a 403 would tell a prober their guess ' +
     'was interesting.',
 })
-@ApiTooManyRequestsResponse({ description: 'Throttled tighter than the global limit (30/60 s).' })
+@ApiTooManyRequestsResponse({
+  description:
+    'Throttled tighter than the global limit: 30 / 60 s per IP, counted PER ROUTE HANDLER — so the ' +
+    'bound across this controller is 30 times its handler count, not 30 (docs/TECH_DEBT.md #315).',
+})
 @Controller({ path: 'staff', version: '1' })
 // Tighter than the global 100/60 s — the ADR-0051 precedent this ADR invokes and did not apply.
 // Two reasons: this is the most privileged surface in the product, and every successful hit writes
 // a durable audit row, so a compromised staff session could otherwise flood the one table that
 // cannot be pruned. Thirty a minute is far above any human use of a console with two panels.
+//
+// **The flood bound is 30 PER HANDLER, not 30 for the surface** (`docs/TECH_DEBT.md` #315, verified
+// 2026-09-13). `@nestjs/throttler` hashes the handler name into the counter key
+// (`dist/throttler.guard.js:148-150`), and a controller-level decorator sets each handler's limit
+// rather than pooling them. With eight routes here the real ceiling on audit rows is 240 a minute.
+// The decision is not revisited by this comment — it still needs a compromised staff session, and
+// 240/min is still far above human use — but the arithmetic the number was chosen against is
+// recorded rather than left to be re-derived by the next reader.
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @UseGuards(StaffGuard)
 export class StaffController {

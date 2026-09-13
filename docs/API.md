@@ -382,8 +382,11 @@ the token's `planId` + `organizationId`, and return **field-stripped, read-only*
 
 - **Uniform 404** — any dead / revoked / expired / soft-deleted-grant / deleted-plan
   token resolves to the same `404`, never `401/403` (no oracle).
-- **429** — a **tighter per-IP rate limit** (30 requests / 60 s) than the global default
-  (100 / 60 s) applies to `/api/v1/share/*` only; a burst yields `429`.
+- **429** — a **tighter rate limit** (30 requests / 60 s) than the global default (100 / 60 s)
+  applies to `/api/v1/share/*` only; a burst yields `429`. Both figures are **per IP and per route
+  handler**, not per surface (`docs/TECH_DEBT.md` #315): a controller-level `@Throttle` sets each
+  handler's limit and `@nestjs/throttler` hashes the handler name into the counter key, so the real
+  ceiling across this surface is the figure times its three routes.
 - **Headers** — every guest response carries `X-Robots-Tag: noindex, nofollow` and
   `Referrer-Policy: no-referrer` (§2/§5): not crawlable, not a referrer-leak source.
 - **Never exposed** — cost / Earned-Value / money, resources / assignments, baselines /
@@ -893,7 +896,9 @@ data is a compile error. Three properties follow, and they are unlike the rest o
   census assertion derives this from the path, so a staff route added later is covered the day it
   is written.
 - **Tighter throttling than the global limit** — 30 requests a minute, declared once on the
-  controller.
+  controller. Declared once, but **counted per route handler**, so the ceiling across the eight
+  staff routes is 240 a minute rather than 30 (`docs/TECH_DEBT.md` #315). That matters here because
+  every successful hit writes an `audit_events` row and nothing can prune that table.
 
 `POST /api/v1/staff/probe-results` is the surface's **first write** (ADR-0086 D6 claims one already
 existed; it did not). It records a canvas performance reading taken **in the operator's own
@@ -1121,8 +1126,13 @@ boundary, because at that boundary an absent reading is stored rather than missi
   restates either. **The response does not vary by role**: it carries no cost,
   rate or budget field at any depth (metric 10 is narrowed to
   resource-assignment existence and says so in `detail.narrowing`), so one URL
-  produces one document — a handover artefact. Shares the global throttle
-  budget (measured: `docs/specs/schedule-health-check/m0-measurement.md`).
+  produces one document — a handover artefact. **Earns no tighter limit than
+  the global default** (measured:
+  `docs/specs/schedule-health-check/m0-measurement.md`). This said "shares the
+  global throttle budget" until 2026-09-13 and there is no shared budget to
+  join — the counter is per route handler (`docs/TECH_DEBT.md` #315), so this
+  route has its own 100 / 60 s. The decision it describes is unchanged; only
+  the mechanism was wrong.
 
 - `GET …/schedule/health-check/critical-path-test` runs **DCMA metric 12, the
   Critical Path Test, as a read-only what-if** (health M6, `schedule:read` —
