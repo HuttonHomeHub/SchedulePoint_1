@@ -300,6 +300,8 @@ export function ActivitiesTable({
   // activity's SAVED calendar. `undefined` is a real answer (the list can be loading or absent) and
   // the field degrades to hours and minutes rather than guessing a day.
   const resourcesHoursPerDay = effectiveHoursPerDay(calendars, {
+    // Assignment join lag: the activity's own calendar (ADR-0071 §1), never its driver's.
+    frame: { kind: 'own' },
     activityCalendarId: managingResources?.calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
@@ -663,6 +665,13 @@ export function ActivitiesTable({
             effectiveHoursPerDay(calendars, {
               activityCalendarId: activity.calendarId ?? '',
               ...(planCalendarId === undefined ? {} : { planCalendarId }),
+              // The Duration column measures the work (#86), so it reads on the calendar the
+              // activity schedules on — which is what the API's own `durationDays` is measured on.
+              frame: {
+                kind: 'scheduling',
+                type: activity.type,
+                drivingResourceCalendarId: activity.drivingResourceCalendarId,
+              },
             }),
           )}
         </span>

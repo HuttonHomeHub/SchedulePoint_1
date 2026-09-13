@@ -38,6 +38,7 @@ function activity(
   earlyStart: string,
 ): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     id,
     planId: 'p1',
     code: null,

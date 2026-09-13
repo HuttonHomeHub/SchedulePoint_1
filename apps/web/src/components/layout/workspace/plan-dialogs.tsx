@@ -137,6 +137,9 @@ export function PlanDialogs({
                 // is the "renders, looks right, quietly refuses" failure the epic exists to stop.
                 ...hoursPerDayProp(
                   effectiveHoursPerDay(model.calendars.data ?? [], {
+                    // The assignment join lag is framed on the activity's OWN calendar even when the activity
+                    // schedules on its driving resource's (ADR-0071 §1 / ADR-0035 §34). #86 did not change that.
+                    frame: { kind: 'own' },
                     activityCalendarId: model.resourcesActivity.calendarId ?? '',
                     ...(model.plan.data?.calendarId == null
                       ? {}

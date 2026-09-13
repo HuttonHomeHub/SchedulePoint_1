@@ -1432,6 +1432,72 @@ expected to take.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
+> **M1–M5 LANDED 2026-09-13. The defect is fixed on both sides and the gate pass is folded.**
+>
+> **M5 blocked on two of four reviews, and the test-engineer's largest finding was the epic's own
+> census.** `SYMBOLS` named the four resolvers — and almost nothing calls those directly: seven of
+> the real call sites reach a rule through `attachDayFactors`, `attachLagDayFactors` or
+> `resolveLagDayFactorMinutes`, so a spec asserting _"classifies every call site"_ was measuring a
+> population most callers are not in, and would have passed against a new service picking the wrong
+> wrapper. Widened to 14 sites / 10 classified pairs, and the pinned floor raised 5 → 12 for a
+> second reason: at 5 the **narrow list still satisfied it**, so re-narrowing `SYMBOLS` would have
+> gone unnoticed. Verified red three ways.
+>
+> The other five findings were coverage, and the sharpest is that **the one site whose rule M2
+> actually changed was the one site with no test** — the duration UPDATE. Five e2e cases now run
+> against a real database (update, remaining duration, lag create+update, guest, health check),
+> each with a control on the same plan so a build resolving the driver for _every_ row fails. Two
+> client sites gained cases setting a non-null `drivingResourceCalendarId`, which **nothing in the
+> web suite had ever done** — and on a null driver the two frames are identical by construction, so
+> both call sites could have been swapped back with the suite green. All verified red against the
+> specific swap.
+>
+> **The stake found on the way**: 21 days of crane time is 30,240 minutes, which on the crew's
+> eight-hour day reads 63 and clears metric 8's 44-day threshold — so a wrong frame reported a
+> **compliant plan as failing a DCMA assessment** (ADR-0116's one prohibition). Verified red with
+> that exact number.
+>
+> Three documents were corrected rather than left: the e2e's docblock still said a green run meant
+> the defect was **present** (it had inverted, exactly as its own paragraph promised — its web
+> sibling had inverted and this had not); `compute-health.output.spec.ts`'s describe said metric 8
+> judges on the activity's **OWN** factor, correct when written and made wrong one layer up by M2
+> without anything in that file changing; and two `schedule.service.ts` comments said the same.
+>
+> **What is NOT covered, measured rather than estimated:** two client read sites
+> (`plan-workspace-toolbar.tsx:506`, `use-float-paths-panel.ts:128`) still have no case setting a
+> non-null driver, so an own↔scheduling swap there is silent. Both are reads sharing the proven
+> helper, which is why they are residue rather than a blocker — filed as `#317`.
+>
+> **And a measured blind spot in the new guest case, stated because it looks stronger than it is:**
+> it catches the guest read drifting from the member's, and does **not** catch the rule collapsing
+> on both sides at once — the write then stores 2,400, the read divides by 480, and 5 comes back
+> out. That self-consistency is the exact property that hid this row for a year.
+>
+> One rule served two quantities, so it is two named rules with no default between them —
+> `ownCalendarId` / `schedulingCalendarId` on the server, a `DayFactorFrame` discriminator on the
+> client, the same vocabulary both sides. The compiler then asked all twelve server sites and all
+> twelve client sites which quantity they meant, which is how the work was scoped rather than
+> guessed; each answer carries its reason at the call site.
+>
+> **The product-owner decision (CQ-1, 2026-09-13) is that one number changes for readers**: a driven
+> activity whose resource works to a different calendar reports a different `durationDays` — the
+> epic's own fixture goes from a five-day crane lift to a two-day one. No stored minute moved and no
+> date moved; the read-out now says what the programme actually reserves. CQ-2 (the assignment join
+> lag stays on the activity's own calendar) and CQ-3 (`drivingResourceCalendarId` on the activity
+> read) shipped as recommended; CQ-4 has a guest adopt the corrected figure without learning a
+> resource is why.
+>
+> **Two characterisation suites inverted, exactly as each had promised in its own docblock**, and
+> that is the closest thing to proof this row has: `day-factor-divergence.characterisation.test.ts`
+> said "when M2 lands, `expect(2400)` becomes `expect(7200)` and this docblock's framing inverts",
+> and it did. Both keep the old number beside the new one, because the pair is the evidence.
+>
+> **Still owed:** M0-T3 (a count of affected rows against the DEPLOYED database — one query, and it
+> cannot be taken from a test database whose answer is structurally zero) and M0-T4's timing limb.
+> M0-T4's second falsification condition — 0 ms on a plan with no `RESOURCE_DEPENDENT` row — was
+> answered **structurally instead**: the driver read is skipped when the rows in hand contain no
+> driven activity, which is a stronger answer than a stopwatch on hardware that cannot produce one.
+
 > **M0-T2 TAKEN 2026-09-12, and it WIDENS this row rather than confirming it. The driver is not
 > required for the duration/float disagreement.**
 >
@@ -4075,6 +4141,65 @@ This row stays open on its remaining half: nothing stops a twenty-seventh copy b
 list is shared by convention, not by a gate, and the gate is not obvious — a census of `deleteMany`
 call sites would sweep in every legitimate one inside a test body. Worth a thought, not worth a bad
 rule.
+
+### 316. A guest reads a relationship's lag on 1440 while a member reads it on the lag calendar
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (the #86 M5 gate pass — found independently by the security and api reviewers, neither asked about it) · **Size:** S to fix, M to decide · **Owner:** api
+
+`GuestDependencyDto.from` computes `lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY)` with
+`MINUTES_PER_DAY = 1440` (`share/dto/guest-dependency.dto.ts:7,51`). The member DTO one directory
+over computes `minutesToDays(entity.lagMinutes, entity.lagDayFactorMinutes)`
+(`dependencies/dto/dependency-response.dto.ts:93`), on the calendar the relationship's `lagCalendar`
+names — which is what that DTO's own docblock says it does (`:10`).
+
+**So the two disagree about the same relationship whenever the lag calendar is not 24-hour.** On an
+eight-hour plan calendar a one-day lag stores 480 working minutes: the member reads **1 day**, the
+guest reads `Math.round(480 / 1440)` = **0**. Not a rounding nicety — the guest is told there is no
+lag at all. `share-guest.service.ts:listDependencies` never calls `attachLagDayFactors`, so the
+factor the member path resolves is not even loaded on the guest path; this is a missing conversion
+rather than a wrong constant.
+
+**It is NOT caused by #86 and #86 did not regress it.** `guest-dependency.dto.ts` is untouched by
+that epic, and the arithmetic above is wrong for a plain `TASK` on an eight-hour calendar with no
+resource anywhere. It is filed here because it is the same defect class — one day-denominated field
+converted on a calendar nobody chose — sitting one file away from the guest path #86 just corrected,
+and because the register's own recurring finding is a correct pattern applied to a control and not
+its neighbour. Both reviewers reached it separately while looking at something else.
+
+**What needs deciding, and why it is not just fixed.** Correcting it changes a number a guest sees,
+which is the same shape as #86's CQ-1 and was a product-owner decision there. The guest surface is
+also ADR-0051's one unauthenticated read, so anything added to its payload is a scope question:
+the member conversion needs `lagDayFactorMinutes`, and loading it means the guest dependency read
+starts resolving endpoint calendars it does not currently touch. Whether that is a conversion done
+server-side and discarded (cheap, no new exposure) or a new field is the decision.
+
+**One thing to check when it is picked up:** `GuestDependencyDto` exposes `lagMinutes` alongside
+`lagDays`, so the exact value has always been available and a client reading minutes is unaffected.
+That bounds the blast radius to a reader of `lagDays` — which is the guest share view's own table.
+
+### 317. Two client day-factor call sites have no test that sets a driving calendar
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (the #86 M5 gate pass, test-engineer finding 6 — the half not closed in that epic) · **Size:** S · **Owner:** web
+
+`plan-workspace-toolbar.tsx:506` and `use-float-paths-panel.ts:128` both resolve a day factor
+through the `scheduling` frame, and **no test anywhere sets a non-null `drivingResourceCalendarId`
+for either**. That is not a thin-coverage complaint: on a `null` driver the two frames are
+_identical by construction_ (`schedulingCalendarId` falls straight through to `ownCalendarId`), so
+swapping either site back to `{ kind: 'own' }` is **green everywhere**. The rule they implement is
+unobserved.
+
+The epic closed the equivalent gap at the two sites that matter most — `ActivitiesTable`'s Duration
+column and `ActivityEditorDialog`'s seed, both write-adjacent, both verified red against exactly
+that swap (`ActivitiesTable.day-factor.test.tsx`,
+`ActivityEditorDialog.sub-day.test.tsx`). These two are reads sharing the same proven helper, which
+is why they are residue rather than a blocker.
+
+**What a case needs, since the obvious fixture does not discriminate:** `formatDurationRead` prints
+the row's own `durationDays` whenever the value divides evenly by the factor, and that branch is
+factor-insensitive in its output — so a whole-day duration like 7,200 minutes prints `5 d` on both
+frames and proves nothing. 600 minutes takes the text branch on both and prints `10h` against
+`1d 2h`. Measured while writing the two cases above; the first attempt used 7,200 and would have
+shipped an assertion the frame cannot change.
 
 ### 313. The sign-up→onboarding wait is widened at 4 of 64 sites, and a widened one still failed
 

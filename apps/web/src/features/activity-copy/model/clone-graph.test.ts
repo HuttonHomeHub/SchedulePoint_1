@@ -27,6 +27,7 @@ import {
 
 function activity(over: Partial<ActivitySummary> & { id: string; name: string }): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     planId: 'p1',
     code: null,
     description: null,

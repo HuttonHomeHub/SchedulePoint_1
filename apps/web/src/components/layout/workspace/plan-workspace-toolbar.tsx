@@ -499,6 +499,14 @@ export function ToolbarPlanWorkspace({
       effectiveHoursPerDay(model.calendars.data ?? [], {
         activityCalendarId: activity.calendarId ?? '',
         ...(plan.calendarId == null ? {} : { planCalendarId: plan.calendarId }),
+        // Duration and remaining duration measure the WORK, so they are counted on the calendar the
+        // activity schedules on (`docs/TECH_DEBT.md` #86). This feeds the Gantt Duration column, the
+        // grid cell edit and the printed programme, which must all agree with the API.
+        frame: {
+          kind: 'scheduling',
+          type: activity.type,
+          drivingResourceCalendarId: activity.drivingResourceCalendarId,
+        },
       }),
     [model.calendars.data, plan.calendarId],
   );

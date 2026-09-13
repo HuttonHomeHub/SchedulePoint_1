@@ -549,10 +549,29 @@ changes what those fields have always meant:
 
 | Field                                          | Measured on                                                                |
 | ---------------------------------------------- | -------------------------------------------------------------------------- |
-| `durationDays`, `remainingDurationDays`        | the **activity's own** calendar, else the plan's                           |
+| `durationDays`, `remainingDurationDays`        | the calendar the activity **schedules on** — see the rule below            |
 | `levelingDelayDays`, `totalFloat`, `freeFloat` | the same                                                                   |
 | `lagDays`                                      | the **relationship's lag calendar** (`TWENTY_FOUR_HOUR` is pinned at 1440) |
 | a baseline's `durationDays`                    | the factor **frozen at capture**, not the live calendar                    |
+
+**"The calendar the activity schedules on" is type-gated, and that is the whole of #86.** It resolves
+**driving resource → the activity's own → the plan's** (ADR-0039 §4). For every type but
+`RESOURCE_DEPENDENT` the first rung is empty, so the answer is the activity's own calendar and the
+rule reads exactly as it always did. For a `RESOURCE_DEPENDENT` activity with an active driving
+assignment it is the **resource's** calendar — the work happens there, and the engine has measured
+that activity's float there since ADR-0039. Until 2026-09-13 these day-denominated fields were
+converted on the activity's own calendar regardless, so one row could report a duration and a float
+derived on two different day lengths.
+
+A client resolves it without a second request: `drivingResourceCalendarId` rides on the activity
+read, `null` for anything not driven and for a driven activity whose driver is missing or inherits.
+Assignments are otherwise fetched per activity, so without that field a table, a Gantt grid or a lag
+field would need one request per row to learn which day length a number is in.
+
+This reaches `lagDays` too. When `lagCalendar` is `PREDECESSOR` or `SUCCESSOR`, the named endpoint's
+calendar is resolved by the same rule — so a lag measured at a driven end converts on that end's
+driving resource's calendar. `PROJECT_DEFAULT` and `TWENTY_FOUR_HOUR` are unaffected: neither names
+an endpoint.
 
 So `durationDays: 5` on an eight-hour calendar is 2,400 working minutes, not 7,200; and the same
 2,400 minutes reads back as `5` there, `2.5` on a sixteen-hour two-shift calendar and `2` (from

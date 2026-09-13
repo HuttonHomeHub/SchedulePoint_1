@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateDependency } from '../api/use-dependencies';
-import { lagHoursPerDay } from '../model/lag-factor';
+import { lagEndpoint, lagHoursPerDay } from '../model/lag-factor';
 import {
   LAG_NEEDS_WHOLE_DAYS,
   lagFieldHelp,
@@ -114,8 +114,9 @@ export function AddLinkSection({
   const hoursPerDay = lagHoursPerDay(lagCalendar, {
     calendars,
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
-    predecessorCalendarId: linkingToPredecessor ? other?.calendarId : anchor?.calendarId,
-    successorCalendarId: linkingToPredecessor ? anchor?.calendarId : other?.calendarId,
+    // The whole endpoint, because the frame is type-gated (#86) — see `LagEndpoint`.
+    predecessor: lagEndpoint(linkingToPredecessor ? other : anchor),
+    successor: lagEndpoint(linkingToPredecessor ? anchor : other),
   });
 
   // The dialog reset on open; the inline form resets when the subject changes, which is the same

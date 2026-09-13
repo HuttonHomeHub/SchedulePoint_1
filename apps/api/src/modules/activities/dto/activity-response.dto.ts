@@ -53,9 +53,12 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({
     description:
-      'Working days on THIS ACTIVITY’S CALENDAR (ADR-0068) — an eight-hour calendar counts 480 ' +
-      'working minutes to the day, not 1440 — rounded from the stored minutes (milestones are 0). A sub-day activity ' +
-      'reads back here as its nearest whole day — read `durationMinutes` for the exact value.',
+      'Working days on THE CALENDAR THIS ACTIVITY SCHEDULES ON (ADR-0068, corrected by #86) — an ' +
+      'eight-hour calendar counts 480 working minutes to the day, not 1440 — rounded from the ' +
+      'stored minutes (milestones are 0). For a RESOURCE_DEPENDENT activity that is its driving ' +
+      'resource’s calendar (`drivingResourceCalendarId`), not `calendarId`: the work happens ' +
+      'there, and its float is already measured there. A sub-day activity reads back here as its ' +
+      'nearest whole day — read `durationMinutes` for the exact value.',
   })
   durationDays!: number;
 
@@ -177,6 +180,19 @@ export class ActivityResponseDto implements ActivitySummary {
     nullable: true,
     type: String,
     description:
+      "The calendar this activity's driving resource works to (ADR-0039 §4), or null. Null for " +
+      'every activity that is not RESOURCE_DEPENDENT, and for one whose driver is missing or ' +
+      'inherits. Derived on read, never stored. Day-denominated fields on a driven activity are ' +
+      'measured on THIS calendar rather than `calendarId`, which is why it is exposed: a client ' +
+      'cannot resolve it without one assignments request per row.',
+  })
+  drivingResourceCalendarId!: string | null;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    type: String,
+    description:
       'WBS parent (ADR-0038): the WBS_SUMMARY activity this rolls up into, or null for top-level.',
   })
   parentId!: string | null;
@@ -201,7 +217,8 @@ export class ActivityResponseDto implements ActivitySummary {
     type: Number,
     description:
       'Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035); null ' +
-      'derives it from percent complete. A day is the ACTIVITY’S CALENDAR’S standard working day ' +
+      'derives it from percent complete. A day is the standard working day of the calendar this ' +
+      'activity SCHEDULES on — the driving resource’s for a RESOURCE_DEPENDENT activity (#86) ' +
       '(ADR-0068), not always 24 hours.',
   })
   remainingDurationDays!: number | null;
@@ -404,6 +421,7 @@ export class ActivityResponseDto implements ActivitySummary {
       // Stored in working-minutes (ADR-0036). Both are exposed: days for every existing client,
       // minutes so a sub-day value survives the round trip instead of reading back rounded.
       durationDays: minutesToDays(entity.durationMinutes, entity.dayFactorMinutes),
+      drivingResourceCalendarId: entity.drivingResourceCalendarId,
       durationMinutes: entity.durationMinutes,
       durationType: entity.durationType,
       constraintType: entity.constraintType,

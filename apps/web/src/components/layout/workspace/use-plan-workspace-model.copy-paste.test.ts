@@ -116,6 +116,7 @@ vi.mock('@/features/activity-copy/api/use-clone-carriage', () => ({
 }));
 
 const ACTIVITY: ActivitySummary = {
+  drivingResourceCalendarId: null,
   id: 'start',
   planId: 'p1',
   code: null,

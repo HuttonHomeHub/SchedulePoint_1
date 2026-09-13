@@ -89,6 +89,7 @@ vi.mock('@/features/schedule', () => ({
 }));
 
 const ACTIVITY: ActivitySummary = {
+  drivingResourceCalendarId: null,
   id: 'a1',
   planId: 'p1',
   code: null,

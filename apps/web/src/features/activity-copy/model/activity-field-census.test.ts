@@ -27,6 +27,7 @@ const PLACEMENT: ClonePlacement = {
 
 function source(): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     id: 'a',
     planId: 'p1',
     code: 'A1010',
@@ -100,7 +101,12 @@ describe('the clone field census', () => {
     }
     // A tripwire on the count itself: the number is not meaningful, but a sudden change means
     // ActivitySummary moved and the reader should look at why.
-    expect(entries.length).toBe(59);
+    //
+    // 59 -> 60 on 2026-09-13: `drivingResourceCalendarId` (`docs/TECH_DEBT.md` #86). It is derived
+    // on read from the driving assignment, so a clone carries no assignments and the server would
+    // recompute it anyway — classified `withheld`. The tripwire did exactly its job here: it is the
+    // only thing that asked why the shape moved.
+    expect(entries.length).toBe(60);
   });
 
   it('sends nothing the census withholds', () => {

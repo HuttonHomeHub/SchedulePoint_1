@@ -18,6 +18,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 const ACTIVITY: ActivitySummary = {
+  drivingResourceCalendarId: null,
   id: 'a1',
   planId: 'pl1',
   code: 'A100',

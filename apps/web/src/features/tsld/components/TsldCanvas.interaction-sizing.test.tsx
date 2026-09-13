@@ -24,6 +24,7 @@ const NO_DEPS: DependencySummary[] = [];
 
 function activity(): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     id: 'a1',
     planId: 'p1',
     code: null,

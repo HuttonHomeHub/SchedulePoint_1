@@ -18,6 +18,7 @@ import {
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     id: 'a1',
     planId: 'p1',
     code: null,

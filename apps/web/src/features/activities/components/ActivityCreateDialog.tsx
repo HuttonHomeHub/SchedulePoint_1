@@ -252,6 +252,8 @@ export function ActivityCreateDialog({
   // from is the plan's. `useDurationSeed` below re-reads it once the calendar list lands, so a
   // sub-day duration is never shown (or saved) as its rounded day.
   const seedFactor = effectiveHoursPerDay(calendars, {
+    // A brand-new activity holds no assignment, so no driver can exist to defer to (#86).
+    frame: { kind: 'own' },
     activityCalendarId: '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
@@ -365,6 +367,8 @@ export function ActivityCreateDialog({
   // the saved one, because a planner can change the calendar and the duration in the same edit
   // (ADR-0070 §3). `undefined` = not known, which degrades the field to whole working days.
   const hoursPerDay = effectiveHoursPerDay(calendars, {
+    // Create: no assignment can exist yet, so the scheduling rule resolves identically (#86).
+    frame: { kind: 'own' },
     activityCalendarId: calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });

@@ -57,6 +57,8 @@ export function PlanScheduleSettings({
   // The threshold is plan-level, so it resolves a day on the PLAN calendar — see the field's docblock
   // for why that is a disclosure rather than a fix on a mixed-calendar plan.
   const hoursPerDay = effectiveHoursPerDay(calendars ?? [], {
+    // Plan-level: there is no activity here, so no driving resource could apply (#86).
+    frame: { kind: 'own' },
     ...(plan.calendarId === null ? {} : { planCalendarId: plan.calendarId }),
   });
   if (!canEdit) {

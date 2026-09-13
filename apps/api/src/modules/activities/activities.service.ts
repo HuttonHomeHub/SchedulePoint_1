@@ -43,8 +43,10 @@ import {
   attachDayFactors,
   daysToMinutes,
   resolveDayFactorMinutes,
+  resolveSchedulingDayFactorMinutes,
   type WithDayFactor,
 } from './day-factor';
+import { loadDrivingCalendarMap, loadDrivingCalendarMapForRows } from './driving-calendars';
 import type { BulkDeleteActivitiesDto } from './dto/bulk-delete-activities.dto';
 import type { CreateActivityDto } from './dto/create-activity.dto';
 import type { UpdateActivityProgressDto } from './dto/update-activity-progress.dto';
@@ -118,9 +120,15 @@ export class ActivitiesService {
    * calendar would store the right minutes and then read back as "1". One plan lookup (skipped when
    * every row already names its own calendar) plus one calendar lookup for the whole response.
    */
-  private async withDayFactors<T extends { calendarId: string | null; planId: string }>(
-    rows: readonly T[],
-  ): Promise<WithDayFactor<T>[]> {
+  private async withDayFactors<
+    T extends {
+      id: string;
+      organizationId: string;
+      calendarId: string | null;
+      planId: string;
+      type: ActivityType;
+    },
+  >(rows: readonly T[]): Promise<WithDayFactor<T>[]> {
     const planIds = [
       ...new Set(rows.filter((row) => row.calendarId === null).map((r) => r.planId)),
     ];
@@ -129,13 +137,22 @@ export class ActivitiesService {
         ? []
         : (await this.plans.findCalendarIds(planIds)).map((p) => [p.id, p.calendarId]),
     );
-    return attachDayFactors(this.calendars, rows, planCalendarIds);
+    // The driving-resource calendar for any RESOURCE_DEPENDENT row on this page (#86). Asked of the
+    // rows, so a page without one costs nothing.
+    const driving = await loadDrivingCalendarMapForRows(this.prisma, rows);
+    return attachDayFactors(this.calendars, rows, planCalendarIds, driving);
   }
 
   /** {@link withDayFactors} for a single activity. */
-  private async withDayFactor<T extends { calendarId: string | null; planId: string }>(
-    row: T,
-  ): Promise<WithDayFactor<T>> {
+  private async withDayFactor<
+    T extends {
+      id: string;
+      organizationId: string;
+      calendarId: string | null;
+      planId: string;
+      type: ActivityType;
+    },
+  >(row: T): Promise<WithDayFactor<T>> {
     const [decorated] = await this.withDayFactors([row]);
     return decorated!;
   }
@@ -584,11 +601,25 @@ export class ActivitiesService {
             activityCalendarId !== null
               ? null
               : (await this.loadActivePlan(existing.planId, organization.id)).calendarId;
+          // The SCHEDULING rule, not the activity's own (`docs/TECH_DEBT.md` #86): a duration
+          // measures the work, and a RESOURCE_DEPENDENT activity does that work on its driving
+          // resource's calendar. Read inside the write transaction so the factor the planner's
+          // number is converted with is the one this write sees.
           patch.durationMinutes = daysToMinutes(
             dto.durationDays,
-            await resolveDayFactorMinutes(
+            await resolveSchedulingDayFactorMinutes(
               this.calendars,
-              { activityCalendarId, planCalendarId },
+              {
+                type: effectiveType,
+                drivingCalendarId:
+                  effectiveType === 'RESOURCE_DEPENDENT'
+                    ? ((
+                        await loadDrivingCalendarMap(tx, organization.id, existing.planId, true)
+                      ).get(activityId) ?? null)
+                    : null,
+                activityCalendarId,
+                planCalendarId,
+              },
               tx,
             ),
           );
@@ -1070,7 +1101,22 @@ export class ActivitiesService {
             ? null
             : daysToMinutes(
                 dto.remainingDurationDays,
-                await resolveDayFactorMinutes(this.calendars, {
+                // A remainder scales with the duration it is a remainder of, so it takes the same
+                // SCHEDULING rule (#86) — otherwise "3 of 5 days done" is arithmetic that does not
+                // close on a driven activity.
+                await resolveSchedulingDayFactorMinutes(this.calendars, {
+                  type: existing.type,
+                  drivingCalendarId:
+                    existing.type === 'RESOURCE_DEPENDENT'
+                      ? ((
+                          await loadDrivingCalendarMap(
+                            this.prisma,
+                            organization.id,
+                            existing.planId,
+                            true,
+                          )
+                        ).get(existing.id) ?? null)
+                      : null,
                   activityCalendarId: existing.calendarId,
                   planCalendarId: plan.calendarId,
                 }),

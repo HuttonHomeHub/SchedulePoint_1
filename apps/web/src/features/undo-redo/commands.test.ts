@@ -30,6 +30,7 @@ import {
 /** A full activity row; overrides pick out the fields a given test cares about. */
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     id: 'a1',
     planId: 'pl1',
     code: null,

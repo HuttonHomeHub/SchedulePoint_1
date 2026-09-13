@@ -1,7 +1,7 @@
 import type { ActivitySummary, CalendarSummary, DependencySummary } from '@repo/types';
 import type { UseQueryResult } from '@tanstack/react-query';
 
-import { lagHoursPerDay } from '../model/lag-factor';
+import { type LagEndpoint, lagEndpoint, lagHoursPerDay } from '../model/lag-factor';
 import {
   DEPENDENCY_TYPE_LABELS,
   LAG_CALENDAR_LABELS,
@@ -49,16 +49,18 @@ export function DependencyTable({
   planCalendarId?: string;
   planActivities?: ActivitySummary[];
 }): React.ReactElement {
-  const calendarOf = (activityId: string): string | null | undefined =>
-    planActivities.find((candidate) => candidate.id === activityId)?.calendarId;
+  // The whole endpoint, not just its calendar: which calendar an end's work happens on is
+  // type-gated (`docs/TECH_DEBT.md` #86), so naming the calendar alone would supply half a frame.
+  const endpointOf = (activityId: string): LagEndpoint | undefined =>
+    lagEndpoint(planActivities.find((candidate) => candidate.id === activityId));
   // Per ROW, not per table: `lagCalendar` is a column, so one page of a plan's logic can
   // legitimately need several different factors (the API's own note on `resolveLagDayFactorMinutes`).
   const factorFor = (dep: DependencySummary): number | undefined =>
     lagHoursPerDay(dep.lagCalendar, {
       calendars,
       ...(planCalendarId === undefined ? {} : { planCalendarId }),
-      predecessorCalendarId: calendarOf(dep.predecessor.id),
-      successorCalendarId: calendarOf(dep.successor.id),
+      predecessor: endpointOf(dep.predecessor.id),
+      successor: endpointOf(dep.successor.id),
     });
   const columns: Column<DependencySummary>[] = [
     {

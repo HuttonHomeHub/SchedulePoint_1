@@ -10,8 +10,13 @@ import { PrismaService } from '../../prisma/prisma.service';
  * `calendarId` rides along because a lag's day↔minute factor is resolved from the endpoint the
  * relationship's `lagCalendar` names (ADR-0037 / ADR-0068 §4) — selecting it here costs nothing on
  * a join that already runs, and is the alternative to a second query per row.
+ *
+ * `type` rides along for the same reason and for the next step of the same rule: which calendar an
+ * endpoint SCHEDULES on is type-gated, because only a `RESOURCE_DEPENDENT` activity defers to its
+ * driving resource (`schedulingCalendarId`, `docs/TECH_DEBT.md` #86). It is selected, not mapped
+ * into the response — the DTO's endpoint summary is unchanged.
  */
-const endpointSelect = { id: true, code: true, name: true, calendarId: true } as const;
+const endpointSelect = { id: true, code: true, name: true, calendarId: true, type: true } as const;
 
 const withEndpoints = {
   include: {

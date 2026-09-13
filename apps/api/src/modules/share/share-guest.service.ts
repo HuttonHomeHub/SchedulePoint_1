@@ -6,6 +6,7 @@ import type { GuestPrincipal } from '../../common/auth/guest-principal';
 import { NotFoundError } from '../../common/errors/domain-errors';
 import { ActivityRepository } from '../activities/activity.repository';
 import { attachDayFactors } from '../activities/day-factor';
+import { toDrivingCalendarMap } from '../activities/driving-calendars';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { DependencyRepository } from '../dependencies/dependency.repository';
 import { PlanRepository } from '../plans/plan.repository';
@@ -95,7 +96,19 @@ export class ShareGuestService {
     const planCalendarIds = new Map<string, string | null>(
       (await this.plans.findCalendarIds([guest.planId])).map((p) => [p.id, p.calendarId]),
     );
-    const decorated = await attachDayFactors(this.calendars, items, planCalendarIds);
+    const decorated = await attachDayFactors(
+      this.calendars,
+      items,
+      planCalendarIds,
+      // CQ-4: a guest adopts the corrected factor. The duration is a property of the work, and
+      // withholding the correction would have a guest and a member read different numbers off the
+      // same bar. The resource itself stays invisible — only the frame changes (#86).
+      items.some((row) => row.type === 'RESOURCE_DEPENDENT')
+        ? toDrivingCalendarMap(
+            await this.schedule.loadDrivingResourceCalendars(guest.organizationId, guest.planId),
+          )
+        : new Map(),
+    );
     this.touchAccess(guest.shareId);
     return { items: decorated.map((row) => GuestActivityDto.from(row)), meta };
   }

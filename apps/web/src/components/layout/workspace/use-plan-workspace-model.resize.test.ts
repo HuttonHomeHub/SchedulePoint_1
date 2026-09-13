@@ -101,6 +101,7 @@ vi.mock('@/features/schedule', () => ({
 // An activity carrying a constraint + non-default duration-type/EV/accrual inputs, so the
 // full-definition round-trip assertion below proves they are RESENT, not silently cleared.
 const ACTIVITY: ActivitySummary = {
+  drivingResourceCalendarId: null,
   id: 'a1',
   planId: 'p1',
   code: 'A100',

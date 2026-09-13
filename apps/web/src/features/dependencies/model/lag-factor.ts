@@ -1,4 +1,4 @@
-import type { CalendarSummary, LagCalendarSource } from '@repo/types';
+import type { ActivityType, CalendarSummary, LagCalendarSource } from '@repo/types';
 
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
@@ -13,6 +13,40 @@ import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
  */
 export const ELAPSED_HOURS_PER_DAY = 24;
 
+/**
+ * One end of a relationship, as much as the form knows about it.
+ *
+ * It is **one object rather than three loose fields** because a lag measures the work at the end it
+ * names, and which calendar that work happens on is type-gated (`docs/TECH_DEBT.md` #86): a
+ * `RESOURCE_DEPENDENT` endpoint defers to its driving resource. Naming the calendar without the type
+ * would let a host supply half a frame and silently get the pre-#86 answer, which is the shape this
+ * split exists to make unreachable.
+ */
+export interface LagEndpoint {
+  /** The activity's own calendar. `null`/`''` means it inherits the plan's. */
+  calendarId?: string | null;
+  type: ActivityType;
+  /** From the activity read; `null` for anything not driven, or a driver that is missing/inherits. */
+  drivingResourceCalendarId: string | null;
+}
+
+/**
+ * Build a {@link LagEndpoint} from an activity the host already holds, or `undefined` when it holds
+ * none. ONE derivation, so three call sites cannot each decide which fields a frame needs.
+ */
+export function lagEndpoint(
+  activity:
+    | { calendarId: string | null; type: ActivityType; drivingResourceCalendarId: string | null }
+    | undefined,
+): LagEndpoint | undefined {
+  if (activity === undefined) return undefined;
+  return {
+    calendarId: activity.calendarId,
+    type: activity.type,
+    drivingResourceCalendarId: activity.drivingResourceCalendarId,
+  };
+}
+
 /** The endpoint calendars a lag's factor can depend on, as the form currently knows them. */
 export interface LagFactorContext {
   /** The route-composed calendar library — the same list the pickers draw from. */
@@ -20,12 +54,12 @@ export interface LagFactorContext {
   /** The plan's calendar, which every `''`/absent activity binding inherits. */
   planCalendarId?: string;
   /**
-   * The predecessor activity's own calendar. `null`/`''` means it inherits the plan's; `undefined`
-   * means the host cannot name it, which is not the same thing and does not fall back.
+   * The predecessor end. `undefined` means the host cannot name it, which is not the same as an end
+   * bound to nothing and does not fall back.
    */
-  predecessorCalendarId?: string | null | undefined;
-  /** The successor activity's own calendar — same three-valued reading as the predecessor's. */
-  successorCalendarId?: string | null | undefined;
+  predecessor?: LagEndpoint | undefined;
+  /** The successor end — same reading as the predecessor's. */
+  successor?: LagEndpoint | undefined;
 }
 
 /**
@@ -49,23 +83,35 @@ export function lagHoursPerDay(
     case 'TWENTY_FOUR_HOUR':
       return ELAPSED_HOURS_PER_DAY;
     case 'PROJECT_DEFAULT':
-      return effectiveHoursPerDay(calendars, { ...(planCalendarId ? { planCalendarId } : {}) });
+      // The plan's own calendar by definition — there is no endpoint here, so no driver (#86).
+      return effectiveHoursPerDay(calendars, {
+        ...(planCalendarId ? { planCalendarId } : {}),
+        frame: { kind: 'own' },
+      });
     case 'PREDECESSOR':
-      return endpointHoursPerDay(context, context.predecessorCalendarId);
+      return endpointHoursPerDay(context, context.predecessor);
     case 'SUCCESSOR':
-      return endpointHoursPerDay(context, context.successorCalendarId);
+      return endpointHoursPerDay(context, context.successor);
   }
 }
 
 function endpointHoursPerDay(
   { calendars, planCalendarId }: LagFactorContext,
-  endpointCalendarId: string | null | undefined,
+  endpoint: LagEndpoint | undefined,
 ): number | undefined {
   // An endpoint the host cannot name is not the same as one bound to nothing: the first means we do
   // not know, the second means it inherits the plan's. Only the second may fall back.
-  if (endpointCalendarId === undefined) return undefined;
+  if (endpoint === undefined) return undefined;
+  // The SCHEDULING frame: a lag measures the work at this end, and a driven end does that work on
+  // its driving resource's calendar (ADR-0039 §4). This mirrors the server's `lagCalendarIdFor`
+  // case for case, which is the whole reason the two cannot disagree about a submitted `lagDays`.
   return effectiveHoursPerDay(calendars, {
-    ...(endpointCalendarId ? { activityCalendarId: endpointCalendarId } : {}),
+    ...(endpoint.calendarId ? { activityCalendarId: endpoint.calendarId } : {}),
     ...(planCalendarId ? { planCalendarId } : {}),
+    frame: {
+      kind: 'scheduling',
+      type: endpoint.type,
+      drivingResourceCalendarId: endpoint.drivingResourceCalendarId,
+    },
   });
 }

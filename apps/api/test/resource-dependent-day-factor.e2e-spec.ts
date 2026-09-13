@@ -29,12 +29,22 @@ import { clearBaselineTree } from './clear-baseline-tree';
  * effective calendar". Where the two calendars have different working hours, the quantity written
  * and the calendar it is spent on disagree.
  *
- * ## This is CHARACTERISATION, not desired behaviour
+ * ## INVERTED on 2026-09-13, exactly as the paragraph it replaces used to promise
  *
- * Every expectation pins what the product does **today**, including the wrong finish. When M2 of the
- * spec lands, the resource-dependent activity finishes level with its task twin and these
- * expectations invert. A reader who finds this file green has learnt the defect is
- * still present, which is the opposite of what a green test usually means.
+ * This opened as characterisation: every expectation pinned what the product did **today**,
+ * including the wrong read, and this paragraph said that when M2 landed the expectations would
+ * invert and a green run would stop meaning "the defect is still present". M2 landed and that is
+ * what happened, so a green run here now means the defect is **gone**.
+ *
+ * The paragraph is rewritten rather than deleted because leaving it would have been the drift this
+ * epic exists to remove: a file whose own docblock tells the reader a green result means the
+ * opposite of what it means. Its web sibling
+ * (`apps/web/src/lib/day-factor-divergence.characterisation.test.ts`) inverted the same way.
+ *
+ * **What did NOT change is the dates.** The engine always scheduled the driven activity on its
+ * driving resource's calendar; M2 fixed the two rules that disagreed with it — the read-out and the
+ * update write. So the date assertions below are load-bearing in both directions: they were correct
+ * before M2 and are correct after it, which is what makes them the control for everything else.
  *
  * ## Why the fixture is hand-built
  *
@@ -185,11 +195,287 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(byName.get('Task twin')?.earlyFinish).toBe('2026-01-05');
 
     // And the resource-dependent one spends the SAME 2,400 minutes at 24 h/day — under two days.
-    // **This is the defect, and it is the number M2 has to change**: a planner asked for five days
-    // of crane time and the programme reserves less than two, with every read-out still saying `5d`
-    // because `minutesToDays(2400, 480)` returns 5 on the way back out.
+    // **This was the defect and M2 fixed the read half**: a planner asked for five days of crane
+    // time and the programme reserves less than two. Until 2026-09-13 every read-out still said
+    // `5d`, because `minutesToDays(2400, 480)` returned 5 on the way back out; it now converts on
+    // the crane's calendar and says `2d`, which is what the dates below have always shown.
+    // The dates themselves are unchanged by M2 and are asserted here for exactly that reason.
     expect(byName.get('Crane lift')?.earlyFinish).toBe('2026-01-02');
     expect(byName.get('Crane lift')?.earlyFinish).not.toBe(byName.get('Task twin')?.earlyFinish);
+  });
+
+  /**
+   * A plan holding a `Task twin` (TASK) and a `Crane lift` (RESOURCE_DEPENDENT, driven by a
+   * 24-hour crane) on an 8-hour plan calendar. Returns both ids.
+   *
+   * Extracted for the write-path cases below rather than copied into each: the whole subject here
+   * is two rules agreeing, and a fixture assembled twice is the one thing that can make them
+   * disagree for a reason that is not the product's.
+   */
+  async function drivenFixture(actor: Actor): Promise<{
+    planId: string;
+    drivenId: string;
+    taskId: string;
+  }> {
+    const eightHourDay = await calendar(actor, 'Crew (8h)', 8);
+    const roundTheClock = await calendar(actor, 'Crane (24h)', 24);
+    const planId = await planOn(actor, eightHourDay);
+
+    const task = await actor.agent
+      .post(`${org}/plans/${planId}/activities`)
+      .send({ name: 'Task twin', durationDays: 5 })
+      .expect(201);
+    const driven = await actor.agent
+      .post(`${org}/plans/${planId}/activities`)
+      .send({ name: 'Crane lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
+      .expect(201);
+    const drivenId = driven.body.data.id as string;
+
+    const crane = await actor.agent
+      .post(`${org}/resources`)
+      .send({ name: 'Crane', kind: 'EQUIPMENT', calendarId: roundTheClock })
+      .expect(201);
+    await actor.agent
+      .post(`${org}/activities/${drivenId}/assignments`)
+      .send({ resourceId: crane.body.data.id, budgetedUnits: 1, isDriving: true })
+      .expect(201);
+
+    return { planId, drivenId, taskId: task.body.data.id as string };
+  }
+
+  /**
+   * **The M5 test-engineer review's finding #5, and the sharpest of the coverage gaps it named.**
+   *
+   * The census classifies the UPDATE site as `scheduling` and CREATE as `own`, and until this case
+   * existed nothing executed the difference: the e2e suite covered CREATE and GET only, so the one
+   * site whose rule M2 actually CHANGED was the one site with no test. Swapping it back would have
+   * been green everywhere.
+   *
+   * The asymmetry is real and is not a bug: at CREATE no assignment exists yet, so there is no
+   * driver to defer to and both rules give 2,400. At UPDATE the crane is assigned, so the same
+   * typed `5` is five days of CRANE time — 7,200 minutes.
+   */
+  it('converts an UPDATED duration on the driver’s calendar, where CREATE could not', async () => {
+    const actor = await adminWithOrg();
+    const { planId, drivenId, taskId } = await drivenFixture(actor);
+
+    const before = await actor.agent.get(`${org}/activities/${drivenId}`).expect(200);
+    // Written before the crane existed: 5 × 8 × 60, and correctly so.
+    expect(before.body.data.durationMinutes).toBe(2400);
+
+    const updated = await actor.agent
+      .patch(`${org}/activities/${drivenId}`)
+      .send({ durationDays: 5, version: before.body.data.version })
+      .expect(200);
+
+    // 5 × 24 × 60. The planner typed the same number and meant the same thing — five days of the
+    // work this activity schedules — and the work happens on the crane's calendar.
+    expect(updated.body.data.durationMinutes).toBe(7200);
+    expect(updated.body.data.durationDays).toBe(5);
+
+    // The control, on the same plan and the same request shape. A TASK has no driver, so its
+    // update converts on the plan's 8 h day and is unmoved by this epic. Without it, a build that
+    // resolved 24 h for EVERY activity would pass the assertion above.
+    const taskBefore = await actor.agent.get(`${org}/activities/${taskId}`).expect(200);
+    const taskUpdated = await actor.agent
+      .patch(`${org}/activities/${taskId}`)
+      .send({ durationDays: 5, version: taskBefore.body.data.version })
+      .expect(200);
+    expect(taskUpdated.body.data.durationMinutes).toBe(2400);
+
+    // And the round trip closes: five days in, five days back, on both — which is the property a
+    // planner actually experiences and the one the old code broke for the driven row only.
+    await actor.agent.post(`${org}/plans/${planId}/schedule/recalculate`).expect(200);
+    const list = await actor.agent.get(`${org}/plans/${planId}/activities`).expect(200);
+    const byName = new Map(
+      (list.body.data as { name: string; durationDays: number }[]).map((a) => [a.name, a]),
+    );
+    expect(byName.get('Crane lift')?.durationDays).toBe(5);
+    expect(byName.get('Task twin')?.durationDays).toBe(5);
+  });
+
+  /**
+   * The review's finding #5, second half: `remainingDurationDays` on the progress route.
+   *
+   * A remainder scales with the duration it is a remainder of, so it takes the same rule. It is a
+   * separate site from the duration write and was separately untested — and progress is
+   * deliberately NOT pen-gated (ADR-0060), so it is reachable by a Contributor who cannot touch the
+   * duration at all.
+   */
+  it('converts a reported REMAINING duration on the driver’s calendar too', async () => {
+    const actor = await adminWithOrg();
+    const { drivenId } = await drivenFixture(actor);
+
+    const before = await actor.agent.get(`${org}/activities/${drivenId}`).expect(200);
+    const progressed = await actor.agent
+      .patch(`${org}/activities/${drivenId}/progress`)
+      .send({ remainingDurationDays: 2, version: before.body.data.version })
+      .expect(200);
+
+    // 2 × 24 × 60, not 2 × 8 × 60. Two more days of crane time.
+    expect(progressed.body.data.remainingDurationMinutes).toBe(2880);
+    expect(progressed.body.data.remainingDurationDays).toBe(2);
+  });
+
+  /**
+   * The review's finding #2: the relationship-lag write, which had no executing test at all.
+   *
+   * `dependencies.service.spec.ts` mocks `findHoursPerDayMinutes` to an empty Map, so every factor
+   * it sees is the 1440 fallback and it cannot discriminate these two rules even in principle —
+   * which is why this had to come here rather than there.
+   *
+   * A `PREDECESSOR` lag measures the work at the predecessor's end (ADR-0070 §5), and that end is
+   * the crane's, so one day of lag is 1,440 minutes rather than 480.
+   */
+  it('converts a PREDECESSOR lag on the driven endpoint’s driving calendar', async () => {
+    const actor = await adminWithOrg();
+    const { planId, drivenId, taskId } = await drivenFixture(actor);
+
+    const link = await actor.agent
+      .post(`${org}/plans/${planId}/dependencies`)
+      .send({
+        predecessorId: drivenId,
+        successorId: taskId,
+        type: 'FS',
+        lagDays: 1,
+        lagCalendar: 'PREDECESSOR',
+      })
+      .expect(201);
+
+    expect(link.body.data.lagMinutes).toBe(1440);
+    expect(link.body.data.lagDays).toBe(1);
+
+    // The update site is a second, separate call site — the census lists them as one row because
+    // they share a resolver, and this proves they share its ANSWER and not just its name.
+    const updated = await actor.agent
+      .patch(`${org}/dependencies/${link.body.data.id}`)
+      .send({ lagDays: 2, version: link.body.data.version })
+      .expect(200);
+    expect(updated.body.data.lagMinutes).toBe(2880);
+    expect(updated.body.data.lagDays).toBe(2);
+
+    // The control: the SUCCESSOR end is the plain task, so the same typed lag converts on the
+    // plan's 8 h day. Same request, same plan, different endpoint — so a build that resolved the
+    // crane for every lag would fail here.
+    const onSuccessor = await actor.agent
+      .patch(`${org}/dependencies/${link.body.data.id}`)
+      .send({ lagDays: 1, lagCalendar: 'SUCCESSOR', version: updated.body.data.version })
+      .expect(200);
+    expect(onSuccessor.body.data.lagMinutes).toBe(480);
+  });
+
+  /**
+   * **The review's finding #4, and it executes a decision rather than a mechanism: CQ-4.**
+   *
+   * A guest adopts the corrected factor. That was argued rather than tested — the guest decoration
+   * had zero coverage of any kind — and it is the one place the two halves of ADR-0051 pull in
+   * opposite directions: a guest must not learn that a resource exists, and a duration is a
+   * property of the work, so withholding the correction would have a guest and a member read
+   * different numbers off the same bar.
+   *
+   * So this asserts BOTH halves. The number agrees with the member's, and the field naming the
+   * calendar it came from is absent — which is what makes "only the frame changes" a fact.
+   */
+  it('gives a guest the member’s duration, and still tells them nothing about the resource', async () => {
+    const actor = await adminWithOrg();
+    const { planId, drivenId } = await drivenFixture(actor);
+
+    // Update through the member path so the stored minutes are the driver-framed 7,200 — the value
+    // a guest could most easily be shown wrongly, since 7,200 at the plan's 8 h day reads as 15.
+    const before = await actor.agent.get(`${org}/activities/${drivenId}`).expect(200);
+    await actor.agent
+      .patch(`${org}/activities/${drivenId}`)
+      .send({ durationDays: 5, version: before.body.data.version })
+      .expect(200);
+
+    const share = await actor.agent
+      .post(`${org}/plans/${planId}/shares`)
+      .send({ label: 'QS' })
+      .expect(201);
+    const token = (share.body.data.url as string).split('#')[1];
+    expect(token).toBeTruthy();
+
+    const guest = await request(server())
+      .get('/api/v1/share/activities')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const lift = (guest.body.data as { name: string; durationDays: number }[]).find(
+      (a) => a.name === 'Crane lift',
+    );
+
+    // The member reads 5. So does the guest — not the 15 the plan's calendar would have produced.
+    expect(lift?.durationDays).toBe(5);
+
+    // **Blind spot, measured rather than assumed.** This case catches a break in the GUEST read
+    // alone (verified: it reports 15). It does NOT catch the rule being collapsed on both sides at
+    // once — the write then stores 2,400 and the read divides by 480, and 5 comes back out. That
+    // self-consistency is the exact property that hid #86 for a year, so it is worth naming here:
+    // the cases above are what catch a symmetric regression, and this one is what catches a guest
+    // drifting away from a member.
+
+    // And the frame is all that changed: the resource is still invisible. `drivingResourceCalendarId`
+    // is carried on the internal row to resolve the factor and is deliberately absent from the
+    // guest DTO (ADR-0051 §4), which the shared forbidden-key gate also pins.
+    expect(lift).not.toHaveProperty('drivingResourceCalendarId');
+    expect(lift).not.toHaveProperty('dayFactorMinutes');
+  });
+
+  /**
+   * **The review's finding #3: the DCMA health check's wiring, and the worst consequence in the
+   * epic.**
+   *
+   * `compute-health.output.spec.ts` already proves metric 8 discriminates on `dayFactorMinutes`.
+   * What nothing proved is which factor `schedule.service.ts` hands it — and that is the whole
+   * question, because the metric's input is exactly the value this epic changed.
+   *
+   * The stake is higher than a wrong read-out. Twenty-one days of crane time is a perfectly
+   * ordinary activity; the same 30,240 minutes measured against the crew's eight-hour day is 63,
+   * which clears the 44-day threshold. A wrong frame here does not merely print a wrong number —
+   * it reports a **compliant plan as failing an assessment**, which ADR-0116 names as the one
+   * thing a health check must never do. A planner would go looking for a duration that is not
+   * there.
+   */
+  it('judges metric 8 on the driver’s day length, so a compliant plan is not reported as failing', async () => {
+    const actor = await adminWithOrg();
+    const { planId, drivenId } = await drivenFixture(actor);
+
+    // 21 days of crane time = 30,240 minutes. On the crew's 8 h day that same figure reads 63.
+    const before = await actor.agent.get(`${org}/activities/${drivenId}`).expect(200);
+    const updated = await actor.agent
+      .patch(`${org}/activities/${drivenId}`)
+      .send({ durationDays: 21, version: before.body.data.version })
+      .expect(200);
+    expect(updated.body.data.durationMinutes).toBe(30_240);
+
+    await actor.agent.post(`${org}/plans/${planId}/schedule/recalculate`).expect(200);
+    const report = await actor.agent
+      .get(`${org}/plans/${planId}/schedule/health-check`)
+      .expect(200);
+
+    const metric = (report.body.data.metrics as { id: string }[]).find(
+      (m) => m.id === 'HIGH_DURATION',
+    ) as unknown as { measured: { count: number | null } | null };
+
+    // Zero offenders. At the own-calendar factor this is 1, and the plan reads as failing.
+    expect(metric.measured?.count).toBe(0);
+
+    // The pinned counter-fact: a plan CAN fail this metric, so a count of 0 above is a judgement
+    // and not an inert metric. The crew twin is given a duration that is over the threshold on the
+    // calendar it really does schedule on, so this offender is correct in either frame.
+    const twin = await actor.agent.get(`${org}/plans/${planId}/activities`).expect(200);
+    const taskRow = (twin.body.data as { id: string; name: string; version: number }[]).find(
+      (a) => a.name === 'Task twin',
+    );
+    await actor.agent
+      .patch(`${org}/activities/${taskRow!.id}`)
+      .send({ durationDays: 63, version: taskRow!.version })
+      .expect(200);
+    await actor.agent.post(`${org}/plans/${planId}/schedule/recalculate`).expect(200);
+    const after = await actor.agent.get(`${org}/plans/${planId}/schedule/health-check`).expect(200);
+    const afterMetric = (after.body.data.metrics as { id: string }[]).find(
+      (m) => m.id === 'HIGH_DURATION',
+    ) as unknown as { measured: { count: number | null } | null };
+    expect(afterMetric.measured?.count).toBe(1);
   });
 
   it('agrees when the two calendars agree — so a green run cannot mean the fixture stopped discriminating', async () => {
@@ -350,10 +636,21 @@ describe.skipIf(!hasDatabase)('RESOURCE_DEPENDENT day factor (e2e, characterisat
     expect(twinFloatMinutesAtOwnFactor).toBe(960);
     expect(twinFloatMinutesAtOwnFactor).not.toBe(2400); // the five-day window at 480
 
-    // The driven activity, for completeness and labelled as non-discriminating: 8 days of slack
-    // reads 8 on either factor, so this pins the spec's predicted case without proving it.
+    // The driven activity. `totalFloat` was ALREADY driver-aware — the recalculation resolves each
+    // activity's scheduling calendar (ADR-0039 §4) — which is why it reads 8 here both before and
+    // after M2, and why it was never the half that needed fixing.
     expect(byName.get('Crane lift')?.totalFloat).toBe(8);
-    expect(byName.get('Crane lift')?.durationDays).toBe(5);
+
+    // **This number changed at M2, and the change is the point (CQ-1, accepted 2026-09-13).**
+    // It read `5` until then, because the duration was converted on the activity's OWN 8 h calendar
+    // while the work is done on the crane's 24 h one. 2,400 minutes at 1440 is 1.67 days, which
+    // rounds to 2 — so the read-out now says what the programme actually reserves instead of
+    // repeating the number that was typed before the crane existed.
+    //
+    // No stored minute moved and no date moved: `durationMinutes` is still 2,400 and `earlyFinish`
+    // is still 2 Jan. Only the day-denominated READ-OUT changed, from a wrong number to a right one.
+    expect(byName.get('Crane lift')?.durationMinutes).toBe(2400);
+    expect(byName.get('Crane lift')?.durationDays).toBe(2);
   });
 
   /**

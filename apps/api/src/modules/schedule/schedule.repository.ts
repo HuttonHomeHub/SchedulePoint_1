@@ -13,6 +13,7 @@ import {
 
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
+import { loadDrivingResourceCalendarRows } from '../activities/driving-calendars';
 
 import type { CriticalityRule } from './criticality-rule';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
@@ -343,20 +344,9 @@ export class ScheduleRepository {
     planId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<Array<{ activityId: string; resourceCalendarId: string | null }>> {
-    const rows = await db.resourceAssignment.findMany({
-      where: {
-        organizationId,
-        isDriving: true,
-        deletedAt: null,
-        activity: { planId, deletedAt: null, type: 'RESOURCE_DEPENDENT' },
-        resource: { deletedAt: null },
-      },
-      select: { activityId: true, resource: { select: { calendarId: true } } },
-    });
-    return rows.map((r) => ({
-      activityId: r.activityId,
-      resourceCalendarId: r.resource.calendarId,
-    }));
+    // Delegates rather than duplicates: the dependency lag read needs the same rule, and two copies
+    // of it drift invisibly (`docs/TECH_DEBT.md` #86).
+    return loadDrivingResourceCalendarRows(db, organizationId, planId);
   }
 
   /**

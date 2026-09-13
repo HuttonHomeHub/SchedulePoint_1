@@ -105,6 +105,14 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
       'The calendar is part of how the work is measured. An ARCHIVED calendar makes the create ' +
       '422 (ADR-0053 §4), which the caller pre-checks and refuses by name — never substitutes.',
   },
+  drivingResourceCalendarId: {
+    disposition: 'withheld',
+    reason:
+      'Not a field of the activity at all: it is derived on read from the driving assignment ' +
+      '(`docs/TECH_DEBT.md` #86), so the create DTO refuses it and the server would recompute it ' +
+      'anyway. A clone carries no assignments, so its own value is null until somebody assigns a ' +
+      "driver — and sending the source's would assert a driver the copy does not have.",
+  },
   budgetedExpense: {
     disposition: 'carried',
     reason:

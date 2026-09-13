@@ -29,6 +29,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const BASE_LOE: ActivitySummary = {
+  drivingResourceCalendarId: null,
   id: 'loe1',
   planId: 'pl1',
   code: 'LOE1',

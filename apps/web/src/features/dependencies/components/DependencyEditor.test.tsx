@@ -8,6 +8,7 @@ import { dependencyKeys } from '../api/use-dependencies';
 import { DependencyEditor } from './DependencyEditor';
 
 const ACTIVITY: ActivitySummary = {
+  drivingResourceCalendarId: null,
   id: 'b1',
   planId: 'pl1',
   code: 'B10',

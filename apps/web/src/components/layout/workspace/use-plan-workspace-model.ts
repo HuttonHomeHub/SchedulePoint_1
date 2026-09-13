@@ -54,6 +54,8 @@ import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import {
+  type LagEndpoint,
+  lagEndpoint,
   lagHoursPerDay,
   resolveLagDragWrite,
   useCreateDependency,
@@ -1263,11 +1265,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const updateDependency = useUpdateDependency(orgSlug);
   const lagConflict =
     'This plan changed since you opened it — the lag wasn’t changed. Refresh to see the latest.';
-  // An endpoint's own calendar, for the lag factor. `undefined` when the row is not loaded is a
-  // real answer and NOT the same as `null` (bound to nothing, inherits the plan's) — `lagHoursPerDay`
-  // reads the difference and only the second falls back (ADR-0070 §3).
-  const activityCalendarId = (activityId: string): string | null | undefined =>
-    (activities.data ?? []).find((a) => a.id === activityId)?.calendarId;
+  // An endpoint, for the lag factor. `undefined` when the row is not loaded is a real answer and NOT
+  // the same as a calendar of `null` (bound to nothing, inherits the plan's) — `lagHoursPerDay` reads
+  // the difference and only the second falls back (ADR-0070 §3). It carries the type and driving
+  // calendar too, because the frame is type-gated (`docs/TECH_DEBT.md` #86).
+  const lagEndpointOf = (activityId: string): LagEndpoint | undefined =>
+    lagEndpoint((activities.data ?? []).find((a) => a.id === activityId));
 
   const onTsldLag = async ({ dependencyId, lagDays }: TsldLagInput): Promise<TsldEditOutcome> => {
     const dependency = (dependencies.data ?? []).find((d) => d.id === dependencyId);
@@ -1286,8 +1289,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       lagHoursPerDay(dependency.lagCalendar, {
         calendars: calendars.data ?? [],
         ...(plan.data?.calendarId ? { planCalendarId: plan.data.calendarId } : {}),
-        predecessorCalendarId: activityCalendarId(dependency.predecessor.id),
-        successorCalendarId: activityCalendarId(dependency.successor.id),
+        // The whole endpoint, because the frame is type-gated (#86) — see `LagEndpoint`.
+        predecessor: lagEndpointOf(dependency.predecessor.id),
+        successor: lagEndpointOf(dependency.successor.id),
       }),
     );
     // Zero days moved is nothing to write — and a stale caller must never burn a version bump

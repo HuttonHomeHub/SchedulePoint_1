@@ -1,7 +1,7 @@
 import type { CalendarSummary } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { ELAPSED_HOURS_PER_DAY, lagHoursPerDay } from './lag-factor';
+import { ELAPSED_HOURS_PER_DAY, type LagEndpoint, lagHoursPerDay } from './lag-factor';
 
 /**
  * Which calendar a lag's day↔minute factor comes from (ADR-0070 §5).
@@ -16,7 +16,17 @@ function calendar(id: string, hoursPerDay: number): CalendarSummary {
   return { id, hoursPerDay } as CalendarSummary;
 }
 
-const CALENDARS = [calendar('plan', 8), calendar('pred', 10), calendar('succ', 6)];
+const CALENDARS = [
+  calendar('plan', 8),
+  calendar('pred', 10),
+  calendar('succ', 6),
+  calendar('crane', 24),
+];
+
+/** A plain TASK end — the shape every assertion below was written against. */
+function end(calendarId: string | null): LagEndpoint {
+  return { calendarId, type: 'TASK', drivingResourceCalendarId: null };
+}
 
 describe('lagHoursPerDay', () => {
   it('pins TWENTY_FOUR_HOUR at 24 elapsed hours, whatever any calendar says', () => {
@@ -44,8 +54,8 @@ describe('lagHoursPerDay', () => {
     const context = {
       calendars: CALENDARS,
       planCalendarId: 'plan',
-      predecessorCalendarId: 'pred',
-      successorCalendarId: 'succ',
+      predecessor: end('pred'),
+      successor: end('succ'),
     };
     expect(lagHoursPerDay('PREDECESSOR', context)).toBe(10);
     expect(lagHoursPerDay('SUCCESSOR', context)).toBe(6);
@@ -57,7 +67,7 @@ describe('lagHoursPerDay', () => {
       lagHoursPerDay('PREDECESSOR', {
         calendars: CALENDARS,
         planCalendarId: 'plan',
-        predecessorCalendarId: null,
+        predecessor: end(null),
       }),
     ).toBe(8);
     // `undefined` means the host did not tell us. Guessing the plan's would be a wrong lag whenever
@@ -65,6 +75,54 @@ describe('lagHoursPerDay', () => {
     expect(
       lagHoursPerDay('PREDECESSOR', { calendars: CALENDARS, planCalendarId: 'plan' }),
     ).toBeUndefined();
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #86. A lag measures the work at the end it names, and a RESOURCE_DEPENDENT
+   * end does that work on its driving resource's calendar (ADR-0039 §4) — so the lag converts there
+   * too. This mirrors the API's `lagCalendarIdFor`, which is the whole point: a client that framed
+   * it differently would submit a `lagDays` the server converted on another calendar.
+   */
+  it('reads a DRIVEN endpoint from its driving resource calendar, not its own', () => {
+    expect(
+      lagHoursPerDay('PREDECESSOR', {
+        calendars: CALENDARS,
+        planCalendarId: 'plan',
+        predecessor: {
+          calendarId: 'pred',
+          type: 'RESOURCE_DEPENDENT',
+          drivingResourceCalendarId: 'crane',
+        },
+      }),
+    ).toBe(24);
+  });
+
+  it('ignores a driving calendar on any other type — the A5500 contrast', () => {
+    // A TASK with an assigned resource keeps its own calendar. Type-gating is what stops the driver
+    // leaking into every activity that merely HAS a resource.
+    expect(
+      lagHoursPerDay('PREDECESSOR', {
+        calendars: CALENDARS,
+        planCalendarId: 'plan',
+        predecessor: { calendarId: 'pred', type: 'TASK', drivingResourceCalendarId: 'crane' },
+      }),
+    ).toBe(10);
+  });
+
+  it('falls back to a driven endpoint’s own calendar when the driver is missing or inherits', () => {
+    // Absence and null collapse here deliberately: the difference between them is
+    // `resourceDriverMissing`, which is a flag on a different path, not a day length.
+    expect(
+      lagHoursPerDay('PREDECESSOR', {
+        calendars: CALENDARS,
+        planCalendarId: 'plan',
+        predecessor: {
+          calendarId: 'pred',
+          type: 'RESOURCE_DEPENDENT',
+          drivingResourceCalendarId: null,
+        },
+      }),
+    ).toBe(10);
   });
 
   it('returns undefined when the calendar list has not resolved', () => {
