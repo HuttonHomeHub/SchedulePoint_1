@@ -1203,7 +1203,7 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 > **Re-verified 2026-08-08 — half of this is done.** The triple `activityRect` computation was fixed
 > by the per-frame `RectCache` (`render/geometry.ts:481`, declared on `rectCache` at
@@ -1270,6 +1270,31 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
 > classifies that flag **Class B — formally kept**, and ADR-0088 records unit-level flag-off parity
 > suites having exactly one catch in the project's history. Building a flag-off harness for a
 > guard-only flag is a harder sell than it was when this was filed.
+
+> **Re-derived 2026-09-13. Both items still exact, and the second premise is weaker on a third limb
+> the row had not measured.** All six citations resolve verbatim — `crossedLanes` declared at
+> `link-routing.ts:142` and called at `:191` (inside `routeOrthogonal`, `:150`) and `:291` (inside
+> `bundleCorridors`), with **no third call site anywhere**, so "twice per edge" is exact; and
+> `geometry.ts:481` / `paint-frame.ts:69` / `paint.ts:855` are the `RectCache` type, its `PaintFrame`
+> field and the destructure that reads it. That is a **clean check recorded so the next sweep does not
+> repeat it** (`#246`'s own rule), and it is the first re-derivation of the 2026-09-12 repointing —
+> one day is thin evidence, so read it as "not yet rotted", not as proof the repointing was durable.
+>
+> **The third limb: the configuration a flag-off harness would cover cannot be produced by any
+> published image.** Verified rather than cited — `apps/web/Dockerfile` declares exactly one `VITE_`
+> build arg (`VITE_API_URL`), `docker-publish.yml` passes **no** build-args at all, and
+> `.dockerignore` strips `**/.env` and `**/.env.*`. So this is not only a guard-only Class B flag with
+> one recorded catch in project history; the harness would assert behaviour **no shipped bundle
+> exhibits**, which is the shape ADR-0088 calls _worse than covering a rollback path_. It is still
+> reachable in a local dev build, so the item is narrowed to a developer-only configuration rather
+> than refuted — which is why it is left open for the product owner rather than struck here.
+>
+> **One asymmetry the row does not state, because it names only one flag.** The epic is ADR-0064
+> **and** ADR-0065, and while `VITE_CANVAS_AUTHORING_FLOW` has three pins (all `'true'`, the no-op
+> class ADR-0088 measured at 135), `VITE_CANVAS_LINK_ROUTING` has **zero pins of any value** in any
+> Playwright config and appears in no `.env.example`. The open bullet is about the two-click link
+> **pick**, which is ADR-0064, so naming that flag is correct — but a reader costing "add a flag-off
+> config" should know the routing half has no harness pin at all to build from.
 
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
