@@ -92,6 +92,12 @@ function activityRow(): WithDayFactor<Activity> {
 
 /** Keys that must NEVER appear on a guest activity DTO (cost / audit / user / internal). */
 const FORBIDDEN_ACTIVITY_KEYS = [
+  // CQ-4 of `docs/TECH_DEBT.md` #86: a guest adopts the CORRECTED `durationDays` and never learns
+  // that a resource is why. The exact-key assertion below already enforces this structurally; both
+  // are named here because every other CQ-4 exclusion is, and an exclusion nobody wrote down reads
+  // as an accident rather than a decision.
+  'drivingResourceCalendarId',
+  'dayFactorMinutes',
   'organizationId',
   'planId',
   'description',

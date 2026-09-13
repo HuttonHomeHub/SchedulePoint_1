@@ -876,11 +876,12 @@ export class ScheduleService {
       this.resolveCalendar(organization.id, plan.calendarId),
     ]);
 
-    // Each activity's OWN day↔minute factor (ADR-0068) in one batched lookup — metric 8's
-    // conversion, never a constant and never a per-row query — beside the plan's own factor for
-    // CPLI's working-day arithmetic (the `variance.ts` shape, ADR-0025). The two lookups are
-    // independent PK reads against the same small table, so they share one round trip rather than
-    // running sequentially (the M5 backend-performance review's one suggestion, folded).
+    // Each activity's SCHEDULING day↔minute factor (ADR-0068 + `docs/TECH_DEBT.md` #86) in one
+    // batched lookup — metric 8's conversion, never a constant and never a per-row query — beside
+    // the plan's own factor for CPLI's working-day arithmetic (the `variance.ts` shape,
+    // ADR-0025). The two lookups are independent PK reads against the same small table, so they
+    // share one round trip rather than running sequentially (the M5 backend-performance review's
+    // one suggestion, folded).
     const [withFactors, planFactor] = await Promise.all([
       (async () =>
         attachDayFactors(
@@ -1013,7 +1014,8 @@ export class ScheduleService {
       this.schedule.loadHealthActivities(organization.id, planId),
     ]);
     // One narrow loader serves both jobs: display labels for the offender/detail fields, and each
-    // activity's own day↔minute factor (ADR-0068) for the injection's unit.
+    // activity's SCHEDULING day↔minute factor (ADR-0068 + #86) for the injection's unit — the
+    // calendar the work happens on, which for a driven activity is its driving resource's.
     const withFactors = await attachDayFactors(
       this.calendars,
       labelRows,

@@ -50,7 +50,16 @@ describe('metrics 6 and 7 — float, as stored whole working days', () => {
   });
 });
 
-describe("metric 8 — high duration on each activity's OWN day factor", () => {
+/**
+ * Metric 8 judges on the factor it is HANDED, and since `docs/TECH_DEBT.md` #86 that is each
+ * activity's SCHEDULING factor — the calendar the work happens on, which for a driven activity is
+ * its driving resource's. This describe said "OWN day factor" until 2026-09-13, which was correct
+ * when written and became wrong one layer up without anything here changing: these cases pass
+ * `dayFactorMinutes` directly and so cannot see which rule produced it. The wiring is proved in
+ * `test/resource-dependent-day-factor.e2e-spec.ts`, where a real driven activity goes through a
+ * real health check.
+ */
+describe('metric 8 — high duration on the factor each activity is handed', () => {
   it('the same remaining minutes are an offender on an 8-hour calendar and not on a 24-hour one', () => {
     // 21,600 minutes = 45 eight-hour days (FAIL side of 44) = 15 twenty-four-hour days (pass).
     const eightHour = computeInput({

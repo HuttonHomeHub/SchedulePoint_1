@@ -481,6 +481,11 @@ export interface ActivitySummary {
    * Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035 §2), or null to
    * derive it from `percentComplete`. The engine schedules this remaining from the data date (never
    * before it).
+   *
+   * Measured on the calendar this activity SCHEDULES on — the driving resource's for a
+   * `RESOURCE_DEPENDENT` activity (`docs/TECH_DEBT.md` #86), which is the same rule
+   * {@link ActivitySummary.durationDays} uses, because a remainder scales with the duration it
+   * is a remainder of.
    */
   remainingDurationDays: number | null;
   /**

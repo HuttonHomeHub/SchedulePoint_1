@@ -44,8 +44,12 @@ export class GuestActivityDto {
 
   @ApiProperty({
     description:
-      'Working days on this activity’s calendar (ADR-0068), rounded from the stored minutes ' +
-      '(milestones are 0). A sub-day activity reads back here as 0 — read `durationMinutes`.',
+      'Working days on the calendar this activity SCHEDULES on (ADR-0068, corrected by #86), ' +
+      'rounded from the stored minutes (milestones are 0). For a RESOURCE_DEPENDENT activity that ' +
+      'is its driving resource’s calendar rather than its own, and WHICH calendar that is, is ' +
+      'deliberately not exposed to a guest (ADR-0051 keeps resources out of the guest scope) — so ' +
+      'this description is the whole account a guest gets, which is why it states the rule rather ' +
+      'than naming a field. A sub-day activity reads back here as 0 — read `durationMinutes`.',
   })
   durationDays!: number;
 

@@ -245,13 +245,19 @@ export class DependenciesService {
             reason: DEPENDENCY_CONFLICT.CYCLE_DETECTED,
           });
         }
-        // Only read when an endpoint actually defers to a driver (`docs/TECH_DEBT.md` #86). Inside
-        // the transaction, so the calendar the lag is converted on is the one this write sees.
+        // Only read when an endpoint actually defers to a driver AND this write has a `lagDays` to
+        // convert (`docs/TECH_DEBT.md` #86). Gating on the endpoint type alone was enough to be
+        // correct and not enough to be cheap: this runs inside the transaction, which holds the
+        // plan advisory lock taken above, so a request sending `lagMinutes` (or no lag at all)
+        // would have extended that lock for a query whose result is then discarded. Inside the
+        // transaction is still right — the calendar the lag converts on must be the one this write
+        // sees — so the fix is the condition, not the placement.
         const drivingOnCreate = await loadDrivingCalendarMap(
           tx,
           organization.id,
           plan.id,
-          predecessor.type === 'RESOURCE_DEPENDENT' || successor.type === 'RESOURCE_DEPENDENT',
+          dto.lagDays !== undefined &&
+            (predecessor.type === 'RESOURCE_DEPENDENT' || successor.type === 'RESOURCE_DEPENDENT'),
         );
         const created = await this.dependencies.create(
           {

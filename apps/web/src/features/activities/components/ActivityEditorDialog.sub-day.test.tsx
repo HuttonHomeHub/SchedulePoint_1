@@ -187,4 +187,38 @@ describe('ActivityEditorDialog — sub-day durations', () => {
     expect(screen.getByLabelText('Duration (working days)')).toHaveValue(0);
     expect(screen.queryByText(/A day is/)).not.toBeInTheDocument();
   });
+  /**
+   * **`docs/TECH_DEBT.md` #86 — the editor's seed, and the M5 review's finding #6.**
+   *
+   * Nothing in the web suite set a non-null `drivingResourceCalendarId`, and on a `null` driver the
+   * two frames are identical by construction — so this call site could have been swapped back to
+   * `{ kind: 'own' }` with every test green. It is a WRITE path: the seeded text is what a planner
+   * edits and submits, so a wrong factor here stores a wrong quantity of work.
+   *
+   * The fixture is 240 stored minutes on a driven activity whose crane runs round the clock. On the
+   * crane's day that is `4h`; on the crew's eight-hour day the same minutes read `4h` too — so the
+   * seed alone cannot discriminate, and the assertion is on the HELP LINE, which names the day
+   * length it used. That is the one rendered string that differs, and naming it is also what the
+   * planner needs in order to know what `1d` will mean when they type it.
+   */
+  it('seeds the duration against the DRIVING resource’s day length, and says which it used', () => {
+    mount({
+      activity: activity({
+        type: 'RESOURCE_DEPENDENT',
+        drivingResourceCalendarId: 'cal-24',
+      }),
+    });
+
+    // The crane's calendar, not the plan's eight-hour one.
+    expect(screen.getByText(/A day is 24 working hours/)).toBeInTheDocument();
+    expect(screen.queryByText(/A day is 8 working hours/)).not.toBeInTheDocument();
+  });
+
+  it('ignores a driving calendar on a TASK — the type gate', () => {
+    // Without this, a build reading the driver for every activity passes the case above.
+    mount({
+      activity: activity({ type: 'TASK', drivingResourceCalendarId: 'cal-24' }),
+    });
+    expect(screen.getByText(/A day is 8 working hours/)).toBeInTheDocument();
+  });
 });

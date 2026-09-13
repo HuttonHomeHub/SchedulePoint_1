@@ -53,9 +53,12 @@ export class ActivityResponseDto implements ActivitySummary {
 
   @ApiProperty({
     description:
-      'Working days on THIS ACTIVITY’S CALENDAR (ADR-0068) — an eight-hour calendar counts 480 ' +
-      'working minutes to the day, not 1440 — rounded from the stored minutes (milestones are 0). A sub-day activity ' +
-      'reads back here as its nearest whole day — read `durationMinutes` for the exact value.',
+      'Working days on THE CALENDAR THIS ACTIVITY SCHEDULES ON (ADR-0068, corrected by #86) — an ' +
+      'eight-hour calendar counts 480 working minutes to the day, not 1440 — rounded from the ' +
+      'stored minutes (milestones are 0). For a RESOURCE_DEPENDENT activity that is its driving ' +
+      'resource’s calendar (`drivingResourceCalendarId`), not `calendarId`: the work happens ' +
+      'there, and its float is already measured there. A sub-day activity reads back here as its ' +
+      'nearest whole day — read `durationMinutes` for the exact value.',
   })
   durationDays!: number;
 
@@ -214,7 +217,8 @@ export class ActivityResponseDto implements ActivitySummary {
     type: Number,
     description:
       'Explicit remaining work in whole days for an in-progress activity (M2, ADR-0035); null ' +
-      'derives it from percent complete. A day is the ACTIVITY’S CALENDAR’S standard working day ' +
+      'derives it from percent complete. A day is the standard working day of the calendar this ' +
+      'activity SCHEDULES on — the driving resource’s for a RESOURCE_DEPENDENT activity (#86) ' +
       '(ADR-0068), not always 24 hours.',
   })
   remainingDurationDays!: number | null;
