@@ -14,6 +14,31 @@ This file holds **candidate** work. It is not the product plan
 or the engine's capability gap map (ADR-0034 §8 — the authoritative list of
 scheduling behaviours still to build).
 
+> **Swept 2026-09-13 — twelve live entries examined, nine re-derived by running a command, three
+> wrong.** The three not independently re-derived are **privacy operations** (its own text says do
+> not start), **hosting** and **per-activity revision history**; each carries a recent dated re-read
+> of its own, and saying "twelve were checked" would claim more than was done. This file's own
+> closing observation is that _"nothing observes it: no gate reads this file, and
+> `check:debt-status` covers `docs/TECH_DEBT.md` alone"_, so a sweep record is the only verification
+> signal it can carry. Method: for each entry, take the claim that **sizes** it and re-derive it by
+> running something.
+>
+> Wrong or overtaken: **internationalisation** (its `Intl`-throughout claim was false the day it was
+> written), **branch-protection as code** (void by product-owner decision), and **performance budget
+> / Lighthouse** (a bundle budget shipped; a CI frame-rate gate is refused by ADR-0128). Each is
+> annotated in place rather than rewritten.
+>
+> Verified accurate and **not** annotated, because a paragraph saying nothing changed is padding in a
+> file this long: background processing, caching, object storage, metrics & tracing (none of the
+> seven dependencies is installed; `pino-http` is, which is exactly what
+> [CLAUDE.md](../CLAUDE.md) §17 claims), resource-`GROUP` dissolve (dissolve exists for activities
+> only), the soft-delete filter (no Prisma `$extends` anywhere), and per-activity revision history.
+>
+> **The contrast with the register is the reason to keep sweeping this file.** In the same session,
+> four `docs/TECH_DEBT.md` rows were re-derived and **none** was wrong; nine re-derived here produced
+> three. Both samples are small — but the register has a gate and had just had an item-by-item
+> sweep, and this file has never had either.
+
 ## Product (unscheduled)
 
 Product direction lives in [ROADMAP.md](ROADMAP.md) and
@@ -147,6 +172,52 @@ a product idea that has not yet earned a roadmap line:
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
   this is a real option rather than a rewrite — but no locale machinery exists.
+
+  _(Re-derived 2026-09-13 — the first verification this entry has had, and **the sizing claim does
+  not hold**. Two of its three claims are exact: `plans.currency_code` is real
+  (`schema.prisma:811`), and there is genuinely **no locale machinery** — zero matches for `i18n`,
+  `i18next`, `react-intl`, `useTranslation` or `@lingui` across `apps/` and in either
+  `package.json`. What fails is the load-bearing one, **"`Intl` throughout"**, which is the whole
+  argument for `M` rather than "a rewrite", and it fails in two unrelated ways._
+
+  _**First, `Intl` is used and its locale is pinned.** All four shared formatters hard-code
+  `'en-GB'` — `lib/format-money.ts:27,46` and `lib/format-date.ts:6,28`. That is the cheap half: the
+  locale is one parameter away from being a variable._
+
+  _**Second, and not cheap: the diagram does not use `Intl` at all.** Month labels come from two
+  hardcoded English arrays — `MONTHS_SHORT` (`features/tsld/render/time-scale.ts:142`, consumed at
+  `:213`) and `CANVAS_MONTHS` (`features/tsld/render/geometry.ts:187`, consumed by
+  `formatCanvasDate` at `:210-215`, which builds `` `${day} ${name}` `` by hand). `time-scale.ts` is
+  imported by `GanttPanel.tsx` and by `toolbar/commands/use-diagram-image.ts`, so **one English array
+  labels the TSLD ruler, the Gantt ruler and the exported PNG/PDF** — the last being the artefact a
+  planner sends to somebody who was not in the room. This is not a defect today: the product ships
+  one locale and the labels are correct. It is a **scope** fact, and the entry asserts its opposite._
+
+  _**Two more sites, and the awkward one is not in `apps/web` at all.**
+  `features/calendars/schemas/calendar-schemas.ts:68,71` holds short and long English weekday names
+  (the ADR-0067 shift editor). And `packages/interchange/src/validate.ts:758` holds `WEEKDAY_NAMES`
+  whose own docblock says it exists for **"a finding a planner has to act on — `weekday 3` names
+  nothing they can see"** — so that is planner-facing copy inside a **pure, framework-free package**,
+  which is the hardest place in this repository to reach with a translation layer and the one a
+  scoping pass over `apps/web` would never see. It is emphatically **not** format-defined text: it
+  was checked for exactly that, because localising a name the XER/MSPDI format dictates would be a
+  defect rather than a fix._
+
+  _**And it was born stale, not decayed — checked, because the distinction decides the remedy**
+  (`docs/TECH_DEBT.md` #58/#246). `MONTHS_SHORT` landed in `32e843f4` on **2026-07-12**; this entry
+  was written in `bd011eb9` on **2026-07-28**, sixteen days later. So "`Intl` throughout" was false
+  on the day it was typed, and has sized this item ever since. Periodic re-derivation is the answer
+  to decay; there was never a correct value here to return to, which is why nothing recovered it for
+  seven weeks. Counting the file's own series, this is the **sixth** stale claim it has been caught
+  on — and the first shown to have been wrong at birth rather than overtaken._
+
+  _**The entry is not re-sized here**, because the size is a judgement and the canvas half needs a
+  real decision: the painter measures text and sits under `docs/TECH_DEBT.md` #75's draw budget, so
+  "call `Intl` per label" is not obviously free. What is recorded is that **`M` rests on a claim that
+  is false**, which is the thing that would have spent somebody's week. Per this file's own closing
+  observation — "nothing observes it: no gate reads this file" — this was found by reading the code,
+  not by any instrument, and no gate is added here (one would be a shared-gate change, ADR-0105)._
+
 - ~~`M` **Notifications.**~~ **SPECCED, AND DEFERRED ON A NAMED TRIGGER — 2026-09-11.** The
   decision this row said was owed ("which events earn a notification and through what channel") is
   taken: [ADR-0137](adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md),
@@ -308,8 +379,57 @@ narrowed one, which the Background-processing entry now states.**
   GHCR), so this is a decision and an ADR, not a rewrite.
 - `S` **Branch-protection & release-bot permissions** documented as code rather
   than configured by hand in the GitHub UI.
+
+  _(Re-derived 2026-09-13 — the first verification this entry has had, and **its first half is void
+  by decision**, which makes it the **seventh** stale claim this file has been caught on (the sixth is the i18n
+  entry above, found in the same pass) and the first
+  where acting on it would REVERSE a product-owner decision rather than merely waste a day._
+
+  _**There is no branch protection to document.** Measured three ways today, the same three
+  [CLAUDE.md](../CLAUDE.md) §8 records for 2026-09-11: `branches?protected=true` → `[]`, `/rulesets`
+  → `[]`, and `branches/main` → `protected: false`. Its absence is a **product-owner decision**
+  (2026-09-11, recorded in §8 and in
+  [ADR-0136](adr/0136-a-rule-is-enforced-where-the-artefact-lands.md)), not a gap — which is why
+  §19.9, reading the check runs by hand, is this repository's only merge gate. Somebody picking up
+  "branch-protection as code" from this bullet would codify a rule that was deliberately declined._
+
+  _**The settings-as-code half is real, and now has a load-bearing example this entry did not
+  know about.** `squash_merge_commit_title` is `PR_TITLE`, set by hand in the GitHub UI — and that
+  single setting is what makes ADR-0136's `pr-title.yml` gate mean anything, because it is what
+  causes the PR title to become the commit subject that lands on `main`. A gate is checking a string
+  whose promotion to the commit message is guaranteed by an unversioned checkbox. That is worth
+  codifying; "branch protection" is not._
+
+  _So the accurate item is narrower and sharper: **the repository settings that shipped gates depend
+  on are configured by hand and versioned nowhere.** Not re-sized here — `S` was a guess about the
+  wrong subject._)
+
 - `M` **Performance budget / Lighthouse CI** on the plan workspace — the one
   screen where regressions would actually hurt.
+
+  _(Re-derived 2026-09-13 — **overtaken in part, and half-refused by a recorded decision**. Not
+  given an ordinal in this file's stale-claim series, because it is a partial overtaking rather than
+  a claim that was false; the distinction is worth keeping or the counter stops meaning anything._
+
+  _**A performance budget now exists — for bundle size.** `pnpm --filter @repo/web check:bundle-size`
+  runs in CI (`.github/workflows/ci.yml:270`) against a measured floor, landed by ADR-0136 M3 and
+  recorded as closing `docs/TECH_DEBT.md` #48(b) on 2026-09-11. **Lighthouse itself is genuinely
+  absent** — zero matches for `lighthouse` or `lhci` across the workflows and both `package.json`s._
+
+  _**And the plan workspace's runtime performance already has an instrument that is deliberately not
+  a CI gate.** ADR-0128 put the canvas frame-rate probe on the staff console, to run in the
+  operator's own browser, because this repository's container produced a no-change baseline that
+  moved 0.56 → 1.85 pp and 0.93 → 10.00 pp between two runs an hour apart against a 2.00 pp bar.
+  That ADR says **"there is no CI gate here and there never will be"** (`:39`, restated at `:222`) —
+  a decision, not a gap. So "Lighthouse CI **on the plan workspace**" names, in part, something
+  already refused._
+
+  _**What is actually left is narrower and is a real question nobody has answered**: page-load Core
+  Web Vitals — LCP and CLS on first paint — which is a **different quantity** from canvas frame rate
+  and is not covered by either the bundle budget or the ADR-0128 probe. Whether that is wanted is
+  undecided; ADR-0128's refusal does not reach it, because a container can measure a page load
+  reproducibly in a way it cannot measure a rAF pan._)
+
 - `M` **Centralise the soft-delete filter** via a Prisma client extension, so it
   is enforced globally rather than repeated per repository. The cost of the
   current approach is that one forgotten `deletedAt: null` leaks deleted rows;
