@@ -2465,7 +2465,7 @@ a field the register writes and its own gate cannot read.
 
 ### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
 **Owner:** repo
 
 `scripts/lib/doc-register.test.mjs` opens by calling itself _"the ONLY safety net both gates have"_,
@@ -2492,6 +2492,27 @@ function the gate calls — the `doc-register.mjs` shape, and the better answer.
 shared-gate trigger, which is why this is a row and not a commit: the epic that found it declined to
 widen a shared gate inside its own gate pass, for the same reason `#240` declined to widen
 `check:claims` inside the accessibility milestone that found it.
+
+> **Re-derived 2026-09-13, and this row's own argument has got STRONGER while acquiring a sibling it
+> does not name.** Measured across `scripts/`: **18 `check-*.mjs` gates, 5 with their own
+> `.test.mjs`** — so "a gate owns its own test file" is **not** an estate-wide pattern, and read that
+> way the row overstates. Read as it means it, over the family that shares the module, it understates:
+> **7 scripts import `lib/doc-register.mjs`, and 5 of the 7 have a test.** All five estate-wide
+> test-owning gates are in that family, which is a sharper statement than the row makes.
+>
+> **It moved in the row's favour after its last check.** At 2026-09-10 the family held two such tests
+> — `check-reconcile-due.test.mjs` (2026-08-30) and `check-spec-status.test.mjs` (2026-09-09) — exactly
+> as the row says. Three more have landed since: `check-ci-roster` and `check-licenses` (both
+> `69207b1d`, 2026-09-11) and `check-e2e-roster` (`97a1236e`, 2026-09-12). So the asymmetry went 2-of-3
+> to 5-of-7.
+>
+> **The sibling is `check-advisory-agreement.mjs`** — it consumes `doc-register.mjs` and has no test
+> either, so there are **two** exceptions in the family and this row names only itself. Worth knowing
+> before anybody writes the seam: whatever shape closes this one should close that one, and pricing
+> the work for a single gate under-scopes it.
+>
+> Nothing else changes. `main()` still reads a fixed `DOC` and `scripts/debt-register.json`'s
+> ratchet, so the seam question and its ADR-0105 trigger stand exactly as written.
 
 **Interim mitigation, so this is not a bare deferral:** every assertion added by ADR-0124 was
 verified red against the specific defect it names, and each red run is recorded with the command that
