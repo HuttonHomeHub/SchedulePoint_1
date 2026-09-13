@@ -2052,6 +2052,29 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 > prefers: a symbol either exists or does not, and `RectCache` and `crossedLanes` were both found in
 > seconds by name after their line numbers had been meaningless for a month.
 >
+> **The comparison is four claims, not two, and the model that separates them is the size of the
+> invalidating set (2026-09-13).** `ec1227a8` at 07:05 on 2026-09-10 wrote four checkable claims
+> across two rows. `73d390bd` at **21:19 the same day** killed two of them and left two exact. All
+> four were right when written, and neither commit was about the other's subject:
+>
+> | claim                                          | shape                               | invalidated by                | outcome      |
+> | ---------------------------------------------- | ----------------------------------- | ----------------------------- | ------------ |
+> | `#204`: `selection-actions.tsx:844`            | an **address**                      | any edit above it in the file | dead in 14 h |
+> | `#118`: "the matrix's **32** pairs"            | a **total of a growing population** | any addition anywhere in it   | dead in 14 h |
+> | `#118`: "**17** anchor on `--background`"      | a **subset count**                  | additions to that subset only | exact        |
+> | `#204`: "thirteen entries, **none** `'never'`" | a **universal property**            | an addition that violates it  | exact        |
+>
+> That refines this row's own mechanism — _"a line citation moves only when an edit lands above
+> it"_ — into something that covers counts as well as lines: **a claim dies when its invalidating
+> set is touched, and the citation styles differ only in how large that set is.** So the guidance is
+> not "prefer symbols to lines"; it is **prefer the narrowest invalidating set that still says what
+> you mean**.
+>
+> The `#118` case makes that concrete in a way a symbol rule could not: the added row is a **duplicate
+> of a pair already in `TEXT_PAIRS`**, so distinct `(fill, ink)` pairs stayed at **30** across the
+> edit. The same fact written as "30 distinct pairs" would have survived; written as "32 pairs" it
+> did not. One measurement, three phrasings, two of which rot.
+
 > **A second controlled comparison, and the first measured half-life (2026-09-13).** `#204`(a)'s
 > re-derivation put **two** citations in one sentence, written by one hand in one commit: a line
 > (`selection-actions.tsx:844` reads `showLabel: 'always'`) and an identity (_not one of that file's
@@ -3198,7 +3221,7 @@ observation on the host, not by a test.
 
 ### 118. Staff-console M6 review findings that were not folded
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 Six specialists reviewed the combined M1–M5 diff. Eight blocking findings were folded with
 regression tests verified red first (the denial audit row, the missing `nextCursor`, the undeclared
@@ -3305,6 +3328,15 @@ per-pair scope filter in `TEXT_PAIRS`. That is a change to a shared gate (ADR-01
 > every particular, including the part that matters most: the naive addition really does go red at
 > 2.00:1 in `chrome` and `brand`, and it really is **latent** — re-measured with the gate itself,
 > and a spec claim that it was live was checked and withdrawn.
+>
+> **Re-derived 2026-09-13: `17` is still exact, `32` is now `33`, and the drift is instructive rather
+> than a typo.** Both figures were right when written — measured at `ec1227a8` the matrix held
+> **32 rows, 17 of them anchored on `--background`**. `73d390bd` (ADR-0133) then added one
+> `NON_TEXT_PAIRS` entry — `--primary`/`--primary-foreground`, _"the focus indicator on a
+> control filled with --primary"_ — so it is **33 rows** today. The `17` survives because the
+> new row does not
+> anchor on `--background`, and the derived `34` survives with it. The figure is annotated rather
+> than rewritten, because which of the two rotted is the point — see `#246`.
 
 > **The "answer one question for three rows" argument has lapsed, and following it now misleads**
 > (2026-09-09). This paragraph ended _"the same shape as **#231** and **#227**: three deferred edits
