@@ -1234,7 +1234,7 @@ contained, found by taking the finding seriously rather than by trying to satisf
 
 ### 84. Levelling is quadratic in the number of activities contending on ONE resource
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 **Found by** the backend-performance review of ADR-0071 M2, which measured `level.ts` before and
 after the join-lag rework and reported the honest result: the new implementation is marginally
@@ -1281,6 +1281,13 @@ expected to take.
 > `adr/0041:168-169`). One residual it does not name: **ADR-0041 has no section "§F"** — `:159` is a
 > heading `### Invariants` with items lettered (a)–(f). The ADR uses "§F" as its own loose shorthand
 > at `:154`, so this row inherits it rather than inventing it; a reader hunting for a §F finds none.
+
+> **Both citations re-derived and exact, twelve days after they were corrected** (2026-09-13).
+> `level.ts:437-438` still carries the `O(k log k)` / "never a per-minute scan" phrasing verbatim, and
+> ADR-0041 `:154` is still the ADR-0071 amendment paragraph naming §F's boundedness. Recorded because
+> a clean check that leaves no record gets repeated — and because this row is the control in `#246`'s
+> symbol-versus-line comparison: it cites a settled engine module and an ADR, and neither moved.
+> **The measurements were not re-run** and the remedy is unchanged: measure a real plan first.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
@@ -1796,7 +1803,7 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 ### 246. The register's diagnoses survive and its citations rot
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-03 (the 32-row verification sweep) · **Size:** M ·
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-03 (the 32-row verification sweep) · **Size:** M ·
 **Owner:** repo
 
 The 2026-09-03 sweep verified all 32 substantive `unverified` rows against the code. The
@@ -1854,6 +1861,37 @@ symbol is stable, the way `docs/specs/better-auth-1-7-account-issuer/migration-d
 does; or run this sweep on a schedule, since its cost is bounded and its yield was high. Both are
 changes to how the register is written, so both need the spec ADR-0105 requires.
 
+> **The symbol proposal is no longer uncosted, and `#248` ran the experiment by accident**
+> (2026-09-13, from re-deriving eight rows in one pass). That row had **two** citations into the same
+> service: on 2026-09-10 it converted one to a symbol — _the `const [{ activities, edges, options,
+meta }, labelRows]` destructure inside `getCriticalPathTest`_ — and left the other as the line range
+> `schedule.service.ts:277-296`. Three days later the symbol had moved **28 lines** (`:971` → `:999`)
+> and still resolved in one grep, while the line range had come to hold `criticalityRuleOf`, an
+> unrelated helper containing no levelling at all. One row, two citations, one deliberate difference,
+> opposite outcomes.
+>
+> **And the discriminator is not age. It is nearly "is the file being edited", and that first answer
+> was overstated — the check is recorded because it corrected me.** Across the rows re-derived that
+> day, everything that rotted sat in a file edited within two days (`tsld-toolbar-items.tsx` and
+> `schedule.service.ts` that same day, `HierarchyTree.tsx` and `selection-actions.tsx` the day
+> before). But two citations into files edited **just as recently** held perfectly —
+> `GanttPanel.tsx:81` and `schedule.controller.ts:285`, both touched on 2026-09-11 — and `menu.tsx`
+> has not been touched since 2026-09-01, yet `#229`'s two citations into it were wrong anyway,
+> because they were **wrong when written** rather than rotted.
+>
+> Read together those three cases give the real mechanism, which is a property of the **edit**, not
+> the file: **a line citation moves only when an edit lands above it.** `GANTT_ROW_HEIGHT` is at
+> line 81 and `:285` is a controller's OpenAPI block, so most edits to those files cost them nothing;
+> `#248`'s destructure sits near line 1000 of a service, where almost any edit above moves it. So the
+> shape most at risk is a **deep line in a large, actively-edited file** — and "wrong when written"
+> is a separate failure that no citation style prevents.
+>
+> So the practical rule the row's proposal should carry: **cite a symbol when the file is under
+> active development; a line is fine in an ADR, a migration or a settled engine module.** That is
+> cheap, needs no gate, and is testable against the next sweep. The evidence is **19 citations from
+> one pass — 7 rotted, 12 held** (counted, not estimated), which is a pass and not a study, and is
+> stated as such.
+
 **And this sweep's own result could not be recorded in the field meant for it** — see `#247`. The
 `Verified:` field is written inline and read at column 0, so `A8` has never fired and the sixteen
 rows this sweep checked and found accurate carry no machine-readable trace of having been checked.
@@ -1896,7 +1934,7 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 
 ### 248. The DCMA what-if drops the levelling pass, and nothing says so
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** M · **Owner:** api
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** M · **Owner:** api
 
 **The honesty half is DONE (2026-09-11 sweep) and the engine half is what survives.** The row named
 two remedies and said to do at least one. The cheap one landed with the ADR-0116 addendum and is now
@@ -1979,6 +2017,27 @@ throttled at 14/60 s on a measured budget.
 asserting a description contains a word is the scan-matching-prose trap this repository has recorded
 four times, and it would pass against a route that had quietly started levelling. The behavioural
 assertion belongs with the first remedy, where there is something to assert.
+
+> **A natural experiment inside one row: the symbol-based citation survived and the line range did
+> not** (re-derived 2026-09-13). This row's own remedy — stop citing `:952`/`:971` and name _the
+> `const [{ activities, edges, options, meta }, labelRows]` destructure inside `getCriticalPathTest`_
+> — was the right call and is now proven: that site has moved **again**, to `:999`, and the citation
+> still resolves in one grep. Two other citations also held exactly: the OpenAPI caveat at
+> `schedule.controller.ts:285`, and `grep -ci "level" docs/adr/0116-*.md` returning **10**.
+>
+> **The one citation the row did NOT convert is the one that broke.** `schedule.service.ts:277-296`,
+> given as where `recalculate` runs the levelling pass, today holds `criticalityRuleOf` — an
+> unrelated helper with no levelling in it at all. The site is `levelSchedule(`, called inside the
+> `if (graph.leveling)` guard, and it is named here as a symbol rather than a line for the reason
+> this row already established about its neighbour.
+>
+> **And that guard is narrower than this row says.** The text reads "whenever `plan.levelResources`
+> is true"; the code branches on `graph.leveling`, which the builder populates only when the plan
+> opted in **and has assignments** — its own comment says "iff the plan opted in AND has
+> assignments". The row's argument is unaffected in substance, because a levelled plan is one with
+> assignments, but a plan with `levelResources: true` and no assignments runs no levelling pass, so
+> for that plan the what-if's baseline is not wrong. **The engine half of the remedy is unchanged and
+> still owed.**
 
 ### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
 
