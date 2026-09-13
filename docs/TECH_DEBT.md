@@ -1446,9 +1446,20 @@ expected to take.
 > population of the two.
 >
 > Found by the `staff-diagnostics-panel` spec pass re-deriving the count this row still owes, and
-> **confirmed here by reading the three cited functions rather than by trusting the finding** — the
-> spec agent had no ability to run anything. It is a reading, not an experiment: M0-T2b's twin
-> experiment is what would settle it, and re-running that is the first task of whatever fixes it.
+> **confirmed by reading the three cited functions and then by RUNNING the experiment** — the spec
+> agent had no ability to run anything, so its finding was a reading.
+>
+> **This paragraph said "it is a reading, not an experiment; M0-T2b's twin experiment is what would
+> settle it" — and that was wrong, in the helpful direction.** The twin experiment is already a
+> committed e2e case that runs in CI on every push:
+> `resource-dependent-day-factor.e2e-spec.ts`'s _"discriminates the factor: the same task with the
+> plan calendar set EXPLICITLY"_ asserts `totalFloat` **2** on the inheriting twin against **5** on
+> the explicit one, over an asserted-equal window with identical 2,400 duration minutes. It passed
+> against `api-v0.62.0`. So the divergence is characterised, executing, and green — which is what a
+> characterisation test is for, and also why nothing flagged it while the epic shipped.
+>
+> Asserting an experiment did not exist, without looking, in the file that had been edited all day
+> to hold it, is ADR-0076 Class 3 — inside a correction written about an overclaim.
 >
 > **M5 blocked on two of four reviews, and the test-engineer's largest finding was the epic's own
 > census.** `SYMBOLS` named the four resolvers — and almost nothing calls those directly: seven of
