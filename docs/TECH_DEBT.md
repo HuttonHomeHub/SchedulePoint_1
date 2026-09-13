@@ -4106,6 +4106,21 @@ So `#182` fixed exactly the three sites whose failures it had seen and left ten 
 same directory — the "one correct pattern applied to a control and not its neighbour" shape this
 register keeps recording, here in a test suite rather than in a component.
 
+**One mechanism was proposed and then RULED OUT, which narrows this row rather than advancing it**
+(`#314`, 2026-09-13). The theory was rate limiting: the global `ThrottlerGuard` is on in test as
+well as production, and both queries the sign-up landing awaits treat a 429 as permanent, so a
+throttled `/me` would render "Something went wrong" and the heading would never appear **at any
+timeout** — which matches the signature below, including the part this row calls the wrong way
+round. Measured, it does not hold. `@nestjs/throttler`'s bucket is keyed **per route handler**, and
+six traced base-journey specs issue 20–71 API requests each across about fourteen endpoints with
+**`GET /me` the heaviest at four per test** and **zero 429s in 285 requests**. Reaching 100/60 s on
+one handler would take twenty-five tests inside a minute. So rate limiting is off the list, and the
+trace named below is still the first task.
+
+**What that measurement DID establish, and it is useful here:** a base-journey test issues its
+requests in a **4.8–6.8 second burst** and then spends the rest of its twenty seconds idle. Whatever
+is costing `dependencies.spec.ts:98` more than 15 s, it is not a queue of its own requests.
+
 **What is NOT established, stated plainly because the remedy depends on it.** Why
 `dependencies.spec.ts:98` failed three consecutive times at 15 s is **unknown**. Three-for-three at
 three times the original margin is not the signature of a marginal wait, so "widen it again" is the
@@ -4139,6 +4154,140 @@ suite. The remedy candidates — read the trace first; then either a shared `sig
 so there is one wait to tune instead of 61, or a fix to whatever makes the transition slow — both
 change how every e2e suite is set up, so ADR-0105 fires on the fix and it wants a spec rather than
 57 more edits.
+
+### 314. A 429 is the one transient 4xx, and the app's query default calls every 4xx permanent
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (tracing `#313`'s failure chain by reading, the trace being unreadable from here) · **Size:** S to fix, M to decide where the rule lives · **Owner:** web
+
+`lib/query/query-client.ts:17-22` is the app's global retry predicate, and its own docblock states
+the rule it implements: _"Retries transient errors with backoff but **never retries 4xx** (client
+errors are not transient)."_ That parenthesis is true of every 4xx but three, and the exception that
+matters is **429**, which exists precisely to say _this would have worked, come back in a moment_.
+
+**The register already made this decision, in the opposite direction, two days ago.**
+`features/perf-probe/model/store-failure.ts` was written for ledgered `#269` (closed 2026-09-11) and
+names the trap in as many words:
+
+> **429** — a 4xx, and the one 4xx that IS worth retrying, after a wait. Named explicitly because a
+> blanket "4xx cannot be retried" rule would get this one wrong, which is precisely the trap #269
+> flags.
+
+`RETRYABLE_4XX = new Set([408, 425, 429])` there; `status >= 400 && status < 500 → false` in the
+query client. **One decision, two files, opposite answers** — the register's commonest shape, here
+between a feature model and the app's own defaults.
+
+**And the second file has not been edited since the walking skeleton.** `git log` on
+`query-client.ts` returns **one commit**: `56a82ca5`, 2026-07-09, _"organisation onboarding &
+membership (walking skeleton + first slice) (#2)"_. `store-failure.ts` landed in `69207b1d` on
+2026-09-11. So the blanket rule is not a decision somebody took and got wrong against a live
+alternative — it is a sensible first-day default that two months and 138 ADRs of accumulated
+knowledge never came back to, including the epic that wrote down the exact reason it is wrong. That
+is a statement about the file's history rather than about anybody's care, and it is checkable in one
+command.
+
+**Why it is not merely inelegant: the two queries on the `_authed` critical path both inherit the
+default.** Neither `sessionQueryOptions` (`features/auth/api/use-session.ts:27-40`) nor
+`organizationsQueryOptions` (`features/organizations/api/use-organizations.ts:21-24`) overrides
+`retry`. The session query maps **only 401** to `null` and rethrows everything else, so a 429 on
+`GET /me` is a rejection, not an unauthenticated answer. `_authed.beforeLoad` (`app/router.tsx:108`)
+awaits it, and a rejection there is not a `redirect` — so the router falls to
+`defaultErrorComponent` (`app/router.tsx:512-520`), which renders:
+
+> **Something went wrong** — We couldn't load this page. Please try again.
+
+with **nothing to press**. The copy instructs a retry the screen does not offer, on a failure that a
+single automatic retry would have cleared. `ensureOrgMembership` (`app/router.tsx:150`) awaits the
+organisations query the same way, so **every navigation to an org route** has the property too, not
+only the sign-up landing.
+
+**The ceiling is reachable, and it is per route handler per IP.** `ThrottlerGuard` is a global
+`APP_GUARD` (`apps/api/src/app.module.ts:153`) at `RATE_LIMIT_LIMIT`/`RATE_LIMIT_TTL`, defaulting to
+**100 per 60 s** (`config/env.validation.ts:292-293`). Note the asymmetry with the auth layer's own
+limiter, which is `enabled: options.isProduction` (`common/auth/better-auth.ts:271`): **the global
+one is on everywhere, including dev and test.**
+
+**Per route handler, not one bucket per caller** — read out of the installed dependency rather than
+assumed, because the two readings differ by about an order of magnitude in what it takes to trip.
+**This row's own first draft got it wrong in exactly that direction**, built the `#313` mechanism on
+the wrong reading, and was corrected only by going to measure it. Recorded rather than quietly
+fixed, because the correct reading was already in the repository (see the `#268` note below) and the
+config is what a third reader will open first too.
+`@nestjs/throttler@6.5.0`'s default key is
+`sha256(ClassName-handlerName-throttlerName-tracker)` (`dist/throttler.guard.js:148-150`), and
+nothing here overrides it — `generateKey` has **zero** occurrences in `apps/api/src`. The tracker is
+`req.ip`, so an office NAT is still one caller, and **that is where this bites in production**:
+`sessionQueryOptions` carries `staleTime: 0` and the client default is `refetchOnWindowFocus: true`,
+so `GET /me` refetches on every window focus and every navigation. Ten planners behind one WAN
+address, each changing focus ten times a minute, is the ceiling exactly — on the one route whose
+failure renders the dead end above.
+
+**`#313` is NOT explained by this, and the hypothesis is recorded as withdrawn rather than
+deleted.** This row was raised on the theory that a shared bucket explained `#313`'s signature, and
+the measurement taken to _size_ it refuted it instead. Five base-journey specs were run locally
+under `--trace on` (chromium, the real dev-server configuration) and their traces read:
+
+| spec                      | Nest API requests | burst span | statuses                    |
+| ------------------------- | ----------------- | ---------- | --------------------------- |
+| `dependencies.spec.ts:82` | **71**            | 6.8 s      | 62×200, 7×201, 1×409, 1×204 |
+| `schedule.spec.ts:61`     | 67                | 6.8 s      | 60×200, 7×201               |
+| `tsld.spec.ts:59`         | 54                | 4.8 s      | 48×200, 6×201               |
+| `schedule.spec.ts:124`    | 49                | 5.6 s      | 44×200, 5×201               |
+| `dependencies.spec.ts:15` | 44                | 5.2 s      | 39×200, 5×201               |
+| `clients.spec.ts:10`      | 20                | 2.3 s      | 17×200, 3×201               |
+
+**Zero 429s in 285 requests, all five specs green.** The per-test totals do exceed 100 inside a
+60-second window when summed — which is what the first draft of this row reasoned from — but they
+are **spread across about fourteen distinct endpoints**, and the heaviest single one is `GET /me` at
+**four per test**. Per handler, reaching 100/60 s would take twenty-five base-journey tests inside
+one minute, against tests that take twenty seconds each. The margin is not thin.
+
+**The three raised configs are consistent with the per-route key and are not evidence against it.**
+Seeding hundreds of activities hammers **one** endpoint, which is exactly the shape a per-handler
+bucket refuses, so `playwright.gantt.config.ts:57` and its two siblings were right and their stated
+reason is right. Counted anyway, because the first draft used it as the reachability proof: **47
+Playwright configs, 3 raise the limit, 44 do not.** That spread is a note now, not an argument.
+
+**Two structural facts survive the withdrawal and are worth keeping.** `apps/api/test` boots a fresh
+Nest app per spec file — 51 of its 57 `*.e2e-spec.ts` files call `Test.createTestingModule`, and the
+other six issue **zero** HTTP requests (counted, not assumed) — so the in-memory throttler storage
+starts empty in every file, and `fileParallelism: false` (`apps/api/vitest.e2e.config.mts:25`) stops
+any two sharing one. A Playwright config is the mirror image: one API process started once by
+`webServer` and never reset. That asymmetry is real; it is simply not large enough to matter at the
+base journey's endpoint spread.
+
+**A doubt this raised about `#268`, and then settled rather than left** (same day). That row records
+its mechanism as _"the whole file runs inside one 60-second window against one in-memory counter"_,
+which is not how the default key works. Rather than flag it, the experiment it needs was run: remove
+the `beforeEach` clear from `apps/api/test/staff.e2e-spec.ts` and run the file. **2 of 22 tests fail,
+both on `POST /api/v1/staff/probe-results`** — one handler, and the same one whose request count is
+highest. The endpoint takes 8 literal posts plus a 4-entry field loop plus a **30-entry `bad[]` loop
+inside one test**, so about **42 requests against that controller's ceiling of 30**. The file was
+restored immediately; the corrected account is written onto `#268`, where its remedy and its measured
+_effect_ both stand — only the one-counter phrasing was loose. It was loose in a way that cost
+something exactly once: **here**, in this row's own first draft.
+
+**One inaccuracy found on the way, recorded with its (nil) consequence.** `app-setup.ts:26-32` sets
+`trust proxy` only when `TRUSTED_PROXY_IPS` is declared, _"left off in dev/test where there is no
+proxy"_ — and the e2e configuration **does** run behind one, the Vite dev server proxying `/api`. It
+changes nothing here: every e2e request originates from one browser on localhost, so the tracker is
+the same either way. Worth a sentence because the comment's reason is false for the configuration
+the journeys use, and a later reader could rely on it somewhere it does matter.
+
+**Why the fix is not taken here.** It is four lines, and where the rule lives is the decision.
+`store-failure.ts` is the right rule in the wrong place for an app-wide default — it sits under
+`features/perf-probe/model/`, so importing it from `lib/query/` points the dependency the wrong way,
+and restating the set in the query client is a second copy of a decision `#269` deliberately put in
+one file. Extracting it to `lib/api/` touches the perf-probe feature and its suite, which is a
+shared-decision move rather than a patch. The candidates, cheapest first: (1) extract
+`RETRYABLE_4XX` and `describeStoreFailure`'s status rule into `lib/api/`, leaving `store-failure.ts`
+as the panel-copy layer over it; (2) restate the three statuses in `query-client.ts` with a pointer
+to `#269`, which is the copy the decision was written to avoid; (3) leave the default and give
+`sessionQueryOptions` and `organizationsQueryOptions` their own predicate, which fixes the guard and
+leaves every other query wrong. (1) is the answer.
+
+**A separate half, not folded in:** even with the retry, an exhausted bucket that is still exhausted
+after the backoff lands on `defaultErrorComponent` with no way out. That screen offering a reload is
+its own small piece of work and does not need this decision first.
 
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
@@ -6490,6 +6639,36 @@ name the cause: the suite passed at 22 tests, and adding a 23rd pushed **three u
 into 429, each failing with a message about the assertion it was making. The whole file runs inside
 one 60-second window against one in-memory counter, so a test's request budget was being spent by
 its neighbours.
+
+**The mechanism stated above was wrong, and the corrected one is measured** (2026-09-13, by
+removing the `beforeEach` clear and running the file). `@nestjs/throttler@6.5.0` keys its buckets
+**per route handler**, not per file and not per caller — `sha256(ClassName-handlerName-throttlerName-tracker)`,
+`dist/throttler.guard.js:148-150`, with no override anywhere in `apps/api/src` — so _"one in-memory
+counter"_ for the whole file is not what the library does. This repository had already established
+that: `scripts/measure-band-copy.mjs:48-55` says _"the shape of that limit is not what it looks like
+from the config… the real bound is 100 per 60 s **per route handler** per IP"_, with the citation
+registered in `scripts/dependency-claims.json`, six days before this row was raised.
+
+**The corrected account, and it is sharper than the original.** Without the clear, **2 of 22 tests
+fail, both on `POST /api/v1/staff/probe-results`** (`:626` expecting 422 and `:638` expecting 404,
+each getting 429) — one handler, not a file-wide counter. The arithmetic: that endpoint takes 8
+literal posts, a 4-entry field loop, and a **30-entry `bad[]` loop inside a single test**, so it sees
+roughly **42 requests against a ceiling of 30** while no other handler comes close. That is why the
+symptom looked like innocent bystanders: _"refuses every bound the DTO declares"_ spends the whole
+budget by itself, and the next two tests that happen to POST there pay for it.
+
+**What this row got right is most of it, and that matters for how the correction is read.** The
+_effect_ — a test's spending counting against its neighbours' — is real, was measured three ways at
+the time, and is exactly what happens per handler. The _remedy_ is right and untouched: `storage.clear()`
+empties every key, so it isolates whatever the key shape is. Only the one-counter **phrasing** was
+loose, and it mattered exactly once — in `#314`, whose first draft reasoned from it about a different
+suite and reached a wrong conclusion.
+
+**What is structural, and does hold:** `apps/api/test` boots a fresh Nest app per file — 51 of 57
+files call `Test.createTestingModule`, the other six issue zero HTTP requests — so storage starts
+empty in every file and `fileParallelism: false` stops any two sharing one. The web e2e harness is
+the mirror image: one API process per Playwright config, never reset. `#314` records why that
+asymmetry turns out **not** to explain `#313`.
 
 **Fixed for this file** by clearing the throttler storage in `beforeEach` — isolation, not a
 weakened bound. The product limit is untouched, every test still runs its own requests under the

@@ -51,7 +51,11 @@
       "path": "dist/throttler.guard.js",
       "lines": "148-150",
       "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
-      "citedBy": ["scripts/measure-band-copy.mjs"]
+      "citedBy": [
+        "apps/api/test/staff.e2e-spec.ts",
+        "docs/TECH_DEBT.md",
+        "scripts/measure-band-copy.mjs"
+      ]
     },
     {
       "ref": "index.js:116-124",
