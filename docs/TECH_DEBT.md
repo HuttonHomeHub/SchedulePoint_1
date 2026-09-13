@@ -1938,6 +1938,111 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 > a scratchpad script and is **not** committed: it is a measurement, not a gate, and `#246`'s open
 > question is unchanged and still needs the spec ADR-0105 requires.
 
+**Measured 2026-09-13: a tenth of this register's citations never resolved at all — they were wrong
+in the commit that wrote them, and "rot" is the wrong word for those.**
+
+This row's thesis is decay: a diagnosis survives while its evidence ages out under refactors. That
+is real and remains the larger share. What is added here is a **second, distinct mechanism** which
+is smaller, but whose population can be counted exactly, and which matters out of proportion to its
+size because the two have **opposite remedies** — decay is answered by re-deriving periodically, and a birth defect is
+not answered by that at all, because there was never a correct value to return to.
+
+**The mechanism.** Sometimes a register row is written **about** a change, in the **same commit** as
+the change — 15% of the time, measured, not assumed. In that case the author opens the file, reads
+the line, writes `foo.ts:119` into the row, and then makes the edit, which adds lines above 119 and
+moves what they cited. The check was real; the **order** was
+wrong. A reviewer cannot catch it either: at review time the diff and the prose agree with each
+other, and only the sequence _inside_ the commit is wrong, which a diff does not show.
+
+**Measured across all 210 commits that have touched this file, with the denominator stated so the
+share is not overread.** **451** distinct line citations have ever been added to
+`docs/TECH_DEBT.md` (233 are live today). **68 of them — 15% — had their cited file changed in the
+same commit**, which is the only population this mechanism can touch. Of those 68, **47 (69%) had
+lines added or removed above the cited line by that very commit**. So the mechanism accounts for
+**10% of every citation this register has ever made**: a minority, but a predictable and
+preventable one.
+
+Those 47 are **at risk** rather than proven wrong: an author could have written the post-edit number.
+So five were resolved by hand against what the row claims they show. **Four are unambiguously
+wrong**, and the fifth turns out to be a different defect:
+
+| citation                 | the row says it shows                       | what is actually there                                                    |
+| ------------------------ | ------------------------------------------- | ------------------------------------------------------------------------- |
+| `surface.tsx:67`         | the `RESET_TONES` declaration               | it is at **`:75`** (`#279`)                                               |
+| `toolbar-styles.ts:119`  | a `cva` "consumed by" two call sites        | `toolbarCardVariants` is at **`:110`**; `:119` is a caret-height docblock |
+| `surface.tsx:62-65`      | text saying "latent rather than live"       | that phrase is at **`:72`**                                               |
+| `health-rows.ts:135-137` | metric 10's narrowing as a hardcoded string | a docblock about who owns the wording                                     |
+
+**Two of those four prove the mechanism rather than merely fitting it**, because the pre-edit line can
+be read directly. At `69207b1d^`, `health-rows.ts:135-137` is **exactly** the hardcoded string the
+row describes — `if (metric.id === 'RESOURCES' && …) return 'Reads resource-assignment existence
+only …'` — and at `69207b1d` it is a docblock. The author read the right thing at the right line and
+the same commit moved it. `surface.tsx:67` is the same story: the declaration sat at 67 before
+`ec1227a8` and at 75 after, and `ec1227a8` wrote the citation. This is not a correlation between
+"lines moved" and "citation looks wrong"; it is the sequence, observable in the two trees.
+
+The fourth, `app-shell.tsx:122-127`, is **excluded from the count rather than scored as a hit**: it
+is cited as evidence that `#156` closed "by deleting the whole drawer mechanism", so it points at
+code that **no longer exists**. A line range for deleted code can never resolve, and it was already
+unresolvable when written — a distinct and arguably worse failure than a line shift, and not the one
+being measured here. Worth naming because it is invisible to the same sweep: nothing in the diff
+distinguishes it from a live citation.
+
+One of the four is the case that prompted the sweep, so read it as **three fresh, three wrong**. That
+is still a sample, not a census — the honest claim is 47 at risk with a small, uniformly-confirming
+sample, not 47 proven.
+
+**Two method limits, stated rather than left implicit.** The cited path is matched to a changed file
+by suffix, and **2 of the 68 (3%) matched more than one candidate** — so basename collisions are a
+real but small source of false positives. And "lines shifted above the cited line" is a necessary
+condition for being born stale, not a sufficient one; a pure same-length replacement above the line
+is correctly excluded, and an author who re-read after editing is wrongly included.
+
+**The remedy is an ordering, and it is cheap.** Either re-derive a line citation **after** the edit
+that accompanies it rather than before — the whole defect is that these two steps are in the wrong
+order — or cite a **symbol**, which is immune by construction, since a symbol survives an edit above
+it and a line number is defined by not having done so. That second option is not a new idea here:
+`#248` ran the experiment by accident on 2026-09-10 and the symbol held while the line range rotted,
+and `#279` is now a third data point at 8 lines inside a single commit.
+
+**And unlike most of this row, the remedy has a computable form — which is the strongest thing here.**
+The full check is impossible: nothing can know what a citation was _meant_ to point at. But the
+**at-risk** condition is exactly what was measured above, and it is decidable from the diff alone:
+_this commit adds `path:N` to the register and also changes `path` with a net line shift above `N`._
+That is a precise, cheap, low-volume warning: it would have fired on **20 of the 210 commits that
+have touched this file — one in ten** — covering all 68 at-risk citations, and it says only "re-check this citation before you push", which is the one moment it can still be fixed
+for free. It is **not built here**: a gate `prepush.sh` derives and CI runs is a shared-gate change
+and an ADR-0105 trigger, and it needs one decision a gate cannot make for itself — whether to fire on
+a citation the author may have deliberately written against the post-edit tree, which is
+indistinguishable from the defect and is the reason the check must warn rather than block.
+
+**The contrast with `CLAUDE.md` is the argument for the gate, and it is already in the repository.**
+That file carries **16** distinct `file:line` citations. Eleven point into this repository and all
+eleven resolve to a file that exists with the line in range. The other five point into
+**dependencies** — into `axe-core`, `qss`, `better-auth`'s sign-up path and others — and every one
+is registered in `scripts/dependency-claims.json` with a package, a version and an anchor, so
+`check:claims` re-checks them on every push (111 claims across 17 packages, green). ADR-0076 built
+that register precisely because a citation into code this repository does not own cannot be checked
+by reading.
+
+> **This paragraph tripped that gate on its first run, which is the best possible demonstration of
+> it.** The sentence above originally quoted two of those citations with their line numbers, as
+> examples — and `check:claims` refused the push: _"cited in `docs/TECH_DEBT.md` but not in
+> `scripts/dependency-claims.json`"_. It was right. **A gate cannot tell a quotation from an
+> assertion**, so illustrating a registered citation creates an unregistered one. That is `#312`'s
+> open "does a citation inside a quoted historical sentence count?" question, appearing **live, in a
+> different gate, against the paragraph praising it** — and the answer that gate already gives is
+> _yes, it counts_. The examples are named without line numbers instead, which makes the point
+> without making a claim. **The operating manual's citations are gated and the debt register's are not**, and that
+> is the structural reason this class lives here rather than there — not a difference in care. The
+> advisory above is the same idea one file over, and the precedent for it already passes in CI.
+
+**What this does not change.** The row's headline — diagnoses survive, evidence does not — still
+holds, and the 2026-09-03 sweep's distribution is untouched. What changes is **why** the evidence
+fails and therefore what to do about it: a periodic re-derivation pass cannot fix a citation that was
+never right, and will keep finding the same class forever unless the ordering changes at the point of
+writing.
+
 ### 248. The DCMA what-if drops the levelling pass, and nothing says so
 
 **Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** M · **Owner:** api
@@ -7246,7 +7351,7 @@ declined. Do not do both.
 
 ### 279. The reset that closes the split-pair defect has no CSS rule, no caller, and would paint the wrong thing
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
 
 **#118 item 4 asked for a per-pair scope filter. Specced properly, the answer is that the mechanism
 this repository already decided on was never built** — and the filter is a way of writing down a hole
@@ -7257,8 +7362,11 @@ was re-derived here, and one of its claims did not survive that:
 
 - **`<Surface tone="card">` renders `data-surface="card"` and there is no `[data-surface='card']`
   rule in `globals.css`** — nor `popover`. The attribute matches nothing.
-- **`RESET_TONES` has zero production callers.** Its only occurrence is its own declaration
-  (`surface.tsx:67`).
+- **`RESET_TONES` has zero production callers.** It has no call site at all: besides its own
+  declaration (`surface.tsx:75`) it is named only in two docblocks that describe it — both added by
+  this row's own corrections. (This bullet read "its only occurrence is its own declaration
+  (`surface.tsx:67`)" until 2026-09-13; see below for why both halves were wrong on the day they
+  were written.)
 - **What it does render is `bg-background text-foreground`** (`surface.tsx`, the `className`
   default). Inside a `chrome` scope both names are rebound, so a component asking for a card would
   get the **chrome** fill and ink — the opposite of the docblock's promise that a reset "RESTORES
@@ -7362,6 +7470,68 @@ here**: it touches `globals.css`, `Card`, `Menu`, `Combobox` and `Tooltip`'s con
 accessibility, component and ux review plus a pixel-identical screenshot set as its falsification
 condition. That is an epic, not a follow-up, and its M0 must re-derive these numbers by running
 before anything is edited.
+
+**Re-derived 2026-09-13. All four findings hold — and one bullet's two claims were both wrong the
+instant they were written, by their own commit.**
+
+The substance is unchanged, re-checked against the tree rather than re-read: there is still no
+`[data-surface='card']` or `[data-surface='popover']` rule in `globals.css`; `RESET_TONES` still has
+**zero** production callers, its only other occurrences being two docblocks that describe it; and the
+reset branch still renders `bg-background text-foreground` (`surface.tsx:128`), so inside a `chrome`
+scope a component asking for a card would still get the chrome fill and ink.
+
+**One bullet above carried two claims, and `ec1227a8` falsified both of them in the act of writing
+them.** Both are corrected above rather than left standing with a note beside them.
+
+- **The line number.** It said `surface.tsx:67`; the declaration is at **`:75`**. The commit that
+  moved it is `ec1227a8` — **the same commit that wrote `(surface.tsx:67)` into this row**. Before
+  that commit the declaration was at 67, after it 75, and the diff adds ten lines above it.
+- **The count.** It said _"its only occurrence is its own declaration"_. Before `ec1227a8` that was
+  **exactly true** — one occurrence in `surface.tsx`. That commit added a second, a docblock at
+  `:62` describing the very defect this row reports, and `69207b1d` then added a third to
+  `reset-fills.structural.test.ts` when it corrected that gate's instruction. So the row's
+  corrections **created the occurrences** that made its own count false.
+
+Neither is rot. Both were wrong at the moment they were committed, and the second is the sharper
+one: a document describing a symbol **is itself an occurrence of that symbol**, so a claim about how
+many times a name appears is falsified by writing the claim down. That is not a general law — it
+bites only a count of _mentions_ rather than of callers — and the fix is to count the thing that
+matters. The bullet now says **zero call sites**, which is what the row was ever about and which
+writing about it cannot change.
+
+**That makes three instances of one mechanism found in a single pass, and the mechanism is worth
+more than any of them.** All three are a claim about the tree written in the same commit that changes
+the tree:
+
+- **`#279`** (here) — the citation's target moved in the commit that wrote the citation.
+- **`#249`** — "nothing in that pass touched `plan-workspace-toolbar.tsx`", written by `69207b1d`,
+  which touched `plan-workspace-toolbar.tsx`.
+- **`#302`/`#298`** — `#298` was **born** carrying `Status: unverified` beside a verification date,
+  in `69207b1d` again.
+
+None is carelessness, and that is the point: **the author checks the tree, writes down what they
+found, and then makes the edit — and the edit invalidates the check.** The verification is real and
+the order is wrong. A reviewer cannot catch it either, because at review time the diff and the prose
+are consistent with each other; only the _sequence inside the commit_ is wrong, and a diff does not
+show sequence.
+
+**The remedy is an ordering, not more care, and there are two.** Re-derive a line citation **after**
+the edit that accompanies it rather than before — or cite a **symbol**, which is immune, since a
+symbol survives an edit above it and a line number is defined by not having done so (`#248`,
+re-confirmed here at 8 lines in one commit). This row is a third data point for that finding and the
+first where the displacement and the citation are the same commit.
+
+**One note on this annotation's own citation**, since it would be poor form to add a fresh instance
+of the class while describing it: `surface.tsx:128` was read against the tree this commit ships, and
+this commit changes `docs/TECH_DEBT.md` and nothing else — so nothing can move it out from under the
+claim. That is the remedy applied rather than only recommended, and it is free here only because the
+annotation and the code are in different commits, which is exactly the condition the 15% lack.
+
+No change to the remedy: the reset is still unbuilt, still has no CSS rule and still no caller, and
+building it is still a surface pass rather than a fix. The line number **is** corrected rather than
+left standing with a note beside it — ADR-0071's rule is that noticing drift and stepping over it
+leaves the register exactly as wrong as not noticing, and a reader who takes the citation and not
+the commentary is the reader this row exists for.
 
 ### 280. A gate piped into `tail` reports the pipe's exit status, and a push went out on a red one
 
