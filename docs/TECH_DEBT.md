@@ -134,7 +134,7 @@ backwards.
 
 ### 58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 > **Half done 2026-08-08 — in a different shape than specified.** The **TODAY chip shipped** as
 > ADR-0056's canvas Today pill (`render/paint.ts:1339-1364`, `TODAY_CHIP_TOP`), not as the DOM chip
@@ -158,6 +158,18 @@ backwards.
 > — the year and month rows still clamp left (`syncRulerRow(…, true)`, `TsldCanvas.tsx:1607-1608`) —
 > **and the month tint**, the ruler container carrying one flat `bg-canvas` with no per-month fill
 > (`:2192-2196`). Two items, not four, and neither of the two that shipped was recorded as shipping.
+>
+> **And this row is the control case for #246, checked rather than assumed (2026-09-13).** Several
+> of this pass's citation findings were **born stale** — wrong in the commit that wrote them — and
+> #272 already warns that the label is becoming a tempting one, and records an
+> explicit NON-instance beside it. These two
+> citations are **not** an instance: `3cf27de4` (2026-08-09) introduced both, and touched
+> **neither** `render/paint.ts` nor `TsldCanvas.tsx`. They were accurate when written and decayed over five weeks. So the two
+> mechanisms are separated by exactly one command — did the commit that wrote the citation also edit
+> the cited file? — and #246's original thesis (the diagnosis survives, the evidence rots) is
+> confirmed here in its pure form. Nothing else in this row changes: its 2026-08-22 and 2026-09-09
+> re-derivations already carry the stale citations and the narrowed residual, and re-deriving them
+> a third time found them accurate.
 
 S4 landed the canvas month bands — the diagram on its own banded ground — but deliberately stopped
 short of the tiered ruler redesign (year centred / month names / day numbers) and the TODAY chip.
@@ -494,7 +506,7 @@ can.
 
 ### 72. The bulk-selection checkboxes are hand-rolled
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 **The target-size half closed 2026-09-01 and the primitive half did not**, so the row is narrowed
 rather than deleted.
@@ -2815,7 +2827,7 @@ number attached.
 
 ### 105. Two follow-ups from the canvas status & feedback gate pass
 
-**Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
+**Status:** open · **Verified:** 2026-09-13 · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
@@ -2857,6 +2869,14 @@ blocked the epic.
    labels one producer (`wbsGroupLabelById`, consumed by both the legend and the spoken clause) and
    listbox row text one producer (`composeListboxRowText`, consumed by both the row and the
    announcement). The export legend is the third instance of the same shape, left alone.
+   > **Re-derived 2026-09-13, and this time ITEM BY ITEM — both of them, which is the whole list**,
+   > so the caveat at the top of this row does not apply to the 2026-09-13 date the way it applies
+   > to the 2026-09-10 one. Item 1: `ToolbarItemRenderApi` still carries exactly five fields and no
+   > `busy`, and the sentence quoted above is still on `activeKind` word for word. Item 2:
+   > `EXPORT_LEGEND` is still a hand-authored array (`render-export-image.ts:159`), and
+   > `wbsGroupLabelById` / `composeListboxRowText` are both still single producers with two
+   > consumers each, so the contrast the item draws still holds. Nothing changed; the value is that
+   > the date now means what a reader will take it to mean.
 
 ### 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
 
@@ -5782,9 +5802,13 @@ be profiling; and `LEGEND_WIDTH_PX` needs the component-contract decision record
 
 ### 223. The canvas resource strip does not export or print, and the gate for that cannot see it
 
-**Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram UX review)
+**Status:** open · **Verified:** 2026-09-13 · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram UX review)
 
-**Re-verified 2026-09-10**: `use-diagram-image.ts` still contains **zero** occurrences of `stripRef`.
+**Re-verified 2026-09-10, and again 2026-09-13** — the second time including the line citation,
+because a line citation is the half that rots. `use-diagram-image.ts` still contains **zero**
+occurrences of `stripRef` (nor of `resourceStrip` / `ResourceStripSnapshot`, swept across
+`features/tsld/export/`), and `scene-parity.structural.test.ts:30-31` still declares exactly the
+two files this row names — `CANVAS` on :30, `EXPORT` on :31. Both halves exact.
 
 The Stage-E resource strip (ADR-0049, `VITE_CANVAS_RESOURCE_VIEW`) is painted from `TsldCanvas`'s
 own `stripRef`, which is a **separate ref from `sceneRef`**. `use-diagram-image.ts` has **zero**
