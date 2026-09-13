@@ -35,7 +35,11 @@ import {
 } from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
-import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
+import {
+  attachDayFactors,
+  resolveDayFactorMinutes,
+  schedulingCalendarId,
+} from '../activities/day-factor';
 import { loadDrivingCalendarMap } from '../activities/driving-calendars';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { classifyRevisionChanges } from '../baselines/revision-changes';
@@ -342,18 +346,18 @@ export class ScheduleService {
    * on three calendars costs three rows. An activity with no calendar takes the 24-hour constant,
    * which is also what `buildPlanCalendar` falls back to, so the unit and the schedule agree.
    *
-   * **That last clause is FALSE when the plan has a calendar, and it is `docs/TECH_DEBT.md` #86's
-   * mechanism** (measured 2026-09-12, `docs/specs/resource-dependent-day-factor/m0-measurements.md`
-   * §M0-T2b). An activity inheriting its plan's calendar carries `null` here and so takes 1440,
-   * while the schedule it is measured against runs on the plan's day — 480 for an 8 h calendar. The
-   * experiment is two five-day tasks in one plan, identical but for `activities.calendar_id` being
-   * set explicitly on one: `total_float` reads **5** on the explicit one and **2** on the inheriting
-   * one. The invariant holds only when the PLAN has no calendar either, which is the one case #86 is
-   * not about.
+   * **That clause is now true because of WHAT THIS IS HANDED, not because of anything below.** It
+   * was false for as long as the caller passed `calIdByActivity`, where `null` is the engine's
+   * *inherit* sentinel: an activity inheriting its plan's calendar took 1440 while the schedule it
+   * is measured against ran on the plan's day — 480 for an 8 h calendar — so `total_float` read
+   * **2** where the explicitly-bound twin read **5** (`docs/TECH_DEBT.md` #86's second mechanism,
+   * measured 2026-09-12). This function's body was never wrong and is unchanged; it is now passed
+   * `dayFactorCalIdByActivity`, in which `null` means what this docblock always assumed — the plan
+   * has no calendar either.
    *
-   * **Left as characterisation, deliberately.** Where the fix belongs — resolving the inherited
-   * calendar into `calIdByActivity`, or defaulting to the plan's factor rather than to 1440 — is a
-   * choice with different blast radii and belongs to that row's M1, not to a comment.
+   * So the reading that matters for a future editor: **`null` here is "no calendar anywhere", never
+   * "inherit".** Passing the port map back would silently restore the defect, which is why the two
+   * maps are named differently at their source and why a structural test pins which one arrives.
    */
   private async resolveDayFactors(
     calIdByActivity: ReadonlyMap<string, string | null>,
@@ -454,7 +458,10 @@ export class ScheduleService {
         // Float and drift are persisted IN DAYS by this write, so they take the same factor the
         // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
         // float" for one span — not a smaller change than converting them, an incoherent one.
-        const dayFactorByActivity = await this.resolveDayFactors(graph.calIdByActivity, tx);
+        const dayFactorByActivity = await this.resolveDayFactors(
+          graph.dayFactorCalIdByActivity,
+          tx,
+        );
         await this.schedule.writeResults(organization.id, planId, results, dayFactorByActivity, tx);
         await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
         // Stamp this plan's schedule freshness cursor in the SAME engine-owned write path (F6, ADR-0045
@@ -1298,9 +1305,26 @@ export class ScheduleService {
     /** The resource-levelling demand model — loaded ONLY when the plan opts in (`levelResources`) and
      * has active assignments; null keeps the byte-identical fast path (ADR-0041 §7). */
     leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null;
-    /** The calendar each activity SCHEDULES on, keyed by activity id — the day↔minute factor's
-     * source for the day-denominated float columns this recalculation persists (ADR-0068 §3a). */
+    /**
+     * The engine's PORT map: which calendar each activity schedules on, where `null` means
+     * **inherit the plan's** and is the fast path `portFor` collapses to `undefined`. It is an
+     * input to `computeSchedule` and to the PRED/SUCC lag resolution, so it is not the right map to
+     * convert minutes into days with — `null` there is a sentinel, not a calendar.
+     */
     calIdByActivity: ReadonlyMap<string, string | null>;
+    /**
+     * The DAY-FACTOR map: the calendar each activity's day-denominated float columns are measured
+     * in, with the inherit sentinel already **resolved** to the plan's calendar.
+     *
+     * Two maps rather than one because the same value answers two different questions (`#86`, the
+     * second of its two mechanisms). `calIdByActivity` carries `null` for an inheriting activity and
+     * the engine reads that correctly as "use the plan's port"; `resolveDayFactors` read the same
+     * `null` as "no calendar at all" and took the 24-hour constant — so an activity's duration was
+     * measured on the plan's real day and its float on a 24-hour one. Built by
+     * {@link schedulingCalendarId}, the resolver #86's first half already wrote, rather than by a
+     * second spelling of its fallback rung here.
+     */
+    dayFactorCalIdByActivity: ReadonlyMap<string, string | null>;
     meta: {
       lagCalendarOverrideCount: number;
       activityCalendarCount: number;
@@ -1372,6 +1396,24 @@ export class ScheduleService {
     // RESOURCE_DEPENDENT endpoint's lag rides its resource calendar, consistent with its scheduling).
     const calIdByActivity = new Map(
       activityRows.map((r) => [r.id, effectiveByActivity.get(r.id)!.calId] as const),
+    );
+    // The same question asked for a different purpose, so a different map (`#86`). The engine wants
+    // the inherit sentinel; the day↔minute conversion wants it resolved. `schedulingCalendarId` is
+    // the rule — driver → own → plan — and is called rather than restated, so the two halves of #86
+    // cannot drift about what an activity's scheduling calendar is.
+    const dayFactorCalIdByActivity = new Map(
+      activityRows.map(
+        (r) =>
+          [
+            r.id,
+            schedulingCalendarId({
+              type: r.type,
+              drivingCalendarId: drivingResourceCalByActivity.get(r.id) ?? null,
+              activityCalendarId: r.calendarId,
+              planCalendarId: plan.calendarId,
+            }),
+          ] as const,
+      ),
     );
 
     // Progressed activities this recalc consumes (M2, ADR-0035): 0 = an unprogressed plan.
@@ -1549,6 +1591,7 @@ export class ScheduleService {
       // in that calendar's days (ADR-0068 §3a) — ADR-0035 already measures an activity's float in
       // its own calendar, so the unit and the measurement finally agree.
       calIdByActivity,
+      dayFactorCalIdByActivity,
       meta: {
         lagCalendarOverrideCount,
         activityCalendarCount: distinctActivityCalIds.length,

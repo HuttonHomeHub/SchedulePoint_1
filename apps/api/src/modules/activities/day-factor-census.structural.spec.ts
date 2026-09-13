@@ -71,6 +71,17 @@ const CENSUS: readonly CensusEntry[] = [
   },
   {
     file: 'src/modules/schedule/schedule.service.ts',
+    symbol: 'schedulingCalendarId',
+    rule: 'scheduling',
+    quantity: 'dayFactorCalIdByActivity — the map the recalculation converts float days with',
+    reason:
+      'The second of #86 two mechanisms. The engine port map carries null as an INHERIT sentinel ' +
+      'and resolveDayFactors read that as no calendar at all, taking 1440 while the schedule ran ' +
+      'on the plan day. This builds the resolved map beside it, by calling the rule rather than ' +
+      'restating its fallback rung.',
+  },
+  {
+    file: 'src/modules/schedule/schedule.service.ts',
     symbol: 'resolveDayFactorMinutes',
     rule: 'own',
     quantity: 'the plan factor for CPLI working-day arithmetic',
