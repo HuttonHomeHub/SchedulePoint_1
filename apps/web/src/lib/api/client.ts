@@ -78,14 +78,6 @@ const MAX_PAGE_LIMIT = 100;
 const MAX_PAGES = 1000;
 
 /**
- * Fetch **every** page of a cursor-paginated list endpoint and return the concatenated rows. The
- * plan workspace (canvas + activities table + logic) needs the *whole* plan, not a single default
- * page: an edge only draws when both its endpoint bars are loaded, so a partial page silently drops
- * activities and their links. Loops `?limit=100&cursor=…` following `meta.nextCursor` until the
- * server reports no more, appending `limit`/`cursor` onto any query string the caller already set.
- * The list endpoints order deterministically by id, so the concatenation is stable across pages.
- */
-/**
  * {@link apiFetchAllPages}, but keeping the LAST page's `meta`.
  *
  * A sibling rather than a signature change: `apiFetchAllPages` has ~100 call sites that want the
@@ -118,6 +110,14 @@ export async function apiFetchAllPagesWithMeta<T, M>(
   return { rows, meta };
 }
 
+/**
+ * Fetch **every** page of a cursor-paginated list endpoint and return the concatenated rows. The
+ * plan workspace (canvas + activities table + logic) needs the *whole* plan, not a single default
+ * page: an edge only draws when both its endpoint bars are loaded, so a partial page silently drops
+ * activities and their links. Loops `?limit=100&cursor=…` following `meta.nextCursor` until the
+ * server reports no more, appending `limit`/`cursor` onto any query string the caller already set.
+ * The list endpoints order deterministically by id, so the concatenation is stable across pages.
+ */
 export async function apiFetchAllPages<T>(path: string): Promise<T[]> {
   const rows: T[] = [];
   let cursor: string | null = null;
