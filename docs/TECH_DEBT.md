@@ -3887,6 +3887,54 @@ list is shared by convention, not by a gate, and the gate is not obvious — a c
 call sites would sweep in every legitimate one inside a test body. Worth a thought, not worth a bad
 rule.
 
+### 313. The sign-up→onboarding wait is widened at 4 of 61 sites, and a widened one still failed
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
+
+`#182` was closed on 2026-08-28 by giving _"three base-journey sign-up specs"_ an explicit
+`{ timeout: 15_000 }` with the reason written at each site. Today's run shows both halves of that
+closure failing at once, in **one job, one shard, one browser**:
+
+- **A widened site failed anyway.** `e2e/dependencies.spec.ts:98` — which carries the 15 s wait and
+  a comment explaining it — missed the `create your organisation` heading on the initial attempt
+  **and both retries**, all three at 15 s.
+- **An un-widened neighbour failed too.** `e2e/members.spec.ts:24` is the identical assertion at the
+  **5 s default**; it failed and passed on retry, so it is reported as `flaky` rather than as a
+  failure and shows up in no exit code.
+
+49 of 51 tests passed. The PR under test changed `docs/TECH_DEBT.md` and nothing else — zero files
+under `apps/` — so the change cannot be the cause.
+
+**The spread was never measured when `#182` closed, and it is the finding.** Counted today across
+every e2e suite, the same positive assertion appears at **61 sites**. **Four** carry
+`{ timeout: 15_000 }` — `e2e/clients.spec.ts:27`, `e2e/dependencies.spec.ts:31` and `:98`, and
+`e2e-narrow-shell/narrow-shell.spec.ts:61`. The other **57 are at the 5 s default**. In the base
+journey alone there are **13** sites, of which **10** were left untouched: `activities:26`,
+`auth:37`, `baselines:23`, `members:24` and `:52`, `navigator-crud:21`, `plans:22`,
+`recently-deleted:30`, `schedule:26`, `tsld:24`.
+
+So `#182` fixed exactly the three sites whose failures it had seen and left ten neighbours in the
+same directory — the "one correct pattern applied to a control and not its neighbour" shape this
+register keeps recording, here in a test suite rather than in a component.
+
+**What is NOT established, stated plainly because the remedy depends on it.** Why
+`dependencies.spec.ts:98` failed three consecutive times at 15 s is **unknown**. Three-for-three at
+three times the original margin is not the signature of a marginal wait, so "widen it again" is the
+one response the evidence does not support. A trace was captured
+(`playwright-report-web-shard-1`, artifact 10312829458) and has **not** been read; reading it is
+the first task, not choosing a timeout. Note also that the sibling at the **shorter** wait recovered
+while the one at the longer wait did not, which is the wrong way round for a load explanation.
+
+**Distinct from `#119a`**, which is the **API** e2e suite and a different signature entirely; this is
+the web suite, on Firefox, in the shared sign-up preamble.
+
+**Why it is worth a row rather than a re-run.** The preamble is shared by 61 sites, so whatever this
+is, it is the single most-executed piece of test code in the estate, and a flake there taxes every
+suite. The remedy candidates — read the trace first; then either a shared `signUpAndOnboard` helper
+so there is one wait to tune instead of 61, or a fix to whatever makes the transition slow — both
+change how every e2e suite is set up, so ADR-0105 fires on the fix and it wants a spec rather than
+57 more edits.
+
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
 **Status:** deferred · **Verified:** 2026-09-11
