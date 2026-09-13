@@ -4151,6 +4151,37 @@ trace named below is still the first task.
 requests in a **4.8–6.8 second burst** and then spends the rest of its twenty seconds idle. Whatever
 is costing `dependencies.spec.ts:98` more than 15 s, it is not a queue of its own requests.
 
+**The wait is measured, and it removes "marginal" from the vocabulary of this row.** Ten runs of
+`e2e/dependencies.spec.ts` locally (chromium, `--repeat-each=5 --workers=1 --trace on`, all ten
+green), with the interval taken from each trace's own action log rather than from a stopwatch —
+`before`/`after` events for the `create an account` click and the `create your organisation`
+`expect`:
+
+| quantity                | ms                                       |
+| ----------------------- | ---------------------------------------- |
+| heading wait, n = 10    | min **207**, median **227**, max **324** |
+| the click that precedes | 55–124                                   |
+
+**So the 5 s default is about 15× the observed worst case and the widened 15 s is about 46×.** A
+margin of that size does not get eaten by CI load; a 46× overrun is a different event from a slow
+one. Three consecutive failures at 15 s therefore almost certainly mean **the browser was never on
+the onboarding screen** — sign-up issued no session and the client pushed `/verify-email`, or the
+`_authed` guard bounced to `/sign-in`, or the form never submitted — all of which render a different
+screen, at which point no timeout is long enough. That is consistent with the un-widened neighbour
+recovering on a retry: an intermittent session outcome recovers, a slow machine does not
+selectively.
+
+**What this does NOT establish**, because the gap between the two environments is the whole
+difficulty here: it is idle-machine chromium, and the failures were firefox under four-shard CI
+load. The claim is about the **size of the margin**, not about CI's absolute timings. But a margin
+has to shrink by more than an order of magnitude before a timeout explanation becomes available at
+all, and nothing about a 4-shard runner does that to a 227 ms wait.
+
+**Two responses are now off the table rather than merely doubted.** Widening the timeout again — the
+row already said the evidence did not support it, and 46× says why. And the rate-limit mechanism,
+ruled out in `#314`. The trace remains the first task; what it should be read for is **which screen
+the browser was on**, not how long anything took.
+
 **What is NOT established, stated plainly because the remedy depends on it.** Why
 `dependencies.spec.ts:98` failed three consecutive times at 15 s is **unknown**. Three-for-three at
 three times the original margin is not the signature of a marginal wait, so "widen it again" is the
