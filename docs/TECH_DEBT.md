@@ -4316,8 +4316,10 @@ repository had no hyphenated output anywhere to copy from.
 > **The mechanism is unchanged and the figures were stale twice.** `check-claims.mjs:382` builds the
 > ref from **basename + line range only** and `:393-395` matches on that string alone; no claim in
 > `scripts/dependency-claims.json` carries a `version`, and `verifiedAgainst` holds one version per
-> package. The row says "all 78 entries" and its 2026-09-03 sweep said 97; the register actually
-> holds **96 claims across 15 packages**. The worked example no longer reproduces (`better-auth` is
+> package. The row says "all 78 entries" and its 2026-09-03 sweep said 97; **on 2026-09-09** the
+> register held **96 claims across 15 packages** — dated rather than stated flat, because it was
+> 111 across 17 four days later and this sentence is the third of four figures for one quantity
+> (see the note at the end of the row). The worked example no longer reproduces (`better-auth` is
 > pinned 1.7.1), which is a fact about the pin rather than about the blind spot.
 
 _Found 2026-08-23, by the gate accepting a citation it should have refused._
@@ -4328,8 +4330,11 @@ Putting the version in the `ref` requires every citation in prose to carry it, w
 anybody writes one. Parsing a version out of the surrounding prose is a text heuristic over a shape
 nobody has agreed — the class of fix that produced #177, #183 and this row. What it probably wants is
 the version recorded **per claim** rather than per package, so a `ref` resolves to a version rather
-than to a filename: a schema change to `dependency-claims.json` and a migration of all 78 entries,
-which is a slice of its own.
+than to a filename: a schema change to `dependency-claims.json` and a migration of **every entry**,
+which is a slice of its own. _(That sentence said "all 78 entries" from 2026-08-31 until 2026-09-13.
+It now names no number deliberately — see the note at the end of this row, where four different
+figures for one quantity are set out. The count is the thing that keeps going stale here, so the
+sentence that sizes the work no longer carries one.)_
 
 `scripts/check-claims.mjs` scans the tree for citation-shaped strings and requires each one to
 appear as a `ref` in `scripts/dependency-claims.json`. The `ref` is `basename:lines` — it carries no
@@ -4376,6 +4381,27 @@ then be changing underneath the citations it is checking.
 > **mechanism is untouched** — the ref is still `basename:lines`, built and matched with no version
 > anywhere, and `verifiedAgainst` still holds one version per package with nowhere to put one. The
 > row also says "a migration of all 78 entries"; the register now holds **97**.
+>
+> **Four figures for one quantity, and the sentence a reader acts on carried the oldest
+> (2026-09-13).** Measured today: the register holds **111 claims across 17 packages** — 17 in
+> `verifiedAgainst` and 17 distinct packages across the claims, which agree. The mechanism is
+> untouched and was re-verified at its own line numbers: `check-claims.mjs:382` still builds
+> ``const ref = `${base}:${lines...}` `` and `:393-395` still matches on that string alone, and
+> **no claim carries a `version` field** — checked across the whole file, not sampled.
+>
+> **The count is not the finding; how it survived is.** The sizing sentence said "all 78 entries"
+> from 2026-08-31. The 2026-09-03 sweep appended a note at the end of this row reading, in as many
+> words, _"The row also says 'a migration of all 78 entries'; the register now holds **97**"_ — it
+> named the wrong sentence, gave the right number, and left the wrong sentence in place. The
+> 2026-09-09 note at the top then corrected **that** note (to 96 across 15) and also left "78"
+> standing. So it was noticed twice and corrected zero times, until this pass removed the number
+> from the sentence altogether.
+>
+> **That is `#194`'s subject arriving in a different row.** `#194` records the identical shape in
+> `scripts/frontend-only.json`'s `reason` field and states the rule: _"Noticing drift and stepping
+> over it leaves the artefact exactly as wrong as not noticing."_ Here it happened twice, in the
+> register itself, to one sentence — which is the argument for fixing the text rather than
+> appending a third observation about it.
 
 ### 184. Unsaved-work guard: the findings its gate pass did not block on
 
@@ -7380,11 +7406,31 @@ bounds the harness rather than the thing being measured — the verdict is still
 **What stays open, and it is not either of those.** The P2 probe still runs its whole measurement —
 two 2,000-activity imports, 25 harness iterations and 21 HTTP round trips, minutes of wall clock,
 a 900-second timeout — inside the default e2e include set, on **every** pull request, and now
-asserts nothing at all. It produces a report nobody reads on a run nobody triggered. The option
-costed and not taken was to give it its own script and CI step the way the ADR-0066 pairwise
-differential has one, so it runs deliberately and its wall-clock is attributed to a step a reader can
-see. That is the remaining work; it is small, and it is worth doing before the next probe copies this
-one's shape.
+asserts no performance **bar**. It produces a report nobody reads on a run nobody triggered.
+
+> **The clause above read "and now asserts nothing at all" until 2026-09-13, and it was wrong in
+> the way that matters for this row's own remedy.** The file still carries five assertions, three
+> under its own banner `// ── NON-VACUITY, checked before the verdict ──`:
+> `expect(lastMatched, 'both sides must be non-empty').toBeGreaterThan(1_000)`;
+> `expect(lastChanges, 'the two sides must genuinely differ, or this measures the fastest path')`;
+> `expect(routeMatched, 'the route must actually have matched both sides')`; plus
+> `expect(planB).not.toBe(planC)`. What it no longer asserts is the **250 ms bar** — `P2_BAR_MS`
+> survives only inside report strings (`:359`, `:370`, `:423`) and never in an `expect`.
+>
+> **It also contradicted this row sixteen lines above**, which says of the fix that "the
+> non-vacuity assertions stay". Those assertions are the only thing standing between a green run
+> and a vacuous one, and this row asks for the probe to be moved out of the default set — so the
+> move must carry them with it. A reader who believed "asserts nothing at all" would not know to.
+>
+> Everything else in the paragraph re-derived exact on 2026-09-13: `}, 900_000)` at `:425`,
+> `ITERATIONS = 25`, `ROUTE_ITERATIONS = 21`, the two 2,000-activity generations, and — the claim
+> worth checking rather than assuming — that it really does run on **every** pull request:
+> `apps/api/vitest.e2e.config.mts:14` includes `test/**/*.e2e-spec.ts` and `:18` excludes only
+> `test/pairwise/**`, so this file matches the include and is excluded by nothing. The option
+> costed and not taken was to give it its own script and CI step the way the ADR-0066 pairwise
+> differential has one, so it runs deliberately and its wall-clock is attributed to a step a reader can
+> see. That is the remaining work; it is small, and it is worth doing before the next probe copies this
+> one's shape.
 
 > **2026-09-12 — "minutes of wall clock" was never measured, and it is 20 seconds.** Run alone
 > against a real database on this container: **20.45 s** reported by vitest (18.57 s of test time),
