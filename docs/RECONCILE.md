@@ -301,5 +301,32 @@ result rather than in the code:
    read 100 of 103, and the three it skipped included the oldest open row, which was the one the
    scan was choosing work from.
 
+**The same session continued to twenty-five, and the last nine added three shapes the two above do
+not cover.** The count is a running tally kept as the pass went, not a re-derived figure; the shapes
+are each cited to one instance, which is the part worth trusting.
+
+3. **the query asked about history rather than code.** Tracking which commit invalidated a register
+   citation, `69207b1d` was named as the mover and written into a draft before being checked; it was
+   `73d390bd`, and the two differ by a day and an epic. Shapes 1 and 2 are both about querying source;
+   this is the same failure with a different instrument — a pickaxe needs the right literal
+   (a backticked `` `:844`` returned nothing at all), and `--stat` needs the right commit before it
+   can answer anything.
+
+4. **widening talked the reader OUT of a correct objection.** Re-checking `docs/TECH_DEBT.md` #88,
+   a citation looked misdescribed; reading more context found a docblock that justified it, and the
+   objection was withdrawn — but the register's existing caveat had made the same objection more
+   precisely, and it was right. The wider read justified the **pointer** and never addressed the
+   **parenthetical**, which is what a reader following it would fail to find. So widening is not
+   automatically the end of the enquiry: the test is whether the broader reading answers the specific
+   objection, not whether it produces a reassuring sentence.
+
+5. **the control was derived from the thing it was controlling.** A one-line status check filtered a
+   list to completed runs and then reported that filtered length against **itself**, printing `4/4`
+   over ten runs of which six were still going. That is `docs/TECH_DEBT.md` #247's A9 and ADR-0120's
+   Finding 0 in a shell one-liner — the third recorded instance of one mechanism — and it is the
+   worst of the five, because the other four produce a result that looks wrong or empty while this
+   one produces a result that looks **right**. A control must measure a different quantity by a
+   different route, or it can only ever agree with itself.
+
 The second is the dangerous one. A scan that **chooses the next piece of work** is the worst one to
 write narrow, because its blind spot never appears as a wrong answer — only as an absence.
