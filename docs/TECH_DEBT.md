@@ -295,7 +295,7 @@ rules exist because that is true of any machine nobody chose.
 
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 The activity DTO returns `null` for a cost field that is **unset** and `null` for one the caller
 **may not read** — the two are indistinguishable on the wire. So the tabbed activity editor
@@ -338,6 +338,19 @@ other is a client bug in a different file.
 > assertion has to be deleted deliberately, which is the moment a reader meets #62.
 >
 > This is ADR-0058's move applied to a rule the row had already written down and left to memory.
+
+> **Re-derived 2026-09-13, every claim exact — recorded because a clean check that leaves no trace
+> gets repeated** (`#246`'s rule, and `#247`'s finding that the `Verified:` field is the only trace
+> anything reads). The coincidence still holds **and now holds by construction rather than by
+> coincidence of two lists**: `COST_READ` and `HIERARCHY_WRITE` are named `const` arrays spread into
+> exactly `PLANNER` and `ORG_ADMIN`, and `activity:update` is one of `HIERARCHY_WRITE`'s 32 members.
+> The guard is live (`org-permissions.spec.ts`, the coupling `it` plus the positive case above it
+> that keeps it from passing vacuously), and the second consumer is real —
+> `use-plan-workspace-model.ts:486` derives `canReadCost: canWrite`, and
+> `ActivityEditorDialog.tsx:853` forwards `gating.cost.readable` under a comment naming this row.
+> **Nothing here changes**: the DTO still cannot distinguish "unset" from "may not read", which is
+> the architectural gap, and the guard converts a silent client defect into a red build rather than
+> closing it.
 
 ### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
@@ -2452,7 +2465,7 @@ a field the register writes and its own gate cannot read.
 
 ### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
 **Owner:** repo
 
 `scripts/lib/doc-register.test.mjs` opens by calling itself _"the ONLY safety net both gates have"_,
@@ -2479,6 +2492,27 @@ function the gate calls — the `doc-register.mjs` shape, and the better answer.
 shared-gate trigger, which is why this is a row and not a commit: the epic that found it declined to
 widen a shared gate inside its own gate pass, for the same reason `#240` declined to widen
 `check:claims` inside the accessibility milestone that found it.
+
+> **Re-derived 2026-09-13, and this row's own argument has got STRONGER while acquiring a sibling it
+> does not name.** Measured across `scripts/`: **18 `check-*.mjs` gates, 5 with their own
+> `.test.mjs`** — so "a gate owns its own test file" is **not** an estate-wide pattern, and read that
+> way the row overstates. Read as it means it, over the family that shares the module, it understates:
+> **7 scripts import `lib/doc-register.mjs`, and 5 of the 7 have a test.** All five estate-wide
+> test-owning gates are in that family, which is a sharper statement than the row makes.
+>
+> **It moved in the row's favour after its last check.** At 2026-09-10 the family held two such tests
+> — `check-reconcile-due.test.mjs` (2026-08-30) and `check-spec-status.test.mjs` (2026-09-09) — exactly
+> as the row says. Three more have landed since: `check-ci-roster` and `check-licenses` (both
+> `69207b1d`, 2026-09-11) and `check-e2e-roster` (`97a1236e`, 2026-09-12). So the asymmetry went 2-of-3
+> to 5-of-7.
+>
+> **The sibling is `check-advisory-agreement.mjs`** — it consumes `doc-register.mjs` and has no test
+> either, so there are **two** exceptions in the family and this row names only itself. Worth knowing
+> before anybody writes the seam: whatever shape closes this one should close that one, and pricing
+> the work for a single gate under-scopes it.
+>
+> Nothing else changes. `main()` still reads a fixed `DOC` and `scripts/debt-register.json`'s
+> ratchet, so the seam question and its ADR-0105 trigger stand exactly as written.
 
 **Interim mitigation, so this is not a bare deferral:** every assertion added by ADR-0124 was
 verified red against the specific defect it names, and each red run is recorded with the command that
@@ -3557,7 +3591,7 @@ double-submit apart from a slow one. Left open rather than guessed at.
 
 ### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 `apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the
 whole base journey, so its six editing specs — `activities.spec.ts`, `baselines.spec.ts`,
@@ -3598,6 +3632,23 @@ dated flag work precisely because the date was the wrong instrument.
 > in `scripts/flag-retirement.json` **alongside** a permanent `keep`. That reads as scheduled
 > retirement work, and ADR-0088 D4 says it will never happen — a queue and a decision wearing the
 > same clothes, which is the shape ADR-0073 C3.4 deleted `PENDING_COVERAGE` for.
+
+> **Re-derived 2026-09-13, exact in every particular again — and this row's TRIGGER may have just
+> fired.** The pins are at `playwright.config.ts:66-67` under a comment naming this row; the six
+> tests are still 1/1/2/2 across `activities`, `baselines`, `dependencies` and `schedule`; none of
+> those four nor `e2e/workspace.ts` contains any pen acquisition; `playwright.edit.config.ts` exists;
+> `use-plan-workspace-model.ts:180` is the `derivePlanGating(` call. The `batch`-beside-`keep`
+> observation holds too — both flags read `class: B` with a permanent `keep` **and** a batch
+> (`batch-3` and `batch-2`).
+>
+> **The trigger is _"the next time a base-journey editing spec needs changing for any reason"_, and
+> `#313` is such a reason.** That row was filed today for a failure in `e2e/dependencies.spec.ts:98`
+> — one of this row's own four files. Whether it fires depends on where `#313`'s remedy lands, which
+> is not yet known because its trace has not been read: an app-side cause touches no spec, a
+> test-side one touches this exact file. **So the two should be picked up together, and whoever
+> opens `dependencies.spec.ts` for `#313` should convert it to acquire the pen while they are in
+> there** — that is the whole point of a trigger phrased as "for any reason", and it is the cheapest
+> this conversion will ever be.
 
 ### 120. Nothing reports `n_dead_tup` at runtime, so a retention drain's bloat is invisible while it happens
 
@@ -3961,6 +4012,22 @@ while the one at the longer wait did not, which is the wrong way round for a loa
 
 **Distinct from `#119a`**, which is the **API** e2e suite and a different signature entirely; this is
 the web suite, on Firefox, in the shared sign-up preamble.
+
+**Whoever picks this up cannot reproduce it locally, and that is a property of the environment
+rather than a gap in the row.** Both failures were `[firefox]`. The base config declares three
+projects (`chromium`, `firefox`, `webkit`, `playwright.config.ts:21-32`), but `/opt/pw-browsers`
+holds **only chromium** — verified by listing it — and `scripts/e2e-local.sh web` therefore runs
+`--project=chromium`, with a comment saying so and calling cross-browser CI's job. So the
+documented local pre-push gate (CLAUDE.md §19.8, and ADR-0096's _"change a screen, run the base
+journey"_) **structurally cannot produce this failure**, and could never have caught it. That is
+not an argument against either rule — it is the reason the trace matters so much here: iterating
+on the real configuration means installing Firefox in the dev container or waiting on CI, and a
+green local run says nothing about this class.
+
+**And it may fire `#121`'s trigger.** `e2e/dependencies.spec.ts` is one of the four base-journey
+files that row wants converted to acquire the pen, and `#121`'s trigger is _"the next time a
+base-journey editing spec needs changing for any reason"_. If this turns out to be test-side,
+convert the file while it is open; if it is app-side, nothing here fires.
 
 **Why it is worth a row rather than a re-run.** The preamble is shared by 61 sites, so whatever this
 is, it is the single most-executed piece of test code in the estate, and a flake there taxes every
