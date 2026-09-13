@@ -4255,18 +4255,16 @@ any two sharing one. A Playwright config is the mirror image: one API process st
 `webServer` and never reset. That asymmetry is real; it is simply not large enough to matter at the
 base journey's endpoint spread.
 
-**A doubt this raised about `#268`, flagged rather than resolved.** That row's recorded mechanism is
-_"the whole file runs inside one 60-second window against one in-memory counter, so a test's request
-budget was being spent by its neighbours"_ — which is not how the default key works, **and
-`scripts/measure-band-copy.mjs:48-55` had already said so in this repository six days earlier**:
-_"the real bound is 100 per 60 s per route handler per IP"_, with the citation registered in
-`scripts/dependency-claims.json`. Counting the literal route strings in
-`apps/api/test/staff.e2e-spec.ts`, its requests spread across about seven
-handlers with a maximum of **10 on `POST /staff/probe-results`**, against that controller's
-`@Throttle` limit of 30. That is a **lower bound** — helpers and loops are not counted — so it
-disproves nothing, but it makes the stated mechanism doubtful, and it is cheap to settle by
-re-running that suite with its `beforeEach` fix removed. Recorded here rather than asserted onto that
-row.
+**A doubt this raised about `#268`, and then settled rather than left** (same day). That row records
+its mechanism as _"the whole file runs inside one 60-second window against one in-memory counter"_,
+which is not how the default key works. Rather than flag it, the experiment it needs was run: remove
+the `beforeEach` clear from `apps/api/test/staff.e2e-spec.ts` and run the file. **2 of 22 tests fail,
+both on `POST /api/v1/staff/probe-results`** — one handler, and the same one whose request count is
+highest. The endpoint takes 8 literal posts plus a 4-entry field loop plus a **30-entry `bad[]` loop
+inside one test**, so about **42 requests against that controller's ceiling of 30**. The file was
+restored immediately; the corrected account is written onto `#268`, where its remedy and its measured
+_effect_ both stand — only the one-counter phrasing was loose. It was loose in a way that cost
+something exactly once: **here**, in this row's own first draft.
 
 **One inaccuracy found on the way, recorded with its (nil) consequence.** `app-setup.ts:26-32` sets
 `trust proxy` only when `TRUSTED_PROXY_IPS` is declared, _"left off in dev/test where there is no
@@ -6642,19 +6640,29 @@ into 429, each failing with a message about the assertion it was making. The who
 one 60-second window against one in-memory counter, so a test's request budget was being spent by
 its neighbours.
 
-**The mechanism stated above is DOUBTFUL and wants one re-run to settle** (raised 2026-09-13 while
-writing `#314`). `@nestjs/throttler@6.5.0` keys its buckets **per route handler**, not per file or
-per caller — `sha256(ClassName-handlerName-throttlerName-tracker)`, `dist/throttler.guard.js:148-150`,
-with no override anywhere in `apps/api/src`. So _"one in-memory counter"_ for the whole file is not
-what the library does — **and this repository had already established that.**
-`scripts/measure-band-copy.mjs:48-55` says it in as many words: _"the shape of that limit is not what
-it looks like from the config… the real bound is 100 per 60 s **per route handler** per IP"_, with the
-same citation registered in `scripts/dependency-claims.json` since that measurement, six days before
-this row was raised. Counting the literal route strings here, this spec's requests spread across
-about **seven handlers**, the heaviest being **10 on `POST /staff/probe-results`** against a limit of 30. That is a lower bound — helpers and loops are uncounted — so it does not disprove the recorded
-mechanism, and **the fix is right either way**, since clearing the storage in `beforeEach` isolates
-tests whatever the key is. What is in doubt is the explanation, not the remedy. Settling it costs one
-run of this file with the `beforeEach` removed, watching which handler 429s.
+**The mechanism stated above was wrong, and the corrected one is measured** (2026-09-13, by
+removing the `beforeEach` clear and running the file). `@nestjs/throttler@6.5.0` keys its buckets
+**per route handler**, not per file and not per caller — `sha256(ClassName-handlerName-throttlerName-tracker)`,
+`dist/throttler.guard.js:148-150`, with no override anywhere in `apps/api/src` — so _"one in-memory
+counter"_ for the whole file is not what the library does. This repository had already established
+that: `scripts/measure-band-copy.mjs:48-55` says _"the shape of that limit is not what it looks like
+from the config… the real bound is 100 per 60 s **per route handler** per IP"_, with the citation
+registered in `scripts/dependency-claims.json`, six days before this row was raised.
+
+**The corrected account, and it is sharper than the original.** Without the clear, **2 of 22 tests
+fail, both on `POST /api/v1/staff/probe-results`** (`:626` expecting 422 and `:638` expecting 404,
+each getting 429) — one handler, not a file-wide counter. The arithmetic: that endpoint takes 8
+literal posts, a 4-entry field loop, and a **30-entry `bad[]` loop inside a single test**, so it sees
+roughly **42 requests against a ceiling of 30** while no other handler comes close. That is why the
+symptom looked like innocent bystanders: _"refuses every bound the DTO declares"_ spends the whole
+budget by itself, and the next two tests that happen to POST there pay for it.
+
+**What this row got right is most of it, and that matters for how the correction is read.** The
+_effect_ — a test's spending counting against its neighbours' — is real, was measured three ways at
+the time, and is exactly what happens per handler. The _remedy_ is right and untouched: `storage.clear()`
+empties every key, so it isolates whatever the key shape is. Only the one-counter **phrasing** was
+loose, and it mattered exactly once — in `#314`, whose first draft reasoned from it about a different
+suite and reached a wrong conclusion.
 
 **What is structural, and does hold:** `apps/api/test` boots a fresh Nest app per file — 51 of 57
 files call `Test.createTestingModule`, the other six issue zero HTTP requests — so storage starts

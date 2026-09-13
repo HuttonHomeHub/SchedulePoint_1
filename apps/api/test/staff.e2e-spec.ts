@@ -74,12 +74,24 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
      *
      * `StaffController` carries `@Throttle({ default: { limit: 30, ttl: 60_000 } })` — a real
      * security bound, with `staff-throttle.structural.spec.ts` pinning the literal — and the whole
-     * suite runs inside one 60-second window against one in-memory counter. So the file had
-     * silently reached the ceiling: it passed at 22 tests and any new coverage pushed **unrelated**
-     * tests into 429, each failing with a message about its own assertion rather than about the
-     * limit. Measured three ways before this was written, because the first two diagnoses were
-     * wrong — a global `RATE_LIMIT_LIMIT` (overridden per controller, so the change was inert) and
-     * "my test is greedy" (the baseline passed at exactly 22).
+     * suite runs inside one 60-second window. So the file had silently reached the ceiling: it
+     * passed at 22 tests and any new coverage pushed **unrelated** tests into 429, each failing
+     * with a message about its own assertion rather than about the limit. Measured three ways
+     * before this was written, because the first two diagnoses were wrong — a global
+     * `RATE_LIMIT_LIMIT` (overridden per controller, so the change was inert) and "my test is
+     * greedy" (the baseline passed at exactly 22).
+     *
+     * **The counter is per ROUTE HANDLER, not one for the file** — `@nestjs/throttler@6.5.0` keys
+     * on `sha256(ClassName-handlerName-throttlerName-tracker)` (`dist/throttler.guard.js:148-150`),
+     * and nothing here overrides it. This docblock said "one in-memory counter" until 2026-09-13,
+     * which is wrong and was reasoned from about a different suite once before being caught
+     * (`docs/TECH_DEBT.md` #268, #314). Re-measured by deleting the `clear()` below and running the
+     * file: **2 of 22 fail, both on `POST /api/v1/staff/probe-results`** — 8 literal posts plus a
+     * 4-entry field loop plus the **30-entry `bad[]` loop inside one test**, about 42 requests
+     * against a ceiling of 30, while no other handler comes near it.
+     *
+     * None of that changes the fix. `storage.clear()` empties every key, so it isolates whatever
+     * the key shape is; only the explanation needed correcting.
      *
      * The product bound is untouched: every test still runs its own requests under the real 30 per
      * minute. What is removed is one test's spending counting against the next one's, which
