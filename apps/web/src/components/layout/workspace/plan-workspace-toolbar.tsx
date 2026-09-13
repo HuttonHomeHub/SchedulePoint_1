@@ -120,7 +120,7 @@ import {
   useTsldToolbarContext,
   type PlanDialogKind,
 } from '@/features/tsld/toolbar/use-tsld-toolbar-context';
-import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
+import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
@@ -496,18 +496,12 @@ export function ToolbarPlanWorkspace({
    */
   const hoursPerDayFor = useCallback(
     (activity: ActivitySummary): number | undefined =>
-      effectiveHoursPerDay(model.calendars.data ?? [], {
-        activityCalendarId: activity.calendarId ?? '',
-        ...(plan.calendarId == null ? {} : { planCalendarId: plan.calendarId }),
-        // Duration and remaining duration measure the WORK, so they are counted on the calendar the
-        // activity schedules on (`docs/TECH_DEBT.md` #86). This feeds the Gantt Duration column, the
-        // grid cell edit and the printed programme, which must all agree with the API.
-        frame: {
-          kind: 'scheduling',
-          type: activity.type,
-          drivingResourceCalendarId: activity.drivingResourceCalendarId,
-        },
-      }),
+      // Duration and remaining duration measure the WORK, so they are counted on the calendar the
+      // activity schedules on (`docs/TECH_DEBT.md` #86). This feeds the Gantt Duration column, the
+      // grid cell edit and the printed programme, which must all agree with the API. ONE shared
+      // derivation (#317) — this was written out longhand here and in `ActivitiesTable`, which is
+      // two spellings of one rule with nothing keeping them in step.
+      activitySchedulingHoursPerDay(model.calendars.data ?? [], activity, plan.calendarId),
     [model.calendars.data, plan.calendarId],
   );
 
