@@ -1,5 +1,25 @@
 # @repo/web
 
+## 0.126.2
+
+### Patch Changes
+
+- [#523](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/523) [`c18efbc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c18efbce1b34633f7a3d92a43ccc5d86cd160a79) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Project Explorer: hand focus back to the tree when a focused row is removed under it.
+  
+  A row can disappear while the browser's focus ring is physically on it — a lazy-load placeholder is
+  focusable and is unmounted the moment its fetch resolves, and a real node goes the same way on a
+  collapse or another member's delete. Focus landed on the page body, which on this surface also
+  silently disables the keyboard shortcuts, since those are handlers on the workspace root. The tree
+  now takes focus back and says what left (WCAG 2.2 §2.4.3 Focus Order).
+
+- [#526](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/526) [`7f22cf2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7f22cf2361a69e79675b9708a8cebce55b2ff91b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Project Explorer: say what arrived when a level finishes loading.
+  
+  Expanding a client or a project fetches its children, and until now the only way to learn the fetch
+  had finished was to see the rows appear — so a screen-reader user got nothing unless they happened
+  to be standing on the placeholder when it vanished. The tree now announces the outcome ("11 projects
+  loaded", "No plans.", "Couldn't load plans.") through the app's polite live region, which is what
+  ADR-0029 specified and nothing had implemented.
+
 ## 0.126.1
 
 ### Patch Changes
