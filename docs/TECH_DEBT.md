@@ -5969,7 +5969,7 @@ all six are live:
 
 ### 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
-**Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
 long-press listener cleanup, both landed with the pass) · **Size:** S ×2 · **Owner:** web
@@ -5982,6 +5982,7 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   the product mentions the gesture. It degrades gracefully (a tap still fires the command exactly
   as before), so this is an unadvertised affordance rather than a defect; the right home is
   whatever touch-help surface exists when one does.
+
   > **Re-derived entry by entry 2026-09-11, and two clauses sharpen.** First, the gesture **is**
   > documented — `docs/UX_STANDARDS.md:102-104,127` and `docs/DESIGN_SYSTEM.md:1001` all describe
   > it — so the accurate finding is that no **user-facing** surface names it, which is what the
@@ -6006,6 +6007,35 @@ closed on 2026-08-31 and the size beside this line still said three until 2026-0
   > this is a pointer gesture. Re-derived at the same time — `HierarchyTree` carries a **second**
   > unadvertised long-press (`:16`, `:114`, `:203`, `:360`, `:385`) for row menus, so the class has
   > two members and not one.
+
+  > **Re-derived again 2026-09-13, and the 2026-09-11 pass's own evidence is wrong in two places
+  > while both of its conclusions survive.** That is this register's born-stale class (`#246`), and
+  > it is worth recording because the wrong citations were produced **by a re-derivation** — the
+  > activity meant to catch exactly this — so "re-derived" is not a quality stamp on the evidence
+  > under it.
+  >
+  > **1. The `showLabel: 'never'` count.** The pass wrote _"nothing in `apps/web/src` sets
+  > `showLabel: 'never'` (both matches are comments)"_. There are **seven** matches, and **four are
+  > code** — `Toolbar.test.tsx:124,133,167,244` — with three comments rather than two. Measured at
+  > `69207b1d^`, immediately before that day's commit: **the same seven, the same split.** So it was
+  > wrong when written, not moved since. **The conclusion holds**: all four code matches are test
+  > fixtures, so no _production_ item sets it and `ToolbarButton`'s icon-only branch really is
+  > dormant. The claim to make is "no production item", which is what the pass meant and not what it
+  > checked.
+  >
+  > **2. `plan-workspace-toolbar.tsx:1900-1911`** does not contain the shortcuts-sheet mount and
+  > never did: `<PlanShortcutsHelp` sits at **`:1941`** today and at **`:1937`** at `69207b1d^`,
+  > while `:1900-1911` was the export-error banner on both sides. **The conclusion holds** — the
+  > sheet is mounted once for the whole workspace above both views, which is the fact the struck
+  > clause turned on; only the line range was invented.
+  >
+  > **Everything else re-derives exact**, including the parts easiest to get wrong:
+  > `render-export-image.ts:190` is `const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;` (a
+  > **basename-only** citation, `#101`'s blind spot — it resolves, and a reader guessing a directory
+  > will not find it), `export-image.test.ts:286-298` is the `it('reserves EXPORT_MARKER_ROW by
+default, in both extents')` case down to the phrase this row quotes, and
+  > `tsld-toolbar-items.tsx:1984` is the `useTooltip({` of the bespoke undo/redo pair.
+
 - **A no-marks export shows a blank 22 px paper strip with no separator closing it off** (ux).
   `EXPORT_MARKER_ROW` is reserved unconditionally (deliberate — geometry stability, see
   DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
