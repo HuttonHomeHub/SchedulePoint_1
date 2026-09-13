@@ -5964,7 +5964,7 @@ different derivations of different subjects; its docblock has to say so, or the 
 
 ### 249. Four hand-copied dock-geometry blocks in the plan workspace
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
 
 `plan-workspace-toolbar.tsx` now carries **four** near-identical dock-resize blocks — notes,
 floatPaths, health and revisions — each about fifteen lines of `Prefs` / `EffectiveMax` / `Width` /
@@ -5990,9 +5990,38 @@ than silently skipped, because ADR-0114 found that _a deferral whose reason has 
 like one whose reason still holds_; this one still holds, and the next reader should not have to
 re-derive that.
 
+**Re-checked 2026-09-13. The count still holds exactly — and the trigger has fired twice, once in
+the commit that wrote the sentence above.** `notesEffectiveMax`, `floatPathsEffectiveMax`,
+`healthEffectiveMax`, `revisionEffectiveMax`: still four, by the same distinct-identifier method.
+
+The trigger is _"the next time this file is touched for another reason"_. Since the row was raised,
+`plan-workspace-toolbar.tsx` has been touched by **`73d390bd`** (2026-09-10, ADR-0133's command
+deck — 33 insertions, 7 deletions) and **`69207b1d`** (2026-09-11, ADR-0134 — 4 insertions
+threading `schedulingMode`). **`69207b1d` is the commit that added the paragraph above**, whose
+stated reason is _"nothing in that pass touched `plan-workspace-toolbar.tsx`"_ — and it touched it,
+four lines, in the same commit. The trigger was declared not-fired by the change that fired it.
+
+**But the row's judgement is right and only its reason is false, which is the interesting half.**
+Neither commit went anywhere near the dock geometry: `git show … | grep -E
+'(EffectiveMax|PointerToSize|onResize|Prefs)'` returns **nothing** for either. The moment the remedy
+is waiting for — somebody already inside this wiring, where folding in a helper is cheap — has not
+arrived. So the conclusion survives its own evidence being wrong, which is `#246`'s thesis one level
+up: a **trigger** decays the same way a citation does.
+
+**The defect is the predicate, not the discipline.** _"This file is touched"_ is the wrong condition
+for a remedy about a **region** of a 1,000-line file three epics have moved through: it fires on a
+four-line prop thread that could not carry a geometry refactor, so an honest reader checking it
+either reports a firing they cannot act on or — as here — writes a false reason for a correct
+decision. Re-key it on the region: **the next time a dock is added, or any of the four blocks'
+`Prefs`/`EffectiveMax`/`PointerToSize`/`onResize` wiring is edited.** That is checkable by the same
+grep that just answered it, and it fires only when the remedy is actually cheap.
+
+Recorded rather than acted on: re-keying the trigger is a change to this row, and taking the
+refactor is still the standalone high-risk move the row declines.
+
 ### 251. The `aria-disabled` shading recipe is hand-rolled, and closing an ADR-0082 row adds one
 
-**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-13 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
 
 **Re-derived independently 2026-09-11, and the population GREW by two in two days — both times
 because this register closed a row.** Counted by a looser, file-level predicate than the
@@ -6087,6 +6116,39 @@ that the recipe has already been got wrong twice in this codebase's record (once
 reason, once by using native `disabled` and losing the reason with the tab stop), and thirteen copies
 is thirteen chances to get it wrong again. The remedy is a `useShadedControl` hook; the trigger is
 the next epic that touches three or more of them.
+
+**Re-derived 2026-09-13 from the row's own written predicate, and both figures are exact: 12
+implementations, 31 partial.** Two days on, unchanged — and re-derived by re-running the predicate
+as this row states it (comments stripped; the file writes `aria-disabled` **and** carries an
+`sr-only` node linked by `aria-describedby`) rather than by trusting the number. The twelve are
+`plan-facts`, `menu`, `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton`, `FloatPathsPanel`,
+`performance-probe-panel`, `RevisionChangesView`, `RevisionComparePanel`, `ScheduleHealthPanel`,
+`TsldPanel`, `tsld-toolbar-items`.
+
+**Its growth mechanism did not fire in this window, and the window was not quiet** — which is the
+thing worth checking rather than the total. **Eight rows closed since 2026-09-11** (`#31`, `#55`,
+`#285`, `#297`, `#301`, `#304`, `#305`, `#311`) and the population held at 12. None of the eight is
+an ADR-0082 missing-reason row: two are ledger backfills, two are focus hand-off (ADR-0135), and the
+rest are deck geometry, CI sharding, check-run reading and a CSP dedupe. So the mechanism is
+**conditional and correctly did not fire**, which is a real observation rather than the absence of
+one — the first draft of this paragraph said "no row closed", which was wrong by eight.
+
+**This row is the positive control for a pattern the rest of tonight's pass makes visible: write the
+predicate, not the number.** Four rows re-derived in one session, and re-derivability tracked
+exactly one property — whether the row wrote down **how** it counted:
+
+| row    | what it recorded              | re-derived                                              |
+| ------ | ----------------------------- | ------------------------------------------------------- |
+| `#251` | the predicate, in full        | **12 / 31 — exact**, 2 days on                          |
+| `#249` | the four distinct identifiers | **exact**, 3 days on                                    |
+| `#248` | a symbol, and a line range    | symbol **held** (moved 28 lines); line range **rotted** |
+| `#312` | a number, and no predicate    | population wrong by **6×** (2 against 12)               |
+
+`#312` is the instructive one: it reported two dangling numbers and there are twelve, because it
+recorded a **result** from a sweep it did not describe, so nobody — including its author — could
+re-run it. A row that states its predicate can be checked by anyone in one command and repays that
+forever; a row that states only its total can only be re-checked by re-inventing the method, which
+is how a figure survives six weeks past being wrong.
 
 ### 256. Every e2e reset hand-orders the whole schema, and five had it wrong
 
@@ -7655,7 +7717,7 @@ table would arrive with nothing failing.
 
 ### 312. The Closed-numbers ledger has holes, and nothing checks that a cited number resolves
 
-**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (sweeping CLAUDE.md's register-status claims) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-12 (sweeping CLAUDE.md's register-status claims) · **Size:** M · **Owner:** repo
 
 **Two numbers resolved to nothing, and the ledger's own preamble names this failure in its own
 words** — _"It also keeps inbound references resolvable. ADRs are never rewritten (CLAUDE.md §6) and
@@ -7693,6 +7755,109 @@ dangling as well — the ledger's own three named examples — which would have 
 finding and was wrong: the number column is padded (`| 29  |`) and the pattern was `^\| N \|`. Caught
 by noticing that the three examples the preamble chose were exactly the three that failed, which is
 too neat to be true. The corrected pattern leaves two.
+
+**Re-derived 2026-09-13. The population is twelve rather than two, the diagnosis above is the wrong
+one, and there is a second failure class the proposed gate is structurally blind to.**
+
+This row swept `CLAUDE.md` for its own **status claims** — 22 sites — and found two dangling
+numbers. The population its own proposed gate would read was never derived. Derived: **3,793
+citation sites across 305 distinct numbers**, against a resolvable set of **295** (100 detailed
+rows, 43 compact-table rows, 152 ledger entries — the three sets are pairwise disjoint, checked).
+
+**That total is stale by the act of writing it down, and it went stale twice inside one session,**
+which is why it is no longer quoted bare. It was **3,793** before this annotation; **3,840** with
+the annotation added (47 `#N` mentions in the paragraphs here); and **3,854** once `#249` and `#251`
+were annotated as well, in the same pass. A register that measures itself moves its own measurement.
+
+**Pinning it to a commit was the first fix and it was wrong**, which is worth the sentence it costs:
+a branch SHA does not survive here. This repository squash-merges, so the commit a figure is
+measured at ceases to exist the moment the work lands — the same property that makes `#55`'s and
+`#83`'s history unrecoverable two paragraphs up, arriving in the remedy rather than the diagnosis.
+Anchor a moment to the **pull request** or the date, never to a branch commit.
+
+So the only stable invariant to re-derive against is the **dangling** count, which was **12 distinct
+at 67 sites** at every one of those three measurements, checked each time. Re-derive that, not the
+total.
+
+**Twelve numbers cited as register rows resolve to nothing, at 67 sites**: `#19`, `#22`, `#24`,
+`#25`, `#26`, `#27`, `#36`, `#39`, `#50`, `#52`, `#54`, `#61`. `#25` is cited **18 times**
+(including ADR-0028 and ADR-0048), `#54` **15 times** (including `docs/DATABASE.md`). An ADR is
+never rewritten, so none of those can be repaired at source.
+
+**All twelve predate the ledger, so "nothing noticed" is not what happened.** Each was a live row in
+a real snapshot, established by replaying the register through all 209 of its own commits. All
+twelve were deleted by **one commit** — `bd011eb9`, 2026-07-28, _"docs: rebaseline the repository on
+the system that exists, and gate the drift"_, which is the **ADR-0058 commit**: the drift-control
+pass took the register from 60 live rows to 42 and left twelve numbers cited across `docs/`. The
+ledger was created in `8781957f` on **2026-08-03**, six days later; `git merge-base --is-ancestor`
+confirms the deletion is its ancestor. Nobody broke the rule — **the rule did not exist yet.**
+
+**And a backfill WAS attempted, which is the part worth keeping.** The first draft of this paragraph
+said the ledger "was never backfilled", and checking disproved it: it was created holding **eight
+entries, six of them backfilled** — `#29` (closed 2026-07-30), `#77`, `#79`, `#80`, `#82`
+(2026-08-01) and `#78` (2026-08-02), all closed before the ledger existed. Somebody did look
+backwards. **They reached 2026-07-30 and stopped, two days short of `bd011eb9`.** So the defect is
+not absence of care but a backfill whose horizon fell just the wrong side of the single commit that
+made the largest hole — and the fix is the same either way: finish it, once, rather than watch for
+it.
+
+**The second class: a number can be silently reused, and two were.** Freeing a number makes it look
+available — the hazard the ledger preamble names, citing `#83` as _the_ instance. Sweeping every
+number's heading across every snapshot and keeping only those that went **absent** between two
+dissimilar titles (an in-place rewrite is not a collision; the register's own rules encourage one,
+and `#64`, `#120` and `#154` are correctly excluded by that test) leaves **two more**:
+
+- **`#61`** held _"`Toolbar`'s `showLabel={r.item.tier === 1}` conflates priority with presentation"_
+  (2026-07-27), was deleted by `bd011eb9`, and came back the next day as _"The
+  resource-assignment routes assert the plan edit-lock but never declare it"_ (`8a9ae730`,
+  2026-07-29) before being deleted again the same day. Its **eight surviving citations split across
+  both subjects**: four point at the toolbar row (`ADR-0031:76`, `DESIGN_SYSTEM.md:244`,
+  `DECISIONS.md:1452`, `graphite/m5-command-strip.md:55`), three at the resource-assignment row
+  (`activity-editor-logic-resources-convergence` feature-spec `:390`, `:691`, plan `:419`), one is a
+  bare list entry that could be either.
+- **`#60`** held _"The toolbar's 'Calendar…' dialog now holds 7 unrelated settings sections"_, was
+  deleted by the same commit, and returned hours later as _"The Gantt's scroll behaviour is
+  unmeasured on real hardware"_ — **which is what `#60` still is today.**
+
+`#60` is the worse shape and the reason this is worth a paragraph: **a dangling citation announces
+itself; a collided one does not.** A reader following a pre-2026-07-28 `#60` lands on a live,
+plausible, entirely unrelated row and has no signal that anything is wrong. The gate this row
+proposes — _does every `#N` resolve?_ — answers **yes** for `#60` and is structurally incapable of
+seeing it. Detecting that class needs the citation's **date** compared against the number's
+lifetime, which is a different instrument.
+
+**The row's own two examples split on the same clock, and only one is the failure it describes.**
+`#31` was a live compact-table row through **2026-08-17** and deleted after that — genuinely after
+the ledger existed, so a real lapse, at a measured **26 days** to notice (2026-08-17 → 2026-09-12).
+This row says "six and seven weeks"; six weeks before 2026-09-12 is 2026-08-01, the week the
+**twelve** went, not the week `#31` went. What that figure was measured from is not recoverable, so
+it is recorded as a discrepancy rather than corrected. `#55` is stranger: **no snapshot in the
+register's entire history has it as a live row** — and neither does `#83`, the collision the
+preamble treats as established fact. That is not evidence either never existed: this repository
+squash-merges, so a row created and deleted inside one pull request is invisible to every snapshot.
+**Absence is unprovable by this method**, and that blind spot is worth more than either answer.
+
+**The gate this row calls "computable in a few lines" fails on day one as specified.** Run as
+written — every `#N` in `docs/` or `CLAUDE.md` must resolve — it reports **40 distinct numbers at
+136 sites**. Excluding markdown heading anchors (`#0-corrections-to-the-brief`,
+`#22-the-two-exceptions`) and pure-digit hex colours (`#333`, `#666`, `#999`, `#123456`) leaves
+**39 at 128**. The remaining 27 false positives are overwhelmingly **pull-request numbers** —
+`#482`, `#508`, `#514`, `#347`/`#349`/`#351` — which are lexically identical to a register citation
+and outnumber the true findings better than two to one. At a 69% false-positive rate the gate is
+unshippable in ADR-0058's sense: it fails on day one, so it gets deleted rather than fixed.
+
+**The discriminator is proximity, not line presence, and the difference is load-bearing.** Requiring
+the register to be named _on the same line_ still admits `#508`, because one line of
+`docs/specs/ci-sharding/feature-spec.md` carries a `docs/TECH_DEBT.md #301` citation **and** a
+`(PR #508)` aside — a line-level test cannot separate two citations sharing a line. Requiring the
+`#N` to be preceded by `TECH_DEBT` / `tech-debt` / `debt register` **within 24 characters** lands on
+exactly the twelve, 67 sites, no false positives. So the gate is buildable; it is simply not the
+gate this row describes, and that gap is the finding.
+
+**Still a shared gate and still not built here** (ADR-0105); the two decisions this row names remain
+open, and the collision class adds a third. What changes is that **the backfill is not a gate change
+and should go first** — a gate armed before it fails on twelve pre-existing rows and lands straight
+back in ADR-0058's deletion path.
 
 ### 289. NestJS 12 breaks the API e2e bootstrap, and Dependabot titles it as routine
 
