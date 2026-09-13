@@ -30,6 +30,7 @@ const NO_DEPS: DependencySummary[] = [];
 
 function activity(id: string, name: string, laneIndex: number): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     id,
     planId: 'p1',
     code: null,

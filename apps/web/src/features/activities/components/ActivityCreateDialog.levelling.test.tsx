@@ -29,6 +29,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const ACTIVITY: ActivitySummary = {
+  drivingResourceCalendarId: null,
   id: 'a1',
   planId: 'pl1',
   code: 'A100',

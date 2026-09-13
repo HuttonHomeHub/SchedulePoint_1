@@ -27,6 +27,7 @@ beforeEach(() => {
 
 function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
+    drivingResourceCalendarId: null,
     id: 'a1',
     planId: 'p1',
     code: null,

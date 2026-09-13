@@ -189,6 +189,10 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     externalLateFinish: null,
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     calendarId: null,
+    // ADR-0051 keeps resources out of the guest scope, and #86 CQ-4 kept them out of the guest DTO
+    // too: a guest adopts the CORRECTED durationDays — the server already converts it on the driving
+    // resource's calendar — and never learns that a resource is why. Null is the answer, not a gap.
+    drivingResourceCalendarId: null,
     parentId: null,
     laneIndex: activity.laneIndex,
     scheduleAsLateAsPossible: false,
