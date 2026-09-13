@@ -52,6 +52,9 @@
       "lines": "148-150",
       "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
       "citedBy": [
+        "apps/api/src/modules/schedule/schedule.controller.ts",
+        "apps/api/src/modules/share/share-guest.controller.ts",
+        "apps/api/src/modules/staff/staff.controller.ts",
         "apps/api/test/staff.e2e-spec.ts",
         "docs/TECH_DEBT.md",
         "scripts/measure-band-copy.mjs"

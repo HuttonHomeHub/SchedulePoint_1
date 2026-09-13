@@ -106,9 +106,10 @@ export class CrossPlanRevisionCompareController {
   })
   @ApiTooManyRequestsResponse({
     description:
-      'Rate limited by the **global** budget (100 requests / 60 s per IP). This route runs no CPM ' +
-      'computation — both sides are persisted columns — so it shares the generic read budget ' +
-      'rather than earning a tighter one. That is a rule applied, not a preference: the threshold ' +
+      'Rate limited by the **global default** (100 requests / 60 s per IP, counted per route ' +
+      'handler — docs/TECH_DEBT.md #315). This route runs no CPM computation — both sides are ' +
+      'persisted columns — so it earns no tighter limit than the default. That is a rule applied, ' +
+      'not a preference: the threshold ' +
       'and the fallback formula were committed before the measurement, which landed at 215.2 ms ' +
       'p95 end-to-end at 2,000 activities per side, inside the 250 ms bar.',
   })

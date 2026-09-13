@@ -60,7 +60,17 @@ const GuestSecurityHeaders = (): MethodDecorator =>
  */
 @ApiTags('share-guest')
 @ApiSecurity('shareToken')
-@ApiTooManyRequestsResponse({ description: 'Rate limit exceeded for the guest surface.' })
+// The limit is PER ROUTE HANDLER, not per surface (`docs/TECH_DEBT.md` #315): a controller-level
+// `@Throttle` sets each handler's limit, and `@nestjs/throttler` hashes the handler name into the
+// counter key (`dist/throttler.guard.js:148-150`). With three routes here a caller's real ceiling
+// across the surface is three times `GUEST_THROTTLE`. Token guessing stays infeasible either way
+// (256-bit, SHA-256 stored, uniform 404), so this is a stated bound that is looser than it reads,
+// not a hole — recorded because this is the surface a later reader is likeliest to reason from.
+@ApiTooManyRequestsResponse({
+  description:
+    'Rate limit exceeded for the guest surface. The limit is counted per route handler, so the ' +
+    'ceiling across /api/v1/share/* is the declared figure times the handler count.',
+})
 @Public()
 @UseGuards(ShareTokenGuard)
 @Throttle(GUEST_THROTTLE)

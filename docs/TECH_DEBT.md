@@ -4381,6 +4381,101 @@ dialog behind the boundary), a reload discards it and asks ADR-0108's guard firs
 `AppErrorBoundary` is untouched since `56a82ca5` too, which is how the pair came to differ: both were
 right when written, and only one was revisited.
 
+### 315. A controller-level `@Throttle` bounds each handler, not the surface, so two documented limits are 3× and 8× looser
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (reading `docs/API.md`'s rate-limit passages against `#314`'s measurement) · **Size:** S to document, M to decide · **Owner:** api
+
+`@nestjs/throttler@6.5.0` keys its counter
+`sha256(ClassName-handlerName-throttlerName-tracker)` (`dist/throttler.guard.js:148-150`, registered
+in `scripts/dependency-claims.json`; no override anywhere in `apps/api/src`). A `@Throttle` on a
+**controller** changes the limit and the window for each of its handlers; it does not make them
+share one counter. So a surface's real bound is **the declared limit times the number of handlers**,
+and both places this repository declares one intended a surface bound.
+
+| surface                 | declared                     | handlers | real bound per IP |
+| ----------------------- | ---------------------------- | -------- | ----------------- |
+| `/api/v1/share/*` guest | 30 / 60 s (`GUEST_THROTTLE`) | **3**    | **90 / 60 s**     |
+| `/api/v1/staff/*`       | 30 / 60 s                    | **8**    | **240 / 60 s**    |
+
+**The staff case is the one worth reading, because the number was chosen for a specific harm.** Its
+comment says the limit exists so that _"a compromised staff session could otherwise flood the one
+table that cannot be pruned"_ — `audit_events`, which refuses `DELETE` by database trigger and which
+ADR-0085 D1 deliberately keeps that way. Every successful staff hit writes a row. The bound on that
+flood is **240 a minute, not 30**: at ADR-0072's measured ~592 B/row that is ~142 kB/min, ~205 MB a
+day, in a table nothing can prune. It still needs a compromised staff session — which is a larger
+problem than this — and 240/min is still far above human use of a two-panel console, so this is a
+**documented bound that is 8× looser than stated**, not an exploitable hole. It is filed because the
+number was picked against a harm, and the arithmetic behind the pick is wrong.
+
+**The guest case matters for a different reason.** `/api/v1/share/*` is the product's only
+unauthenticated data read (ADR-0051), and its tighter limit is defence against probing a
+uniform-404 token space. Token guessing is infeasible regardless — 256-bit tokens, SHA-256 stored —
+so **90 / 60 s rather than 30** is not a security hole either; it is the same wrong arithmetic, on
+the surface where somebody is most likely to reason from the stated figure later.
+
+**And somebody did — this is the sharpest instance, because a shipped design decision rests on it.**
+`share/dto/guest-pagination-query.dto.ts:13-17` justifies the guest surface's **page size** from the
+budget: _"walking a large plan at 100/page would spend the entire budget on a single legitimate
+first load (a 2,000-activity plan ≈ 20 activity pages + ~20 dependency pages > 30) and self-429
+mid-walk."_ Activities and dependencies are **different handlers**, so they never shared a counter
+and the **sum is not the quantity that matters** — at 100/page the activity walk is ~20 against its
+own 30.
+
+**But the conclusion survives on a narrower argument, and finding that out is why this wants
+re-answering rather than re-wording.** The _dependency_ walk alone can exceed 30. This repository's
+own scale fixture is **2,160 activities / 3,200 links** — **32 pages at 100/page**, over the limit on
+that one handler, with the activity handler's untouched budget unable to help. So a guest loading a
+link-dense plan really could self-429 mid-walk, on one endpoint rather than out of a shared pool.
+The page-size decision stands; the reason written for it does not; and the corrected reason changes
+what a later reader should watch — a plan's **link** count, not its activity count. **This
+paragraph's own first draft said "both inside the window, and nothing would have self-429'd"**,
+which is the same mistake one layer along: I checked that the counters were separate and did not
+check the larger of the two against its own limit.
+
+**Four claims in shipped OpenAPI text were false for the same reason and are corrected in the same
+change as this row** — they carry no decision, so they are fixed rather than filed:
+
+- `schedule.controller.ts` health-check: _"shares the generic read budget with the schedule summary
+  and the Earned-Value read"_ — it shares nothing; each has its own 100/60 s.
+- `schedule.controller.ts` revision-compare: _"shares the generic budget with the health check and
+  the schedule summary"_ — likewise.
+- `cross-plan-revision-compare.controller.ts`: _"it shares the generic read budget rather than
+  earning a tighter one"_ — likewise.
+- `FLOAT_PATHS_THROTTLE`'s docblock: _"Sharing the generic read budget would let one authenticated
+  member spend it on a hundred CPM recomputations a minute."_ **This one is wrong in the direction
+  that strengthens its own conclusion**: without the decorator that route would have its own
+  100/60 s, so a member could spend a hundred recomputations a minute on it whatever else they
+  called. The `@Throttle` is more necessary than the comment argues, not less.
+
+**Every one of those decisions stands.** They rest on measurements — sub-1 ms loads at 2,000
+activities for the health check, 215.2 ms p95 for the cross-plan compare, ~100 ms p95 per
+`computeSchedule` for float-paths — and a measurement is unaffected by how the counter is keyed.
+What was wrong is the stated mechanism, in four places, in text served to API consumers who plan a
+request budget from it.
+
+**What needs a decision, and why it is not taken here.** Making a surface bound real is a
+behavioural change to a security control: `@nestjs/throttler` supports a per-controller
+`generateKey` (drop `context.getHandler().name` from the prefix) or a named throttler shared across
+the class. Either changes what the product refuses, so ADR-0105 fires and it wants a spec — and the
+spec has a prior question. **The intended bound may be the per-handler one.** A surface counter
+means one noisy panel read can lock an operator out of every other panel, which is exactly the
+cross-test interference `#268` exists about, one layer out. So the choice is per surface, and
+`/api/v1/share/*` (an anonymous prober) and `/api/v1/staff/*` (a signed-in operator with eight
+panels) plausibly want different answers.
+
+**One comment that says "per-IP" and is NOT corrected, because the discriminator matters.**
+`app-setup.ts:26-32` reads _"Nest's global `ThrottlerGuard` keys its per-IP buckets on `req.ip`"_,
+and that is **true**: the tracker is `req.ip`, which is the paragraph's whole subject (without
+`trust proxy` every client collapses onto the proxy's address). The four corrected above are
+different — each asserts that routes **share** a budget, which is false. So the test is not "does
+the sentence say per-IP" but "does it claim a shared counter". A sweep that replaced every "per-IP"
+would have rewritten a correct comment, which is this register's own recurring failure pointed the
+other way.
+
+**A generalisation worth stating before the next `@Throttle` lands:** a controller-level decorator
+is a **per-route** limit expressed once, never a surface budget. Anyone declaring one should state
+the handler count beside the figure, because the two numbers are what a reader will reason from.
+
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
 **Status:** deferred · **Verified:** 2026-09-11

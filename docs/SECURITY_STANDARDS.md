@@ -116,6 +116,15 @@ store only a hash**.
 - **Global rate limiting** (`@nestjs/throttler`), with **stricter limits on
   unauthenticated and sensitive endpoints** — the guest share routes carry their
   own tighter per-IP `@Throttle`. Return **429**.
+- **A `@Throttle` bounds one route handler, never a surface.** The counter key is
+  `sha256(ClassName-handlerName-throttlerName-tracker)`, so a decorator on a
+  **controller** sets each of its handlers' limits rather than pooling them: the
+  real ceiling across a surface is the declared figure **times its handler
+  count**. Both class-level declarations in this repository were written as if it
+  were a surface budget (`docs/TECH_DEBT.md` #315), and one shipped design
+  decision was derived from the wrong model. **State the handler count beside the
+  figure** when declaring one — those are the two numbers a later reader reasons
+  from, and only one of them is in the code.
 - Guard against enumeration (uniform responses on auth and on share-token
   resolution), and cap payload sizes and pagination limits server-side.
 

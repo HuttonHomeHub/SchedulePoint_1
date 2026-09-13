@@ -42,10 +42,17 @@ import { ScheduleService } from './schedule.service';
  * The float-paths budget: **20 requests / 60 s**, against the global 100/60 s.
  *
  * This route is not a persisted read-model — it runs a full `computeSchedule` per call (~100 ms p95
- * on a 540-activity plan, `scripts/measure-float-paths.mjs`). Sharing the generic read budget would
- * let one authenticated member spend it on a hundred CPM recomputations a minute. Twenty is well
- * above what the panel can generate — it fetches once per open, per target, per page size — and far
- * below what a loop would want. `ttl` is milliseconds, matching the global `ThrottlerModule`.
+ * on a 540-activity plan, `scripts/measure-float-paths.mjs`). Without this, one authenticated member
+ * could spend a hundred CPM recomputations a minute on this route alone. Twenty is well above what
+ * the panel can generate — it fetches once per open, per target, per page size — and far below what
+ * a loop would want. `ttl` is milliseconds, matching the global `ThrottlerModule`.
+ *
+ * **This paragraph said "sharing the generic read budget would let one member…" until 2026-09-13,
+ * and there is no sharing to opt out of** (`docs/TECH_DEBT.md` #315). `@nestjs/throttler` keys per
+ * route HANDLER (`dist/throttler.guard.js:148-150`), so absent this decorator the route would carry
+ * its own 100/60 s rather than draw on a common pool. The correction strengthens the decision: the
+ * hundred-recomputations case is reachable without a tighter limit, not only when a budget is
+ * shared.
  */
 const FLOAT_PATHS_THROTTLE = { default: { ttl: 60_000, limit: 20 } } as const;
 
@@ -192,9 +199,9 @@ export class ScheduleController {
   @ApiOkResponse({ type: ScheduleHealthReportDto })
   @ApiTooManyRequestsResponse({
     description:
-      'Rate limited by the global budget (100 requests / 60 s per IP). This route is a persisted ' +
-      'read — it runs no CPM computation — so it shares the generic read budget with the schedule ' +
-      'summary and the Earned-Value read rather than earning a tighter one. Measured at both ' +
+      'Rate limited by the global default (100 requests / 60 s per IP, counted per route handler ' +
+      '— docs/TECH_DEBT.md #315). This route is a persisted read — it runs no CPM computation — so ' +
+      'it earns no tighter limit than the default, unlike float-paths which recomputes. Measured at both ' +
       'scales (M0-T2 at 500 activities; the M5 gate pass at 2,000 — all four loads sub-1 ms, ' +
       'independently re-derived by the security review): see ' +
       'docs/specs/schedule-health-check/m0-measurement.md §M0-T2.',
@@ -244,9 +251,9 @@ export class ScheduleController {
   })
   @ApiTooManyRequestsResponse({
     description:
-      'Rate limited by the global budget (100 requests / 60 s per IP). This route is a persisted ' +
-      'read — it runs no CPM computation — so it shares the generic budget with the health check ' +
-      'and the schedule summary rather than earning a tighter one, for the reason health-check ' +
+      'Rate limited by the global default (100 requests / 60 s per IP, counted per route handler ' +
+      '— docs/TECH_DEBT.md #315). This route is a persisted read — it runs no CPM computation — so ' +
+      'it earns no tighter limit than the default, for the reason health-check ' +
       'documents above. Deriving one from a measurement would have been right; **copying** ' +
       'float-paths’ would not, and float-paths’ exists precisely because it recomputes.',
   })
