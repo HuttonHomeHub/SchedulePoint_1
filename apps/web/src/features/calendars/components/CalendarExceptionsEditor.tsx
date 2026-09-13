@@ -301,10 +301,12 @@ function ExceptionEditForm({
  * surfaced as a friendly inline message. Fetches the calendar detail itself so it
  * can stay embedded in the calendar dialog.
  *
- * Behind `VITE_CALENDAR_SHIFT_EDITOR` a worked exception may carry **specific hours** rather than
- * only "the whole day works" (ADR-0067 §3) — a half-day before a holiday, or a shutdown day with a
- * short crew — and each row gains an Edit action, so correcting one no longer means deleting it and
- * adding it back. Flag off, this surface is exactly what it was.
+ * A worked exception may carry **specific hours** rather than only "the whole day works"
+ * (ADR-0067 §3) — a half-day before a holiday, or a shutdown day with a short crew — and each row
+ * has an Edit action, so correcting one no longer means deleting it and adding it back. This
+ * arrived behind `VITE_CALENDAR_SHIFT_EDITOR`; ADR-0088 D3 retired that flag on 2026-08-10
+ * (`9e37a3f4`), so there is no flag-off state and the behaviour is unconditional. That commit
+ * edited this file and removed a sibling "Flag off, ..." sentence from it while leaving this one.
  */
 export function CalendarExceptionsEditor({
   orgSlug,

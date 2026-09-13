@@ -2830,10 +2830,20 @@ number attached.
 **Status:** open · **Verified:** 2026-09-13 · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
-a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
-follow-up landing its items — not item by item. Any single entry below may have been fixed
-incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
-person picking it up checks that one, which is cheap because every entry names its file.
+a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
+filed it has had no follow-up landing its items — not item by item.
+
+**That caveat has since been discharged, and saying so is the point** (swept 2026-09-13). Every one
+of the seven rows carrying this block has had a later item-by-item pass, dated **2026-09-11 or
+after** and recorded on the entries themselves. So read the per-item dates below, which supersede
+this paragraph; the 2026-09-10 line describes that day's pass and is not an instruction about the
+row's state today.
+
+It used to end _"treat each as unverified until the person picking it up checks that one"_, and that
+sentence outlived the work it asked for. A block can be half-stale in exactly this way — its
+**description** stayed true while its **instruction** went false — and the instruction is the half a
+reader acts on, so it is the half that costs somebody an afternoon. It did: two entries were reached
+for on 2026-09-13 as unchecked and both had been walked on 2026-09-11.
 
 Non-blocking findings from the three specialist gates over the epic diff. Both are real; neither
 blocked the epic.
@@ -2933,10 +2943,20 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 **Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
-a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
-follow-up landing its items — not item by item. Any single entry below may have been fixed
-incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
-person picking it up checks that one, which is cheap because every entry names its file.
+a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
+filed it has had no follow-up landing its items — not item by item.
+
+**That caveat has since been discharged, and saying so is the point** (swept 2026-09-13). Every one
+of the seven rows carrying this block has had a later item-by-item pass, dated **2026-09-11 or
+after** and recorded on the entries themselves. So read the per-item dates below, which supersede
+this paragraph; the 2026-09-10 line describes that day's pass and is not an instruction about the
+row's state today.
+
+It used to end _"treat each as unverified until the person picking it up checks that one"_, and that
+sentence outlived the work it asked for. A block can be half-stale in exactly this way — its
+**description** stayed true while its **instruction** went false — and the instruction is the half a
+reader acts on, so it is the half that costs somebody an afternoon. It did: two entries were reached
+for on 2026-09-13 as unchecked and both had been walked on 2026-09-11.
 
 Five specialists reviewed the combined #108/#113/#111 diff. Ten findings were folded with regression
 tests; these are the ones deliberately left, each with the reason, so they are not rediscovered as
@@ -5661,10 +5681,20 @@ browser tab.
 **Status:** open · **Verified:** 2026-09-10
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
-a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
-follow-up landing its items — not item by item. Any single entry below may have been fixed
-incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
-person picking it up checks that one, which is cheap because every entry names its file.
+a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
+filed it has had no follow-up landing its items — not item by item.
+
+**That caveat has since been discharged, and saying so is the point** (swept 2026-09-13). Every one
+of the seven rows carrying this block has had a later item-by-item pass, dated **2026-09-11 or
+after** and recorded on the entries themselves. So read the per-item dates below, which supersede
+this paragraph; the 2026-09-10 line describes that day's pass and is not an instruction about the
+row's state today.
+
+It used to end _"treat each as unverified until the person picking it up checks that one"_, and that
+sentence outlived the work it asked for. A block can be half-stale in exactly this way — its
+**description** stayed true while its **instruction** went false — and the instruction is the half a
+reader acts on, so it is the half that costs somebody an afternoon. It did: two entries were reached
+for on 2026-09-13 as unchecked and both had been walked on 2026-09-11.
 
 Neither was blocking and neither was folded; both were recorded so they are decisions rather than
 things that were dropped. **(b) closed 2026-09-11; (a) is live and is not a coding task** — it needs
@@ -5739,10 +5769,20 @@ question, and the trigger is what to look at.
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
-a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
-follow-up landing its items — not item by item. Any single entry below may have been fixed
-incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
-person picking it up checks that one, which is cheap because every entry names its file.
+a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
+filed it has had no follow-up landing its items — not item by item.
+
+**That caveat has since been discharged, and saying so is the point** (swept 2026-09-13). Every one
+of the seven rows carrying this block has had a later item-by-item pass, dated **2026-09-11 or
+after** and recorded on the entries themselves. So read the per-item dates below, which supersede
+this paragraph; the 2026-09-10 line describes that day's pass and is not an instruction about the
+row's state today.
+
+It used to end _"treat each as unverified until the person picking it up checks that one"_, and that
+sentence outlived the work it asked for. A block can be half-stale in exactly this way — its
+**description** stayed true while its **instruction** went false — and the instruction is the half a
+reader acts on, so it is the half that costs somebody an afternoon. It did: two entries were reached
+for on 2026-09-13 as unchecked and both had been walked on 2026-09-11.
 
 Six specialists reviewed the stacked-resource-histogram diff. Every blocking finding was folded with
 a regression test verified red first (ADR-0121 D8). These are the non-blocking ones, each left with
@@ -6511,10 +6551,20 @@ write nobody reviewed on its own terms.
 > wrong.
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
-a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
-follow-up landing its items — not item by item. Any single entry below may have been fixed
-incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
-person picking it up checks that one, which is cheap because every entry names its file.
+a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
+filed it has had no follow-up landing its items — not item by item.
+
+**That caveat has since been discharged, and saying so is the point** (swept 2026-09-13). Every one
+of the seven rows carrying this block has had a later item-by-item pass, dated **2026-09-11 or
+after** and recorded on the entries themselves. So read the per-item dates below, which supersede
+this paragraph; the 2026-09-10 line describes that day's pass and is not an instruction about the
+row's state today.
+
+It used to end _"treat each as unverified until the person picking it up checks that one"_, and that
+sentence outlived the work it asked for. A block can be half-stale in exactly this way — its
+**description** stayed true while its **instruction** went false — and the instruction is the half a
+reader acts on, so it is the half that costs somebody an afternoon. It did: two entries were reached
+for on 2026-09-13 as unchecked and both had been walked on 2026-09-11.
 
 Each was judged real and not worth holding the release for.
 
@@ -6592,10 +6642,20 @@ incidentally. One had been, halfway, which is the case that caveat exists for.
 > pile with work left in it; one decision is what is left.
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
-a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
-follow-up landing its items — not item by item. Any single entry below may have been fixed
-incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
-person picking it up checks that one, which is cheap because every entry names its file.
+a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
+filed it has had no follow-up landing its items — not item by item.
+
+**That caveat has since been discharged, and saying so is the point** (swept 2026-09-13). Every one
+of the seven rows carrying this block has had a later item-by-item pass, dated **2026-09-11 or
+after** and recorded on the entries themselves. So read the per-item dates below, which supersede
+this paragraph; the 2026-09-10 line describes that day's pass and is not an instruction about the
+row's state today.
+
+It used to end _"treat each as unverified until the person picking it up checks that one"_, and that
+sentence outlived the work it asked for. A block can be half-stale in exactly this way — its
+**description** stayed true while its **instruction** went false — and the instruction is the half a
+reader acts on, so it is the half that costs somebody an afternoon. It did: two entries were reached
+for on 2026-09-13 as unchecked and both had been walked on 2026-09-11.
 
 Six specialists over the combined diff. Security and backend-performance passed with nothing
 blocking, both having re-derived the epic's own measurements from the shipped code rather than
@@ -6982,10 +7042,20 @@ than having to remember to look.
 **Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
-a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
-follow-up landing its items — not item by item. Any single entry below may have been fixed
-incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
-person picking it up checks that one, which is cheap because every entry names its file.
+a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
+filed it has had no follow-up landing its items — not item by item.
+
+**That caveat has since been discharged, and saying so is the point** (swept 2026-09-13). Every one
+of the seven rows carrying this block has had a later item-by-item pass, dated **2026-09-11 or
+after** and recorded on the entries themselves. So read the per-item dates below, which supersede
+this paragraph; the 2026-09-10 line describes that day's pass and is not an instruction about the
+row's state today.
+
+It used to end _"treat each as unverified until the person picking it up checks that one"_, and that
+sentence outlived the work it asked for. A block can be half-stale in exactly this way — its
+**description** stayed true while its **instruction** went false — and the instruction is the half a
+reader acts on, so it is the half that costs somebody an afternoon. It did: two entries were reached
+for on 2026-09-13 as unchecked and both had been walked on 2026-09-11.
 
 Six specialists ran over the epic's combined diff. Seven findings blocked and were folded with
 red-first regression tests (see the M4 commit). These twelve did not, each with the reason it was
@@ -8480,6 +8550,19 @@ population". With this it is **three** — `#298` born carrying a status contrad
 "nothing in that pass touched `plan-workspace-toolbar.tsx`" written by a commit that touched it, and
 now a count stale by its own additions. Three distinct defects, one commit, one mechanism. Still not
 a population, and no longer a coincidence.
+
+**Re-derived 2026-09-13, and the estate is clean in BOTH directions for the first time recorded.**
+138 ADR files in `docs/adr/` against 138 bolded `- **ADR-NNNN**` entries in
+[CLAUDE.md](../CLAUDE.md) §16: **no file missing an entry, and no entry naming a file that does not
+exist.** One command — a set comparison both ways — which is worth stating because the two earlier
+checks compared only one direction and the second of them undercounted.
+
+**The row stays `open`, and the reason is the row's own point.** That comparison was run by a
+person, which is exactly the mechanism this row says is insufficient: a person has missed it twice,
+and a third pass coming back clean is evidence about today, not a guarantee about tomorrow. Nothing
+computes it — `check:adr-coverage` reads the ADR index and `docs/ROADMAP.md`, and its own docblock
+says it does not read this file. A clean manual result is the weakest kind of assurance there is,
+and recording it as such is the honest version of "verified".
 
 ### 292. The web entry chunk is 372 kB gzip, and every authenticated route is in it
 
