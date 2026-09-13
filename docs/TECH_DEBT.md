@@ -2633,7 +2633,7 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 ### 101. `check:claims` completeness has structural blind spots
 
-**Status:** open · **Verified:** 2026-09-10 · (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
+**Status:** open · **Verified:** 2026-09-13 · (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
 **Narrowed:** 2026-08-08 (W5 M2-T4)
 
 `pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
@@ -2712,6 +2712,41 @@ holds — it can only fail to _demand_ a new one.
 version, and a version bump fails CI) is unaffected.
 
 ---
+
+**Re-derived 2026-09-13: the counts have grown, the substantive claim holds exactly, and the
+re-derivation's own two wrong turns are the part worth keeping.**
+
+**The counts.** Measured against `claims[].path` — the field the gate reads, which this row already
+records a probe getting wrong — **111 claims across 17 packages, 36 distinct dependency basenames**,
+against 100 / 15 / 31 three days ago and 40 / 5 at ADR-0077. The growth is this row's own argument
+for re-running rather than re-reading, and it continues: +11 claims and +5 basenames in three days.
+
+**Zero collisions, measured against the broadest possible repo side.** Not `ownGlobs()` but **every
+tracked file** — `git ls-files`, **2,479** distinct basenames — so a zero here implies a zero under
+the narrower set the gate actually excludes by. Limitation 1 still cannot be silently skipping
+anything. Limitation 2's four directories are still exactly `docs`, `apps/api/src`, `apps/api/test`,
+`apps/web/src` (`check-claims.mjs:360-365`).
+
+**Two wrong turns, both mine, both disproved by running something.** The first: the register now
+holds `index.js`, `index.mjs`, `index.d.ts` and `index.esm.mjs`, and this row's parenthetical says
+_"the set holds no `index.js`/`index.mjs`"_ — which reads, at a glance, like a claim that has since
+gone false. It has not. **"The set" is `ownBasenames()`**, named in that paragraph's own first
+sentence: the basenames **this repository** has. Measured: **zero** tracked `index.js`, `index.mjs`,
+`index.d.ts` or `index.esm.mjs`. The row is precise, and the clause immediately after it — that
+`@better-fetch/fetch`'s `index.js:733-739` **is** registered and registration is checked before the
+exclusion — is the row anticipating exactly the objection I was about to raise.
+
+The second wrong turn was already in flight on `#308` an hour earlier: a parenthetical read the wrong
+way round, a "defect" pursued, and the measurement clearing the row instead. **Twice in one pass the
+register's prose looked loose and turned out to be exact once its referent was resolved** — which is
+the mirror of tonight's other findings and belongs beside them. The rule that catches both is the
+same one: run the check before writing the correction, not after.
+
+**What latency rests on, stated so it can be re-checked in one command.** Zero tracked `index.js` or
+`index.mjs` against **44** tracked `index.ts`/`index.tsx`. The gap between the safe state and a live
+blind spot is one character in one filename — a committed build artefact or a plain-JS config would
+close it silently. That is not a correction to the row; it is the row's own limitation 1 with a
+number attached.
 
 ### 105. Two follow-ups from the canvas status & feedback gate pass
 
@@ -8243,7 +8278,9 @@ and every agent reads to learn what has been decided, and an ADR absent from it 
 one audience that matters most.
 
 **The repair is done; the gate is not.** ADR-0132 now has its entry, and a full comparison of all
-**133** ADR files against §16 found **exactly one** missing, so the estate is clean today. It will
+**133** ADR files against §16 found **exactly one** missing, so the estate is clean today. (That
+figure is the count **before this row's own commit added ADR-0134/0135/0136** — 136 immediately
+after, 138 on 2026-09-13. It is annotated rather than rewritten; see below.) It will
 not stay clean: the previous two instances of this class were also repaired by hand, and both
 recurred.
 
@@ -8309,6 +8346,51 @@ Until then the check is one command, and it belongs in the reconciliation pass
 ```
 python3 -c "import os,re; nums=sorted({m.group(1) for f in os.listdir('docs/adr') if (m:=re.match(r'(\d{4})-',f))}); c=open('CLAUDE.md').read(); print([n for n in nums if f'ADR-{n}' not in c])"
 ```
+
+**Re-derived 2026-09-13. The estate is still clean, the gate is still unbuilt, and this row's own
+count has drifted in exactly the way it warns about.**
+
+**Clean, and measured rather than assumed.** There are **138** ADR files in `docs/adr/` today, and
+**all 138 carry a bulleted `ADR-NNNN` entry in `CLAUDE.md` §16** — zero missing, checked by
+comparing the two sets rather than by spot-reading. The row's concern that the estate "will not stay
+clean" has not yet materialised, four days on, which is worth recording because a clean check that
+leaves no trace invites the next reader to repeat it.
+
+**The gate is still unbuilt, confirmed at the source.** `scripts/check-adr-coverage.mjs` reads
+`docs/ROADMAP.md`, `docs/adr/README.md` and the `docs/adr` directory; its **only** mention of
+`CLAUDE.md` is a docblock explaining why it does not check it. Nothing has changed there.
+
+**And the row says 133 — which was wrong on the day it was written, by exactly three.** `69207b1d`
+wrote the sentence _"a full comparison of all 133 ADR files"_ **and added ADR-0134, ADR-0135 and
+ADR-0136 in the same commit**: `git ls-tree` counts **133** at `69207b1d^` and **136** at
+`69207b1d`. The author counted, wrote the figure down, and then the commit filed three more ADRs —
+so the number was stale the moment it landed, by precisely the files that commit existed to add.
+That is `#246`'s born-stale mechanism in its **count** form, with the cleanest proof it has: the
+delta is not approximately the commit's own additions, it **is** them.
+
+The figure is therefore **not** rewritten to 138 — overwriting it would falsify a historical
+statement to make a present one true, and the comparison really did examine 133. It is annotated
+above with what it was: the count **before** that commit's own three ADRs, 136 after, 138 today.
+
+The sharp part is _why_ it went stale while the banner did not. **`CLAUDE.md`'s "138 ADRs" is
+gated** — `pnpm check:counts` re-derives it and fails the build if it disagrees (ADR-0076 Class 1) —
+**and this row is not.** The same quantity is computed in one document and hand-written in another,
+and the hand-written one drifted by five. This row exists because a gate covered the index a reader
+rarely opens and not the section they are briefed from; the same shape has now reached the row
+itself, where the gate covers the banner and not the register entry quoting it.
+
+Left as a caution rather than a new proposal: gating a prose count inside a debt row is not
+obviously worth a gate. **And note that dating it would NOT have been enough here** — a date of
+2026-09-11 beside "133" would have been just as wrong, because the figure was already stale within
+its own commit. What this one needed is `#246`'s remedy exactly: **derive the count after the edit,
+not before.**
+
+**One more thing follows, and it upgrades a note made earlier tonight.** `#302`'s annotation records
+`69207b1d` producing two register-accuracy defects and says, carefully, that "one commit is not a
+population". With this it is **three** — `#298` born carrying a status contradiction, `#249`'s
+"nothing in that pass touched `plan-workspace-toolbar.tsx`" written by a commit that touched it, and
+now a count stale by its own additions. Three distinct defects, one commit, one mechanism. Still not
+a population, and no longer a coincidence.
 
 ### 292. The web entry chunk is 372 kB gzip, and every authenticated route is in it
 
@@ -8790,7 +8872,7 @@ Related: #305, #297, ADR-0029 §202-203, ADR-0082.
 
 ### 308. `scripts/e2e-local.sh measure:<name>` cannot run one spec, so nobody uses it
 
-**Status:** open · **Verified:** 2026-09-12 · **Raised:** 2026-09-12 (three failed hand-rolled runs in one session) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-12 (three failed hand-rolled runs in one session) · **Size:** S · **Owner:** repo
 
 `scripts/e2e-local.sh` exists because a run that cannot be trusted is worse than no run, and its
 `measure:*` target was added for exactly that reason: its own comment records that _"every measurement
@@ -8818,6 +8900,33 @@ spec with the bootstrap intact. Check the `web:<suite>` branch (`:194`) for the 
 **Precedent for why this class matters**: `web:wsb` once printed "Done", exited clean and ran
 **nothing** — a target that looks like it worked is the failure this script was written to remove, and
 a target nobody can use for the common case gets routed around instead.
+
+**Re-derived 2026-09-13: every figure exact, and the environment facts still true — including the one
+that is only true of a running machine.**
+
+`scripts/e2e-local.sh:207-211` is still `pnpm --filter @repo/web "measure:${name}"` with **no
+`"$@"`**, so the target still cannot forward a spec path. `measure-toolbar/` still holds **36** spec
+files, counted. And the two facts that decay fastest were checked against the machine rather than the
+file: the installed browser is still **`chromium-1194`** (`/opt/pw-browsers/chromium-1194/`), and
+Postgres answers on **5432** while **5433 does not respond at all** — `pg_isready` on both, plus
+`scripts/e2e-local.sh:27` (`PG_PORT="${PGPORT:-5432}"`) and `docker-compose.yml`'s `'5432:5432'`
+agreeing with it.
+
+**One wording nit, recorded because the checker made the mistake it describes.** The phrase _"a
+guessed Postgres port (**5432**, not 5433)"_ has two readings: _the guess was 5432 and should have
+been 5433_, or _the port is 5432, not the 5433 you might assume_. The second is correct and is
+consistent with the item beside it, which names `chromium-1194` as the **right** value — but the
+first reading is available, and this re-derivation took it, went looking for a defect and found
+instead that 5433 is dead. A reader who takes the same reading configures a port nothing is listening
+on. _"The port is 5432, not 5433"_ removes the ambiguity at the cost of four words.
+
+**And it is a third safe-side instance for `#246`.** That row measures citations written in the same
+commit as an edit to the cited file as wrong 69% of the time. This citation was written by
+`c18efbce`, which **did not touch** `scripts/e2e-local.sh` — and `:207-211` framed the `measure:*`
+target then and frames it now, unchanged.
+
+Nothing here moves the remedy: the target still forwards no arguments, and the unsafe path is still
+the only way to run one spec.
 
 ### 298. Two gate-pass findings recorded rather than folded, and one suite name that stopped describing itself
 
