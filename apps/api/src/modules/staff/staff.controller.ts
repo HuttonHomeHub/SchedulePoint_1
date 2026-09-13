@@ -30,6 +30,7 @@ import { CreateProbeResultDto } from './dto/create-probe-result.dto';
 import { ProbeResultRowDto, ProbeResultsQueryDto } from './dto/probe-result.dto';
 import { StaffAccountsQueryDto } from './dto/staff-accounts-query.dto';
 import { CspReportRowDto } from './dto/staff-csp-reports.dto';
+import { StaffDiagnosticsDto } from './dto/staff-diagnostics.dto';
 import { StaffHealthDto } from './dto/staff-health.dto';
 import { StaffIdentityDto } from './dto/staff-identity.dto';
 import {
@@ -38,6 +39,7 @@ import {
   StaffInstallationDto,
 } from './dto/staff-installation.dto';
 import { IdentityProbe } from './identity-probe.decorator';
+import { StaffDiagnosticsService } from './staff-diagnostics.service';
 import { StaffHealthService } from './staff-health.service';
 import { StaffProbeService } from './staff-probe.service';
 import { StaffGuard } from './staff.guard';
@@ -96,6 +98,7 @@ export class StaffController {
     private readonly audit: AuditService,
     private readonly health: StaffHealthService,
     private readonly probe: StaffProbeService,
+    private readonly diagnosticsService: StaffDiagnosticsService,
   ) {}
 
   @Get('me')
@@ -217,6 +220,33 @@ export class StaffController {
   ): Promise<StaffInstallationDto> {
     await this.recordPanelRead(staff, context, 'installation');
     return this.health.installation();
+  }
+
+  @Get('diagnostics')
+  @ApiOperation({
+    summary: 'How many rows answer a named question about customer data',
+    description:
+      'Counts, and nothing else (ADR-0140). Each registry entry returns how many rows were ' +
+      'examined, how many answer the question, and how many plans and organisations those rows ' +
+      'fall in. **No plan, client, project or activity is ever named, at any size.**\n\n' +
+      '**This route accepts no parameter of any kind, and that is the decision rather than a ' +
+      'small API.** A parameterless aggregate cannot be used to ask about anybody in particular; ' +
+      'an organisation or date filter would turn it into a differencing oracle over customer data ' +
+      '— count with org X excluded, subtract — and the whole narrowing of ADR-0086 D6 would ' +
+      'collapse. A structural gate refuses an input decorator here, so this is not a convention.\n\n' +
+      'It narrows ADR-0086 D6 rather than sitting outside it: the SQL reads `activities`, `plans`, ' +
+      '`calendars`, `resource_assignments` and `resources`. What it replaces is `psql` on the host ' +
+      '— wider, unaudited, unrated and unreachable by the person who needs the number.',
+  })
+  @ApiOkResponse({ type: StaffDiagnosticsDto })
+  async diagnostics(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+  ): Promise<StaffDiagnosticsDto> {
+    // The audit row names the panel and never its contents — the rule every other panel here
+    // follows, and the one place it costs nothing, because the contents are integers.
+    await this.recordPanelRead(staff, context, 'diagnostics');
+    return await this.diagnosticsService.run();
   }
 
   @Get('accounts')

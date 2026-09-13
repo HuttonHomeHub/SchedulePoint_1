@@ -32,6 +32,9 @@ const STAFF_DIR = __dirname;
 const DTO_PATH = join(STAFF_DIR, 'dto', 'staff-diagnostics.dto.ts');
 const REGISTRY_PATH = join(STAFF_DIR, 'staff-diagnostics.registry.ts');
 const REPOSITORY_PATH = join(STAFF_DIR, 'staff-diagnostics.repository.ts');
+// The SQL lives in the REGISTRY, not the repository — see the S-4 docblock for why that placement
+// departs from the plan, and for the second assertion that keeps this gate from having a hole.
+const SQL_PATH = REGISTRY_PATH;
 const CONTROLLER_PATH = join(STAFF_DIR, 'staff.controller.ts');
 
 /** Source with comments removed. See the docblock above for why this is necessary, not fastidious. */
@@ -79,11 +82,49 @@ function rowProperties(source: string): { name: string; type: string }[] {
     }
   }
 
-  const body = source.slice(open + 1, end);
+  // Decorator bodies are stripped FIRST, and that is not tidiness. `@ApiProperty({ enum: X,
+  // description: '…' })` is full of `name: value` pairs, and the first version of this scan read
+  // them as property declarations — reporting `enum: DIAGNOSTIC_IDS, description: …` as a
+  // non-numeric property of the DTO. The same shape as a gate matching its own docblock, one
+  // syntax along: the scan must see what the class DECLARES, not what its annotations say about it.
+  const body = stripDecorators(source.slice(open + 1, end));
   const out: { name: string; type: string }[] = [];
-  // `name!: type;` — the repository's DTO convention throughout (`staff-health.dto.ts`).
-  for (const match of body.matchAll(/^\s*([A-Za-z_$][\w$]*)\s*!?\s*:\s*([^;]+);/gm)) {
+  // `name!: type;` — the DTO convention throughout (`staff-health.dto.ts`). `?` and a bare `:` are
+  // matched too: `planName?: string` typechecks under `strictPropertyInitialization` where
+  // `planName: string` does not, so a gate keyed on `!` alone would have one way out of it.
+  for (const match of body.matchAll(/^[ \t]*([A-Za-z_$][\w$]*)\s*[!?]?\s*:\s*([^;\n]+);/gm)) {
     out.push({ name: match[1]!, type: match[2]!.trim() });
+  }
+  return out;
+}
+
+/** Remove `@Decorator(...)` blocks, parentheses balanced, so their contents are not read as code. */
+function stripDecorators(source: string): string {
+  let out = '';
+  for (let i = 0; i < source.length; i += 1) {
+    if (source[i] !== '@') {
+      out += source[i];
+      continue;
+    }
+    const open = source.indexOf('(', i);
+    const nextLine = source.indexOf('\n', i);
+    if (
+      open === -1 ||
+      (nextLine !== -1 && open > nextLine && !/^@[\w$.]+$/.test(source.slice(i, nextLine).trim()))
+    ) {
+      out += source[i];
+      continue;
+    }
+    let depth = 0;
+    let j = open;
+    for (; j < source.length; j += 1) {
+      if (source[j] === '(') depth += 1;
+      if (source[j] === ')') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    i = j;
   }
   return out;
 }
@@ -106,23 +147,42 @@ describe('S-1 — the diagnostic row DTO carries numbers and nothing else (ADR-0
     expect(read(DTO_PATH)).not.toMatch(/\[\s*\w+\s*:\s*string\s*\]\s*:/);
   });
 
-  it('catches a non-numeric property when it sees one', () => {
-    // The pinned positive, over a synthetic class rather than the real file — so it proves the
-    // scan does something, rather than proving the real file is currently fine.
+  it('catches a non-numeric property when it sees one, decorators and all', () => {
+    // The pinned positive, over a synthetic class rather than the real file — so it proves the scan
+    // does something, rather than proving the real file is currently fine.
+    //
+    // It carries decorators DELIBERATELY, and one of them names a `description:` whose text would
+    // read as a property declaration if the stripping stopped working. That is the case the first
+    // version of this gate failed, and it fails in the direction that matters: towards a false
+    // POSITIVE, which gets the gate weakened by whoever is trying to land an unrelated change.
+    // The `?` property is the other escape a `!`-keyed regex would leave open.
     const synthetic = `
       export class StaffDiagnosticRowDto {
+        @ApiProperty({ enum: DIAGNOSTIC_IDS, description: 'thing: a value; and more' })
         id!: DiagnosticId;
+        @ApiProperty()
         label!: string;
+        @ApiProperty({ description: 'how many' })
         numerator!: number;
+        @ApiProperty()
         planName!: string;
-        capturedAt!: Date;
+        capturedAt?: Date;
       }
     `;
     const props = rowProperties(synthetic);
+
+    // Exactly the five real properties, and nothing from inside a decorator.
+    expect(props.map((p) => p.name)).toEqual([
+      'id',
+      'label',
+      'numerator',
+      'planName',
+      'capturedAt',
+    ]);
+
     const offenders = props.filter(
       (p) => !LITERAL_PROPERTIES.includes(p.name) && p.type !== 'number',
     );
-
     expect(offenders.map((p) => p.name)).toEqual(['planName', 'capturedAt']);
   });
 });
@@ -219,7 +279,7 @@ const COUNT_WITH_ALIAS = /^count\s*\([\s\S]*\)\s+AS\s+[a-z_][a-z0-9_]*$/i;
 
 describe('S-4 — the SQL projects counts only (ADR-0140 D3.2)', () => {
   it('projects nothing but aliased count expressions', () => {
-    const lists = projections(read(REPOSITORY_PATH));
+    const lists = projections(read(SQL_PATH));
 
     expect(lists.length, 'the repository must contain at least one SELECT').toBeGreaterThan(0);
 
@@ -234,13 +294,32 @@ describe('S-4 — the SQL projects counts only (ADR-0140 D3.2)', () => {
   });
 
   it('interpolates nothing — the query takes no parameters, so injection is structural', () => {
-    const source = read(REPOSITORY_PATH);
+    const source = read(SQL_PATH);
     const sqlTemplates = [...source.matchAll(/Prisma\.sql`([\s\S]*?)`/g)].map((m) => m[1]!);
 
     expect(sqlTemplates.length, 'the SQL must be a Prisma.sql tagged template').toBeGreaterThan(0);
     for (const template of sqlTemplates) {
       expect(template, 'zero interpolation — see ADR-0140 D5').not.toContain('${');
     }
+  });
+
+  /**
+   * **The hole this closes, and the plan departure behind it.**
+   *
+   * The approved plan put "one SQL constant" in `StaffDiagnosticsRepository`. It is in the REGISTRY
+   * instead, because a per-entry query held by the repository would make the repository know each
+   * diagnostic by name — and then "adding a diagnostic is one registry entry and nothing else",
+   * which is ADR-0140 D2 clause 3, would simply be false.
+   *
+   * That placement gives S-4 a hole unless this exists: the gate reads the registry, so SQL that
+   * sprouted in the repository would be projected past it unseen. The repository runs what it is
+   * handed and composes no SQL of its own, and this is what says so.
+   */
+  it('keeps all SQL in the registry, so the projection gate can see all of it', () => {
+    const repository = read(REPOSITORY_PATH);
+
+    expect(repository, 'the repository composes no SQL of its own').not.toContain('Prisma.sql');
+    expect(repository, 'the repository projects nothing of its own').not.toMatch(/\bSELECT\b/i);
   });
 
   it('catches a projected column when it sees one', () => {

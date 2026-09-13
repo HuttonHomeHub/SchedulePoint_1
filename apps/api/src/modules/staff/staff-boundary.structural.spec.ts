@@ -167,6 +167,13 @@ describe('the staff boundary (ADR-0086)', () => {
       'worse for the boundary. Every customer value stays in Postgres and only integers cross. ' +
       'Held by gates S-1 (all-numeric DTO), S-2 (no handler input) and S-4 (projection is counts ' +
       'only).',
+    'staff-diagnostics.repository.spec.ts':
+      'Its Prisma stub DECLARES a $queryRaw property; it calls nothing and no client exists in a ' +
+      'unit test to call. The scan reads source text and cannot separate a mock from a query, so ' +
+      'the choice was an exception or a rule change — and narrowing the rule to exclude specs was ' +
+      'refused, because the gate deliberately covers tests (a spec importing PlanRepository to ' +
+      'build a fixture has put that import in the module). One named file is the smaller change. ' +
+      'The import assertion above still covers this file unchanged.',
   };
 
   /**

@@ -30,6 +30,19 @@ fourth synthetic source that only **mentions** `$queryRaw` in a comment, and mus
 three. That fourth case is the scan-matching-its-own-documentation trap, which four gates in this
 repository have shipped.
 
+### A second exception, added in M2 and recorded rather than absorbed
+
+`staff-diagnostics.repository.spec.ts` trips the gate: its Prisma stub **declares** a `$queryRaw`
+property. It calls nothing, and in a unit test no client exists to call — but the scan reads source
+text and cannot separate a mock from a query.
+
+That left two moves, and the one not taken is the finding. Narrowing the rule to exclude `.spec.ts`
+files would have been **weakening a gate to land the change that tripped it** — the exact failure
+the S-1 pinned positive is written against, one file over — and the gate covers tests deliberately:
+a spec importing `PlanRepository` to build a fixture has put that import in the module, and only
+luck keeps it out of the shipped path. So the narrower move: one more file named **by path**, with
+its reason inline. Every other file still fails, and the import assertion covers this one unchanged.
+
 ## S-1, S-2, S-4, S-5 — red because their subject does not exist
 
 `vitest run src/modules/staff/staff-diagnostics.structural.spec.ts`, on the M1 tree:

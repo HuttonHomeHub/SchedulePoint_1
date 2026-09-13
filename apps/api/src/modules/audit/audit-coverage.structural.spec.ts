@@ -61,6 +61,7 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'GET /api/v1/staff/accounts': ['staff.panel_read'],
   'GET /api/v1/staff/activity': ['staff.panel_read'],
   'GET /api/v1/staff/probe-results': ['staff.panel_read'],
+  'GET /api/v1/staff/diagnostics': ['staff.panel_read'],
   // The console's one WRITE, and by ADR-0073's two tests it earns nothing: the row it creates
   // already carries `recorded_by_user_id` and `recorded_at` (durably attributed), and it changes
   // nobody's rights and nobody's work (no blast radius). It is audited anyway because the seventh

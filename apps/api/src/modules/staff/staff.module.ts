@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { VersionService } from '../../version/version.service';
 
 import { StaffBootstrapService } from './staff-bootstrap.service';
+import { StaffDiagnosticsRepository } from './staff-diagnostics.repository';
+import { StaffDiagnosticsService } from './staff-diagnostics.service';
 import { StaffHealthService } from './staff-health.service';
 import { StaffProbeService } from './staff-probe.service';
 import { StaffController } from './staff.controller';
@@ -35,6 +37,8 @@ import { StaffGuard } from './staff.guard';
     StaffHealthService,
     StaffProbeService,
     StaffBootstrapService,
+    StaffDiagnosticsService,
+    StaffDiagnosticsRepository,
     VersionService,
   ],
 })
