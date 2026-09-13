@@ -3600,6 +3600,32 @@ what `RUN_CAP` exists for.
 > Prisma knows — and it is still a spec-level change (ADR-0105) rather than a fourth hand-edit
 > across 25 files. What is different now is that the cost is measurable: four tables, five
 > occurrences, and on each the whole estate is edited by hand.
+>
+> **That "permanent answer" is PARTLY SHIPPED, and this row does not know it (2026-09-13).**
+> `apps/api/test/clear-baseline-tree.ts` landed **2026-09-07 in `39de20bc`** — six days after this
+> row's last verification — and it is exactly the prescribed mechanism, scoped to the baseline
+> subtree. Its own docblock (`:18`) states the method: _"The children are asked of `Prisma.dmmf`,
+> never listed. That is the whole point: a new child …"_. **17 specs use it**, and it **throws** on
+> an unmapped delegate, naming the model, rather than silently sweeping less than it claims.
+>
+> **This strengthens the row rather than closing it.** The argument above is "four tables, five
+> occurrences, and on each the whole estate is edited by hand"; the better argument is now that the
+> derived sweep **works, is in production use across 17 specs, and covers the most recent of the
+> four tables**. Three — `plan_shares`, `resource_assignments`, `activity_steps` — are still swept
+> by hand, so the row stays open and the spec-level change (ADR-0105) is still owed.
+>
+> **And the forward check this row exists to make was run rather than assumed.** Of **37** specs
+> calling `plan.deleteMany()`, **36** sweep baselines — directly, via `clearDomainData`, or via
+> `clearBaselineTree`. The one that does not is `test/pairwise/pairwise-differential.e2e-spec.ts`,
+> and it is harmless on two independent grounds: it contains **zero** baseline references, so it
+> creates none to leave behind, and it lives under `test/pairwise/**`, which
+> `apps/api/vitest.e2e.config.mts:18` excludes from the default e2e set. **No sixth occurrence is
+> waiting in the current tree.**
+>
+> _(A first pass grepped only `baseline.deleteMany|clearDomainData` and reported NINE gaps. Eight of
+> the nine call `clearBaselineTree`. Recorded because this row's whole history is people
+> mis-diagnosing this exact failure, and publishing that would have been the largest false finding
+> of the pass — caught by widening the query, which cost one command.)_
 
 > **A FOURTH occurrence, 2026-09-01 — and I lost it by doing exactly what this row tells the next
 > reader not to do.** A full `scripts/e2e-local.sh api` run failed **45 tests in one file** (44 files,
