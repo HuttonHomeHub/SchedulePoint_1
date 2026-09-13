@@ -5141,6 +5141,22 @@ When operating in this repo, Claude Code should:
    decision-bearing claim asserted without checking (ADR-0076 Class 3), inside the
    commit whose subject was checking claims.
 
+   **And when the checks are green, pin the merge to a SHA you OBTAINED — never one
+   you completed from a short prefix.** `expectedHeadSha` is the only thing standing
+   between "I read the checks for this commit" and "I merged whatever is there now",
+   so it is worth nothing if it is guessed. Take the full value from the API, from
+   `git rev-parse`, or from `git ls-remote`; a `git log --oneline` gives seven or
+   eight characters and the rest is not inferable.
+
+   **The reason this needs saying is that the failure lies to you.** A fabricated pin
+   is rejected as `409 Head branch was modified` — the same message GitHub returns
+   when somebody really did push — so the obvious reading is that the branch moved
+   under you, and the obvious next step is to re-read the checks for a head that never
+   changed. It happened on 2026-09-13 merging PR #564: the pin was invented, the
+   remote tip was exactly what it had been, and `git ls-remote` settled it in one
+   command. Compare the remote tip against your local `git rev-parse` **before**
+   concluding anything moved.
+
 10. **Use Conventional Commits** and add a changeset for user-visible change.
     Meet the Feature Completion Criteria (§21) before calling work done.
 11. **A claim that decides something must carry its evidence** (ADR-0076). When a
