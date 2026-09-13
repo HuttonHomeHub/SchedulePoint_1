@@ -5964,7 +5964,7 @@ different derivations of different subjects; its docblock has to say so, or the 
 
 ### 249. Four hand-copied dock-geometry blocks in the plan workspace
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
 
 `plan-workspace-toolbar.tsx` now carries **four** near-identical dock-resize blocks — notes,
 floatPaths, health and revisions — each about fifteen lines of `Prefs` / `EffectiveMax` / `Width` /
@@ -5990,9 +5990,38 @@ than silently skipped, because ADR-0114 found that _a deferral whose reason has 
 like one whose reason still holds_; this one still holds, and the next reader should not have to
 re-derive that.
 
+**Re-checked 2026-09-13. The count still holds exactly — and the trigger has fired twice, once in
+the commit that wrote the sentence above.** `notesEffectiveMax`, `floatPathsEffectiveMax`,
+`healthEffectiveMax`, `revisionEffectiveMax`: still four, by the same distinct-identifier method.
+
+The trigger is _"the next time this file is touched for another reason"_. Since the row was raised,
+`plan-workspace-toolbar.tsx` has been touched by **`73d390bd`** (2026-09-10, ADR-0133's command
+deck — 33 insertions, 7 deletions) and **`69207b1d`** (2026-09-11, ADR-0134 — 4 insertions
+threading `schedulingMode`). **`69207b1d` is the commit that added the paragraph above**, whose
+stated reason is _"nothing in that pass touched `plan-workspace-toolbar.tsx`"_ — and it touched it,
+four lines, in the same commit. The trigger was declared not-fired by the change that fired it.
+
+**But the row's judgement is right and only its reason is false, which is the interesting half.**
+Neither commit went anywhere near the dock geometry: `git show … | grep -E
+'(EffectiveMax|PointerToSize|onResize|Prefs)'` returns **nothing** for either. The moment the remedy
+is waiting for — somebody already inside this wiring, where folding in a helper is cheap — has not
+arrived. So the conclusion survives its own evidence being wrong, which is `#246`'s thesis one level
+up: a **trigger** decays the same way a citation does.
+
+**The defect is the predicate, not the discipline.** _"This file is touched"_ is the wrong condition
+for a remedy about a **region** of a 1,000-line file three epics have moved through: it fires on a
+four-line prop thread that could not carry a geometry refactor, so an honest reader checking it
+either reports a firing they cannot act on or — as here — writes a false reason for a correct
+decision. Re-key it on the region: **the next time a dock is added, or any of the four blocks'
+`Prefs`/`EffectiveMax`/`PointerToSize`/`onResize` wiring is edited.** That is checkable by the same
+grep that just answered it, and it fires only when the remedy is actually cheap.
+
+Recorded rather than acted on: re-keying the trigger is a change to this row, and taking the
+refactor is still the standalone high-risk move the row declines.
+
 ### 251. The `aria-disabled` shading recipe is hand-rolled, and closing an ADR-0082 row adds one
 
-**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-13 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
 
 **Re-derived independently 2026-09-11, and the population GREW by two in two days — both times
 because this register closed a row.** Counted by a looser, file-level predicate than the
@@ -6087,6 +6116,39 @@ that the recipe has already been got wrong twice in this codebase's record (once
 reason, once by using native `disabled` and losing the reason with the tab stop), and thirteen copies
 is thirteen chances to get it wrong again. The remedy is a `useShadedControl` hook; the trigger is
 the next epic that touches three or more of them.
+
+**Re-derived 2026-09-13 from the row's own written predicate, and both figures are exact: 12
+implementations, 31 partial.** Two days on, unchanged — and re-derived by re-running the predicate
+as this row states it (comments stripped; the file writes `aria-disabled` **and** carries an
+`sr-only` node linked by `aria-describedby`) rather than by trusting the number. The twelve are
+`plan-facts`, `menu`, `ToolbarButton`, `ToolbarPopover`, `ToolbarSplitButton`, `FloatPathsPanel`,
+`performance-probe-panel`, `RevisionChangesView`, `RevisionComparePanel`, `ScheduleHealthPanel`,
+`TsldPanel`, `tsld-toolbar-items`.
+
+**Its growth mechanism did not fire in this window, and the window was not quiet** — which is the
+thing worth checking rather than the total. **Eight rows closed since 2026-09-11** (`#31`, `#55`,
+`#285`, `#297`, `#301`, `#304`, `#305`, `#311`) and the population held at 12. None of the eight is
+an ADR-0082 missing-reason row: two are ledger backfills, two are focus hand-off (ADR-0135), and the
+rest are deck geometry, CI sharding, check-run reading and a CSP dedupe. So the mechanism is
+**conditional and correctly did not fire**, which is a real observation rather than the absence of
+one — the first draft of this paragraph said "no row closed", which was wrong by eight.
+
+**This row is the positive control for a pattern the rest of tonight's pass makes visible: write the
+predicate, not the number.** Four rows re-derived in one session, and re-derivability tracked
+exactly one property — whether the row wrote down **how** it counted:
+
+| row    | what it recorded              | re-derived                                              |
+| ------ | ----------------------------- | ------------------------------------------------------- |
+| `#251` | the predicate, in full        | **12 / 31 — exact**, 2 days on                          |
+| `#249` | the four distinct identifiers | **exact**, 3 days on                                    |
+| `#248` | a symbol, and a line range    | symbol **held** (moved 28 lines); line range **rotted** |
+| `#312` | a number, and no predicate    | population wrong by **6×** (2 against 12)               |
+
+`#312` is the instructive one: it reported two dangling numbers and there are twelve, because it
+recorded a **result** from a sweep it did not describe, so nobody — including its author — could
+re-run it. A row that states its predicate can be checked by anyone in one command and repays that
+forever; a row that states only its total can only be re-checked by re-inventing the method, which
+is how a figure survives six weeks past being wrong.
 
 ### 256. Every e2e reset hand-orders the whole schema, and five had it wrong
 
@@ -7702,11 +7764,20 @@ numbers. The population its own proposed gate would read was never derived. Deri
 citation sites across 305 distinct numbers**, against a resolvable set of **295** (100 detailed
 rows, 43 compact-table rows, 152 ledger entries — the three sets are pairwise disjoint, checked).
 
-**That total is stale by the act of writing it down, which is worth one sentence.** Re-deriving
-after this annotation landed returns **3,840** — the 47 extra sites are the `#N` mentions in the
-paragraphs below. A register that measures itself moves its own measurement, so the total is a
-figure of the moment and only the _dangling_ count is a stable invariant to re-derive against: that
-one is **12 distinct at 67 sites** both before and after, checked.
+**That total is stale by the act of writing it down, and it went stale twice inside one session,**
+which is why it is no longer quoted bare. It was **3,793** before this annotation; **3,840** with
+the annotation added (47 `#N` mentions in the paragraphs here); and **3,854** once `#249` and `#251`
+were annotated as well, in the same pass. A register that measures itself moves its own measurement.
+
+**Pinning it to a commit was the first fix and it was wrong**, which is worth the sentence it costs:
+a branch SHA does not survive here. This repository squash-merges, so the commit a figure is
+measured at ceases to exist the moment the work lands — the same property that makes `#55`'s and
+`#83`'s history unrecoverable two paragraphs up, arriving in the remedy rather than the diagnosis.
+Anchor a moment to the **pull request** or the date, never to a branch commit.
+
+So the only stable invariant to re-derive against is the **dangling** count, which was **12 distinct
+at 67 sites** at every one of those three measurements, checked each time. Re-derive that, not the
+total.
 
 **Twelve numbers cited as register rows resolve to nothing, at 67 sites**: `#19`, `#22`, `#24`,
 `#25`, `#26`, `#27`, `#36`, `#39`, `#50`, `#52`, `#54`, `#61`. `#25` is cited **18 times**
