@@ -232,6 +232,24 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-<build>/chrome-linux/chrome \
   pnpm --filter @repo/web test:e2e:library
 ```
 
+**In the agent sandbox that "if" is not conditional, and the fallback Playwright
+names cannot be followed** (measured 2026-09-13). `playwright-core@1.62.1`'s
+`browsers.json` asks for chromium revision **1234**; `/opt/pw-browsers` holds
+**1194**. So the bare `pnpm --filter @repo/web test:e2e:library` fails before it
+opens a page, with Playwright's own advice to run `npx playwright install` — and
+that download is refused by the egress proxy (`403 request blocked: no rule or
+allowlist entry allows host "playwright.download.prss.microsoft.com"`), which the
+proxy's documentation says to report rather than retry. Setting the variable is
+therefore mandatory here, not an optimisation.
+
+**Which is why the two routes above are not equivalent.** `scripts/e2e-local.sh`
+discovers the binary itself (`:152-155`) and passes `--project=chromium`
+(`:178`), so it works from cold with nothing exported; the `pnpm --filter` form in
+this section does neither. Only chromium is installed, so the base config's
+`firefox` and `webkit` projects cannot run locally at all — which is the reason a
+firefox-only CI failure is not reproducible here (`docs/TECH_DEBT.md` #313), and
+the reason `--project=chromium` matters as much as the path does.
+
 Shared Playwright helpers live beside the suite they came from; the APG
 `Combobox` driver (`apps/web/e2e/combobox.ts`) is imported across suites, because
 `selectOption()` does not apply to a combobox and a label match is ambiguous
