@@ -35,7 +35,7 @@ import { NoteCountBadge } from '@/features/notes';
 import { ActivityResourcesDialog } from '@/features/resources';
 import { WbsBulkAssignBar } from '@/features/wbs';
 import { formatConstraint } from '@/lib/constraint-format';
-import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
+import { activitySchedulingHoursPerDay, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
   criticality,
@@ -662,17 +662,10 @@ export function ActivitiesTable({
         <span className="text-muted-foreground">
           {formatDuration(
             activity,
-            effectiveHoursPerDay(calendars, {
-              activityCalendarId: activity.calendarId ?? '',
-              ...(planCalendarId === undefined ? {} : { planCalendarId }),
-              // The Duration column measures the work (#86), so it reads on the calendar the
-              // activity schedules on — which is what the API's own `durationDays` is measured on.
-              frame: {
-                kind: 'scheduling',
-                type: activity.type,
-                drivingResourceCalendarId: activity.drivingResourceCalendarId,
-              },
-            }),
+            // The Duration column measures the work (#86), so it reads on the calendar the
+            // activity schedules on — which is what the API's own `durationDays` is measured on.
+            // Shared with the Gantt's own read-out (#317).
+            activitySchedulingHoursPerDay(calendars, activity, planCalendarId),
           )}
         </span>
       ),

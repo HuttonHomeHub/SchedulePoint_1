@@ -46,6 +46,40 @@ export function activityDayFactorFrame(
 }
 
 /**
+ * An activity's day factor on the calendar its WORK happens on (`docs/TECH_DEBT.md` #86/#317).
+ *
+ * The composition of {@link activityDayFactorFrame} and {@link effectiveHoursPerDay} that every
+ * read-out of a duration, a remaining duration or a levelling delay needs — extracted because three
+ * surfaces had written it out longhand and a fourth was about to. Two spellings of one rule is the
+ * ADR-0065 `routeOrthogonal` argument: they drift, and the drift is invisible, because each site
+ * looks right alone and only somebody comparing the same activity on two screens would ever see it.
+ *
+ * **It is deliberately NOT the rule for a relationship lag.** `lag-factor.ts` frames a
+ * `LagEndpoint`, where `undefined` means "the host cannot name this end" and must resolve to
+ * `undefined` rather than falling back to the plan — the opposite of what this returns. That site
+ * keeps its own construction and says why.
+ *
+ * `planCalendarId` accepts `null` and `undefined` alike because its two callers type it
+ * differently (`plan.calendarId` is nullable; a prop is optional), and normalising here is what
+ * stopped the extraction changing behaviour at either.
+ */
+export function activitySchedulingHoursPerDay(
+  calendars: CalendarSummary[],
+  activity: {
+    calendarId: string | null;
+    type: ActivityType;
+    drivingResourceCalendarId: string | null;
+  },
+  planCalendarId: string | null | undefined,
+): number | undefined {
+  return effectiveHoursPerDay(calendars, {
+    activityCalendarId: activity.calendarId ?? '',
+    ...(planCalendarId == null ? {} : { planCalendarId }),
+    frame: activityDayFactorFrame(activity),
+  });
+}
+
+/**
  * How many working hours a *day* is worth for the activity currently being edited (ADR-0070 §3).
  *
  * ## Why the form resolves this, and not the server
