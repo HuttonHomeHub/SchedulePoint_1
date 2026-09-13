@@ -2051,6 +2051,27 @@ the withdrawn version still propagated into `CLAUDE.md` and a guide two days lat
 > icon-only branch really is dormant, the sheet really is mounted once above both views. The
 > diagnoses were right and the evidence offered for them was not — which is the row's thesis
 > holding in the one place it would be most embarrassing to find an exception.
+>
+> **And a bounded sample says NOT to generalise that, which is the other half of an honest finding.**
+> The obvious next thought is that the 2026-09-11 pass was producing bad citations generally — it
+> touched **21 rows**. Tested rather than assumed: every lined citation in the 2026-09-11 blocks of
+> two untouched rows (`#149` and `#184`, four each) was resolved **semantically** — does the cited
+> line contain what the row says it contains — because `#246`'s own 2026-09-12 scan established that
+> positional resolution cannot see this class. **Eight of eight resolve.** The one imperfection is a
+> near-miss of a different order: `#184`'s `app-shell.tsx:122-127` points at the grid-rows paragraph
+> while the drawer-deletion sentence it means sits at `:118-120` — four lines up, inside the same
+> docblock, where any editor view shows both. That is not `#211`'s shape, where `:1900-1911` and the
+> real mount at `:1941` are different subjects forty lines apart.
+>
+> So `#211` is **two defects in one row**, not a signature of the pass. A sample of eight is small
+> and is stated as such; what it rules out is the cheap over-correction — distrusting twenty-one
+> rows because two citations in one of them were wrong.
+>
+> **Two of those eight reported a miss on the first attempt and both were the checker's**: one
+> `want` pattern that did not match the comment's actual wording, and one **basename-only** citation
+> resolved against a guessed directory (`#101` again — `app-shell.tsx` lives under `layout/navigator/`).
+> Instances 27 and 28 of `docs/RECONCILE.md`'s corollary, committed inside a check whose entire
+> subject is citations that do not say what they seem to.
 
 **Why this is a row and not a fixed thing.** The obvious remedy — gate the citations the way
 `check:claims` gates dependency citations — does not transfer. Those are pinned by package version
