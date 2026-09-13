@@ -105,6 +105,14 @@ documents, an `EXPLAIN` and two committed falsification conditions.
   3. Record the verdict, including a failure. Derive the M2 throttle number from the measured cost
      (spec Q-e) rather than keeping the placeholder 6/60 s (the ADR-0116 M6 precedent).
 
+> **DONE (2026-09-13) — limb 1 passes, limb 2 fails, and the bar did not move.**
+> [`m0-measurements.md`](m0-measurements.md) carries three variants, both plan texts verbatim, the
+> index probe and the throttle derivation. The failing limb reopened **§4.5's anchoring**, which is
+> corrected in place in the spec: anchoring the query text on `resource_assignments` does not decide
+> which table the planner drives from, and the partial unique cannot serve a query that wants the
+> whole set it covers. The throttle was re-derived and 6/60 s survives — with the arithmetic, and
+> with the number that would change it, written down.
+
 ##### Task M0-T3 — _(armed by M0-T2, does not open otherwise)_ — design the index
 
 - **Description:** if and only if M0-T2 reports a sequential scan of `activities` that matters,
@@ -117,6 +125,15 @@ documents, an `EXPLAIN` and two committed falsification conditions.
 - **Testing:** the migration's own suite, per `docs/DATABASE.md`.
 - **Development steps:** 1. run the agent. 2. write the migration to its design. 3. re-run M0-T2 and
   record the before/after.
+
+> **DID NOT ARM (2026-09-13).** M0-T2 reported a sequential scan of `activities` at every scale, so
+> the trigger's first clause is met — and its second is not: it does not matter. Measured, a
+> candidate `activities (type) WHERE deleted_at IS NULL` takes the sparse 102,000-activity estate
+> from 34 ms to 1.2 ms and is **not chosen at all** on the fully resourced one that approaches the
+> bar, so it helps only the case that is already cheap. Full working, and the trigger that re-arms
+> this, in [`m0-measurements.md`](m0-measurements.md). `database-architect` is not engaged because
+> there is no schema change to design — not because one was judged too small (§19.3 binds a change;
+> declining to make one is the decision it protects).
 
 ##### Task M0-T4 — Put CQ-1 and CQ-2 to the product owner, with numbers
 
