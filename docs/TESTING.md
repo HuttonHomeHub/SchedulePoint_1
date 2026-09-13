@@ -386,6 +386,24 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 15  | `pnpm check:licenses`                                       | you added or bumped a dependency, or edited `scripts/licence-policy.json`                         |
 | 15a | `pnpm check:e2e-roster`                                     | you added, renamed or removed a Playwright suite, or changed a CI end-to-end step                 |
 | 16  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
+| 17  | `pnpm check:doc-links`                                      | you added, moved, renamed or deleted a doc, or changed a relative link                            |
+| 18  | `pnpm check:adr-coverage`                                   | you filed an ADR, or edited `docs/adr/README.md` or `docs/ROADMAP.md`                             |
+| 19  | `pnpm check:flags`                                          | you added, retired or re-dated a `VITE_` flag in `apps/web/src/config/env.ts` (ADR-0084)          |
+| 20  | `pnpm check:surface-contract`                               | you gave a scheduling field a storage or API half — the gate asks for its UI half                 |
+| 21  | `pnpm check:browser-safe`                                   | you changed a shared package's barrel, or imported a Node-only module into one                    |
+| 22  | `pnpm check:advisory-agreement`                             | you changed `prepush.sh`'s `ADVISORY_GATES`, or a gate's exit convention                          |
+
+**Steps 17–22 were missing until 2026-09-13, and the reason is this table's own subject.** It calls
+itself the reference for what each step is, and it is **hand-maintained beside a roster
+`prepush.sh` derives** — so every gate added since it was written had to be copied here by
+somebody who remembered to, and six were not: `doc-links`, `adr-coverage`, `flags`,
+`surface-contract`, `browser-safe` and `advisory-agreement`. Nobody was ever left unprotected —
+`pnpm prepush` runs all of them whether or not they appear here — but a reader consulting the
+table to answer _"I filed an ADR, what should I run?"_ was told `check:counts` and not
+`check:adr-coverage`, which is the narrower of the two. That is the failure the paragraph above
+the table already names: _assembling this list by hand at the call site is what actually fails_.
+Re-derived and reconciled: the table now lists **all 19** `check:*` gates
+(`docs/TECH_DEBT.md` #191).
 
 **Step 16 is the only advisory gate, and `prepush.sh` prints it differently.** `check:reconcile-due`
 exits **2**, not 1: the rule is that **exit 1 is for an obligation whose remedy is an edit to the
