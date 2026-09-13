@@ -258,3 +258,48 @@ written after four of them); this table starts where the epic-boundary rule did.
 **Verify the claim; do not trust the document.** Every drift found so far was a
 confident sentence that nobody had re-checked — including sentences written
 during a previous reconcile. Read the code.
+
+### The corollary, measured 2026-09-13
+
+**A first query that contradicts the document is likelier wrong than the document. Widen it before
+writing the correction.**
+
+This is not a softening of the rule above — it is what makes it work. The rule says re-derive; the
+corollary says a single re-derivation is not yet evidence.
+
+One pass enumerated **sixteen** occasions in a single session where a first query appeared to show
+a document wrong and **the query was the thing that was wrong**:
+
+- a grep for an array's first element (`'Jan'`, `'Monday'`) cited the ELEMENT's line as the
+  declaration's — three times, three separate files
+- `grep "flagDefaultOff("` counted the function's **definition** and nearly reported CLAUDE.md's
+  "called zero times" as false
+- the same scan's `flagDefaultOn(import.meta.env.X)` pattern was single-line and missed a
+  declaration split across two; a sibling grep quoted the flag name and missed `import.meta.env.X`
+- a probe read `sections().title` where the field is `.heading`, and reported **0 rows** over a
+  document with 103
+- a scan for a quoted phrase surviving in prose flagged four rows, **three false positives** — it
+  could not tell a quotation from a survivor
+- a scan for unmarked closed items flagged three, **two false positives** — a marker may sit on a
+  heading's wrapped line or at the item's foot
+- two scans diffed `sections()` results by **object identity** across separate calls, listing
+  everything
+- a grep for the baseline test sweep reported **nine** missing and eight of the nine call a helper
+  (`clearBaselineTree`) the query did not know existed
+
+**The genuine defects that pass found — and there were about a dozen — were all found by queries
+that had already been widened at least once.** Not one survived from a first attempt. So the
+discriminator is not "did my query disagree with the document" but "has my query survived being
+made deliberately broader".
+
+Two shapes account for most of it, and both are worth naming because they are invisible in the
+result rather than in the code:
+
+1. **the query matched a narrower thing than it names** — an element rather than a declaration, a
+   definition rather than a call, one line of a two-line statement;
+2. **the query silently read a subset** — `\d+\.` over a register whose rows may carry a letter
+   read 100 of 103, and the three it skipped included the oldest open row, which was the one the
+   scan was choosing work from.
+
+The second is the dangerous one. A scan that **chooses the next piece of work** is the worst one to
+write narrow, because its blind spot never appears as a wrong answer — only as an absence.
