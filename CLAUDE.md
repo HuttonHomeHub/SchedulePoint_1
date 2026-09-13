@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1227 web
 > source files with 42 Playwright suites beside the base journey, and
-> 139 ADRs.
+> 140 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4731,6 +4731,84 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   which is ADR-0076 Class 3 inside a paragraph whose subject is that class. Corrected in place
   rather than deleted. **The CPM engine is not imported and no migration runs**; `apps/` contributes
   zero files to the epic's diff.
+
+- **ADR-0139** _(Accepted; M0–M5 landed 2026-09-13, released `api-v0.63.0`)_ — A sentinel is not a
+  calendar. `docs/TECH_DEBT.md` #86's second mechanism: `effectiveOf` returns `null` for an activity
+  that inherits its plan's calendar, and the engine reads that correctly as _"use the plan's port"_
+  through `portFor` — while `resolveDayFactors` read the same `null` as **no calendar at all** and
+  fell back to 1440. So an eight-hour plan's float was converted in 24-hour days and reported beside
+  a duration converted in eight-hour ones: "5 days of duration, 2 days of float" on one row, both
+  true, neither comparable. **One `null` carrying two meanings in two readers, which is why neither
+  file looked wrong.** The fix is option (c) of three the product owner was shown —
+  `calIdByActivity` stays the engine **port** map and a second `dayFactorCalIdByActivity` is built
+  beside it **by calling `schedulingCalendarId`** rather than restating its fallback rung, so
+  `resolveDayFactors`' body is unchanged and the two maps cannot drift into two rules.
+  **The parity sentence is a third one and the ADR says so in its own words**, because reaching for
+  either existing form would have been wrong: this is not ADR-0125 D1's strong claim (here
+  `computeSchedule` **is** called) and not ADR-0116 D7's weaker sibling (this path **writes**). The
+  honest form is that **the engine's arguments are byte-identical and the change is entirely in the
+  conversion applied after it returns** — checkable rather than asserted, and pinned by a structural
+  gate that refuses `resolveDayFactors(graph.calIdByActivity` and refuses the day-factor map in any
+  `computeSchedule(` argument list.
+  **The population framing was corrected twice, in opposite directions, and both corrections came
+  from reading rather than from anything failing.** It was first reported as "most activities on most
+  plans"; the seed catalogue's calendars derive 1440 from full-day shifts, so a **stock plan is
+  unaffected** — and **every XER import is affected wholesale**, because P6's `day_hr_cnt` is eight
+  hours. Then `docs/TECH_DEBT.md` #86 was updated to call the finding "a reading, not an experiment",
+  which was **false**: the discriminating twin experiment was already a committed e2e case. ADR-0076
+  Class 3 inside a correction about an overclaim, corrected in place.
+  **600 minutes is the fixture value that discriminates**, and that is not incidental: the whole-day
+  branches of `formatDurationRead` and `formatRelativeFloat` are factor-**insensitive** in their
+  output, so a test written with a whole-day duration passes identically against the defect and
+  against the fix. Two of the epic's cases were inverted characterisations and one was **renamed**,
+  from "different day lengths" to "the **same** day length", because the case it actually pins is the
+  inheriting one. A self-consistency trap is recorded with it: a test that recalculates and reads
+  back through the same API passes if the rule collapses on **both** sides, so the suite carries an
+  explicit twin control rather than trusting the round trip.
+  The web half takes one named derivation, `activitySchedulingHoursPerDay`, with a structural gate
+  refusing a **new** longhand `kind: 'scheduling'` frame and one declared exception. The census gate
+  widened 4 symbols → 7 and its floor 5 → 12, on the M5 finding that most callers reach a rule
+  through a **wrapper** and a census is only worth the names callers type. The comparison boundary is
+  **accepted and documented** rather than fixed (`docs/TECH_DEBT.md` #318), on the product owner's
+  "the correct number wins": a value stored under the old rule reads back under the new one.
+  **`docs/TECH_DEBT.md` #317 closed** in the same epic.
+
+- **ADR-0140** _(Accepted 2026-09-13)_ — A diagnostic takes no input, so it cannot ask about anybody.
+  The count that decides whether a defect is worth chasing — how many activities, across how many
+  plans — has never been answerable without `docker compose exec db psql`, which is the ADR-0128
+  failure one tier along: a measurement that exists, is correct, and is unreachable by the only
+  person who can take it. **It narrows ADR-0086 D6 and says so**, rather than dodging with "this sits
+  outside it" — the SQL names four of the five tables D6 prohibits. ADR-0086 **D1 is untouched**, and
+  that is an acceptance condition rather than a hope: the three D1 assertions pass **unedited**, and
+  editing one is the signal the milestone did more than it says.
+  **Three clauses carry the narrowing and clause 2 does the real work**: the disclosure is bounded by
+  the **return type** rather than by the query's reach (nothing is re-identifiable from "17 of 1,284
+  across 3 plans"); **no caller input, therefore no oracle**, because an oracle requires the caller to
+  vary the question and a filter would make it a differencing one over customer data; and a **closed,
+  uniform registry**, so "add a diagnostic" cannot quietly become "add a field". The comparison that
+  decides it is not "an aggregate or nothing" but `psql` — wider, unaudited, unrated, unreachable —
+  so the narrowing **replaces a broader capability with a narrower audited one**, which is ADR-0086's
+  own founding argument one step further.
+  **The guarantee is stated as weaker than ADR-0086 D1's rather than borrowing D1's language.** D1 is
+  a _negative_ type property that only an edit to one watched file can defeat; this is a _positive_
+  property on one return type, defeated by an ordinary-looking DTO widening that typechecks and reads
+  like a feature, with `$queryRaw`'s row type **asserted rather than checked**, and invisible to the
+  existing boundary gate, whose forbidden list is accessor strings that `$queryRaw` matches none of.
+  Three weaknesses, three named repairs. **So the gate is widened FIRST, in its own milestone,
+  against code that does not exist** — choosing `$queryRaw` because the gate cannot see it would be
+  exploiting a blind spot and calling it compliance.
+  **Its M0 falsified the spec's own cost argument, and the correction is the transferable part.**
+  §4.5 argued the query would anchor on `resource_assignments` and start from a small set; measured,
+  **anchoring the query TEXT on a table does not decide which table the planner drives from**, and
+  `uq_resource_assignments_activity_driving` **structurally cannot serve a query that wants every row
+  it covers** — a covering index has no selectivity to offer when the `WHERE` matches 100,200 of
+  100,200. The ≤ 500 ms limb passes at every scale and the no-sequential-scan limb fails at every
+  scale; **the bar did not move**. M0-T3 does not arm, measured: a candidate index takes the sparse
+  estate 34 ms → 1.2 ms and is **not chosen at all** on the one that approaches the bar, so it helps
+  only the case that is already cheap — and the 704 kB it costs on a 48 MB table is explicitly not
+  the argument. `database-architect` is not engaged **because there is no schema change to design**,
+  which is the decision §19.3 protects rather than the one it forbids.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

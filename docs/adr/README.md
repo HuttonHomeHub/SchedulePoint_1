@@ -163,3 +163,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0137](0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)              | A notification is a record, and the build waits for somebody to notify          | Accepted           |
 | [0138](0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md)                      | A shard count is set by where the constraint changes hands                      | Accepted           |
 | [0139](0139-a-sentinel-is-not-a-calendar.md)                                                    | A sentinel is not a calendar                                                    | Accepted           |
+| [0140](0140-a-diagnostic-takes-no-input.md)                                                     | A diagnostic takes no input, so it cannot ask about anybody                     | Accepted           |

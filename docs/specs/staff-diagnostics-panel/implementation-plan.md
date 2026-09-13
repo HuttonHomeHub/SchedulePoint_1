@@ -245,6 +245,27 @@ yet, and a decision is recorded.
      docblocks** and reported prose as a violation; `staff-boundary.structural.spec.ts:28-41`
      already records that exact defect and its fix.
 
+> **DONE (2026-09-13).** ADR-0140 filed as **0140, not the 0139 this plan named** — that number was
+> taken the same day by the inherited-calendar ADR, which is exactly what the task's own risk note
+> said to check for. The red run is recorded as [`m1-red-run.md`](m1-red-run.md): S-3 verified red
+> against four named mutations, and S-1/S-2/S-4/S-5 red across seven assertions because their
+> subject does not exist yet, with three pinned positives green over synthetic sources.
+>
+> **Two departures from this plan, both recorded rather than smoothed.** M1-T1 step 3 said "default:
+> exempt" from `docs/ROADMAP.md`, with the reason "a staff-console operations surface; a planner
+> cannot act on it" — and the three nearest precedents (**ADR-0086, ADR-0087 and ADR-0128**, all
+> staff-console decisions) are **all cited in the roadmap, none exempt**. Following the plan would
+> have made this the odd one out and asserted a classification the repository has three times decided
+> against, so it is on the roadmap. Writing that entry then exposed a second thing: **ADR-0086's own
+> roadmap bullet says "staff reaching plan data is a compile error"**, which reads as false the day a
+> staff route counts activities. The compile-error property is about `Principal` assignability and is
+> intact; the sentence needed a qualifier and got one in the same commit, because leaving it is the
+> ADR-0058 class in the document a reader checks first.
+>
+> Filing also found **ADR-0139 missing from `CLAUDE.md` §16** — filed that morning, in this session,
+> and absent from the register that `check:adr-coverage` structurally cannot read (`#291`). Both
+> entries were added.
+
 ---
 
 ## Milestone M2 — The route (ships dark)
