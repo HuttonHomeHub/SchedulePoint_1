@@ -2052,6 +2052,28 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 > prefers: a symbol either exists or does not, and `RectCache` and `crossedLanes` were both found in
 > seconds by name after their line numbers had been meaningless for a month.
 >
+> **A comment-only change is not address-safe, and `#234` supplies the control (2026-09-13).** That
+> row was surveyed on 2026-09-11 with **26 `<Spinner` sites enumerated by file and line** — the
+> largest single citation set in this register, and therefore the cleanest natural experiment it has
+> produced. Two days later **25 still resolve**. Three of the cited files were edited in between:
+>
+> | file                       | commit     | lines added | where                                 | citations | outcome    |
+> | -------------------------- | ---------- | ----------- | ------------------------------------- | --------- | ---------- |
+> | `FloatPathsPanel`          | `69207b1d` | **+19**     | `:376`, `:409` — below `:187`         | 1         | held       |
+> | `RevisionComparePanel`     | `69207b1d` | **+9**      | `:482`, `:648` — below `:256/294/425` | 3         | held       |
+> | `CalendarExceptionsEditor` | `66233907` | **+2**      | `:304` — **above** `:431`             | 1         | **rotted** |
+>
+> **Magnitude is irrelevant; position is everything.** The two files that gained nineteen and nine
+> lines kept every citation; the file that gained **two** lost its. That is this row's mechanism —
+> _an edit above it_ — confirmed against a control rather than inferred from the cases that broke.
+>
+> **And the edit that did the damage changed no code at all.** `66233907` is a comment-only commit
+> (verified: zero non-comment lines in its diff for that file) whose subject was **correcting a
+> stale docblock** — a documentation pass, in a session whose subject is documentation drift,
+> invalidating a carefully-enumerated citation in a different row of the same register. So the cost
+> of address-style citations cannot be managed by being careful about code: **a documentation fix is
+> a line-shifting edit like any other**, and it is the one nobody thinks to check afterwards.
+
 > **The comparison is four claims, not two, and the model that separates them is the size of the
 > invalidating set (2026-09-13).** `ec1227a8` at 07:05 on 2026-09-10 wrote four checkable claims
 > across two rows. `73d390bd` at **21:19 the same day** killed two of them and left two exact. All
@@ -2319,7 +2341,7 @@ assertion belongs with the first remedy, where there is something to assert.
 
 ### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
 **Owner:** repo
 
 **Re-verified 2026-09-10 by probe rather than by reading**, because the previous verification was a
@@ -2355,6 +2377,40 @@ many.
 > quoting it (three sites, all of them rows _about_ this contradiction) and could reasonably conclude
 > the row was wrong, or that A8 works. **Neither is true**, and that is why the exhibit is recorded
 > as withdrawn rather than deleted.
+
+> **What the unreadable field COSTS, measured 2026-09-13 — and the number is the argument for
+> repairing rather than deleting.** This row establishes that nothing reads `Verified:`. The
+> consequence is that nothing keeps it current, and that is now countable: **18 rows record, in their
+> own bodies, a check later than their `Verified:` field** — "swept 2026-09-11 item by item",
+> "re-derived 2026-09-12", "re-counted 2026-09-12" — with a lag of **1 to 4 days**. Eight of the
+> eighteen (`#86 #165 #194 #195 #202 #211 #247 #292`) predate 2026-09-13 and belong to at least two
+> earlier sessions, so this is not one person's slip. **`#247` was itself one of the eight**: the row
+> about the field nobody reads had a stale copy of that field.
+>
+> **The cost is not hypothetical, and it was observed rather than predicted.** Work here is selected
+> by asking which open rows carry an old `Verified:` date. Run on 2026-09-13, that query returned
+> `#165`, `#181`, `#194`, `#202`, `#211` and `#266` as candidates — every one of which had already
+> been re-derived, four of them within the previous 48 hours. The field is not merely unread by the
+> gate; it actively misdirects the one decision it exists to inform, and the only thing standing
+> between that and repeated work is somebody keeping a list in their head, which is what ADR-0058
+> says to replace.
+>
+> **It also bears on the question this row says to settle first.** If `Verified:` meant "the thing
+> this row describes is confirmed", these eighteen bodies would not be writing "re-derived" beside a
+> different date — the field is plainly being used as _when was this row last checked_, and simply
+> not maintained. That is evidence for repairing A8 rather than deleting it, though it does not
+> settle `#117`'s case, where the two facts genuinely come apart.
+>
+> **Twelve of the eighteen are now correct** — ten this session's own, plus `#194` (re-derived here:
+> `frontend-only.json` reads `active: false`, its `history` holds two entries, and the `reason` field
+> carries the corrected count), plus this row, whose core
+> claim was re-derived by probe to earn the bump rather than assumed: `fieldValue` reads `Status` on
+> **104 of 104** rows and `Verified` on **0 of 104**, with **98** carrying a date. (Those are the
+> row's 102/102, 0/102 and 96 with the population two rows larger; the ratio is the claim and it is
+> unchanged.) The remaining **six** (`#86 #165 #195 #202 #211 #292`) are deliberately **left alone**, because bumping a date is
+> asserting a check, and those checks were somebody else's. That asymmetry is the whole reason a field like this cannot be repaired by a
+> sweep — only the person who did the work can honestly write it down, which is precisely why it
+> wants a gate.
 
 **Two assertions in the same file disagree about the document's shape, and the one that disagrees is
 the silent one.** A2 splits the status value on `[\s·—|]` before checking the vocabulary, so it was
@@ -2499,7 +2555,7 @@ it did not have.
 
 ### 234. Fifteen page and panel loading states are spinners where the shape is known
 
-**Status:** open · **Verified:** 2026-09-10 · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass
+**Status:** open · **Verified:** 2026-09-13 · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass
 
 **Re-verified 2026-09-10, and the row's own count is NOT reproducible from it**: it says "fifteen"
 and enumerates none, while `animate-spin` appears **55** times across non-test `.tsx`. Those are not
@@ -2533,8 +2589,17 @@ before they can scope it, which is most of the work.
 >   `client-detail.tsx:20`, `project-detail.tsx:43`, `plan-detail.tsx:42`, `staff.tsx:149/302/468/532`
 >   (and `:56` if counted here rather than above), `EarnedValuePanel:122`,
 >   `ScheduleSummaryStrip:54`, `NoteThread:86`, `ActivityMembersPanel:140`,
->   `CalendarExceptionsEditor:431`, `AcceptInvitationCard:75`, `GuestPlanView:64`.
+>   `CalendarExceptionsEditor:433`, `AcceptInvitationCard:75`, `GuestPlanView:64`.
 >
+> **Re-derived 2026-09-13: every count reproduces and 25 of the 26 citations still resolve.**
+> `<Spinner` is **28** matches, `animate-spin` **7**, the bare identifier **49** — the survey's
+> figures exactly, two days on. The single exception is `CalendarExceptionsEditor`, whose Spinner
+> moved `:431` → `:433`; it is repointed above, and _why_ it moved is the useful part, recorded in
+> `#246`.
+>
+> **So this row now needs no re-survey to be picked up**, which was the whole complaint the
+> 2026-09-10 paragraph raised. The enumeration is the asset; it survived a release.
+
 > **So the row's original figure was right and the re-verification's objection was not.** Stated
 > carefully, because landing exactly on "fifteen" is the kind of agreement worth distrusting: the
 > **26** and the three-way split are mechanical, and the 14-versus-15 turns on one judgement call
@@ -3030,7 +3095,7 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 
 ### 116. Consolidation-pass findings that were not folded
 
-**Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
+**Status:** open · **Verified:** 2026-09-13 · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -3536,7 +3601,7 @@ dated flag work precisely because the date was the wrong instrument.
 
 ### 120. Nothing reports `n_dead_tup` at runtime, so a retention drain's bloat is invisible while it happens
 
-**Status:** deferred · **Verified:** 2026-09-11
+**Status:** deferred · **Verified:** 2026-09-13
 
 > **Reclassified `open` → `deferred` on 2026-09-11, on two sentences this row already contains.**
 > _"This is ordinary Postgres behaviour and not a defect in the design"_ and _"there is time, and
@@ -3855,6 +3920,54 @@ This row stays open on its remaining half: nothing stops a twenty-seventh copy b
 list is shared by convention, not by a gate, and the gate is not obvious — a census of `deleteMany`
 call sites would sweep in every legitimate one inside a test body. Worth a thought, not worth a bad
 rule.
+
+### 313. The sign-up→onboarding wait is widened at 4 of 61 sites, and a widened one still failed
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (PR #565 CI, web shard 1) · **Size:** S to survey, M to fix · **Owner:** unassigned
+
+`#182` was closed on 2026-08-28 by giving _"three base-journey sign-up specs"_ an explicit
+`{ timeout: 15_000 }` with the reason written at each site. Today's run shows both halves of that
+closure failing at once, in **one job, one shard, one browser**:
+
+- **A widened site failed anyway.** `e2e/dependencies.spec.ts:98` — which carries the 15 s wait and
+  a comment explaining it — missed the `create your organisation` heading on the initial attempt
+  **and both retries**, all three at 15 s.
+- **An un-widened neighbour failed too.** `e2e/members.spec.ts:24` is the identical assertion at the
+  **5 s default**; it failed and passed on retry, so it is reported as `flaky` rather than as a
+  failure and shows up in no exit code.
+
+49 of 51 tests passed. The PR under test changed `docs/TECH_DEBT.md` and nothing else — zero files
+under `apps/` — so the change cannot be the cause.
+
+**The spread was never measured when `#182` closed, and it is the finding.** Counted today across
+every e2e suite, the same positive assertion appears at **61 sites**. **Four** carry
+`{ timeout: 15_000 }` — `e2e/clients.spec.ts:27`, `e2e/dependencies.spec.ts:31` and `:98`, and
+`e2e-narrow-shell/narrow-shell.spec.ts:61`. The other **57 are at the 5 s default**. In the base
+journey alone there are **13** sites, of which **10** were left untouched: `activities:26`,
+`auth:37`, `baselines:23`, `members:24` and `:52`, `navigator-crud:21`, `plans:22`,
+`recently-deleted:30`, `schedule:26`, `tsld:24`.
+
+So `#182` fixed exactly the three sites whose failures it had seen and left ten neighbours in the
+same directory — the "one correct pattern applied to a control and not its neighbour" shape this
+register keeps recording, here in a test suite rather than in a component.
+
+**What is NOT established, stated plainly because the remedy depends on it.** Why
+`dependencies.spec.ts:98` failed three consecutive times at 15 s is **unknown**. Three-for-three at
+three times the original margin is not the signature of a marginal wait, so "widen it again" is the
+one response the evidence does not support. A trace was captured
+(`playwright-report-web-shard-1`, artifact 10312829458) and has **not** been read; reading it is
+the first task, not choosing a timeout. Note also that the sibling at the **shorter** wait recovered
+while the one at the longer wait did not, which is the wrong way round for a load explanation.
+
+**Distinct from `#119a`**, which is the **API** e2e suite and a different signature entirely; this is
+the web suite, on Firefox, in the shared sign-up preamble.
+
+**Why it is worth a row rather than a re-run.** The preamble is shared by 61 sites, so whatever this
+is, it is the single most-executed piece of test code in the estate, and a flake there taxes every
+suite. The remedy candidates — read the trace first; then either a shared `signUpAndOnboard` helper
+so there is one wait to tune instead of 61, or a fix to whatever makes the transition slow — both
+change how every e2e suite is set up, so ADR-0105 fires on the fix and it wants a spec rather than
+57 more edits.
 
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
@@ -4440,7 +4553,7 @@ repository had no hyphenated output anywhere to copy from.
 
 ### 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 > **The mechanism is unchanged and the figures were stale twice.** `check-claims.mjs:382` builds the
 > ref from **basename + line range only** and `:393-395` matches on that string alone; no claim in
@@ -5011,7 +5124,7 @@ public-contract half of the reason is not load-bearing. Established by reading t
 
 ### 194. "The epic's own gate pass removes it" has now failed twice as an instruction
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 _Filed 2026-08-26 by the reconciliation pass, after the declaration it describes blocked this pass's
 own commit._
@@ -5879,7 +5992,7 @@ browser tab.
 ### 218. Two review suggestions from the typeface gate pass, not folded
 
 **Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, gate pass) · **Size:** S ·
-**Status:** open · **Verified:** 2026-09-10
+**Status:** open · **Verified:** 2026-09-13
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -5967,7 +6080,7 @@ question, and the trigger is what to look at.
 
 ### 228. Stacked-histogram gate-pass suggestions, consciously not folded
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -6738,7 +6851,7 @@ write nobody reviewed on its own terms.
 
 ### 255. Six non-blocking findings from the revision-compare gate pass
 
-**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-13 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
 
 > **Reclassified `open` → `deferred` on 2026-09-11, after the item-by-item walk below.** Three of
 > the six are done. The **whole remainder is a decision somebody else takes**, and each names whose:
@@ -6832,7 +6945,7 @@ incidentally. One had been, halfway, which is the case that caveat exists for.
 
 ### 259. Twelve non-blocking findings from the staff performance-probe gate pass
 
-**Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-13 · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
 
 > **Reclassified `open` → `deferred` on 2026-09-11, on this row's own closing sentence.** Eight of
 > twelve are closed, 4 belongs to `#271`, and 5 and 6 are records rather than work — so the row
@@ -7240,7 +7353,7 @@ than having to remember to look.
 
 ### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -7436,7 +7549,7 @@ docblock names. Harness only, never shipped, and it inflates the very figure (a)
 
 ### 264. A contended sweep produced four false failures, and then a contended re-run confirmed three of them
 
-**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (ADR-0129 M4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-09 (ADR-0129 M4) · **Size:** S · **Owner:** repo
 
 The ADR-0129 gate pass ran `scripts/e2e-sweep.sh` and got four failures: `account`, `audit`,
 `designed-chrome`, `narrow-shell`. Every one was an artefact of contention, and the way that was
@@ -7494,7 +7607,7 @@ re-derive the diagnosis from four confusing failures.
 
 ### 266. A measurement probe still runs its full 900-second measurement in the blocking e2e job
 
-**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PRs #491/#493) · **Verified:** 2026-09-09 ·
+**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PRs #491/#493) · **Verified:** 2026-09-13 ·
 **Size:** S · **Owner:** api
 
 **The two defects this row was raised for are fixed** (product-owner decisions, 2026-09-09). It is
