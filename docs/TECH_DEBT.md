@@ -7653,7 +7653,7 @@ before the next person tries to register one.
 
 ### 291. `check:adr-coverage` cannot see CLAUDE.md, which is the register a reader actually opens
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
 
 **ADR-0132 was Accepted on 2026-09-09, filed in `docs/adr/`, listed in `docs/adr/README.md`, and
 cited by `docs/ROADMAP.md`, `docs/TECH_DEBT.md`, `docs/DESIGN_SYSTEM.md` and five spec directories
@@ -7681,6 +7681,28 @@ instance, and the first where the row predicting the recurrence was one day old.
 again, which is exactly the remedy this row says does not hold. The estate is clean as of
 2026-09-11 (all 136 ADR files compared against §16; the two missing were 0135, now repaired, and
 0136, being written at the time).
+
+> **Fifth and sixth instances, and this time the recurrence is not the finding — the HAND
+> COMPARISON is** (2026-09-13). §16 was missing **ADR-0049** (Proposed, but
+> `VITE_CANVAS_RESOURCE_VIEW` default-on since 2026-07-20, and the strip ADR-0121 later built on) and
+> **ADR-0122** (Accepted, cited by ADR-0127's own entry). Both are in `docs/adr/README.md`, so
+> `check:adr-coverage` was green. Each appeared in `CLAUDE.md` only in passing inside **another**
+> ADR's entry, which is the ADR-0071 shape exactly.
+>
+> **Both were already missing on 2026-09-10 and on 2026-09-11** — they long predate either date — so
+> this row's two "the estate is clean" assertions were **both wrong when written**, and neither was
+> wrong because something recurred. A reader comparing 133 files by hand reported one missing when
+> three were; a reader comparing 136 reported two when four were. That is a stronger argument for the
+> gate than anything above it: the row's case was that hand repair does not **hold**, and the measured
+> case is that hand comparison does not **work** — it is ~138 numbers checked against a 4,000-line
+> section, which is a machine's job and has now been got wrong twice by people who were being careful.
+> Found this time by a script (`git ls-files` against a regex over `^- \*\*ADR-(\d{4})\*\*`), which
+> took one command and is most of the gate.
+>
+> The repair is done and **the estate is clean as of 2026-09-13 — 138 of 138, asserted by that
+> script rather than by reading**. Two consequential claims elsewhere were corrected with it:
+> `CLAUDE.md`'s "exactly one missing" sentence, and ADR-0131's live-and-Proposed count, which is
+> **five** today rather than four.
 
 **Why it was repaired rather than gated, again.** ADR-0136's epic was in its last milestone when
 this surfaced, and widening a shared gate mid-epic is the thing CLAUDE.md §19.1 says stops the work

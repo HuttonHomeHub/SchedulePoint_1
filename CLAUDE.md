@@ -564,6 +564,28 @@ Recorded as ADRs in [`docs/adr/`](docs/adr/). Current set:
   endpoint reusing soft-delete/`deleteBatchId` (no schema change). Progress edits out of scope
   (non-pen-gated). No schema/API for M1–M3; behind `VITE_UNDO_REDO` (default off). A server-persisted
   undo log and full-plan snapshots were rejected for v1. Builds on ADR-0022/0028/0031/0032/0033.
+- **ADR-0049** _(Proposed; `VITE_CANVAS_RESOURCE_VIEW` **default-on** 2026-07-20, gated on
+  `RESOURCE_CURVES_ENABLED`)_ — The canvas-axis-aligned resource strip: a shared-viewport sibling
+  canvas layer. At approval the product owner chose, over the default of docking the shipped modal
+  `ResourceHistogram` **with its own independent axis**, a strip whose demand bars sit under the same
+  day/week/month columns as the diagram and move and scale with the viewport on every pan and zoom.
+  The load-bearing consequence is that the strip is a **third Canvas 2D layer painted by the existing
+  `TsldCanvas` loop from the same `viewRef`** — not a viewport-synced DOM/SVG band beside it — so
+  co-alignment is **definitional rather than synchronised**: a bucket draws at `screenXOfDay`, the
+  same affine the painter, the ruler and hit-testing already share, and a WEEK bucket spans exactly
+  seven day-columns. A one-frame desync during a fast pan reads as broken, and the rejected design is
+  the one that can have one. Two dirty flags keep the layers decoupled inside ADR-0026's model — a
+  new `stripDirtyRef` for **data** (resource, granularity, refetch, theme re-resolve) beside the
+  existing `dirtyRef` for **viewport** — so a pan re-aligns the strip at **no extra scene cost**
+  (the scene was repainting that frame anyway) while a granularity switch repaints the strip
+  **without** repainting the scene. `measure()` subtracts the band's height exactly as `RULER_HEIGHT`
+  is already subtracted at the top, so an inactive strip reserves nothing and the scene is
+  byte-for-byte today's — the parity gate. The a11y answer is **reused, not rebuilt**: the shipped
+  histogram's keyboard-navigable `<table>`, because the strip canvas is `aria-hidden` like every
+  other. Amends ADR-0026 (its layer stack and dirty-flag set) and supersedes nothing; frontend-only.
+  **Still filed `Proposed` although its flag has been default-on since the day it was written**, and
+  ADR-0121 later built the stacked histogram on this strip — so read the status as a filing state,
+  not as a claim that the surface is unbuilt.
 - **ADR-0050** _(Accepted; interchange M1 — behind `VITE_SCHEDULE_INTERCHANGE`)_ — Schedule interchange:
   canonical model + import pipeline: a **format-agnostic canonical model** + per-format parsers (XER now,
   MSPDI at M3) + a mapper to a SchedulePoint import-DTO graph + an ADR-0035-aligned **validate/repair/
@@ -3767,6 +3789,49 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   and two docblocks corrected for overstating what they protect. **The CPM engine is not imported
   and no migration runs.**
 
+- **ADR-0122** _(Accepted; 2026-09-02)_ — A picture a screen reader cannot reach is not described by
+  saying it is. The TSLD's pinned WBS band is an `aria-hidden` canvas, and **two places in the
+  repository asserted its text equivalent existed** — `TsldCanvas.tsx`'s own comment, and ADR-0063 §7
+  ("it **is announced as a group**"). Neither was true, and the reason nobody noticed is that **each
+  was right about half its subject**: a real `WBS_SUMMARY` is an ordinary activity and already has a
+  row in the parallel listbox, while the derived **Unassigned** bucket has no activity id — it is not
+  in the database at all — so it structurally cannot be an option in a listbox built from activities.
+  The claim was accurate for the groups that had another route and false for the one that did not.
+  The net effect was that a screen-reader user learned a plan had unfiled work in the **Gantt** and
+  not in the diagram view of the same plan — the diagram being the surface this product exists to be.
+  Found independently by the accessibility and UX reviews of `docs/TECH_DEBT.md` #71, neither of which
+  was asked about it.
+  **The decisions.** ADR-0063 §7's second clause is **withdrawn as a statement of fact** (its first —
+  that the bucket cannot be selected — stands, and nothing here makes the equivalent operable). The
+  equivalent is a **non-focusable `sr-only` list inside the diagram region**, not part of the listbox:
+  a band group is not a bar, ADR-0026 D7's parallel DOM is about the only route to a **selectable**
+  object, and making these `option`s would invent an interaction ADR-0063 §7 refuses while polluting
+  the set ADR-0063 §4's invariant counts. Its precedent is the **data-date paragraph** beside the same
+  listbox — standing, non-live, non-focusable — placed **inside** the section because a
+  landmark-navigating reader lands inside the region and never passes a preceding sibling (the
+  ADR-0073 C2.5 finding, one element along). It is deliberately **not** `aria-describedby`-linked,
+  because a description is flattened to a string and that would destroy the level structure below it.
+  `role="list"`/`role="listitem"` are **explicit**, because Tailwind v4's Preflight sets
+  `list-style: none` and that is a documented cause of WebKit/VoiceOver dropping the implicit roles —
+  `role="list"` had **zero** occurrences in `apps/web/src`, so no local precedent compensated; the
+  tests assert the role rather than the tag, since a DOM-shape assertion passes in a browser where the
+  semantics have gone. A group's count is its **whole subtree**, which makes the counts
+  **non-additive across nesting** — "Structure, 30" containing "Substructure, 10" describes 30, not 40
+  — so each row carries its resolved parent, the description is emitted in **depth-first tree order**,
+  and each item states `aria-level`; without that the count decision would have made the surface
+  actively misleading rather than merely incomplete (WCAG 1.3.1). The re-ordering is done on a
+  **copy**, because changing the shared sort to suit a text feature would silently re-order the
+  band's paint.
+  **Consequences worth carrying.** The diagram and the Gantt name a group from **one composer**, so
+  they cannot drift into describing the same grouping two ways — a difference only somebody who
+  opened one plan in both views would ever see. ADR-0063 §4's invariant becomes **structurally** safe
+  rather than observed to hold (its assertions key on `getAllByRole('option')` and a `listitem`
+  cannot enter that set), and both passed **unedited** through the change — "an invariant you have to
+  touch to make room for your feature was never an invariant". The non-additive counts are a standing
+  trap, and the obvious later "fix" of counting direct children is wrong. Out of scope
+  **structurally** rather than by decision: the guest share view has no band toggle. And **real AT
+  announcement was reasoned from specification, not observed with a screen reader** — the same honest
+  label ADR-0083 carries. **The CPM engine is not imported and no migration runs.**
 - **ADR-0123** _(Accepted; M0–M5 landed 2026-09-02)_ — A search param is a string, and the shape is
   decided at the router. TanStack Router's default codec **typed** search values: `?verified=1`
   reached a validator as the number `1`, `?q=true` as a boolean, `?q=a&q=b` as an array — and
@@ -4273,10 +4338,14 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   deciding whether a change needs a full spec opens the spec and reads the header, and a `Draft`
   header over shipped work tells them stages 1–4 were never completed for the surface they are about
   to change.
-  **The predicate is citation, and the refinement was measured and rejected.** Eleven ADRs are
-  `Proposed` and **four of them are live production surfaces** (0029 the app-shell, 0030 the
+  **The predicate is citation, and the refinement was measured and rejected.** Eleven ADRs were then
+  `Proposed` and **four of them were live production surfaces** (0029 the app-shell, 0030 the
   canvas-first workspace, 0031 the toolbar registry, 0032 canvas-first authoring), so keying on the
-  ADR's own status would silently miss the loudest cases. The objection then **defuses itself**:
+  ADR's own status would silently miss the loudest cases. _(Re-derived 2026-09-13: **eight** are
+  `Proposed` today, and the live set is **five** — ADR-0049 is the fifth, its flag default-on since
+  2026-07-20. Both figures are put in the past tense here rather than updated in place, because
+  they are ADR-0131's evidence for a decision it made on the day; the point they support is
+  unaffected and is stronger with a fifth.)_ The objection then **defuses itself**:
   following all eleven, 0029–0032 cite files that live in `docs/plans/`, 0082 and 0083 cite no spec
   directory at all, and the rest cite shipped epics — the population of _cited by a Proposed ADR
   whose work has not started_ is empty. The claim is narrow and true: an ADR citing a spec is the
@@ -4360,6 +4429,16 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   this file**, so nothing failed. Found incidentally by an agent writing an unrelated spec, and
   repaired in the same pass rather than stepped over; the gap is now `docs/TECH_DEBT.md` #291, and a
   full comparison of all 133 ADR files against this section found **exactly one** missing.
+  **That last sentence was itself wrong, and the same check on 2026-09-13 found TWO more** —
+  ADR-0049 (Proposed, but `VITE_CANVAS_RESOURCE_VIEW` default-on since 2026-07-20) and ADR-0122
+  (Accepted, and cited by ADR-0127's entry). Both were already absent on 2026-09-10, so the
+  comparison that reported one was an undercount; both are in the **gated** index
+  `docs/adr/README.md`, which is why nothing failed. Each appeared in this file only in passing,
+  inside another ADR's entry — a decision cited by number and absent from the register, which is
+  the ADR-0071 failure this paragraph was written about, twice more and undetected by the
+  paragraph's own remedy. The gap stays `docs/TECH_DEBT.md` #291: `check:adr-coverage`'s own
+  docblock says it does not read this file, so the register is checked by a person or not at all,
+  and a person has now missed it twice.
 
 - **ADR-0133** _(Accepted; M0–M8 landed 2026-09-10)_ — A command surface declares its rows, and the
   pen leads the one it unlocks. Five epics had worked this band and each asked whether the row
