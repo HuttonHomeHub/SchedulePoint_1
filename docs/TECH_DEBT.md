@@ -2027,6 +2027,28 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 > prefers: a symbol either exists or does not, and `RectCache` and `crossedLanes` were both found in
 > seconds by name after their line numbers had been meaningless for a month.
 >
+> **A second controlled comparison, and the first measured half-life (2026-09-13).** `#204`(a)'s
+> re-derivation put **two** citations in one sentence, written by one hand in one commit: a line
+> (`selection-actions.tsx:844` reads `showLabel: 'always'`) and an identity (_not one of that file's
+> thirteen entries is `'never'`_). Committed in `ec1227a8` at **07:05** on 2026-09-10; ADR-0133
+> (`73d390bd`) landed at **21:19 the same day** and moved the entry nine lines to `:853`. The line
+> citation was dead in **14 h 14 min**, and `69207b1d` moved it a further 37 lines to `:890` the next
+> day. The identity claim is exact at all three commits across three epics — **13 entries, 0
+> `'never'`** at `ec1227a8`, at `73d390bd` and today.
+>
+> That is tighter than `#248`'s accidental experiment, which it corroborates: same row, same
+> sentence, same author, same minute, same file, so author, date and file are all controlled and only
+> the citation style differs. It also **fits this row's stated mechanism rather than testing it from
+> outside** — `:844` of 1,027 is a deep line in a large, actively-edited file, the shape the paragraph
+> above names as most at risk, and `selection-actions.tsx` is already in that paragraph's list.
+>
+> **What it adds is the rate.** This row says citations rot and never says how fast, which invites the
+> reading that rot happens between sweeps. The fastest recorded instance is **same-day, by a commit
+> already in flight** — so "it was correct when I wrote it" is not evidence that it is correct now,
+> even within one session, and the commit that wrote it is titled _"every register row is verified"_.
+> The `7 rotted / 12 held` tally above is deliberately **not** incremented: that pass swept this same
+> file, so this citation may already be one of the seven, and an eighth would double-count.
+>
 > **Three false-positive classes in the probe itself, recorded because each nearly produced a wrong
 > number.** A first pass anchored on `apps/|packages|scripts|docs` reported **33** citations and
 > **zero** broken — this register cites by **basename**, so a path-anchored scan sees almost none of
@@ -5357,7 +5379,7 @@ the chrome scope's existing text pairs.
 
 ### 204. Four things the foot-row-and-deck epic found and did not fix
 
-**Status:** open · **Verified:** 2026-09-09
+**Status:** open · **Verified:** 2026-09-13
 
 _Triage 2026-08-28 (Phase 4): re-filed consciously. (a) is #131's tooltip-primitive question,
 narrowed there the same day (six universal glyphs; ADR-0105 spec item); (b) is a gated pairing;
@@ -5377,9 +5399,13 @@ already lapsed before the fix landed — ADR-0115/M4 restored `zoom-to-selection
 today. The class is still closed durably rather than by accident: `ToolbarButton`'s icon-only
 branch now speaks through the Tooltip primitive (hover + focus + long-press), so any future
 `showLabel: 'never'` item on ANY toolbar inherits the treatment by construction — the "real fix"
-this row asked for. Re-derived 2026-09-09: `selection-actions.tsx:844` reads `showLabel: 'always'`
-and **not one** of that file's thirteen entries is `'never'`, so the sentence that follows is kept
-as the record of what was found and is **no longer true of the code**._ `zoom-to-selection` **was**
+this row asked for. Re-derived 2026-09-09: `zoom-to-selection`'s own entry in
+`selection-actions.tsx` reads `showLabel: 'always'` and **not one** of that file's thirteen entries
+is `'never'`, so the sentence that follows is kept as the record of what was found and is **no
+longer true of the code**. (That re-derivation cited `selection-actions.tsx:844`, which was exact
+when committed and dead **the same day** — the entry is at `:890` now and `:844` is a comment. It is
+repointed to the id rather than to the new line, which is `#246`'s own recommendation; that row
+measures the interval, because this pair turned out to be a controlled experiment.)_ `zoom-to-selection` **was**
 `showLabel: 'never'` (foot-row-and-deck M1), so a sighted
 touch-only reader got no visible name: `aria-label` carries it for assistive technology and `title`
 carries it for a pointer, and a tap fires neither. **This is not a WCAG failure** — the accessible
