@@ -115,6 +115,26 @@ the other filtered on `**Size:**` and `**Owner:**`, fields **many rows omit**, a
 product-facing queue is blocked" — a statement about the query, delivered as a statement about the
 register, which hid #86 (a live wrong write) for most of a night.
 
+**It caught four more scans on 2026-09-13, and this time the cost is measurable.** A verification
+pass wrote four separate scans over this file — for the stale `checked as a LIST` caveat, for a
+quoted phrase surviving in prose, for item-level closure markers, and for `fieldValue`'s reach —
+and every one anchored on `\d+\.`. Each therefore read **100 rows where `check:debt-status` counts
+103**, silently, exactly as this paragraph predicts.
+
+Three of the four lost nothing: `#118a`, `#118b` and `#119a` carry none of the defects those scans
+were hunting, checked afterwards rather than assumed. **The fourth did lose something.** A scan for
+"which open rows have the oldest `Verified` date" — the one used to CHOOSE what to examine next —
+reported 2026-09-09 as the oldest, and `#119a` is **open and `Verified: 2026-09-01`**. So the blind
+spot did not merely shrink the population; it hid the single row the selection was looking for. A
+scan that picks the next piece of work is the worst one to write narrow.
+
+**How a closed ITEM is marked has two forms, and neither is wrong.** Rows with lettered items mark a
+closed one either **in the item's heading** (`#165` (a): `**a. Title (CLOSED 2026-08-22.)**`) or
+**at the item's foot** (`#202` (c): a `> **FIXED …, and (c) is CLOSED.**` note). A reader of either
+gets the right answer, and a scan that knows only one form reports the other as a defect — measured,
+that is exactly what happened on 2026-09-13, two false positives out of three flags. Recorded so the
+next reader neither "standardises" one away nor files the other as a finding.
+
 **A table inside a detailed row must not lead with a bare number.** `check:debt-status`'s A6 reads
 any `| N | … | … |` line as a Closed-numbers ledger entry and checks its third cell is a date, and
 it cannot tell a ledger row from a data table in a detailed row — so a table of widths keyed
@@ -3925,7 +3945,10 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
 **Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(c) is CLOSED 2026-09-01 too** — fixed in `e560ac2c`, whose message names `#165c`, and this
 header was not updated: the already-fixed-and-unclosed shape at ITEM granularity, which is harder
 to see than at row granularity because the row is legitimately still open. **(a) is CLOSED
-2026-08-22; (b)–(e) remain open.** The product owner's decision was to shoot, report and choose;
+2026-08-22; (b), (d) and (e) remain open.** _(That read "(b)–(e) remain open" until 2026-09-13,
+a range which silently included (c) — already closed two sentences earlier in this same paragraph.
+It is a letter list now, because a range is exactly what lets a closed item hide inside it.)_ The
+product owner's decision was to shoot, report and choose;
 they chose (a).
 
 `apps/web/scripts/shoot.mjs` carried 26 shots and five routes had none: `/account`, `/me/activity`,
@@ -4059,7 +4082,8 @@ chips, `Outcome` is plain text.
 > rows for a two-row picture, because it grouped by `top` and the bar is `items-end`, so a 56 px
 > field and a 54 px group on one visual row have tops 2 px apart.
 
-**c. `All events shown` is a filled dark button that is not an action.** It is a status, rendered in
+**c. `All events shown` is a filled dark button that is not an action. (CLOSED 2026-09-01,
+`e560ac2c`.)** It is a status, rendered in
 the same treatment as `Change password` and `New project`. ADR-0099's status bar exists because
 _"`Recalculate` stops being a button pretending to be a status"_; this is that, one screen along.
 
