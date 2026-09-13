@@ -1,5 +1,56 @@
 # @repo/web
 
+## 0.127.0
+
+### Minor Changes
+
+- [#578](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/578) [`13f8329`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/13f8329fce7256c18f1b2ce50d4f718fe8af971e) Thanks [@claude](https://github.com/apps/claude)! - The duration and lag fields ask which calendar they are measured in.
+  
+  The client resolved one day length per activity and used it for everything, which is right until an
+  activity's work happens somewhere its own figures do not. A resource-dependent activity driven by a
+  resource on a different calendar now reads and writes its duration, remaining duration and
+  relationship lag on the calendar it schedules on, matching the API.
+  
+  **What a planner sees.** The Duration column and the activity editor report a driven activity's
+  duration in the day length of its driving resource — so a five-day crane lift on a round-the-clock
+  crane reads as the two days the programme actually reserves. Typing a duration into the editor now
+  stores that many days of the resource's time rather than of the activity's own calendar, which is
+  what the field has always appeared to promise.
+  
+  The assignment join lag deliberately keeps the activity's own calendar; it is measured on the
+  activity rather than on the work, and that distinction is now named at every call site rather than
+  implied by which helper was reached for first.
+
+### Patch Changes
+
+- [#523](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/523) [`c18efbc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c18efbce1b34633f7a3d92a43ccc5d86cd160a79) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Project Explorer: hand focus back to the tree when a focused row is removed under it.
+  
+  A row can disappear while the browser's focus ring is physically on it — a lazy-load placeholder is
+  focusable and is unmounted the moment its fetch resolves, and a real node goes the same way on a
+  collapse or another member's delete. Focus landed on the page body, which on this surface also
+  silently disables the keyboard shortcuts, since those are handlers on the workspace root. The tree
+  now takes focus back and says what left (WCAG 2.2 §2.4.3 Focus Order).
+
+- [#526](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/526) [`7f22cf2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7f22cf2361a69e79675b9708a8cebce55b2ff91b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Project Explorer: say what arrived when a level finishes loading.
+  
+  Expanding a client or a project fetches its children, and until now the only way to learn the fetch
+  had finished was to see the rows appear — so a screen-reader user got nothing unless they happened
+  to be standing on the placeholder when it vanished. The tree now announces the outcome ("11 projects
+  loaded", "No plans.", "Couldn't load plans.") through the app's polite live region, which is what
+  ADR-0029 specified and nothing had implemented.
+
+- [#577](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/577) [`3b91abd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3b91abd66ff6771e780d7d8caf9ec02acef303b9) Thanks [@claude](https://github.com/apps/claude)! - Retry a rate-limited read, and give the route error screen the way out its copy promises.
+  
+  The query client refused to retry every 4xx, which is right for all but three of them: a 429 means
+  "this would have worked, come back in a moment", and 408/425 are about timing rather than content.
+  Both queries on the authenticated critical path inherit that default, so a rate-limited `GET /me`
+  was a hard failure rather than a retry — and it landed on an error screen reading "Please try
+  again" above nothing pressable, while the app's other error screen has always had a Reload button.
+  
+  That screen now offers **Try again**, which clears the boundary and re-runs the route's loaders
+  without a page reload, so anything unsaved in a dialog behind it survives. A sustained rate limit
+  outlasts the automatic backoff by design; the button is what recovers it.
+
 ## 0.126.1
 
 ### Patch Changes
