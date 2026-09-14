@@ -476,6 +476,12 @@ fire here — the spec's prediction for the large plan, now measured.
 
 ### 9.3 §4.10 row 2 FIRES — and not in the shape the spec predicted
 
+> **CORRECTION, 2026-09-14, before any code was written on it.** §9.3 and §9.4 as first written
+> are **wrong about the mechanism and wrong about what is on screen**, and §10 replaces them.
+> They are kept rather than rewritten because the error is the instructive part: the numbers
+> below were all correctly measured and the sentence built on them was not checked. Read §10
+> before acting on anything here.
+
 The spec's row reads _"WBS summary bars dominate the picture"_ and anticipated ink. They
 dominate something worse: **the lane axis**.
 
@@ -559,3 +565,92 @@ recommend first:
 **This is a design decision and not a measurement, so it goes to the product owner** rather
 than being folded silently. Everything in M1 is unaffected by the answer: the viewport fill is
 rank 1 under every option above.
+
+## 10. The §9.3 correction — what those 174 bars actually are
+
+**§9.3 says "174 rollup bars consume 94 % of the minimap's height". Both halves are false.**
+Found by pursuing an inconsistency in my own document rather than by anything failing: §9.3
+reported 151 summaries in lanes 9–177, and the row histogram in the same section reported the
+middle 90 rows carrying **two** inked pixels, both chrome. 151 wide bars and 2 pixels cannot
+both be true, and I published the pair without noticing.
+
+### 10.1 What settled it
+
+Four steps, each ruling out a hypothesis rather than confirming one:
+
+1. **The painter in isolation** — fed a synthetic 178-lane set, it emitted 15 `fillRect`s per
+   y-decile down to y = 119. So the painter is not the filter.
+2. **The live scene** — temporary instrumentation inside `buildMinimapBitmap` on the running
+   page logged `activities: 2160, rects: 2160`, `maxLane: 177`, and a y-histogram of **15 rects
+   per decile**. So the scene is not filtered either: the bars ARE being drawn.
+3. **Their geometry** — the same instrumentation printed the first six rects above y = 10:
+   `{x: 0, y: 10.11, w: 1, h: 1}`, `{x: 0, y: 10.79, w: 1, h: 1}`, and so on. **One pixel wide,
+   at x = 0.**
+4. **The data** — every one of the 160 `WBS_SUMMARY` rows has `early_finish = early_start`.
+   Mean span **0.0 days**.
+
+### 10.2 So the picture is this
+
+The summaries are **zero-span**. They paint as 1 px dots at day 0 — and the **data-date
+vertical is drawn last, at day 0, full height, and paints straight over every one of them**.
+They are not invisible because they are small; they are invisible because a later layer covers
+them. That is why the middle rows measured as exact ground plus one data-date pixel: `199 + 1`,
+with no blending anywhere, which is what "overwritten" looks like and what "too small to see"
+does not.
+
+The bottom band, meanwhile, is real and is **not** summaries: the 14 `LEVEL_OF_EFFORT` rows
+have a mean span of **2,117 days**, so they are the only wide bars in the high lanes.
+
+### 10.3 What survives, what is withdrawn, and what is now untested
+
+**Survives, unchanged:**
+
+- Every measured number in §9.2 (span, pitch, lanes) and §9.5.
+- **The WBS band does not reach the minimap** — 18.97 % of the screen changes, the minimap is
+  byte-identical. Independent of all of this.
+- The picture is mostly empty at scale: 18 of 120 rows carry ≥ 10 inked pixels.
+- Summaries do inflate the **lane count** — 160 of them hold 151 lanes.
+
+**Withdrawn:**
+
+- "174 rollup bars consume 94 % of the minimap's height." They consume 94 % of the lane
+  **axis** while drawing **nothing a reader can see**.
+- §9.4's mechanism — _"a summary spans its entire subtree, so it overlaps every activity beneath
+  it, and `packLanes` must open a lane"_ — is **not what happened here**. These summaries span
+  nothing; they all start and end at day 0, so they collide **at a point**, and `packLanes`
+  opens a lane for each because no lane is free at day 0. The conclusion was right and the
+  reason was invented.
+- §9.4's claim that the partial link graph "is a real caveat for the task side and none at all
+  for the summary side" is **exactly backwards**. A summary's lane is link-independent; its
+  **span** is not, and the span is what makes these ones degenerate.
+
+**Now untested:** whether a summary that really does roll up a subtree still forces its own
+lane. It should — it would then overlap its own children — but this fixture cannot show it, and
+nothing here should be read as having shown it.
+
+### 10.4 This changes the approved action, and that must go back to the product owner
+
+The product owner approved **omit `WBS_SUMMARY` and `LEVEL_OF_EFFORT` from the minimap
+bitmap**, on §9.3's account. Against the corrected picture, implemented literally, it would:
+
+- remove 160 dots **nobody can see** (they are already painted over) — no visual change;
+- remove the 14 LOE bars, which **are** visible and are the bottom band;
+- and leave the compression **essentially intact**. `worldExtent` takes `maxLane` from whatever
+  it is given, and 6 ordinary **tasks** sit at lanes up to **163**, so dropping summaries and
+  LOE moves the lane count 178 → **164**, not 178 → 9. `pxPerLane` goes 0.674 → 0.73.
+
+So the action removes the one thing in that region a reader can see and does not fix what it
+was approved to fix. **It is not built.** The decision goes back with these numbers.
+
+### 10.5 A real, general defect found on the way — and it is not about summaries
+
+**The data-date vertical overwrites any zero-duration activity sitting at the data date.** It is
+drawn last, 1 px wide, full height, at day 0; a milestone is zero-duration by definition, and
+this plan holds **42 `START_MILESTONE` and 34 `FINISH_MILESTONE`**, all zero-span. Any of them
+landing on the data date is painted out of the picture entirely.
+
+That is a genuine minimap defect, independent of the WBS question, and it belongs to M2 — whose
+subject is exactly "five marks, five appearances". ADR-0100 D5 says **paint order IS the
+decimation policy**, and this is that policy having an unintended consequence its own ADR does
+not mention: the data date was put last so it survives the merge, and the cost is that it
+silently removes whatever sits under it.
