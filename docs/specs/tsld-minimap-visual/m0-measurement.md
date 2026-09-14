@@ -376,3 +376,65 @@ year at 69.0 and 17.7. A plan whose month pitch lands between 6 and 8 — a span
 760–1,015 days at 200 px — is where they would differ, and no such plan has been measured. The
 floor is therefore set from the images on its own merits rather than from a case that
 discriminates, and that is stated so a later reader does not mistake it for a tuned number.
+
+## 8. M0-T5 — the baseline M5 will re-derive
+
+### 8.1 Today's asserted counts, verbatim
+
+From `apps/web/src/features/tsld/render/minimap-budget.test.ts`, so M5 compares against what
+was actually asserted rather than against a remembered shape:
+
+| case                                   | assertion                                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 2,000 activities                       | `fillRect === 1 + 2000 + 1`; `fillText === 0`; `measureText === 0`; `strokeRect === 0`                            |
+| 2,000 activities                       | `styleWrites === 4` (ground + two bar passes + data-date)                                                         |
+| fringed plan (8 lanes, 100 activities) | `fillRect === 1 + (100 − critical) + critical × 2 + 1`; `styleWrites === 5`; `strokeRect === 0`; `fillText === 0` |
+| empty plan                             | `fillRect === 1`; `styleWrites === 1`                                                                             |
+
+**One live defect in that file is recorded here rather than fixed** (it belongs to M3): the
+third case's comment at `:107` says _"6 style writes"_ while the assertion at `:127` correctly
+expects **5**. The assertion is right and the prose is wrong; M3-T3 corrects the name, never
+the number.
+
+### 8.2 Rebuild cost, measured against the shipped painter
+
+`buildMinimapBitmap` imported through the dev server's own module graph — so the code measured
+is the code that ships — into a real `<canvas>` in Chromium. 20 warm-up builds, then 200
+samples.
+
+| scene                        | p50        | p95         | max     |
+| ---------------------------- | ---------- | ----------- | ------- |
+| 500 activities / 60 lanes    | **0.9 ms** | **1.6 ms**  | 13.7 ms |
+| 2,160 activities / 274 lanes | **3.9 ms** | **13.2 ms** | 14.7 ms |
+
+Environment: `HeadlessChrome/141` on X11 Linux, `devicePixelRatio 1`, software-rasterised —
+the same class of environment as the v1 figure, which is what makes the two comparable at all.
+
+### 8.3 The p95 disagrees with v1 and the honest reading is interference, not regression
+
+v1 recorded p50 3.4 / p95 5.1 / max 9.2 at 2,160. This run agrees closely on **p50** (3.9 vs
+3.4, +15 %) and diverges sharply on **p95** (13.2 vs 5.1, +159 %).
+
+**A 2.6× tail under a 1.15× median is the signature of interference rather than of slower
+code** — slower code moves the median. The confound is named rather than assumed: this ran
+while a 2,160-activity plan was seeding through the local API into the local Postgres on the
+same machine. Load average at the time was **0.93**, so one core busy — a real confound, and a
+moderate one rather than saturation, which is stated in both directions rather than used to
+excuse the number.
+
+**This figure is therefore PROVISIONAL and is to be re-run clean before M3 relies on it.** The
+v1 number is not treated as the truth either: it carries its own stated deviation, and neither
+run has a repeat-measurement spread, which ADR-0128 makes the thing that turns a reading into a
+verdict.
+
+### 8.4 M3's falsification bar, committed before M3 runs
+
+Per ADR-0128's method, written now rather than after the result is known:
+
+> **M3 passes if the rebuild stays within one order of magnitude of the clean baseline, and
+> the per-frame path is unchanged.** The second limb is the one that matters and it is
+> structural, not statistical: the tiers are drawn inside `buildMinimapBitmap`, which runs on
+> scene change only, so a regression that moved work onto the frame loop would show up as a
+> changed call site rather than a changed millisecond. A gate that only measured milliseconds
+> could pass while the picture was rebuilt every frame — which is exactly what
+> `minimap-budget.test.ts`'s own docblock says it structurally cannot catch.
