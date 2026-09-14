@@ -4271,6 +4271,14 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
    draggable — `cursor-grab` is invisible before hover and absent on touch. Click-to-jump
    and the keyboard cover the function; the convention (IDE minimaps) covers most readers.
    If first-contact feedback says otherwise, corner ticks or a faint fill are the shape.
+   > **CLOSED 2026-09-14** (minimap-visual M1). First-contact feedback said otherwise — the
+   > product owner called the minimap "extremely basic" and said it does not pop — and the
+   > remedy is the one **this item named**: a faint fill. The rectangle now carries
+   > `--canvas-minimap-frame-fill` beside its two-tone frame, so the region reads as an object
+   > rather than as a boundary without hover and on touch. Measured in the shipped render at
+   > **ΔE 5.01** against the canvas behind the panel (ratio 1.126:1 — which is why the
+   > perceptibility gate is a ΔE one; a contrast ratio calls a visible chroma shift invisible).
+   > Gated by two assertions in `token-contrast.test.ts`, both verified red.
 2. **Q2 (command-strip promotion) was decided against pre-Graphite arithmetic** (ux): the
    "no room" conclusion cites measurements taken before ADR-0099 reshaped the strip. The
    default stands (product owner Q2) and the minimap item still sits in `View ▾`; if it is
@@ -4287,6 +4295,15 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
    copy bar but offers no route; reachable only when an open panel's plan loses its
    computed dates, and the canvas beneath carries its own actionable prompt. One "add an
    activity" line if it ever surfaces in use.
+   > **RE-FILED, not folded in, 2026-09-14** (minimap-visual M4-T2). This item's own condition is
+   > _"if it ever surfaces in use"_, and it **has not**: every screenshot the epic took — the
+   > 10-activity fixture, the 2,160-activity scale plan, the today-spanning plan, band on and
+   > band off — had computed dates, so the empty state was never reached. The epic was one
+   > milestone away and touched the same component, which is exactly the circumstance in which a
+   > deferred item gets folded in on the strength of being nearby; it stays deferred because its
+   > trigger is a fact about use rather than about proximity. Recorded rather than left silent,
+   > per ADR-0114: a deferral whose reason has lapsed reads exactly like one whose reason still
+   > holds — and so does the reverse.
 4. **`handleClose`'s chain has no last resort** (accessibility): if both the captured
    opener and `dismissFocusRef` are unusable, focus stays put. Unreachable today —
    `TsldPanel` always wires the listbox ref — noted in the handler's comment.

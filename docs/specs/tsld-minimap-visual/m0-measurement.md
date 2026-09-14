@@ -772,3 +772,73 @@ unchanged.** The second limb remains the load-bearing one and is structural rath
 statistical — the tiers draw inside `buildMinimapBitmap`, which runs on scene change only, so a
 regression that moved work onto the frame loop shows up as a changed call site rather than as a
 changed millisecond.
+
+## 13. M4 — what the shipped picture measures, and what M4 did NOT change
+
+Re-shot at 1646 with M1–M3 landed, against the same fixture as §2. The whole-picture colour
+inventory, by area:
+
+| ink                | px     | what                    |
+| ------------------ | ------ | ----------------------- |
+| `rgb(222,225,227)` | 15,382 | the tinted ground       |
+| `rgb(145,9,18)`    | 3,717  | critical                |
+| `rgb(148,82,3)`    | 2,256  | **near-critical (M2)**  |
+| `rgb(71,132,189)`  | 696    | ordinary                |
+| `rgb(29,34,41)`    | 636    | frame stroke            |
+| `rgb(255,255,255)` | 628    | frame halo              |
+| `rgb(49,50,50)`    | 177    | the data date           |
+| `rgb(107,112,119)` | 166    | **the month tier (M3)** |
+
+**Eight distinct marks where §2 measured five**, and the ground is no longer the canvas: it
+reads **ΔE 5.01** against the canvas behind the panel, which is the M1 gate's floor confirmed in
+a real browser rather than in arithmetic. Its contrast ratio is **1.126:1** — the number that
+would have called it invisible, which is §5.3's argument standing up to a photograph.
+
+The ladder as shipped, through the tint: critical vs ordinary **2.36:1**, critical vs
+near-critical **1.54:1**, near-critical vs ordinary **1.53:1**, month rule vs ground **3.80:1**,
+data date vs ground **9.79:1**.
+
+### 13.1 The measurement found a gap in my own M1 gate
+
+Two of those pairs sit **three hundredths above the 1.5 floor**, and `CRITICALITY_PAIRS` asserts
+the ladder **untinted**. M1's composite assertion covered one pair — and worse, it was written as
+an `it.each` over two grounds whose body **ignored the parameter** and computed the same pair
+both times, so it read as two assertions and was one. It also predated M2, which added the third
+bar state, so neither `--warning` pair was composited by anything.
+
+Widened at M4 to sweep `CRITICALITY_PAIRS` itself — reused rather than restated, so a fourth bar
+state is covered the day it joins that list. **Verified red** by raising the fill to 55 %: the two
+failures are precisely the two pairs the old assertion could not see (1.32:1 and 1.27:1).
+
+This is the register's own favourite shape — one correct pattern applied to a control and not its
+neighbour — found in code I had written two milestones earlier, by measuring the shipped render
+rather than by re-reading the test.
+
+### 13.2 M4-T1 — chrome: NO CHANGE, and the reason
+
+§4.10's fourth row asked whether the **panel** is what looks unfinished, and §4 answered no: the
+panel is plain but coherent, and the picture was the weaker half. The picture is now fixed, and
+the re-shot panel does not read as the weak part beside it. The plan's own risk note for this
+task says the win "must be **seen**, not copied" — it is not seen, so nothing is changed.
+Recorded as a decision rather than left as silence.
+
+### 13.3 M4-T2 — `docs/TECH_DEBT.md` #155.3 re-filed, not folded in
+
+Its condition is _"if it ever surfaces in use"_ and it has not: every screenshot this epic took
+had computed dates, so the empty state was never reached. The epic was one milestone away and
+touching the same component, which is exactly when a nearby deferral gets folded in; it stays
+deferred because its trigger is a fact about **use**, not about proximity.
+
+### 13.4 M4-T3 — CQ-3 answered: the panel size is unchanged
+
+`MINIMAP_BOX` stays 200×120. Recorded as **asked and answered** rather than left implicit —
+that figure was on record as "the probed working figure … **not a decision**" for a year and
+nobody revisited it, which is how it became a question this epic had to ask. Changing it would
+invalidate §7's pitch ladder, §9.2's measured pitches and §12's cost baseline, all of which are
+derived at 200 px; the answer buys nothing the epic's other milestones have not already bought.
+
+### 13.5 Closed: #155.1
+
+The drag affordance was cursor-only, and that item **named the remedy**: _"corner ticks or a
+faint fill are the shape."_ First-contact feedback arrived, the fill is the fill it named, and the
+rectangle now reads as an object without hover and on touch.

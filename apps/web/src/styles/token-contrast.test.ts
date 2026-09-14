@@ -408,19 +408,34 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     ).toBeGreaterThanOrEqual(5);
   });
 
-  it.each([
-    ['non-critical', '--primary'],
-    ['critical', '--destructive'],
-  ] as const)('criticality survives the viewport fill over the %s bar', () => {
-    const fill = parseColour(tokens.get('--canvas-minimap-frame-fill')!);
-    const through = (token: string): Srgb =>
-      compositeOver(fill, compositeOver(parseColour(tokens.get(token)!), fillOf(tokens)));
-    const value = contrastRatio(through('--primary'), through('--destructive'));
-    expect(
-      value,
-      `critical vs non-critical THROUGH the fill is ${fmtRatio(value)}`,
-    ).toBeGreaterThanOrEqual(1.5);
-  });
+  /**
+   * **The whole criticality ladder through the fill, not one pair of it** (M4).
+   *
+   * M1 shipped this as an `it.each` over two grounds whose body ignored the parameter and
+   * computed `--primary` vs `--destructive` both times — the same assertion twice, reading as
+   * two. It also predated M2, which gave the minimap a **third** bar state, so the two pairs
+   * involving `--warning` were composited by nothing.
+   *
+   * That mattered: measured from the shipped render, critical vs near-critical is **1.54:1** and
+   * near-critical vs ordinary **1.53:1**, against the 1.5 floor. The margin is three hundredths,
+   * so these are exactly the pairs an un-composited gate would let drift.
+   *
+   * `CRITICALITY_PAIRS` is reused rather than restated, so a fourth bar state is swept here the
+   * day it is added to that list — the alternative is a second list that agrees until it does not.
+   */
+  it.each(CRITICALITY_PAIRS)(
+    'the fill preserves %s vs %s (%s)',
+    (a: string, b: string, why: string) => {
+      const fill = parseColour(tokens.get('--canvas-minimap-frame-fill')!);
+      const through = (token: string): Srgb =>
+        compositeOver(fill, compositeOver(parseColour(tokens.get(token)!), fillOf(tokens)));
+      const value = contrastRatio(through(a), through(b));
+      expect(
+        value,
+        `${why} THROUGH the viewport fill is ${fmtRatio(value)}`,
+      ).toBeGreaterThanOrEqual(1.5);
+    },
+  );
 
   /**
    * **The Today marker's pair** (minimap-visual M2). Same shape as the frame's assertion and for a
