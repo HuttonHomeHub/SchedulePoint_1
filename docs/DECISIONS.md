@@ -10,6 +10,44 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-14 — The deployed count is not a zero, and #86 is rewritten to what is left
+
+**What was decided.** `docs/TECH_DEBT.md` #86's last owed item, M0-T3 — a count of affected rows
+against the **deployed** database — was taken through the ADR-0140 staff diagnostics panel and
+recorded in both measurement records. The row is then **rewritten down to what is left** (M0-T4's
+unmeasured timing limb) and renamed, per this register's own rule for a partly-done row. Its number
+is **kept rather than ledgered**, because several ADRs cite `#86` and a live row resolves better
+than a ledger line.
+
+**The reading**, taken by the product owner against API 0.64.0 at `2026-09-14T06:39:30.570Z`:
+`day-factor-divergence` examined 2 / affected 2; `inherited-day-factor` examined 164 / affected 19;
+one plan and one organisation each; 8 ms and 3 ms.
+
+**Why it matters more than a bookkeeping close.** M0-T3 was written expecting a zero — the task says
+so in as many words, that a zero "is the strongest possible argument for CQ-1 and must not be left
+unstated". It is not a zero. Twenty-one activities on the one live installation held stored
+day-denominated figures derived on a day length that disagreed with the schedule they were measured
+against, so the product owner's "the correct number wins" decision was taken on real rows rather
+than on a fixture. **The panel's first press justified the panel.**
+
+**Three things the reading does NOT establish, recorded because each reads stronger than it is.**
+2 of 2 is not a rate — on a population of two, "both of them" is the honest phrasing. The 8 ms and
+3 ms are not the query-cost limb: those triggers were derived against a 102,000-activity synthetic
+and this host holds 164, so they are untested rather than cleared. And there is one installation,
+so nothing here generalises.
+
+**The consequence that is actionable.** `resolveDayFactors` runs inside the recalculate transaction
+(`schedule.service.ts:461-465` → `writeResults`), so a deployed fix corrects a row only when its
+plan is next recalculated. The 21 counted rows still hold their old figures until then. On a
+single-tenant installation "who to tell" is the person reading the panel, and what to tell them is
+which plan to recalculate — which is a sharper reading of the panel's own `retrospective` copy than
+the copy itself gives.
+
+**What #86 keeps.** M0-T4's ≤ 5 ms p95 limb is **deferred, not closed**, with the deployed count as
+the reason (a driven population of two, and the no-driver path skipped by construction) and a
+written trigger to reopen. "Very hard to see it mattering" is not a measurement, and this register
+exists because that sentence has been wrong before.
+
 ## 2026-09-11 — Reconciliation pass: the agents were briefed on a product two versions back
 
 Run because `check:reconcile-due` fired at **exactly** its threshold — eight ADRs (0129–0136) since

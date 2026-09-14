@@ -266,6 +266,36 @@ pass found.
   property is about `Principal` assignability and is intact; the sentence needed the qualifier, and
   leaving it would be the ADR-0058 class in the one document a reader checks first.
 
+## The first press — 2026-09-14, and the deliverable is the number
+
+ADR-0128 records that an epic like this one delivers a **number, not a panel**. Taken by the product
+owner on the deployed host against `api-v0.64.0` at `2026-09-14T06:39:30.570Z`, one day after the
+route was written:
+
+| diagnostic                                       | examined | affected | plans | orgs | elapsed |
+| ------------------------------------------------ | -------: | -------: | ----: | ---: | ------: |
+| `day-factor-divergence` (driving resource)       |        2 |        2 |     1 |    1 |    8 ms |
+| `inherited-day-factor` (inherited plan calendar) |      164 |       19 |     1 |    1 |    3 ms |
+
+`docs/TECH_DEBT.md` #86's M0-T3 is thereby **taken**, having been owed since that epic began and
+explicitly untakeable from a container. Its task text expected a zero — it says a zero "is the
+strongest possible argument for CQ-1 and must not be left unstated" — and the answer is not a zero:
+21 activities on the one live installation held stored figures derived on a day length that
+disagreed with the schedule they were measured against.
+
+**Three things the reading does not establish**, each recorded because it reads stronger than it is.
+**2 of 2 is not a rate** on a population of two. **8 ms and 3 ms are not the query-cost limb** — D-A's
+re-arm trigger is 100 ms and D-B's 500 / 300 ms, both derived against a 102,000-activity synthetic,
+and this host holds 164 activities; the triggers are untested, not cleared, and the candidate index
+stays unbuilt for D6's reason. And there is **one installation**, so nothing generalises.
+
+**What the panel's own copy points at without naming.** `resolveDayFactors` runs inside the
+recalculate transaction, so a deployed fix corrects a row only when its plan is next recalculated —
+the 21 counted rows still hold their old figures until then. "Who to tell" on a single-tenant
+installation is the reader, and what to tell them is which plan to recalculate. That is a sharper
+reading of `retrospective` than the copy gives, and is recorded here rather than folded into the
+screen, because it is true of these two diagnostics and not of the field in general.
+
 ## What this ADR does not do
 
 It does **not** license, and a later request for any of these is a new decision rather than an

@@ -4808,6 +4808,21 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   only the case that is already cheap — and the 704 kB it costs on a 48 MB table is explicitly not
   the argument. `database-architect` is not engaged **because there is no schema change to design**,
   which is the decision §19.3 protects rather than the one it forbids.
+  **The first press is the deliverable, and it landed the next day.** Taken by the product owner on
+  the deployed host against `api-v0.64.0`, 2026-09-14: `day-factor-divergence` examined **2**,
+  affected **2**; `inherited-day-factor` examined **164**, affected **19**; one plan and one
+  organisation each. `docs/TECH_DEBT.md` #86's M0-T3 is thereby taken, having been owed since that
+  epic began and explicitly untakeable from a container — and **it is not the zero its own task text
+  expected**, so the "the correct number wins" decision was taken on real rows rather than on a
+  fixture. Three things it does not establish are recorded rather than glossed: **2 of 2 is not a
+  rate** on a population of two; **8 ms and 3 ms are not the query-cost limb**, since both re-arm
+  triggers were derived against a 102,000-activity synthetic and this host holds 164, so they are
+  untested rather than cleared; and there is one installation, so nothing generalises. The half the
+  screen does not say: `resolveDayFactors` runs inside the recalculate transaction, so those 21 rows
+  keep their old figures **until their plans are recalculated** — on a single-tenant installation
+  "who to tell" is the reader, and what to tell them is which plan to recalculate. #86 is rewritten
+  down to its one remaining limb (M0-T4's unmeasured ≤ 5 ms p95) and **deferred on that count**, its
+  number kept rather than ledgered so the ADRs citing it resolve to a live row.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
