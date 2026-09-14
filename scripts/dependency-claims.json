@@ -4,15 +4,15 @@
     "better-call": "1.4.0",
     "@better-fetch/fetch": "1.3.1",
     "nodemailer": "9.1.1",
-    "zod": "4.4.3",
+    "zod": "4.6.5",
     "@nestjs/throttler": "6.5.0",
-    "react-hook-form": "7.86.0",
+    "react-hook-form": "7.88.0",
     "lucide-react": "1.33.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
-    "@tanstack/react-router": "1.170.33",
-    "@tanstack/history": "1.162.2",
-    "@tanstack/router-core": "1.171.28",
+    "@tanstack/react-router": "1.170.36",
+    "@tanstack/history": "1.162.4",
+    "@tanstack/router-core": "1.171.30",
     "playwright-core": "1.62.1",
     "tailwindcss": "4.3.3",
     "@tanstack/query-core": "5.101.4",
@@ -64,7 +64,7 @@
       "ref": "index.js:116-124",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "116-124",
+      "lines": "137-145",
       "anchor": "opts.setBlockers([...blockers, blocker]);",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -72,7 +72,7 @@
       "ref": "index.js:19-26",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "19-26",
+      "lines": "43-50",
       "anchor": "const isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -80,7 +80,7 @@
       "ref": "index.js:221-238",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "221-238",
+      "lines": "240-257",
       "anchor": "if (skipBlockerNextPop) skipBlockerNextPop = false;",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -91,7 +91,7 @@
       "ref": "index.js:224-236",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "224-236",
+      "lines": "250-262",
       "anchor": "win.history.go(-delta);",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -99,7 +99,7 @@
       "ref": "index.js:230-233",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "230-233",
+      "lines": "249-252",
       "anchor": "ignoreNextPop = true;",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -110,7 +110,7 @@
       "ref": "index.js:24-34",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "24-34",
+      "lines": "42-52",
       "anchor": "const blockers = opts.getBlockers?.() ?? [];",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -121,7 +121,7 @@
       "ref": "index.js:240-262",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "240-262",
+      "lines": "267-289",
       "anchor": "const shouldHaveBeforeUnload = blocker.enableBeforeUnload ?? true;",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -129,7 +129,7 @@
       "ref": "index.js:247-257",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "247-257",
+      "lines": "266-276",
       "anchor": "if (typeof document !== \"undefined\" && blockers.length) for (const blocker of blockers) {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -140,7 +140,7 @@
       "ref": "index.js:258-261",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "258-261",
+      "lines": "277-280",
       "anchor": "if (shouldBlock) {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -151,7 +151,7 @@
       "ref": "index.js:299-301",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "299-301",
+      "lines": "317-319",
       "anchor": "onBlocked: () => {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -162,7 +162,7 @@
       "ref": "index.js:306",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "306",
+      "lines": "331",
       "anchor": "win.addEventListener(beforeUnloadEvent, onBeforeUnload, { capture: true });",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -170,7 +170,7 @@
       "ref": "index.js:344-351",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "344-351",
+      "lines": "369-376",
       "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
@@ -178,7 +178,7 @@
       "ref": "index.js:344-352",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "344-352",
+      "lines": "369-377",
       "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -200,7 +200,7 @@
       "ref": "link.js:290-297",
       "package": "@tanstack/react-router",
       "path": "dist/esm/link.js",
-      "lines": "290-297",
+      "lines": "71-78",
       "anchor": "ignoreBlocker",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -338,7 +338,7 @@
       "package": "@tanstack/router-core",
       "path": "dist/esm/qss.js",
       "lines": "25-32",
-      "anchor": "if (val !== void 0) result.set(key, stringify(val));",
+      "anchor": "if (val !== void 0) (result ||= new URLSearchParams()).set(key, stringify(val));",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
         "docs/specs/router-search-params/implementation-plan.md"
@@ -381,7 +381,7 @@
       "ref": "router.js:627-628",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "627-628",
+      "lines": "645-646",
       "anchor": "parseSearch: options.parseSearch ?? defaultParseSearch",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -392,7 +392,7 @@
       "ref": "router.js:678-689",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "678-689",
+      "lines": "691-702",
       "anchor": "const strictSearch = validateSearch(route.options.validateSearch, { ...parentSearch }) ?? void 0;",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -403,7 +403,7 @@
       "ref": "router.js:690-697",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "690-697",
+      "lines": "702-709",
       "anchor": "if (!(err instanceof SearchParamError)) searchParamError = new SearchParamError(err.message, { cause: err });",
       "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
     },
@@ -411,7 +411,7 @@
       "ref": "router.js:788-791",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "788-791",
+      "lines": "796-799",
       "anchor": "Object.assign(accumulatedSearch, validateSearch(route.options.validateSearch, accumulatedSearch));",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -937,7 +937,7 @@
       "ref": "index.esm.mjs:2739",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "2739",
+      "lines": "2730",
       "anchor": "_formState.isSubmitted, _validationModeAfterSubmit",
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
@@ -956,7 +956,7 @@
       "ref": "index.esm.mjs:3148-3150",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "3148-3150",
+      "lines": "3159-3161",
       "anchor": "const _focusError = () => _options.shouldFocusError &&",
       "citedBy": [
         "docs/specs/activity-dialog-unification/feature-spec.md",
@@ -968,7 +968,7 @@
       "ref": "index.esm.mjs:3216",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "3216",
+      "lines": "3232",
       "anchor": "isSubmitted: true,",
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
@@ -991,7 +991,7 @@
       "ref": "util.js:145-163",
       "package": "zod",
       "path": "v4/core/util.js",
-      "lines": "145-163",
+      "lines": "218-236",
       "anchor": "export const allowsEval = /* @__PURE__*/ cached(() => {",
       "citedBy": ["apps/web/src/config/zod-jitless.ts"]
     },
@@ -1102,7 +1102,7 @@
       "ref": "load-client.js:671-672",
       "package": "@tanstack/router-core",
       "path": "dist/esm/load-client.js",
-      "lines": "671-672",
+      "lines": "685-686",
       "anchor": "route.options.pendingComponent ?? router.options.defaultPendingComponent",
       "citedBy": ["docs/specs/route-code-splitting/feature-spec.md"]
     },
