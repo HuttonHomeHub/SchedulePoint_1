@@ -46,6 +46,18 @@ updates:
       # @eslint/js must track the ESLint core major, which is held at 9 above.
       - dependency-name: '@eslint/js'
         update-types: ['version-update:semver-major']
+      # NestJS held at 11 until `@nestjs/throttler` supports Nest 12. Measured 2026-09-14:
+      # throttler's newest published version is 6.5.0 (a single `latest` dist-tag, no
+      # prerelease) and its peers cap at `@nestjs/common`/`@nestjs/core` `^11.0.0`. It is not
+      # droppable — it is the application's only rate limiter (ADR-0051, `/api/v1/share/*`) and
+      # ADR-0140 added a per-handler `@Throttle` override with a structural gate. Everything
+      # else in the set is already on 12 (core/common/testing/platform-express/swagger 12.0.1,
+      # terminus/config/cli 12.0.0), so this is a one-package wait: re-check with
+      # `pnpm view @nestjs/throttler peerDependencies` and remove these four entries when Nest 12
+      # appears there. Without the ignore, Dependabot re-proposes an unmergeable group PR weekly
+      # (#482 and #588, both closed 2026-09-14 for this reason).
+      - dependency-name: '@nestjs/*'
+        update-types: ['version-update:semver-major']
       # Prisma held at 6: Prisma 7 removes `url` from the datasource block and
       # requires a driver adapter + prisma.config.ts — a deliberate migration
       # (worth an ADR), not a routine bump. Remove these when migrating.

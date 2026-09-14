@@ -75,8 +75,11 @@ describe('AuthShell', () => {
       </AuthShell>,
     );
     screen.getByRole('button', { name: 'announce' }).click();
-    await expect(
-      screen.findByText('Check your email', { selector: '[data-testid="announcer"]' }),
-    ).resolves.toBeInTheDocument();
+    // vitest 5 types `.resolves.<matcher>()` as non-thenable, so `await expect(...).resolves`
+    // is an `@typescript-eslint/await-thenable` error. Awaiting the query itself is the same
+    // assertion with nothing left implicit: `findByText` is what actually retries and settles.
+    expect(
+      await screen.findByText('Check your email', { selector: '[data-testid="announcer"]' }),
+    ).toBeInTheDocument();
   });
 });
