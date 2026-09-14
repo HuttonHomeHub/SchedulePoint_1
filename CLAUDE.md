@@ -4825,6 +4825,47 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   number kept rather than ledgered so the ADRs citing it resolve to a live row.
   **The CPM engine is not imported and no migration runs.**
 
+- **ADR-0141** _(Accepted 2026-09-14)_ — A thumbnail's legibility is a pitch, not a zoom. The
+  product owner used the shipped minimap and reported it _"extremely basic in appearance"_ — it
+  _"doesn't pop."_ Measured, that was not taste: the picture drew **five marks in three colours**,
+  two pairs of which were literally the same token value (`today` and `critical` are both
+  `--destructive`; the critical fringe and the data-date vertical are both `--foreground`), and its
+  ground was the diagram's own, so the panel measured **1.03:1** against the canvas it floats over
+  and read as a hole rather than a picture. The viewport indicator was two hairlines with no fill,
+  and at whole-plan zoom it is congruent with the picture's own edge **to the pixel**, so the
+  loudest mark in the widget (14.13:1) delimited everything and therefore said nothing. It now
+  carries a filled indicator, the diagram's **third** bar state (near-critical had no minimap mark
+  at all — a scene state with no mark, not two marks sharing a token), a Today marker that survives
+  a critical bar of its own colour, and **temporal tiers admitted by measured pitch** — the floor
+  (6 px) set from rendered images rather than inherited from `DAY_GRID_MIN_PX`, whose docblock gives
+  a reason and cites no measurement. **D4 records a stale remedy caught before it was built**: the
+  plan's step 3 assumed the criticality fills needed separating, and they already carry a lightness
+  ladder (0.2152 / 0.1234 / 0.0626). Amends ADR-0100 D5/D7/D9. **The CPM engine is not imported and
+  no migration runs.**
+
+- **ADR-0142** _(Accepted 2026-09-14)_ — A remedy is measured before it is built. ADR-0141 closed
+  with two questions left open for the product owner and the M5 UX review added a third; all three
+  were answered, **two were built and one was not**, because measuring it first showed it does
+  nothing. **D1 is the refusal with its evidence.** Mapping the lane axis by occupied rank collapses
+  **zero** lanes on every plan in the catalogue — structurally, because `packLanes`
+  (`packages/layout/src/pack-lanes.ts:78-84`) opens a lane only when none is free, so a packer
+  cannot leave an empty one. It is not universally inert (an import whose ADR-0069 phase 3 failed,
+  or a plan emptied by deletion), and the refusal is not widened past what was measured. The real
+  term is the **day** axis: the box is 9.5 % inked, **every** one of the 120 rows carries ink, bars
+  collide at 0.94 per inked pixel, and **99 % of bars floor to 1 px** at 0.0456 px/day, so the
+  minimap at scale is a dust field and that is a faithful rendering. **D2** gives ADR-0100 D5 the
+  rule it was missing — the data date outranks texture and does **not** outrank plan data, since a
+  mark placed above the whole bar ladder does not win a pixel, it removes an activity class from the
+  picture (76 milestones). **D3** is the panel border, and WCAG 1.4.11 applies **because the panel is
+  a focusable keyboard-operable widget, not because its two grounds match** — the M8 accessibility
+  review's correction, kept because the wrong reason would license gating every same-background
+  container. The colour remedies were measured and rejected first: the old application's border was
+  **navy** (`#14213D`), which is 1.00:1 against our viewport frame, because that app paired navy with
+  an amber viewport band where ours is dark. **D4** is the general form — ADR-0058 says verify the
+  claim and ADR-0081 extends it to a plan's tasks; this extends it to a plan's **remedies**, since an
+  approved action is a claim that it will work and approval does not make it one. Third instance in
+  one epic. Amends ADR-0100 D5 and ADR-0141. **The CPM engine is not imported and no migration runs.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

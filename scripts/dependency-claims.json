@@ -1140,6 +1140,17 @@
       "lines": "252-258",
       "anchor": "await (0, hooks_1.callModuleDestroyHook)(module);",
       "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "axe.js:33491-33496",
+      "package": "axe-core",
+      "path": "axe.js",
+      "lines": "33491-33496",
+      "anchor": "id: 'target-size',",
+      "citedBy": [
+        "docs/specs/staff-console-design/feature-spec.md",
+        "docs/specs/staff-console-design/implementation-plan.md"
+      ]
     }
   ]
 }

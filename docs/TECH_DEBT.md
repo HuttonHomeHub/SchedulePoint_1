@@ -10152,7 +10152,20 @@ closed` immediately precedes every failure. This row meanwhile was wrong twice o
 
 ### 319. The staff console has never been photographed, and the harness cannot reach it
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (ADR-0140 M3) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-13 (ADR-0140 M3) · **Size:** M · **Owner:** web
+
+**This row's headline was wrong and the correction makes the defect worse, not smaller** (found
+2026-09-14 by the staff-console design spec, which re-derived the claim rather than inheriting it).
+`shoot.mjs:570` **does** carry a `staff` shot, with its own branch at `:845-867`, and the file holds
+**42** shots rather than 25 — a figure its own docblock also states wrongly. So this was never an
+omission from the list: it is a shot that **cannot be satisfied**. `onboard()` mints
+`shoot-${Date.now()}-${width}@example.com` against a `STAFF_EMAILS` that must be set before the API
+boots, and nothing verifies the address. A reader auditing the shot list for coverage of `/staff`
+**finds it there**, which is the failure mode this register exists to remove — the instrument
+reports something, so nobody looks.
+
+The original text follows, because the reasoning about WHY the route is hard to reach is unaffected
+and is the part a fix needs.
 
 `apps/web/scripts/shoot.mjs` has 25 shots and **not one of them is `/staff`**. Every panel on that
 screen — mail health, retention, CSP violations, installation, accounts, staff activity, the
