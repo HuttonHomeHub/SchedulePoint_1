@@ -238,6 +238,18 @@ keep `main` releasable.
   survives a critical bar** of its own colour, and **temporal tiers** admitted by measured pitch in
   the box rather than by tier name, so a long programme stays quiet instead of striped. Eight
   distinct marks where there were five.
+
+- **The overview stops hiding milestones, and its panel has an edge again** (ADR-0142, amending
+  ADR-0100 D5 and ADR-0141). The data-date vertical was the last thing drawn, so any zero-duration
+  activity standing on it was painted out — 76 milestones on the measured plan, and unreportable,
+  because a bar that is never drawn looks exactly like one that does not exist. It now draws above
+  the tiers and beneath the bars: ahead of texture, not ahead of the plan's own work. The panel's
+  border becomes the diagram's primary, because the panel's ground is the same token as the diagram
+  it floats over and the grey measured **1.17:1** against it — no separation at all. The third
+  approved change, remapping the lane axis, was **measured and not built**: it collapses zero lanes
+  on every plan, structurally, because a packer never leaves an empty lane. What compresses that
+  picture is the day axis — 99% of bars floor to 1px — and the numbers are on record so the next
+  reader starts from them.
 - **The plan workspace is a workstation, not a page** (ADR-0099, "Graphite"). A ground-up redesign
   of the surface the product exists to be. The shell becomes a CSS grid — a leading-edge tool rail,
   a stage, and a trailing context drawer — so the command band spans the drawer and opening it
