@@ -10237,3 +10237,48 @@ also the slowest time to do it. Worth checking whether `inputs` on the two tasks
 instrument. **Do not close this by "remembering to use --force"** — that is the vigilance ADR-0058
 exists to replace, and the person who needs to remember is the person who does not know the cache is
 stale.
+
+### 322. `check:claims` cannot discriminate a non-unique anchor, so a relocated citation can silently point at the wrong occurrence
+
+**Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (the better-auth 1.7.1 → 1.7.4 bump) · **Size:** M · **Owner:** repo
+
+`scripts/check-claims.mjs` asks whether a claim's `anchor` string appears **somewhere inside** the
+cited `lines` range. That is exactly right for an anchor that occurs once in its file, and it cannot
+answer the question at all for one that occurs more than once: every occurrence satisfies it.
+
+**Measured 2026-09-14 across the whole register: 13 of 112 claims (12%) have a non-unique anchor**,
+in seven packages — `better-auth` (3, one of them **five** occurrences),
+`@tanstack/react-router` (3), `@tanstack/router-core` (2), `@nestjs/core` (2),
+`@better-fetch/fetch` (1), `@tanstack/history` (1), `react-hook-form` (1).
+
+**The failure is not hypothetical; it was met while bumping `better-auth`.**
+`email-verification.mjs:285-286` anchors on
+`if (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);`, which occurs five times in
+that file (1.7.1: 207/236/277/**286**/315). The claim names the **fourth**, inside
+`if (user.user.emailVerified)`. An automated first-match relocation proposes `209-210` at 1.7.4 —
+a **different branch of the same function that reads identically** — and `check:claims` was run
+against both `209-210` and the correct `287-288` and **passed on each**. The citation is read by
+`apps/web/src/routes/verify-email.tsx`, so a wrong one would misdescribe which branch the
+verification screen is reasoning about, permanently and greenly.
+
+It was caught only because the anchors were checked for uniqueness by hand before relocating, and
+the two ambiguous ones were then resolved by reading both versions. Nothing in the repository does
+that, so the next person bumping a cited package has no reason to look.
+
+**All 13 are currently CORRECT — they are unprotected, not wrong.** Spot-checked 2026-09-14: each
+cited range today contains exactly one occurrence of its anchor (for example
+`nest-application-context.js:119-125` anchors on a line occurring at 122 and 202, and 122 is the
+one inside the range). The defect is that nothing would report it if a future bump moved the range
+onto a different occurrence. Do not read this row as a claim that the register holds 13 wrong
+citations.
+
+**Why this is not fixed in the pull request that found it:** `check-claims.mjs` is a shared gate,
+and ADR-0105 makes a shared-gate change a spec trigger — crossing one mid-flight means the work
+stops and the spec is written. Folding it into a dependency bump is precisely what that rule exists
+to prevent.
+
+**Candidate fix, to be specced rather than assumed:** have the gate count occurrences and fail (or
+warn) when an anchor is not unique in its file, which would force the 13 existing claims onto
+anchors that are. The obvious cheaper variant — keep the range check and merely warn — is worth
+costing against it, because a warning in a gate nobody reads is the ADR-0058 failure. Either way
+the remedy touches every one of those 13 claims, which is why this is sized M rather than S.
