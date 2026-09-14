@@ -16,6 +16,7 @@ import {
   useStaffActivity,
   useStaffInstallation,
 } from '@/features/staff/api/staff-panels';
+import { CHECK_SECTION_ID, deriveConsoleStatus } from '@/features/staff/model/console-status';
 import {
   lastRunSentence,
   oldestSentence,
@@ -26,6 +27,7 @@ import {
 } from '@/features/staff/model/retention-copy';
 import { DiagnosticsPanel } from '@/features/staff/ui/diagnostics-panel';
 import { Panel } from '@/features/staff/ui/panel';
+import { StaffStatusSummary } from '@/features/staff/ui/status-summary';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 
 /**
@@ -47,6 +49,33 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
  */
 export function StaffConsoleScreen(): React.ReactElement {
   const identity = useStaffIdentity();
+  /**
+   * The four queries the summary reads, called HERE and passed down as facts.
+   *
+   * **This adds no request.** Each key is the one its panel already uses, so TanStack dedupes them
+   * — which is the same mechanism that already lets the Mail and Retention halves share one
+   * response. The one that needed checking rather than assuming is `useStaffAccounts`, which is
+   * keyed by its cursor: called with none here, it is the identical key the panel starts on, and
+   * when a reader presses *Show older* the panel moves to a new key while this one stays cached and
+   * does not refetch. Two requests either way.
+   *
+   * It matters because reading a staff panel is an audited act — a second request is a second
+   * `staff.panel_read` row on every page load, forever, in the table that refuses `DELETE`.
+   */
+  const health = useStaffHealth();
+  const security = useStaffCspReports();
+  const accounts = useStaffAccounts();
+  const installation = useStaffInstallation();
+  const status = deriveConsoleStatus({
+    health: { isPending: health.isPending, isError: health.isError, data: health.data },
+    security: { isPending: security.isPending, isError: security.isError, data: security.data },
+    accounts: { isPending: accounts.isPending, isError: accounts.isError, data: accounts.data },
+    installation: {
+      isPending: installation.isPending,
+      isError: installation.isError,
+      data: installation.data,
+    },
+  });
   // Both landable states name themselves. `/staff` is reached only by typing the address — there is
   // deliberately no link to it — so the title is the first thing a screen reader announces on
   // arrival, and this was the one sibling of the authenticated shell that skipped the hook every
@@ -128,6 +157,16 @@ export function StaffConsoleScreen(): React.ReactElement {
             member. Anything you reach in the app itself, you reach with your ordinary membership.
           </Alert>
         )}
+        {/* **Zone 1: never columned.** A status answer must not sit beside anything — placed in a
+            column it would be one of two things a reader's eye has to choose between, on the screen
+            whose entire job is to answer one question before anything else is read.
+
+            The derivation takes the page's OWN query results as arguments and issues nothing.
+            Reading a staff panel is an audited act, so a summary that fetched for itself would
+            write a second `staff.panel_read` row on every page load — and `useStaffAccounts` is
+            keyed by its cursor, so a summary calling it with no cursor while the panel below holds
+            one after *Show older* would be a different query rather than a deduped one. */}
+        <StaffStatusSummary status={status} />
         {/* **The order is priority, and the spans are content width demand — two separate
             decisions that a single-column stack conflated.**
 
@@ -493,7 +532,7 @@ function MailAndRetentionPanel(): React.ReactElement {
         ].filter((clause): clause is string => clause !== null);
 
   return (
-    <Panel title="Mail and retention" status={clauses.join(' ')}>
+    <Panel title="Mail and retention" id={CHECK_SECTION_ID.mail} status={clauses.join(' ')}>
       <MailSection />
       <RetentionSection />
     </Panel>
@@ -540,6 +579,7 @@ function SecurityPanel(): React.ReactElement {
   return (
     <Panel
       title="Content-Security-Policy"
+      id={CHECK_SECTION_ID.security}
       status={
         reports.isPending
           ? ''
@@ -577,6 +617,7 @@ function InstallationPanel(): React.ReactElement {
   return (
     <Panel
       title="Installation"
+      id={CHECK_SECTION_ID.alerting}
       status={
         installation.isPending
           ? ''
@@ -641,6 +682,7 @@ function AccountsPanel(): React.ReactElement {
   return (
     <Panel
       title="Unverified accounts"
+      id={CHECK_SECTION_ID.accounts}
       status={
         accounts.isPending
           ? ''

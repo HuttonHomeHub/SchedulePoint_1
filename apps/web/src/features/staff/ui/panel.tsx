@@ -29,8 +29,11 @@ export function Panel({
   title,
   status,
   children,
+  id,
 }: {
   title: string;
+  /** The section's anchor id — the target of the status summary's "jump to" link (spec §8.4). */
+  id?: string;
   /**
    * What this panel says once its query settles, announced politely — WCAG 4.1.3.
    *
@@ -44,7 +47,9 @@ export function Panel({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <SectionCard title={title}>
+    // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as omitting
+    // the prop — spread it conditionally rather than widening `SectionCardProps` to accept one.
+    <SectionCard title={title} {...(id === undefined ? {} : { id })}>
       <div className="space-y-4">
         <p aria-live="polite" className="sr-only">
           {status}

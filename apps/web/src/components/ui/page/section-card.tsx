@@ -14,6 +14,18 @@ export interface SectionCardProps {
   className?: string;
   /** Omits the card's own padding, for a section whose content is a full-bleed table. */
   flush?: boolean;
+  /**
+   * The section's `id`, making it an anchor target and a place focus can be sent.
+   *
+   * **Taken deliberately rather than stumbled into** (staff-console design, spec §8.4). A
+   * `<section aria-labelledby>` is a landmark and is NOT focusable, and this interface accepted no
+   * `id` and no rest spread — so a page wanting to offer "jump to the section that answers this"
+   * could not, and the obvious workaround is a script-driven scroll, which gives a keyboard user
+   * nothing. Setting `id` also sets `tabIndex={-1}`, because an anchor that moves the viewport
+   * without moving focus leaves a keyboard reader exactly where they were, looking at something
+   * else. `-1` keeps it out of the tab sequence: it is a destination, not a stop.
+   */
+  id?: string;
 }
 
 /**
@@ -46,10 +58,16 @@ export function SectionCard({
   children,
   className,
   flush,
+  id,
 }: SectionCardProps): React.ReactElement {
   const titleId = useId();
   return (
-    <Card as="section" aria-labelledby={titleId} className={className}>
+    <Card
+      as="section"
+      aria-labelledby={titleId}
+      className={cn('scroll-mt-6 focus-visible:outline-none', className)}
+      {...(id === undefined ? {} : { id, tabIndex: -1 })}
+    >
       <CardHeader className={cn('flex items-start justify-between gap-4', flush && 'pb-4')}>
         <div className="min-w-0">
           <CardTitle id={titleId} level={2} className="text-base">

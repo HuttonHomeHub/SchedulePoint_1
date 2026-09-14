@@ -234,7 +234,15 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // trail — and Playwright's strict mode failed it. Which is the panel working: the console records
   // that staff read it, and the reader's own address is what it records.
   await expect(staff.getByText(`Signed in as ${STAFF_EMAIL}.`)).toBeVisible();
-  await expect(staff.getByRole('heading', { name: 'Mail' })).toBeVisible();
+  // **`exact` since the M2 merge, and both halves are asserted.** Mail and retention are one card
+  // now, so `name: 'Mail'` matched the card's own `<h2>Mail and retention</h2>` as well as the
+  // subsection's `<h3>Mail</h3>` — Playwright's default name matching is a case-insensitive
+  // substring. The card's title and BOTH subsection headings are pinned, because keeping retention
+  // reachable by heading navigation was the accepted cost of merging it: folded into mail's prose
+  // it would have left the heading list entirely.
+  await expect(staff.getByRole('heading', { name: 'Mail and retention' })).toBeVisible();
+  await expect(staff.getByRole('heading', { name: 'Mail', exact: true })).toBeVisible();
+  await expect(staff.getByRole('heading', { name: 'Retention', exact: true })).toBeVisible();
   await expect(staff.getByRole('heading', { name: 'Content-Security-Policy' })).toBeVisible();
   // **Only that the panel renders — not which state it is in.** The empty-state caveat ("not yet
   // proof the policy is clean") is pinned by `staff.test.tsx`, where the payload is controlled.
@@ -250,7 +258,46 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // is reading the same in-memory `RetentionStatusStore` the sweep writes. `OperationalModule` is
   // global and exports the store; providing a second copy inside `StaffModule` would compile,
   // inject, and report a working sweep as one that had never run, forever, with nothing failing.
-  await expect(staff.getByRole('heading', { name: 'Retention' })).toBeVisible();
+  // ---------------------------------------------------- FC-1a: the summary comes FIRST, in the DOM
+  //
+  // **"The first viewport" is a sighted-user concept.** It is the right criterion for the visual
+  // redesign and it is NOT an accessibility guarantee, so it cannot stand in for one: somebody
+  // navigating linearly, by heading, or by "read all" has no fold. The AT-equivalent is that the
+  // summary precedes every section in DOM ORDER and links to each condition it reports — asserted
+  // here in DOM terms, independent of pixels, and at the two-column breakpoint, because the
+  // pre-column unit assertions say nothing about the grid (`feature-spec.md` §8.11).
+  //
+  // This is also what forbids CSS `order` and a dense auto-flow in `PageGrid`: a two-column layout
+  // satisfies WCAG 1.3.2 only while the DOM sequence IS the reading sequence, and the natural
+  // implementation of "two columns" breaks that silently, because nothing looks wrong.
+  const sectionNames = await staff
+    .locator('section[aria-labelledby]')
+    .evaluateAll((nodes) =>
+      nodes.map((node) => node.querySelector('h2')?.textContent?.trim() ?? '(unnamed)'),
+    );
+  expect(
+    sectionNames.length,
+    'the sweep found no sections — every check below is vacuous',
+  ).toBeGreaterThan(4);
+  expect(sectionNames[0], 'the status summary must be the first section in the DOM').toBe('Status');
+
+  // Every condition the summary reports carries a link to the section that answers it — and the
+  // whole row is the target (WCAG 2.5.8), which is the shape ADR-0090 and ADR-0110 both record
+  // shipping wrong as a caret nobody could hit.
+  const summary = staff.getByRole('region', { name: 'Status' });
+  const summaryLinks = summary.getByRole('link');
+  expect(await summaryLinks.count(), 'the summary reports no checks').toBeGreaterThan(0);
+  for (const href of await summaryLinks.evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('href') ?? ''),
+  )) {
+    expect(href).toMatch(/^#staff-section-/);
+    // The destination exists and can receive focus — an anchor that moves the viewport without
+    // moving focus leaves a keyboard reader where they were, looking at something else.
+    const target = staff.locator(`${href}`);
+    await expect(target).toHaveAttribute('tabindex', '-1');
+  }
+
+  await expect(staff.getByRole('heading', { name: 'Retention', exact: true })).toBeVisible();
   // Scoped to the section, never the document — the ADR-0073 C2.5 finding, where a document-scoped
   // assertion passed on the page's prose alone and proved nothing about the table.
   const retention = staff.getByRole('region', { name: /retention by table/i });
