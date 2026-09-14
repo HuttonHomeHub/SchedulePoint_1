@@ -842,3 +842,97 @@ derived at 200 px; the answer buys nothing the epic's other milestones have not 
 The drag affordance was cursor-only, and that item **named the remedy**: _"corner ticks or a
 faint fill are the shape."_ First-contact feedback arrived, the fill is the fill it named, and the
 rectangle now reads as an object without hover and on touch.
+
+## 14. M5 — the gate pass
+
+Four specialists over the combined M1–M4 diff: accessibility, component, ux, frontend
+performance. **`database-architect` was not engaged, and that is a decision rather than an
+omission** — there is no model, column, index, constraint or migration in this epic, confirmed
+against the diff.
+
+**Performance passed with nothing blocking**, having re-derived the epic's own numbers from the
+shipped code rather than trusting §12. Two results are worth keeping:
+
+- The `calendarBoundaries` day-walk M3 added to each rebuild was **measured**, not reasoned about:
+  **0.024 ms p95 at 4,385 days**, 0.034 at a 20-year span, 0.159 at an absurd 100-year one — under
+  2 % of the rebuild baseline. The month-jump alternative is declined on those numbers plus the
+  one-date-walk rule.
+- **It found the M0-T5 harness is now stale**: its palette predates M3, so `gridMinor`/`gridYear`
+  arrive `undefined` and Canvas 2D silently discards them — ADR-0121's own defect, in my
+  instrument. §12's figure is a correct **pre-M3** baseline; the corrected re-run with both new
+  passes firing is **12.8–15.5 ms p95**, overlapping §12 and inside §8.4's bar.
+
+### 14.1 The finding that matters most, and it is mine
+
+The component review proved **by mutation** that M2's Today-halo test was **vacuous**: `mount()`
+passes no `todayDay`, so the component's own `todayDay = null` default applied, the marker never
+rendered, and the early-return guard took every run. Changing the marker's background to `red`
+left it passing.
+
+**The guard was written to be careful and was the defect.** Its comment was right about the hazard
+it named — a bare `getByTestId` would fail for a reason that is not the test's subject — and wrong
+that the hazard applied: the fixture does not decide whether today is in span, the **prop** does,
+and the file's own convention (`mount({ todayDay: 20 })`) was already a few cases below.
+
+It is the exact shape §13.1 records catching in M1's `it.each`, **recurring one milestone later,
+in the sibling file, inside the epic that documented the pattern**. Fixed and re-verified red.
+
+### 14.2 The accessibility review's headline is disproved; its three subsidiary findings stand
+
+It blocked on WCAG 1.4.1, arguing the criticality ladder is **hue-only** on every real plan — the
+fringe fires on neither measured plan, near-critical has no fringe, so a third state was added
+with no non-hue channel, into the amber/red pair CVD readers resolve worst.
+
+**The premise is wrong, and the numbers it cites as evidence are the evidence against it.**
+Measured relative luminance: **0.2152 / 0.1234 / 0.0626** — a monotone ladder, each step roughly a
+halving. A luminance ratio **is** a lightness measure, so a hue-only ladder at equal lightness
+would read ~1.00:1; these read 2.36 / 1.54 / 1.53 against the product's 1.5:1 floor. This is
+ADR-0102's own work, which separated these on lightness _because_ they had previously "differed in
+hue and almost nothing else" at 1.23:1.
+
+**Three subsidiary findings were right and are fixed:**
+
+1. **The plan's M2-T2 step 3** ("replace the row-height-gated fringe with a fill-level lightness
+   separation") **was specified and not built** — correct, and the reason is that the fills already
+   have one. Recorded as ADR-0141 D4: a **plan remedy that had gone stale**, written before
+   ADR-0102's ladder was checked, which is §19's rule applied to a fix rather than to a problem.
+2. **The ADR was never filed.** The spec's §4.9 says plainly that ADR-0100 is Accepted, that ADRs
+   are immutable, and that D5 must be amended by a **new** decision. M3 amended D5 **in place**.
+   Reverted, and filed as **ADR-0141** — the rule lost to convenience in the one milestone whose
+   own spec warned against exactly it.
+3. **`MINIMAP_GROUNDS` omitted `--warning`**, which the Today marker and the frame can both now
+   cross. A sweep that does not contain the ground a mark crosses is green for not having looked,
+   which is this file's own recorded failure mode. Widened.
+
+And **the docblock that invited the misreading is corrected**: `MinimapPalette.outline` called the
+fringe "the 1.4.1 answer". It is a **second** lightness cue on tall rows, not the thing criticality
+rests on, and the reviewer read it exactly as written.
+
+### 14.3 The UX review's sharpest finding: the demonstration shot cannot show M1's fix
+
+It pixel-sampled rather than eyeballing, and proved congruence arithmetically: **636 inked frame
+pixels is exactly the perimeter of a 200×120 box**. So in every screenshot this epic took, the
+viewport rectangle covers the whole picture — and a fill that covers everything cannot read as a
+region. It uniformly darkens the ground, which is the same "delimits everything, says nothing"
+failure M1 exists to fix, one property along.
+
+§9.6 anticipated the congruence and framed it as a bound on the _worst case_; it did not notice
+that this made the epic's only visual evidence the one state where its rank-1 fix is invisible.
+
+**Taken:** `apps/web/.screenshots/m5-fill-in-use.png`, zoomed so the rectangle measures
+**78 × 18 px inside the 200 × 120 box** — the state a planner is in whenever they are not looking
+at the whole plan, and the one a sign-off should judge.
+
+### 14.4 Recorded rather than acted on
+
+- **The UX review's second blocking item**: §10.4 (lane compression) must go back to the product
+  owner explicitly rather than be shelved. It has, twice, and it is put again with this pass. The
+  review's judgement is that it is **the dominant remaining term** for any plan with real WBS
+  structure, which is the norm in this domain.
+- **Panel chrome challenged, fairly**: §13.2's "no change" is a self-assessment by the person who
+  built the picture fix, and the old application's minimap border was **primary-coloured** where
+  ours is neutral. Left as it is, with the challenge recorded, because the alternative is changing
+  a shipped surface on an eye rather than a measurement — a live suggestion, not a closed question.
+- **The near-critical margin is thin** — 1.53:1 against a 1.5 floor — and will be the first thing a
+  palette nudge breaks. That is the gate working, named here so the failure is legible when it
+  comes.

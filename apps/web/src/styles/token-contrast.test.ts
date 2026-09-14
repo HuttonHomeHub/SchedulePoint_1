@@ -359,6 +359,11 @@ const MINIMAP_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
   ['the minimap ground', '--canvas'],
   ['non-critical bar ink', '--primary'],
   ['critical bar ink', '--destructive'],
+  // The THIRD bar ink, added at minimap-visual M2. The M5 accessibility review caught its
+  // absence, and the reason it matters is this file's own recorded failure mode: a sweep that
+  // does not contain the ground a mark actually crosses is green for not having looked. The
+  // Today marker and the viewport frame both cross near-critical bars now.
+  ['near-critical bar ink', '--warning'],
 ];
 
 describe('the minimap rectangle frame is perceivable on everything it crosses', () => {

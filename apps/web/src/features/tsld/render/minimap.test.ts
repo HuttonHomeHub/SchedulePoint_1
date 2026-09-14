@@ -267,6 +267,118 @@ describe('the near-critical bar state (M2)', () => {
     const barPassRects = fills.filter((f) => f.style === PALETTE.bar).length;
     expect(barPassRects, 'exactly one ordinary bar is drawn in the ordinary ink').toBe(1);
   });
+
+  /**
+   * **The ladder's ORDER, which the case above does not assert** (M5 component review).
+   *
+   * ADR-0100 D5 makes draw order the decimation policy, so on a 1px merge the most urgent state
+   * must be the later draw. The pre-existing critical-vs-ordinary case proves that by colliding
+   * two bars on one pixel; near-critical shipped at M2 with no equivalent, so inverting its pass
+   * to run before the ordinary one would have been caught by nothing.
+   */
+  it('paints ordinary → near-critical → critical, so the more urgent survives a merge', () => {
+    const fills: string[] = [];
+    let current = '';
+    const ctx = {
+      setTransform: () => {},
+      clearRect: () => {},
+      fillRect: () => {
+        fills.push(current);
+      },
+      strokeRect: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      fill: () => {},
+      setLineDash: () => {},
+      fillText: () => {},
+      measureText: () => ({ width: 0 }) as TextMetrics,
+      strokeStyle: '',
+      lineWidth: 1,
+      globalAlpha: 1,
+      font: '',
+      textBaseline: 'middle' as CanvasTextBaseline,
+      textAlign: 'left' as CanvasTextAlign,
+      get fillStyle() {
+        return current;
+      },
+      set fillStyle(v: string | CanvasGradient | CanvasPattern) {
+        current = typeof v === 'string' ? v : '[object]';
+      },
+    };
+    // All three on the SAME pixel and lane, so the merge is real rather than incidental.
+    const shared = { earlyStart: '2026-06-01', earlyFinish: '2031-06-01', laneIndex: 0 } as const;
+    buildMinimapBitmap(
+      ctx,
+      [
+        activity({ id: 'crit', ...shared, isCritical: true }),
+        activity({ id: 'near', ...shared, isNearCritical: true }),
+        activity({ id: 'norm', ...shared }),
+        activity({
+          id: 'anchor',
+          earlyStart: '2026-01-01',
+          earlyFinish: '2026-01-02',
+          laneIndex: 1,
+        }),
+      ],
+      DATA_DATE,
+      BOX,
+      PALETTE,
+    );
+    expect(fills.lastIndexOf(PALETTE.bar)).toBeLessThan(fills.indexOf(PALETTE.nearCritical));
+    expect(fills.lastIndexOf(PALETTE.nearCritical)).toBeLessThan(fills.indexOf(PALETTE.critical));
+  });
+
+  /**
+   * The tie-break for an activity flagged BOTH, pinned rather than left implicit. The engine
+   * cannot produce one (`isNearCritical` is computed as `!isCritical && …`), and the types here
+   * are two independent booleans that permit it — so the resolution is a property of draw order
+   * rather than of the data, and it matches the scene's own precedence (`paint.ts`: critical is
+   * tested first). Asserted so a later reordering cannot silently invert it.
+   */
+  it('critical wins over near-critical when an activity carries both flags', () => {
+    const fills: string[] = [];
+    let current = '';
+    const ctx = {
+      setTransform: () => {},
+      clearRect: () => {},
+      fillRect: () => {
+        fills.push(current);
+      },
+      strokeRect: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      fill: () => {},
+      setLineDash: () => {},
+      fillText: () => {},
+      measureText: () => ({ width: 0 }) as TextMetrics,
+      strokeStyle: '',
+      lineWidth: 1,
+      globalAlpha: 1,
+      font: '',
+      textBaseline: 'middle' as CanvasTextBaseline,
+      textAlign: 'left' as CanvasTextAlign,
+      get fillStyle() {
+        return current;
+      },
+      set fillStyle(v: string | CanvasGradient | CanvasPattern) {
+        current = typeof v === 'string' ? v : '[object]';
+      },
+    };
+    buildMinimapBitmap(
+      ctx,
+      [activity({ id: 'both', isCritical: true, isNearCritical: true, laneIndex: 0 })],
+      DATA_DATE,
+      BOX,
+      PALETTE,
+    );
+    expect(fills, 'painted critical').toContain(PALETTE.critical);
+    expect(fills, 'never painted near-critical').not.toContain(PALETTE.nearCritical);
+    expect(fills, 'never painted ordinary').not.toContain(PALETTE.bar);
+  });
 });
 
 describe('the temporal tier ladder (M3)', () => {

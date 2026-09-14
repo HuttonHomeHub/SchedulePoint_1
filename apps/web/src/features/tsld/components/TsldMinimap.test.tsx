@@ -72,13 +72,24 @@ describe('TsldMinimap', () => {
     expect(rect.style.outline).toContain('var(--color-canvas-minimap-frame-halo)');
   });
 
+  /**
+   * **This case was VACUOUS as shipped at M2, and the M5 component review proved it by
+   * mutation** — changing the marker's `background` to `red` left it passing.
+   *
+   * The cause was a guard written to be careful: `mount()` passes no `todayDay`, so the
+   * component's own `todayDay = null` default applied, `todayX` resolved to `null`, the marker
+   * never rendered, and `if (today === null) return` took every run. The comment explaining the
+   * guard was correct about the hazard it named and wrong that the hazard applied — the fixture
+   * does not control whether today is in span, the **prop** does, and the file's own convention
+   * (`mount({ todayDay: 20 })`) was already sitting a few cases below.
+   *
+   * It is the exact shape M4 caught in M1's `it.each` (`m0-measurement.md` §13.1): a test that
+   * reads as coverage and asserts nothing — recurring one milestone later, in the epic that
+   * documented the pattern, in the sibling file.
+   */
   it('the Today marker carries a halo, so it survives a bar of its own colour (M2)', () => {
-    mount();
-    const today = screen.queryByTestId('tsld-minimap-today');
-    // Guarded rather than asserted present: the marker renders only when today falls inside the
-    // plan's span, and the default fixture's span is a property of the fixture, not of this rule.
-    // A bare `getByTestId` here would make this case fail for a reason that is not its subject.
-    if (today === null) return;
+    mount({ todayDay: 20 });
+    const today = screen.getByTestId('tsld-minimap-today');
     expect(today.style.background).toBe('var(--destructive)');
     expect(today.style.boxShadow).toContain('var(--color-canvas-minimap-frame-halo)');
   });

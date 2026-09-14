@@ -91,9 +91,27 @@ export interface MinimapPalette {
    * consumer here.
    */
   readonly nearCritical: string;
-  /** The scene's foreground `outline` — the critical FRINGE (WCAG 1.4.1, M4 a11y gate):
-   * hue is not the only channel separating critical from non-critical wherever a lane row
-   * is tall enough to carry it (see {@link CRITICAL_FRINGE_MIN_H}). */
+  /**
+   * The scene's foreground `outline` — the critical FRINGE.
+   *
+   * **It is a SECOND lightness cue, not "the 1.4.1 answer", and the difference matters.** This
+   * docblock previously said the latter, and the M5 accessibility review read it exactly as
+   * written: that criticality depends on the fringe, that the fringe fires on neither measured
+   * plan, and that the minimap is therefore hue-only. The first premise is the one that is
+   * wrong, and it was wrong here rather than in the reviewer.
+   *
+   * The three bar inks are already separated on **lightness** — measured relative luminance
+   * 0.2152 (`--primary`) / 0.1234 (`--warning`) / 0.0626 (`--destructive`), a monotone ladder
+   * whose steps are roughly a halving, and which `CRITICALITY_PAIRS` gates at ≥ 1.5:1. That is
+   * ADR-0102's own work: it separated these on lightness precisely because they had differed
+   * "in hue and almost nothing else" at 1.23:1. A luminance ratio IS a lightness measure, so a
+   * hue-only ladder would read ~1.00:1 and this one reads 2.36 / 1.54 / 1.53.
+   *
+   * What the fringe adds on top is a second cue wherever a lane row can carry it (see
+   * {@link CRITICAL_FRINGE_MIN_H}) — belt-and-braces on tall rows, absent on the plans this
+   * epic measured (`pxPerLane` 2.93 at 540 activities, 0.674 at 2,160), and not the thing
+   * criticality rests on either way.
+   */
   readonly outline: string;
   /** The data-date vertical — the scene's `dataDate`. */
   readonly dataDate: string;
@@ -366,13 +384,6 @@ export function buildMinimapBitmap(
   for (const r of rects) {
     if (!r.critical && !r.nearCritical) ctx.fillRect(r.x, r.y, r.w, r.h);
   }
-  // Near-critical, between ordinary and critical — draw order IS the decimation policy (ADR-0100
-  // D5), so the ladder is painted in ascending urgency and the most urgent survives the 1px merge.
-  //
-  // **Guarded, so a plan with none pays nothing.** Without the guard every existing budget
-  // assertion would move from 4 style writes to 5 for a pass that draws zero rects, which is a
-  // gate loosened to accommodate a feature rather than a cost the feature actually has. The
-  // `fringed` guard immediately below is the same shape and the precedent.
   const anyNearCritical = rects.some((r) => r.nearCritical && !r.critical);
   if (anyNearCritical) {
     ctx.fillStyle = palette.nearCritical;
@@ -380,6 +391,13 @@ export function buildMinimapBitmap(
       if (r.nearCritical && !r.critical) ctx.fillRect(r.x, r.y, r.w, r.h);
     }
   }
+  // Near-critical, between ordinary and critical — draw order IS the decimation policy (ADR-0100
+  // D5), so the ladder is painted in ascending urgency and the most urgent survives the 1px merge.
+  //
+  // **Guarded, so a plan with none pays nothing.** Without the guard every existing budget
+  // assertion would move from 4 style writes to 5 for a pass that draws zero rects, which is a
+  // gate loosened to accommodate a feature rather than a cost the feature actually has. The
+  // `fringed` guard immediately below is the same shape and the precedent.
   // The critical fringe (WCAG 1.4.1): where the row can carry it, a critical bar is a
   // foreground-luminance rect with the critical fill inset — lightness, not hue alone.
   // Still fillRect-only and still batched (one fillStyle write per pass), so the budget

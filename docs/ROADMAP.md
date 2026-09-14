@@ -226,6 +226,18 @@ keep `main` releasable.
   condition was committed before the prototype and passed on both fixtures and again against
   the shipped code — and the need itself was re-derived rather than quoted: at 1646 the working
   presets frame 0.3–8.6% of a real plan's span, which is the problem the panel answers.
+
+- **The overview looks like a programme** (ADR-0141, amending ADR-0100 D5/D7/D9). The product
+  owner used the shipped minimap and said it was _"extremely basic in appearance"_ — it _"doesn't
+  pop"_. Measured, that was not taste: the picture drew five marks in three colours, two pairs of
+  which were the **same token value**, and its ground was the diagram's own, so the panel measured
+  **1.03:1** against the canvas behind it and read as a hole rather than a picture. It now carries
+  a **filled** viewport indicator (a border says where a region ends; a fill says the region is a
+  thing), the diagram's **third** bar state — near-critical had no minimap mark at all, so an
+  activity you are being warned about looked exactly like one you are not — a **Today marker that
+  survives a critical bar** of its own colour, and **temporal tiers** admitted by measured pitch in
+  the box rather than by tier name, so a long programme stays quiet instead of striped. Eight
+  distinct marks where there were five.
 - **The plan workspace is a workstation, not a page** (ADR-0099, "Graphite"). A ground-up redesign
   of the surface the product exists to be. The shell becomes a CSS grid — a leading-edge tool rail,
   a stage, and a trailing context drawer — so the command band spans the drawer and opening it
