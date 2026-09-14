@@ -2,8 +2,9 @@ import { useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { PerformanceProbePanel } from '@/features/perf-probe/ui/performance-probe-panel';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
@@ -65,46 +66,76 @@ export function StaffConsoleScreen(): React.ReactElement {
   // the surface exists and is worth attacking.
   if (identity.isError || identity.data === null) {
     return (
-      <main className="mx-auto max-w-2xl p-6">
-        <h1 className="text-2xl font-semibold">Not found</h1>
-        <p className="text-muted-foreground mt-2">
-          There is nothing at this address.{' '}
-          <a className="underline" href="/">
-            Go to SchedulePoint
-          </a>
-          .
-        </p>
+      <main>
+        <PageContainer width="narrow">
+          <PageHeader
+            title="Not found"
+            description={
+              <>
+                There is nothing at this address.{' '}
+                <a className="underline" href="/">
+                  Go to SchedulePoint
+                </a>
+                .
+              </>
+            }
+          />
+        </PageContainer>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Staff console</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Signed in as {identity.data.email}. This console operates the installation — it cannot
-          reach any customer&rsquo;s clients, projects or plans.
-        </p>
+    <main>
+      <PageContainer width="narrow" className="space-y-6">
+        {/* `actions` carries the way back, and until now there was none. The authenticated branch
+            rendered a header with no link home while the NOT-FOUND branch above has one — so the
+            branch for people who cannot use this page had a way out and the branch for people who
+            can did not, and there is no app shell here to supply one. Nobody had noticed: not the
+            spec, not M0's pictures. `docs/UX_STANDARDS.md:122`, and spec §8.15. */}
+        <PageHeader
+          title="Staff console"
+          description={
+            <>
+              Signed in as {identity.data.email}. This console operates the installation — it cannot
+              reach any customer&rsquo;s clients, projects or plans.
+            </>
+          }
+          actions={
+            /* A plain `<a>`, not a router `<Link>`: `/staff` is outside the `_authed` shell and a
+               staff account need not be a member of anything, so the destination is the app's front
+               door rather than a route this one knows about. `buttonVariants` is the established way
+               to give a link a button's treatment (`InviteExitLinks.tsx:29`) — `Button` renders a
+               `<button>` and has no `asChild`. */
+            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/">
+              Back to SchedulePoint
+            </a>
+          }
+        />
         {/* ADR-0086 D4 permits dual-hatting rather than refusing it — refusing would lock the only
             staff member out on day one — and the compensation it named was that the console says
-            which hat is active. That was decided and never built; the UX review found it. */}
+            which hat is active. That was decided and never built; the UX review found it.
+
+            It is a SIBLING of `PageHeader` and deliberately not one of its `actions`: that slot
+            renders in a `flex shrink-0 items-center gap-2` (`page-header.tsx:60`), which is right
+            for a button and wrong for a full-width banner. The plan's "keep it exactly as it is"
+            was ambiguous about placement (spec §8.19). */}
         {identity.data.dualHatted && (
-          <Alert purpose="condition" tone="info" className="mt-3">
+          <Alert purpose="condition" tone="info">
             <strong className="font-medium">This account is also an organisation member.</strong>{' '}
             Staff-ness confers nothing inside any organisation, and nothing you do here is done as a
             member. Anything you reach in the app itself, you reach with your ordinary membership.
           </Alert>
         )}
-      </header>
-      <MailHealthPanel />
-      <PerformanceProbePanel />
-      <DiagnosticsPanel />
-      <RetentionPanel />
-      <SecurityPanel />
-      <InstallationPanel />
-      <AccountsPanel />
-      <ActivityPanel />
+        <MailHealthPanel />
+        <PerformanceProbePanel />
+        <DiagnosticsPanel />
+        <RetentionPanel />
+        <SecurityPanel />
+        <InstallationPanel />
+        <AccountsPanel />
+        <ActivityPanel />
+      </PageContainer>
     </main>
   );
 }

@@ -469,9 +469,18 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     // and (since M7) the block's own machine facts, spread warning and partial notice. This used to
     // read one id; `aria-describedby` is a space-separated LIST and now carries several, so a
     // single-id assertion looked like a product defect and was the harness being one version behind.
+    //
+    // **Named rather than positional, since the staff-console design epic's M1.** This read
+    // `getByRole('region').filter({ has: history }).first()`, which was unambiguous only while
+    // `DataTable`'s scroll container was the ONLY region containing this table. `Panel` now composes
+    // `SectionCard`, which renders a named `<section>` — also a region, also containing the table,
+    // and PRECEDING it in document order — so `.first()` returned the section, which carries no
+    // `aria-describedby`, and this assertion failed against a perfectly correct page. Predicted by
+    // the design review before the change and confirmed on the first run (spec §8.6). `.last()`
+    // would also work and is positional; the region is named by its caption (`data-table.tsx:225`),
+    // so naming it says which region is meant instead of relying on nesting order.
     const describedBy = await staff
-      .getByRole('region')
-      .filter({ has: history })
+      .getByRole('region', { name: SITTING_TABLE })
       .first()
       .getAttribute('aria-describedby');
     expect(describedBy, 'the table names what describes it').not.toBeNull();
