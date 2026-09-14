@@ -438,3 +438,124 @@ Per ADR-0128's method, written now rather than after the result is known:
 > changed call site rather than a changed millisecond. A gate that only measured milliseconds
 > could pass while the picture was rebuilt every frame — which is exactly what
 > `minimap-budget.test.ts`'s own docblock says it structurally cannot catch.
+
+## 9. The scale plan — M0-T2, and §4.10 row 2 firing
+
+### 9.1 The fixture, and what is not canonical about it
+
+A 2,160-activity scale plan seeded through the **public REST API** (`schedulepoint-seed --tier
+scale --activities 2000`, ADR-0066). Two departures are recorded rather than glossed:
+
+- **2,811 of roughly 3,200 links** — the seeder was killed by my own 50-minute timeout at 88 %
+  complete. The plan was recalculated and measured as it stands.
+- **Lanes were packed by calling the shipped `packLanes` from `@repo/layout` and writing
+  `lane_index` with one SQL statement**, not through Auto-arrange. The packing is therefore
+  exactly what the product computes — same function, the one Auto-arrange and the interchange
+  commit both call — and only the transport differs. Said out loud per ADR-0081's rule that a
+  harness names where it goes round the product. (Auto-arrange was tried first through the UI
+  and moved nothing; that is not diagnosed here and is **not** claimed as a defect.)
+
+### 9.2 M0-T2 — the spec's arithmetic holds
+
+Measured live off the recalculated plan:
+
+|                      | measured     | spec §3.3 (arithmetic) |
+| -------------------- | ------------ | ---------------------- |
+| span                 | **4,385 d**  | 4,125 d                |
+| month pitch @ 200 px | **1.39 px**  | 1.5 px                 |
+| quarter pitch        | **4.16 px**  | 4.4 px                 |
+| year pitch           | **16.66 px** | 17.7 px                |
+| lanes                | **178**      | 274                    |
+| px per lane          | **0.674**    | —                      |
+| recalculate          | 625 ms       | —                      |
+
+**The spec's table is confirmed to within ~8 %** and its conclusion is unchanged: at the
+M0-T3 floor of 6 px, month and quarter are refused and only the **year** tier is admitted.
+`pxPerLane` of 0.674 is far below `CRITICAL_FRINGE_MIN_H = 3`, so the 1.4.1 fringe **cannot**
+fire here — the spec's prediction for the large plan, now measured.
+
+### 9.3 §4.10 row 2 FIRES — and not in the shape the spec predicted
+
+The spec's row reads _"WBS summary bars dominate the picture"_ and anticipated ink. They
+dominate something worse: **the lane axis**.
+
+```
+lanes 0–8      1,989 activities   (92 % of the plan)
+lanes 9–177      171 activities   ~1 per lane
+```
+
+and by type, lanes 9–177 hold **151 WBS summaries**, 14 Level-of-Effort bars and 6 tasks.
+TASK's mean lane is **2.4**; WBS_SUMMARY's is **79.5**.
+
+The picture that produces, measured row by row over the 200×120 box:
+
+```
+rows 0–16     dense (200, 200, 149, …, 156 inked px)
+rows 18–108   exactly 2 inked pixels per row — and BOTH are chrome
+              (the Today line and the viewport rectangle's edge)
+rows 110–119  rising again to 182
+```
+
+**Only 18 of 120 rows carry 10 or more inked pixels.** 90 rows — three-quarters of the box —
+contain no bar at all. So 174 rollup bars consume 94 % of the minimap's height and compress
+1,910 tasks, which is the actual work, into the top 5 %.
+
+### 9.4 It is structural, not an artefact of this fixture
+
+A `WBS_SUMMARY` spans its entire subtree by definition, so it overlaps every activity beneath
+it, and `packLanes` opens a lane whenever no existing lane's last finish is strictly before an
+item's start. A summary can therefore almost never share a lane with its own children:
+**the number of summary lanes tracks the number of summaries.** Any plan with a WBS has this
+shape, and a deeper WBS has it worse.
+
+The partial link graph (§9.1) is a real caveat for the **task** side — fewer links means fewer
+chains and possibly more task lanes — and it is **not** a caveat for the summary side, which
+does not depend on link count at all.
+
+### 9.5 The WBS band does not reach the minimap
+
+ADR-0063 exists to lift summaries out of the scene, so it is the obvious existing remedy.
+Measured: toggling **WBS band** on changes **18.97 % of the screen** and leaves the minimap
+region **byte-identical** (`ImageChops.difference(...).getbbox() is None`).
+
+So the mechanism that removes summaries from the diagram does not remove them from the
+overview of that diagram — and the band is default-off anyway (`TsldPanel.tsx:1064`,
+`wbsBand ?? false`), so the default case is the bad case either way.
+
+**The non-vacuity check is why that sentence is worth anything.** A byte-identical minimap is
+also what a toggle that did nothing would produce, and on the first attempt that is exactly
+what happened: the locator `/wbs|band/i` matched **"Month bands"**, which precedes "WBS band"
+in the panel. The scene changed, the minimap did not, and the false finding was one paragraph
+from being written. It was caught by dumping the panel's accessibility tree and reading the
+sixteen names, and the run above pairs "the minimap did not change" with "19 % of the screen
+did" for exactly that reason. ADR-0091 #199's rule — locate a control by its id, never by its
+copy — one panel along.
+
+### 9.6 §4.10 row 1 is plan-dependent, which changes how M1 is justified
+
+On the small fixture the viewport rectangle is congruent with the picture's edge (§2.2, §6.2).
+On this plan it is a legible rectangle covering roughly 78 % of the width and 14 % of the
+height, clearly distinguishable from the panel. **So the congruence is the worst case, not the
+general one**, and M1's justification is "the indicator must read as a region at every zoom",
+not "the indicator is invisible" — which was already withdrawn once in §2.2 and is now bounded
+from the other side as well.
+
+### 9.7 What this re-orders
+
+Per §4.10, a fired row re-orders the epic. Options for the summary problem, with the one I
+recommend first:
+
+1. **Omit `WBS_SUMMARY` (and `LEVEL_OF_EFFORT`) from the minimap bitmap.** A summary's extent
+   is the union of its children's extents, all of which are already drawn, so omitting it
+   removes **no information from the picture** while returning 94 % of the height to the work.
+   It is the ADR-0100 D5 decimation argument applied to one more layer, and D5 already omits
+   ten of fifteen. Measured effect: 178 lanes → ~9.
+2. Draw them but exclude them from the lane extent — keeps the ink, keeps most of the
+   compression, and makes the y axis no longer mean "lane", which is worse than either.
+3. Make the minimap follow the WBS band toggle — leaves the default case broken, since the
+   band is default-off.
+4. Do nothing — the picture stays 75 % empty on every plan with a WBS.
+
+**This is a design decision and not a measurement, so it goes to the product owner** rather
+than being folded silently. Everything in M1 is unaffected by the answer: the viewport fill is
+rank 1 under every option above.
