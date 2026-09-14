@@ -253,3 +253,72 @@ gate as a _stroke_. Nothing here proposes changing the stroke — the fill is a 
 property with a separate justification — but a later milestone reaching for "make the frame
 amber too" must clear D9 first, and on these numbers it cannot without the two-tone pair
 carrying it on the halo.
+
+## 6. M0-T4 — the collisions, proven live
+
+§2.5 recorded that the fixture could not test the `today`/`critical` collision, because today
+was off-span and one of the two marks was not drawn. A second plan was built for it: data date
+2026-08-03, a six-link chain of 14-day activities running past today, three off-path bars.
+
+### 6.1 The resolution happens where the code says it does
+
+M0-T4's stated risk is the ADR-0102 one — a token can resolve somewhere other than where it
+appears to. Read live off the element the painter asks:
+
+```
+resolvedFrom   canvas surface          ← NOT the documentElement fallback
+--foreground   oklch(0.321 0 0)
+--destructive  oklch(0.439 0.175 27)
+--primary      oklch(0.624 0.115 249)
+--warning      oklch(0.528 0.13 62)
+--canvas       oklch(0.958 0.004 250)
+--background   oklch(0.958 0.004 250)
+```
+
+So the ADR-0102 failure is **not present here**, and that is worth stating as a pass rather
+than leaving unremarked. Two things follow directly:
+
+- `today` and `critical` are both `token('--destructive')`, and `--destructive` has **one**
+  value — so they are the same colour by construction, now confirmed rather than inferred.
+- `outline` and `dataDate` are both `token('--foreground')`, likewise.
+- `--canvas` and `--background` are **the same value**, which is §2.1 seen from the token side:
+  the minimap's ground is the page's background, so the picture cannot differ from the page.
+
+### 6.2 The Today marker's computed colour, and the pixels underneath it
+
+```
+minimap rect box    {x:1433, y:816, w:200, h:120}
+minimap canvas box  {x:1433, y:816, w:200, h:120}   ← congruent, measured live
+Today marker        present, {x:1506.45, y:816, w:1, h:120}
+Today computed bg   oklch(0.439 0.175 27)           ← exactly --destructive
+```
+
+The congruence in the first two lines is §2.2 measured rather than inferred from a screenshot:
+at whole-plan zoom the viewport indicator **is** the picture's edge, to the pixel.
+
+Sampling the Today column against its neighbour settles the collision:
+
+```
+        x=1504 (beside)      x=1506 (on the line)
+y=818   (156,7,17)           (156,7,17)     ← inside a critical bar
+y=842   (156,7,17)           (156,7,17)     ← inside a critical bar
+y=850   (239,241,244)        (156,7,17)     ← over empty ground
+y=930   (239,241,244)        (156,7,17)     ← over empty ground
+```
+
+The Today line over ground is `rgb(156,7,17)` — **byte-identical to the critical bar**. The
+file read is now a live read, and M0-T4 is discharged.
+
+### 6.3 The consequence is sharper than "two marks share a token"
+
+The rows above are the whole finding in four lines: where the Today line crosses **empty
+ground** it is legible, and where it crosses a **critical bar** it vanishes completely — same
+red, no fringe, no dash, nothing. So the marker that says _where we are now_ is invisible on
+exactly the rows a planner cares most about, and on a real programme the critical path is
+where most of the ink is.
+
+That is a stronger statement than the spec's, which frames the defect as a registry problem
+(two entries, one value). It is a **legibility** problem with a worst case, and the worst case
+is the common case. M2 owns it, and its acceptance condition should be stated as _the Today
+marker is distinguishable where it crosses a critical bar_ rather than as _the two tokens
+differ_ — the second is satisfiable by a change that still leaves them close.
