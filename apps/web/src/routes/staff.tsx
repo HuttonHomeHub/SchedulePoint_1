@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardTitle } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { PageContainer, PageGrid, PageGridItem, PageHeader } from '@/components/ui/page';
+import { PageContainer, PageGrid, PageGridItem, PageHeader, StatGrid } from '@/components/ui/page';
+import { QueryErrorState } from '@/components/ui/query-error-state';
 import { Spinner } from '@/components/ui/spinner';
 import { PerformanceProbePanel } from '@/features/perf-probe/ui/performance-probe-panel';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
@@ -225,16 +226,6 @@ export function StaffConsoleScreen(): React.ReactElement {
   );
 }
 
-/** A metric. Local helper — the codebase has no promoted primitive for this shape (TECH_DEBT). */
-function Stat({ label, value }: { label: string; value: string }): React.ReactElement {
-  return (
-    <div>
-      <dt className="text-muted-foreground text-sm">{label}</dt>
-      <dd className="text-xl font-semibold tabular-nums">{value}</dd>
-    </div>
-  );
-}
-
 /**
  * Mail health — the question this console was built to answer without a shell.
  *
@@ -260,16 +251,17 @@ function MailSection(): React.ReactElement {
       </CardTitle>
       {health.isPending && <Spinner label="Loading mail health…" />}
       {health.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read mail health.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void health.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState
+          label="Could not read mail health."
+          onRetry={() => void health.refetch()}
+        />
       )}
-      {data !== undefined && (
+      {/* **`!isError &&`, not just `data !== undefined`.** `query.data` is not cleared by a failed
+          refetch nor while one is in flight, so without this the failure message above renders
+          directly on top of the previous run's figures, with nothing saying they are stale — the
+          ADR-0140 M4 finding, which applies to four panels here. It is the worst of the three
+          states, because it looks like a page that is partly working. */}
+      {!health.isError && data !== undefined && (
         <>
           {!data.transportConfigured && (
             <Alert purpose="condition" tone="info">
@@ -279,18 +271,20 @@ function MailSection(): React.ReactElement {
             </Alert>
           )}
 
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Stat label="Failures, last hour" value={String(data.failuresLastHour)} />
-            <Stat label="Failures, last 24 hours" value={String(data.failuresLast24h)} />
-            <Stat
-              label="Last failure"
-              value={
-                data.lastFailureAt === null
-                  ? 'Never'
-                  : new Date(data.lastFailureAt).toLocaleString()
-              }
-            />
-          </dl>
+          <StatGrid
+            columns={3}
+            items={[
+              { label: 'Failures, last hour', value: String(data.failuresLastHour) },
+              { label: 'Failures, last 24 hours', value: String(data.failuresLast24h) },
+              {
+                label: 'Last failure',
+                value:
+                  data.lastFailureAt === null
+                    ? 'Never'
+                    : new Date(data.lastFailureAt).toLocaleString(),
+              },
+            ]}
+          />
 
           {/* **The badge states the fact; the sentence states the cost.** These two switches are
               what the whole epic exists to surface, and "off" alone left a reader unable to tell
@@ -407,16 +401,17 @@ function RetentionSection(): React.ReactElement {
       </CardTitle>
       {health.isPending && <Spinner label="Loading retention…" />}
       {health.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read retention state.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void health.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState
+          label="Could not read retention state."
+          onRetry={() => void health.refetch()}
+        />
       )}
-      {retention !== undefined && (
+      {/* **`!isError &&`, not just `data !== undefined`.** `query.data` is not cleared by a failed
+          refetch nor while one is in flight, so without this the failure message above renders
+          directly on top of the previous run's figures, with nothing saying they are stale — the
+          ADR-0140 M4 finding, which applies to four panels here. It is the worst of the three
+          states, because it looks like a page that is partly working. */}
+      {!health.isError && retention !== undefined && (
         <>
           {!retention.enabled && (
             <Alert purpose="condition" tone="info" id={RETENTION_DISABLED_ID}>
@@ -628,23 +623,23 @@ function InstallationPanel(): React.ReactElement {
     >
       {installation.isPending && <Spinner label="Loading installation…" />}
       {installation.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read installation state.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void installation.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState
+          label="Could not read installation state."
+          onRetry={() => void installation.refetch()}
+        />
       )}
-      {data !== undefined && (
+      {/* `!isError &&` for the reason the Mail section records: a failed refetch does not clear
+          `query.data`, so without it the failure message sits on top of stale figures. */}
+      {!installation.isError && data !== undefined && (
         <>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="API version" value={data.apiVersion} />
-            <Stat label="Environment" value={data.environment} />
-            <Stat label="Mail host" value={data.mailHost ?? 'Not configured'} />
-            <Stat label="Staff addresses" value={String(data.staffCount)} />
-          </dl>
+          <StatGrid
+            items={[
+              { label: 'API version', value: data.apiVersion },
+              { label: 'Environment', value: data.environment },
+              { label: 'Mail host', value: data.mailHost ?? 'Not configured' },
+              { label: 'Staff addresses', value: String(data.staffCount) },
+            ]}
+          />
           <div className="flex flex-wrap gap-2">
             <Badge variant={data.requireEmailVerification ? 'neutral' : 'warning'}>
               {data.requireEmailVerification
@@ -693,16 +688,11 @@ function AccountsPanel(): React.ReactElement {
     >
       {accounts.isPending && <Spinner label="Loading accounts…" />}
       {accounts.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read accounts.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void accounts.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState label="Could not read accounts." onRetry={() => void accounts.refetch()} />
       )}
-      {data !== undefined && (
+      {/* `!isError &&` for the reason the Mail section records: a failed refetch does not clear
+          `query.data`, so without it the failure message sits on top of stale figures. */}
+      {!accounts.isError && data !== undefined && (
         <>
           <p className="text-muted-foreground text-sm">
             {data.unverifiedTotal === 0

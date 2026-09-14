@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StaffConsoleScreen } from './staff';
@@ -38,6 +38,25 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
  * Returns every polite region joined, so a future second one cannot silently drop out of the
  * assertion; today there is one per rendered `Panel`.
  */
+/**
+ * Assert a sentence inside a named section, not across the whole document.
+ *
+ * **Since the M3 summary, the console states each condition TWICE on purpose** — tersely at the top
+ * ("No mail transport is configured, so nothing is being delivered.") and in full in the panel that
+ * owns it ("… Every message is being written to the log instead of sent — which produces no
+ * failures, and is why the counts below read as healthy."). A summary that did not name the
+ * condition would not be a summary; FC-1 asks for exactly this. So five document-wide `getByText`
+ * assertions became ambiguous, and scoping them is the fix rather than weakening them to `getAll`:
+ * a `getAllByText(...).length > 0` would pass if the PANEL's sentence disappeared and only the
+ * summary's remained, which is the half these tests are about.
+ *
+ * It is also the ADR-0073 C2.5 rule this file already cites one helper up: a document-scoped
+ * assertion passed on a page's prose alone and proved nothing about the thing it named.
+ */
+function withinSection(name: string | RegExp): ReturnType<typeof within> {
+  return within(screen.getByRole('region', { name }));
+}
+
 function politeRegionText(): string {
   return [...document.querySelectorAll('[aria-live="polite"]')]
     .map((node) => node.textContent ?? '')
@@ -300,7 +319,10 @@ describe('StaffConsoleScreen', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Unverified accounts' })).toBeVisible();
-    expect(await screen.findByText(/3 accounts cannot complete/i)).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Unverified accounts' });
+    expect(
+      withinSection('Unverified accounts').getByText(/3 accounts cannot complete/i),
+    ).toBeInTheDocument();
     expect(await screen.findByText('stuck@example.test')).toBeInTheDocument();
   });
 
@@ -359,7 +381,10 @@ describe('StaffConsoleScreen', () => {
 
     renderScreen();
 
-    expect(await screen.findByText(/No mail transport is configured/i)).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Mail and retention' });
+    expect(
+      withinSection('Mail and retention').getByText(/No mail transport is configured/i),
+    ).toBeInTheDocument();
     expect(screen.getByText('Failure alerting: off')).toBeInTheDocument();
     expect(screen.getByText('Heartbeat: off')).toBeInTheDocument();
   });
@@ -460,6 +485,65 @@ describe('StaffConsoleScreen', () => {
  * ADR-0064 §7 all record that this is precisely where the defects live — a control that renders,
  * looks right, and states something the response does not say.
  */
+describe('a failed refetch', () => {
+  /**
+   * **A failure must never render above the previous run's numbers** — the ADR-0140 M4 finding,
+   * which applies to four panels here.
+   *
+   * `query.data` is NOT cleared by a failed refetch nor while one is in flight, so a panel written
+   * as `{isError && <failure/>}` followed by `{data !== undefined && <content/>}` renders BOTH: a
+   * red "could not read" sentence sitting directly above figures from the last successful read,
+   * with nothing saying they are stale. It is the worst of the three possible states, because it
+   * looks like a page that is partly working.
+   *
+   * Verified red against the code as it stood before this milestone, where both blocks rendered.
+   */
+  it('does not render stale figures beneath the failure message', async () => {
+    let calls = 0;
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === '/staff/me') {
+        return Promise.resolve({
+          userId: 'u1',
+          email: 'ops@schedulepoint.test',
+          dualHatted: false,
+        });
+      }
+      if (path !== '/staff/health') return otherPanels(path);
+      calls += 1;
+      // The first read succeeds and paints figures; every later one fails, which is what a refetch
+      // after a transient outage looks like.
+      if (calls > 1) return Promise.reject(new ApiFetchError(500, { code: 'X', message: 'boom' }));
+      return Promise.resolve({
+        failuresLast24h: 7,
+        failuresLastHour: 0,
+        lastFailureAt: null,
+        transportConfigured: true,
+        alertingConfigured: true,
+        heartbeatConfigured: true,
+        recentFailures: [],
+        retention: healthyRetention(),
+      });
+    });
+    renderScreen();
+
+    // The figures land.
+    await waitFor(() => {
+      expect(screen.getByText('7')).toBeInTheDocument();
+    });
+
+    // Now make it fail, the way a reader would: the retry button.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Try again' })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not read mail health.')).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText('7'),
+      "the previous run's figures are still on screen beneath a failure message",
+    ).toBeNull();
+  });
+});
+
 async function renderRetention(
   over: Partial<Retention>,
   options: { alertingConfigured?: boolean } = {},
@@ -532,7 +616,9 @@ describe('the Retention section', () => {
     // because the panel could reintroduce it beside the sentence rather than inside it.
     await renderRetention({ enabled: false, lastRunAt: new Date().toISOString() });
 
-    expect(screen.getByText(/Retention sweeping is disabled/)).toBeInTheDocument();
+    expect(
+      withinSection('Mail and retention').getByText(/Retention sweeping is disabled/),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Last swept/)).not.toBeInTheDocument();
   });
 
@@ -562,7 +648,9 @@ describe('the Retention section', () => {
   it('surfaces a run of failures, and says where the reason is', async () => {
     await renderRetention({ consecutiveFailures: 3 });
 
-    expect(screen.getByText(/The last 3 sweeps failed/)).toBeInTheDocument();
+    expect(
+      withinSection('Mail and retention').getByText(/The last 3 sweeps failed/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/retention\.sweep_failed/)).toBeInTheDocument();
   });
 
@@ -713,8 +801,13 @@ describe('the Retention section', () => {
     });
 
     // ── The pinned positive: the conditions are on screen and readable.
-    expect(await screen.findByText(/No mail transport is configured/)).toBeInTheDocument();
-    expect(await screen.findByText(/Retention sweeping is disabled/)).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Mail and retention' });
+    expect(
+      withinSection('Mail and retention').getByText(/No mail transport is configured/),
+    ).toBeInTheDocument();
+    expect(
+      withinSection('Mail and retention').getByText(/Retention sweeping is disabled/),
+    ).toBeInTheDocument();
 
     // ── Nothing on this screen interrupts. `role="alert"` is assertive, and not one of the facts
     //    here is worth cutting across whatever a reader is doing.

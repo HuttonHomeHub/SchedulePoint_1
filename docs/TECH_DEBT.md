@@ -10394,6 +10394,37 @@ Both are a SQL query away — the same cheap move that produced this row. Neithe
 structural argument (a packer still leaves no gaps); both bear on whether the **domain** claim was
 right, and it is the domain claim that was refused here.
 
+### 325. Four hand-rolled metric tiles remain, each with its own type ramp
+
+**Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (staff-console design, M4) · **Size:** S · **Owner:** web
+
+`StatGrid` (`components/ui/page/stat-grid.tsx`) was promoted from the staff console's local `Stat`
+helper, whose own docblock said _"the codebase has no promoted primitive for this shape"_ — which was
+**already untrue when it was written**: `ContextStrip` (`components/ui/form-layout.tsx:251-276`) is a
+promoted `<dl>` of label/value pairs. The design review found it (spec §8.9), and found four more
+independent answers to the same question besides:
+
+| site                                                      | `dt`      | `dd`                                                    |
+| --------------------------------------------------------- | --------- | ------------------------------------------------------- |
+| `earned-value/components/EarnedValuePanel.tsx:80-85`      | `text-xs` | `text-lg font-semibold tabular-nums` **+ a `sub` slot** |
+| `interchange/components/InterchangeReportTable.tsx:49-50` | `text-xs` | `text-xl font-semibold tabular-nums`                    |
+| `share/components/GuestPlanView.tsx:114-115`              | `text-xs` | `text-sm font-medium tabular-nums`                      |
+| `schedule/components/ScheduleSummaryStrip.tsx:24-25`      | `text-xs` | `text-sm font-medium tabular-nums`                      |
+
+**Why it is filed rather than done.** Promoting a primitive and converting five surfaces in one
+milestone is two changes, and the second is not this epic's. What the epic owed was that the promotion
+be a **convergence rather than a sixth divergence**, and that obligation is discharged in two ways: the
+`StatGrid` ↔ `ContextStrip` discriminator is stated in both docblocks, and the API is designed against
+the **widest existing caller** — `EarnedValuePanel`'s `sub` slot — so that panel can adopt it. An API
+designed against the narrowest caller is one the widest can never take.
+
+**What a fix has to decide, and why it is not mechanical.** The four disagree on the figure's size
+(`text-lg`, `text-xl`, `text-sm` twice), and two of them are deliberately quiet because they sit beside
+other content rather than being what the reader came for — which is the same distinction the
+`ContextStrip` discriminator draws. So the conversion is a judgement per site about which primitive it
+wants, not a find-and-replace, and doing it carelessly would flatten two correct decisions into one
+wrong one.
+
 ### 324. Every focus ring in the product is a `box-shadow`, and `forced-colors` suppresses box-shadow
 
 **Status:** unverified · **Raised:** 2026-09-14 (the minimap M8 accessibility review, out of scope for that diff) · **Size:** M · **Owner:** web
