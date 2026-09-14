@@ -1,5 +1,5 @@
 ---
-'@repo/web': patch
+'@repo/web': minor
 ---
 
 The minimap gains temporal structure. A whole-plan picture with no time tiers reads as a smear
