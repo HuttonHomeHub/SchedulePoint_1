@@ -4691,7 +4691,20 @@ repository had no hyphenated output anywhere to copy from.
 
 ### 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
 
-**Status:** open · **Verified:** 2026-09-13
+**Status:** open · **Verified:** 2026-09-14
+
+> **Measured 2026-09-14, and the number is the argument for the schema change this row keeps
+> deferring.** One routine bump — zod 4.4.3 → 4.6.5, react-hook-form 7.86 → 7.88, and the three
+> TanStack packages across two patch releases — **relocated 23 of 112 claims**, plus one anchor
+> rewritten because `qss.js`'s `encode` was refactored to allocate lazily. Every one of those 23
+> leaves the **prose** citing lines the code no longer occupies, because `ref` is `basename:lines`
+> and is the join key against the documents, while `lines` is what the gate checks. So the register
+> self-heals and the sentence a reader actually follows does not. That is this row's blind spot seen
+> from the other side: not "a coinciding line in a different version passes", but "a correct
+> citation goes stale in every document the moment anything is bumped, and nothing reports it".
+> Re-pointing the prose was **not** done here — it is the same schema change (a version per claim)
+> this row already scopes, and doing half of it inside a dependency bump is the shared-gate change
+> ADR-0105 exists to stop.
 
 > **The mechanism is unchanged and the figures were stale twice.** `check-claims.mjs:382` builds the
 > ref from **basename + line range only** and `:393-395` matches on that string alone; no claim in
