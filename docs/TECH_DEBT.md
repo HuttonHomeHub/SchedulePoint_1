@@ -10157,7 +10157,12 @@ closed` immediately precedes every failure. This row meanwhile was wrong twice o
 **This row's headline was wrong and the correction makes the defect worse, not smaller** (found
 2026-09-14 by the staff-console design spec, which re-derived the claim rather than inheriting it).
 `shoot.mjs:570` **does** carry a `staff` shot, with its own branch at `:845-867`, and the file holds
-**42** shots rather than 25 — a figure its own docblock also states wrongly. So this was never an
+**42** shots rather than 25. ~~a figure its own docblock also states wrongly.~~ **That half was
+itself wrong and is struck: no docblock in `shoot.mjs` states a shot count at all** — verified by
+reading `:1-24`, and recorded in `docs/specs/staff-console-design/feature-spec.md:29` and
+`m0-measurement.md` on the same day this row was rewritten. The disproved clause was left in by
+this epic's own M0-T1, so the row contradicted its author's finding for a day; caught by the design
+review (spec §8.18). The 25 is simply the figure this row was raised with. So this was never an
 omission from the list: it is a shot that **cannot be satisfied**. `onboard()` mints
 `shoot-${Date.now()}-${width}@example.com` against a `STAFF_EMAILS` that must be set before the API
 boots, and nothing verifies the address. A reader auditing the shot list for coverage of `/staff`

@@ -1,6 +1,6 @@
 # Feature Spec: The staff console design review
 
-- **Status:** Approved — 2026-09-14, all three critical questions answered (CQ-1 overrides this document's own recommendation; see §6).
+- **Status:** Approved — 2026-09-14, all three critical questions answered (CQ-1 overrides this document's own recommendation; see §6), then reviewed by three specialists who all returned **blocked** and whose findings are folded in §8 (CQ-1's "throughout" is refined to span-by-demand on arithmetic; the milestones are re-sliced).
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-14
 - **Tracking issue / epic:** _(none yet)_
@@ -109,7 +109,12 @@ screen at one time. That is the mechanism the product owner is describing, and i
 - `Stat` is a local helper whose own docblock says _"the codebase has no promoted primitive for this
   shape (TECH_DEBT)"_ (`staff.tsx:112`), rendered into two `<dl>` grids with **different column
   counts** decided independently — `grid-cols-2 sm:grid-cols-3` (`:172`) and
-  `grid-cols-2 sm:grid-cols-4` (`:483`).
+  `grid-cols-2 sm:grid-cols-4` (`:483`). **That inherited docblock is wrong and §8.9 supersedes it**:
+  `ContextStrip` (`components/ui/form-layout.tsx:251-276`) is a promoted `<dl>` fact display taking
+  the same data shape, and there are **four more** hand-rolled metric tiles besides. The divergence
+  is worse than this bullet claims, which strengthens the case for promoting one — but the
+  discriminator against `ContextStrip` has to be stated, or this becomes the sixth answer rather than
+  the first step of a convergence.
 - Severity is spoken in four vocabularies that do not compose: `Alert tone`
   (`error | success | info` — there is **no `warning` tone**, `alert.tsx:66-74`), `Badge variant`
   (`neutral | warning`), the hand-rolled destructive paragraph above, and plain muted body text.
@@ -569,6 +574,14 @@ a severity colour the vocabulary lacks — note that `Alert` has **no `warning` 
 it is explicitly **out of scope**: the summary expresses severity by **order and by words**, with the
 existing `Badge variant="warning"` where a chip is wanted.
 
+> **Half of that paragraph is stale and §8.10 supersedes it.** `Alert` having no `warning` tone is
+> true and **irrelevant**: `components/ui/notice-strip.tsx:30` already ships
+> `warning: 'border-warning/40 bg-warning/10 text-warning-text'`, its **role is the caller's** so it
+> can render with no live region at all — exactly what a standing-condition summary needs — and
+> `--warning-text` is already used two panels down at `staff.tsx:271`. No token decision, no matrix
+> entry, nothing out of scope. The "order and words" rule is kept because it is right on its own
+> merits (WCAG 1.4.1), not because the colour was unavailable.
+
 ### 4.11 Implementation approach & alternatives
 
 **Chosen: adopt the archetypes first, then re-order, then unify the details — each a separate
@@ -626,6 +639,13 @@ against this document's recommendation**, and it is recorded as an override rath
 because a spec that silently agrees with whatever was chosen stops being evidence of anything.
 
 ### CQ-1 — LAYOUT: **two columns throughout.** Overrides §4's default and alternative 2.
+
+> **Refined by the design review — read §8.1 with this.** "Two columns" stands and is right. The
+> word **"throughout"** does not survive arithmetic nobody had done: two _equal_ columns at 1646 are
+> **787 px**, narrower than today's **848 px** single column, so it would have made the cramped
+> tables M0 diagnosed **worse**. Spans are assigned by content width demand instead — tables run
+> full width at 1488 px (**+75 %**), stat grids and control rows pair at 732 px. Same decision, more
+> of what it was chosen for.
 
 This document rejected a whole-page grid as a default and kept it alive as a question, with a named
 risk: _a grid that puts a red state in the right-hand column below the fold is worse than the stack_,
@@ -737,3 +757,497 @@ made and none is recorded.
 
 A question goes back only if proceeding would be unsafe, or would waste the work if the guess were
 wrong.
+
+---
+
+## 8. The design review gate (2026-09-14) — three reviews, all blocking
+
+The product owner's approval in §7 is conditional on one thing: _"the agents agree with them"_. Three
+specialists reviewed this document and `implementation-plan.md` **before any code was written** —
+`ui-architect`, `accessibility-reviewer`, `ux-reviewer`. All three returned **blocked**: twelve
+architecture findings, five accessibility, four UX.
+
+That is the gate working. Every one of them is a completeness or arithmetic failure **inside** an
+already-approved decision, not a new question — so none went back to the product owner, which is what
+§7.3 licenses. Each is folded below with the evidence that settled it. Where a finding corrected this
+document, the original wording is left in place above and superseded here rather than rewritten,
+because a spec that silently agrees with whatever was chosen stops being evidence of anything.
+
+### 8.1 The decisive finding: two EQUAL columns are narrower than today's single column
+
+**This is arithmetic, and nobody had done it.** `page-container.tsx:18-23` gives `narrow` =
+`max-w-4xl` = **896 px**; `staff.tsx:82` pairs it with `p-6`, so content today is **848 px**.
+
+Two equal columns, at the widest possible container (`full`, the whole 1646 px viewport), with `p-6`
+and a `gap-6`:
+
+```
+(1646 − 48 padding − 24 gap) / 2 = 787 px per column
+```
+
+**787 < 848.** At the product owner's own width, no two-equal-column arrangement gives any panel as
+much width as it has today. At `width="wide"` it is 732 px. Every arrangement loses 60–120 px per
+panel.
+
+Now read this epic's own diagnosis, `m0-measurement.md:66-68`:
+
+> _"The narrow column is why several panels' tables look cramped at 1646 while the window is half
+> empty — a symptom of the measure, not of the tables."_
+
+Five of the eight panels are table-bodied, and the column counts are **4, 4, 5, 2, 3** — verified by
+reading the five `columns` definitions at `staff.tsx:133, 256, 398, 518, 591`. Two of them carry
+`break-all` fields (Mail's recipient at `:136`, CSP's blocked URI at `:407`/`:415`). So **"two columns
+throughout" makes the symptom M0 diagnosed worse**, while fixing the unrelated symptom (unused
+margin).
+
+**And no falsification condition could see it.** FC-1 measures what is above the fold; FC-2 measures
+document height, which two columns improves by construction (§6 already concedes this proves nothing);
+FC-3 counts weight sites. The epic could pass all three and ship a console whose tables are **less**
+legible than the one it replaced. That is the gate-that-cannot-see-the-defect shape this register
+records repeatedly (ADR-0093, ADR-0108, ADR-0121, ADR-0131).
+
+**CQ-1 is not overturned.** Two columns is right — 46 % of 1646 px is genuinely wasted, and the
+product owner's instruction that _"single column shouldn't be set in stone"_ stands. What was wrong is
+the word **"throughout"**, which was never a considered decision: it was the only arrangement on the
+table when the question was asked.
+
+**The refined answer — a two-column grid whose spans are assigned by content width demand:**
+
+|                            |                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Container**              | `PageContainer width="wide"` (`max-w-screen-2xl`, 1536) — not `narrow`                                              |
+| **Zone 1, never columned** | `PageHeader` + the dual-hat `Alert` + `StaffStatusSummary`. A status answer must not sit beside anything.           |
+| **Zone 2, the grid**       | each section declares **wide** (body is a table) or **narrow** (body is a stat grid, a badge row, or tool controls) |
+| **Wide**                   | `col-span-2` → **1488 px of content, +75 % against today's 848**                                                    |
+| **Narrow**                 | pairs → 732 px each, ample for four `Stat`s or three buttons                                                        |
+
+Applied to the real content: Installation's four `Stat`s pair with Diagnostics' controls; Mail's
+failures table, Retention's table, CSP's five-column table and Staff activity all run full width;
+Performance keeps its own full-width row. **Both wins, not one win and one regression** — less
+scrolling _and_ wider tables — which is what §7.1's "looking pretty" actually asks for.
+
+Decided under §7.3 (_"go with what will make the best app possible in the long run"_) rather than
+returned as a question, because the arithmetic only admits one answer and the alternative regresses
+the thing M0 was opened about.
+
+**FC-4 is added, because nothing else in the epic would notice if this went wrong:**
+
+> **FC-4 — no table-bodied section is narrower after the change than the 848 px it has today.**
+> Measured in the browser at 1646, on the same shot FC-1 is judged from.
+
+### 8.2 The four-band model survives as an ordering and is retired as a layout primitive
+
+The architect was asked directly whether four bands survive two columns. **No**, for three reasons,
+all of which hold up:
+
+- **A band is a one-dimensional device.** Its entire content is _"this comes before that"_. Rendering
+  a 1-D model in a 2-D layout leaves one axis carrying no meaning — and a reader infers meaning from
+  it anyway (_is the left column more important?_ No: it is wrap order). That is worse than one
+  column, where the missing axis is at least honest.
+- **Band C is the reductio.** `DiagnosticsPanel` is a paragraph and two buttons
+  (`diagnostics-panel.tsx:87-135`). `performance-probe-panel.tsx` is **1,189 lines**. Laying those
+  2-up produces a column with a several-hundred-pixel void. Every band pairs panels whose heights
+  differ by an order of magnitude, and **ragged voids are the specific thing that will read as _not
+  pretty_** — §7.1's explicit goal.
+- **§8.1**: band-wise 2-up narrows every table.
+
+**The bands keep their real job — priority ordering — which is also DOM order, which is also
+screen-reader order.** That satisfies US-2's third acceptance criterion unchanged. Only the claim that
+a band is a layout row is withdrawn.
+
+The three alternatives the architect was asked about are all **rejected**, and the reasons are worth
+keeping:
+
+- **Master/detail** — hides seven of eight sections by default, directly contradicting SC-1/FC-1. And
+  to be usable its master list would have to carry each section's state, at which point the master
+  list **is** `StaffStatusSummary` and the detail pane duplicates the section it points at. Wrong
+  pattern for a screen read for alarm.
+- **A masthead of metrics** — the console's headline is a **judgement** ("is anything wrong?"), not a
+  number. `InstallationPanel`'s facts (`staff.tsx:483-488`) are API version, environment, mail host,
+  staff count; none is a question an operator arrives with. It would compete with the summary for the
+  most valuable band on the page.
+- **A fixed status rail** — not rejected, **promoted from "deferred" to a decision made in the layout
+  milestone**. §4 deferred a sticky summary as _"a real option if M5's measurement shows SC-1
+  failing"_. Once there is a grid it is nearly free, and it makes FC-1 **structurally true rather than
+  measured**. Retrofitting is cheap; designing around its absence and then adding it is not.
+
+### 8.3 `PageGrid` — a seventh component in the archetype family, not a seventh page archetype
+
+The `ConsolePage` rejection in §4.11 still holds: its stated reasons (content ordering, a
+staff-specific summary) are genuinely not page-archetype material, and the column count does not
+change that.
+
+But **a two-column page grid is a page-level layout decision, and hand-rolling it in `staff.tsx` is
+exactly the bespoke frame the authoring rule forbids — and the M1 gate cannot see it.**
+`archetypes.structural.test.ts:39-46` matches `mx-auto…max-w-`, `<h1`, `<h2`. A raw
+`grid grid-cols-2` at the page root matches **none** of them.
+
+So: add **`PageGrid`** to `components/ui/page/`, alongside `PageContainer`, taking the wide/narrow
+span decision per child. Much smaller than `ConsolePage`, it is what the next operations surface will
+need, and it gives the M1 gate something to assert the use of. `HAND_ROLLED` is extended so a
+page-level `grid-cols-` in the staff surface fails.
+
+### 8.4 `SectionCard` gains `id` + a focusable target — taken deliberately, not stumbled into
+
+W-2 says focus moves to _"the `SectionCard` `<section aria-labelledby>`"_. **A `<section
+aria-labelledby>` is not focusable**, and `SectionCardProps` (`section-card.tsx:6-17`) accepts no `id`
+and no rest spread, so it cannot even be an anchor target.
+
+So the summary **requires** `SectionCard` to gain `id` + `tabIndex={-1}`. CQ-4's stated default was
+chosen specifically to avoid widening `SectionCard`'s public contract — and the epic widens it anyway,
+one milestone later, for a different reason nobody costed.
+
+**Take the widening deliberately.** `id` and a focusable target are generally useful on a section
+archetype (the organisation overview has the same skip-to-section problem), and it is a **better**
+widening than the `status` prop CQ-4 rejected. `Panel` still composes for `status`. The two costs §4.4
+already priced — its own assertion in `page-archetypes.test.tsx`, and a re-run of the overview
+journey — are now **budgeted** rather than incurred silently.
+
+### 8.5 M1 is not a no-op on measure in three ways, and its judging criterion would fire on all three
+
+M1's method is _"does anything look different? If yes, something was hand-rolled differently from the
+archetype and we have just found it."_ Three things will look different for reasons that are **not**
+findings, and must be anticipated or M1 produces three false positives on its first run:
+
+1. **`space-y-6` is lost.** `staff.tsx:82` is `mx-auto max-w-4xl space-y-6 p-6`; `PageContainer` emits
+   `mx-auto w-full flex-1 p-6` + the width and has **no** spacing. All eight panels' vertical rhythm
+   collapses unless `className="space-y-6"` is passed. (Superseded in part by §8.3 — the grid's `gap`
+   replaces it in zone 2 — but M1 runs before the grid, so M1 passes it.)
+2. **`space-y-4` inside every panel is lost, with no route to restore it.** `panel.tsx:38` is
+   `<CardContent className="space-y-4">`. `SectionCard` passes `className` to the **`Card`**
+   (`section-card.tsx:52`), not to `CardContent` (`:62`), and `SectionCardProps` is a **closed
+   interface** — no rest spread, no `contentClassName`. The fix needs no widening: `Panel` wraps its
+   own children in `<div className="space-y-4">`.
+3. **Panel headings change size and weight.** Today `panel.tsx:36` is `text-lg font-medium` (18 px /
+   500). `SectionCard` renders `CardTitle level={2} className="text-base"` → 16 px / 600. That is
+   **desirable** — it is the system's rank treatment — but it must be _expected_, not discovered.
+
+### 8.6 The journey assertion that actually breaks is not the one the plan flagged
+
+The plan flagged `staff.spec.ts:256` and `:304`. Both are **safe**: they locate by name
+(`/retention by table/i`, `/staff actions/i`), which are `DataTable` captions, and a new `SectionCard`
+region is named by its panel title — different names, no ambiguity.
+
+The one that breaks is **`staff.spec.ts:472-477`**:
+
+```js
+const describedBy = await staff
+  .getByRole('region')
+  .filter({ has: history })
+  .first()
+  .getAttribute('aria-describedby');
+```
+
+`history` is the sittings table inside the Performance panel. Today the only region containing it is
+`DataTable`'s scroll region, which carries `aria-describedby`. Once `Panel` becomes a `SectionCard`
+region, the Performance `<section>` **also contains it and precedes it in document order**, so
+`.first()` returns the section — which has no `aria-describedby` — and the assertion fails. Fix the
+locator to `.last()` or scope it by the caption name.
+
+### 8.7 The M2 structural gate as specified is vacuous — it passes today, against the defect it names
+
+The gate was specified over **`features/staff`**. Grepped: **zero** production matches there (the only
+hit is a comment in `retention-copy.test.ts:209`). All four offending `role="alert"` +
+`text-destructive-text` blocks are in **`apps/web/src/routes/staff.tsx`** — `:154`, `:307`, `:473`,
+`:537` — which is not in `features/staff`.
+
+So it could never be verified red, and would pass on day one having tested nothing. Scope it to the
+same file set as the archetype gate: `routes/staff.tsx` + `features/staff/**` +
+`features/perf-probe/ui/**`.
+
+### 8.8 "One loading shape" is not achievable, and would regress a shipped decision
+
+US-3 requires _"the loading treatment is the one shape used by all six"_, aligned with `DataTable`'s.
+But `DataTable`'s loading state is a **content-shaped skeleton, not a spinner**
+(`data-table.tsx:119-173`), and its own docblock argues the point:
+
+> _"a skeleton whose column count differs from the settled table reflows the page under the reader's
+> cursor — which is the defect a skeleton exists to prevent"_
+
+Unifying the four `Spinner` panels onto one spinner regresses against that; unifying onto "DataTable's
+skeleton" is impossible, because Mail's settled content is a stat grid and a badge row, not a table.
+
+**The failure half is genuinely unifiable and is the strong part of M2:** `data-table.tsx:176-186` and
+`staff.tsx:153-161` are **character-identical** modulo the label.
+
+And the plan's own mitigation was wrong in a way this repository has a rule about: _"it composes
+nothing of `DataTable`; both simply render the same shapes, asserted by one unit test over both"_ is
+**two implementations of one shape held together by a test** — precisely the ADR-0065 / ADR-0121 rule
+this same document invokes twice elsewhere. **`DataTable` must consume the shared failure component,
+or the extraction is not taken.**
+
+So: narrow it to **`QueryErrorState`** (five call sites including `DataTable`), and make loading a
+**rule** — skeleton where the settled shape is known, spinner otherwise — with per-panel skeletons
+where they are cheap. The "one shape" wording is struck from US-3.
+
+### 8.9 `StatGrid`'s founding claim is stale, and there are four more hand-rolled answers
+
+This document inherited `staff.tsx:112`'s docblock verbatim — _"the codebase has no promoted primitive
+for this shape"_. `components/ui/form-layout.tsx:251-276` is **`ContextStrip`**: a promoted `<dl>` fact
+display in `components/ui/`, taking `facts: ReadonlyArray<{label, value}>` — the same data shape.
+
+And there are at least four more independent metric tiles, each with its own type ramp:
+
+| Site                                                      | `dt`      | `dd`                                                    |
+| --------------------------------------------------------- | --------- | ------------------------------------------------------- |
+| `staff.tsx:116-117`                                       | `text-sm` | `text-xl font-semibold tabular-nums`                    |
+| `earned-value/components/EarnedValuePanel.tsx:80-85`      | `text-xs` | `text-lg font-semibold tabular-nums` **+ a `sub` slot** |
+| `interchange/components/InterchangeReportTable.tsx:49-50` | `text-xs` | `text-xl font-semibold tabular-nums`                    |
+| `share/components/GuestPlanView.tsx:114-115`              | `text-xs` | `text-sm font-medium tabular-nums`                      |
+| `schedule/components/ScheduleSummaryStrip.tsx:24-25`      | `text-xs` | `text-sm font-medium tabular-nums`                      |
+
+Promoting a sixth answer without stating the discriminator is how the fourteen-empty-states story
+starts again. So: **(a)** state the `StatGrid` ↔ `ContextStrip` discriminator in both docblocks — _a
+grid of headline metrics in a page section_ vs _the facts an edit is about, beside the edit_;
+**(b)** design the API against the **widest existing caller**, `EarnedValuePanel`'s `sub` slot, or it
+can never adopt it; **(c)** file a register row naming the four unconverted sites, so this is the
+first step of a convergence rather than a sixth divergence.
+
+### 8.10 The status vocabulary already exists, shipped three weeks ago
+
+`features/schedule-health/model/health-rows.ts` (ADR-0116) **is** `console-status.ts`'s design,
+already built: a pure, React-free, fetch-free view-model emitting per-check rows with a
+`verdictLabel` (_"the verdict as a WORD — never colour alone (WCAG 1.4.1)"_), a **four-valued** `tone:
+'pass' | 'fail' | 'muted' | 'info'`, a `reasonSentence` for the not-assessable case, a `remedy` route
+and a `caveatSentence`. It is gated by `schedule-health-vocabulary.structural.test.ts`, and
+`ScheduleHealthPanel.tsx:224-226` renders the four-state roll-up line.
+
+**Derive `console-status.ts`'s vocabulary from it** rather than inventing a parallel one — same
+four-state tone names, verdict-as-a-word, reason sentence. Otherwise the epic removes four competing
+severity vocabularies _within_ one page and adds a fifth _across_ the product. **Do not extract a
+shared primitive yet** — this is the second instance, and the house rule is to extract at the third;
+file the register row that names it.
+
+**And §4.10's self-imposed constraint is stale.** It argued severity must be order-and-words-only
+because _"`Alert` has no `warning` tone"_. True of `Alert` and **irrelevant**:
+`components/ui/notice-strip.tsx:30` has `warning: 'border-warning/40 bg-warning/10 text-warning-text'`,
+its **role is the caller's** so it can render with **no live region at all** — exactly what a
+standing-condition summary needs — and `--warning-text` is already used two panels down at
+`staff.tsx:271`. No token decision, no matrix entry, nothing out of scope.
+
+### 8.11 Accessibility: DOM order is the AT-equivalent of FC-1, and it had no condition
+
+The reviewer's sharpest point answers a question this document did not ask itself. **"First viewport,
+no scrolling" is a sighted-user concept**; nothing about it is meaningful to someone navigating
+linearly, by heading, or by "read all". FC-1 is a legitimate and necessary check for the _visual_
+redesign, but it is **not** an accessibility guarantee and this spec must not be read as though it
+were.
+
+The AT-equivalent guarantee is that the summary is **first in DOM order after the `<h1>` and its
+description, and enumerates or links every non-healthy condition** — which US-1 already asks for in
+words and which, uniquely among this epic's requirements, had **no falsification condition**. That is
+the one place the discipline lapsed. So:
+
+> **FC-1a — in DOM order, `StaffStatusSummary` precedes every section, and for each non-healthy
+> condition it contains a link whose target is that section.** Asserted structurally, in DOM terms,
+> independent of pixels — and asserted **at the two-column breakpoint**, verified red against a
+> CSS-`order`-based implementation first.
+
+Three further accessibility decisions:
+
+- **No CSS `order`, and no grid placement that displaces a section from its DOM position.** WCAG 1.3.2
+  is satisfied by a two-column layout only if the DOM sequence _is_ the reading sequence. Achievable
+  — nest two ordinary sub-trees rather than re-ordering a flat list — but it has to be stated as an
+  engineering constraint, and it was not.
+- **The pinned "not a live region" test must assert the absence of `aria-live`, not only of `role`.**
+  `aria-live="polite"` with no `role` is still a live region. `Alert` never sets it, so the point is
+  moot if the summary reuses `Alert` — but §4 explicitly allows a bespoke component, and nothing then
+  stops a later author adding `aria-live` to make it "feel responsive".
+- **Eight (soon seven) polite regions are inherited, not introduced**, and are tolerable as a
+  _secondary_ channel because each panel's status sentence self-identifies by name. Worth naming in
+  the ADR as **considered** rather than silently inherited. _Reasoning from specification, not
+  observed AT behaviour._
+
+### 8.12 The Mail + Retention merge had no implementing task
+
+CQ-3 approved it. `implementation-plan.md:326` and `:404` **both still list Mail and Retention as two
+separate entities**, exactly as today, and **no task anywhere in M1–M5 merges them**. That is the
+"a plan is a claim too" pattern this register records repeatedly (ADR-0081, ADR-0120, ADR-0133): an
+approved decision that reads as done because it is in the spec, with nothing in the breakdown that
+builds it.
+
+It also exposes a tension this document created and did not resolve. Today "Retention" is a full
+`<h2>`, independently reachable by heading navigation. Either:
+
+- **no subheading** → "Retention" leaves the heading list entirely, and a reader must open "Mail" and
+  read its body to find it. A real navigability regression, and it cuts against exactly the
+  _"seasoned admin navigating with ease"_ framing §7.2 invokes — **an expert user relies on heading
+  and landmark shortcuts more, not less**; or
+- **an `<h3>` "Retention"**, which is what "labelled subsection" must mean — but that reproduces the
+  shape §4.5 argued against at band level (_"pushes every section heading to `<h3>`… a shared contract
+  change"_).
+
+**Resolved: `<h3>` via `CardTitle level={3}`, inside the merged card.** §4.5's objection was to
+pushing **every** section heading down a level across the whole page, which is a shared contract
+change; adding one `<h3>` inside one card is not that, and `CardTitle` already supports the level. The
+merged card's title stays **"Mail"**; retention is its labelled subsection with its own `id`, and the
+summary links to the **subsection**, not the card.
+
+Two mechanics nobody had written down, now required of the task:
+
+- **How the single `status` polite sentence is composed** from two independently-settling facts.
+  Concatenating "Mail: 0 failures…" and "Retention: …" back-to-back with no separation is not a
+  design; state one.
+- **The existing `describedById` wiring is preserved.** `RETENTION_DISABLED_ID` /
+  `RETENTION_FAILING_ID` (`staff.tsx:283-289, 367`) must keep pointing at whatever the retention
+  `DataTable` becomes inside the merged card.
+
+### 8.13 WCAG 2.5.8 — the by-hand check becomes a named checklist
+
+The framing was right: `axe-core@4.13.0` ships `target-size` with `enabled: false`, so requesting
+`wcag22aa` does not turn it on, and `e2e-workspace-fit` never touches `/staff`. But M4 delegated
+entirely to _"check every icon-only or small control by hand"_, with no list.
+
+Checked rather than assumed: **`Button`'s existing size tokens already clear the bar for everything
+that exists today** — `globals.css:939-940, 1082-1089` gives `--control-h-sm` = 32/44 px and
+`--control-h` = 36/44 px, both above the 24 px AA floor. **The risk is in what M4 _adds_** under the
+density licence, not in what exists. The checklist:
+
+1. `StaffStatusSummary`'s per-condition links — the **whole row** is the target with a full
+   descriptive accessible name, never a small trailing icon or caret. This is exactly the shape
+   ADR-0090 and ADR-0110 record shipping wrong twice.
+2. Every `useClipboardCopy` call site goes through the shared `Button` `icon` variant, never a bespoke
+   smaller element.
+3. Whatever interactive element the Mail/Retention merge adds (a jump link to the subsection).
+4. Any compacted pagination, if "dense tables" gets read as "smaller controls".
+5. **Any new interactive element uses the existing `--control-h` tokens / `Button` variants rather
+   than an arbitrary size** — which also keeps it inside SC-4's arbitrary-sizing ratchet as a cheap
+   secondary proxy, though that ratchet was not built for this purpose and must not be relied on
+   alone.
+
+### 8.14 What "a seasoned administrator" does not license — with one blocking addition
+
+§7.2 already draws roughly the right line (_"Expertise in the reader is not an accessibility
+exemption"_). Sharpened, and one item promoted to **blocking**:
+
+**Licensed:** visual density, more information per screen, terser _visible_ labels, fewer paragraphs
+that merely restate a heading, compact tables and metric rows, admin-conventional density.
+
+**Not licensed:** semantic correctness (headings, landmarks, names, roles — an expert AT user depends
+on these _more_, navigating by shortcut rather than reading serially); programmatic accessible names
+(terser visible text is fine, dropping an `aria-label` because "an admin will infer it from context"
+is not — a sighted admin's contextual inference is not available to a screen-reader user, however
+expert); target size, contrast, focus visibility, keyboard operability (**expertise and disability are
+orthogonal**, and this page's audience is people who chose to open an ops console, not people who
+happen to be sighted mouse users).
+
+**Blocking addition — `aria-describedby`-linked caveat prose is KEPT by default.** The retention notes
+(`RETENTION_DISABLED_ID` / `RETENTION_FAILING_ID`), the `audit_events … refuses DELETE` note
+(`staff.tsx:373-378`) and the mail-transport note (`:164-170`) are exactly the "non-obvious
+consequence" class §4's own rule says to keep. _"A seasoned admin reads a label"_ must not justify
+trimming one: a sighted admin **loses nothing** if the paragraph stays (they skim past what they
+already know), but a screen-reader user landing inside the region it is wired to gets it read every
+time — cutting it removes the **only** channel that population has for it. M4's disposition list marks
+every `aria-describedby` target _"kept, with reason: linked description"_ by default; removing one
+requires a specific justification, rather than the default running the other way.
+
+**And a new keyboard shortcut, if one surfaces during M4's sweep, is a primitive keyboard-contract
+change under ADR-0111 / §19.13** and needs its own accessibility + component pass before it ships —
+not a wave-through on the strength of this review. Nothing in the task list proposes one; this is
+preventive.
+
+### 8.15 UX: nobody had noticed there is no way back to the application
+
+`staff.tsx:81-99`, the authenticated branch, renders a header with **no link home**. The **not-found**
+branch at `:73` has one ("Go to SchedulePoint"). So the branch for people who _cannot_ use the page
+has a way out and the branch for people who _can_ does not, and there is no app shell here either.
+Violates `docs/UX_STANDARDS.md:122`. One line, via `PageHeader`'s `actions` slot, in M1.
+
+Four UX suggestions are taken under §7.1, because "pretty" is the request:
+
+- **Reuse `ListRow` + `rowLinkClass` for `StaffStatusSummary`** rather than inventing a list of links.
+  `NeedsAttentionSection.tsx` is the same problem already solved and reviewed; this is the product's
+  second "is anything wrong" surface and should look like a sibling of the first.
+- **Give the promoted `Stat` an optional tone.** Today a failure count and "API version 0.64.0" render
+  identically (`staff.tsx:117`). On the page whose job is _is anything wrong_, the two most alarming
+  numbers carry no signal. Uses existing gated tokens.
+- **`probe-sittings.tsx:80-86`'s comparability paragraph renders unconditionally**, including when
+  there is nothing to compare. Render it once ≥ 2 sittings exist.
+- **Staff activity is dominated by the console's own reads** (~7 rows per page load). Client-side
+  grouping of consecutive "panel read" rows restores the signal without touching the API.
+
+One is **declined for now**: removing all five `<strong>` lead-ins. The line numbers are right and the
+ADR-0097 precedent is real, but that precedent's reason — _"`Alert` already carries a tone colour, an
+accent bar, a leading icon and a role"_ — covers **severity**, not **identity**. In a four-sentence
+alert the bold opening clause is what lets a scanning admin tell _which_ condition it is without
+reading it. §7.2 licenses cutting prose: **cut the bodies first, then re-judge whether the lead-in is
+still doing work.** Removing the lead-in and keeping four sentences is the worst of both.
+
+### 8.16 M0 is not finished, and FC-1 currently has no instrument
+
+`m0-measurement.md` records **one width and one state**. M0-T4 required three widths and both states;
+M0-T3 required the unhealthy shot; M0-T4 step 2 required the FC-3 baseline readings. Against the tree:
+
+- **There is no `staff-unhealthy` shot** — `shoot.mjs:656` is the only staff entry.
+- **No weight-site or arbitrary-sizing figure appears anywhere in `m0-measurement.md`.** FC-3 has no
+  baseline.
+- **`m0-baseline.md` does not exist**, and M5-T1's mitigation (_"the recipe and width are re-read from
+  `m0-baseline.md`, not remembered"_) points at a file nothing wrote. The house convention is
+  `m0-measurement.md`; the plan's references are corrected to it.
+
+**The consequence is not bookkeeping.** FC-1 is judged on the §4.7 unhealthy recipe, and no unhealthy
+baseline exists — the one unhealthy panel in M0's picture is disclosed at `m0-measurement.md:33-39` as
+a harness artefact, explicitly _not_ the recipe. So **the epic's headline falsification condition has
+no instrument at all**, and §8.1 is why that matters: the layout is exactly what FC-1 exists to judge.
+M0-T3 and M0-T4 are finished **before the layout milestone is built**, not before it is judged.
+
+**And FC-3 compares against a ceiling, not a measurement.** `token-architecture.test.ts:602-607`
+asserts `toBeLessThanOrEqual(SCREEN_WEIGHT_CEILING)`; **173 is a ceiling**. FC-3 says weight sites must
+_fall from 173_, which is only true if the last epic ratcheted to exactly its measurement. Plausible
+from the comment chain, but it is an assumption stated as a figure, and FC-3 is undefined if the real
+count is 171. **Record the measured number.**
+
+### 8.17 The milestones are re-sliced: the frame moves before the vocabulary and the sweep
+
+M3 as written carried four independent structural changes — order, the summary, the merge, **and** the
+grid — and **M2 and M4 were judged against a frame M3 then throws away**:
+
+- M2's `StatGrid` responsive rule was to be _"derived from the widest caller, reviewed at 1280 and
+  below"_ — a rule that depends entirely on container width, which the grid changes. It would be
+  decided twice.
+- M4's element sweep was to _"enumerate every element **from the pictures**"_ — one-column pictures.
+  Every density and width judgement in the "every element" sweep would be made against the wrong
+  frame.
+
+And per §8.1 and §8.16, **the layout is the riskiest thing in the epic and the thing FC-1 exists to
+judge**. Finding out at M3 that it fails, after `StatGrid`'s column rule and the element sweep have
+been tuned to it, is the expensive outcome this gate exists to prevent.
+
+|        |                                                                                                                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **M0** | **finish it** — unhealthy shot, three widths, FC-3 baseline (§8.16)                                                                                                                  |
+| **M1** | adopt the archetypes — unchanged, with §8.5's three expected diffs written down, plus §8.15's way back                                                                               |
+| **M2** | **the frame**: `PageGrid`, `width="wide"`, span-by-demand, section order, the Mail/Retention merge. Structural only. **FC-1 and FC-4 are judged here**, when reverting is one commit |
+| **M3** | the summary                                                                                                                                                                          |
+| **M4** | one vocabulary — decided against **real** container widths                                                                                                                           |
+| **M5** | every element — swept against a **re-shoot in the real frame**                                                                                                                       |
+| **M6** | gate pass, judge FC-2/FC-3, the ADR                                                                                                                                                  |
+
+M1 stays first and stays neutral, so §4.11's stated reason for M1-first is untouched.
+
+### 8.18 Two register rows this epic's own M0 left wrong
+
+`docs/TECH_DEBT.md` **#319** still carries the sub-claim this epic disproved: _"42 shots rather than
+25 — a figure its own docblock also states wrongly."_ **No docblock states a shot count**;
+`feature-spec.md:29` and `m0-measurement.md` both record that correction, and the row was rewritten on
+2026-09-14 by this epic's own M0-T1 with the disproved half left in. **M0-T1's output currently
+contradicts M0's own finding.** Swept in the same pass as this section.
+
+Also noted, non-blocking: `alert.tsx:63` cites `docs/TECH_DEBT.md #118` for the `Alert`/`NoticeStrip`
+boundary, but #118 is _"Staff-console M6 review findings that were not folded"_. Probably a stale
+cross-reference; worth one minute during the M2/M4 work since both primitives are in scope.
+
+### 8.19 Three suggestions taken without argument
+
+- **Container queries, not viewport breakpoints, for in-panel grids.**
+  `RevisionComparePanel.tsx:361` uses `@sm:grid-cols-2` and ADR-0061 established the reasoning (a
+  panel's width comes from its container, not the viewport). Once a panel can be in a 732 px column
+  **or** a 1488 px span, a `sm:grid-cols-4` on `StatGrid` is wrong in one of the two. §8.1's
+  asymmetric grid makes this near-blocking rather than a nicety.
+- **`PageHeader` cannot hold the dual-hat `Alert`.** `PageHeaderProps` takes `title`, `description`,
+  `actions`, and `actions` renders in a `flex shrink-0 items-center gap-2` — wrong for a full-width
+  banner. The `Alert` at `staff.tsx:92-98` becomes a **sibling after** `PageHeader`. M1-T2's "keep it
+  exactly as it is" was ambiguous about placement.
+- **Two non-findings, recorded so nobody chases them.** `staff.tsx:83`'s `<header>` → `<div>` is
+  landmark-neutral (ARIA-in-HTML maps a `header` descended from `main` to `generic`, so no landmark is
+  lost), and `flex-1` on `PageContainer` is inert here because `<main>` is not a flex container.
