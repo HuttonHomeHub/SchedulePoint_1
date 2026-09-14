@@ -10206,3 +10206,34 @@ rather than riding an epic's last milestone.
 review reported `docs/TECH_DEBT.md` #315 as cited by shipped code and absent from the register. It is
 **present**, in the Closed-numbers ledger — which exists precisely so an inbound citation to a closed
 row stays resolvable. Filing work against it would have been work against nothing.
+
+### 321. Turbo's `lint`/`typecheck` cache survives a dependency change, so `prepush` can pass where CI fails
+
+**Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (the vitest 4 → 5 bump) · **Size:** S · **Owner:** repo
+
+`turbo.json:4` declares `"globalDependencies": [".env", "tsconfig.base.json"]`. **`pnpm-lock.yaml` is
+not in it**, and neither `lint` (`:27-30`) nor `typecheck` (`:31-34`) names it as an input. So a
+dependency bump does not invalidate either task's cache — but both are **type-aware**:
+`@typescript-eslint`'s `await-thenable`, `no-unsafe-*` and friends read the INSTALLED types, and
+`tsc` obviously does. The cached verdict was computed against different types from the ones now on
+disk, and turbo has no way to know.
+
+**Observed, not theorised.** The vitest 4 → 5 bump changed `.resolves.<matcher>()` to type as
+non-thenable. `pnpm prepush` reported **22 ok** including `lint`; CI, on a fresh runner with an empty
+cache, failed `@repo/web#lint` with one error —
+`auth-shell.test.tsx:78 Unexpected await of a non-Promise (non-"Thenable") value`. `npx turbo lint
+--force` reproduces it exactly, and deleting every `.eslintcache` does **not** (that is ESLint's own
+cache, a second layer, and it was not the one holding the stale answer).
+
+**Why it matters more than one red PR.** `docs/TESTING.md` sells `pnpm prepush` as the gate you run
+before pushing, and §19.8 of `CLAUDE.md` requires it — on the premise that CI is "the second opinion,
+never the first". For any change that touches dependencies, that premise is currently false in the
+one direction nobody checks: the local gate is **weaker** than CI and says so in green.
+
+**The fix is probably one line** — add `pnpm-lock.yaml` to `globalDependencies` — but it is a
+shared-gate change (ADR-0105) and it has a cost to measure first: every dependency bump would then
+re-run lint and typecheck for every package with no cache, which is exactly when you want that and
+also the slowest time to do it. Worth checking whether `inputs` on the two tasks is the narrower
+instrument. **Do not close this by "remembering to use --force"** — that is the vigilance ADR-0058
+exists to replace, and the person who needs to remember is the person who does not know the cache is
+stale.
