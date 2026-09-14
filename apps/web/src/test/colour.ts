@@ -151,3 +151,45 @@ export function tokenContrast(fill: string, ink: string, backdrop?: Srgb): numbe
 export function fmtRatio(ratio: number): string {
   return `${Math.round(ratio * 100) / 100}:1`;
 }
+
+/**
+ * CIE 1976 ΔE*ab between two gamma-encoded sRGB triples.
+ *
+ * **Added because the WCAG contrast ratio is the wrong instrument for one specific question**
+ * and the minimap epic's M0 caught it saying so (`docs/specs/tsld-minimap-visual/
+ * m0-measurement.md` §5.3). A ratio answers _can this be READ against that_ — a luminance
+ * question, and the right one for text, borders and any pair where one carries information the
+ * other must not swallow. It is blind by construction to a **chroma shift at equal lightness**,
+ * which is exactly what a low-alpha tint on a neutral ground is: the old SchedulePoint's amber
+ * viewport fill measures **1.073:1** against its own ground — "invisible" — and **ΔE 8.33**,
+ * which is what a reader actually sees.
+ *
+ * So: use `contrastRatio` for _is this legible against that_, and this for _is this tint
+ * perceptible at all_. Rough calibration — ΔE ≈ 2.3 is one just-noticeable difference, ≈ 5 is
+ * unmistakable to an unprompted reader.
+ *
+ * **ΔE*ab, not ΔE2000, deliberately.** ΔE2000 is more perceptually uniform and it is also a
+ * fifteen-term formula with three tuning constants; every use here compares a near-neutral
+ * light tint against a near-neutral light ground, where the two agree closely and the extra
+ * machinery would be unverifiable arithmetic in a gate nobody can check by hand. If a future
+ * caller needs saturated pairs, that is the moment to upgrade — and to say so here.
+ */
+export function deltaE76(a: Srgb, b: Srgb): number {
+  const [l1, a1, b1] = srgbToLab(a);
+  const [l2, a2, b2] = srgbToLab(b);
+  return Math.sqrt((l1 - l2) ** 2 + (a1 - a2) ** 2 + (b1 - b2) ** 2);
+}
+
+/** sRGB (gamma-encoded, 0–1) → CIE L*a*b* under D65, the illuminant sRGB is defined against. */
+function srgbToLab(srgb: Srgb): [number, number, number] {
+  const [r, g, b] = srgb.map(decodeGamma) as unknown as [number, number, number];
+  const x = 0.4124 * r + 0.3576 * g + 0.1805 * b;
+  const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const z = 0.0193 * r + 0.1192 * g + 0.9505 * b;
+  // D65 white point, matching the matrix above.
+  const f = (t: number): number => (t > 216 / 24389 ? Math.cbrt(t) : (841 / 108) * t + 4 / 29);
+  const fx = f(x / 0.95047);
+  const fy = f(y / 1.0);
+  const fz = f(z / 1.08883);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}

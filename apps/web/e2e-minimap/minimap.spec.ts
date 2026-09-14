@@ -84,6 +84,22 @@ test.describe('The minimap', () => {
       })
       .toBeGreaterThanOrEqual(8);
 
+    // ── The rectangle is a REGION, not only a boundary (minimap-visual M1-T3).
+    //
+    // `getComputedStyle`, never the attribute: a unit assertion on an inline style passes
+    // against a value a browser silently discards, which is not hypothetical in this token
+    // family — ADR-0100 M4 records the frame pair painting NO colour in a real browser while
+    // every computed gate stayed green, because a `:root` token with no `@theme inline` alias
+    // resolves to the empty string. This is the only tier that can tell those apart.
+    //
+    // Asserted at the rectangle's CURRENT size and again at its 8×8 floor, because the two are
+    // different renderings: the floor is what a planner sees at the Day preset on a long plan,
+    // and it is the case where a border alone leaves almost nothing to see.
+    const fillOfRect = async (): Promise<string> =>
+      rect.evaluate((node) => getComputedStyle(node).backgroundColor);
+    const transparent = new Set(['rgba(0, 0, 0, 0)', 'transparent', '']);
+    expect(transparent.has(await fillOfRect()), 'the viewport rectangle has a fill').toBe(false);
+
     // The picture is not blank: the build painted the ground and bars into the backing store.
     const painted = await picture.evaluate((canvas: HTMLCanvasElement) => {
       const ctx = canvas.getContext('2d');
@@ -161,6 +177,24 @@ test.describe('The minimap', () => {
     // rectangle is at its narrowest.
     expect(padBox.width, 'pad width ≥ 24 (WCAG 2.5.8)').toBeGreaterThanOrEqual(24);
     expect(padBox.height, 'pad height ≥ 24 (WCAG 2.5.8)').toBeGreaterThanOrEqual(24);
+
+    // The fill survives at the rectangle's SMALLEST rendering (M1-T3, the second of the two
+    // cases its sibling assertion names). This is the Day preset on a long plan, where the
+    // true rectangle floors at 8×8 — the state in which a border alone leaves a planner almost
+    // nothing to see, and therefore the state the fill exists for. Measured here rather than
+    // above because only this part of the journey has driven the viewport to that preset.
+    const rectAfterReload = panelAfterReload.getByTestId('tsld-minimap-rect');
+    const rectBox = (await rectAfterReload.boundingBox())!;
+    expect(Math.min(rectBox.width, rectBox.height), 'the rectangle is at its floor').toBeLessThan(
+      40,
+    );
+    const floorFill = await rectAfterReload.evaluate(
+      (node) => getComputedStyle(node).backgroundColor,
+    );
+    expect(
+      ['rgba(0, 0, 0, 0)', 'transparent', ''].includes(floorFill),
+      `the rectangle keeps its fill at ${Math.round(rectBox.width)}×${Math.round(rectBox.height)}`,
+    ).toBe(false);
     const beforeDrag = await ruler.innerText();
     await page.mouse.move(padBox.x + padBox.width / 2, padBox.y + padBox.height / 2);
     await page.mouse.down();

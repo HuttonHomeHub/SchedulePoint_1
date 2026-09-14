@@ -53,6 +53,25 @@ describe('TsldMinimap', () => {
     expect(screen.getByTestId('tsld-minimap-rect')).toBeInTheDocument();
   });
 
+  /**
+   * M1-T2. Deliberately an assertion on the INLINE STYLE and nothing stronger, because jsdom
+   * has no layout and no colour pipeline: it cannot tell a value a browser paints from one it
+   * discards. So this pins that the declaration is present and points at the right custom
+   * property, and the two claims it CANNOT make are made elsewhere — that the token resolves
+   * to anything at all is `token-contrast.test.ts`'s reachability assertion (a `:root` token
+   * with no `@theme inline` alias paints nothing in a real browser while every computed gate
+   * stays green — ADR-0100 M4's own recorded defect in this token family), and that a reader
+   * can see it is the journey, which reads `getComputedStyle`.
+   */
+  it('the viewport rectangle carries a fill, not only a border (M1-T2)', () => {
+    mount();
+    const rect = screen.getByTestId('tsld-minimap-rect');
+    expect(rect.style.background).toBe('var(--color-canvas-minimap-frame-fill)');
+    // The frame pair is untouched: the fill is added BESIDE it, never in place of it.
+    expect(rect.style.border).toContain('var(--color-canvas-minimap-frame)');
+    expect(rect.style.outline).toContain('var(--color-canvas-minimap-frame-halo)');
+  });
+
   it('states there is nothing to show when no activity has computed dates (AC-1.4)', () => {
     mount({ activities: [activity({ earlyStart: null, earlyFinish: null })] });
     expect(screen.getByText(/nothing to show yet/i)).toBeInTheDocument();

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { compositeOver, fmtRatio, parseColour, relativeLuminance, type Srgb } from '@/test/colour';
+import {
+  compositeOver,
+  contrastRatio,
+  deltaE76,
+  fmtRatio,
+  parseColour,
+  relativeLuminance,
+  type Srgb,
+} from '@/test/colour';
 import {
   blockBody,
   declarations,
@@ -369,6 +377,51 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     ).toBeGreaterThanOrEqual(3);
   });
 
+  /**
+   * **The fill's own pair, and it takes a DIFFERENT instrument** (minimap-visual M1-T1).
+   *
+   * Two assertions, because the fill has two jobs and one number cannot judge both:
+   *
+   * 1. The tinted region must be **perceptible** against the untinted one, or the fill is
+   *    decoration. That is a ΔE question, not a contrast-ratio one — a ratio is blind to a
+   *    chroma shift at equal lightness, and M0 measured the old app's amber viewport fill at
+   *    **1.073:1** (which reads as "invisible") and **ΔE 8.33** (which is what a reader sees).
+   *    Asserting the ratio here would have picked a dark neutral at α=0.21 — three and a half
+   *    times the ink, for a picture that dims the region the reader is looking at.
+   * 2. Criticality must **survive** the tint, since the fill sits over both bar inks. This is
+   *    the spec's original assertion, kept — and M0's measurement reframes it as a CEILING on
+   *    alpha rather than the thing that picks it: a neutral fill holds 2.02:1 at α=0.40,
+   *    against a 1.5 floor, so it never binds at any alpha a designer would choose.
+   *
+   * Both verified red: (1) against α=0.01, which gives ΔE ≈ 0.9 — necessary because a ΔE
+   * assertion passes at every alpha once the fill is visible at all, so it is exactly the shape
+   * of gate that can be green for having tested nothing; (2) against an alpha high enough to
+   * collapse the pair.
+   */
+  it('the viewport fill is PERCEPTIBLE against the untinted ground (ΔE ≥ 5)', () => {
+    const ground = fillOf(tokens);
+    const tinted = compositeOver(parseColour(tokens.get('--canvas-minimap-frame-fill')!), ground);
+    const delta = deltaE76(tinted, ground);
+    expect(
+      delta,
+      `the viewport fill over --canvas is ΔE ${delta.toFixed(2)} — below 5 it is decoration`,
+    ).toBeGreaterThanOrEqual(5);
+  });
+
+  it.each([
+    ['non-critical', '--primary'],
+    ['critical', '--destructive'],
+  ] as const)('criticality survives the viewport fill over the %s bar', () => {
+    const fill = parseColour(tokens.get('--canvas-minimap-frame-fill')!);
+    const through = (token: string): Srgb =>
+      compositeOver(fill, compositeOver(parseColour(tokens.get(token)!), fillOf(tokens)));
+    const value = contrastRatio(through('--primary'), through('--destructive'));
+    expect(
+      value,
+      `critical vs non-critical THROUGH the fill is ${fmtRatio(value)}`,
+    ).toBeGreaterThanOrEqual(1.5);
+  });
+
   it('both halves are REACHABLE — the @theme inline block aliases them to --color-* names', () => {
     // The M4 component review's finding: the pair was declared at :root and referenced from the
     // component as var(--color-canvas-minimap-frame) — but only the `@theme inline` block turns a
@@ -378,7 +431,14 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     // asserted geometry, and the journey asserted visibility. Verified red against the
     // alias-less CSS before the aliases were added.
     const css = readGlobalsCss();
-    for (const name of ['canvas-minimap-frame', 'canvas-minimap-frame-halo']) {
+    for (const name of [
+      'canvas-minimap-frame',
+      'canvas-minimap-frame-halo',
+      // M1-T1: the fill joins the list for the same reason the other two are on it — a :root
+      // token with no `@theme inline` alias paints NOTHING in a real browser while every
+      // computed assertion above stays green, because they read the :root value directly.
+      'canvas-minimap-frame-fill',
+    ]) {
       expect(css, `@theme inline must alias --${name}`).toMatch(
         new RegExp(String.raw`--color-${name}:\s*var\(--${name}\);`),
       );

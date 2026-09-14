@@ -425,6 +425,31 @@
   --canvas-minimap-frame: oklch(0.25 0.015 260);
   --canvas-minimap-frame-halo: oklch(1 0 0);
 
+  /* The viewport indicator's FILL (minimap-visual M1-T1). A border says where a region ends;
+     a fill says the region is a thing. M0 measured why that matters: at whole-plan zoom the
+     rectangle is congruent with the picture's own edge to the pixel, so the loudest mark in
+     the widget (14.13:1 against the ground) delimits EVERYTHING and therefore says nothing.
+
+     **The alpha is 8% because ΔE said so, not because it looks about right.** The spec's M1-T1
+     named one assertion — criticality must survive the tint — and that constraint never binds:
+     a neutral fill keeps critical-vs-ordinary at 2.02:1 even at α=0.40, against a 1.5 floor.
+     The binding constraint is the opposite one and the gate now carries both: the tinted region
+     must differ from the untinted region, measured as ΔE ≥ 5 (≈2.3 is one JND). A CONTRAST
+     RATIO cannot judge this — it is blind to a chroma shift at equal lightness, and said the
+     old app's amber fill was 1.073:1 when a reader plainly saw it at ΔE 8.33.
+
+     **The hue is the frame's own, and amber lost on a collision rather than on looks.** Rendered
+     side by side, amber at α=0.06–0.12 reads best: warm against a cool picture, exactly what the
+     old app did. But `--warning` is near-critical in the scene, and near-critical currently has
+     NO minimap mark at all (M0 §2.3) — so M2 may well add it, and an amber viewport would be a
+     new collision created by the milestone whose whole subject is removing collisions. `--primary`
+     was rejected on the same test one step earlier: it IS the ordinary bar ink, and the rendered
+     candidate reads as extra blue bars inside the rectangle. The frame's own value collides with
+     no schedule meaning and says frame-and-fill are one object. Its cost is that a dark tint
+     dims what it covers — real, and at 8% it is a soft shade rather than a dimming; at 14% the
+     rendered candidate does read as greyed-out, which is where that objection starts to bite. */
+  --canvas-minimap-frame-fill: oklch(0.25 0.015 260 / 8%);
+
   /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
      Theme-INVARIANT, like `brand` and for the same reason one step further out.
      ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
@@ -1450,6 +1475,8 @@
   --color-canvas-band: var(--canvas-band);
   --color-canvas-minimap-frame: var(--canvas-minimap-frame);
   --color-canvas-minimap-frame-halo: var(--canvas-minimap-frame-halo);
+  --color-canvas-minimap-frame-fill: var(--canvas-minimap-frame-fill);
+
   --color-canvas-grid-day: var(--canvas-grid-day);
   --color-canvas-grid-month: var(--canvas-grid-month);
   --color-canvas-grid-year: var(--canvas-grid-year);

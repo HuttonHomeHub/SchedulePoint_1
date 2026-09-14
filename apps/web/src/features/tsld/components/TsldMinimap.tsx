@@ -431,12 +431,27 @@ export function TsldMinimap({
           {/* The viewport rectangle: moved by the HOST's frame loop via style.transform. The
               two-tone frame pair is the WCAG 1.4.11 answer measured at M2-T1 — no single
               colour clears the ground and both bar inks, so the stroke holds the dark ground
-              and the halo holds the bars. */}
+              and the halo holds the bars.
+
+              **The fill is what makes it a region rather than a boundary** (minimap-visual
+              M1-T2). M0 measured the border at 14.13:1 against the ground — the loudest mark
+              in the widget by a factor of five — and found that at whole-plan zoom it is
+              congruent with the picture's own edge TO THE PIXEL, so the loudest thing on
+              screen delimits everything and therefore says nothing. The fix is not a bolder
+              line; a bolder line would make it worse. Alpha and hue are both derived, in
+              `globals.css` beside the token and in `token-contrast.test.ts`, which asserts
+              the fill's perceptibility in ΔE and criticality's survival in contrast ratio —
+              two instruments, because one number cannot judge both.
+
+              This node is the one the frame loop writes `style.transform` to, so it must not
+              be moved, renamed or wrapped: a wrapper would silently break the ADR-0026 D3
+              no-React-render contract. The fill is one more declaration on the same element. */}
           <div
             ref={rectRef}
             data-testid="tsld-minimap-rect"
             className="absolute top-0 left-0 will-change-transform"
             style={{
+              background: 'var(--color-canvas-minimap-frame-fill)',
               border: '1px solid var(--color-canvas-minimap-frame)',
               outline: '1px solid var(--color-canvas-minimap-frame-halo)',
               outlineOffset: '-2px',
