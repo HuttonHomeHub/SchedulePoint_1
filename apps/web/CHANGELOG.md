@@ -1,5 +1,43 @@
 # @repo/web
 
+## 0.129.0
+
+### Minor Changes
+
+- [#608](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/608) [`4ecdaa7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4ecdaa7eb8dc96fbdb68bbcec59a69367ce0ad13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The minimap gains temporal structure. A whole-plan picture with no time tiers reads as a smear
+  rather than a programme, so it now draws one minor tier (month or quarter, whichever fits) plus
+  the year, beneath the bars — refusing any tier whose pitch falls below a measured legibility
+  floor, so a long plan stays quiet rather than striped.
+
+### Patch Changes
+
+- [#608](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/608) [`4ecdaa7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4ecdaa7eb8dc96fbdb68bbcec59a69367ce0ad13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The minimap's border no longer merges with the bar beside it. The panel border shares its colour
+  with a non-critical bar, and the picture is flush to three of the panel's edges by construction —
+  the plan's earliest, latest and lowest activities are mapped to exactly those edges — so on any
+  plan whose extreme activity is non-critical the two touched and became one shape. One pixel of the
+  panel's own ground now sits between them, which costs two pixels of panel size and no picture.
+
+- [#608](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/608) [`4ecdaa7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4ecdaa7eb8dc96fbdb68bbcec59a69367ce0ad13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The minimap stops painting out milestones that sit on the data date. The data-date vertical was
+  the last thing drawn, 1px wide and full height, so any zero-duration activity standing on it
+  disappeared — 42 start milestones and 34 finish milestones on the measured plan. It now draws
+  above the month/year tiers and beneath the bars: still ahead of texture, no longer ahead of the
+  plan's own work.
+
+- [#608](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/608) [`4ecdaa7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4ecdaa7eb8dc96fbdb68bbcec59a69367ce0ad13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The minimap paints the diagram's third bar state. A near-critical activity was drawn as an
+  ordinary one, so the picture showed two criticality states where the diagram beside it shows
+  three. The Today marker also gains a halo, so it stays visible where it crosses a critical bar
+  — the two share a colour token, and it was previously invisible there.
+
+- [#608](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/608) [`4ecdaa7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4ecdaa7eb8dc96fbdb68bbcec59a69367ce0ad13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The minimap panel's edge separates it from the diagram again. The widget floats over the canvas
+  and its own ground is the same colour as the canvas, so its border is the whole separation between
+  the two — and at the neutral grey it measured 1.17:1 against that ground, which is to say it did
+  not separate them. It is now the diagram's own primary at 3.15:1, matching the old application's
+  treatment and clearing WCAG 1.4.11's non-text floor.
+
+- [#608](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/608) [`4ecdaa7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4ecdaa7eb8dc96fbdb68bbcec59a69367ce0ad13) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The minimap's viewport indicator is filled, not only bordered. At whole-plan zoom the
+  rectangle is congruent with the picture's own edge, so a border alone marks everything and
+  therefore marks nothing; the fill makes it read as a region at every zoom.
+
 ## 0.128.0
 
 ### Minor Changes
