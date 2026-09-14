@@ -164,3 +164,92 @@ minimap critical vs its fringe          1.48:1
 
 **Nothing re-orders the epic on this half.** Two additions to M2's scope (§2.3, §2.4) and one
 rewritten justification for M1 (§2.2).
+
+## 5. M1's design, re-derived from the inks — and the instrument the spec prescribes cannot judge it
+
+M1-T1 says to choose the fill's alpha from an assertion rather than by eye, and names the
+assertion: composite the fill over `--primary` and over `--destructive` and check the pair
+still clears the criticality floor (1.5:1, ADR-0097 Landing E). Computed against the inks
+sampled in §3, **that constraint never binds and the instrument answers the wrong
+question.**
+
+### 5.1 The criticality risk M1-T1 is built around does not occur
+
+Alpha-compositing a neutral dark fill over the two measured bar inks:
+
+| alpha | critical vs ordinary, through the tint |
+| ----- | -------------------------------------- |
+| 0.10  | 2.495:1                                |
+| 0.20  | 2.355:1                                |
+| 0.30  | 2.187:1                                |
+| 0.40  | 2.023:1                                |
+
+The floor is **1.5**. It is not reached at any alpha a designer would use, so M1-T1's stated
+risk — "the tint washes out the criticality distinction beneath it" — is **not the binding
+constraint**. Keeping the assertion is still right (it is cheap and it pins a real property),
+but a milestone that only had this assertion would have been free to pick any alpha at all.
+
+### 5.2 The constraint that does bind is the opposite one, and the spec does not name it
+
+What has to be true is that the **tinted region differs from the untinted region** — otherwise
+the fill is decoration. On this ground that is hard in one direction and easy in the other:
+
+| fill            | alpha for a 1.5:1 region floor | cost to criticality           |
+| --------------- | ------------------------------ | ----------------------------- |
+| neutral dark    | 0.21                           | 2.329:1 — fine                |
+| primary blue    | 0.32                           | 2.476:1 — fine                |
+| **brand amber** | **0.68**                       | **1.308:1 — below the floor** |
+
+A **light** tint can never work: the ground is already `rgb(239,241,244)`, so lightening it
+moves the ratio by almost nothing. By this instrument the answer is a dark neutral at
+α≈0.21 — which is a design that **dims the region the reader is looking at**, the exact
+objection §4.1 raises against the outside scrim, applied inwards.
+
+### 5.3 …and then the instrument turns out to be wrong for the question
+
+The old app's fill measures **1.073:1** against its own ground. On that number I wrote, in an
+earlier draft of this document, that the old fill "did nothing" and that its indicator's
+visibility was entirely its border. **That was wrong, and a second instrument says so:**
+
+|                                    | contrast ratio | CIE76 ΔE |
+| ---------------------------------- | -------------- | -------- |
+| Old app's amber fill vs its ground | 1.073:1        | **8.33** |
+
+ΔE 2.3 is a just-noticeable difference and 5 is unmistakable, so the old fill was **clearly
+visible** — as a chroma shift on a neutral ground, which is a channel a luminance ratio is
+blind to by construction. Contrast ratio is the right instrument for "can this be read
+against that" and the wrong one for "can this tint be seen at all".
+
+Measured with the right one, the design inverts:
+
+| fill            | alpha for ΔE ≥ 5 | ratio (for reference) | criticality through it |
+| --------------- | ---------------- | --------------------- | ---------------------- |
+| **brand amber** | **0.06**         | 1.040:1               | **2.463:1**            |
+| primary blue    | 0.09             | 1.119:1               | 2.644:1                |
+| neutral dark    | 0.08             | 1.168:1               | 2.506:1                |
+
+A hue-bearing tint at **α≈0.06** is unmistakable and costs criticality essentially nothing —
+against α=0.21 of dark neutral, three and a half times the ink, to achieve a worse picture.
+This is also what the old app did, and why it worked.
+
+### 5.4 What this changes in M1-T1
+
+The task gains a **second assertion using a second instrument**, and the two are not
+interchangeable:
+
+1. **ΔE(tinted ground, ground) ≥ 5** — the region is legible. New; the spec has nothing
+   covering it, and without it the alpha is unconstrained from below.
+2. **contrast(critical-through-tint, ordinary-through-tint) ≥ 1.5** — criticality survives.
+   The spec's assertion, kept, now understood as a ceiling on alpha rather than the thing
+   that picks it.
+
+**Verified red is not optional for the first one**: a ΔE assertion written against a fill that
+is already visible passes whatever the alpha, so it must be run against α small enough to
+fail (α = 0.01 gives ΔE ≈ 0.9).
+
+**One caveat is recorded rather than resolved.** ADR-0100 D9 contrast-gates the frame pair at
+3:1 against `MINIMAP_GROUNDS`; brand amber is **1.918:1** on this ground and would fail that
+gate as a _stroke_. Nothing here proposes changing the stroke — the fill is a separate
+property with a separate justification — but a later milestone reaching for "make the frame
+amber too" must clear D9 first, and on these numbers it cannot without the two-tone pair
+carrying it on the halo.
