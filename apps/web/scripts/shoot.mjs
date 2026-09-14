@@ -654,6 +654,47 @@ const SHOTS = [
   // variable set — see `playwright.staff.config.ts`, which already does exactly that. Silent
   // skipping is how a shot list grows a hole that reads as coverage.
   { name: 'staff', staff: true, go: (p) => p.goto(`${BASE}/staff`) },
+  // **The state the design is actually judged on** (staff-console M0-T3, spec §4.7). An all-green
+  // console cannot tell you whether a red state would be findable, so the epic's headline
+  // falsification condition — every non-healthy condition named within the first viewport — is
+  // measured here and nowhere else.
+  //
+  // It is a SECOND INVOCATION against a differently-configured API, not a second pass of one run:
+  // this harness boots no servers (`:566-570`), and the recipe is environment. Take `staff` first,
+  // against the healthy API, and this one second — `onboardStaff` can only VERIFY a new account by
+  // receiving mail, so a fresh account cannot be created against an API whose transport is
+  // deliberately unset. After the first run the account persists and is already verified, which is
+  // what makes the ordering work rather than a coincidence.
+  {
+    name: 'staff-unhealthy',
+    staff: true,
+    go: (p) => p.goto(`${BASE}/staff`),
+    // Keyed to spec §4.7's recipe, one probe per line, deliberately matching the VISIBLE sentence.
+    // Coupling a measurement instrument to copy is right here: the shot is judged on what is on
+    // screen, so a copy change should make this fail and be re-read, not pass quietly against a
+    // condition that no longer announces itself.
+    //
+    // **The split into `conditions` and `ambient` is the whole point, and it was learnt by running
+    // the first version against the HEALTHY API and watching it pass.** That version listed all
+    // four together and required any two; `MAIL_ALERT_URL` and `HEARTBEAT_URL` are **empty by
+    // default on every boot** (CLAUDE.md §17 — they are compose edits on the host), so it found
+    // "Failure alerting: off, Heartbeat: off" on the healthy console and filed the picture. A
+    // control written to stop a hierarchy assertion being judged over an empty set, satisfied by
+    // two conditions that are true whether or not the recipe was ever applied. The
+    // gate-that-cannot-see-the-defect shape, inside the gate written to prevent it.
+    //
+    // So `conditions` holds only what the recipe **turns on** — the probes that DISCRIMINATE
+    // between the two boots — and **every one of them must be present**. `ambient` is reported for
+    // the record and can satisfy nothing.
+    conditions: [
+      { id: 'MAIL_SMTP_URL unset', pattern: /No mail transport is configured/i },
+      { id: 'RETENTION_SWEEP_ENABLED=false', pattern: /Retention sweeping is disabled/i },
+    ],
+    ambient: [
+      { id: 'MAIL_ALERT_URL unset', pattern: /Failure alerting: off/i },
+      { id: 'HEARTBEAT_URL unset', pattern: /Heartbeat: off/i },
+    ],
+  },
   // **The states the empty-state pass changed, which nothing had ever photographed**
   // (`docs/specs/empty-state-consolidation/` M8). The epic reshaped 27 sites and three of its
   // milestones owed a shot each; those are the six below. The reason they were owed rather than
@@ -937,7 +978,10 @@ for (const width of widths) {
               `STAFF_EMAILS containing ${process.env.SHOOT_STAFF_EMAIL ?? 'ops@schedulepoint.test'}, ` +
               `MAIL_SMTP_URL=smtp://127.0.0.1:${STAFF_SMTP_PORT}, and MAIL_FROM (the API refuses to ` +
               `start with a transport and no sender). playwright.staff.config.ts:55-84 is the ` +
-              `working recipe.`,
+              `working recipe. For \`staff-unhealthy\`, boot a SECOND time on spec §4.7's recipe ` +
+              `(MAIL_SMTP_URL, MAIL_ALERT_URL and HEARTBEAT_URL unset, ` +
+              `RETENTION_SWEEP_ENABLED=false) — take \`staff\` first, because a new account can ` +
+              `only be verified by receiving mail.`,
           );
           continue;
         }
@@ -974,6 +1018,30 @@ for (const width of widths) {
                 `STAFF_EMAILS does not contain ${process.env.SHOOT_STAFF_EMAIL ?? 'ops@schedulepoint.test'}, ` +
                 `or the address is not verified, or the API is not the one this harness targets.`,
             );
+          // **The non-vacuity control, checked BEFORE the picture is filed** (spec §4.7). A
+          // hierarchy assertion over an empty set passes and proves nothing — the shape ADR-0093,
+          // ADR-0108, ADR-0121 and ADR-0131 each recorded a gate failing on. So a shot that
+          // declares conditions must actually find at least two DISTINCT ones, and it names which
+          // it found rather than printing a bare count: "2 of 4" does not tell you whether the
+          // recipe was applied or whether two unrelated things happened to be wrong.
+          //
+          // Verified red by running it against the healthy API, where it finds zero.
+          if (shot.conditions) {
+            const body = (await staffPage.locator('body').innerText()) ?? '';
+            const missing = shot.conditions.filter((c) => !c.pattern.test(body)).map((c) => c.id);
+            if (missing.length > 0)
+              throw new Error(
+                `${shot.name}: the non-vacuity control failed — the recipe was not applied. ` +
+                  `Missing: ${missing.join(', ')}. This picture would be judged for hierarchy ` +
+                  `against a console with nothing wrong on it. Boot the API on the spec §4.7 ` +
+                  `recipe: MAIL_SMTP_URL unset, RETENTION_SWEEP_ENABLED=false.`,
+              );
+            const amb = (shot.ambient ?? []).filter((c) => c.pattern.test(body)).map((c) => c.id);
+            console.log(
+              `${width}  ${shot.name}  recipe applied (${shot.conditions.length}/` +
+                `${shot.conditions.length})${amb.length > 0 ? `; ambient: ${amb.join(', ')}` : ''}`,
+            );
+          }
           await staffPage.screenshot({ path: join(dir, `${shot.name}.png`), fullPage: true });
         } finally {
           await staffCtx.close();

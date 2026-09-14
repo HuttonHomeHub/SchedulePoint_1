@@ -60,10 +60,10 @@ The three above could **all pass** against a console whose tables are less legib
 replaces, and none of them says anything a screen-reader user can use. Both gaps are closed here
 rather than discovered at the gate pass.
 
-| #         | Condition                                                                                                                                                             | Withdrawn if                                                                                                                     |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **FC-1a** | In **DOM order**, `StaffStatusSummary` precedes every section, and for each non-healthy condition it contains a **link whose target is that section**                 | the summary is not first, or a condition it reports has no link — the AT-equivalent of FC-1, in DOM terms, independent of pixels |
-| **FC-4**  | **No table-bodied section is narrower after the change than the 848 px it has today** (`max-w-4xl` − `p-6`), measured in the browser at 1646 on the same shot as FC-1 | any table-bodied section is narrower than it is today — the redesign widened the page and narrowed the content                   |
+| #         | Condition                                                                                                                                             | Withdrawn if                                                                                                                     |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **FC-1a** | In **DOM order**, `StaffStatusSummary` precedes every section, and for each non-healthy condition it contains a **link whose target is that section** | the summary is not first, or a condition it reports has no link — the AT-equivalent of FC-1, in DOM terms, independent of pixels |
+| **FC-4**  | **No table on the page is narrower after the change than the 798 px it measures today**, in the browser at 1646 on the same shot as FC-1              | any table is narrower than it is today — the redesign widened the page and narrowed the content                                  |
 
 **FC-1a is verified red against a CSS-`order`-based implementation first**, and asserted **at the
 two-column breakpoint** — the pre-column M1 assertion tells you nothing about the column layout
@@ -71,7 +71,28 @@ two-column breakpoint** — the pre-column M1 assertion tells you nothing about 
 
 **FC-4 exists because nothing else in the epic could see the defect it guards.** FC-1 measures what is
 above the fold; FC-2 improves by construction under any grid; FC-3 counts weight sites. See §8.1 for
-the arithmetic — two _equal_ columns at 1646 are 787 px against today's 848 px.
+the arithmetic, and **`m0-measurement.md` §9 for the measured version of it**, which is the one to
+use: §8.1 costed the layout in _container_ widths and a card's own padding takes 50 px, so the figure
+FC-4 guards is the **table** at **798 px**. Today 798; two equal columns **737 (−7.6 %)**;
+span-by-demand at `wide` **1,438 (+80 %)**. One table in the code — CSP's, five columns
+(`staff.tsx:398`) — does not render on an empty database and is the widest the console can produce:
+judge against the four that render and remember the fifth.
+
+**FC-3's baseline is measured, and both ratchets sit exactly on their ceilings — 173 and 17**
+(`m0-measurement.md` §8). So FC-3 is well-defined; it would not have been if either read 171, and
+nobody had checked.
+
+**FC-2 is weaker than §6 said, for a second and independent reason.** Its baseline **drifts upward on
+its own**: the healthy state measured 3,690 px and re-measures **4,245 px** on the same build with no
+product change, because "Unverified accounts" and "Staff activity" are fed by tables that only grow —
+and staff activity grows ~7 rows **every time the console is opened**, including by the harness. So
+if FC-2 is judged at all, **the before and after are measured in the same sitting** (stash, measure,
+restore) and the verdict says so (`m0-measurement.md` §10).
+
+**FC-1 FAILS on today's console: 3 of 5 conditions above the fold, at every width**
+(`m0-measurement.md` §7). The three that pass all belong to the **same panel**, which happens to sit
+first; "Retention sweeping is disabled" is **562 px** below the fold and the unverified-account count
+**1,445 px** below. That is the epic's justification, measured rather than asserted.
 
 **FC-3's baseline is a measurement, not the ceiling.** `token-architecture.test.ts:602-607` asserts
 `toBeLessThanOrEqual(SCREEN_WEIGHT_CEILING)`, and **173 is a ceiling**. M0 records the number the gate
@@ -218,7 +239,10 @@ that the harness change did not disturb the product.
      (`docs/specs/tsld-minimap/`, `workspace-layout/`). **The plan previously said `m0-baseline.md`
      and nothing ever wrote that file**, so M5-T1's mitigation pointed at something that does not
      exist (§8.16). Every figure names the width, the state and the command.
-  4. **This task is NOT complete until the unhealthy shot exists and the FC-3 numbers are recorded.**
+  4. ~~**This task is NOT complete until the unhealthy shot exists and the FC-3 numbers are
+     recorded.**~~ **DONE 2026-09-14** — `staff-unhealthy` (1646 × 5553), three widths, both ratchet
+     readings, and the FC-1 baseline verdict are in `m0-measurement.md` §6–§12. The original text
+     follows, because the reason the task was reopened is the part a reader needs.**
      As of the review, `m0-measurement.md` holds **one width and one state**, there is no
      `staff-unhealthy` entry in `shoot.mjs`, and no weight or sizing figure appears anywhere — so
      **FC-1 has no instrument at all**, because it is judged on the §4.7 unhealthy recipe and the one

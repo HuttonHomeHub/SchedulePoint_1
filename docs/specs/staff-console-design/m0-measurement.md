@@ -91,3 +91,141 @@ script in `package.json` carries the flag, and without it the import throws loud
 
 **One more precondition the plan did not name**, found by booting the API: `MAIL_FROM` is required
 whenever `MAIL_SMTP_URL` is set, and the API refuses to start without it. Now in the skip message.
+
+---
+
+# M0 completed — the unhealthy shot, three widths, and the FC-3 baseline
+
+**Taken:** 2026-09-14, same build. **Artefact:** `apps/web/.screenshots/1646/staff-unhealthy.png`
+(1646 × 5553).
+
+Everything above was taken on **one width in one state**, and the design review found that this left
+**FC-1 with no instrument at all** (spec §8.16): FC-1 is judged on the §4.7 unhealthy recipe, and the
+single unhealthy panel in the picture above is disclosed there as a harness artefact, explicitly not
+the recipe. That is closed here, along with the three-width sweep and the FC-3 readings.
+
+## 6. The unhealthy baseline — measured at three widths
+
+API booted on the §4.7 recipe: `MAIL_SMTP_URL` unset, `MAIL_ALERT_URL` / `HEARTBEAT_URL` unset,
+`RETENTION_SWEEP_ENABLED=false`, 68 unverified accounts present.
+
+| quantity                    |              1280 |              1440 |              1646 |
+| --------------------------- | ----------------: | ----------------: | ----------------: |
+| Document height             |      **5,553 px** |      **5,553 px** |      **5,553 px** |
+| …in viewport heights (1000) |       5.6 screens |       5.6 screens |   **5.6 screens** |
+| Content column              |        **848 px** |        **848 px** |        **848 px** |
+| Unused horizontal space     | 432 px (**34 %**) | 592 px (**41 %**) | 798 px (**48 %**) |
+| Table width                 |        **798 px** |        **798 px** |        **798 px** |
+
+**The three columns are identical, and that is the finding.** Every number except the margin is the
+same at 1280 as at 1646: the page does not respond to width **at all** above 896 px. It is not that
+the layout adapts badly — there is no adaptation to observe. So the 46 % recorded in §1 is
+**48 %** at 1646 measured properly, and it is 34 % even on a 1280 laptop.
+
+## 7. FC-1 FAILS on today's console — 3 of 5, at every width
+
+Measured as the scroll-position of each condition's own sentence, against a 1000 px fold:
+
+| condition                                        |     y | verdict               |
+| ------------------------------------------------ | ----: | --------------------- |
+| `MAIL_SMTP_URL` unset — "No mail transport…"     |   194 | above the fold        |
+| `MAIL_ALERT_URL` unset — "Failure alerting: off" |   325 | above the fold        |
+| `HEARTBEAT_URL` unset — "Heartbeat: off"         |   325 | above the fold        |
+| `RETENTION_SWEEP_ENABLED=false` — "…is disabled" | 1,562 | **below by 562 px**   |
+| 68 unverified accounts                           | 2,445 | **below by 1,445 px** |
+
+**This is the epic's justification, measured rather than asserted.** Three of the five conditions are
+above the fold only because they all belong to the **same panel**, which happens to sit first. The two
+that belong to other panels are both below it — one by more than a screen and a half. An operator
+opening this console to answer _"is anything wrong?"_ is told about mail and must scroll past two
+inert panels to learn that **nothing has been deleted from any table since the sweep was switched
+off**.
+
+Identical at all three widths, for the reason §6 gives: there is no responsive behaviour to differ.
+
+## 8. FC-3's baseline is a measurement now, not a ceiling
+
+The review's B8 was right to ask. Read from the **real instrument** — both ceilings temporarily
+dropped to 0 so the assertion message reports the true count, then reverted (a figure taken with a
+_copy_ of an instrument measures the copy, ADR-0124):
+
+| ratchet                                  | ceiling | **measured** |
+| ---------------------------------------- | ------: | -----------: |
+| `weightSites()` outside `components/ui/` |     173 |      **173** |
+| arbitrary sizing values                  |      17 |       **17** |
+
+**Both sit exactly on their ceilings**, so the previous epic did ratchet to its own measurement and
+FC-3 — _"falls from 173"_ — is well-defined. It would not have been if either read 171, and nobody
+had checked.
+
+## 9. FC-4's baseline is 798 px, not 848
+
+Spec §8.1 costed the layout in **container** widths (848 px today). The **table** is what FC-4
+guards, and a card's own padding takes 50 px of it. Measured, every table on the page is **798 px**.
+So FC-4 is stated against 798, and the three arrangements compare like this:
+
+| arrangement                                   | container |    **table** |            vs today |
+| --------------------------------------------- | --------: | -----------: | ------------------: |
+| today, `narrow`                               |    848 px |   **798 px** |                   — |
+| two **equal** columns at 1646 (`full`)        |    787 px |   **737 px** | **−61 px (−7.6 %)** |
+| span-by-demand, `wide`, a table spanning both |  1,488 px | **1,438 px** | **+640 px (+80 %)** |
+
+The review's conclusion is unchanged and its arithmetic is confirmed: equal columns regress every
+table on the page. The gain from span-by-demand is **+80 %**, slightly better than the +75 % §8.1
+estimated from container widths.
+
+**One table in the code does not appear in this picture and is not missing.** `staff.tsx:398` defines
+a **five**-column CSP table; on this database there are no violations, so the panel renders "No
+violations recorded" and no table. It is the widest table the console can produce and the one with
+the least margin for narrowing — judge FC-4 against the four that render, and remember the fifth.
+
+## 10. FC-2's baseline drifts upward on its own, and the epic must not quote it as a win
+
+§4 recorded **3,690 px** for the healthy state. The healthy shot re-taken today measures
+**4,245 px** — the same build, the same width, the same state, **+555 px**. Nothing about the product
+changed. "Unverified accounts" and "Staff activity" are both fed by tables that only **grow**, and
+`staff activity` grows by roughly seven rows _every time the console is opened_ — including by this
+harness.
+
+So **FC-2 compares two numbers taken at different times against a database that is monotonically
+increasing**, which means a redesign could beat it while being taller, or be penalised while being
+shorter. §6 already said FC-2 proves almost nothing because two columns halve the page by
+construction; this is a second, independent reason, and it is the stronger one. **If FC-2 is judged
+at all, the before and after must be measured in the same sitting** — stash the change, measure,
+restore — and the verdict says so. It is not the condition that decides this epic: **FC-1 does, and
+it fails today.**
+
+## 11. The non-vacuity control was vacuous, and running it is the only way that was ever going to
+
+show
+
+The control was written as _"at least two of four recipe conditions are present"_, and **it passed
+against the healthy API**, finding `Failure alerting: off` and `Heartbeat: off`. Both are
+**empty by default on every boot** — CLAUDE.md §17 records them as compose edits on the host — so
+they are true whether or not the recipe was ever applied. A control written to stop a hierarchy
+assertion being judged over an empty set, satisfied by two conditions that carry no information.
+The gate-that-cannot-see-the-defect shape (ADR-0093, ADR-0108, ADR-0121, ADR-0131), inside the gate
+written to prevent it.
+
+Fixed by splitting the probes: `conditions` holds only what the recipe **turns on** — the two that
+discriminate between the boots — and **every one must be present**; `ambient` is reported for the
+record and can satisfy nothing. **Re-verified red** against the healthy API, where it now names the
+two it is missing.
+
+**And it earned its keep within the hour.** The first attempt to boot the unhealthy API failed with
+`EADDRINUSE` — a stale server from the earlier run still held port 3000 — while `curl` on
+`/health` answered **200** from that old process. Every signal said the stack was ready. The control
+is what would have refused the picture; the ADR-0099 rule (a sweep measures the tree it runs
+against) is what made me look. Both servers are now killed by port before a shot, not by remembered
+pid.
+
+## 12. The measurement harness lied once, and the guard is recorded
+
+`measure-staff.mjs`'s first run reported **`FC-1: 0 of 5 -> FAIL`** at all three widths, with
+`document height : 1000 px`. It had signed in with the wrong password, stayed on the auth screen, and
+found none of the five conditions **because it was not looking at the console** — then printed a
+verdict about a page it had never loaded, in the format of a real result. An instrument that cannot
+tell _"the condition is absent"_ from _"I am on the wrong screen"_ is worse than none, because
+somebody acts on it. It now asserts the `<h1>` reads "Staff console" and **throws** otherwise, with
+the message saying that nothing below it is a measurement. Same rule as the shot's own guard, which
+already had it.
