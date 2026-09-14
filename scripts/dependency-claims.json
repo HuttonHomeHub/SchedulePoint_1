@@ -7,16 +7,16 @@
     "zod": "4.6.5",
     "@nestjs/throttler": "6.5.0",
     "react-hook-form": "7.88.0",
-    "lucide-react": "1.33.0",
+    "lucide-react": "1.46.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
     "@tanstack/react-router": "1.170.36",
     "@tanstack/history": "1.162.4",
     "@tanstack/router-core": "1.171.30",
-    "playwright-core": "1.62.1",
+    "playwright-core": "1.63.0",
     "tailwindcss": "4.3.3",
-    "@tanstack/query-core": "5.101.4",
-    "@nestjs/core": "11.1.29"
+    "@tanstack/query-core": "5.102.8",
+    "@nestjs/core": "11.2.3"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -869,8 +869,8 @@
       "ref": "arrow-left-to-line.mjs:15",
       "package": "lucide-react",
       "path": "dist/esm/icons/arrow-left-to-line.mjs",
-      "lines": "15",
-      "anchor": "const ArrowLeftToLine = createLucideIcon(\"arrow-left-to-line\", __iconNode);",
+      "lines": "20",
+      "anchor": "const ArrowLeftToLine = createLucideIcon(__iconData);",
       "citedBy": [
         "docs/adr/0091-modes-density-and-the-command-band.md",
         "docs/specs/workspace-modes/feature-spec.md"
@@ -880,8 +880,8 @@
       "ref": "chart-gantt.mjs:16",
       "package": "lucide-react",
       "path": "dist/esm/icons/chart-gantt.mjs",
-      "lines": "16",
-      "anchor": "const ChartGantt = createLucideIcon(\"chart-gantt\", __iconNode);",
+      "lines": "21",
+      "anchor": "const ChartGantt = createLucideIcon(__iconData);",
       "citedBy": [
         "docs/adr/0091-modes-density-and-the-command-band.md",
         "docs/specs/workspace-modes/feature-spec.md"
@@ -891,8 +891,8 @@
       "ref": "hand.mjs:22",
       "package": "lucide-react",
       "path": "dist/esm/icons/hand.mjs",
-      "lines": "22",
-      "anchor": "const Hand = createLucideIcon(\"hand\", __iconNode);",
+      "lines": "27",
+      "anchor": "const Hand = createLucideIcon(__iconData);",
       "citedBy": [
         "docs/adr/0091-modes-density-and-the-command-band.md",
         "docs/specs/workspace-modes/feature-spec.md"
@@ -902,7 +902,7 @@
       "ref": "lucide-react.d.ts:342",
       "package": "lucide-react",
       "path": "dist/lucide-react.d.ts",
-      "lines": "342",
+      "lines": "354",
       "anchor": "declare const AlignHorizontalJustifyStart:",
       "citedBy": ["docs/specs/workspace-modes/feature-spec.md"]
     },
@@ -910,8 +910,8 @@
       "ref": "waypoints.mjs:19",
       "package": "lucide-react",
       "path": "dist/esm/icons/waypoints.mjs",
-      "lines": "19",
-      "anchor": "const Waypoints = createLucideIcon(\"waypoints\", __iconNode);",
+      "lines": "24",
+      "anchor": "const Waypoints = createLucideIcon(__iconData);",
       "citedBy": [
         "docs/adr/0091-modes-density-and-the-command-band.md",
         "docs/specs/workspace-modes/feature-spec.md"
@@ -932,7 +932,7 @@
       "ref": "coreBundle.js:13373",
       "package": "playwright-core",
       "path": "lib/coreBundle.js",
-      "lines": "13373",
+      "lines": "13712",
       "anchor": "assert(buffer, \"Fetch response has been disposed\");",
       "citedBy": ["apps/web/e2e-csp/csp.spec.ts", "docs/TECH_DEBT.md"]
     },
@@ -1045,7 +1045,7 @@
       "ref": "focusManager.js:56-59",
       "package": "@tanstack/query-core",
       "path": "build/modern/focusManager.js",
-      "lines": "56-59",
+      "lines": "50-53",
       "anchor": "return globalThis.document?.visibilityState !== \"hidden\";",
       "citedBy": [
         "apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts",
