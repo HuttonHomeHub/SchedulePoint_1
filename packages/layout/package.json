@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@repo/config": "workspace:*",
-    "@types/node": "^22.10.7",
+    "@types/node": "^22.20.2",
     "eslint": "^9.39.5",
     "typescript": "catalog:",
     "vitest": "catalog:"
