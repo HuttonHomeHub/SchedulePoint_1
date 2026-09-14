@@ -5137,13 +5137,29 @@ When operating in this repo, Claude Code should:
    by check-run name keeping the most recently started**, and confirm every
    survivor is `completed` with `conclusion: success`.
 
-   **The list is ten entries since ADR-0138** — `quality`, `e2e-api`, four
-   `e2e-web` shards, `image`, the PR-title check and two CodeQL runs — where
-   before that epic it was six (`ci.yml` declared three jobs, not seven). That
-   makes reading it before merge slightly longer and no less necessary: four of
-   the ten are shards of what used to be one check, and `fail-fast` is off
+   **The roster is a property of the pull request, not of the repository, so never
+   count it.** Ten checks come from workflows here — `ci.yml`'s four jobs, one of
+   which fans out to four `e2e-web` shards (`quality`, `e2e-api`, four shards and
+   `image`), the PR-title check, and CodeQL's two entries; before ADR-0138 it was
+   six, `ci.yml` having declared three jobs rather than seven. **Others are
+   conditional on what the pull request touches and are declared in no workflow at
+   all.** #595 (2026-09-14) carried an eleventh — a `.github/dependabot.yml`
+   validation check served by Dependabot's own API — because it edited that file,
+   so its `total_count: 11` was eleven distinct names with nothing stale in the
+   list.
+
+   **That is also why this stays prose rather than becoming a gate**, against
+   ADR-0058's usual preference: the fixed ten could be derived from
+   `.github/workflows/` easily enough, and deriving them would keep a number
+   accurate while leaving the advice wrong. The number was never the thing worth
+   protecting.
+
+   So reading the list before merge is slightly longer and no less necessary: four
+   of the ten are shards of what used to be one check, and `fail-fast` is off
    precisely so a second red shard is visible rather than cancelled. **"The
-   end-to-end check is green" is no longer a single fact.**
+   end-to-end check is green" is no longer a single fact** — and neither is "there
+   should be ten of them". The test is that every survivor of the dedupe is
+   `completed` with `conclusion: success`, whatever the length.
 
    **The dedupe clause is not tidiness.** One SHA can carry two runs of the same
    check, and the older one keeps its conclusion for ever. PR #514 is the worked
@@ -5188,7 +5204,10 @@ When operating in this repo, Claude Code should:
    is therefore wider than a title edit: **any two `pull_request` events close
    together** do it, and the workflow's own docblock discusses that concurrency
    group only as ineffective, never as a producer of a third conclusion.
-   `total_count` reads **11** where the repository has ten checks. It matters because `cancelled` is neither of the two
+   The duplicate shows up as a `cancelled` entry beside its successful twin, which
+   is exactly what the dedupe removes — and no arithmetic finds it for you, because
+   a roster longer than you expected is just as likely to be a conditional check as
+   a stale run. It matters because `cancelled` is neither of the two
    conclusions above: it is not `success`, so an undeduped pass **refuses a
    perfectly mergeable PR** and sends the reader looking for a failure that never
    happened. The dedupe handles it; nothing else does.
