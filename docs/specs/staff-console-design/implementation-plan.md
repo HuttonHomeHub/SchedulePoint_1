@@ -1,7 +1,7 @@
 # Implementation Plan: The staff console design review
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) — **Draft, not yet approved.**
-- **Status:** Draft
+- **Feature spec:** [./feature-spec.md](./feature-spec.md) — **Approved 2026-09-14.**
+- **Status:** Approved
 - **Owner:** web
 
 ## Breakdown
@@ -98,8 +98,12 @@ that the harness change did not disturb the product.
      API's absence (`:58-62`), announces a failure (`:68`) and reverts its label after 2 s
      (`:49-53`). Correct both, and note that the row's own argument ("extract now rather than at the
      fourth") has already been overtaken.
-  3. `shoot.mjs:18`'s docblock says 25 shots; make it derive or delete the number (a count in prose
-     is ADR-0076 Class 1 — the class `pnpm check:counts` exists for).
+  3. ~~`shoot.mjs:18`'s docblock says 25 shots; make it derive or delete the number.~~
+     **WITHDRAWN at M0 — the claim was false.** No docblock in `shoot.mjs` states a shot count;
+     the only live "25 shots" text is `CLAUDE.md:2775`, correctly past-tense about ADR-0102
+     widening the harness 12 → 25. Following this step would have "corrected" a file that was
+     already right. Kept struck through rather than deleted, because a plan that quietly loses a
+     task reads as a plan that never had it.
   4. `playwright.staff.config.ts:19` says _"The spec verifies addresses through the API rather than
      through mail, so no SMTP sink is needed"_, nine lines above the config starting one (`:62-66`)
      for a spec that uses it (`staff.spec.ts:184`). Correct the sentence, not the config.

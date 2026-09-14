@@ -11,14 +11,37 @@
  * It drives the REAL app against a REAL API, because the alternative (a component in isolation) is
  * how three separate epics shipped a control that looked right alone and wrong in place.
  *
- *   node scripts/shoot.mjs                       # every shot at the default widths
- *   node scripts/shoot.mjs --only sign-in        # one shot
- *   node scripts/shoot.mjs --width 1646          # one width (the product owner's Surface Pro)
+ *   pnpm --filter @repo/web shoot                # every shot at the default widths
+ *   pnpm --filter @repo/web shoot --only sign-in # one shot
+ *   pnpm --filter @repo/web shoot --width 1646   # one width (the product owner's Surface Pro)
+ *
+ * **Use the script, not `node scripts/shoot.mjs` directly.** Since the staff shot became
+ * satisfiable this file imports `SmtpSink` from TypeScript, so it needs
+ * `--experimental-strip-types`, which the script carries. Without it the import throws — loudly,
+ * which is the right way for a harness to fail.
  *
  * Output lands in `.screenshots/<width>/<name>.png`, git-ignored.
  */
 import { chromium } from '@playwright/test';
 import { globSync } from 'node:fs';
+
+// **Imported straight from the TypeScript the journeys use, under `--experimental-strip-types`.**
+// The approved plan recommended moving `SmtpSink` to `.mjs` + a `.d.ts` so bare `node` could read
+// it; sub-option (i) — strip the types instead — was rejected there without being tried, and it
+// works on this repository's Node floor (measured on 22.22.2). It is taken because it is strictly
+// smaller: the sink stays ONE implementation with its types attached, and the three specs and one
+// config that already import it are untouched. The `shoot` script in `package.json` carries the
+// flag so the documented route always has it; without the flag the import throws loudly, which is
+// the right failure mode for a harness (ADR-0065 / ADR-0121: two copies drift invisibly — this way
+// there is no second copy to drift).
+import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink.ts';
+
+/**
+ * Must match the port in the `MAIL_SMTP_URL` the API was booted with, which is why it reads the
+ * same `E2E_SMTP_PORT` default `playwright.staff.config.ts:66` uses. Two numbers that have to agree
+ * and are written down twice is how they stop agreeing.
+ */
+const STAFF_SMTP_PORT = Number(process.env.E2E_SMTP_PORT ?? '3026');
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -71,6 +94,69 @@ async function onboard(page, width) {
   await page.getByRole('button', { name: /create organisation/i }).click();
   await page.waitForURL(new RegExp(`/orgs/${slug}`));
   return slug;
+}
+
+/**
+ * Sign in as a **verified staff** account, so `/staff` can be photographed.
+ *
+ * **Why this could not simply reuse `onboard()`.** That function mints
+ * `shoot-${Date.now()}-${width}@example.com`, and staff-ness is decided by the API's `STAFF_EMAILS`
+ * — read **once, before the process boots** (ADR-0086). An address containing a timestamp cannot be
+ * in a variable that was set before the timestamp existed. So the staff shot needs a **knowable**
+ * address, which is what `SHOOT_STAFF_EMAIL` is for; its default matches the one
+ * `playwright.staff.config.ts` already allow-lists, so an API booted for the staff journey is
+ * already booted for this.
+ *
+ * **And allow-listing is not enough: the guard demands `emailVerified`**, independently of
+ * `AUTH_REQUIRE_EMAIL_VERIFICATION` (`staff-bootstrap.service.ts:17-18` counts the allow-listed
+ * accounts that are inert for exactly this reason). A verification token goes to the mailbox and
+ * nowhere else — since ADR-0074 M0 the row stores it **hashed**, so it cannot be read back out of
+ * the database either. Receiving the mail is therefore the only route, which is why this harness
+ * now runs an SMTP sink and why `docs/TECH_DEBT.md` #319 called the shot unsatisfiable.
+ *
+ * The e2e database persists, so on every run after the first the account already exists and is
+ * already verified; both branches are handled and neither is the error case.
+ */
+async function onboardStaff(page, sink) {
+  const email = process.env.SHOOT_STAFF_EMAIL ?? 'ops@schedulepoint.test';
+  await page.goto(`${BASE}/sign-up`);
+  await page.getByLabel('Full name').fill('Ops Lovelace');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: /create an account/i }).click();
+
+  // Already registered on a previous run: sign in instead. Deliberately not a `catch` around the
+  // whole sign-up — that would swallow a real failure and land on the same screen.
+  const taken = await page
+    .getByText(/already|exists|registered/i)
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (taken) {
+    await page.goto(`${BASE}/sign-in`);
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(password);
+    await page.getByRole('button', { name: /sign in/i }).click();
+  }
+  await page.waitForLoadState('networkidle');
+
+  // Verify only if this run created the account. `waitFor` on mail nobody is going to send is a
+  // 30-second timeout reported as a mail failure — the shape `staff.spec.ts:160-168` records
+  // having been bitten by.
+  await page.goto(`${BASE}/staff`);
+  await page.waitForLoadState('networkidle');
+  const heading = await page
+    .getByRole('heading', { level: 1 })
+    .first()
+    .textContent()
+    .catch(() => null);
+  if (heading !== null && /staff console/i.test(heading)) return;
+
+  const mail = await sink.waitFor(email, /verify-email/);
+  const verifyUrl = firstUrlIn(mail.body);
+  if (!verifyUrl) throw new Error(`no verification link was sent to ${email}`);
+  await page.goto(verifyUrl);
+  await page.waitForLoadState('networkidle');
 }
 
 /**
@@ -847,24 +933,52 @@ for (const width of widths) {
         // indistinguishable from coverage — which is the whole failure W1 exists to correct.
         if (process.env.SHOOT_STAFF !== '1') {
           console.log(
-            `${width}  ${shot.name}  SKIPPED — set SHOOT_STAFF=1 and run the API with STAFF_EMAILS ` +
-              `containing this run's address (see playwright.staff.config.ts, which already does)`,
+            `${width}  ${shot.name}  SKIPPED — set SHOOT_STAFF=1, and boot the API with: ` +
+              `STAFF_EMAILS containing ${process.env.SHOOT_STAFF_EMAIL ?? 'ops@schedulepoint.test'}, ` +
+              `MAIL_SMTP_URL=smtp://127.0.0.1:${STAFF_SMTP_PORT}, and MAIL_FROM (the API refuses to ` +
+              `start with a transport and no sender). playwright.staff.config.ts:55-84 is the ` +
+              `working recipe.`,
           );
           continue;
         }
-        await shot.go(page);
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(800);
-        // A staff-gated route renders nothing recognisable to a non-staff caller, and photographing
-        // that would be a picture of the guard rather than of the console. Fail rather than file it.
-        const heading = await page
-          .getByRole('heading', { level: 1 })
-          .first()
-          .textContent()
-          .catch(() => null);
-        if (heading === null)
-          throw new Error('staff console rendered no heading — is the caller staff?');
-        await page.screenshot({ path: join(dir, `${shot.name}.png`) });
+        // **Its own context and its own account** — the shared signed-in page holds the stamped
+        // `shoot-…@example.com` identity, which is not and cannot be in `STAFF_EMAILS` (see
+        // `onboardStaff`). Photographing THAT would be a picture of the guard's uniform 404, which
+        // is a real screen but not the one this shot is named for.
+        //
+        // This is the defect #319 described and the reason its headline was wrong: the shot has
+        // always been on the list, and a reader auditing the list for `/staff` coverage found it
+        // there. It could never have produced a picture.
+        const sink = new SmtpSink();
+        await sink.start(STAFF_SMTP_PORT);
+        const staffCtx = await browser.newContext({ viewport: { width, height: 1000 } });
+        try {
+          const staffPage = await staffCtx.newPage();
+          await onboardStaff(staffPage, sink);
+          await shot.go(staffPage);
+          await staffPage.waitForLoadState('networkidle');
+          // The console's panels each resolve their own query; 800 ms was enough when it was one
+          // card and is not now there are eight. This waits for the last one rather than guessing.
+          await staffPage.waitForTimeout(2500);
+          // A staff-gated route renders nothing recognisable to a non-staff caller, and
+          // photographing that would be a picture of the guard. Fail rather than file it — and
+          // name WHICH precondition failed, because "no heading" covers four different causes.
+          const heading = await staffPage
+            .getByRole('heading', { level: 1 })
+            .first()
+            .textContent()
+            .catch(() => null);
+          if (heading === null || !/staff console/i.test(heading))
+            throw new Error(
+              `staff console not reached (heading: ${heading ?? 'none'}). Either ` +
+                `STAFF_EMAILS does not contain ${process.env.SHOOT_STAFF_EMAIL ?? 'ops@schedulepoint.test'}, ` +
+                `or the address is not verified, or the API is not the one this harness targets.`,
+            );
+          await staffPage.screenshot({ path: join(dir, `${shot.name}.png`), fullPage: true });
+        } finally {
+          await staffCtx.close();
+          await sink.stop();
+        }
       } else if (shot.signedOut) {
         // A signed-out shot needs its own context — the session cookie would redirect it away.
         const anon = await browser.newContext({ viewport: { width, height: 1000 } });
