@@ -97,12 +97,39 @@ different changes with different blast radii, and choosing between them is M1's.
 `#86`'s original driver-aware case unproved — `Crane lift` still cannot discriminate in this
 fixture, as M0-T2 records.
 
-## M0-T3 — NOT taken, and it cannot be taken from here
+## M0-T3 — TAKEN 2026-09-14, on the deployed host, and it is not a zero
 
-The task asks for a count "against the **deployed** database". This session has only a local test
-database, which the suites truncate; a count from it is structurally zero and would be worse than no
-number, because the plan says a zero "is the strongest possible argument for CQ-1 and must not be
-left unstated". **A zero from an empty database is not that zero.** Owed, and it is one query.
+It was owed for four days with the note below: a count against the **deployed** database, which a
+container cannot produce, because the suites truncate the only table it has and "a zero from an
+empty database is not that zero". `ADR-0140`'s staff diagnostics panel exists to close exactly this,
+and the product owner pressed it against **API 0.64.0** at `2026-09-14T06:39:30.570Z`:
+
+| diagnostic                                       | examined | affected | plans | orgs | elapsed |
+| ------------------------------------------------ | -------: | -------: | ----: | ---: | ------: |
+| `day-factor-divergence` (driving resource)       |        2 |        2 |     1 |    1 |    8 ms |
+| `inherited-day-factor` (inherited plan calendar) |      164 |       19 |     1 |    1 |    3 ms |
+
+**The task's own framing anticipated the opposite answer.** It says a zero "is the strongest possible
+argument for CQ-1 and must not be left unstated". It is not a zero: 21 activities on the one live
+installation carried stored day-denominated figures derived on a day length that disagreed with the
+schedule they were measured against. The product owner's "the correct number wins" decision was
+taken on real rows, not on a fixture.
+
+**Three things it does not say**, each because it looks stronger than it is. **2 of 2 is not a
+rate** — D-A examined two rows; "both of them" is the honest phrasing and "100 %" is not. **8 ms and
+3 ms are not the timing limb**: the query triggers in `docs/specs/staff-diagnostics-panel/` were
+derived against a 102,000-activity synthetic and this host holds 164, so nothing here tests them.
+And there is **one installation**, so the population claim generalises to nothing.
+
+**What follows from it.** `resolveDayFactors` runs inside the recalculate transaction
+(`schedule.service.ts:461-465` → `writeResults`), so the fix corrects a row only when its plan is
+next recalculated. The 21 counted rows still hold their old figures until then — the count is a list
+of plans to recalculate, which is what "who to tell" means on a single-tenant installation.
+
+> _Superseded — kept because the reason it could not be taken is the reason the panel exists._ The
+> task asks for a count "against the **deployed** database". That session had only a local test
+> database, which the suites truncate; a count from it is structurally zero and would be worse than
+> no number. Owed, and it is one query.
 
 ## M0-T4 — NOT taken
 

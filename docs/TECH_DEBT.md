@@ -1430,350 +1430,40 @@ expected to take.
 > symbol-versus-line comparison: it cites a settled engine module and an ADR, and neither moved.
 > **The measurements were not re-run** and the remedy is unchanged: measure a real plan first.
 
-### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
+### 86. `loadDrivingResourceCalendars`'s added cost is unmeasured
 
-> **BOTH MECHANISMS NOW FIXED, 2026-09-13.** The driving-resource rule shipped as `api-v0.62.0`
-> (M1–M5 below); the **inherited-plan-calendar** factor followed the same day as **ADR-0139**, after
-> the product owner accepted the blast radius ("the correct number wins") and chose the two-map
-> design over both candidates this row had named.
->
-> **The second fix is one sentence: a sentinel is not a calendar.** `effectiveOf` returns `null` for
-> an activity inheriting its plan's calendar, which the engine reads correctly as "use the plan's
-> port" and `resolveDayFactors` read as "no calendar at all", taking 1440. A sibling
-> `dayFactorCalIdByActivity` now carries the same question with the sentinel resolved, built by
-> calling `schedulingCalendarId` — the resolver this row's first half already wrote — rather than by
-> restating its fallback rung. **`resolveDayFactors`' body did not change**: `null → 1440` became
-> correct the moment `null` meant what its docblock always assumed.
->
-> **The population claim in this row was wrong and is corrected rather than quietly dropped.** It was
-> put to the product owner as touching "most activities on most plans with a non-24h calendar".
-> Checked: a **stock plan is unaffected** — a calendar of full working days derives a 1,440-minute
-> standard day, for which the old conversion was already right — while **every XER import is affected
-> wholesale**, since a P6 calendar carries its own `day_hr_cnt` and eight hours is the usual figure.
-> Narrow and total, landing on the on-ramp from P6, rather than broad and low-grade.
->
-> Three fields moved (`total_float`, `free_float`, `visual_drift_days`) and the rest did not:
-> `durationDays`, `remainingDurationDays` and `levelingDelayDays` were **already correct**, and
-> `is_critical` is decided in minutes inside the engine. **`apps/web` is untouched** — the client's
-> resolver already fell back to the plan, so only the server was wrong. The comparison-boundary
-> consequence is **`#318`**, accepted and documented on the product owner's decision.
->
-> **Two characterisation cases had to invert and one had to be renamed** — it was called _"reports
-> duration days and float days on different day lengths"_, which is the defect stated as a title.
-> That is the second time in this row that a green characterisation test was mistaken for a signal.
->
-> **The headline read "the defect is fixed on both sides" until later the same day, and that was an
-> overclaim.** "Both sides" meant server and client, which is true of what M1–M5 did; a reader
-> meeting it first would reasonably conclude the row was finished, and it is not. The
-> **inherited-plan-calendar factor measured at M0-T2b is still live at `api-v0.62.0`** —
-> `schedule.service.ts`'s `effectiveOf` returns `r.calendarId` with no plan fallback, so an activity
-> inheriting its plan's calendar reaches `resolveDayFactors` as `null` and takes 1440 while the
-> schedule it is measured against runs on the plan's day. That function's own docblock says so and
-> calls it deliberately deferred. It needs **no resource at all**, so it is very probably the larger
-> population of the two.
->
-> Found by the `staff-diagnostics-panel` spec pass re-deriving the count this row still owes, and
-> **confirmed by reading the three cited functions and then by RUNNING the experiment** — the spec
-> agent had no ability to run anything, so its finding was a reading.
->
-> **This paragraph said "it is a reading, not an experiment; M0-T2b's twin experiment is what would
-> settle it" — and that was wrong, in the helpful direction.** The twin experiment is already a
-> committed e2e case that runs in CI on every push:
-> `resource-dependent-day-factor.e2e-spec.ts`'s _"discriminates the factor: the same task with the
-> plan calendar set EXPLICITLY"_ asserts `totalFloat` **2** on the inheriting twin against **5** on
-> the explicit one, over an asserted-equal window with identical 2,400 duration minutes. It passed
-> against `api-v0.62.0`. So the divergence is characterised, executing, and green — which is what a
-> characterisation test is for, and also why nothing flagged it while the epic shipped.
->
-> Asserting an experiment did not exist, without looking, in the file that had been edited all day
-> to hold it, is ADR-0076 Class 3 — inside a correction written about an overclaim.
->
-> **M5 blocked on two of four reviews, and the test-engineer's largest finding was the epic's own
-> census.** `SYMBOLS` named the four resolvers — and almost nothing calls those directly: seven of
-> the real call sites reach a rule through `attachDayFactors`, `attachLagDayFactors` or
-> `resolveLagDayFactorMinutes`, so a spec asserting _"classifies every call site"_ was measuring a
-> population most callers are not in, and would have passed against a new service picking the wrong
-> wrapper. Widened to 14 sites / 10 classified pairs, and the pinned floor raised 5 → 12 for a
-> second reason: at 5 the **narrow list still satisfied it**, so re-narrowing `SYMBOLS` would have
-> gone unnoticed. Verified red three ways.
->
-> The other five findings were coverage, and the sharpest is that **the one site whose rule M2
-> actually changed was the one site with no test** — the duration UPDATE. Five e2e cases now run
-> against a real database (update, remaining duration, lag create+update, guest, health check),
-> each with a control on the same plan so a build resolving the driver for _every_ row fails. Two
-> client sites gained cases setting a non-null `drivingResourceCalendarId`, which **nothing in the
-> web suite had ever done** — and on a null driver the two frames are identical by construction, so
-> both call sites could have been swapped back with the suite green. All verified red against the
-> specific swap.
->
-> **The stake found on the way**: 21 days of crane time is 30,240 minutes, which on the crew's
-> eight-hour day reads 63 and clears metric 8's 44-day threshold — so a wrong frame reported a
-> **compliant plan as failing a DCMA assessment** (ADR-0116's one prohibition). Verified red with
-> that exact number.
->
-> Three documents were corrected rather than left: the e2e's docblock still said a green run meant
-> the defect was **present** (it had inverted, exactly as its own paragraph promised — its web
-> sibling had inverted and this had not); `compute-health.output.spec.ts`'s describe said metric 8
-> judges on the activity's **OWN** factor, correct when written and made wrong one layer up by M2
-> without anything in that file changing; and two `schedule.service.ts` comments said the same.
->
-> **What is NOT covered, measured rather than estimated:** two client read sites
-> (`plan-workspace-toolbar.tsx:506`, `use-float-paths-panel.ts:128`) still have no case setting a
-> non-null driver, so an own↔scheduling swap there is silent. Both are reads sharing the proven
-> helper, which is why they are residue rather than a blocker — filed as `#317`, **and closed the
-> same day** (ledgered): reading the toolbar site for a test seam found it and `ActivitiesTable` were
-> one composition written out twice, so the two became one named `activitySchedulingHoursPerDay`
-> with a structural gate refusing the next longhand copy.
->
-> **And a measured blind spot in the new guest case, stated because it looks stronger than it is:**
-> it catches the guest read drifting from the member's, and does **not** catch the rule collapsing
-> on both sides at once — the write then stores 2,400, the read divides by 480, and 5 comes back
-> out. That self-consistency is the exact property that hid this row for a year.
->
-> One rule served two quantities, so it is two named rules with no default between them —
-> `ownCalendarId` / `schedulingCalendarId` on the server, a `DayFactorFrame` discriminator on the
-> client, the same vocabulary both sides. The compiler then asked all twelve server sites and all
-> twelve client sites which quantity they meant, which is how the work was scoped rather than
-> guessed; each answer carries its reason at the call site.
->
-> **The product-owner decision (CQ-1, 2026-09-13) is that one number changes for readers**: a driven
-> activity whose resource works to a different calendar reports a different `durationDays` — the
-> epic's own fixture goes from a five-day crane lift to a two-day one. No stored minute moved and no
-> date moved; the read-out now says what the programme actually reserves. CQ-2 (the assignment join
-> lag stays on the activity's own calendar) and CQ-3 (`drivingResourceCalendarId` on the activity
-> read) shipped as recommended; CQ-4 has a guest adopt the corrected figure without learning a
-> resource is why.
->
-> **Two characterisation suites inverted, exactly as each had promised in its own docblock**, and
-> that is the closest thing to proof this row has: `day-factor-divergence.characterisation.test.ts`
-> said "when M2 lands, `expect(2400)` becomes `expect(7200)` and this docblock's framing inverts",
-> and it did. Both keep the old number beside the new one, because the pair is the evidence.
->
-> **Still owed:** M0-T3 (a count of affected rows against the DEPLOYED database — one query, and it
-> cannot be taken from a test database whose answer is structurally zero) and M0-T4's timing limb.
-> M0-T4's second falsification condition — 0 ms on a plan with no `RESOURCE_DEPENDENT` row — was
-> answered **structurally instead**: the driver read is skipped when the rows in hand contain no
-> driven activity, which is a stronger answer than a stopwatch on hardware that cannot produce one.
+**Status:** deferred · **Verified:** 2026-09-14 · **Size:** S · **Owner:** api
 
-> **M0-T2 TAKEN 2026-09-12, and it WIDENS this row rather than confirming it. The driver is not
-> required for the duration/float disagreement.**
->
-> Measured at the storage layer through the public REST API
-> (`docs/specs/resource-dependent-day-factor/m0-measurements.md`), with the plan on an 8 h calendar
-> and the subject an **ordinary task with no resource, no driver and no calendar of its own**:
-> `duration_minutes` **2400**, plan `hours_per_day_minutes` **480**, slack window **5 days**
-> (2026-01-05 → 2026-01-10) — and `total_float` **2**. `durationDays` reads back 5 (2400 / 480), so
-> on the activity's own day length the float should read 5; 2 is what 1440 produces. **"5 days of
-> duration, 2 days of float" is not expressible on any single day length**, which is precisely what
-> `schedule.repository.ts:756-759` says cannot happen, in its own comment.
->
-> This row and its spec both attribute the disagreement to the **driving resource's** calendar
-> (`schedule.service.ts:428` passing the driver-aware `graph.calIdByActivity`). That subject has no
-> assignment at all. **So the remedy cannot be only "teach the driver-aware rule to the other
-> sites"**, and the epic's shape is worth reconsidering before M1 rather than after.
->
-> The mechanism is deliberately NOT claimed: two readings fit the numbers (float minutes of 2,400
-> divided by 1440, or a slack measured on a 24-hour axis and divided coherently by 1440 — correct in
-> its own terms and merely reported in a different unit from its neighbour). The observable defect is
-> identical either way; the discriminator is which factor `resolveDayFactors` received, which is
-> M1's first question.
->
-> > **ANSWERED 2026-09-12 by experiment, not by reading — M0-T2b, same document.** The question was
-> > put to the product rather than the source: `Task twin`'s fixture with ONE difference, a second
-> > five-day task carrying the plan's own 8 h calendar **explicitly** on `activities.calendar_id`
-> > instead of inheriting it. Same window (asserted equal), same 2,400 duration minutes, same 5
-> > `durationDays`. **The inheriting twin reads `total_float` 2; the explicit twin reads 5.** Two
-> > identical activities, two different floats. The three possible outcomes were written into the
-> > test's docblock **before** the run, so the result could not be read backwards.
-> >
-> > **The 24-hour-axis reading is disproved**: on that reading a five-day window is 7,200 minutes and
-> > the explicit twin would read **15**. It reads 5 — so the engine's slack is 2,400 minutes and the
-> > explicit activity was divided by 480, which leaves 1440 as the only divisor that takes the
-> > inheriting one to 2. **The factor is the defect**, and it reaches an activity with no resource, no
-> > driver and no calendar of its own.
-> >
-> > The code agrees and is corroboration rather than the finding: `resolveDayFactors` maps a `null`
-> > calendar id to `DEFAULT_HOURS_PER_DAY_MINUTES`, and an activity inheriting its plan's calendar
-> > carries `null`. **That function's docblock states the invariant that fails** — "the unit and the
-> > schedule agree" holds only when the PLAN has no calendar either, which is the one case this row
-> > is not about.
-> >
-> > **What it does not settle**: where the fix belongs. Resolving the inherited calendar into
-> > `calIdByActivity`, or defaulting to the plan's factor rather than 1440, are different changes
-> > with different blast radii — M1's choice, and still the product owner's to approve.
->
-> Two further notes. **The `RESOURCE_DEPENDENT` case cannot discriminate in that fixture** — 8 days
-> of slack reads 8 on both 480 and 1440 — so the plain task is the assertion that carries the weight,
-> the opposite of what the plan expected. And **M0-T1 was already built** (`ec1227a8`, 2026-09-10)
-> when the plan was written asking for it; re-run 2026-09-12, still green, so the write-path defect
-> is still live. M0-T3 (the deployed-row count) and M0-T4 (the query cost) remain owed and are
-> explicitly not takeable from a container — see the measurements file for why.
+_Rewritten 2026-09-14 down to what is left, per this file's own rule for a partly-done row. The
+defect this number used to name — a `RESOURCE_DEPENDENT` activity's day factor read from the wrong
+calendar — is **fixed on both mechanisms and released**: the driving-resource rule as
+`api-v0.62.0`, the inherited-plan-calendar rule as `api-v0.63.0` (**ADR-0139**), and the client's
+half with them. The narrative lives in ADR-0139, in `docs/specs/resource-dependent-day-factor/` and
+in the commits; this file is the backlog, not the history. The number is kept rather than ledgered
+so the several ADRs citing `#86` resolve to a live row._
 
-**Status:** open · **Verified:** 2026-09-10 · **Severity RAISED — it writes** (see the 2026-09-10
-note; the "display only" framing below is false) · **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
-inherited it rather than introducing it.
+**What is left is one falsification condition that was never measured.** M0-T4 committed two limbs
+for the driver lookup added to the recalculate path:
 
-`effectiveHoursPerDay()` (`apps/web/src/lib/effective-hours-per-day.ts`) resolves the factor as the
-**activity's own** `calendarId`, falling back to the plan's. That is correct for every activity type
-but one. For a **`RESOURCE_DEPENDENT`** activity, ADR-0035 §23 / ADR-0039 §4 make the **driving
-resource's** calendar authoritative — the service resolves and overrides the activity's own, which
-`ActivityCalendarField.tsx` already documents on screen. The web factor never accounts for it.
+1. **≤ 5 ms p95 added** on the 2,000-activity seeded plan — **unmeasured**;
+2. **0 ms on a plan with no `RESOURCE_DEPENDENT` row** — **answered structurally** rather than with
+   a stopwatch: the driver read is skipped when the rows in hand contain no driven activity, which
+   is a stronger answer than a timing on hardware that cannot produce one.
 
-**What it costs.** Any day-denominated figure the client _renders_ for such an activity is measured
-against the wrong day length: the assignment join-lag field (shipped under ADR-0071) and now the
-derived-duration preview.
+**Why it is deferred rather than open, and the reason is a measurement rather than a shrug.**
+M0-T3's deployed count (taken 2026-09-14 through the ADR-0140 staff panel) reports **2** driving
+assignments on `RESOURCE_DEPENDENT` activities in the entire installation. So on the only live host
+the lookup's population is two rows, and the no-driver path — which is every other plan — is skipped
+by construction. There is nothing here a stopwatch could resolve into a decision.
 
-_(Citation corrected 2026-09-01: this row said "ADR-0039 §23", and ADR-0039 has no §23 — §23 is
-ADR-0035's, which ADR-0039's own heading cites as "reuses the ADR-0037 port seam (rung 2, §23)".
-The code cites it correctly; only this row did not. The sweep also found the row overstating the
-plumbing cost: `AssignmentRow` already receives `resource: ResourceSummary | undefined`, and
-`ResourceSummary` carries `calendarId`, so only the calendars list is missing — and the panel above
-it already holds both.)_ Both are display and neither writes a wrong value — the API stores
-minutes, and the engine reschedules on the correct calendar regardless — so this is a misleading
-read-out, not corrupt data. It bites only where a `RESOURCE_DEPENDENT` activity has a driving
-resource on a calendar whose `hoursPerDay` differs from the activity's own.
+**It is not closed**, because "very hard to see it mattering" is not a measurement, and this register
+exists because that sentence has been wrong before.
 
-**Why it is not fixed here.** `AssignmentRow` cannot resolve it without the driving `resource.calendarId`
-plus the calendars list plumbed to a component that currently needs neither — real work, and out of
-scope for a three-line formatter fix. Doing it badly (guessing, or resolving in two places) is how
-the flat-1440 defect this entry sits beside came about.
-
-**The fix when it is taken:** teach `effectiveHoursPerDay()` the `RESOURCE_DEPENDENT` branch — take
-the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT` and a driver
-exists, else today's answer — so every caller is corrected at once rather than per-surface. The
-engine is not involved and the recalc parity gate is untouched.
-
-> **Scoped 2026-09-01, and "every caller is corrected at once" does not survive contact.** The
-> helper has **twelve** call sites and can only use what it is handed, so a branch alone corrects
-> nobody — it would be dead code until a caller supplies the driver.
->
-> **Where the driver is resolvable, and where it is not**, established by reading rather than
-> estimating:
->
-> - `ActivityResourcesPanel` **can** — it holds `assignments.data` (each with `isDriving` and
->   `resourceId`) and a `resourceById` map, and `ResourceSummary.calendarId` exists
->   (`packages/types/src/index.ts:1739`). But it does not compute the factor: it receives
->   `activityHoursPerDay` as a **prop** from its host and forwards it to `AssignmentRow`
->   (`features/resources/components/ActivityResourcesPanel.tsx:317-319`). Correcting it means the
->   panel deriving its own — which needs the activity's
->   `type` and the `calendars` list plumbed in, two new props on a component that currently needs
->   neither.
-> - `ActivitiesTable`'s **Duration column** cannot. It resolves per row (`:663`) and the table
->   never loads assignments, so the driving resource is not in scope at all; getting it would mean
->   a bulk fetch this surface does not do today.
-> - The two activity editors are in between and need checking when the work is taken.
->
-> **So it needs a spec, not a register row** (ADR-0105): the panel's props are a component contract.
-> That is a bigger trigger than the row's own "three-line formatter fix" framing implies, and the
-> framing is what has kept it looking cheaper than it is.
-
-> **Two line citations drifted, and the row misses a call site** (2026-09-03 sweep).
-> `ActivityResourcesPanel`'s forward is at `:317-319`, not `:318-320`; `ActivitiesTable`'s Duration
-> column is at `:663`, not `:639`. More usefully: `ActivitiesTable` has a **second** call site
-> (`resourcesHoursPerDay`, `:302`, the Resources dialog's join lag) on the same defect, which the row
-> does not mention. The defect itself is confirmed live and unfixed — `effectiveHoursPerDay()` takes
-> no activity type and no assignment input, so it has nothing to resolve a driver with — and the rest
-> of the scoping note verified exact, including the twelve call sites.
->
-> **Both citations were corrected in this note and left standing in the text above it for six days**,
-> which is the failure this sweep kept finding: a reader meets the wrong figure first and the
-> correction only if they read on. Applied in place 2026-09-09, along with the panel's real path —
-> it is `features/**resources**/components/`, not `features/activities/`, which is why a reader
-> checking the citation finds nothing at all rather than finding it moved.
->
-> **Re-derived 2026-09-09 against the current tree**, because a citation sweep that does not re-run
-> its own count is the same defect one level up: twelve call sites across eight files
-> (`plan-dialogs`, `plan-workspace-toolbar`, `PlanScheduleSettings`, `lag-factor` ×2,
-> `use-float-paths-panel`, `ActivityEditorDialog` ×2, `ActivityCreateDialog` ×2, `ActivitiesTable`
-> ×2), and the server's fallback order confirmed at `schedule.service.ts:1278-1287` — driving
-> resource, then the activity's own calendar, then the plan's. The client's helper still takes
-> `{ activityCalendarId, planCalendarId }` and nothing else, so it structurally cannot express the
-> first rung.
-
-> **Specced 2026-09-10 (`docs/specs/resource-dependent-day-factor/`), and three of this row's own
-> claims are wrong — one of them the sentence that has kept it a low priority.**
->
-> **1. It is NOT display-only. It writes.** This row says _"Both are display and neither writes a
-> wrong value — the API stores minutes, and the engine reschedules on the correct calendar
-> regardless."_ `durationWriteFields` (`duration-field.ts:118-131`) returns
-> `{ durationMinutes: parsed.minutes }`, parsed against this helper's factor, and **both**
-> `ActivityCreateDialog` and `ActivityEditorDialog` import it. Worked through: an activity on an 8 h
-> calendar with a 24 h driving resource, planner types `5d` → 2,400 stored minutes → the engine
-> spends them at 1440/day = **1.67 days of work**. The read comes back
-> `minutesToDays(2400, 480)` = 5, so the field says `5d` and the table says `5 d`. **A
-> schedule-affecting write with a fully self-consistent read-back** — which is precisely why nobody
-> has reported it, and why the row's own reasoning ("the API stores minutes") reads as reassurance
-> when it is the mechanism.
->
-> **2. The defect is server-vs-server, not client-vs-server.** The client is a faithful mirror of
-> `apps/api/src/modules/activities/day-factor.ts:19-24`, which is `activityCalendarId ??
-planCalendarId` — the same rule. Two server rules both claim to name "the activity's effective
-> calendar", and only `schedule.service.ts:1277-1287` is driver-aware. The consequence nobody had
-> written down: `durationDays` and `totalFloat` sit on one DTO and are converted on **different
-> factors** — `schedule.service.ts:428` passes the driver-aware `graph.calIdByActivity`, while
-> `activity-response.dto.ts:406` uses the stored activity-own `dayFactorMinutes`. And
-> `schedule.repository.ts:756-759` states the property that violates, in its own comment: _"Same
-> factor as its duration, so '3 days of work with 1 day of float' is one consistent statement."_
->
-> **3. The fix this row prescribes would BREAK three correct sites.** It says to teach the helper a
-> `RESOURCE_DEPENDENT` branch _"so every caller is corrected at once"_. Three of the twelve are the
-> assignment join lag, which is **correct today by decision**: ADR-0071 §1 is headed
-> "activity-calendar-framed", ADR-0035 §34 says "the activity's own calendar", and
-> `schedule.service.ts:1143-1146` refuses the substitution explicitly for the histogram. So one
-> branch corrects five sites and breaks three. **The discriminator is which QUANTITY is being
-> measured, not which activity** — which is why there can be no single-branch fix, and why this row
-> has been scoped twice without closing.
->
-> **What the spec recommends** is two named rules and a required discriminated `DayFrame`
-> (`{kind:'own'} | {kind:'scheduling', drivingCalendarId?}`), so all twelve calls fail to typecheck
-> and both wrong wirings are compile errors — the ADR-0117/ADR-0132 no-default shape. Sequencing is
-> load-bearing: **server first**, because fixing the client first would make a planner type `1d` and
-> the table say `3 d`. The client picker is `readOnly` for `RESOURCE_DEPENDENT`
-> (`ActivityCalendarField.tsx:85,141`), so the "only the client knows the pending selection"
-> argument — the reason this helper exists at all — does not apply to the one type it is about.
->
-> **Deliberately not built here.** It is six milestones, it changes `durationDays` on existing rows
-> (ADR-0068 §6's named hazard, verbatim), and it wants six specialist reviews. What this note buys is
-> that the next reader does not inherit "display only".
->
-> **The write half is now EXECUTED, not read** (`apps/web/src/lib/day-factor-divergence.characterisation.test.ts`,
-> the spec's M0). Three cases, running: the helper returns **8** for an activity whose driving
-> resource sits on a 24 h calendar that **is in the list the surface already holds** (so the obstacle
-> is the signature, not the data); `durationWriteFields('5d', 8)` returns
-> `{ durationMinutes: 2400 }` against the 7,200 the scheduling calendar would give; and a third case
-> pins the two agreeing when the calendars agree, so a later green run cannot mean the fixture
-> stopped discriminating. The flag is deliberately **not** pinned — its sibling pins it off to assert
-> a rollback contract, and pinning it off here would take the degraded whole-days branch where the
-> factor is provably unused, characterising a path on which the defect cannot occur.
->
-> **The engine half is now EXECUTED too** (`apps/api/test/resource-dependent-day-factor.e2e-spec.ts`,
-> M0-T1) — against a real database, through the public REST API throughout, so no step of the
-> fixture reuses the assembly the defect lives in.
->
-> **The measured result.** A plan on an 8 h calendar. Two activities, both written
-> `durationDays: 5`, both storing **2,400 minutes** — the driver is not consulted on the way in. One
-> is an ordinary `TASK`; the other is `RESOURCE_DEPENDENT` with a driving crane on a 24 h calendar.
-> After one recalculate:
->
-> | activity                          | written | stored    | early finish   |
-> | --------------------------------- | ------- | --------- | -------------- |
-> | Task twin                         | `5d`    | 2,400 min | **2026-01-05** |
-> | Crane lift (`RESOURCE_DEPENDENT`) | `5d`    | 2,400 min | **2026-01-02** |
->
-> A planner asked for five days of crane time and the programme reserves under two — while every
-> read-out still says `5d`, because `minutesToDays(2400, 480)` returns 5 on the way back out.
->
-> **The second case is the discriminator, not decoration.** With the driving resource on a calendar
-> whose day length **matches**, the two finishes coincide. So the difference above is caused by the
-> day length and not by a driver that failed to resolve — which is a different defect that would
-> produce the same-looking failure, and without this case a green run could not tell them apart.
->
-> **The seed catalogue could not supply the fixture**: every calendar it builds has
-> `hoursPerDay: null` (`packages/seed/src/{fixture,pairwise,scale,negative}`), so no seeded plan can
-> exhibit this divergence at all. `docs/TEST_PLAYBOOK.md`'s `plan:capability-resources` row watches
-> the right distinction on calendars of **equal** day length — precisely the case where it is
-> invisible. Both files are characterisation: when M2 lands, `2026-01-02` becomes `2026-01-05` and a
-> green run stops meaning "the defect is still here".
+**Trigger to reopen:** an installation whose driven population is materially larger than two (the
+staff panel's `day-factor-divergence` row reports `examined`, so the number is one press away), or
+any complaint about recalculate latency on a resourced plan. Re-running it needs the 2,000-activity
+seeded plan and a machine whose readings mean something — ADR-0127 D8 and ADR-0128 on why a
+container is not that machine.
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 

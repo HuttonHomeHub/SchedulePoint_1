@@ -573,3 +573,45 @@ something else: a narrower question, a cached answer, or a different shape entir
 **Still not the deployed number.** Everything here is a synthetic fixture on a test database. The
 figure `docs/TECH_DEBT.md` #86's M0-T3 is owed remains owed until somebody presses the button on
 the host — which is the whole reason the panel exists.
+
+---
+
+## THE DEPLOYED READING — taken 2026-09-14, and it is the first one that counts
+
+Everything above this line is a synthetic fixture on a test database. This is the number the panel
+was built to produce, taken by the product owner on the deployed host against **API 0.64.0** at
+`2026-09-14T06:39:30.570Z`, pasted verbatim from **Copy for the record**:
+
+| diagnostic                                       | examined | affected | plans | orgs | elapsed |
+| ------------------------------------------------ | -------: | -------: | ----: | ---: | ------: |
+| `day-factor-divergence` (driving resource)       |        2 |        2 |     1 |    1 |    8 ms |
+| `inherited-day-factor` (inherited plan calendar) |      164 |       19 |     1 |    1 |    3 ms |
+
+**Both are non-zero, and that is the finding.** `docs/TECH_DEBT.md` #86's M0-T3 was written
+expecting the argument to run the other way — the task says a zero "is the strongest possible
+argument for CQ-1 and must not be left unstated". It is not a zero. Twenty-one activities on this
+host had stored numbers derived on a day length that disagreed with the schedule they were measured
+against, which is the product owner's "the correct number wins" decision meeting real rows.
+
+**What it establishes, and only this.** That both mechanisms were live on real data rather than only
+in a fixture; and that neither is broad — one organisation, one plan apiece, on an installation of
+164 activities.
+
+**What it does NOT establish, stated because each looks stronger than it is:**
+
+- **2 of 2 is not a rate.** D-A examined two rows and both diverged. On a population of two, "100 %"
+  and "both of them" are the same sentence, and the second is the honest one.
+- **It measures no query cost worth having.** D-A's re-arm trigger is a press over 100 ms and D-B's
+  over 500 / 300 ms, and both were derived against a **102,000-activity** synthetic. This host holds 164. So 8 ms and 3 ms do not clear those triggers — they are three orders of magnitude away from
+  the population the triggers were written about, and a reader must not record them as the triggers
+  having been tested. They remain untested, and the candidate index remains unbuilt for the reason
+  M0-T3 gives: the planner does not choose it.
+- **It says nothing about any other installation**, because there is no other installation.
+
+**The actionable half, which the panel's own copy points at without naming.** The fixes are
+deployed, but `resolveDayFactors` runs inside the recalculate transaction
+(`schedule.service.ts:461-465`, feeding `writeResults`), so the stored `total_float`, `free_float`
+and `visual_drift_days` on those 21 activities are **still the old figures until their plans are
+recalculated**. The diagnostic counts rows whose numbers changed meaning; a recalculation is what
+makes them change. "Who to tell" on a single-tenant installation is the person reading the panel,
+and what to tell them is which plan to recalculate.
