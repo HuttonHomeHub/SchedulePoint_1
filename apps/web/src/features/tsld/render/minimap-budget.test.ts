@@ -27,6 +27,7 @@ const PALETTE: MinimapPalette = {
   outline: '#f2f4f8', // distinct from dataDate so the fringe assertions can tell them apart
   bar: '#3b6fbf',
   critical: '#e05d44',
+  nearCritical: '#d29628',
   dataDate: '#e6e8ee',
 };
 const BOX = { width: 200, height: 120 };
@@ -127,6 +128,38 @@ describe('minimap draw budget', () => {
     expect(calls.styleWrites).toBe(5);
     expect(calls.strokeRect).toBe(0);
     expect(calls.fillText).toBe(0);
+  });
+
+  /**
+   * M2. The near-critical pass is GUARDED, and these two cases are the guard's two sides.
+   *
+   * The point of the guard is that a plan with no near-critical activity pays exactly what it
+   * paid before — so the four assertions above, which all use `plan()` (every activity
+   * `isNearCritical: false`), still expect **4** style writes and are untouched. If the pass were
+   * unconditional they would have had to move to 5 for a pass drawing zero rects, which is a gate
+   * loosened to fit a feature rather than a cost the feature has.
+   */
+  it('a plan with no near-critical activity pays nothing for the pass', () => {
+    const { calls, ctx } = countingCtx();
+    buildMinimapBitmap(ctx, plan(500), DATA_DATE, BOX, PALETTE);
+    expect(calls.styleWrites, 'ground + two bar passes + data-date').toBe(4);
+    expect(calls.fillRect).toBe(1 + 500 + 1);
+  });
+
+  it('a plan WITH near-critical activities adds exactly one batched pass', () => {
+    const acts = plan(500).map((a, i) =>
+      i % 5 === 1 && !a.isCritical ? { ...a, isNearCritical: true } : a,
+    );
+    const near = acts.filter((a) => a.isNearCritical && !a.isCritical).length;
+    expect(near, 'the fixture must actually contain near-critical bars').toBeGreaterThan(0);
+    const { calls, ctx } = countingCtx();
+    buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
+    // ground + ordinary + NEAR-CRITICAL + critical + data-date. Still one write per pass, and
+    // still O(n) fills — one per placed bar, whichever pass drew it.
+    expect(calls.styleWrites).toBe(5);
+    expect(calls.fillRect).toBe(1 + 500 + 1);
+    expect(calls.fillText).toBe(0);
+    expect(calls.strokeRect).toBe(0);
   });
 
   it('the empty plan costs one ground fill and nothing else', () => {

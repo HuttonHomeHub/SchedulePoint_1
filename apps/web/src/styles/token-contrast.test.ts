@@ -422,6 +422,26 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     ).toBeGreaterThanOrEqual(1.5);
   });
 
+  /**
+   * **The Today marker's pair** (minimap-visual M2). Same shape as the frame's assertion and for a
+   * sharper reason: the marker IS `--destructive`, so on a critical bar the pair's first half is
+   * 1.00:1 by definition and the halo carries the whole thing. M0 §6 proved that live — the
+   * marker's computed background is `oklch(0.439 0.175 27)`, and sampling its column found
+   * `rgb(156,7,17)` over ground, byte-identical to the critical bar it crosses.
+   *
+   * The acceptance condition is deliberately "distinguishable **where it crosses a critical
+   * bar**", not "the two tokens differ": the second is satisfiable by a change that leaves them
+   * close, and closeness is not the defect — identity on one specific ground is.
+   */
+  it.each(MINIMAP_GROUNDS)('the Today marker or its halo clears 3:1 on %s', (_name, ground) => {
+    const line = ratio(tokens, ground, '--destructive');
+    const halo = ratio(tokens, ground, '--canvas-minimap-frame-halo');
+    expect(
+      Math.max(line, halo),
+      `Today pair on ${ground}: line ${fmtRatio(line)}, halo ${fmtRatio(halo)}`,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it('both halves are REACHABLE — the @theme inline block aliases them to --color-* names', () => {
     // The M4 component review's finding: the pair was declared at :root and referenced from the
     // component as var(--color-canvas-minimap-frame) — but only the `@theme inline` block turns a

@@ -654,3 +654,72 @@ subject is exactly "five marks, five appearances". ADR-0100 D5 says **paint orde
 decimation policy**, and this is that policy having an unintended consequence its own ADR does
 not mention: the data date was put last so it survives the merge, and the cost is that it
 silently removes whatever sits under it.
+
+## 11. M2's dispositions — including the two it declines
+
+M2's subject is "five marks, five appearances". Two of the three collisions it inherited are
+fixed; the third is **declined on inspection**, and one new defect is **recorded rather than
+fixed** because the fix is a decision this epic has no mandate for.
+
+### 11.1 Fixed — the Today marker (the real one)
+
+`today` and `critical` are both `--destructive`, proven live in §6, and the consequence is that
+the marker vanishes wherever it crosses a critical bar. It now carries a `box-shadow` halo — the
+`--canvas-minimap-frame` pair's answer to the same problem one element over — so the hue stays
+the scene's (ADR-0059: two views of one plan do not disagree about what a thing looks like) and
+legibility is bought with a second channel instead.
+
+`box-shadow` rather than `outline` because the viewport rectangle beside it already uses
+`outline` for its own halo, and two meanings for one property on sibling nodes is how the next
+reader gets it wrong. Gated by a new `MINIMAP_GROUNDS` sweep, **verified red** by pointing the
+halo at `--destructive`: 2.4:1 on both bar grounds.
+
+### 11.2 Fixed — near-critical had no mark at all
+
+Not a collision: a scene state with **no minimap representation**. A third batched pass, drawn
+between ordinary and critical so the ladder paints in ascending urgency and the most urgent
+still survives the 1 px merge (ADR-0100 D5's rule, extended rather than amended).
+
+**Guarded, and the guard is the point.** A plan with no near-critical activity pays exactly what
+it paid before, so all four existing budget assertions still expect **4** style writes and are
+untouched. Unguarded they would have had to move to 5 for a pass drawing zero rects — a gate
+loosened to accommodate a feature rather than a cost the feature has. Two new cases assert both
+sides, the second **verified red** against the pre-change painter.
+
+### 11.3 DECLINED — the fringe/dataDate "collision" is not a legibility defect
+
+§6.1 records that `outline` (the critical fringe) and `dataDate` are both `--foreground`, and the
+spec's table lists it beside the Today one. **On inspection they are not comparable defects and
+this one needs no change.**
+
+The Today case is identity on a ground where the mark must be read: same colour, and the marker
+disappears. The fringe case is two dark 1 px marks that are never a choice a reader has to make —
+the fringe is bounded to a bar and reads as that bar's edge, the data date is a continuous
+full-height vertical, and the two are distinguished by extent before colour is consulted. On top
+of that, `pxPerLane` is below `CRITICAL_FRINGE_MIN_H` on any large plan (0.674 measured, §9.2),
+so on the plans where this would matter **the fringe is not drawn at all**.
+
+Recorded as a decline with the reason rather than fixed, because this register has overstated a
+citation once (ADR-0082) and inventing a change to match a table is the same error in the other
+direction.
+
+### 11.4 RECORDED, not fixed — the data-date vertical paints over what sits under it
+
+§10.5's finding: the data date is drawn **last**, 1 px wide, full height, at day 0, so any
+zero-duration activity starting on the data date is painted out. A milestone is zero-duration by
+definition; the measured plan holds **42 `START_MILESTONE` and 34 `FINISH_MILESTONE`**.
+
+It is not fixed here because every available fix is a **decimation-policy decision**, which is
+ADR-0100 D5's territory rather than a defect repair:
+
+- draw the data date **first** — the bars then win, and a dense plan hides the data date, which
+  inverts the problem rather than solving it;
+- **nudge** a zero-width bar clear of the line — at 0.0456 px/day that is a lie about position
+  worth roughly 22 days;
+- **accept it** and say so — defensible (one global fact beats one bar, and the activity is
+  reachable on every other surface), but it should be a stated decision rather than an emergent
+  one.
+
+There is no free fix at 1 px: two marks cannot share a pixel. The choice belongs with the lane-
+compression question in §10.4, since both are "what should the minimap draw" rather than "is this
+drawn correctly", and both should be answered together.

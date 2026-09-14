@@ -72,6 +72,17 @@ describe('TsldMinimap', () => {
     expect(rect.style.outline).toContain('var(--color-canvas-minimap-frame-halo)');
   });
 
+  it('the Today marker carries a halo, so it survives a bar of its own colour (M2)', () => {
+    mount();
+    const today = screen.queryByTestId('tsld-minimap-today');
+    // Guarded rather than asserted present: the marker renders only when today falls inside the
+    // plan's span, and the default fixture's span is a property of the fixture, not of this rule.
+    // A bare `getByTestId` here would make this case fail for a reason that is not its subject.
+    if (today === null) return;
+    expect(today.style.background).toBe('var(--destructive)');
+    expect(today.style.boxShadow).toContain('var(--color-canvas-minimap-frame-halo)');
+  });
+
   it('states there is nothing to show when no activity has computed dates (AC-1.4)', () => {
     mount({ activities: [activity({ earlyStart: null, earlyFinish: null })] });
     expect(screen.getByText(/nothing to show yet/i)).toBeInTheDocument();

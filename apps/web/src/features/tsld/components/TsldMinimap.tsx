@@ -419,13 +419,32 @@ export function TsldMinimap({
               }}
             />
           ) : null}
-          {/* Today vertical — positioned on the same minute tick as the canvas Today marker. */}
+          {/* Today vertical — positioned on the same minute tick as the canvas Today marker.
+              Its **halo** is not decoration (minimap-visual M2). `today` and `critical` are the
+              same token, `--destructive`, which M0 proved live rather than by reading: the
+              marker's computed background is `oklch(0.439 0.175 27)` and a critical bar paints
+              `rgb(156,7,17)`, so sampling the marker's column found it byte-identical to the bar
+              over ground and INVISIBLE wherever it crosses one. On a real programme that is most
+              of the ink, and the mark saying "where we are now" was disappearing on exactly the
+              rows a planner cares most about.
+
+              The fix keeps the scene's hue — the ADR-0059 rule that two views of one plan do not
+              disagree about what a thing looks like — and buys legibility with a second channel
+              instead, which is the `--canvas-minimap-frame` pair's answer to the same problem one
+              element over. `box-shadow` rather than `outline` because the rectangle beside it
+              already uses `outline` for its own halo, and two meanings for one property on
+              sibling nodes is how the next reader gets it wrong. */}
           {todayX !== null ? (
             <div
               aria-hidden="true"
               data-testid="tsld-minimap-today"
               className="pointer-events-none absolute inset-y-0"
-              style={{ left: todayX, width: 1, background: 'var(--destructive)' }}
+              style={{
+                left: todayX,
+                width: 1,
+                background: 'var(--destructive)',
+                boxShadow: '0 0 0 1px var(--color-canvas-minimap-frame-halo)',
+              }}
             />
           ) : null}
           {/* The viewport rectangle: moved by the HOST's frame loop via style.transform. The

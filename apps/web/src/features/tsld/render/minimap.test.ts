@@ -10,6 +10,7 @@ const PALETTE: MinimapPalette = {
   outline: '#f2f4f8', // distinct from dataDate so the fringe assertions can tell them apart
   bar: '#3b6fbf',
   critical: '#e05d44',
+  nearCritical: '#d29628',
   dataDate: '#e6e8ee',
 };
 
@@ -185,5 +186,60 @@ describe('buildMinimapBitmap', () => {
     expect(mapping).not.toBeNull();
     expect(worldExtent(acts, DATA_DATE)!.minDay).toBeGreaterThan(0);
     expect(fills.some((f) => f.style === PALETTE.dataDate)).toBe(false);
+  });
+});
+
+describe('the near-critical bar state (M2)', () => {
+  /**
+   * The scene paints three bar states and the minimap painted two. This asserts the third reaches
+   * the canvas at all — the ADR-0081 shape applied to a colour rather than to a control: the pass
+   * exists, its budget is gated, and without this nothing says a near-critical bar is drawn in the
+   * near-critical ink rather than falling through to `bar`.
+   */
+  it('draws a near-critical bar in its own ink, not the ordinary one', () => {
+    const fills: { style: string; y: number }[] = [];
+    let current = '';
+    const ctx = {
+      setTransform: () => {},
+      clearRect: () => {},
+      fillRect: (_x: number, y: number) => {
+        fills.push({ style: current, y });
+      },
+      strokeRect: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+      fill: () => {},
+      setLineDash: () => {},
+      fillText: () => {},
+      measureText: () => ({ width: 0 }) as TextMetrics,
+      strokeStyle: '',
+      lineWidth: 1,
+      globalAlpha: 1,
+      font: '',
+      textBaseline: 'middle' as CanvasTextBaseline,
+      textAlign: 'left' as CanvasTextAlign,
+      get fillStyle() {
+        return current;
+      },
+      set fillStyle(v: string | CanvasGradient | CanvasPattern) {
+        current = typeof v === 'string' ? v : '[object]';
+      },
+    };
+    const acts = [
+      activity({ id: 'ordinary', laneIndex: 0 }),
+      activity({ id: 'near', laneIndex: 1, isNearCritical: true }),
+      activity({ id: 'crit', laneIndex: 2, isCritical: true }),
+    ];
+    buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
+    const inks = new Set(fills.map((f) => f.style));
+    expect(inks.has(PALETTE.nearCritical), 'the near-critical ink reached the canvas').toBe(true);
+    expect(inks.has(PALETTE.bar), 'the ordinary ink is still used').toBe(true);
+    expect(inks.has(PALETTE.critical), 'the critical ink is still used').toBe(true);
+    // And the near-critical bar is NOT also painted as an ordinary one — the defect was that it
+    // fell through, so a test that only checks the new ink would pass against a double-paint.
+    const barPassRects = fills.filter((f) => f.style === PALETTE.bar).length;
+    expect(barPassRects, 'exactly one ordinary bar is drawn in the ordinary ink').toBe(1);
   });
 });

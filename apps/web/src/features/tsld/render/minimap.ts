@@ -76,6 +76,20 @@ export interface MinimapPalette {
   readonly bar: string;
   /** Critical bar ink — the scene's `critical`; drawn LAST so it survives the merge. */
   readonly critical: string;
+  /**
+   * Near-critical bar ink — the scene's `nearCritical` (minimap-visual M2).
+   *
+   * **It was missing, and that is a different defect from the collisions M2 exists to fix.** The
+   * scene paints three bar states and the minimap painted two: `isNearCritical` fell through to
+   * `bar`, so an activity a planner is being warned about looked exactly like one they are not.
+   * Not two marks sharing a token — a scene state with no mark at all (M0 §2.3, measured from a
+   * screenshot: the scene's amber `rgb(159,86,0)` against the minimap's `rgb(86,146,205)`).
+   *
+   * It costs nothing to gate: `token-contrast.test.ts`'s `CRITICALITY_PAIRS` already asserts all
+   * three canvas-scope pairs, so the separation this relies on was measured before it had a
+   * consumer here.
+   */
+  readonly nearCritical: string;
   /** The scene's foreground `outline` — the critical FRINGE (WCAG 1.4.1, M4 a11y gate):
    * hue is not the only channel separating critical from non-critical wherever a lane row
    * is tall enough to carry it (see {@link CRITICAL_FRINGE_MIN_H}). */
@@ -194,6 +208,9 @@ export interface MinimapRect {
   readonly w: number;
   readonly h: number;
   readonly critical: boolean;
+  /** Near-critical (minimap-visual M2). Its own field rather than a three-valued `criticality`
+   *  so the existing `critical` consumers are untouched — the parity the epic relies on. */
+  readonly nearCritical: boolean;
 }
 
 /**
@@ -225,6 +242,7 @@ export function minimapRects(
       w: Math.max(1, x1 - x0),
       h: Math.max(1, pxPerLane),
       critical: a.isCritical === true,
+      nearCritical: a.isNearCritical === true,
     });
   }
   return rects;
@@ -258,7 +276,21 @@ export function buildMinimapBitmap(
   const rects = minimapRects(activities, dataDate, mapping);
   ctx.fillStyle = palette.bar;
   for (const r of rects) {
-    if (!r.critical) ctx.fillRect(r.x, r.y, r.w, r.h);
+    if (!r.critical && !r.nearCritical) ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
+  // Near-critical, between ordinary and critical — draw order IS the decimation policy (ADR-0100
+  // D5), so the ladder is painted in ascending urgency and the most urgent survives the 1px merge.
+  //
+  // **Guarded, so a plan with none pays nothing.** Without the guard every existing budget
+  // assertion would move from 4 style writes to 5 for a pass that draws zero rects, which is a
+  // gate loosened to accommodate a feature rather than a cost the feature actually has. The
+  // `fringed` guard immediately below is the same shape and the precedent.
+  const anyNearCritical = rects.some((r) => r.nearCritical && !r.critical);
+  if (anyNearCritical) {
+    ctx.fillStyle = palette.nearCritical;
+    for (const r of rects) {
+      if (r.nearCritical && !r.critical) ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
   }
   // The critical fringe (WCAG 1.4.1): where the row can carry it, a critical bar is a
   // foreground-luminance rect with the critical fill inset — lightness, not hue alone.

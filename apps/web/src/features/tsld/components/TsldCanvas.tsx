@@ -1923,6 +1923,10 @@ export function TsldCanvas({
                   ground: palette.canvasGround,
                   bar: palette.bar,
                   critical: palette.critical,
+                  // The scene's third bar state, which the minimap did not have (M0 §2.3): every
+                  // near-critical activity painted as an ordinary one, so the picture showed two
+                  // states where the diagram beside it shows three.
+                  nearCritical: palette.nearCritical,
                   outline: palette.outline,
                   dataDate: palette.dataDate,
                 },
