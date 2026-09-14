@@ -28,10 +28,34 @@ const PALETTE: MinimapPalette = {
   bar: '#3b6fbf',
   critical: '#e05d44',
   nearCritical: '#d29628',
+  gridMinor: '#72777e',
+  gridYear: '#4a4f57',
   dataDate: '#e6e8ee',
 };
 const BOX = { width: 200, height: 120 };
 const DATA_DATE = '2026-01-01';
+
+/**
+ * What the M3 temporal tiers add to every count below — **re-derived, never relaxed**.
+ *
+ * Every fixture here spans 2026-01-01 … 2026-03-01 (60 days). At `BOX.width` 200 that is
+ * 3.33 px/day, so the month pitch is ~101 px and the year pitch ~1,217 px: the ladder admits
+ * **month as the minor tier and year**, the most either can be, so these fixtures exercise the
+ * tiers' worst case rather than skipping them.
+ *
+ * `calendarBoundaries(0, 60, '2026-01-01')` returns month boundaries at offsets **0, 31, 59**
+ * (1 Jan, 1 Feb, 1 Mar) and a year boundary at **0** — four rules, all inside the box:
+ * `screenXOfDay` puts them at 0, 103 and 197.
+ *
+ * So: **+4 `fillRect`** (one per rule) and **+2 `fillStyle`** (one per drawn tier, batched —
+ * never per rule). Both are hand-checkable from the two sentences above, which is the point:
+ * a budget gate whose numbers cannot be re-derived by a reader is a number nobody will
+ * question when it next moves.
+ *
+ * A span admitting NO tier writes neither, and the last case in this file pins that.
+ */
+const TIER_FILLS = 4;
+const TIER_STYLES = 2;
 
 function countingCtx() {
   const calls = { fillRect: 0, fillText: 0, measureText: 0, strokeRect: 0, styleWrites: 0 };
@@ -93,23 +117,28 @@ describe('minimap draw budget', () => {
     const { calls, ctx } = countingCtx();
     buildMinimapBitmap(ctx, plan(2000), DATA_DATE, BOX, PALETTE);
     // ground + one fill per placed bar + the data-date line (first bar anchors day 0 in span)
-    expect(calls.fillRect).toBe(1 + 2000 + 1);
+    expect(calls.fillRect).toBe(1 + TIER_FILLS + 2000 + 1);
     expect(calls.fillText).toBe(0);
     expect(calls.measureText).toBe(0);
     expect(calls.strokeRect).toBe(0);
   });
 
-  it('fillStyle is batched: ground + two bar passes + data-date = 4 writes, regardless of n', () => {
+  it('fillStyle is batched: one write per pass, regardless of n', () => {
     const { calls, ctx } = countingCtx();
     buildMinimapBitmap(ctx, plan(2000), DATA_DATE, BOX, PALETTE);
-    expect(calls.styleWrites).toBe(4);
+    // ground + minor tier + year tier + ordinary bars + critical bars + data-date.
+    expect(calls.styleWrites).toBe(4 + TIER_STYLES);
   });
 
-  it('a fringed plan stays fillRect-only and batched: 6 style writes, no strokes, no text', () => {
+  it('a fringed plan stays fillRect-only and batched: no strokes, no text', () => {
     // 8 lanes → 15px rows → every critical bar carries its 1.4.1 fringe. The shape holds:
-    // ground + bar-pass + fringe-pass + critical-pass + data-date = 5 batched styles… plus
-    // the critical INSET fill after the fringe = 6 writes total, still O(n) fills, still
-    // zero strokeRect/fillText.
+    // ground + bar-pass + fringe-pass + critical-pass + data-date = **5** batched styles, plus
+    // the M3 tiers, still O(n) fills, still zero strokeRect/fillText.
+    //
+    // **This comment used to say "6 writes total" beside an assertion of 5, and the name said 6
+    // too.** The assertion was right; the prose invented a sixth write for "the critical INSET
+    // fill after the fringe", which is a `fillRect` inside a pass whose `fillStyle` was already
+    // set. Corrected at M3-T3: the prose moves, never the number.
     const { calls, ctx } = countingCtx();
     const acts = Array.from({ length: 100 }, (_, i) => ({
       id: `a${i}`,
@@ -124,8 +153,8 @@ describe('minimap draw budget', () => {
     buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
     const critical = acts.filter((a) => a.isCritical).length;
     // ground + non-critical + fringe-per-critical + inset-per-critical + data-date
-    expect(calls.fillRect).toBe(1 + (100 - critical) + critical * 2 + 1);
-    expect(calls.styleWrites).toBe(5);
+    expect(calls.fillRect).toBe(1 + TIER_FILLS + (100 - critical) + critical * 2 + 1);
+    expect(calls.styleWrites).toBe(5 + TIER_STYLES);
     expect(calls.strokeRect).toBe(0);
     expect(calls.fillText).toBe(0);
   });
@@ -142,8 +171,10 @@ describe('minimap draw budget', () => {
   it('a plan with no near-critical activity pays nothing for the pass', () => {
     const { calls, ctx } = countingCtx();
     buildMinimapBitmap(ctx, plan(500), DATA_DATE, BOX, PALETTE);
-    expect(calls.styleWrites, 'ground + two bar passes + data-date').toBe(4);
-    expect(calls.fillRect).toBe(1 + 500 + 1);
+    expect(calls.styleWrites, 'ground + two tiers + two bar passes + data-date').toBe(
+      4 + TIER_STYLES,
+    );
+    expect(calls.fillRect).toBe(1 + TIER_FILLS + 500 + 1);
   });
 
   it('a plan WITH near-critical activities adds exactly one batched pass', () => {
@@ -156,8 +187,8 @@ describe('minimap draw budget', () => {
     buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
     // ground + ordinary + NEAR-CRITICAL + critical + data-date. Still one write per pass, and
     // still O(n) fills — one per placed bar, whichever pass drew it.
-    expect(calls.styleWrites).toBe(5);
-    expect(calls.fillRect).toBe(1 + 500 + 1);
+    expect(calls.styleWrites).toBe(5 + TIER_STYLES);
+    expect(calls.fillRect).toBe(1 + TIER_FILLS + 500 + 1);
     expect(calls.fillText).toBe(0);
     expect(calls.strokeRect).toBe(0);
   });

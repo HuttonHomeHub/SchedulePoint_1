@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Ctx2D } from './ctx-2d';
 import { screenXOfDay, worldExtent, type RenderActivity } from './geometry';
-import { buildMinimapBitmap, minimapRects, minimapViewport, type MinimapPalette } from './minimap';
+import {
+  buildMinimapBitmap,
+  minimapRects,
+  minimapTiers,
+  minimapViewport,
+  type MinimapPalette,
+} from './minimap';
 
 const DATA_DATE = '2026-01-01';
 const BOX = { width: 200, height: 120 };
@@ -11,6 +18,8 @@ const PALETTE: MinimapPalette = {
   bar: '#3b6fbf',
   critical: '#e05d44',
   nearCritical: '#d29628',
+  gridMinor: '#72777e',
+  gridYear: '#4a4f57',
   dataDate: '#e6e8ee',
 };
 
@@ -138,7 +147,23 @@ describe('buildMinimapBitmap', () => {
     const mapping = buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
     expect(mapping).not.toBeNull();
     const styles = fills.map((f) => f.style);
-    expect(styles).toEqual([
+
+    // ── The M3 tiers draw BENEATH everything, and that is asserted as a relationship rather
+    // than folded into the sequence below. This span is ~5.5 years, so the ladder admits
+    // quarter + year; a count would make this case about the calendar instead of about paint
+    // order, and would move every time the fixture's dates did.
+    const tierInks = new Set<string>([PALETTE.gridMinor, PALETTE.gridYear]);
+    const firstBar = styles.findIndex((v) => !tierInks.has(v) && v !== PALETTE.ground);
+    expect(firstBar, 'something is painted after the ground').toBeGreaterThan(0);
+    expect(
+      styles.slice(firstBar).some((v) => tierInks.has(v)),
+      'no tier rule is painted after a bar',
+    ).toBe(false);
+    expect(styles.filter((v) => tierInks.has(v)).length, 'the tiers drew').toBeGreaterThan(0);
+
+    // ── And the original contract, unchanged: with the tiers removed the sequence is exactly
+    // what it was before M3, which is the parity this milestone rests on.
+    expect(styles.filter((v) => !tierInks.has(v))).toEqual([
       PALETTE.ground,
       PALETTE.bar, // anchor + norm share the non-critical pass
       PALETTE.bar,
@@ -243,3 +268,71 @@ describe('the near-critical bar state (M2)', () => {
     expect(barPassRects, 'exactly one ordinary bar is drawn in the ordinary ink').toBe(1);
   });
 });
+
+describe('the temporal tier ladder (M3)', () => {
+  /**
+   * The two plans M0 measured, by their real spans — so this case fails if the ladder ever stops
+   * agreeing with the pictures the floor was set from (`m0-measurement.md` §7.2, §9.2).
+   */
+  it('admits quarter + year on a 1,059-day plan and year alone on a 4,385-day one', () => {
+    expect(minimapTiers(1059, 200)).toEqual({ minor: 'quarter', year: true });
+    expect(minimapTiers(4385, 200)).toEqual({ minor: null, year: true });
+  });
+
+  it('prefers month when month clears the floor — the finest that fits, never both', () => {
+    // 60 days at 200px: month pitch ~101px. Quarter is a SUBSET of the month boundaries, so
+    // drawing both would paint the same rules twice in the same ink.
+    expect(minimapTiers(60, 200)).toEqual({ minor: 'month', year: true });
+  });
+
+  it('refuses every tier on a span too long to carry one', () => {
+    // 200px / 6px floor = at most ~33 rules, so a year pitch under 6px refuses even the coarsest.
+    // 365.25 * 200 / span < 6  =>  span > 12,175 days.
+    expect(minimapTiers(20_000, 200)).toEqual({ minor: null, year: false });
+  });
+
+  it('a span admitting no tier writes no tier — ground, bars and data date only', () => {
+    const { calls, ctx } = countingStyleCtx();
+    // ~55 years: every tier is below the floor.
+    const acts = [
+      activity({ id: 'a', earlyStart: '2026-01-01', earlyFinish: '2081-01-01', laneIndex: 0 }),
+    ];
+    buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
+    expect(calls.styles.includes(PALETTE.gridMinor), 'no minor tier').toBe(false);
+    expect(calls.styles.includes(PALETTE.gridYear), 'no year tier').toBe(false);
+  });
+});
+
+/** A minimal style recorder for the case above. */
+function countingStyleCtx(): { calls: { styles: string[] }; ctx: Ctx2D } {
+  const calls = { styles: [] as string[] };
+  let current = '';
+  const ctx = {
+    setTransform: () => {},
+    clearRect: () => {},
+    fillRect: () => {},
+    strokeRect: () => {},
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    stroke: () => {},
+    fill: () => {},
+    setLineDash: () => {},
+    fillText: () => {},
+    measureText: () => ({ width: 0 }) as TextMetrics,
+    strokeStyle: '',
+    lineWidth: 1,
+    globalAlpha: 1,
+    font: '',
+    textBaseline: 'middle' as CanvasTextBaseline,
+    textAlign: 'left' as CanvasTextAlign,
+    get fillStyle() {
+      return current;
+    },
+    set fillStyle(v: string | CanvasGradient | CanvasPattern) {
+      current = typeof v === 'string' ? v : '[object]';
+      calls.styles.push(current);
+    },
+  };
+  return { calls, ctx };
+}

@@ -6,6 +6,7 @@ import {
   type Size,
   type Viewport,
 } from './geometry';
+import { calendarBoundaries } from './time-scale';
 import { daysBetween } from './working-time';
 
 /**
@@ -96,6 +97,17 @@ export interface MinimapPalette {
   readonly outline: string;
   /** The data-date vertical — the scene's `dataDate`. */
   readonly dataDate: string;
+  /**
+   * The minor temporal tier — the scene's `gridLineMonth` (minimap-visual M3).
+   *
+   * Drawn for whichever of month/quarter clears {@link MINIMAP_TIER_MIN_PX}; a quarter boundary
+   * IS a month boundary, so both use the month ink rather than inventing a third value nothing
+   * else in the product has a meaning for.
+   */
+  readonly gridMinor: string;
+  /** The year tier — the scene's `gridLineYear`. Drawn last of the tiers, so a coarser boundary
+   *  wins at a coincident x (ADR-0056's rule for the scene's own tiers). */
+  readonly gridYear: string;
 }
 
 /**
@@ -107,6 +119,50 @@ export interface MinimapPalette {
  * REPORTED in `token-contrast.test.ts`, the DAY-tier precedent.
  */
 export const CRITICAL_FRINGE_MIN_H = 3;
+
+/**
+ * The pitch below which a temporal tier is refused. **Set from rendered images, not by eye and
+ * not inherited** — `docs/specs/tsld-minimap-visual/m0-measurement.md` §7 records six candidate
+ * pitches drawn into the real 200×120 box with the real ground, grid and bar inks, twice each.
+ * At 1.5 px the rules are a solid wash, at 3 px a hatch, at 4.5 px the ground is visibly striped;
+ * 6 px is the lowest pitch at which they read as individual structure rather than as a texture.
+ *
+ * The scene's own day-tier floor (`DAY_GRID_MIN_PX`, `render/paint.ts`) is **also 6**, and that is
+ * corroboration rather than the derivation: its docblock gives a reason and cites no measurement,
+ * so deriving from it would inherit an unmeasured constant. The agreement supports the rule this
+ * ladder rests on — **a pitch ladder, not a tier name**: a 1 px vertical rule is legible or not at
+ * a given pitch whatever tier it belongs to.
+ *
+ * Its one recorded blind spot: the choice between 6 and 8 is unobservable on both measured plans,
+ * since neither admits the month tier either way. See §7.2.
+ */
+export const MINIMAP_TIER_MIN_PX = 6;
+
+/** Mean days per tier step — calendar-average, since the ladder is a legibility question about
+ *  typical pitch and not an exact boundary count. */
+const TIER_DAYS = { month: 30.44, quarter: 91.31, year: 365.25 } as const;
+
+/**
+ * Which temporal tiers this span can carry, at this box width.
+ *
+ * **At most two**: one minor tier plus the year. Month and quarter are never both drawn — a
+ * quarter boundary is a subset of the month boundaries, so drawing both paints the same rules
+ * twice in the same ink and buys nothing. The minor tier is therefore the FINEST of the two that
+ * clears the floor, which is the ladder §7.2 measures: on a 1,059-day plan quarter (17.2 px) and
+ * year (69.0 px); on a 4,385-day plan year (16.7 px) alone.
+ */
+export function minimapTiers(
+  spanDays: number,
+  boxWidth: number,
+): { minor: 'month' | 'quarter' | null; year: boolean } {
+  const pxPerDay = boxWidth / Math.max(1, spanDays);
+  const fits = (tier: keyof typeof TIER_DAYS): boolean =>
+    pxPerDay * TIER_DAYS[tier] >= MINIMAP_TIER_MIN_PX;
+  return {
+    minor: fits('month') ? 'month' : fits('quarter') ? 'quarter' : null,
+    year: fits('year'),
+  };
+}
 
 /**
  * The world→minimap mapping. `view` is a real {@link Viewport} so every x lands via
@@ -273,6 +329,38 @@ export function buildMinimapBitmap(
   if (extent === null) return null;
 
   const mapping = minimapViewport(extent, box);
+
+  // ── Temporal tiers, BENEATH the bars (minimap-visual M3, ADR-0100 D5 as amended).
+  //
+  // Beneath is the whole affordability argument: their only ground is `--canvas`, and
+  // `--canvas-grid-month`/`--canvas-grid-year` are already asserted ≥ 3:1 against it, so this
+  // adds **no new contrast pair**. Drawn over the bars they would need gating against both bar
+  // inks as well, and would be reading as noise over the very thing the picture is for.
+  //
+  // The boundaries come from `calendarBoundaries`, the same walk the scene's ruler uses — a
+  // second date walk is how two views drift about where a Monday is (ADR-0059). Minor first, year
+  // last, so a coarser boundary wins at a coincident x (ADR-0056's rule for the scene's tiers).
+  //
+  // Cost is bounded by the floor rather than by the plan: a tier is refused below
+  // `MINIMAP_TIER_MIN_PX`, so at most `box.width / 6` ≈ 33 rules per tier and at most two tiers.
+  // Still fillRect-only, still one `fillStyle` write per drawn tier, and a span that admits
+  // neither tier writes nothing at all.
+  const tiers = minimapTiers(mapping.spanDays, box.width);
+  if (tiers.minor !== null || tiers.year) {
+    const bounds = calendarBoundaries(extent.minDay, extent.maxDay, dataDate);
+    const stroke = (days: readonly number[], ink: string): void => {
+      ctx.fillStyle = ink;
+      for (const day of days) {
+        const x = Math.round(screenXOfDay(day, mapping.view));
+        if (x >= 0 && x <= box.width) ctx.fillRect(x, 0, 1, box.height);
+      }
+    };
+    if (tiers.minor !== null) {
+      stroke(tiers.minor === 'month' ? bounds.months : bounds.quarters, palette.gridMinor);
+    }
+    if (tiers.year) stroke(bounds.years, palette.gridYear);
+  }
+
   const rects = minimapRects(activities, dataDate, mapping);
   ctx.fillStyle = palette.bar;
   for (const r of rects) {

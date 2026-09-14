@@ -1929,6 +1929,10 @@ export function TsldCanvas({
                   nearCritical: palette.nearCritical,
                   outline: palette.outline,
                   dataDate: palette.dataDate,
+                  // The temporal tiers (M3). The scene's own gridline inks — a whole-plan picture
+                  // with no time structure at all reads as a smear rather than a programme.
+                  gridMinor: palette.gridLineMonth,
+                  gridYear: palette.gridLineYear,
                 },
                 dpr,
               );

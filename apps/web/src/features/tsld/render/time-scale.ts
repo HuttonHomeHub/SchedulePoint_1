@@ -261,12 +261,18 @@ export function calendarBoundaries(
   firstDay: number,
   lastDay: number,
   dataDate: string,
-): { months: number[]; years: number[]; startMonthIndex: number } {
+): { months: number[]; quarters: number[]; years: number[]; startMonthIndex: number } {
   const anchor = new Date(`${addCalendarDays(dataDate, firstDay)}T00:00:00Z`);
   let y = anchor.getUTCFullYear();
   let m = anchor.getUTCMonth() + 1;
   let d = anchor.getUTCDate();
   const months: number[] = [];
+  // Quarter starts (Jan/Apr/Jul/Oct), collected in the SAME walk (minimap-visual M3). A quarter
+  // boundary IS a month boundary, so deriving it here rather than in a second pass keeps the one
+  // date walk this module exists to be — the ADR-0059 "the time axis is shared, not
+  // reimplemented" rule applied to a tier rather than to a view. It is additive: every existing
+  // caller destructures the fields it wants and is untouched.
+  const quarters: number[] = [];
   const years: number[] = [];
   // The absolute month ordinal of the FIRST visible day. Month banding derives its parity from
   // this rather than from "how many boundaries have I crossed", so the stripes are a property of
@@ -275,6 +281,7 @@ export function calendarBoundaries(
   for (let off = firstDay; off <= lastDay; off += 1) {
     if (d === 1) {
       months.push(off);
+      if (m === 1 || m === 4 || m === 7 || m === 10) quarters.push(off);
       if (m === 1) years.push(off);
     }
     d += 1;
@@ -287,7 +294,7 @@ export function calendarBoundaries(
       }
     }
   }
-  return { months, years, startMonthIndex };
+  return { months, quarters, years, startMonthIndex };
 }
 
 /**

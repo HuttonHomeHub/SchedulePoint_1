@@ -214,6 +214,7 @@ describe('calendarBoundaries', () => {
     // happens to contain a boundary.
     expect(calendarBoundaries(0, 4, '2026-03-10')).toEqual({
       months: [],
+      quarters: [],
       years: [],
       startMonthIndex: 2026 * 12 + 2,
     });

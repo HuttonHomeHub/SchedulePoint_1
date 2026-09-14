@@ -76,6 +76,45 @@ D7 built a parallel a11y layer instead.
    only channel where the row can carry more; below 3 px the picture degrades to hue plus
    the scene's own dash/outline cues one surface up — REPORTED, not asserted, in
    `token-contrast.test.ts` per the day-tier precedent.
+
+   **Amended 2026-09-14 (minimap-visual M3, CQ-1 approved by the product owner).** The layer list
+   gains **temporal tiers** — one minor tier (month or quarter) plus year, drawn **beneath the
+   bars** — and the amendment **narrows this decision rather than relaxing it**. All three of D5's
+   named properties survive verbatim: **zero text work**, **zero per-bar strokes**, and
+   `fillStyle` **batched per pass** — one write per drawn tier, never per rule. The budget gate
+   gains two constants whose derivation is written out in the file so a reader can re-check the
+   arithmetic by hand, and the counts were **re-derived, not relaxed**.
+
+   Three things were **declined** under the same approval, each on a measurement rather than a
+   preference:
+
+   - **Year labels.** At 8 px, `"2026"` is ~19 px against a **17.7 px** year pitch on a
+     2,000-activity plan — they collide precisely where they would help most. D5's "zero text
+     work" therefore stands on arithmetic and not only on the original legibility assertion.
+   - **Endpoint dots** (the old application drew them) — per-bar strokes, which is the second
+     property, and 2,160 of them in a 200×120 box is a texture rather than a cue.
+   - **Links.** The original rejection (3,200 links in a 200 px box is a smear) is untouched.
+
+   **What the tiers cost is bounded by the floor rather than by the plan.** `MINIMAP_TIER_MIN_PX`
+   is **6 px**, set from six candidate pitches rendered into the real box with the real inks
+   (`docs/specs/tsld-minimap-visual/m0-measurement.md` §7) — explicitly **not** inherited from the
+   scene's `DAY_GRID_MIN_PX`, which is also 6 but cites no measurement. Below the floor a tier is
+   refused, so at most `box.width / 6` ≈ 33 rules per tier and at most two tiers; a span too long
+   for either writes nothing at all, which is asserted.
+
+   **The tiers are beneath the bars, and that is the affordability argument rather than a
+   layering taste.** Their only ground is `--canvas`, and `--canvas-grid-month`/`--canvas-grid-year`
+   are already gated ≥ 3:1 against it — so this adds **no new contrast pair**. Drawn over the bars
+   they would need gating against both bar inks as well, and would read as noise over the one
+   thing the picture is for.
+
+   **The same milestone also records a consequence of D5's own rule that this decision did not
+   mention**: paint order being the decimation policy means the data-date vertical, drawn last at
+   day 0, **paints over any zero-duration activity starting on the data date** — and a milestone
+   is zero-duration by definition. That is left open rather than fixed, because every remedy is
+   itself a decimation-policy decision and two marks cannot share a pixel
+   (`m0-measurement.md` §11.4).
+
 6. **The culled-id set is not the minimap's subject**, and `paintScene`'s docblock
    claiming the minimap as its consumer is corrected — the culled set is what is ON
    screen; the minimap's subject is the whole plan.

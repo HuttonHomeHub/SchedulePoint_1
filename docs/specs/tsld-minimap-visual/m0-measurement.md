@@ -723,3 +723,52 @@ ADR-0100 D5's territory rather than a defect repair:
 There is no free fix at 1 px: two marks cannot share a pixel. The choice belongs with the lane-
 compression question in §10.4, since both are "what should the minimap draw" rather than "is this
 drawn correctly", and both should be answered together.
+
+## 12. The clean baseline — and §8.3's diagnosis was wrong
+
+M3's falsification bar (§8.4) was committed before the milestone, so the baseline had to be
+re-taken on an idle machine. Taken 2026-09-14 ~16:48, load average **0.31** (against 0.93 for
+the contaminated run), each scene measured **twice** so the run reports its own spread — which
+ADR-0128 makes the thing that turns a reading into a verdict.
+
+| scene                        | p50       | p95             | max         |
+| ---------------------------- | --------- | --------------- | ----------- |
+| 500 activities / 60 lanes    | 0.9 / 0.9 | 1.5 / 1.5       | 12.2 / 12.3 |
+| 2,160 activities / 274 lanes | 3.9 / 3.8 | **13.6 / 13.9** | 17.2 / 18.8 |
+
+**Run-to-run spread: 0.0–0.1 ms on p50, 0.0–0.3 ms on p95.**
+
+### 12.1 The correction
+
+§8.3 read the p95's divergence from v1 (13.2 against 5.1) as **interference rather than
+regression**, on the reasoning that a 2.6× tail under a 1.15× median is what contention looks
+like and slower code moves the median. The clean run **reproduces the tail**: 13.6 and 13.9
+against the contaminated 13.2, with a 0.3 ms spread between repeats. So the figure was never
+contention, and the argument — which is sound in general — was applied to a case it did not fit.
+
+I named the confound, measured it, and still drew the wrong conclusion from it, because I
+treated a plausible mechanism as an explanation without taking the one measurement that
+discriminates. The repeat is that measurement and it cost ninety seconds.
+
+### 12.2 What the divergence from v1 actually is — recorded as unattributed
+
+Not diagnosed, and deliberately not guessed at. The candidates are a **different machine**
+(v1's figure is from another container on another date), a **different scene** (v1's generator
+is not recorded here), and a **real change in the painter** across the epics since. Two things
+bound it:
+
+- **It is not M2.** The contaminated pre-M2 run measured 13.2 and this post-M2 run 13.6/13.9 —
+  a delta inside twice the spread, on a fixture where M2's pass is guarded off (`plan()` sets
+  `isNearCritical: false` throughout), so all M2 adds is one `rects.some()` scan.
+- **Neither v1's figure nor the contaminated one carries a spread.** Mine does. That is the
+  only reason this paragraph can say anything at all, and it is the argument for taking repeats
+  by default rather than when a number looks surprising.
+
+### 12.3 The bar M3 is judged against
+
+§8.4 stands unchanged and is now anchored to a clean number: **the rebuild stays within one
+order of magnitude of 13.6–13.9 ms p95 at 2,160 activities, and the per-frame path is
+unchanged.** The second limb remains the load-bearing one and is structural rather than
+statistical — the tiers draw inside `buildMinimapBitmap`, which runs on scene change only, so a
+regression that moved work onto the frame loop shows up as a changed call site rather than as a
+changed millisecond.
