@@ -98,7 +98,8 @@ first; "Retention sweeping is disabled" is **562 px** below the fold and the unv
 `toBeLessThanOrEqual(SCREEN_WEIGHT_CEILING)`, and **173 is a ceiling**. M0 records the number the gate
 actually reports; FC-3 is undefined until it does (§8.16).
 
-**FC-1, FC-1a and FC-4 are judged at M2**, the frame milestone — not at the end. Reverting a frame is
+**FC-4 and FC-1a are judged at M2**, the frame milestone — not at the end — along with **FC-1's
+DIRECTION**. Reverting a frame is
 one commit; reverting it after the vocabulary and the element sweep have been tuned to it is not
 (§8.17).
 
@@ -400,9 +401,11 @@ vocabulary, no summary yet.
 
 **Entry point:** `/staff` at any width — the frame is the first thing a reader meets.
 
-**Journey:** the order assertion (below), plus **FC-1, FC-1a and FC-4 are judged at the end of this
-milestone**, from a re-shoot on the §4.7 unhealthy recipe, with the non-vacuity control checked
-first.
+**Journey:** the order assertion (below), plus **FC-4 and FC-1a are judged at the end of this
+milestone, and FC-1's direction with them** — from a re-shoot on the §4.7 unhealthy recipe, with the
+non-vacuity control checked first. See `m2-frame.md` §2 for why FC-1's _verdict_ belongs to M3: its
+stated mechanism is US-1's summary, which M3 builds, so placing the verdict here was an error in
+this re-slice rather than a softening of the condition.
 
 #### Feature: a two-column grid whose spans are assigned by content width demand
 

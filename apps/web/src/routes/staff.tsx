@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { CardTitle } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { PageContainer, PageHeader } from '@/components/ui/page';
+import { PageContainer, PageGrid, PageGridItem, PageHeader } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { PerformanceProbePanel } from '@/features/perf-probe/ui/performance-probe-panel';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
@@ -87,7 +88,7 @@ export function StaffConsoleScreen(): React.ReactElement {
 
   return (
     <main>
-      <PageContainer width="narrow" className="space-y-6">
+      <PageContainer width="wide" className="space-y-6">
         {/* `actions` carries the way back, and until now there was none. The authenticated branch
             rendered a header with no link home while the NOT-FOUND branch above has one — so the
             branch for people who cannot use this page had a way out and the branch for people who
@@ -127,14 +128,59 @@ export function StaffConsoleScreen(): React.ReactElement {
             member. Anything you reach in the app itself, you reach with your ordinary membership.
           </Alert>
         )}
-        <MailHealthPanel />
-        <PerformanceProbePanel />
-        <DiagnosticsPanel />
-        <RetentionPanel />
-        <SecurityPanel />
-        <InstallationPanel />
-        <AccountsPanel />
-        <ActivityPanel />
+        {/* **The order is priority, and the spans are content width demand — two separate
+            decisions that a single-column stack conflated.**
+
+            ORDER answers "what does an operator arrive wanting to know?", and it is also DOM order
+            and therefore the order a screen reader walks. Conditions first (mail, policy
+            violations, accounts that cannot sign in), then what this installation IS, then the
+            tools, then the record. M0 measured the old order's cost: Performance and Diagnostics
+            sat at positions 2 and 3, inert until a button is pressed, taking ~550 px of the best
+            space on the page between the panel reporting a live failure and the panels reporting
+            standing conditions.
+
+            SPAN answers "how wide does this body need to be?" — never "how important is it". A
+            section whose body is a `DataTable` is `wide`, because the console's tables carry up to
+            five columns including `break-all` URI and address fields, and "the tables look cramped"
+            is the diagnosis this epic was opened on. At `width="wide"` a spanning section gets
+            1,438 px of table against today's 798 (+80 %); the pair below gets 732 px each, which is
+            ample for four facts or three buttons.
+
+            **Only one pair falls out of that rule, and it is recorded rather than engineered.**
+            Five of the seven sections are table-bodied, so the two-column grid buys exactly one
+            paired row. That is a smaller win than "two columns" sounds like, and it is the honest
+            one: what actually fixes this page is the WIDTH the spanning sections gain, the ORDER,
+            and (M3) the summary. Pairing more would mean either narrowing a table — which FC-4
+            forbids, and which is the regression the whole span rule exists to prevent — or making a
+            span depend on how much data happened to arrive, which would make the layout a function
+            of the database. */}
+        <PageGrid>
+          <PageGridItem span="wide">
+            <MailAndRetentionPanel />
+          </PageGridItem>
+          <PageGridItem span="wide">
+            <SecurityPanel />
+          </PageGridItem>
+          <PageGridItem span="wide">
+            <AccountsPanel />
+          </PageGridItem>
+          {/* The one paired row: four facts beside three controls. Installation says what this
+              installation is; Diagnostics is how you ask it a question. Neither has a table, and
+              neither is an order of magnitude taller than the other — which is the condition that
+              keeps a two-column row from leaving the ragged void that reads as unfinished. */}
+          <PageGridItem span="narrow">
+            <InstallationPanel />
+          </PageGridItem>
+          <PageGridItem span="narrow">
+            <DiagnosticsPanel />
+          </PageGridItem>
+          <PageGridItem span="wide">
+            <PerformanceProbePanel />
+          </PageGridItem>
+          <PageGridItem span="wide">
+            <ActivityPanel />
+          </PageGridItem>
+        </PageGrid>
       </PageContainer>
     </main>
   );
@@ -157,7 +203,7 @@ function Stat({ label, value }: { label: string; value: string }): React.ReactEl
  * failures with **no transport configured** is not health, it means every send is being logged
  * instead of delivered, which looks identical in a count.
  */
-function MailHealthPanel(): React.ReactElement {
+function MailSection(): React.ReactElement {
   const health = useStaffHealth();
   const data = health.data;
 
@@ -169,16 +215,10 @@ function MailHealthPanel(): React.ReactElement {
   ];
 
   return (
-    <Panel
-      title="Mail"
-      status={
-        health.isPending
-          ? ''
-          : health.isError
-            ? 'Mail health could not be read.'
-            : `Mail: ${String(data?.failuresLast24h ?? 0)} failures in the last 24 hours.`
-      }
-    >
+    <section aria-labelledby={MAIL_HEADING_ID} className="space-y-4">
+      <CardTitle id={MAIL_HEADING_ID} level={3} className="text-sm">
+        Mail
+      </CardTitle>
       {health.isPending && <Spinner label="Loading mail health…" />}
       {health.isError && (
         <div className="flex flex-col items-start gap-3">
@@ -255,7 +295,7 @@ function MailHealthPanel(): React.ReactElement {
           />
         </>
       )}
-    </Panel>
+    </section>
   );
 }
 
@@ -272,10 +312,12 @@ function MailHealthPanel(): React.ReactElement {
  * staff panel is an audited act, so a second route would have written a second `staff.panel_read`
  * row on every page load (spec §4.6). TanStack Query dedupes the call with the Mail panel above.
  */
+const MAIL_HEADING_ID = 'staff-mail-heading';
+const RETENTION_HEADING_ID = 'staff-retention-heading';
 const RETENTION_DISABLED_ID = 'retention-disabled-note';
 const RETENTION_FAILING_ID = 'retention-failing-note';
 
-function RetentionPanel(): React.ReactElement {
+function RetentionSection(): React.ReactElement {
   const health = useStaffHealth();
   const retention = health.data?.retention;
   // Read from the SAME response, because "the sweep is failing" and "anybody outside this screen
@@ -320,18 +362,10 @@ function RetentionPanel(): React.ReactElement {
   ].filter((id): id is string => id !== undefined);
 
   return (
-    <Panel
-      title="Retention"
-      status={
-        health.isPending
-          ? ''
-          : health.isError
-            ? 'Retention state could not be read.'
-            : retention === undefined
-              ? ''
-              : statusSentence(retention)
-      }
-    >
+    <section aria-labelledby={RETENTION_HEADING_ID} className="space-y-4">
+      <CardTitle id={RETENTION_HEADING_ID} level={3} className="text-sm">
+        Retention
+      </CardTitle>
       {health.isPending && <Spinner label="Loading retention…" />}
       {health.isError && (
         <div className="flex flex-col items-start gap-3">
@@ -409,6 +443,59 @@ function RetentionPanel(): React.ReactElement {
           </p>
         </>
       )}
+    </section>
+  );
+}
+
+/**
+ * Mail and retention, in one card — CQ-3.
+ *
+ * **Why they are one section at all.** Both are rendered from a single `useStaffHealth` response,
+ * so two cards drew a boundary the data does not have. They are also the same kind of question:
+ * *what is this installation doing with data over time* — messages going out, rows being deleted —
+ * and an operator who wants one usually wants the other.
+ *
+ * **The title is neutral and both halves are `<h3>`s of equal rank, which departs from the spec's
+ * own resolution** (`feature-spec.md` §8.12 said the card keeps the title "Mail" with retention as
+ * a subsection). That would make retention read as a KIND of mail, which it is not, and it would
+ * demote the panel an operator goes looking for by name when they want to know whether the sweep is
+ * arming. A neutral parent with two equal children says what is true; a "Mail" parent says
+ * something false about the hierarchy, in the one channel — the heading tree — that a screen-reader
+ * user navigates by.
+ *
+ * **Retention keeps a heading, and that was the accepted cost of the merge.** Today it is an
+ * `<h2>`, independently reachable by heading navigation; folded into mail's prose it would have
+ * left the heading list entirely, and a reader would have had to open "Mail" and read its body to
+ * find it. That cuts against exactly the "seasoned admin navigating with ease" framing this epic
+ * was given, because **an expert AT user relies on heading and landmark shortcuts more, not less**.
+ * `CardTitle` already supports `level={3}`, so this costs no shared contract change — §4.5's
+ * objection was to pushing EVERY section heading down a level across the whole page, which is a
+ * different and much larger thing.
+ *
+ * **The status sentence is composed, not concatenated.** `Panel` announces one polite sentence and
+ * there are now two independently-settling facts behind it. They are joined with a full stop and a
+ * space and each names its own subject ("Mail: …", "Retention: …"), so a screen reader speaks two
+ * complete sentences rather than one run-on whose halves a listener has to separate by ear. While
+ * either half is still pending its clause is absent rather than empty — a trailing separator is a
+ * pause that means nothing.
+ */
+function MailAndRetentionPanel(): React.ReactElement {
+  const health = useStaffHealth();
+  const retention = health.data?.retention;
+
+  const clauses = health.isPending
+    ? []
+    : health.isError
+      ? ['Mail and retention state could not be read.']
+      : [
+          `Mail: ${String(health.data?.failuresLast24h ?? 0)} failures in the last 24 hours.`,
+          retention === undefined ? null : statusSentence(retention),
+        ].filter((clause): clause is string => clause !== null);
+
+  return (
+    <Panel title="Mail and retention" status={clauses.join(' ')}>
+      <MailSection />
+      <RetentionSection />
     </Panel>
   );
 }

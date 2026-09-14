@@ -26,6 +26,24 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn() };
 });
 
+/**
+ * The text of the panel's polite region — the `sr-only` `aria-live` sentence `Panel` renders.
+ *
+ * Read as text rather than queried by exact string, because the M2 merge made mail and retention
+ * ONE card with ONE composed sentence, so each subject's clause is now a substring. Asserting on
+ * the region rather than on the document is the part that must not be lost: the visible alerts say
+ * the same words, so a document-wide query would stay green while the announced line went back to
+ * claiming health during a failure — which is the exact defect the accessibility review found.
+ *
+ * Returns every polite region joined, so a future second one cannot silently drop out of the
+ * assertion; today there is one per rendered `Panel`.
+ */
+function politeRegionText(): string {
+  return [...document.querySelectorAll('[aria-live="polite"]')]
+    .map((node) => node.textContent ?? '')
+    .join(' ');
+}
+
 function notFound(): ApiFetchError {
   return new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Not found' });
 }
@@ -573,10 +591,17 @@ describe('the Retention section', () => {
     // Asserted on the POLITE REGION specifically, not on the document: the visible alert says the
     // same words, and matching either would let the sr-only line go back to claiming health while
     // the test stayed green — which is exactly the shape of the defect.
+    //
+    // Read as the region's TEXT rather than by `getByText`, since the M2 merge: mail and retention
+    // are one card and one polite sentence, so the retention clause is now a substring of it and an
+    // exact-text query cannot see it. The property under test is unchanged — this region says the
+    // sweep is failing and does not say everything is inside its period — and the discrimination
+    // that matters is unchanged too, because it is still the sr-only region being read and not the
+    // document.
     await waitFor(() => {
-      expect(screen.getByText('Retention: the last 3 sweeps failed.')).toBeInTheDocument();
+      expect(politeRegionText()).toContain('Retention: the last 3 sweeps failed.');
     });
-    expect(screen.queryByText('Retention: every table is inside its period.')).toBeNull();
+    expect(politeRegionText()).not.toContain('Retention: every table is inside its period.');
   });
 
   it('ties the disabled and failing caveats to the table they qualify', async () => {
@@ -627,7 +652,7 @@ describe('the Retention section', () => {
     await renderRetention({});
 
     await waitFor(() => {
-      expect(screen.getByText('Retention: every table is inside its period.')).toBeInTheDocument();
+      expect(politeRegionText()).toContain('Retention: every table is inside its period.');
     });
   });
 

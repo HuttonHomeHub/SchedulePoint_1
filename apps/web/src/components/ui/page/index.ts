@@ -13,3 +13,4 @@ export { SectionCard, type SectionCardProps } from './section-card';
 export { EmptyState, type EmptyStateProps } from './empty-state';
 export { Skeleton } from './skeleton';
 export { ListRow, ListRowSkeleton, rowLinkClass, type ListRowProps } from './list-row';
+export { PageGrid, PageGridItem, type PageGridProps, type PageGridItemProps } from './page-grid';
