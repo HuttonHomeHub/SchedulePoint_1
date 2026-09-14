@@ -10429,3 +10429,77 @@ closed` immediately precedes every failure. This row meanwhile was wrong twice o
 > symptom. The cost was two days of independent re-diagnosis, two versions of it wrong. That is the
 > `#312` shape one level along — a register whose own contents are not resolvable by the thing they
 > are about.
+
+### 319. The staff console has never been photographed, and the harness cannot reach it
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (ADR-0140 M3) · **Size:** M · **Owner:** web
+
+`apps/web/scripts/shoot.mjs` has 25 shots and **not one of them is `/staff`**. Every panel on that
+screen — mail health, retention, CSP violations, installation, accounts, staff activity, the
+performance probe, and now diagnostics — has shipped without anybody ever looking at a picture of
+it.
+
+That is exactly the gap ADR-0101 records paying for: the shot list covered the plan workspace and
+**stopped at the route**, so the activity editor on it had never been photographed by anything,
+which is how a four-scrollbar panel reached a user. The staff console is one layer worse, because
+it also has no design-review pass of any kind in its history — it was built panel by panel, each
+one composed with the shared `Panel` and each one reviewed alone.
+
+**Why it is not just an omission from the list.** The harness signs up an ordinary account and
+creates an organisation. Reaching `/staff` needs three things it has no machinery for:
+`STAFF_EMAILS` set on the API before boot, an address that matches it, and a **verified** address —
+and the guard demands verification independently of `AUTH_REQUIRE_EMAIL_VERIFICATION`, so the
+journey has to follow a real emailed link through an SMTP sink (`e2e-staff/staff.spec.ts` does
+exactly this and spends most of a minute on it). Adding a shot therefore means either teaching
+`shoot.mjs` about the sink, or marking the account verified directly in the database — which the
+harness currently never does and which would be the first place it reached below the public API.
+
+**What it would show.** Eight stacked cards on one column with no hierarchy between them, on the
+one screen in the product whose reader is deciding whether something is broken right now. Nobody
+has seen that composition; the question is whether it reads as a console or as a list of unrelated
+boxes.
+
+Not folded into ADR-0140's milestone, because it is a change to a shared harness and a design
+question about seven panels this epic did not build (ADR-0105: crossing a trigger means the work
+stops and gets its own spec, rather than being smuggled into the milestone that noticed it).
+
+### 320. Four findings the diagnostics gate pass recorded rather than folded
+
+**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
+
+Six specialists reviewed the diagnostics epic and sixteen defects were folded with regression tests.
+These four were not, each for a reason, and they are here rather than in the gate-pass write-up so
+they are findable by symptom (`#312`'s lesson: a finding inside a multi-item row is invisible to
+anybody searching the register for what they are actually looking at).
+
+**(a) The clipboard-copy idiom is now written a third time.**
+`diagnostics-panel.tsx`, `performance-probe-panel.tsx` and `probe-sittings.tsx` each do
+`navigator.clipboard.writeText(text).then(…)` plus an identical `aria-live="polite"` span. This one
+additionally has a **failure** branch the other two do not, which is the argument for extracting a
+`useClipboardCopy()` now rather than at the fourth: the two older sites are silent when the
+clipboard refuses, which is the WCAG 4.1.3 defect this epic just fixed in its own copy. Not folded
+because a shared hook touching three features is an ADR-0105 trigger, not a gate-pass fix.
+
+**(b) `staff-boundary.structural.spec.ts`'s three original checks have no pinned positive.**
+"Imports no org-scoped module", "never imports the CPM engine" and "reads no customer entity through
+Prisma" are all of the form _every X is safe_ over a scan that could be matching nothing — which is
+the shape the same file's own S-3 block builds an elaborate synthetic control for, and the shape
+ADR-0108's census failed on its first run. They are the assertions ADR-0086 D1 rests on, so the
+population is certainly non-empty today; nothing says so.
+
+**(c) The route's failure path is untested at every tier.** A repository or SQL error propagating
+through service → controller → the standard `{ error }` envelope is exercised by nothing — not the
+unit specs, not the API e2e, not the journey. Only the _client's_ `isError` branch is tested, against
+a mock. So "the panel handles a failure" is proved and "the API produces one that looks like the
+others" is not.
+
+**(d) There is no statement timeout on any raw query in this application.** ADR-0140 D6 establishes
+that the diagnostics route sequentially scans by design and its cost is untested past ~102,000
+activities. A per-query `statement_timeout` would bound the unmeasured tail, and it is a change to
+how every `$queryRaw` in the product executes — a shared mechanism, so it gets its own decision
+rather than riding an epic's last milestone.
+
+**One reported finding is NOT on this list, and the correction is worth keeping**: the security
+review reported `docs/TECH_DEBT.md` #315 as cited by shipped code and absent from the register. It is
+**present**, in the Closed-numbers ledger — which exists precisely so an inbound citation to a closed
+row stays resolvable. Filing work against it would have been work against nothing.

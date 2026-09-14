@@ -30,6 +30,7 @@ import { CreateProbeResultDto } from './dto/create-probe-result.dto';
 import { ProbeResultRowDto, ProbeResultsQueryDto } from './dto/probe-result.dto';
 import { StaffAccountsQueryDto } from './dto/staff-accounts-query.dto';
 import { CspReportRowDto } from './dto/staff-csp-reports.dto';
+import { StaffDiagnosticsDto } from './dto/staff-diagnostics.dto';
 import { StaffHealthDto } from './dto/staff-health.dto';
 import { StaffIdentityDto } from './dto/staff-identity.dto';
 import {
@@ -38,6 +39,7 @@ import {
   StaffInstallationDto,
 } from './dto/staff-installation.dto';
 import { IdentityProbe } from './identity-probe.decorator';
+import { StaffDiagnosticsService } from './staff-diagnostics.service';
 import { StaffHealthService } from './staff-health.service';
 import { StaffProbeService } from './staff-probe.service';
 import { StaffGuard } from './staff.guard';
@@ -85,10 +87,20 @@ import { StaffGuard } from './staff.guard';
 // **The flood bound is 30 PER HANDLER, not 30 for the surface** (`docs/TECH_DEBT.md` #315, verified
 // 2026-09-13). `@nestjs/throttler` hashes the handler name into the counter key
 // (`dist/throttler.guard.js:148-150`), and a controller-level decorator sets each handler's limit
-// rather than pooling them. With eight routes here the real ceiling on audit rows is 240 a minute.
+// rather than pooling them. With NINE routes here the real ceiling on audit rows is 270 a minute.
 // The decision is not revisited by this comment — it still needs a compromised staff session, and
-// 240/min is still far above human use — but the arithmetic the number was chosen against is
+// 270/min is still far above human use — but the arithmetic the number was chosen against is
 // recorded rather than left to be re-derived by the next reader.
+//
+// It said "eight routes … 240 a minute" until the diagnostics route landed and made it nine, which
+// is the drift this comment exists to prevent happening to the comment itself: an arithmetic note
+// whose input is the handler count goes stale the moment somebody adds a handler, and nothing
+// fails. Found by the ADR-0140 M4 security review.
+//
+// **`diagnostics` carries its own, tighter `@Throttle` — the surface's first per-handler override.**
+// Thirty a minute is chosen against panel reads costing single-digit milliseconds; that route runs
+// four full-estate aggregates measured at 327 ms a press, so the same limit would let one caller
+// impose ten seconds of database time a minute. See the decorator on that handler.
 @Throttle({ default: { limit: 30, ttl: 60_000 } })
 @UseGuards(StaffGuard)
 export class StaffController {
@@ -96,6 +108,7 @@ export class StaffController {
     private readonly audit: AuditService,
     private readonly health: StaffHealthService,
     private readonly probe: StaffProbeService,
+    private readonly diagnosticsService: StaffDiagnosticsService,
   ) {}
 
   @Get('me')
@@ -217,6 +230,48 @@ export class StaffController {
   ): Promise<StaffInstallationDto> {
     await this.recordPanelRead(staff, context, 'installation');
     return this.health.installation();
+  }
+
+  @Get('diagnostics')
+  @ApiOperation({
+    summary: 'How many rows answer a named question about customer data',
+    description:
+      'Counts, and nothing else (ADR-0140). Each registry entry returns how many rows were ' +
+      'examined, how many answer the question, and how many plans and organisations those rows ' +
+      'fall in. **No plan, client, project or activity is ever named, at any size.**\n\n' +
+      '**This route accepts no parameter of any kind, and that is the decision rather than a ' +
+      'small API.** A parameterless aggregate cannot be used to ask about anybody in particular; ' +
+      'an organisation or date filter would turn it into a differencing oracle over customer data ' +
+      '— count with org X excluded, subtract — and the whole narrowing of ADR-0086 D6 would ' +
+      'collapse. A structural gate refuses an input decorator here, so this is not a convention.\n\n' +
+      'It narrows ADR-0086 D6 rather than sitting outside it: the SQL reads `activities`, `plans`, ' +
+      '`calendars`, `resource_assignments` and `resources`. What it replaces is `psql` on the host ' +
+      '— wider, unaudited, unrated and unreachable by the person who needs the number.',
+  })
+  @ApiOkResponse({ type: StaffDiagnosticsDto })
+  // **The surface's first per-handler throttle, and it is a NARROWING** (ADR-0140 D7). Every other
+  // route here reads a small table or a bounded page and costs single-digit milliseconds; this one
+  // runs four aggregates over every activity in the installation. Measured on 2026-09-13 at
+  // 102,000 activities in the shape that maximises the matched set: **327–328 ms a press** across
+  // three runs, of which D-B's numerator alone is 240–245 ms.
+  //
+  // Six a minute caps one caller at ~2.0 s of database time a minute; the inherited 30 would cap
+  // them at ~9.8 s. The reopening trigger stays what D7 set — a press reaching one
+  // recalculate-equivalent (~800 ms, ADR-0116 M6's measured figure at 2,000 activities) — and the
+  // arithmetic behind the 327 ms is in `docs/specs/staff-diagnostics-panel/m0-measurements.md`.
+  //
+  // `staff-throttle.structural.spec.ts` permits this because it is strictly tighter and pins the
+  // value. A method-level decorator that WIDENED a route is still refused: that was the failure the
+  // gate was written for, and narrowing is the opposite of it.
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  async diagnostics(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+  ): Promise<StaffDiagnosticsDto> {
+    // The audit row names the panel and never its contents — the rule every other panel here
+    // follows, and the one place it costs nothing, because the contents are integers.
+    await this.recordPanelRead(staff, context, 'diagnostics');
+    return await this.diagnosticsService.run();
   }
 
   @Get('accounts')

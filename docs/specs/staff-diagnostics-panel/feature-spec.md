@@ -114,12 +114,24 @@ counts are available:
 | ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Question         | how many RD activities' `durationDays` **changed value** when `api-v0.62.0` shipped | how many activities **right now** report float on 1440 while scheduling on their plan's day |
 | Predicate        | driving calendar ≠ own calendar                                                     | effective calendar id is `NULL` **and** the plan's calendar is not 1440                     |
-| Tables           | activities, plans, calendars, resource_assignments, resources                       | activities, plans, calendars (+ the driving CTE only for the RD branch)                     |
+| Tables           | activities, plans, calendars, resource_assignments, resources                       | activities, plans, calendars, resource_assignments, resources — **corrected 2026-09-13**    |
 | Nature           | **retrospective** — sizes who to tell                                               | **prospective** — sizes a live defect                                                       |
 | Likely magnitude | small (needs a resource on a different calendar)                                    | potentially **every activity in every plan with a non-24h calendar**                        |
 
 D-A is what the product owner asked for and is what this spec ships. **D-B is CQ-1**, because it is
 cheaper, it is almost certainly the larger number, and it measures something that is still wrong.
+
+> **Two of that row's claims were wrong, and the first one cost the epic a measurement.** The
+> shipped D-B joins `resource_assignments` and `resources` **unconditionally** — not "the driving
+> CTE only for the RD branch" — because that is how it excludes D-A's population. Described as the
+> cheaper query with no resource join, it was scoped out of M0-T2's cost task; measured at M4 it is
+> the **more expensive** of the two entries under the ordinary data shape (240–245 ms of a 327 ms
+> press). A planning artefact that was wrong about a query's shape is why nobody costed it.
+>
+> And "it measures something that is still wrong" lapsed before the entry was built: ADR-0139 fixed
+> the inherited-calendar defect and released it as `api-v0.63.0`, so D-B is **retrospective** like
+> its sibling. The population is identical; only its nature changed. Both corrections are in
+> [`m0-measurements.md`](m0-measurements.md)'s M4 addendum.
 
 ### F6 — Two things in the brief that are correct and were checked anyway
 
@@ -271,15 +283,15 @@ answer; neither is this spec's to pick.
 
 **Non-critical — defaults stated, proceed unless told otherwise.**
 
-| #   | Question                                     | Default                                                                                                                                                                                                                                                                                                                                    |
-| --- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Q-a | On page load or on a button?                 | **On a button.** The query is O(estate) and unbounded by organisation; running it on every `/staff` load also writes an audit row per load. This is the ADR-0128 shape and the inverse of the retention panel's (`staff.controller.ts:145-156` put retention on `/health` _because it is cheap_).                                          |
-| Q-b | Report `affectedOrganizations`?              | **Yes.** It is a count, not an identifier, and it answers "how many customers need telling". Cheap to strike if unwanted.                                                                                                                                                                                                                  |
-| Q-c | Report the query's own `elapsedMs`?          | **Yes.** It is a fact about the query, not about customers, and it is M0-T4's missing timing limb arriving for free on real data.                                                                                                                                                                                                          |
-| Q-d | Its own route, or fold onto `/staff/health`? | **Its own route**, `GET /api/v1/staff/diagnostics`. The retention precedent folded _because a cheap read should not earn a second audit row per page load_; this read is expensive and deliberate, so the same reasoning points the other way.                                                                                             |
-| Q-e | Throttle?                                    | **Tighter than the controller default.** `@Throttle` is per-handler (`staff.controller.ts:85-91`, `docs/TECH_DEBT.md` #315), so a new route adds 30/min of full-estate aggregates to the flood ceiling. Default **6 / 60 s**, revisited against M0-T2's measured cost (the ADR-0116 M6 precedent: derive the number from the measurement). |
-| Q-f | A new audit action?                          | **No.** `staff.panel_read` with `subjectLabel: 'diagnostics'` — the existing five-panel pattern. No enum label, therefore **no migration**.                                                                                                                                                                                                |
-| Q-g | A `VITE_` flag?                              | **No** (ADR-0088 D1). Every published image carries every flag at its default and an operator cannot switch one off; the rollback is a commit boundary.                                                                                                                                                                                    |
+| #   | Question                                     | Default                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q-a | On page load or on a button?                 | **On a button.** The query is O(estate) and unbounded by organisation; running it on every `/staff` load also writes an audit row per load. This is the ADR-0128 shape and the inverse of the retention panel's (`staff.controller.ts:145-156` put retention on `/health` _because it is cheap_).                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Q-b | Report `affectedOrganizations`?              | **Yes.** It is a count, not an identifier, and it answers "how many customers need telling". Cheap to strike if unwanted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Q-c | Report the query's own `elapsedMs`?          | **Yes.** It is a fact about the query, not about customers, and it is M0-T4's missing timing limb arriving for free on real data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Q-d | Its own route, or fold onto `/staff/health`? | **Its own route**, `GET /api/v1/staff/diagnostics`. The retention precedent folded _because a cheap read should not earn a second audit row per page load_; this read is expensive and deliberate, so the same reasoning points the other way.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Q-e | Throttle?                                    | **Tighter than the controller default.** `@Throttle` is per-handler (`staff.controller.ts:85-91`, `docs/TECH_DEBT.md` #315), so a new route adds 30/min of full-estate aggregates to the flood ceiling. Default **6 / 60 s**, revisited against M0-T2's measured cost (the ADR-0116 M6 precedent: derive the number from the measurement). **Derived 2026-09-13 and it survives** — worst measured press is 204 ms on an estate shape far beyond this installation, so 6/60 s caps one caller at 1.2 s of database time a minute; at the deployed size a press is ~1 ms and the rate is an abuse control rather than a cost one. It would have to come down if a press reached ~800 ms, one recalculate-equivalent. |
+| Q-f | A new audit action?                          | **No.** `staff.panel_read` with `subjectLabel: 'diagnostics'` — the existing five-panel pattern. No enum label, therefore **no migration**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Q-g | A `VITE_` flag?                              | **No** (ADR-0088 D1). Every published image carries every flag at its default and an operator cannot switch one off; the rollback is a commit boundary.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ---
 
@@ -591,6 +603,30 @@ load"_ (`schema.prisma:2827-2829`) — starts from a small set and joins outward
 > with the falsification condition committed **before** the run. ADR-0086's own M6 records that
 > Postgres matches a partial index by expression equality rather than by containment — a reason to
 > measure rather than to reason about index applicability.
+
+> **MEASURED 2026-09-13, and the cost paragraph above is WRONG.** See
+> [`m0-measurements.md`](m0-measurements.md). It is corrected in place rather than deleted, because
+> the way it was wrong is the useful part. Two things, neither of them the hazard the block above
+> anticipated:
+>
+> 1. **Anchoring the query TEXT on `resource_assignments` does not decide which table the planner
+>    drives from.** The `type = 'RESOURCE_DEPENDENT'` filter sits on `activities`, the planner
+>    estimated it selective, and led with `activities` at every scale measured — whatever the `FROM`
+>    clause said first.
+> 2. **`uq_resource_assignments_activity_driving` structurally cannot serve this query**, at any
+>    scale, however the text is written. It exists for _"find THE driving assignment of this
+>    activity"_ — a **selective** question. This query wants every driving assignment; on a fully
+>    resourced estate its `WHERE` matches 100,200 of 100,200 rows, so there is no selectivity for an
+>    index to offer and a sequential scan is the correct plan. ADR-0086 M6's lesson in a second
+>    costume: there an index could not be _matched_; here a covering index cannot be _selective_ for
+>    a query that wants the whole covered set.
+>
+> The measured cost is 1.5–2.5 ms at 2,000 activities, 31–35 ms at 102,000, and 161–204 ms on a
+> fully resourced 102,000 — so the **≤ 500 ms limb passes at every scale** and the **no-sequential-
+> scan limb fails at every scale**. M0-T3 does not arm, on the measured ground that a candidate
+> index takes the sparse case 34 ms → 1.2 ms and is **not chosen at all** in the case that
+> approaches the bar. §4.5's other two arguments — `$queryRaw` on boundary grounds, and the
+> semantic point that an undriven activity can never diverge — are untouched.
 
 ### 4.6 Architecture overview
 

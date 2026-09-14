@@ -793,3 +793,109 @@ async function openMeasureOne(page: Page): Promise<void> {
 function rowFor(region: Locator, table: string): Locator {
   return region.getByRole('row').filter({ hasText: table });
 }
+
+/**
+ * **The diagnostics panel, driven end to end — ADR-0140 M3.**
+ *
+ * ADR-0081's rule: a milestone claiming user-facing capability names its entry point and its
+ * journey lands with it. That rule has been paid for twice in this very file's epic — M2 shipped a
+ * route that could not serve a request with 1,589 unit tests green, and a later milestone shipped a
+ * drawer with no door — so the locator below is the point of the test rather than a step in it. If
+ * `Run diagnostics` ever stops matching, the capability has no route to it, and no unit suite in
+ * the repository can notice: they mount the panel, and the seam that breaks is between the panel
+ * and the console.
+ *
+ * **Four things are only testable here.** That the panel is registered on the real route at all;
+ * that a press reaches a route which runs raw SQL against a real database (the unit tests mock
+ * Prisma and the component tests mock the query, so between them nothing executes a `SELECT`); that
+ * the audit row this read writes does not make the request fail, which is exactly how ADR-0086's M2
+ * died; and that the payload the browser renders contains no customer name or id — asserted over
+ * the whole rendered panel rather than over the fields somebody remembered to check.
+ *
+ * **A third `test()` rather than an extension**, for the measured reason the second one gives:
+ * `playwright.staff.config.ts` sets a 120 s per-test timeout and the first test spends most of a
+ * minute on sign-up and verification.
+ */
+test('a staff member runs the diagnostics and can paste the result', async ({ browser }) => {
+  // `clipboard-read` as well as `-write`: the block is the deliverable, so this test reads it
+  // back rather than trusting the "Report copied." announcement, which is a claim about the
+  // handler's success branch and not about what is on the clipboard.
+  const staffContext = await browser.newContext({
+    permissions: ['clipboard-write', 'clipboard-read'],
+  });
+  const staff = await staffContext.newPage();
+
+  // The read's HTTP outcome, captured rather than inferred. A count of zero on screen is a correct
+  // answer on an empty estate AND what a silently failed request would leave behind, so the status
+  // is recorded to tell those apart — the second test's own lesson: a count is not a cause.
+  const statuses: number[] = [];
+  staff.on('response', (response) => {
+    if (response.url().includes('/staff/diagnostics')) statuses.push(response.status());
+  });
+
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+  await staff.goto('/staff');
+
+  // The console, or nothing to test. The verification branch is proved by the first test.
+  await expect(
+    staff.getByRole('heading', { name: 'Staff console' }),
+    'the first test verifies this account; this one assumes it',
+  ).toBeVisible({ timeout: 30_000 });
+
+  // **Nothing has run.** The hook is `enabled: false`, and this is the assertion that says so about
+  // the shipped route rather than about the hook's options: arriving at `/staff` must not itself
+  // count as somebody asking a question about customer data, because every one of those questions
+  // writes a durable audit row.
+  expect(statuses, 'arriving at /staff must not run the diagnostics').toEqual([]);
+
+  // The copy control is shaded with a reason, not hidden (ADR-0082). Reachable, focusable, and its
+  // refusal is a description rather than part of its name.
+  const copy = staff.getByRole('button', { name: 'Copy for the record' });
+  await expect(copy).toHaveAttribute('aria-disabled', 'true');
+
+  // ---------------------------------------------------------------- The entry point, pressed
+  await staff.getByRole('button', { name: 'Run diagnostics' }).click();
+
+  // Both registry entries answer. Located by their labels, which are the accessible headings a
+  // reader navigates by — the first test's lesson about locating by role and name rather than by a
+  // `data-` hook that says nothing about what anybody sees.
+  await expect(staff.getByRole('heading', { name: /Day factor divergence \(driving/ })).toBeVisible(
+    { timeout: 30_000 },
+  );
+  await expect(
+    staff.getByRole('heading', { name: /Day factor divergence \(inherited/ }),
+  ).toBeVisible();
+
+  expect(statuses, 'the read must have succeeded, not merely returned').toEqual([200]);
+
+  // **Counts only.** Asserted over the whole panel rather than over named fields: the point is that
+  // nothing leaks, and a field-by-field check only ever proves it about the fields somebody thought
+  // of. A UUID anywhere here would be an id, and an id is the whole disclosure ADR-0086 D6 protects.
+  // Scoped to the result block by a `data-` hook — the one place a leak could appear, and the
+  // only assertion here that must NOT be page-wide: the Accounts and Staff-activity panels on the
+  // same screen legitimately render ids and addresses, so a page-scoped check would fail for a
+  // reason that has nothing to do with this panel. (`[data-perf-probe-result]` above is the same
+  // convention, for the same reason.)
+  const rendered = (await staff.locator('[data-diagnostics-result]').textContent()) ?? '';
+  expect(rendered).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  // Both zero shapes are legitimate here — the e2e database's contents are not this suite's to
+  // control — so the assertion is that a SENTENCE was produced, in one of the three forms the pure
+  // formatter can emit, rather than a bare number or an empty block.
+  expect(rendered).toMatch(
+    /No work of this shape exists|None of the .* examined is affected|\d+ of \d+ activit/,
+  );
+
+  // ---------------------------------------------------------------- The deliverable
+  // The block is the point, not the panel: a number that stays on one operator's screen answers
+  // nothing, and #86's owed M0-T3 is closed by pasting this into a measurement record.
+  await expect(copy).not.toHaveAttribute('aria-disabled', 'true');
+  await copy.click();
+  await expect(staff.getByText('Report copied.')).toBeVisible();
+
+  const clipboard = await staff.evaluate(() => navigator.clipboard.readText());
+  expect(clipboard).toContain('SchedulePoint staff diagnostics');
+  expect(clipboard).toContain('API version');
+  expect(clipboard).toContain('accepts no parameter');
+
+  await staffContext.close();
+});

@@ -355,9 +355,19 @@ built next.
   own liveness, because it cannot report that it is down. Ships built and **dormant** — nothing
   watches it yet, and #100's operator half stays open until something does.
 - **A staff identity that cannot reach a customer** (ADR-0086). `StaffPrincipal` copies
-  `GuestPrincipal`: no memberships, no `can()`, so staff reaching plan data is a **compile error**
-  rather than a check somebody remembers. The cross-organisation 404 invariant is untouched — not
-  respected, untouched: no code on that path changed.
+  `GuestPrincipal`: no memberships, no `can()`, so staff reaching plan data **through a member
+  service** is a **compile error** rather than a check somebody remembers. The cross-organisation
+  404 invariant is untouched — not respected, untouched: no code on that path changed. _(The
+  qualifier was added when ADR-0140 landed. The compile-error property is about `Principal`
+  assignability and is intact; the unqualified sentence would read as false the day a staff route
+  counts activities, which is the one place a reader checks first.)_
+- **Staff diagnostics — a count, and nothing else** (ADR-0140). The question that decides whether a
+  defect is worth chasing — how many activities, across how many plans — had never been answerable
+  without `docker compose exec db psql`, which is wider, unaudited, unrated and unreachable by the
+  person who needs the number. A parameterless, audited, throttled route returns integers: no name,
+  no list, no filter. It **narrows** ADR-0086 D6 rather than claiming to sit outside it, on three
+  written clauses and four gates — and clause 2 is the load-bearing one, because a diagnostic that
+  takes no input cannot be used to ask about anybody in particular.
 - **The staff console** — mail health, CSP violations, installation state, unverified accounts, and
   a record of what staff themselves have done. Every route is audited **including reads**, because
   on this surface the read _is_ the privileged act.

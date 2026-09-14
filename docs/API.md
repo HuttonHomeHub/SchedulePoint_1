@@ -966,6 +966,30 @@ standard) lets a reader walk back into older sittings — which is what the sitt
 for. Until then the client says the list is a page and refuses to explain an absence at its
 boundary, because at that boundary an absent reading is stored rather than missing.
 
+`GET /api/v1/staff/diagnostics` is the surface's **first read of customer work data**, and it
+returns integers only (ADR-0140). Each registry entry answers one named question with how many rows
+were examined, how many answer it, and how many plans and organisations those rows fall in. **No
+plan, client, project or activity is ever named, at any size**, and nothing is re-identifiable from
+"17 of 1,284 across 3 plans".
+
+It **narrows ADR-0086 D6** rather than sitting outside it — the SQL reads `activities`, `plans`,
+`calendars`, `resource_assignments` and `resources` — and the narrowing rests on three clauses, of
+which the second is load-bearing for anyone reading this file while deciding what to add next:
+
+1. the disclosure is bounded by the **return type**, not by the query's reach;
+2. **the route takes no parameter of any kind, ever.** An organisation filter, a plan filter or a
+   date range would turn a count into a differencing oracle over customer data — count with org X
+   excluded, subtract — and every argument for the route collapses. A structural gate refuses an
+   input decorator on the handler, so this is not a convention and a filter is not a small change:
+   it is a new decision needing its own ADR;
+3. the registry is closed and every entry produces one fixed all-numeric row, so "add a diagnostic"
+   cannot become "add a field".
+
+What it replaces is `docker compose exec db psql` on the host — wider, unaudited, unrated, and
+unreachable by the person who needs the number. Like every route here it writes one
+`staff.panel_read` row naming the panel and never its contents, and it is throttled at the
+controller's 30 / 60 s per handler.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

@@ -105,6 +105,14 @@ documents, an `EXPLAIN` and two committed falsification conditions.
   3. Record the verdict, including a failure. Derive the M2 throttle number from the measured cost
      (spec Q-e) rather than keeping the placeholder 6/60 s (the ADR-0116 M6 precedent).
 
+> **DONE (2026-09-13) — limb 1 passes, limb 2 fails, and the bar did not move.**
+> [`m0-measurements.md`](m0-measurements.md) carries three variants, both plan texts verbatim, the
+> index probe and the throttle derivation. The failing limb reopened **§4.5's anchoring**, which is
+> corrected in place in the spec: anchoring the query text on `resource_assignments` does not decide
+> which table the planner drives from, and the partial unique cannot serve a query that wants the
+> whole set it covers. The throttle was re-derived and 6/60 s survives — with the arithmetic, and
+> with the number that would change it, written down.
+
 ##### Task M0-T3 — _(armed by M0-T2, does not open otherwise)_ — design the index
 
 - **Description:** if and only if M0-T2 reports a sequential scan of `activities` that matters,
@@ -117,6 +125,15 @@ documents, an `EXPLAIN` and two committed falsification conditions.
 - **Testing:** the migration's own suite, per `docs/DATABASE.md`.
 - **Development steps:** 1. run the agent. 2. write the migration to its design. 3. re-run M0-T2 and
   record the before/after.
+
+> **DID NOT ARM (2026-09-13).** M0-T2 reported a sequential scan of `activities` at every scale, so
+> the trigger's first clause is met — and its second is not: it does not matter. Measured, a
+> candidate `activities (type) WHERE deleted_at IS NULL` takes the sparse 102,000-activity estate
+> from 34 ms to 1.2 ms and is **not chosen at all** on the fully resourced one that approaches the
+> bar, so it helps only the case that is already cheap. Full working, and the trigger that re-arms
+> this, in [`m0-measurements.md`](m0-measurements.md). `database-architect` is not engaged because
+> there is no schema change to design — not because one was judged too small (§19.3 binds a change;
+> declining to make one is the decision it protects).
 
 ##### Task M0-T4 — Put CQ-1 and CQ-2 to the product owner, with numbers
 
@@ -227,6 +244,27 @@ yet, and a decision is recorded.
   3. Comment-strip before scanning — **four gates in this repository have matched their own
      docblocks** and reported prose as a violation; `staff-boundary.structural.spec.ts:28-41`
      already records that exact defect and its fix.
+
+> **DONE (2026-09-13).** ADR-0140 filed as **0140, not the 0139 this plan named** — that number was
+> taken the same day by the inherited-calendar ADR, which is exactly what the task's own risk note
+> said to check for. The red run is recorded as [`m1-red-run.md`](m1-red-run.md): S-3 verified red
+> against four named mutations, and S-1/S-2/S-4/S-5 red across seven assertions because their
+> subject does not exist yet, with three pinned positives green over synthetic sources.
+>
+> **Two departures from this plan, both recorded rather than smoothed.** M1-T1 step 3 said "default:
+> exempt" from `docs/ROADMAP.md`, with the reason "a staff-console operations surface; a planner
+> cannot act on it" — and the three nearest precedents (**ADR-0086, ADR-0087 and ADR-0128**, all
+> staff-console decisions) are **all cited in the roadmap, none exempt**. Following the plan would
+> have made this the odd one out and asserted a classification the repository has three times decided
+> against, so it is on the roadmap. Writing that entry then exposed a second thing: **ADR-0086's own
+> roadmap bullet says "staff reaching plan data is a compile error"**, which reads as false the day a
+> staff route counts activities. The compile-error property is about `Principal` assignability and is
+> intact; the sentence needed a qualifier and got one in the same commit, because leaving it is the
+> ADR-0058 class in the document a reader checks first.
+>
+> Filing also found **ADR-0139 missing from `CLAUDE.md` §16** — filed that morning, in this session,
+> and absent from the register that `check:adr-coverage` structurally cannot read (`#291`). Both
+> entries were added.
 
 ---
 
