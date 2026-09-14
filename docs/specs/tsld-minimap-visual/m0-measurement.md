@@ -322,3 +322,57 @@ That is a stronger statement than the spec's, which frames the defect as a regis
 is the common case. M2 owns it, and its acceptance condition should be stated as _the Today
 marker is distinguishable where it crosses a critical bar_ rather than as _the two tokens
 differ_ — the second is satisfiable by a change that still leaves them close.
+
+## 7. M0-T3 — the legibility floor, set from images
+
+M0-T3 forbids setting the tier-admission floor by argument, and forbids inheriting
+`DAY_GRID_MIN_PX`. Six candidate pitches were rendered into the **real** 200×120 box with the
+**real** inks (`--canvas` ground, `--canvas-grid-month`, `--canvas-grid-year`, and the two bar
+values sampled in §3), twice each — rules alone, and rules beneath a 24-lane bar field.
+
+Artefacts: `apps/web/.screenshots/m0-pitch-ladder.png` (all six, both rows).
+
+| pitch       | rules alone                                              | with bars                                     |
+| ----------- | -------------------------------------------------------- | --------------------------------------------- |
+| **1.5 px**  | a solid grey wash — not rules, a tone                    | actively fights the bars                      |
+| **3 px**    | reads as a hatch                                         | noisy                                         |
+| **4.5 px**  | rules crowd; gaps narrower than the apparent line weight | the ground is visibly striped                 |
+| **6 px**    | rules read as individual structure                       | acceptable; the ground is calm                |
+| **8 px**    | clean and quiet                                          | clean                                         |
+| **17.7 px** | obviously structural                                     | excellent — background structure, bars on top |
+
+**The floor is 6 px**, because that is the lowest pitch at which the rules stop reading as a
+texture and start reading as individual structure. The transition is between 4.5 and 6 and it
+is not subtle at 3× magnification; 8 is calmer still but buys nothing the measured plans can
+use (see below).
+
+### 7.1 A coincidence recorded as a coincidence, not as the derivation
+
+The scene's own day-tier floor is **also 6** (`paint.ts:103`). That is corroboration and is
+explicitly **not** where this number comes from: its docblock gives a reason ("else a solid
+block") and cites no measurement, so deriving from it would be inheriting an unmeasured
+constant — which is precisely what M0-T3's risk clause forbids. The agreement is worth noting
+because it supports the spec's own insight that **the rule is a pitch ladder, not a tier
+name**: a 1 px vertical rule is legible or not at a given pitch regardless of which tier it
+belongs to or which canvas it is on.
+
+### 7.2 What the floor admits, and the honest caveat
+
+Against the spec's §3.3 span figures — **still to be confirmed by M0-T2, and flagged as
+inherited arithmetic until then**:
+
+| plan                       | month  | quarter | year    | admitted at a floor of 6 |
+| -------------------------- | ------ | ------- | ------- | ------------------------ |
+| 540 activities (1,059 d)   | 5.7 px | 17.2 px | 69.0 px | **quarter + year**       |
+| 2,160 activities (4,125 d) | 1.5 px | 4.4 px  | 17.7 px | **year only**            |
+
+So the ladder is quiet on both: two tiers on the shorter plan, one on the longer. **Month
+rules are admitted on neither**, which is the spec's §3.3 conclusion reached again by a
+different route — it argued from ink coverage, this argues from an image.
+
+**The caveat is that the choice between 6 and 8 is currently unobservable.** Neither admits
+month on either measured plan (5.7 and 1.5 are below both), and both admit quarter at 17.2 and
+year at 69.0 and 17.7. A plan whose month pitch lands between 6 and 8 — a span of roughly
+760–1,015 days at 200 px — is where they would differ, and no such plan has been measured. The
+floor is therefore set from the images on its own merits rather than from a case that
+discriminates, and that is stated so a later reader does not mistake it for a tuned number.
