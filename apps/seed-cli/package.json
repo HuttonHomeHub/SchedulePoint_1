@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@repo/seed": "workspace:*",
-    "zod": "^4.0.0",
+    "zod": "^4.6.2",
     "@repo/seed-http": "workspace:*"
   },
   "devDependencies": {
