@@ -10,6 +10,39 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-14 — §19.9 stops naming a number, because the number made a wrong shortcut look right
+
+**What was decided.** The check-roster paragraph in §19.9 no longer states how many checks a pull
+request should carry. It states the rule instead: **the roster is a property of the pull request,
+not of the repository**, so read the list and require every survivor of the dedupe to be
+`completed`/`success`, whatever the length.
+
+**Why, and it is not simply that the number went stale.** §19.9 said "the list is ten entries" and,
+in the `cancelled` paragraph, "`total_count` reads **11** where the repository has ten checks" —
+which teaches arithmetic as a duplicate detector. #595 falsified that on 2026-09-14: `total_count`
+was **11 with eleven distinct names and nothing stale**, because editing `.github/dependabot.yml`
+adds a validation check served by Dependabot's own API. A reader applying the sentence would have
+gone hunting for a stale run that did not exist — and the counting habit is precisely what the
+dedupe rule replaces, in the one section that is this repository's **only** merge gate (§8: `main`
+carries no branch protection).
+
+**What was established rather than assumed.** Ten checks are declared by workflows here — `ci.yml`
+has four jobs, `e2e-web` fanning out to four shards (seven checks), plus `pr-title.yml` and
+CodeQL's two entries. The eleventh is declared in no workflow at all; its `details_url` is
+`dependabot-api.githubapp.com`, and it appears only when that file is touched.
+
+**Why no gate, against ADR-0058's usual preference.** The fixed ten _could_ be derived from
+`.github/workflows/`. Doing so would keep a number accurate while leaving the advice wrong, since
+the failure here was a reader counting to ten and legitimately finding eleven. The number was never
+the thing worth protecting, so prose is the right instrument and the paragraph now says so.
+
+**Consequences.** Other occurrences of "ten checks" were checked and deliberately left: most are a
+different ten (`pnpm prepush`'s gate count, itself now 22), and the rest are dated measurements in
+historical `docs/specs/` plans and a `docs/TECH_DEBT.md` row, which are records of what was true
+when written and are not rewritten.
+
+---
+
 ## 2026-09-14 — The deployed count is not a zero, and #86 is rewritten to what is left
 
 **What was decided.** `docs/TECH_DEBT.md` #86's last owed item, M0-T3 — a count of affected rows
