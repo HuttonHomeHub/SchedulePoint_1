@@ -165,6 +165,9 @@ describe('buildMinimapBitmap', () => {
     // what it was before M3, which is the parity this milestone rests on.
     expect(styles.filter((v) => !tierInks.has(v))).toEqual([
       PALETTE.ground,
+      // The data date sits between the tiers and the bars (M7): above texture, beneath plan
+      // data, so a milestone standing on it is not painted out.
+      PALETTE.dataDate,
       PALETTE.bar, // anchor + norm share the non-critical pass
       PALETTE.bar,
       // Rows are 60px tall here, so the critical bar carries its WCAG 1.4.1 lightness
@@ -172,7 +175,6 @@ describe('buildMinimapBitmap', () => {
       // never the only channel where the row can carry more.
       PALETTE.outline,
       PALETTE.critical,
-      PALETTE.dataDate,
     ]);
     // The decimation assertion: at identical geometry, the critical fill is a LATER draw call.
     expect(styles.indexOf(PALETTE.critical)).toBeGreaterThan(styles.indexOf(PALETTE.bar));
@@ -201,6 +203,33 @@ describe('buildMinimapBitmap', () => {
     expect(fills.some((f) => f.style === PALETTE.outline)).toBe(false);
     // The degradation to hue-plus-the-scene's-own-cues below the floor is REPORTED in
     // token-contrast.test.ts (the DAY-tier precedent), not silently accepted.
+  });
+
+  it('draws the data-date vertical BENEATH the bars, so a milestone on the data date survives', () => {
+    const { ctx, fills } = recordingCtx();
+    // A milestone AT the data date: zero span, so its bar is the 1px floor at exactly the x the
+    // data-date vertical occupies. M0 §10 measured 76 of these on the flagship plan, every one of
+    // them painted out — a whole activity class missing from the picture, and unreportable,
+    // because a bar that is never drawn looks exactly like a bar that does not exist.
+    const acts = [
+      activity({ id: 'm', earlyStart: DATA_DATE, earlyFinish: DATA_DATE, laneIndex: 0 }),
+      activity({ id: 'far', earlyStart: '2026-06-01', earlyFinish: '2026-06-30', laneIndex: 1 }),
+    ];
+    buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
+
+    const ddIndex = fills.findIndex((f) => f.style === PALETTE.dataDate);
+    expect(ddIndex, 'the data-date vertical drew').toBeGreaterThanOrEqual(0);
+    const dd = fills[ddIndex]!;
+    // The milestone's bar and the vertical genuinely collide, or this case proves nothing.
+    const milestone = fills.find((f) => f.style === PALETTE.bar && f.y === 0)!;
+    expect(milestone, 'the milestone drew a bar').toBeDefined();
+    expect(milestone.x).toBeLessThanOrEqual(dd.x);
+    expect(milestone.x + milestone.w).toBeGreaterThan(dd.x);
+
+    expect(
+      fills.indexOf(milestone),
+      'the bar is painted after the vertical, so it is not overwritten',
+    ).toBeGreaterThan(ddIndex);
   });
 
   it('omits the data-date vertical when the data date falls outside the drawn extent', () => {

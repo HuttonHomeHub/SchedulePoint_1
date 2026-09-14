@@ -324,10 +324,13 @@ export function minimapRects(
 
 /**
  * Build the invariant plan picture into `ctx` (the caller's detached canvas). Two passes by
- * decision (see {@link minimapRects}); draw order IS the decimation policy — ground, then
- * non-critical, then critical, then the data-date vertical — because later strokes
- * overwrite earlier ones, so **the critical path survives the merge** wherever a critical
- * and a non-critical bar collapse onto the same pixel. Returns the mapping so the caller
+ * decision (see {@link minimapRects}); draw order IS the decimation policy — ground, tiers,
+ * the data-date vertical, then non-critical, near-critical and critical bars — because later
+ * strokes overwrite earlier ones, so **the critical path survives the merge** wherever a
+ * critical and a non-critical bar collapse onto the same pixel. The data date moved beneath
+ * the bars at M7: it outranks texture and does not outrank plan data, because a mark that
+ * outranks the whole bar ladder removes an activity class from the picture rather than
+ * winning a pixel. Returns the mapping so the caller
  * can place the DOM rectangle/overlays without re-deriving it, or `null` when nothing is
  * placeable (the caller shows the empty-state sentence instead of a blank picture).
  */
@@ -379,6 +382,25 @@ export function buildMinimapBitmap(
     if (tiers.year) stroke(bounds.years, palette.gridYear);
   }
 
+  // ── The data-date vertical (day 0 by definition — dates are drawn about the data date).
+  //
+  // **Beneath the bars, above the tiers** (minimap-visual M7). It used to be the last draw call,
+  // which painted out every zero-duration activity sitting on the data date — 76 milestones on the
+  // flagship plan (`m0-measurement.md` §10/§11.4). That is not a collision the decimation policy
+  // resolves: draw order IS that policy (ADR-0100 D5) and it ranks by urgency, so a mark that
+  // outranks the entire bar ladder removes a whole activity class from the picture rather than
+  // winning a pixel. It is also the one class of bar with no width to lose it in, and the loss is
+  // unreportable — a bar that is never drawn looks exactly like a bar that does not exist.
+  //
+  // It still outranks the tiers, which is the part that stays true: a grid rule is texture and the
+  // data date is plan data. At minimap scale the vertical crosses mostly empty lanes, so it reads
+  // as a full-height line regardless of the handful of bars now painted over it.
+  const dataDateX = screenXOfDay(0, mapping.view);
+  if (dataDateX >= 0 && dataDateX <= box.width) {
+    ctx.fillStyle = palette.dataDate;
+    ctx.fillRect(dataDateX, 0, 1, box.height);
+  }
+
   const rects = minimapRects(activities, dataDate, mapping);
   ctx.fillStyle = palette.bar;
   for (const r of rects) {
@@ -417,11 +439,5 @@ export function buildMinimapBitmap(
     }
   }
 
-  // The data-date vertical (day 0 by definition — dates are drawn about the data date).
-  const dataDateX = screenXOfDay(0, mapping.view);
-  if (dataDateX >= 0 && dataDateX <= box.width) {
-    ctx.fillStyle = palette.dataDate;
-    ctx.fillRect(dataDateX, 0, 1, box.height);
-  }
   return mapping;
 }

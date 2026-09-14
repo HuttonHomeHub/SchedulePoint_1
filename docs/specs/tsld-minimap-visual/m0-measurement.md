@@ -936,3 +936,114 @@ at the whole plan, and the one a sign-off should judge.
 - **The near-critical margin is thin** — 1.53:1 against a 1.5 floor — and will be the first thing a
   palette nudge breaks. That is the gate working, named here so the failure is legible when it
   comes.
+
+## 15. M6 — the lane compression, measured before it was built. It is a no-op.
+
+The product owner answered §10.4/§14.4 by choosing **map the lane axis by occupied-lane rank**:
+collapse lanes that hold nothing so only lanes carrying work consume height. It is the remedy I
+recommended, and it was measured before a line of it was written, per the rule that produced every
+other correction in this document.
+
+**It collapses nothing. Not on this fixture — on any packed plan, by construction.**
+
+Measured against the live database (2026-09-14), every plan in the local catalogue:
+
+| plan                             | activities | lane indices | occupied | would collapse |
+| -------------------------------- | ---------: | -----------: | -------: | -------------: |
+| Scale 2000 activities            |      2,160 |          178 |      178 |          **0** |
+| Riverside — Phase 2 Substructure |         10 |            5 |        5 |          **0** |
+| Today span (×2)                  |          9 |            4 |        4 |          **0** |
+| Minimap journey (×3)             |          3 |            3 |        3 |          **0** |
+
+`occupied` counts lanes holding at least one activity with a computed `early_start` — exactly the
+set `minimapRects` draws, so it is the rank map's own denominator and not a proxy for it.
+
+### 15.1 Why it is structural rather than a property of this fixture
+
+`packLanes` (`packages/layout/src/pack-lanes.ts:78-84`) opens a lane **only** when no existing lane
+is free:
+
+```ts
+if (lane === -1) {
+  lane = laneEnds.length;
+  laneEnds.push(item.endDay);
+}
+```
+
+A packer that opens a lane only on demand cannot leave an empty one. So on any plan whose lanes
+came from Auto-arrange or from the interchange commit's phase 3 (ADR-0069), occupied-lane rank is
+the identity map. The zeros above are not eight coincidences; they are one property observed eight
+times.
+
+It is **not** universally inert, and that is worth recording rather than overstating the refusal:
+it would collapse lanes on a plan the packer never reached — ADR-0069's phase 3 is best-effort, so
+a failed layout leaves an import at one lane per source-file row — and on a plan whose lanes have
+been emptied by deletion or hand-placement. None of those is the plan the complaint was about.
+
+### 15.2 So what IS the dominant term — measured, not reasoned
+
+Computed over the flagship plan's 2,160 drawable activities at the shipped 200 × 120 geometry:
+
+| quantity                         |                               measured |
+| -------------------------------- | -------------------------------------: |
+| span / lanes                     |                 4,385 d over 178 lanes |
+| px per day / px per lane         |                         0.0456 / 0.674 |
+| distinct inked pixels            |            **2,287 of 24,000 — 9.5 %** |
+| rows carrying any ink            |                         **120 of 120** |
+| rows carrying ≥ 10 px of ink     |                              18 of 120 |
+| bars per inked pixel             | **0.94** (1.00 = no collisions at all) |
+| median bar width                 |                            **1.00 px** |
+| bars floored to the 1 px minimum |              **2,146 of 2,160 — 99 %** |
+
+Three of those kill the lane hypothesis outright. **Every row carries ink**, so the picture is not
+a set of empty bands. **0.94 bars per inked pixel** means bars are barely colliding — the
+decimation policy is hardly firing, because there is almost nothing to decimate. And **99 % of bars
+are 1 px wide**, which is the whole finding: at 0.0456 px/day an activity must run 22 days to earn
+a second pixel, and almost none of them do.
+
+The minimap at scale is a **dust field, and that is a faithful rendering** — the plan really is
+2,160 short activities scattered across twelve years. The axis that compresses it out of legibility
+is the **day** axis, and no lane remapping touches that. The 14 bars wider than 1 px are the
+`LEVEL_OF_EFFORT` rows §10.2 identified, at up to 193 px.
+
+### 15.3 M6 is therefore NOT built, and the question goes back
+
+This is §10.4's shape a second time: an approved action, measured before building, found not to fix
+what it was approved to fix. Building it would ship an identity transform on every plan the product
+owner has, under a changeset saying the lane axis was fixed — the one outcome worse than leaving it
+alone, because a no-op that reads as a fix stops anyone looking again.
+
+The remaining candidates all trade truthfulness for ink and none is free:
+
+- **raise the bar-width floor to 2–3 px** — makes a short activity visible and overstates its
+  duration by 22–44 days at this scale, and pushes bars per inked pixel up, so the criticality
+  decimation starts firing where today it barely does;
+- **a taller or wider box** — buys pixels linearly and costs the diagram the same pixels, on the
+  surface the last five epics spent recovering 45 px from;
+- **accept it** — the picture shows shape, density and viewport position, which is what a minimap
+  is for, and per-activity legibility at 1 px was never available.
+
+My recommendation is the third, with the numbers above as the reason. It is not a decision to make
+inside a milestone whose measurement has just withdrawn its own premise.
+
+## 16. M7 — the data date moved beneath the bars
+
+The product owner chose **draw the data-date vertical beneath the bars**, answering §10.5/§11.4.
+Built, with the regression test verified red first (`minimap.test.ts`: the milestone's bar and the
+vertical are asserted to genuinely collide before the ordering is asserted at all, so the case
+cannot pass by drawing them apart).
+
+Draw order is now ground → tiers → **data date** → non-critical → near-critical → critical. The
+data date still outranks texture and no longer outranks plan data, which is the rule ADR-0100 D5
+was missing rather than an exception to it: a mark that outranks the entire bar ladder does not win
+a pixel, it removes an activity class from the picture.
+
+**§11.4's objection to this option is answered rather than ignored.** It said drawing the data date
+first means "a dense plan hides the data date". The measurement above bounds that: the vertical is
+1 px wide and 120 px tall, and a bar is 0.674 px tall, so hiding it needs bars standing on the data
+date across most of the lane axis. On the flagship plan that is exactly what the 160 degenerate
+zero-span summaries do (§10.2) — they all sit at day 0 — so on **that** fixture the vertical is
+substantially replaced by a column of summary dots. That is the honest cost, and it is the right
+way round: those summaries are real activities that were being painted out, and a reader who sees a
+dotted column at the data date is being told something true about the plan rather than something
+tidy.
