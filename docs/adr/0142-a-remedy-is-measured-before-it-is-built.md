@@ -114,6 +114,8 @@ size before writing it — here, one SQL query against the seeded catalogue, bef
   truthfulness or canvas. A future reader reaching for occupied-lane rank should read D1 first.
 - The M5 UX review's chrome challenge closes, and the way it closes is the useful part: it was right
   on a measurement, and was declined because nobody had taken the measurement.
-- `apps/web/.screenshots/m8-border.png` records the one place the border/bar shared value is visible,
+- `apps/web/.screenshots/m8-border.png` — **git-ignored, per the `.gitignore` convention that a
+  screenshot is evidence and the prose is the durable record** — recorded the one place the
+  border/bar shared value is visible,
   on a 3-activity fixture whose bars fill large fractions of the box — which §15.2 shows is not what a
   real plan looks like. Recorded as an observation rather than built around.

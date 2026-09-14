@@ -919,7 +919,8 @@ failure M1 exists to fix, one property along.
 §9.6 anticipated the congruence and framed it as a bound on the _worst case_; it did not notice
 that this made the epic's only visual evidence the one state where its rank-1 fix is invisible.
 
-**Taken:** `apps/web/.screenshots/m5-fill-in-use.png`, zoomed so the rectangle measures
+**Taken:** `apps/web/.screenshots/m5-fill-in-use.png` (git-ignored — the measurement below is
+the durable record), zoomed so the rectangle measures
 **78 × 18 px inside the 200 × 120 box** — the state a planner is in whenever they are not looking
 at the whole plan, and the one a sign-off should judge.
 
@@ -1087,7 +1088,8 @@ frame pair, because the question is the same in kind. Verified red against the i
 - **Left open, and stated rather than glossed:** the border shares its value with the non-critical
   bar ink, exactly (`--plot-primary` is the `bar` token). ADR-0141's collisions were two marks
   **inside one picture**; this is a continuous rounded rule enclosing a header row and a picture, so
-  they separate by form. `apps/web/.screenshots/m8-border.png` shows the one place it is visible —
+  they separate by form. `apps/web/.screenshots/m8-border.png` (git-ignored; what it shows is
+  written out here, which is the point of writing it out) shows the one place it is visible —
   a bar running to the picture's left edge merges into the border there. **That shot is the journey's
   3-activity fixture**, where bars occupy large fractions of the box; §15.2 measured that 99 % of
   bars on a real plan are 1 px wide, so the merge is a property of the fixture rather than of the
