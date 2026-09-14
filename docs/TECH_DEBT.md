@@ -10358,3 +10358,49 @@ until that is decided.
 **Re-open when** a planner reports the overview as unreadable on a plan they actually work on — and
 when they do, take the ink measurement on **that** plan first, because this row is the third time an
 intuition about this picture has disagreed with its own arithmetic.
+
+**Two measurements are owed before this is treated as settled rather than deferred**, both raised by
+the M8 UX review and both agreed. Every plan measured above is **freshly packed**, and the flagship
+is the fixture `m0-measurement.md` §10.3 disowned — its 160 `WBS_SUMMARY` rows are zero-span
+placeholders at the data date, and §10.3 says outright that whether a **genuine** subtree rollup
+forces its own lane is untested. So:
+
+1. a plan whose lanes the packer never reached — an import whose ADR-0069 phase 3 failed, or one
+   edited by dissolve/regroup (ADR-0063), bulk delete/restore, or hand-placement (ADR-0052). That is
+   the shape where occupied-lane rank is **not** the identity, and it is closer to an aged
+   programme than a scale generator's output;
+2. a plan with multi-day WBS rollups, which is what "real WBS structure" meant in the original
+   finding.
+
+Both are a SQL query away — the same cheap move that produced this row. Neither changes the
+structural argument (a packer still leaves no gaps); both bear on whether the **domain** claim was
+right, and it is the domain claim that was refused here.
+
+### 324. Every focus ring in the product is a `box-shadow`, and `forced-colors` suppresses box-shadow
+
+**Status:** unverified · **Raised:** 2026-09-14 (the minimap M8 accessibility review, out of scope for that diff) · **Size:** M · **Owner:** web
+
+The house convention is `focus-visible:outline-none` plus a `focus-visible:ring-*` box-shadow —
+**61 occurrences across 49 files** in `apps/web/src`. Windows High Contrast (`forced-colors: active`)
+suppresses `box-shadow` and does **not** suppress a native `outline`, so in that mode a control
+following this convention would show **no focus indicator at all**. That is WCAG 2.2 §2.4.7 Focus
+Visible (level A) on every focusable control in the product, not a corner of one.
+
+**Filed `unverified` deliberately, and the word is doing work.** The mechanism is documented
+behaviour rather than something observed here: nothing in this repository has ever been run under
+`forced-colors`, there is no `@media (forced-colors: active)` block in `globals.css`, no
+`forced-color-adjust` anywhere, and no gate that could see it — axe does not emulate the mode, and
+Playwright's `forcedColors` option has never been set in any of the 43 configs. So the claim to
+check first is not "is box-shadow suppressed" (it is) but **"does this product actually lose its
+focus ring there"**, which wants one run before any remedy is designed.
+
+**It is not the minimap's and it is not M8's.** The convention predates both; M8 changed a border
+colour and inherited the pattern. It is recorded here rather than in that milestone precisely so it
+is not mistaken for something that epic introduced — and because a finding raised in a review of
+something else is the easiest kind to lose.
+
+**The cheap first step** is a `forcedColors: 'active'` Playwright project over one existing journey,
+which answers the question for real and costs a config entry. The remedy, if it fires, is likely the
+standard one — pair the ring with a transparent `outline` so the forced-colors palette has something
+to paint — and that is a change to a shared primitive's focus treatment, so ADR-0111 §19.13 applies
+and it needs a review before release rather than after.

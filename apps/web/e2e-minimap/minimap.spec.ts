@@ -116,6 +116,33 @@ test.describe('The minimap', () => {
       'oklch(0.624 0.115 249)',
     );
 
+    // ── The bitmap never touches the border (minimap-visual M8, the UX review's B1).
+    //
+    // The border shares its value with the non-critical bar ink, and `worldExtent` maps the
+    // plan's extremes to the box's edges, so on EVERY plan a bar starts at x=0, one ends at
+    // x=width and one sits at y=height. Where that extreme activity is non-critical the two
+    // merge at 1:1. `p-px` on the panel puts one pixel of `--canvas` — the pair the border is
+    // gated against — between them, which is asserted here as geometry rather than as colour:
+    // a colour assertion would have to know which activity happens to be extreme.
+    const gap = await panel.evaluate((node) => {
+      const picture = node.querySelector('[data-minimap-surface]');
+      if (picture === null) return null;
+      const p = node.getBoundingClientRect();
+      const c = picture.getBoundingClientRect();
+      const styles = getComputedStyle(node);
+      const bw = (side: string): number =>
+        Number.parseFloat(styles.getPropertyValue(`border-${side}-width`));
+      return {
+        left: c.left - (p.left + bw('left')),
+        right: p.right - bw('right') - c.right,
+        bottom: p.bottom - bw('bottom') - c.bottom,
+      };
+    });
+    expect(gap, 'the picture surface was found').not.toBeNull();
+    for (const [side, value] of Object.entries(gap!)) {
+      expect(value, `the bitmap clears the ${side} border by ${value}px`).toBeGreaterThanOrEqual(1);
+    }
+
     // The picture is not blank: the build painted the ground and bars into the backing store.
     const painted = await picture.evaluate((canvas: HTMLCanvasElement) => {
       const ctx = canvas.getContext('2d');

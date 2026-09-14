@@ -481,9 +481,14 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
    * agrees with the reviewer, which is the part worth keeping: the challenge was right on a
    * number, and the reason it went unbuilt was that nobody had taken the number.
    *
-   * Gated at 3:1 — WCAG 1.4.11's non-text floor, the same instrument as the frame pair above,
-   * because the question is identical in kind: can a reader see where this boundary is.
-   * `--primary` resolves through the canvas scope to `--plot-primary` and clears it at 3.15:1.
+   * Gated at 3:1 — WCAG 1.4.11's non-text floor. **The SC applies because of the widget, not
+   * because the grounds match**, which is the M8 accessibility review's correction to this
+   * docblock's first version: ADR-0055 settled that `--border` is decoration and 1.4.11-exempt,
+   * so a same-background `Card` stays exempt at 1.17:1. What puts this boundary in scope is that
+   * the panel is a `role="group" tabIndex={0}` composite widget with its own keyboard contract —
+   * a control boundary, not a divider. The matching grounds are why the old value was invisible;
+   * they are not why the floor applies. `--primary` resolves through the canvas scope to
+   * `--plot-primary` and clears it at 3.15:1.
    */
   it('the panel border separates the widget from the diagram it floats over (3:1)', () => {
     const value = ratio(tokens, '--canvas', '--primary');

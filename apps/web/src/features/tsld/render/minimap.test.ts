@@ -134,7 +134,7 @@ describe('buildMinimapBitmap', () => {
     expect(fills).toEqual([{ style: PALETTE.ground, x: 0, y: 0, w: BOX.width, h: BOX.height }]);
   });
 
-  it('draws ground → non-critical → critical → data-date, so the critical path survives the merge', () => {
+  it('draws ground → data-date → non-critical → critical, so the critical path survives the merge', () => {
     const { ctx, fills } = recordingCtx();
     // Two bars collapsing onto the same pixel column and lane: the critical one must paint LAST.
     const shared = { earlyStart: '2026-06-01', earlyFinish: '2031-06-01', laneIndex: 0 } as const;
@@ -161,8 +161,12 @@ describe('buildMinimapBitmap', () => {
     ).toBe(false);
     expect(styles.filter((v) => tierInks.has(v)).length, 'the tiers drew').toBeGreaterThan(0);
 
-    // ── And the original contract, unchanged: with the tiers removed the sequence is exactly
-    // what it was before M3, which is the parity this milestone rests on.
+    // ── With the tiers removed, the bar ladder is exactly what it was before M3 — the parity
+    // that milestone rested on — and the data date has moved out of last place, which is the one
+    // thing M7 changed. This sentence said "exactly what it was before M3" until the M8 gate
+    // pass: M7 edited the array three lines down and left the claim above it describing the
+    // array's previous contents, which is the comment-contradicts-its-own-code class (ADR-0076)
+    // at the shortest range it can occur at.
     expect(styles.filter((v) => !tierInks.has(v))).toEqual([
       PALETTE.ground,
       // The data date sits between the tiers and the bars (M7): above texture, beneath plan

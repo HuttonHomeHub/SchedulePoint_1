@@ -75,13 +75,38 @@ that needs work standing on the data date across most of the lane axis. On the f
 160 degenerate zero-span summaries do exactly that — and the resulting dotted column is a true
 statement about that plan, since those summaries were being painted out too.
 
+**That cost is measured on the fixture this document has twice disowned, and the M8 UX review was
+right to say so.** Real summaries roll up actual date ranges; they do not all sit at zero span on
+the data date. On a plan with a handful of milestones genuinely there, the outcome is a mostly
+intact line with occasional interruptions. On this fixture it is closer to a blue column with a grey
+line behind it — and the minimap's job is **orientation**, so ~90 % coverage could plausibly read as
+a wide bar rather than as the data date. The decision stands, because erasing real activities to
+keep one line clean is the worse failure and that is not fixture-dependent; what is **not** settled
+is the cost, and a cheap mitigation exists if it turns out to matter (reserve a pixel or two at the
+top and bottom of the picture for the vertical, the halo logic one element over, without reverting
+anything).
+
 ### D3 — The panel border is the diagram's primary, because the panel's ground is the diagram's ground.
 
 The widget floats over the canvas and its own ground is `--canvas` — the same token. Its border is
 therefore the entire colour separation between the two, with `shadow-md` as the only other channel,
 and at the neutral grey it measured **1.17:1** against that ground. `--primary`, which
-`[data-surface="canvas"]` rebinds to `--plot-primary`, measures **3.15:1** and clears WCAG 1.4.11's
-non-text floor. Gated in `token-contrast.test.ts`, verified red against the incumbent.
+`[data-surface="canvas"]` rebinds to `--plot-primary`, measures **3.15:1**. Gated in
+`token-contrast.test.ts`, verified red against the incumbent.
+
+**WCAG 1.4.11 applies because of the widget, not because the two grounds match.** That distinction
+is the M8 accessibility review's correction and it is kept because the wrong reason generalises
+badly: ADR-0055 already settled that `--border` is decoration and 1.4.11-exempt while `--input`
+identifies a control and is gated, so a `Card` sharing its background with the page stays exempt at
+1.17:1 and "same ground on both sides" cannot be what brings a boundary into scope. What does is
+that this panel is a `role="group" tabIndex={0}` composite widget with arrow-key pan, a draggable
+rectangle and Escape to dismiss — a control boundary rather than a divider. The matching grounds are
+the evidence that the old value was invisible; the interactivity is why the floor applies at all.
+
+The focus ring was checked and is unaffected: `ring-2` compiles to a hard-edged band starting at the
+border-box edge, so it sits **outside** the border with the ground as its neighbour at **5.30:1**,
+which is the graded value. Its ΔE 15.60 from the border is due diligence and **not** an SC number,
+and is labelled that way rather than quoted as though both figures were gates.
 
 `border-primary` is a Tailwind utility deliberately: it compiles to `var(--primary)` because the
 theme mapping is `@theme inline`, so it follows the surface rebind — where a `getComputedStyle` read
@@ -89,9 +114,24 @@ of `--color-primary` would not, which is ADR-0102's finding. Only a browser can 
 since jsdom applies no stylesheet and both navy and blue are plausible borders, so the journey
 asserts the resolved sRGB and was verified red at `oklch(0.907 0 0)`.
 
-**The cost is stated rather than hidden:** the border shares its value with the non-critical bar ink
-exactly. ADR-0141's collisions were two marks inside one picture; this is a continuous rounded rule
-enclosing a header row and a picture, and they separate by form.
+**The border shares its value with the non-critical bar ink exactly, and the bitmap is inset from
+it by one pixel.** That is not spacing. `worldExtent` takes the plan's actual extremes, so on every
+plan a bar starts at x = 0, one ends at x = width and one sits at y = height — the collision is a
+property of the mapping, not of any fixture, and it fires whenever the extreme activity is
+non-critical. `p-px` makes the border's inside neighbour `--canvas`, the pair it is gated against,
+for 2 px of panel size and no data at all.
+
+The colour remedies were measured first and both fail. **The old application's border was navy, not
+blue** (its `main.css` `:root` declares `--primary-color: #14213D`, and its `#minimap-container` rule
+takes `border: 1px solid var(--primary-color)`), which is **1.00:1** against
+`--canvas-minimap-frame`: copying it exactly would have collided the panel border with the viewport
+rectangle beside it, because that app paired navy with an amber viewport band where ours is dark.
+And no blue clears 3:1 from both a near-white ground and the bar ink, which pull opposite ways.
+
+**This paragraph said the merge was "a property of the fixture rather than of the product" until the
+M8 gate pass.** It was wrong, the UX review rejected it on the mapping rather than on the pixels,
+and the wrong version is recorded here rather than replaced — an ADR that quotes ADR-0058 at its
+reader and then silently edits its own false claim is worth less than one that does not.
 
 ### D4 — A gate is not the only instrument that can be green for having tested nothing. So can a plan.
 
@@ -109,13 +149,24 @@ size before writing it — here, one SQL query against the seeded catalogue, bef
 
 - **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity gate
   is untouched by construction.
-- **The lane compression is still open**, and is now open with numbers rather than with an intuition:
-  §15.2's figures say the day axis is the term, and every candidate remedy for it costs either
-  truthfulness or canvas. A future reader reaching for occupied-lane rank should read D1 first.
+- **The lane compression is still open**, and is now open with numbers rather than with an
+  intuition: §15.2's figures say the day axis is the term, and every candidate remedy for it costs
+  either truthfulness or canvas. A future reader reaching for occupied-lane rank should read D1
+  first.
+
+  **What D1 does NOT close, flagged by the M8 UX review and agreed:** the eight measured plans are
+  all freshly packed, and the flagship is the same fixture §10.3 disowned as degenerate — its 160
+  `WBS_SUMMARY` rows are zero-span placeholders at the data date, not real subtree rollups, and
+  §10.3 says in terms that whether a genuine rollup forces its own lane is **untested**. So the
+  structural half of D1 is settled for any packed plan and the **domain** half — "a plan with real
+  WBS structure", which was the review's original finding — is not. The two shapes that would test
+  it are an **imported plan whose ADR-0069 phase-3 pack never ran**, and a plan with **multi-day WBS
+  rollups**; both are cheap SQL away, and neither has been measured. `docs/TECH_DEBT.md` #323 names
+  them as the re-open trigger rather than waiting for a complaint.
+
 - The M5 UX review's chrome challenge closes, and the way it closes is the useful part: it was right
   on a measurement, and was declined because nobody had taken the measurement.
 - `apps/web/.screenshots/m8-border.png` — **git-ignored, per the `.gitignore` convention that a
-  screenshot is evidence and the prose is the durable record** — recorded the one place the
-  border/bar shared value is visible,
-  on a 3-activity fixture whose bars fill large fractions of the box — which §15.2 shows is not what a
-  real plan looks like. Recorded as an observation rather than built around.
+  screenshot is evidence and the prose is the durable record** — is what the UX review sampled to
+  show the border/bar merge, and it is the reason D3's first rationale did not survive: a shot
+  offered as "the one unrepresentative case" turned out to be the general case.

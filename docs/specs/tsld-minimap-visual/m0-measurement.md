@@ -1085,13 +1085,38 @@ frame pair, because the question is the same in kind. Verified red against the i
   blue border was a plausible regression. It is not: `ring-2` sits **outside** the border box, where
   its neighbour is the ground at **5.30:1**, and it is ΔE 15.60 from the border — three times the
   "unmistakable" threshold. The focus indicator is unaffected.
-- **Left open, and stated rather than glossed:** the border shares its value with the non-critical
-  bar ink, exactly (`--plot-primary` is the `bar` token). ADR-0141's collisions were two marks
-  **inside one picture**; this is a continuous rounded rule enclosing a header row and a picture, so
-  they separate by form. `apps/web/.screenshots/m8-border.png` (git-ignored; what it shows is
-  written out here, which is the point of writing it out) shows the one place it is visible —
-  a bar running to the picture's left edge merges into the border there. **That shot is the journey's
-  3-activity fixture**, where bars occupy large fractions of the box; §15.2 measured that 99 % of
-  bars on a real plan are 1 px wide, so the merge is a property of the fixture rather than of the
-  product. Recorded as an observation, not built around, because insetting the picture on the
-  strength of a non-canonical fixture is the mistake §14.4 was trying to avoid in the first place.
+- **CORRECTED at the M8 gate pass, and the correction is the useful part.** The border shares its
+  value with the non-critical bar ink exactly (`--plot-primary` **is** the `bar` token). I wrote
+  that the resulting merge was "a property of the fixture rather than of the product", on the
+  ground that §15.2 measures 99 % of real bars at 1 px. **That is the wrong quantity, and the UX
+  review was right to reject it.** `worldExtent`
+  (`apps/web/src/features/tsld/render/geometry.ts:592-608`) takes `minDay`, `maxDay` and `maxLane`
+  from the actual extremes, and `minimapViewport` maps them onto the box's edges — so on **every**
+  plan the earliest activity's bar starts at x = 0, the latest ends at x = width, and the highest
+  lane's bar bottom sits at y = height. Bar width decides how much of the border is obscured, not
+  whether the collision happens at all. It fires on any plan whose extreme activity is
+  non-critical, which is the common case; sampled from the shot, the touching pixels are
+  `rgb(75,140,202)` and `rgb(71,132,189)`.
+
+  **Fixed geometrically, and the colour remedies were measured and rejected first.** `p-px` on the
+  panel puts one pixel of `--canvas` between the border and the bitmap, so the border's inside
+  neighbour is the pair it is gated against, on every plan. It costs 2 px of panel size and **no
+  data** — the bitmap keeps its full 200 × 120.
+
+  | candidate                                       | vs `--canvas` | vs bar ink | vs the viewport frame |
+  | ----------------------------------------------- | ------------: | ---------: | --------------------: |
+  | `--plot-primary` (shipped, with the 1 px inset) |          3.15 |       1.00 |                  4.49 |
+  | the old app's own `--primary-color`, `#14213D`  |         14.14 |       4.48 |              **1.00** |
+
+  The second row is worth reading twice. **The old application's border was navy, not blue** —
+  its `#minimap-container` rule is `border: 1px solid var(--primary-color)` and its
+  `main.css` `:root` declares `--primary-color: #14213D` — so "the old app's primary-coloured border" meant navy all
+  along, and I reasoned from our own surface-scope architecture instead of opening a file that was
+  on disk the whole time. Copying it exactly would have collided the panel border with the
+  **viewport rectangle** beside it at 1.00:1, because that app paired navy with an **amber**
+  viewport band (`#minimap-viewport`, `--secondary-color`) where ours is dark. And no blue clears
+  3:1 from both a near-white ground and the bar ink at once — the two constraints pull opposite
+  ways.
+
+  Pinned by a browser assertion on the **geometry** rather than on the colour, because a colour
+  assertion would have to know which activity happens to be extreme. Verified red at 0 px.

@@ -360,8 +360,18 @@ export function TsldMinimap({
       // **1.17:1** against that ground (ΔE 6.10) — ADR-0141's opening finding one element
       // further out, since that ADR exists because the picture area measured 1.03:1 against the
       // same ground and read as a hole rather than a picture. `--primary` resolves through
-      // `[data-surface="canvas"]` to `--plot-primary` and clears WCAG 1.4.11's 3:1 at 3.15:1,
-      // gated in `token-contrast.test.ts`.
+      // `[data-surface="canvas"]` to `--plot-primary` and reaches 3.15:1, gated in
+      // `token-contrast.test.ts`.
+      //
+      // **Why WCAG 1.4.11 applies here is the widget, NOT the matching grounds** — the M8
+      // accessibility review's correction, and it matters because the wrong reason generalises
+      // badly. ADR-0055 settled that `--border` is decoration and 1.4.11-exempt while `--input`
+      // identifies a control and is gated; by that rule a `Card` sharing its background with the
+      // page stays exempt at 1.17:1, so "same ground on both sides" cannot be what brings a
+      // boundary into scope. What does is that this panel is a `role="group" tabIndex={0}`
+      // composite widget — arrow-key pan, a draggable rectangle, Escape to dismiss — so its edge
+      // is a control boundary rather than a divider. The matching grounds are the evidence that
+      // the old value was invisible; the interactivity is the reason the floor applies at all.
       //
       // It is a Tailwind utility deliberately: `border-primary` compiles to `var(--primary)`
       // because the theme mapping is `@theme inline`, so it follows the surface rebind. A
@@ -369,11 +379,25 @@ export function TsldMinimap({
       // it is declared, which is ADR-0102's finding and is why the painter takes its inks by raw
       // name.
       //
-      // It shares its value with the non-critical bar ink, which is stated rather than hidden:
-      // ADR-0141's collisions were two marks INSIDE one picture, and this is a continuous
-      // rounded rule enclosing a header row and a picture. The two are separable by form, and
-      // the frame it might have been confused with is 4.49:1 / ΔE 54.44 away from it.
-      className="border-primary bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border shadow-md focus-visible:ring-2 focus-visible:outline-none"
+      // **`p-px` is load-bearing, not spacing.** The border shares its value with the
+      // non-critical bar ink exactly, and the bitmap is flush to three of the panel's edges by
+      // CONSTRUCTION rather than by accident: `worldExtent` takes `minDay`/`maxDay`/`maxLane`
+      // from the actual extremes, so on every plan the earliest activity's bar starts at x=0,
+      // the latest ends at x=width, and the highest lane's bar bottom is at y=height. A bar
+      // therefore touches the border on any plan whose extreme activity is non-critical — the
+      // common case — and the two merge at 1:1 (sampled: rgb(75,140,202) against
+      // rgb(71,132,189)). The M8 write-up called that a property of the fixture; the M8 UX
+      // review showed it is a property of the mapping, and it was right.
+      //
+      // One pixel of the panel's own ground between the border and the bitmap makes the
+      // border's inside neighbour `--canvas` on every plan, which is the pair it is gated
+      // against at 3.15:1. It costs 2px of panel size and NO data — the bitmap keeps its full
+      // 200×120. The alternatives were measured and are worse: the old application's own
+      // `--primary-color` is `#14213D`, which is **1.00:1** against `--canvas-minimap-frame`,
+      // so copying it exactly would have collided the panel border with the viewport rectangle
+      // beside it (that app paired navy with an AMBER viewport band; ours is dark), and no blue
+      // clears 3:1 from both the near-white ground and the bar ink at once.
+      className="border-primary bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border p-px shadow-md focus-visible:ring-2 focus-visible:outline-none"
       style={{ bottom: 12 + bottomOffsetPx }}
     >
       {/* The keyboard contract, spoken once on focus (M4 a11y gate): role="group" carries no
