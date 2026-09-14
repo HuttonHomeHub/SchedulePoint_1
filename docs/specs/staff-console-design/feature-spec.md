@@ -677,3 +677,63 @@ subsection within the card, not a paragraph folded into mail's prose — and M5'
 an operator scanning for the word still finds it.
 
 Nothing else merges and nothing is removed: the other six panels keep their identity.
+
+---
+
+## 7. Further guidance (product owner, 2026-09-14) — and full approval
+
+> _"Once the spec and plan come back and th agents agree with them you have my approval to build and
+> drive this to completion and release"_
+>
+> _"Note I care about it looking pretty so single column shouldn't be set in stone the user is a
+> seasoned admin so should be able to navigate a an admin panel with ease. All other questions go
+> with what will make the best app possible in the long run"_
+
+**Approval is granted**, conditional on one thing: the design agents review this spec and plan and
+their blocking findings are folded before building. After that the epic runs to release without
+coming back.
+
+Three pieces of guidance change what this document assumed, and each is written here rather than
+absorbed silently, because each licenses something §4 was cautious about.
+
+### 7.1 Aesthetic quality is a goal, not a side effect
+
+_"I care about it looking pretty."_ This spec was written defensively — its §4 reads as a set of
+things not to get wrong. That is necessary and it is not sufficient. **A design that is merely
+correct fails this request.** Where a choice is between defensible-and-plain and considered-and-
+handsome, and the gates are satisfied either way, take the second.
+
+The instrument does not change: FC-1 still decides whether hierarchy survives. "Pretty" is not
+testable, which is exactly why it must not be traded against the things that are — it is an
+additional obligation, not a licence to drop one.
+
+### 7.2 The reader is a seasoned administrator
+
+This is the single most freeing sentence in the brief and it was **not** an assumption the spec had
+made. §4's caution about scan order, about density, about how much a reader can hold — all of it was
+written for an unspecified reader. The real one operates this installation, has chosen to open a
+staff console, and navigates admin panels for a living.
+
+Consequences taken deliberately:
+
+- **Density is allowed.** More information per screen is a feature for this reader, not a hazard.
+  The 46 % of the window M0 measured as empty is not restraint, it is waste.
+- **Admin-panel conventions are available** — dense tables, compact metric rows, terse labels,
+  keyboard affordances — and do not need justifying as novelties.
+- **Explanatory prose can be reduced.** Several panels carry a paragraph explaining what they are;
+  a seasoned admin reads a label. Prose that states a **non-obvious consequence** stays (the
+  retention note about `audit_events` refusing `DELETE` is a fact nobody can infer); prose that
+  restates the heading goes.
+- What this does **not** license: unlabelled iconography, colour as the only channel, or anything
+  that fails a gate. Expertise in the reader is not an accessibility exemption.
+
+### 7.3 Everything else is decided for the long run
+
+_"All other questions go with what will make the best app possible in the long run."_ So the
+remaining open items are **decided in-flight and recorded with their reasons**, not returned as
+questions. The standing tie-break: prefer the option that leaves the design system stronger for the
+next surface, over the one that is cheapest for this screen. Where those agree, no decision is being
+made and none is recorded.
+
+A question goes back only if proceeding would be unsafe, or would waste the work if the guess were
+wrong.
