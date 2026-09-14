@@ -1,14 +1,16 @@
 # Implementation Plan: TSLD minimap — visual redesign
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved 2026-09-14**
+- **Status:** Approved
 - **Owner:** Claude (build), product owner (approval, CQ-1/2/3, and the M0-T1 verdict)
 
-> **Nothing in this plan is implemented.** Stages 1–5 write no application code
-> (`docs/PROCESS.md`). M1 is the first milestone that touches `apps/web/src`, and it does not
-> start until the spec is approved and **M0-T1's screenshot has been looked at**, because
-> §4.10 of the spec lists five things that shot could show which would re-order the whole
-> epic.
+> **Approved 2026-09-14** with all three critical questions taking the recommendation:
+> CQ-1 amended for **temporal tiers only** (no text), CQ-2 **inside tint**, CQ-3 **size
+> unchanged**. The M0-T1 verdict is still owed and is still the product owner's — approving
+> the spec did not approve the ranking, because nobody has yet looked at the thing this epic
+> is about. M0 is dark and blocking; M1 is the first milestone that touches `apps/web/src`
+> and it does not start until that shot has been looked at, because §4.10 of the spec lists
+> five things it could show which would re-order the whole epic.
 
 ## Breakdown
 

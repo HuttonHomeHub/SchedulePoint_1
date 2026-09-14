@@ -1,6 +1,7 @@
 # Feature Spec: TSLD minimap — visual redesign
 
-- **Status:** Draft
+- **Status:** Approved — 2026-09-14, product owner, all three critical questions answered
+  with the recommendation (see "Open questions" below)
 - **Author(s):** Claude (feature-analyst), for the product owner
 - **Date:** 2026-09-14
 - **Tracking issue / epic:** —
@@ -212,6 +213,20 @@ does — which is what makes the whole thing revertible at a commit boundary (§
 > proposes changing _when_ it runs. §3.4 states what would have to happen if anything did.
 
 ### Open questions
+
+> **ANSWERED — 2026-09-14, product owner: "go with your recommendations for all three."**
+> So: **CQ-1 approved for temporal tiers only** — fills and batched strokes, no text — and
+> **declined** for year labels, endpoint dots and links, each on the measurement in §4.6.
+> **CQ-2: inside tint.** **CQ-3: size unchanged at 200×120.**
+>
+> Two things that answer does **not** settle, recorded so nobody reads it as wider than it
+> is. It is an answer to the questions **as measured**, and every figure behind them is a
+> file read or arithmetic — §0.1 says so, and M0-T1 is blocking precisely because none of it
+> was seen. If the screenshot fires one of §4.10's five rows the answer stands and the
+> **ranking** changes, which is what that table is for; CQ-3 in particular is re-opened by
+> its own row rather than closed by this approval. And the CQ-1 approval is to amend
+> ADR-0100 D5 **in the direction §4.6 measures** — it is not standing authority to relax the
+> budget gate for whatever a later milestone finds convenient.
 
 **Three are critical** — they change what gets built. Everything else is decided in this
 spec with the reasoning in §4.8.
