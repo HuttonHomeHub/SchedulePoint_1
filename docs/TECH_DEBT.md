@@ -10240,7 +10240,7 @@ stale.
 
 ### 322. Nothing stops a NEW dependency claim being registered with a non-unique anchor
 
-**Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (the better-auth 1.7.1 → 1.7.4 bump) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (the better-auth 1.7.1 → 1.7.4 bump) · **Size:** S · **Owner:** repo
 
 **The exposure this row was filed for is CLOSED; what remains is recurrence.** Read the history
 below before acting, because the remedy changed once the cost was measured.
@@ -10282,3 +10282,15 @@ widened, so the assertion would go green on the day it lands rather than red aga
 register. That ordering was the reason the widening went first.
 
 Sized **S**: one assertion plus its red-verified test, against a register that already satisfies it.
+
+**Deferred on the product owner's decision (2026-09-14), and the status word is doing work.**
+`open` would read as "the register can be fooled", which is precisely what the widening closed —
+all 112 anchors are unique today and each of the 13 was proven to reject its own old location. What
+is deferred is **enforcement against a future registration**, which is a different and smaller
+claim. Two things follow. The exposure returns the moment somebody registers a one-line anchor that
+happens to occur twice, and nothing will say so — so until the assertion lands, **checking
+uniqueness is a manual step when adding a claim**, which is exactly the vigilance ADR-0058 says to
+replace and is therefore not a stable resting place. And the ordering argument above still holds in
+its favour: the assertion would go green on the day it lands, so this gets cheaper to do and never
+harder. Re-open when a claim is next added to `scripts/dependency-claims.json` — the one moment the
+hole is reachable, and the one moment somebody is already in the file.

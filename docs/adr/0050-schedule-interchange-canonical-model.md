@@ -147,6 +147,34 @@ resolves an "M2" note); the per-import `InterchangeReport` is its runtime instan
 - **`.mpp` support in v1.** Rejected: proprietary binary OLE compound document, no
   permissive TS/Node reader; MSPDI (open, documented XML, exportable from every MS
   Project version) serves the MS Project need. `.mpp` is a documented limitation.
+
+  **Amendment, 2026-09-14 — half of that reason has lapsed, and the decision has not
+  changed.** "No permissive TS/Node reader" was true when this was written and is no
+  longer: `@byteink/mppjs` is **MIT**, reads `.mpp` and emits XML, and states "no JVM
+  required" — which also retires the "polyglot runtime + a second container" objection
+  three bullets above, the one this ADR said to revisit _only_ if `.mpp` were pursued.
+  Verified against the npm registry on the day rather than recalled (`registry.npmjs.org`:
+  `license: MIT`, latest `0.1.7`, published 2026-09-03, first published 2026-05-08).
+
+  **What has NOT lapsed is written down so a future reader does not re-open this on the
+  licence alone.** The format is still a proprietary binary OLE compound document, so
+  every field we could read would be reverse-engineered rather than specified; MSPDI
+  still serves the MS Project need, and a planner who can open a `.mpp` can export one.
+  And the package's shape carries its own cost this ADR has no measurement for: it is
+  **0.1.x with four published versions**, and it ships a **prebuilt native binary per
+  platform** (four optional platform packages), so it is not a dependency this repository
+  can read, and whether one runs on the API image's base is unknown — unasked, not
+  answered. The ADR-0136 licence gate would admit MIT; nothing here has assessed the
+  binary.
+
+  **Parked on the product owner's decision (2026-09-14), with a trigger rather than a
+  date** — the ADR-0085/ADR-0137 shape, because an unconditioned "later" stays exactly one
+  priority below whatever is being done. Re-open when a real planner supplies a `.mpp`
+  they cannot get out of MS Project as MSPDI. At that point the questions are the two
+  above and not the licence: does the binary run on our image, and what does a
+  reverse-engineered read cost the ADR-0050 mapping contract, whose whole premise is that
+  every approximation is reported rather than silent.
+
 - **Export-first.** Rejected: contradicts the brief's MoSCoW (XER export / full
   round-trip is a Won't-have "for now", §8) and delivers no switching-cost value.
   Kept as an explicit, product-gated later milestone.
