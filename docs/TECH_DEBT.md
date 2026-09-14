@@ -10311,3 +10311,50 @@ replace and is therefore not a stable resting place. And the ordering argument a
 its favour: the assertion would go green on the day it lands, so this gets cheaper to do and never
 harder. Re-open when a claim is next added to `scripts/dependency-claims.json` — the one moment the
 hole is reachable, and the one moment somebody is already in the file.
+
+### 323. The minimap at scale is compressed by the DAY axis, and no lane remedy touches it
+
+**Status:** deferred · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (minimap-visual M6) · **Size:** M · **Owner:** web
+
+**This row exists so the next reader starts from the measurement rather than from the intuition
+that has now been wrong twice.** ADR-0142 D1 carries the decision; this is the number and the
+trigger.
+
+The M5 UX review judged the lane compression — 178 lane indices mapped linearly into 120 px — the
+dominant remaining term for the minimap's legibility on a real programme. Two remedies were
+approved on that reading and **neither survived being measured before it was built**:
+
+- **Omit `WBS_SUMMARY` and `LEVEL_OF_EFFORT`** (approved, then withdrawn — `m0-measurement.md`
+  §10.4). It moves the lane count 178 → **164**, not 178 → 9, because six ordinary tasks sit at
+  lanes up to 163; and it removes the 14 LOE bars, which are the only visible thing in that region.
+- **Map by occupied-lane rank** (approved, then withdrawn — §15). It collapses **zero** lanes on
+  every one of the eight seeded plans, and structurally so: `packLanes`
+  (`packages/layout/src/pack-lanes.ts:78-84`) opens a lane only when no existing lane is free, so a
+  packer cannot leave an empty one. It is not universally inert — it would help a plan the packer
+  never reached, i.e. an import whose best-effort phase 3 failed (ADR-0069), or one whose lanes have
+  been emptied by deletion or hand-placement — but none of those is the plan the complaint was about.
+
+**What the dominant term is**, measured on the flagship 2,160-activity plan at the shipped 200 × 120
+geometry (§15.2): the box is **9.5 % inked** (2,287 of 24,000 px); **every one of the 120 rows
+carries ink**; bars collide at **0.94 per inked pixel**, so the decimation policy is barely firing;
+and **99 % of bars (2,146 of 2,160) are floored to the 1 px minimum**. At 0.0456 px/day an activity
+must run 22 days to earn a second pixel and almost none do. The picture is a dust field because the
+plan is 2,160 short activities across twelve years, and that is a faithful rendering.
+
+**Every remaining candidate trades truthfulness or canvas for ink**, which is why this is a product
+decision and not a defect fix:
+
+- raise the bar-width floor to 2–3 px — a short activity becomes visible and its duration is
+  overstated by 22–44 days at this scale, and bars-per-inked-pixel rises, so the criticality
+  decimation starts firing where today it barely does;
+- a taller or wider box — buys pixels linearly and costs the diagram the same pixels, on the surface
+  ADR-0090/0091/0092/0099/0112 spent five epics recovering 45 px from;
+- accept it — the picture shows shape, density and viewport position, which is what a minimap is
+  for, and per-activity legibility at 1 px was never available.
+
+**Recommendation on record: accept.** Deferred rather than open because there is nothing to build
+until that is decided.
+
+**Re-open when** a planner reports the overview as unreadable on a plan they actually work on — and
+when they do, take the ink measurement on **that** plan first, because this row is the third time an
+intuition about this picture has disagreed with its own arithmetic.
