@@ -1047,3 +1047,49 @@ substantially replaced by a column of summary dots. That is the honest cost, and
 way round: those summaries are real activities that were being painted out, and a reader who sees a
 dotted column at the data date is being told something true about the plan rather than something
 tidy.
+
+## 17. M8 — the panel border, and the number the M5 review was owed
+
+§14.4 recorded the UX review's chrome challenge and declined it in these words: _"Left as it is,
+with the challenge recorded, because the alternative is changing a shipped surface on an eye
+rather than a measurement."_ The product owner overruled it. **The measurement was then taken, and
+it agrees with the reviewer** — which is the part worth keeping: the challenge was right on a
+number, and the only reason it went unbuilt is that nobody had taken the number.
+
+| pair                                          |        ratio |    ΔE |
+| --------------------------------------------- | -----------: | ----: |
+| incumbent `border-border` vs the panel ground | **1.17 : 1** |  6.10 |
+| `--primary` (→ `--plot-primary`) vs the same  | **3.15 : 1** | 53.22 |
+| `--primary` vs the viewport rectangle's frame |     4.49 : 1 | 54.44 |
+| focus ring vs the new border                  |     1.68 : 1 | 15.60 |
+| focus ring vs the ground it sits on           |     5.30 : 1 |     — |
+
+**The finding is sharper than "the old app was primary".** The panel's ground is `--canvas` and so
+is the diagram it floats over, so its border is not decoration — it is the entire colour separation
+between the widget and the picture behind it, with `shadow-md` as the only other channel. At
+**1.17:1** there was effectively none. That is ADR-0141's opening finding one element further out:
+that ADR exists because the picture area measured 1.03:1 against the canvas it floats over and
+"read as a hole in the panel rather than as a picture", and nothing had asked the same question
+about the panel holding it.
+
+Gated at 3:1 in `token-contrast.test.ts` — WCAG 1.4.11's non-text floor, the same instrument as the
+frame pair, because the question is the same in kind. Verified red against the incumbent.
+
+### 17.1 Two risks checked rather than assumed, and a third left open
+
+- **A double rule.** At whole-plan zoom the viewport rectangle is congruent with the picture's edge
+  (§14.3), so it lands within a pixel or two of the panel border. Measured, they are **4.49:1 /
+  ΔE 54.44** apart — nothing like one line.
+- **The focus ring.** `--plot-ring` shares the border's hue (both at H 249), so a blue ring around a
+  blue border was a plausible regression. It is not: `ring-2` sits **outside** the border box, where
+  its neighbour is the ground at **5.30:1**, and it is ΔE 15.60 from the border — three times the
+  "unmistakable" threshold. The focus indicator is unaffected.
+- **Left open, and stated rather than glossed:** the border shares its value with the non-critical
+  bar ink, exactly (`--plot-primary` is the `bar` token). ADR-0141's collisions were two marks
+  **inside one picture**; this is a continuous rounded rule enclosing a header row and a picture, so
+  they separate by form. `apps/web/.screenshots/m8-border.png` shows the one place it is visible —
+  a bar running to the picture's left edge merges into the border there. **That shot is the journey's
+  3-activity fixture**, where bars occupy large fractions of the box; §15.2 measured that 99 % of
+  bars on a real plan are 1 px wide, so the merge is a property of the fixture rather than of the
+  product. Recorded as an observation, not built around, because insetting the picture on the
+  strength of a non-canonical fixture is the mistake §14.4 was trying to avoid in the first place.

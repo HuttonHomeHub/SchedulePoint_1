@@ -354,7 +354,26 @@ export function TsldMinimap({
       tabIndex={0}
       onKeyDown={onGroupKeyDown}
       aria-describedby="tsld-minimap-keys"
-      className="border-border bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border shadow-md focus-visible:ring-2 focus-visible:outline-none"
+      // **`border-primary`, not `border-border`** (minimap-visual M8). The panel's ground is
+      // `--canvas` and so is the diagram it floats over, so this border is the entire separation
+      // between the two and `shadow-md` is the only other channel. Measured, the grey was
+      // **1.17:1** against that ground (ΔE 6.10) — ADR-0141's opening finding one element
+      // further out, since that ADR exists because the picture area measured 1.03:1 against the
+      // same ground and read as a hole rather than a picture. `--primary` resolves through
+      // `[data-surface="canvas"]` to `--plot-primary` and clears WCAG 1.4.11's 3:1 at 3.15:1,
+      // gated in `token-contrast.test.ts`.
+      //
+      // It is a Tailwind utility deliberately: `border-primary` compiles to `var(--primary)`
+      // because the theme mapping is `@theme inline`, so it follows the surface rebind. A
+      // `getComputedStyle` read of `--color-primary` would NOT — that alias is substituted where
+      // it is declared, which is ADR-0102's finding and is why the painter takes its inks by raw
+      // name.
+      //
+      // It shares its value with the non-critical bar ink, which is stated rather than hidden:
+      // ADR-0141's collisions were two marks INSIDE one picture, and this is a continuous
+      // rounded rule enclosing a header row and a picture. The two are separable by form, and
+      // the frame it might have been confused with is 4.49:1 / ΔE 54.44 away from it.
+      className="border-primary bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border shadow-md focus-visible:ring-2 focus-visible:outline-none"
       style={{ bottom: 12 + bottomOffsetPx }}
     >
       {/* The keyboard contract, spoken once on focus (M4 a11y gate): role="group" carries no

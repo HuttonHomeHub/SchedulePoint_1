@@ -100,6 +100,22 @@ test.describe('The minimap', () => {
     const transparent = new Set(['rgba(0, 0, 0, 0)', 'transparent', '']);
     expect(transparent.has(await fillOfRect()), 'the viewport rectangle has a fill').toBe(false);
 
+    // ── The panel's edge is its separation from the diagram (minimap-visual M8).
+    //
+    // Only a browser can answer this one, and for a reason specific to this codebase.
+    // `border-primary` compiles to `var(--primary)`, which the `[data-surface="canvas"]` scope
+    // rebinds to `--plot-primary` — the diagram blue. Read any other way it resolves to the page
+    // theme's `--page-primary`, which is navy: ADR-0102's finding is that a `--color-*` alias is
+    // substituted where it is declared, so a scope can never reach it. A unit test cannot tell
+    // those two apart because jsdom applies no stylesheet at all, and both are plausible colours
+    // for a border, so the wrong one would look entirely deliberate.
+    const borderColour = await panel.evaluate((node) => getComputedStyle(node).borderTopColor);
+    // --plot-primary: oklch(0.624 0.115 249). Asserted as the resolved sRGB rather than as a
+    // token name, because the token name is exactly what the failure mode above gets right.
+    expect(borderColour, 'the panel border took the canvas scope’s primary').toBe(
+      'oklch(0.624 0.115 249)',
+    );
+
     // The picture is not blank: the build painted the ground and bars into the backing store.
     const painted = await picture.evaluate((canvas: HTMLCanvasElement) => {
       const ctx = canvas.getContext('2d');

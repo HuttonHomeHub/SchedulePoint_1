@@ -462,6 +462,38 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     ).toBeGreaterThanOrEqual(3);
   });
 
+  /**
+   * **The panel's own edge** (minimap-visual M8).
+   *
+   * The widget floats over the diagram and its ground is `--canvas` — the SAME token as the
+   * thing it floats over. So its border is not decoration: it is the only colour separating
+   * the panel from the picture behind it, and `shadow-md` is the only other channel.
+   *
+   * Measured, the incumbent `border-border` (→ `--plot-border` → `--page-border` inside the
+   * canvas scope) is **1.17:1** against that ground, ΔE 6.10. That is ADR-0141's opening
+   * finding one element further out: that ADR was written because the picture area measured
+   * 1.03:1 against the canvas it floats over and "read as a hole in the panel rather than as a
+   * picture" — and nothing had asked the same question about the panel.
+   *
+   * The M5 UX review challenged the chrome on the old application's treatment (a primary-
+   * coloured border) and I recorded it as "left as it is … the alternative is changing a
+   * shipped surface on an eye rather than a measurement". The measurement exists now and it
+   * agrees with the reviewer, which is the part worth keeping: the challenge was right on a
+   * number, and the reason it went unbuilt was that nobody had taken the number.
+   *
+   * Gated at 3:1 — WCAG 1.4.11's non-text floor, the same instrument as the frame pair above,
+   * because the question is identical in kind: can a reader see where this boundary is.
+   * `--primary` resolves through the canvas scope to `--plot-primary` and clears it at 3.15:1.
+   */
+  it('the panel border separates the widget from the diagram it floats over (3:1)', () => {
+    const value = ratio(tokens, '--canvas', '--primary');
+    expect(
+      value,
+      `the minimap panel's border on --canvas is ${fmtRatio(value)} — the panel's ground is the ` +
+        'same token as the diagram behind it, so this border is the whole separation',
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it('both halves are REACHABLE — the @theme inline block aliases them to --color-* names', () => {
     // The M4 component review's finding: the pair was declared at :root and referenced from the
     // component as var(--color-canvas-minimap-frame) — but only the `@theme inline` block turns a
