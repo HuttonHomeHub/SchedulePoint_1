@@ -172,7 +172,12 @@ waits for. Re-running it is `EXPLAIN (ANALYZE)` on the constant M2 ships.
 because one was judged too small. §19.3's rule binds a change; declining to make one is the decision
 it exists to protect.
 
-### The M2 throttle number, derived (spec Q-e)
+### The M2 throttle number, derived (spec Q-e) — **superseded, see the M4 addendum below**
+
+> **Both halves of this section turned out to be wrong**, and it is left standing rather than edited
+> because the way it was wrong is the finding: it derives a press cost from **one** query when the
+> press is four, and it asserts a rate limit that was never wired into the handler at all. The
+> corrected derivation is at the end of this file.
 
 The spec carries **6 / 60 s** as a placeholder "revisited against M0-T2's measured cost". It is
 revisited here, and it survives — but it survives because a number was taken, not because nobody
@@ -479,3 +484,92 @@ FROM generate_series(1, 100000) g;
 COMMIT;
 ANALYZE activities; ANALYZE resource_assignments; ANALYZE resources;
 ```
+
+---
+
+## M4 addendum (2026-09-13) — D-B was never costed, and it is the expensive half
+
+**Everything above measures D-A.** That is not a framing choice made here; it is what M0-T2's
+committed condition said, and it was correct on the day, because D-B was not yet a decided entry.
+By the time the route shipped it was, and nothing went back to measure it. The M4
+backend-performance review found that, measured it, and the numbers below were then **re-derived
+independently** with the four SQL constants extracted verbatim from the shipped
+`staff-diagnostics.registry.ts` rather than retyped.
+
+**Why it went unmeasured is worth more than the number.** `feature-spec.md` §0's decision table
+describes D-B's tables as _"activities, plans, calendars (+ the driving CTE only for the RD
+branch)"_ — i.e. cheaper than D-A, no resource join. The **shipped** query joins
+`resource_assignments` and `resources` unconditionally, because that is how it excludes D-A's
+population (the three exclusions in the entry's own docblock). A planning artefact said the entry
+was cheap, the entry stopped being that, and the cost task was scoped to its sibling. That row is
+corrected in the spec rather than left.
+
+### Measured
+
+Same database as above (`app_test`, PostgreSQL 16.13), M0's variant-A fixture plus 100,000 plain
+`TASK` activities with no calendar of their own — **D-B's worst shape**, and the ordinary one: an
+activity that names no calendar is the common case, not an edge case, and every XER import produces
+a plan whose calendar is not 24 hours.
+
+Non-vacuity control first, and it is not a formality — it is what says the expensive query was
+doing work: `da-denominator 200`, `da-numerator 200|1|1`, `db-denominator 102000`,
+`db-numerator 101800|1|1`.
+
+| Query                                                        | 102,000 activities, D-B's worst shape |
+| ------------------------------------------------------------ | ------------------------------------- |
+| D-A denominator                                              | 26.3 / 26.8 / 30.6 ms                 |
+| D-A numerator                                                | 30.2 / 31.3 / 31.8 ms                 |
+| D-B denominator                                              | 24.9 / 25.5 / 25.7 ms                 |
+| **D-B numerator**                                            | **240.4 / 244.2 / 244.7 ms**          |
+| **The press — all four, in the order the service runs them** | **327 / 328 / 328 ms**                |
+
+**D-B's numerator is three quarters of the press.** Its plan estimates `rows=1` against an actual
+**101,800** and then joins that whole matched set row by row. That is M0's own finding — the
+planner drives from where the selective filter is, not from where the `FROM` clause starts — landing
+on a different join in a different query that nobody re-derived it for.
+
+**One rewrite was tried and rejected on measurement.** The plan's `Sort` node reads
+`actual time=249.330..258.530` beside an aggregate at 287 ms, which looks exactly like two
+`count(DISTINCT …)` dominating the cost. Removing both measures **228–256 ms against 288–304 ms** —
+19 %, because that `Sort` timing is inclusive of its 223 ms child. The expensive thing is the
+matched-set join, there is no cheap rewrite, and the hypothesis was disproved in two minutes by
+running it rather than by reasoning about it.
+
+### The throttle, re-derived — and it was never wired in at all
+
+The section above derived **6 / 60 s** from D-A alone and said it "survives". Two things were wrong
+with that, found independently by three reviewers:
+
+1. **The route shipped at 30 / 60 s.** It carried no decorator of its own and inherited the
+   controller's, while ADR-0140 D7, the implementation plan and this file all asserted 6 — and
+   `staff-throttle.structural.spec.ts` structurally **forbade** the override, asserting `@Throttle`
+   appeared exactly once in the file. A decision recorded in three documents, contradicted by a gate,
+   and absent from the code.
+2. **204 ms was one query, not a press.** The press is four.
+
+Re-derived against the measurement above: **327 ms a press**, so 6 / 60 s caps one caller at
+**~2.0 s of database time a minute** and the inherited 30 would cap them at **~9.8 s**. The
+reopening trigger is unchanged — a press reaching one recalculate-equivalent, ADR-0116 M6's measured
+846 ms at 2,000 activities — and at 327 ms it does not fire. The decorator now exists, on the
+handler, and the gate was amended to admit a **strictly tighter** override and to refuse a widening
+one, verified red three ways including against the exact absence this pass found.
+
+### D-B's re-arm trigger, which it did not have
+
+M0-T3's trigger is written for D-A's candidate index and says nothing about D-B. D-B gets its own,
+in the same form so neither is the special case:
+
+> **M0-T3 opens for D-B if a press against the deployed database exceeds 500 ms**, or if D-B's
+> numerator alone exceeds 300 ms. Re-running it is `EXPLAIN (ANALYZE)` on the constant the registry
+> ships.
+
+500 rather than 100 because the answer for D-B is already known to be "not an index": the candidate
+with the right polarity (`activities(id) WHERE deleted_at IS NULL AND calendar_id IS NULL`) was
+built inside a rolled-back transaction and **the planner does not choose it** — the predicate matches
+too large a fraction of the table to offer selectivity, which is M0-T3's own conclusion arriving at
+a different query by the same route. So the trigger is set where the remedy would have to be
+something else: a narrower question, a cached answer, or a different shape entirely.
+
+**Still not the deployed number.** Everything here is a synthetic fixture on a test database. The
+figure `docs/TECH_DEBT.md` #86's M0-T3 is owed remains owed until somebody presses the button on
+the host — which is the whole reason the panel exists.

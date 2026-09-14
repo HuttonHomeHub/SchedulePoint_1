@@ -22,6 +22,7 @@ import {
   statusSentence,
   tableLabel,
 } from '@/features/staff/model/retention-copy';
+import { DiagnosticsPanel } from '@/features/staff/ui/diagnostics-panel';
 import { Panel } from '@/features/staff/ui/panel';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 
@@ -98,6 +99,7 @@ export function StaffConsoleScreen(): React.ReactElement {
       </header>
       <MailHealthPanel />
       <PerformanceProbePanel />
+      <DiagnosticsPanel />
       <RetentionPanel />
       <SecurityPanel />
       <InstallationPanel />

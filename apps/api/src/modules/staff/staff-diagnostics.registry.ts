@@ -26,6 +26,25 @@ export const DIAGNOSTIC_IDS = ['day-factor-divergence', 'inherited-day-factor'] 
 export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
 
 /**
+ * **What a non-zero count MEANS, and it is a field rather than a sentence for a measured reason.**
+ *
+ * Both entries today are `retrospective`: they size whose stored numbers changed meaning when a
+ * release landed, not work that is wrong now. The M4 UX review found that nothing on screen or in
+ * the paste-ready block said so — so "17 of 1,284" reads as "17 activities are broken right now" to
+ * anybody who has not read ADR-0139, which is nearly everybody who will later read the pasted block.
+ *
+ * The cheap fix was one sentence on the panel. It was rejected because it is true only by
+ * coincidence: the day somebody adds a prospective diagnostic, a global sentence **lies** and
+ * nothing fails. A closed two-value literal on the entry makes the compiler ask instead, and it
+ * costs the row shape nothing that matters — it carries no installation data, exactly like `label`,
+ * which is why gate S-1 admits it alongside the other registry literals rather than being widened
+ * to admit a string.
+ */
+export const DIAGNOSTIC_NATURES = ['retrospective', 'prospective'] as const;
+
+export type DiagnosticNature = (typeof DIAGNOSTIC_NATURES)[number];
+
+/**
  * One named question.
  *
  * `denominator` counts the population the question is *about*; `numerator` counts the subset that
@@ -36,6 +55,8 @@ export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
 export interface DiagnosticEntry {
   readonly id: DiagnosticId;
   readonly label: string;
+  /** Whether a non-zero count describes work that is wrong NOW, or work that once was. */
+  readonly nature: DiagnosticNature;
   /** `SELECT count(*) AS examined FROM …` */
   readonly denominator: Prisma.Sql;
   /** `SELECT count(*) AS affected, count(DISTINCT …) AS affected_plans, … FROM …` */
@@ -71,6 +92,7 @@ export interface DiagnosticEntry {
 const DAY_FACTOR_DIVERGENCE: DiagnosticEntry = {
   id: 'day-factor-divergence',
   label: 'Day factor divergence (driving resource)',
+  nature: 'retrospective',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -121,12 +143,37 @@ const DAY_FACTOR_DIVERGENCE: DiagnosticEntry = {
  *   `RESOURCE_DEPENDENT` because `effectiveOf` ignores a driver entirely for every other type — a
  *   `TASK` with an assigned resource keeps its own calendar (the A5500 contrast), so counting it
  *   here would follow a rule the engine does not.
- * - the inner join to `calendars` plus `hours_per_day_minutes <> 1440` — a plan with no calendar, a
- *   soft-deleted one, or a genuine 24-hour day all resolve to 1440 under both rules.
+ * - the join to `calendars` plus `hours_per_day_minutes <> 1440` — a plan with no calendar, or one
+ *   whose calendar row is gone entirely, resolves to 1440 under both rules, and a genuine 24-hour
+ *   day is the same number either way.
+ *
+ * **That third exclusion said "or a soft-deleted one" and carried `AND c.deleted_at IS NULL`, and
+ * both were wrong.** `CalendarRepository.findHoursPerDayMinutes` is *deliberately* unfiltered by
+ * `deleted_at` and `archived_at` — its own docblock says filtering there "would drop the row and
+ * silently reinterpret that activity's duration" — so a soft-deleted calendar resolves to its
+ * **stored** `hours_per_day_minutes`, and only an id with no row at all falls to the constant. The
+ * filter therefore excluded exactly the activities this diagnostic exists to find, whenever a
+ * plan's calendar had been soft-deleted, and it disagreed with the sibling entry above, whose
+ * unfiltered `LEFT JOIN calendars` is documented as correct for this same reason (spec §0 F2). The
+ * M4 test review found the asymmetry by reading the two queries side by side.
+ *
+ * The case has **no fixture witness and cannot have one**: the `CALENDAR_IN_USE` guard refuses to
+ * delete a calendar an active plan references, so a soft-deleted plan calendar is not reachable
+ * through the public API at all. What protects it is the absent clause plus this paragraph, which
+ * is weaker than a test and is said out loud rather than implied.
+ */
+/**
+ * **Measured cost (M4, and it had none until then):** 240–245 ms for this numerator at 102,000
+ * activities in the shape that maximises its matched set — three quarters of the whole press, and
+ * the more expensive of the two entries under the *ordinary* data shape rather than a pathological
+ * one. Its own re-arm trigger, which M0-T3's does not cover, is in `m0-measurements.md`'s M4
+ * addendum. The entry shipped uncosted because a planning document described it as joining no
+ * resource tables, which the shipped query does.
  */
 const INHERITED_DAY_FACTOR: DiagnosticEntry = {
   id: 'inherited-day-factor',
   label: 'Day factor divergence (inherited plan calendar)',
+  nature: 'retrospective',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -139,7 +186,7 @@ const INHERITED_DAY_FACTOR: DiagnosticEntry = {
            count(DISTINCT a.organization_id) AS affected_organizations
     FROM activities a
     JOIN plans p     ON p.id = a.plan_id AND p.deleted_at IS NULL
-    JOIN calendars c ON c.id = p.calendar_id AND c.deleted_at IS NULL
+    JOIN calendars c ON c.id = p.calendar_id
     LEFT JOIN resource_assignments ra ON ra.activity_id = a.id
                                      AND ra.is_driving = true
                                      AND ra.deleted_at IS NULL

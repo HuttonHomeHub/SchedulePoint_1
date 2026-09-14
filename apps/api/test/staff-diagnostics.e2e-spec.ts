@@ -46,6 +46,7 @@ interface Actor {
 interface DiagnosticRow {
   id: string;
   label: string;
+  nature: string;
   examined: number;
   affected: number;
   affectedPlans: number;
@@ -166,6 +167,18 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       .expect(201);
   }
 
+  /** An assignment that is NOT the driver — the witness for `ra.is_driving = true`. */
+  async function assignNonDriving(
+    actor: Actor,
+    activityId: string,
+    resourceId: string,
+  ): Promise<void> {
+    await actor.agent
+      .post(`${org}/activities/${activityId}/assignments`)
+      .send({ resourceId, budgetedUnits: 1, isDriving: false })
+      .expect(201);
+  }
+
   /**
    * The discriminating fixture. Five activities across two plans in one organisation:
    *
@@ -195,6 +208,34 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
    *   back to the activity's own, so the two coincide.
    * - Row 5 is the 24-hour plan, where the old fallback constant and the correct answer agree.
    * - Row 3 named its own calendar, so it never reached the inherit sentinel at all.
+   *
+   * **Rows 8 to 10 were added by the M4 test review, which found the diagnostic's own PREMISE
+   * unwitnessed.** Every `drive()` call hard-codes `isDriving: true` and nothing was ever
+   * reassigned, so `ra.is_driving = true` and `ra.deleted_at IS NULL` — the two clauses that make
+   * this "the DRIVING resource's calendar" rather than "any resource's" — could both be deleted
+   * with the suite green. And no `RESOURCE_DEPENDENT` activity named a calendar of its own, so the
+   * middle rung of both `COALESCE` chains was never reached: their argument order could be swapped
+   * and nothing would notice.
+   *
+   * | #  | Activity            | Shape                                                    | D-A | D-B |
+   * | -- | ------------------- | -------------------------------------------------------- | --- | --- |
+   * | 8  | Passenger lift      | RD on a 24 h crane held NON-driving, no driver at all     | no  | YES |
+   * | 9  | Reassigned lift     | RD whose crane assignment was UNASSIGNED, then re-driven  | no  | YES |
+   * | 10 | Own-calendar lift   | RD naming a 24 h calendar itself, driver has none         | no  | no  |
+   * | 11 | Unassigned lift     | RD whose only crane assignment was unassigned, no driver  | no  | YES |
+   *
+   * Row 8 has a live assignment to a diverging resource that is not the driver: drop
+   * `is_driving = true` and D-A counts it. Row 9 had its crane assignment unassigned and was then
+   * driven by a resource with no calendar: drop `ra.deleted_at IS NULL` and the stale 24-hour row
+   * makes D-A count it. Row 10 resolves `oc` through its **own** calendar rather than
+   * the plan's, which is the rung nothing else reaches.
+   *
+   * **Row 10 is a NEGATIVE witness, and that is the point of it** — the first draft of this table
+   * said `D-A: YES` and was wrong. With the activity naming 24 h and its driver naming nothing,
+   * `oc` and `sc` both resolve to that same 24 h calendar, so it is correctly not counted. Swap
+   * `oc`'s `COALESCE` to plan-before-activity and it resolves to 8 h while `sc` stays 24 h: the row
+   * turns positive and the count moves. A rung is witnessed by a row whose answer CHANGES when the
+   * rung changes, not by one that happens to be affected.
    */
   async function seedEstate(actor: Actor): Promise<void> {
     const eightHourDay = await calendar(actor, 'Crew (8h)', 8);
@@ -255,6 +296,74 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       .send({ name: 'Subcontractor', kind: 'LABOUR', calendarId: otherEightHourDay })
       .expect(201);
     await drive(actor, twin.body.data.id as string, subcontractor.body.data.id as string);
+
+    // Row 8 — the `is_driving` witness. A live assignment to the 24 h crane that is NOT the
+    // driver, so the activity falls back to the plan's day exactly as if the crane were not there.
+    const passenger = await actor.agent
+      .post(`${org}/plans/${planA}/activities`)
+      .send({ name: 'Passenger lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
+      .expect(201);
+    await assignNonDriving(actor, passenger.body.data.id as string, crane.body.data.id as string);
+
+    // Row 9 — the `ra.deleted_at` witness, and it took two attempts to build.
+    //
+    // The obvious construction is "drive it with the crane, then drive it with the gang", on the
+    // assumption that a second driving assignment supersedes the first. It does not: the service
+    // calls `clearDrivingForActivity`, which sets `is_driving = false` on the live row and deletes
+    // nothing (`resource-assignment.repository.ts:150-163`). So that shape is row 8 again, and
+    // dropping `ra.deleted_at IS NULL` stayed green against it — the witness witnessed nothing,
+    // which only running the mutation showed.
+    //
+    // The crane assignment is therefore UNASSIGNED, which is the one path that soft-deletes
+    // (`softDelete`, `:184-195`), leaving a row with `is_driving = true` AND `deleted_at` set. The
+    // gang then drives it and inherits, so the activity is correctly not D-A; the stale 24 h row is
+    // exactly what a missing `deleted_at IS NULL` picks up.
+    const reassigned = await actor.agent
+      .post(`${org}/plans/${planA}/activities`)
+      .send({ name: 'Reassigned lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
+      .expect(201);
+    const reassignedId = reassigned.body.data.id as string;
+    const craneAssignment = await actor.agent
+      .post(`${org}/activities/${reassignedId}/assignments`)
+      .send({ resourceId: crane.body.data.id, budgetedUnits: 1, isDriving: true })
+      .expect(201);
+    await actor.agent
+      .delete(`${org}/assignments/${craneAssignment.body.data.id as string}`)
+      .expect(204);
+    await drive(actor, reassignedId, gang.body.data.id as string);
+
+    // Row 10 — the activity-calendar rung of both COALESCE chains, which nothing else reaches: an
+    // RD activity naming a 24 h calendar of its own, driven by a resource that has none. `oc`
+    // resolves through `a.calendar_id`, and `sc` falls through the driver to the same place.
+    const ownCalendarLift = await actor.agent
+      .post(`${org}/plans/${planA}/activities`)
+      .send({
+        name: 'Own-calendar lift',
+        durationDays: 5,
+        type: 'RESOURCE_DEPENDENT',
+        calendarId: roundTheClock,
+      })
+      .expect(201);
+    await drive(actor, ownCalendarLift.body.data.id as string, gang.body.data.id as string);
+
+    // Row 11 — D-B's OWN copy of the `ra.deleted_at` clause, which row 9 does not reach.
+    //
+    // Row 9 has both a stale crane row and a live gang row, so under D-B's `count(*)` the activity
+    // is counted once either way: dropping the filter adds a second joined row that the
+    // `r.calendar_id IS NULL` test then throws away, and the live one still qualifies. The clause
+    // can only change an answer where the stale row is the ONLY one — so here the crane assignment
+    // is unassigned and never replaced. With the filter the activity inherits and is D-B; without
+    // it, the stale 24 h crane row makes `r.calendar_id` non-null and the activity vanishes from
+    // the count the diagnostic exists to produce.
+    const unassigned = await actor.agent
+      .post(`${org}/plans/${planA}/activities`)
+      .send({ name: 'Unassigned lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
+      .expect(201);
+    const orphaned = await actor.agent
+      .post(`${org}/activities/${unassigned.body.data.id as string}/assignments`)
+      .send({ resourceId: crane.body.data.id, budgetedUnits: 1, isDriving: true })
+      .expect(201);
+    await actor.agent.delete(`${org}/assignments/${orphaned.body.data.id as string}`).expect(204);
   }
 
   async function readDiagnostics(
@@ -275,7 +384,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     // D-A — the driving-resource half, `api-v0.62.0`. Only the crane lift: the inherit-driver lift
     // resolves to the SAME calendar it would have used anyway, so nothing about it changed meaning.
     expect(byId.get('day-factor-divergence')).toMatchObject({
-      examined: 3, // every RESOURCE_DEPENDENT activity was asked
+      examined: 7, // every RESOURCE_DEPENDENT activity was asked
       affected: 1,
       affectedPlans: 1,
       affectedOrganizations: 1,
@@ -284,11 +393,31 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     // D-B — the inherited-plan-calendar half, `api-v0.63.0`. The inheriting task AND the
     // inherit-driver lift; not the one naming its own calendar, and not the 24 h plan.
     expect(byId.get('inherited-day-factor')).toMatchObject({
-      examined: 7, // every activity in the estate
-      affected: 3,
+      examined: 11, // every activity in the estate
+      affected: 6,
       affectedPlans: 1,
       affectedOrganizations: 1,
     });
+  });
+
+  it('carries each entry’s nature, read from the registry rather than hard-coded', async () => {
+    // TypeScript stops the field being DROPPED — it is non-optional on the DTO — and stops nothing
+    // if a producer writes the wrong literal. Both entries are retrospective today, so this cannot
+    // catch a hard-coded `'retrospective'`; what it does assert is that the value survives the
+    // whole path and lands inside the closed vocabulary, which is what the panel branches on to
+    // tell a reader whether a count means "broken now" or "who to tell". Said plainly rather than
+    // left to look stronger than it is.
+    const staff = await signedInStaff();
+
+    const byId = await readDiagnostics(staff);
+
+    for (const [id, row] of byId) {
+      expect(['retrospective', 'prospective'], `${id} must carry a known nature`).toContain(
+        row.nature,
+      );
+    }
+    expect(byId.get('day-factor-divergence')?.nature).toBe('retrospective');
+    expect(byId.get('inherited-day-factor')?.nature).toBe('retrospective');
   });
 
   it('reports zeroes on an empty estate rather than omitting the rows', async () => {

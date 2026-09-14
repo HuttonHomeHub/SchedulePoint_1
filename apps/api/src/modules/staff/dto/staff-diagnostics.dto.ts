@@ -1,6 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-import { DIAGNOSTIC_IDS, type DiagnosticId } from '../staff-diagnostics.registry';
+import {
+  DIAGNOSTIC_IDS,
+  DIAGNOSTIC_NATURES,
+  type DiagnosticId,
+  type DiagnosticNature,
+} from '../staff-diagnostics.registry';
 
 /**
  * One named question's answer, and **the shape is the boundary** (ADR-0140 D2, clause 3).
@@ -40,6 +45,16 @@ export class StaffDiagnosticRowDto {
   })
   examined!: number;
 
+  @ApiProperty({
+    enum: DIAGNOSTIC_NATURES,
+    description:
+      'What a non-zero `affected` MEANS. `retrospective` sizes whose stored numbers changed ' +
+      'meaning when a release landed — the work is not wrong now, and the count says who to tell. ' +
+      '`prospective` sizes a defect that is still live. A registry literal from a closed union, ' +
+      'never data: it is a property of the question, not of this installation.',
+  })
+  nature!: DiagnosticNature;
+
   @ApiProperty({ description: 'How many of those rows answer the question.' })
   affected!: number;
 
@@ -57,7 +72,7 @@ export class StaffDiagnosticRowDto {
   @ApiProperty({
     description:
       'Wall-clock milliseconds for this entry’s two aggregates. Reported so the reader can see ' +
-      'what the press cost, which is the number the throttle was derived against.',
+      'what the press cost — the quantity the route’s rate limit is derived against.',
   })
   elapsedMs!: number;
 }
@@ -65,6 +80,7 @@ export class StaffDiagnosticRowDto {
 /** The whole response. `TransformInterceptor` adds the `{ data }` envelope around this. */
 export class StaffDiagnosticsDto {
   @ApiProperty({
+    format: 'date-time',
     description:
       'The SERVER clock at the moment the run started, never the browser’s. The copy block pastes ' +
       'this into a measurement record, where a client-set timestamp would be unfalsifiable.',

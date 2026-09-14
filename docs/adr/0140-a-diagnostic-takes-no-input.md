@@ -203,16 +203,34 @@ was judged too small: §19.3 binds a change, and declining to make one is the de
 
 The other two §4.5 arguments are untouched and still stand.
 
-### D7 — The throttle is derived from the measurement, and survives
+### D7 — The throttle is derived from the measurement — and the first version of this section was wrong twice, and was never built
 
-6 / 60 s, which was the spec's placeholder — kept because a number was taken, not because nobody
-looked. Worst measured press is 204 ms on an estate shape this installation is nowhere near, so one
-caller can impose at most 1.2 s of database time a minute; at the deployed size a press is ~1 ms and
-the rate is an abuse control rather than a cost one. It is tighter than the 30/min a new handler
-would otherwise inherit from the controller decorator — which is per-handler, not per-surface
-(`docs/TECH_DEBT.md` #315). **The number that would change it:** a press reaching ~800 ms, one
-recalculate-equivalent against ADR-0116 M6's measured 846 ms at 2,000 activities, would put ~4.8 s
-of database time a minute behind one button.
+6 / 60 s on the handler, tighter than the 30 / 60 s every other route on this controller inherits.
+**The number that would change it** is unchanged: a press reaching one recalculate-equivalent
+(~800 ms, ADR-0116 M6's measured 846 ms at 2,000 activities).
+
+**What this section said before the M4 gate pass, and why it is kept here rather than edited
+away.** It read _"kept because a number was taken… Worst measured press is 204 ms… It is tighter
+than the 30/min a new handler would otherwise inherit"_ — and:
+
+1. **It was never implemented.** The handler carried no decorator and inherited 30 / 60 s, while
+   this ADR, the implementation plan and `m0-measurements.md` all asserted 6. Worse,
+   `staff-throttle.structural.spec.ts` asserted `@Throttle` appeared **exactly once** in the file,
+   so the override this section describes was structurally forbidden by a gate in the same
+   repository. A decision recorded in three documents, refused by a gate, and absent from the code.
+   Three reviewers found it independently.
+2. **204 ms was one query, not a press.** The press is **four** — two entries, each a denominator
+   and a numerator — and D-B's numerator alone had never been measured at all.
+
+Re-measured on 2026-09-13 with the four constants extracted verbatim from the shipped registry:
+**327–328 ms a press** at 102,000 activities in the shape that maximises the matched set. So 6 / 60 s
+caps one caller at **~2.0 s** of database time a minute and the inherited 30 would cap them at
+**~9.8 s** — which is the trade this section always meant to make and did not.
+
+The gate was amended to admit a **strictly tighter** per-handler override, enumerated with its
+reason, and to keep refusing a widening one — which was the case it was written for, and is the
+opposite of what was needed here. Verified red three ways, including against the exact absence this
+pass found.
 
 ## Alternatives considered
 

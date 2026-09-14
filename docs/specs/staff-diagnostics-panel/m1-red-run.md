@@ -90,3 +90,76 @@ The gates hold the **shape**. They cannot tell whether the SQL is correct, wheth
 what the labels say, or whether the route is reachable — that is M2's API e2e and M3's journey.
 Nor can S-3 see a raw query reached through a helper defined in another module: it reads source
 text, and that blind spot is stated in its own docblock rather than implied.
+
+---
+
+## The M4 gate pass — six specialists, five blocked, sixteen defects
+
+Recorded here rather than in a commit message because the list is the useful part: **every one of
+these passed a human read**, and four of them passed a green test suite that was asserting the right
+thing about the wrong world.
+
+### Reached independently by more than one reviewer
+
+| Defect                                                                                                                                                                                                                                                                                                                     | Found by                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **The throttle ADR-0140 D7 decided was never implemented.** The handler inherited 30 / 60 s while the ADR, the plan and `m0-measurements.md` all asserted 6 — and `staff-throttle.structural.spec.ts` asserted `@Throttle` appeared _exactly once_, so the override three documents described was **forbidden by a gate**. | api, security, backend-performance |
+| **A failed re-run rendered the previous numbers under an error saying there were none.** `@tanstack/query-core`'s error reducer spreads the prior state and never clears `data`, so `result = query.data` survived both a failure and an in-flight refetch. The panel's own docblock promised the opposite.                | component, ux, accessibility       |
+| **Copy stayed live mid-refetch**, closing over the superseded reading — so an operator could paste last run's numbers into a measurement record believing them current.                                                                                                                                                    | component, ux                      |
+
+### Found once, and each a real defect
+
+- **D-B was never costed, and it is the expensive half** — 240–245 ms of a 327 ms press, against a
+  sibling entry that got a committed falsification condition, three fixture variants and an index
+  probe. It was scoped out because a planning document described it as joining no resource tables,
+  which the shipped query does. (backend-performance)
+- **D-B contradicted the spec's own F2 ruling.** Its `AND c.deleted_at IS NULL` excluded exactly the
+  activities the diagnostic exists to find whenever a plan's calendar had been soft-deleted —
+  while the sibling query's unfiltered join is documented as correct for that same reason.
+  (test-engineer)
+- **The diagnostic's own premise was unwitnessed.** Every `drive()` call hard-coded
+  `isDriving: true` and nothing was ever unassigned, so `ra.is_driving = true` and
+  `ra.deleted_at IS NULL` — the two clauses that make this "the DRIVING resource's calendar" rather
+  than "any resource's" — could both be deleted with the suite green. (test-engineer)
+- **Two structural assertions could not fail.** "Exports the registry frozen" was a whole-file
+  `toContain('as const')` satisfied by two unrelated declarations — one of which this milestone
+  added, taking the check from weak to vacuous without anybody touching it. "Declares the entry type
+  with exactly the closed key set" checked presence and not absence, under a docblock claiming a
+  widened type "cannot pass unremarked". (test-engineer)
+- **The focus test could not fail either.** `refetch` is a bare spy that never flips `isFetching`,
+  so the relabel it claims to prove never happened and the assertion held because nothing did.
+  (test-engineer)
+- **The clipboard rejection said nothing at all** — no visible change, nothing in the live region,
+  on a browser that refuses clipboard access, which is an ordinary configuration (WCAG 4.1.3).
+  (accessibility)
+- **"1 organisations"** on the commonest installation shape there is: the breakdown line was written
+  inline in the component with a hard-coded plural, beside a sentence that singularised correctly
+  through the pure model. (ux)
+- **Nothing said what a non-zero count MEANS.** Both entries are retrospective — they size whose
+  stored numbers changed meaning when a release landed — and neither the screen, the labels nor the
+  pasted block said so anywhere. "17 of 1,284" reads as "17 activities are broken right now" to
+  anybody who has not read ADR-0139. (ux)
+- **`aria-disabled` with no visual shading.** Every other such control in the codebase pairs it with
+  `aria-disabled:pointer-events-none aria-disabled:opacity-50`; this one had the attribute and no
+  treatment, so a sighted mouse user got no cue before pressing a control that would do nothing.
+  (component)
+- **A comment's arithmetic went stale in the commit that invalidated it**: "eight routes … 240 a
+  minute" became nine and 270 the moment this route landed. (security)
+
+### Two things this pass got wrong, corrected by running rather than reading
+
+- **The D-B rewrite that looked obvious.** Its plan shows a `Sort` node at
+  `actual time=249.330..258.530` beside a 287 ms aggregate, which reads as two `count(DISTINCT …)`
+  dominating the cost. Removing both saves **19 %** — that timing is inclusive of its 223 ms child.
+  There is no cheap rewrite, and the hypothesis died in two minutes because it was measured.
+- **The `deleted_at` witness that witnessed nothing.** Row 9 was built as "drive it with the crane,
+  then drive it with the gang", assuming the second supersedes the first. It does not:
+  `clearDrivingForActivity` sets `is_driving = false` and deletes nothing. The mutation stayed green
+  and only running it showed that — so the row now _unassigns_ the crane, which is the one path that
+  soft-deletes. Row 11 exists for the same reason one query along: D-B's copy of that clause cannot
+  be moved by row 9 at all, because a `count(*)` over two joined rows is unchanged when one of them
+  is discarded.
+
+Every fix carries a regression test verified red against the specific defect it names, and each
+mutation is recorded in the test's own comment rather than here. Three findings are filed rather
+than folded (`docs/TECH_DEBT.md` #319 and the two below), with reasons.

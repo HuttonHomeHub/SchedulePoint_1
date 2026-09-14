@@ -53,6 +53,7 @@ export class StaffDiagnosticsService {
     return {
       id: entry.id,
       label: entry.label,
+      nature: entry.nature,
       examined,
       affected: counts.affected,
       affectedPlans: counts.affectedPlans,

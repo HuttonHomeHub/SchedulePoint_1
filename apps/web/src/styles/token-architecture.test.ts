@@ -582,7 +582,15 @@ describe('weight is a governed axis', () => {
   // `<summary>` (`resource-strip-panel.tsx:335`) carries no weight at all — so it was the one-off,
   // not the match, and a `<summary>` already announces itself with a marker and a pointer cursor.
   // Removed rather than absorbed.
-  const SCREEN_WEIGHT_CEILING = 172;
+  // ...and 172 -> 173 (staff diagnostics M3): ONE weight, the `h3` naming each diagnostic inside
+  // the new Diagnostics panel — the same `h3`-matches-its-own-panel's-`h2` category the probe's
+  // M3 entry above records this ceiling as governing rather than forbidding. It is also the only
+  // channel available here: the heading is `text-sm` above a `text-sm` sentence, so without the
+  // weight nothing separates the question from its answer. The panel places no other weight, and
+  // the alternative considered — emphasising the count itself — was rejected for the reason the
+  // 167 -> 168 entry gives: the metadata line beside it is already `text-muted-foreground`, so a
+  // weight on the number would be a second channel doing the first one's job.
+  const SCREEN_WEIGHT_CEILING = 173;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

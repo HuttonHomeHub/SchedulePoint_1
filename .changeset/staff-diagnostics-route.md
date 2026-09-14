@@ -22,3 +22,13 @@ whose stored numbers changed meaning, not a live defect.
 The route accepts no parameter of any kind. That is the decision rather than a small API: a
 parameterless aggregate cannot be used to ask about anybody in particular, and a filter would make
 it a differencing oracle. A structural gate refuses an input decorator on the handler.
+
+It also carries the staff surface's first per-handler rate limit, 6 / 60 s against the 30 / 60 s
+every other route there inherits: the others read a small table and cost single-digit milliseconds,
+this one runs four aggregates over every activity in the installation, measured at 327 ms a press at
+102,000 activities. The structural gate that pinned "exactly one `@Throttle`" now admits a strictly
+tighter override, enumerated with its reason, and still refuses a widening one.
+
+Each row carries a `nature` — `retrospective` or `prospective` — saying whether a non-zero count
+describes work that is wrong now or work whose stored numbers changed meaning when a release landed.
+Both entries are retrospective today.

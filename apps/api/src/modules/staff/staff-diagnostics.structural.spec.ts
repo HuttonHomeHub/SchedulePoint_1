@@ -54,8 +54,20 @@ function read(path: string): string {
 // S-1 — the row DTO is all numbers
 // ---------------------------------------------------------------------------------------------
 
-/** The two properties allowed to be non-numeric, because they are the registry's own literals. */
-const LITERAL_PROPERTIES = ['id', 'label'];
+/**
+ * The properties allowed to be non-numeric, because they are the registry's own literals.
+ *
+ * **Each one carries a fact about the QUESTION and never about this installation**, which is the
+ * discriminator rather than "we decided these three were fine". `id` and `label` name the question;
+ * `nature` says what a non-zero answer to it means. None of them varies with the data, so none of
+ * them can disclose anything — and that is why widening this list is a decision about the registry's
+ * vocabulary rather than a hole in clause 1.
+ *
+ * A free-text `description` was the M4 UX review's first suggestion and was refused for the
+ * opposite reason: `string` is not a closed vocabulary, so the gate could no longer tell a literal
+ * from a value somebody interpolated.
+ */
+const LITERAL_PROPERTIES = ['id', 'label', 'nature'];
 
 /**
  * Every property declaration on `class StaffDiagnosticRowDto`, as `name → declared type`.
@@ -337,19 +349,49 @@ describe('S-4 — the SQL projects counts only (ADR-0140 D3.2)', () => {
 // ---------------------------------------------------------------------------------------------
 
 describe('S-5 — every registry entry produces the one fixed shape (ADR-0140 D2, clause 3)', () => {
-  it('declares the entry type with exactly the closed key set', () => {
+  it('declares the entry type with exactly the closed key set — no more, no fewer', () => {
     const source = read(REGISTRY_PATH);
+    const start = source.indexOf('interface DiagnosticEntry');
+    expect(start, 'DiagnosticEntry must exist').toBeGreaterThanOrEqual(0);
+    const body = source.slice(source.indexOf('{', start), source.indexOf('\n}', start));
 
-    // The type is the enforcement; this asserts the type says what the ADR says it says, so a
-    // widened entry type cannot pass unremarked while every runtime test stays green.
-    for (const key of ['id', 'label', 'denominator', 'numerator']) {
-      expect(source, `a registry entry declares ${key}`).toMatch(
-        new RegExp(`readonly\\s+${key}\\s*:`),
-      );
-    }
+    const declared = [...body.matchAll(/readonly\s+([A-Za-z_$][\w$]*)\s*[?]?\s*:/g)].map(
+      (m) => m[1],
+    );
+
+    // **Set equality, not presence.** The first version asserted each of the five keys appeared
+    // somewhere in the file, which is a different claim: adding `readonly filterHint?: string` to
+    // the interface left it green while its own docblock said "a widened entry type cannot pass
+    // unremarked". Found by the M4 test review. Scoped to the interface body as well, so a key
+    // named in a comment or in an entry literal cannot satisfy it.
+    expect(declared.sort()).toEqual(['denominator', 'id', 'label', 'nature', 'numerator']);
   });
 
   it('exports the registry frozen, so an entry cannot be added at runtime', () => {
-    expect(read(REGISTRY_PATH)).toContain('as const');
+    // **Scoped to the DIAGNOSTICS export.** A whole-file `toContain('as const')` was satisfied by
+    // `DIAGNOSTIC_IDS` and `DIAGNOSTIC_NATURES`, which are different declarations entirely — so
+    // deleting ` as const` from the registry itself, the exact defect this names, left the
+    // assertion green forever. The second `as const` was added by this same milestone, which is
+    // how a substring check goes from weak to vacuous without anybody touching it.
+    expect(read(REGISTRY_PATH)).toMatch(/export const DIAGNOSTICS = \[[^\]]*\] as const;/);
+  });
+
+  /**
+   * Every non-numeric property on the row is a CLOSED vocabulary, not a string.
+   *
+   * `LITERAL_PROPERTIES` above is the exception list for gate S-1, and an exception list is only
+   * as good as the thing it admits: a `nature: string` would satisfy S-1 while being an open field
+   * that anything could be interpolated into. This asserts each admitted literal is backed by an
+   * `as const` vocabulary the registry exports, so widening the shape means widening a vocabulary
+   * somebody has to write down.
+   */
+  it('backs every admitted literal with a closed vocabulary', () => {
+    const source = read(REGISTRY_PATH);
+
+    for (const vocabulary of ['DIAGNOSTIC_IDS', 'DIAGNOSTIC_NATURES']) {
+      expect(source, `${vocabulary} must be a closed const vocabulary`).toMatch(
+        new RegExp(`export const ${vocabulary} = \\[[^\\]]*\\] as const;`),
+      );
+    }
   });
 });

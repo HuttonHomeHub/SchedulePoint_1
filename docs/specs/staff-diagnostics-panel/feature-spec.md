@@ -114,12 +114,24 @@ counts are available:
 | ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Question         | how many RD activities' `durationDays` **changed value** when `api-v0.62.0` shipped | how many activities **right now** report float on 1440 while scheduling on their plan's day |
 | Predicate        | driving calendar ≠ own calendar                                                     | effective calendar id is `NULL` **and** the plan's calendar is not 1440                     |
-| Tables           | activities, plans, calendars, resource_assignments, resources                       | activities, plans, calendars (+ the driving CTE only for the RD branch)                     |
+| Tables           | activities, plans, calendars, resource_assignments, resources                       | activities, plans, calendars, resource_assignments, resources — **corrected 2026-09-13**    |
 | Nature           | **retrospective** — sizes who to tell                                               | **prospective** — sizes a live defect                                                       |
 | Likely magnitude | small (needs a resource on a different calendar)                                    | potentially **every activity in every plan with a non-24h calendar**                        |
 
 D-A is what the product owner asked for and is what this spec ships. **D-B is CQ-1**, because it is
 cheaper, it is almost certainly the larger number, and it measures something that is still wrong.
+
+> **Two of that row's claims were wrong, and the first one cost the epic a measurement.** The
+> shipped D-B joins `resource_assignments` and `resources` **unconditionally** — not "the driving
+> CTE only for the RD branch" — because that is how it excludes D-A's population. Described as the
+> cheaper query with no resource join, it was scoped out of M0-T2's cost task; measured at M4 it is
+> the **more expensive** of the two entries under the ordinary data shape (240–245 ms of a 327 ms
+> press). A planning artefact that was wrong about a query's shape is why nobody costed it.
+>
+> And "it measures something that is still wrong" lapsed before the entry was built: ADR-0139 fixed
+> the inherited-calendar defect and released it as `api-v0.63.0`, so D-B is **retrospective** like
+> its sibling. The population is identical; only its nature changed. Both corrections are in
+> [`m0-measurements.md`](m0-measurements.md)'s M4 addendum.
 
 ### F6 — Two things in the brief that are correct and were checked anyway
 
