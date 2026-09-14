@@ -85,10 +85,20 @@ describe('SmtpMailService', () => {
     // and therefore a live token — into the log through `err`, since Pino's default serializer
     // emits every enumerable own property, not just `message`/`stack`.
     //
-    // **Checked rather than assumed, and the specific worry did not hold.** `nodemailer@9.0.3`
-    // builds send errors in `_formatError` (`lib/smtp-connection/index.js:932-957`) and attaches
-    // exactly `response`, `responseCode` and `command` — the SERVER's reply and the SMTP verb.
-    // The `raw` fields elsewhere in that package are message-composition inputs, not error fields.
+    // **Checked rather than assumed, and the specific worry did not hold.** `nodemailer@10.0.9`
+    // builds send errors in `_formatError` (`lib/smtp-connection/index.js:932-957`) and attaches `code`,
+    // `response`, `responseCode` and `command` — an error-type string, the SERVER's reply and the
+    // SMTP verb. The `raw` fields elsewhere in that package are message-composition inputs, not
+    // error fields.
+    //
+    // Re-read at the 9 -> 10 major (2026-09-14), which is the bump most likely to have broken this.
+    // The FUNCTION is unchanged and still attaches nothing derived from the message, so the
+    // conclusion stands. Its ADDRESS moved: nodemailer 10 restructured into `dist/{cjs,esm}/`, so
+    // the path cited above no longer exists; the live location is recorded in the register as
+    // `dist/cjs/smtp-connection`, lines 768 onwards. The citation string is deliberately left at the
+    // v9 path: it is the registered `ref` in `scripts/dependency-claims.json`, which ADR-0077 also
+    // cites and ADRs are not rewritten. That a `ref` cannot express a path change is the cost
+    // `docs/TECH_DEBT.md` #181 is about.
     //
     // No redaction path was added for a field that does not exist. This test pins the property the
     // question was really about: whatever a transport hangs off its error, the token must not be

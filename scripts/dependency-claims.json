@@ -3,7 +3,7 @@
     "better-auth": "1.7.1",
     "better-call": "1.4.0",
     "@better-fetch/fetch": "1.3.1",
-    "nodemailer": "9.1.1",
+    "nodemailer": "10.0.9",
     "zod": "4.6.5",
     "@nestjs/throttler": "6.5.0",
     "react-hook-form": "7.88.0",
@@ -920,10 +920,13 @@
     {
       "ref": "index.js:932-957",
       "package": "nodemailer",
-      "path": "lib/smtp-connection/index.js",
-      "lines": "932-957",
+      "path": "dist/cjs/smtp-connection/index.js",
+      "lines": "768-790",
       "anchor": "_formatError(message, type, response, command) {",
-      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.spec.ts"]
+      "citedBy": [
+        "apps/api/src/common/mail/smtp-mail.service.spec.ts",
+        "docs/adr/0077-public-screens-brand-surface.md"
+      ]
     },
     {
       "ref": "coreBundle.js:13373",
