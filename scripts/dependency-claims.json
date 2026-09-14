@@ -38,7 +38,7 @@
       "package": "@better-fetch/fetch",
       "path": "dist/index.js",
       "lines": "733-739",
-      "anchor": "statusText: response.statusText",
+      "anchor": "    data: null,\n    error: __spreadProps(__spreadValues({}, errorObject), {\n      status: response.status,\n      statusText: response.statusText",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
         "docs/specs/public-screens-brand/feature-spec.md",
@@ -111,7 +111,7 @@
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
       "lines": "42-52",
-      "anchor": "const blockers = opts.getBlockers?.() ?? [];",
+      "anchor": "\t\tconst blockers = opts.getBlockers?.() ?? [];\n\t\tconst isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/unsaved-work-guard/architecture.md"
@@ -201,7 +201,7 @@
       "package": "@tanstack/react-router",
       "path": "dist/esm/link.js",
       "lines": "71-78",
-      "anchor": "ignoreBlocker",
+      "anchor": "\tconst { activeOptions, to, preload: userPreload, preloadDelay: userPreloadDelay, hashScrollIntoView, replace, startTransition, resetScroll, viewTransition, ignoreBlocker, disabled, target, onClick, onBlur, onFocus, onMouseEnter, onMouseLeave, onTouchStart } = options;\n\tconst isHydrated = useHydrated();",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/unsaved-work-guard/architecture.md"
@@ -267,7 +267,7 @@
       "package": "@tanstack/react-router",
       "path": "dist/esm/useBlocker.js",
       "lines": "59-65",
-      "anchor": "search: router.options.parseSearch(location.search)",
+      "anchor": "\t\t\t\t\tfullPath: foundRoute.fullPath,\n\t\t\t\t\tpathname: parsedLocation.pathname,\n\t\t\t\t\tparams: rawParams,\n\t\t\t\t\tsearch: router.options.parseSearch(location.search)",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/router-search-params/feature-spec.md",
@@ -295,7 +295,7 @@
       "package": "@tanstack/react-router",
       "path": "dist/esm/useBlocker.js",
       "lines": "78-86",
-      "anchor": "setResolver({",
+      "anchor": "\t\t\t\tsetResolver({\n\t\t\t\t\tstatus: \"blocked\",",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
@@ -371,7 +371,7 @@
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
       "lines": "183-194",
-      "anchor": "const searchStr = this.options.stringifySearch(parsedSearch);",
+      "anchor": "\t\t\t\t\tconst parsedSearch = this.options.parseSearch(search);\n\t\t\t\t\tconst searchStr = this.options.stringifySearch(parsedSearch);",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
         "docs/specs/router-search-params/implementation-plan.md"
@@ -554,7 +554,7 @@
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
       "lines": "287-288",
-      "anchor": "if (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
+      "anchor": "\tif (user.user.emailVerified) {\n\t\tif (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
       "citedBy": ["apps/web/src/routes/verify-email.tsx"]
     },
     {
@@ -645,8 +645,8 @@
       "ref": "password.mjs:174",
       "package": "better-auth",
       "path": "dist/api/routes/password.mjs",
-      "lines": "172",
-      "anchor": "return ctx.json({ status: true });",
+      "lines": "171-172",
+      "anchor": "\tif (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context.internalAdapter.deleteUserSessions(userId);\n\treturn ctx.json({ status: true });",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
     {
@@ -952,7 +952,7 @@
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
       "lines": "2882-2884",
-      "anchor": "options.shouldFocus &&",
+      "anchor": "        });\n        options.shouldFocus &&",
       "citedBy": ["docs/specs/activity-dialog-unification/feature-spec.md"]
     },
     {
@@ -1027,7 +1027,7 @@
       "package": "better-auth",
       "path": "dist/api/rate-limiter/index.mjs",
       "lines": "309-314",
-      "anchor": "}, {",
+      "anchor": "\t}, {\n\t\tpathMatcher(path) {",
       "citedBy": ["docs/TECH_DEBT.md"]
     },
     {
@@ -1114,7 +1114,7 @@
       "package": "@tanstack/router-core",
       "path": "dist/esm/route.d.ts",
       "lines": "438-444",
-      "anchor": "reset: () => void;",
+      "anchor": "    reset: () => void;\n};\nexport type NotFoundRouteProps = {",
       "citedBy": ["docs/TECH_DEBT.md"]
     },
     {
@@ -1122,7 +1122,7 @@
       "package": "@nestjs/core",
       "path": "nest-application-context.js",
       "lines": "119-125",
-      "anchor": "await this.callBeforeShutdownHook(signal);",
+      "anchor": "        await this.callDestroyHook();\n        await this.callBeforeShutdownHook(signal);",
       "citedBy": ["docs/TECH_DEBT.md"]
     },
     {
@@ -1130,7 +1130,7 @@
       "package": "@nestjs/core",
       "path": "nest-application-context.js",
       "lines": "201-204",
-      "anchor": "await this.callShutdownHook(signal);",
+      "anchor": "                await this.dispose();\n                await this.callShutdownHook(signal);",
       "citedBy": ["docs/TECH_DEBT.md"]
     },
     {
