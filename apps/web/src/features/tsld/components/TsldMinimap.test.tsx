@@ -53,6 +53,47 @@ describe('TsldMinimap', () => {
     expect(screen.getByTestId('tsld-minimap-rect')).toBeInTheDocument();
   });
 
+  /**
+   * M1-T2. Deliberately an assertion on the INLINE STYLE and nothing stronger, because jsdom
+   * has no layout and no colour pipeline: it cannot tell a value a browser paints from one it
+   * discards. So this pins that the declaration is present and points at the right custom
+   * property, and the two claims it CANNOT make are made elsewhere — that the token resolves
+   * to anything at all is `token-contrast.test.ts`'s reachability assertion (a `:root` token
+   * with no `@theme inline` alias paints nothing in a real browser while every computed gate
+   * stays green — ADR-0100 M4's own recorded defect in this token family), and that a reader
+   * can see it is the journey, which reads `getComputedStyle`.
+   */
+  it('the viewport rectangle carries a fill, not only a border (M1-T2)', () => {
+    mount();
+    const rect = screen.getByTestId('tsld-minimap-rect');
+    expect(rect.style.background).toBe('var(--color-canvas-minimap-frame-fill)');
+    // The frame pair is untouched: the fill is added BESIDE it, never in place of it.
+    expect(rect.style.border).toContain('var(--color-canvas-minimap-frame)');
+    expect(rect.style.outline).toContain('var(--color-canvas-minimap-frame-halo)');
+  });
+
+  /**
+   * **This case was VACUOUS as shipped at M2, and the M5 component review proved it by
+   * mutation** — changing the marker's `background` to `red` left it passing.
+   *
+   * The cause was a guard written to be careful: `mount()` passes no `todayDay`, so the
+   * component's own `todayDay = null` default applied, `todayX` resolved to `null`, the marker
+   * never rendered, and `if (today === null) return` took every run. The comment explaining the
+   * guard was correct about the hazard it named and wrong that the hazard applied — the fixture
+   * does not control whether today is in span, the **prop** does, and the file's own convention
+   * (`mount({ todayDay: 20 })`) was already sitting a few cases below.
+   *
+   * It is the exact shape M4 caught in M1's `it.each` (`m0-measurement.md` §13.1): a test that
+   * reads as coverage and asserts nothing — recurring one milestone later, in the epic that
+   * documented the pattern, in the sibling file.
+   */
+  it('the Today marker carries a halo, so it survives a bar of its own colour (M2)', () => {
+    mount({ todayDay: 20 });
+    const today = screen.getByTestId('tsld-minimap-today');
+    expect(today.style.background).toBe('var(--destructive)');
+    expect(today.style.boxShadow).toContain('var(--color-canvas-minimap-frame-halo)');
+  });
+
   it('states there is nothing to show when no activity has computed dates (AC-1.4)', () => {
     mount({ activities: [activity({ earlyStart: null, earlyFinish: null })] });
     expect(screen.getByText(/nothing to show yet/i)).toBeInTheDocument();

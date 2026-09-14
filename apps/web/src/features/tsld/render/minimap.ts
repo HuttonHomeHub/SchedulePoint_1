@@ -6,6 +6,7 @@ import {
   type Size,
   type Viewport,
 } from './geometry';
+import { calendarBoundaries } from './time-scale';
 import { daysBetween } from './working-time';
 
 /**
@@ -76,12 +77,55 @@ export interface MinimapPalette {
   readonly bar: string;
   /** Critical bar ink — the scene's `critical`; drawn LAST so it survives the merge. */
   readonly critical: string;
-  /** The scene's foreground `outline` — the critical FRINGE (WCAG 1.4.1, M4 a11y gate):
-   * hue is not the only channel separating critical from non-critical wherever a lane row
-   * is tall enough to carry it (see {@link CRITICAL_FRINGE_MIN_H}). */
+  /**
+   * Near-critical bar ink — the scene's `nearCritical` (minimap-visual M2).
+   *
+   * **It was missing, and that is a different defect from the collisions M2 exists to fix.** The
+   * scene paints three bar states and the minimap painted two: `isNearCritical` fell through to
+   * `bar`, so an activity a planner is being warned about looked exactly like one they are not.
+   * Not two marks sharing a token — a scene state with no mark at all (M0 §2.3, measured from a
+   * screenshot: the scene's amber `rgb(159,86,0)` against the minimap's `rgb(86,146,205)`).
+   *
+   * It costs nothing to gate: `token-contrast.test.ts`'s `CRITICALITY_PAIRS` already asserts all
+   * three canvas-scope pairs, so the separation this relies on was measured before it had a
+   * consumer here.
+   */
+  readonly nearCritical: string;
+  /**
+   * The scene's foreground `outline` — the critical FRINGE.
+   *
+   * **It is a SECOND lightness cue, not "the 1.4.1 answer", and the difference matters.** This
+   * docblock previously said the latter, and the M5 accessibility review read it exactly as
+   * written: that criticality depends on the fringe, that the fringe fires on neither measured
+   * plan, and that the minimap is therefore hue-only. The first premise is the one that is
+   * wrong, and it was wrong here rather than in the reviewer.
+   *
+   * The three bar inks are already separated on **lightness** — measured relative luminance
+   * 0.2152 (`--primary`) / 0.1234 (`--warning`) / 0.0626 (`--destructive`), a monotone ladder
+   * whose steps are roughly a halving, and which `CRITICALITY_PAIRS` gates at ≥ 1.5:1. That is
+   * ADR-0102's own work: it separated these on lightness precisely because they had differed
+   * "in hue and almost nothing else" at 1.23:1. A luminance ratio IS a lightness measure, so a
+   * hue-only ladder would read ~1.00:1 and this one reads 2.36 / 1.54 / 1.53.
+   *
+   * What the fringe adds on top is a second cue wherever a lane row can carry it (see
+   * {@link CRITICAL_FRINGE_MIN_H}) — belt-and-braces on tall rows, absent on the plans this
+   * epic measured (`pxPerLane` 2.93 at 540 activities, 0.674 at 2,160), and not the thing
+   * criticality rests on either way.
+   */
   readonly outline: string;
   /** The data-date vertical — the scene's `dataDate`. */
   readonly dataDate: string;
+  /**
+   * The minor temporal tier — the scene's `gridLineMonth` (minimap-visual M3).
+   *
+   * Drawn for whichever of month/quarter clears {@link MINIMAP_TIER_MIN_PX}; a quarter boundary
+   * IS a month boundary, so both use the month ink rather than inventing a third value nothing
+   * else in the product has a meaning for.
+   */
+  readonly gridMinor: string;
+  /** The year tier — the scene's `gridLineYear`. Drawn last of the tiers, so a coarser boundary
+   *  wins at a coincident x (ADR-0056's rule for the scene's own tiers). */
+  readonly gridYear: string;
 }
 
 /**
@@ -93,6 +137,50 @@ export interface MinimapPalette {
  * REPORTED in `token-contrast.test.ts`, the DAY-tier precedent.
  */
 export const CRITICAL_FRINGE_MIN_H = 3;
+
+/**
+ * The pitch below which a temporal tier is refused. **Set from rendered images, not by eye and
+ * not inherited** — `docs/specs/tsld-minimap-visual/m0-measurement.md` §7 records six candidate
+ * pitches drawn into the real 200×120 box with the real ground, grid and bar inks, twice each.
+ * At 1.5 px the rules are a solid wash, at 3 px a hatch, at 4.5 px the ground is visibly striped;
+ * 6 px is the lowest pitch at which they read as individual structure rather than as a texture.
+ *
+ * The scene's own day-tier floor (`DAY_GRID_MIN_PX`, `render/paint.ts`) is **also 6**, and that is
+ * corroboration rather than the derivation: its docblock gives a reason and cites no measurement,
+ * so deriving from it would inherit an unmeasured constant. The agreement supports the rule this
+ * ladder rests on — **a pitch ladder, not a tier name**: a 1 px vertical rule is legible or not at
+ * a given pitch whatever tier it belongs to.
+ *
+ * Its one recorded blind spot: the choice between 6 and 8 is unobservable on both measured plans,
+ * since neither admits the month tier either way. See §7.2.
+ */
+export const MINIMAP_TIER_MIN_PX = 6;
+
+/** Mean days per tier step — calendar-average, since the ladder is a legibility question about
+ *  typical pitch and not an exact boundary count. */
+const TIER_DAYS = { month: 30.44, quarter: 91.31, year: 365.25 } as const;
+
+/**
+ * Which temporal tiers this span can carry, at this box width.
+ *
+ * **At most two**: one minor tier plus the year. Month and quarter are never both drawn — a
+ * quarter boundary is a subset of the month boundaries, so drawing both paints the same rules
+ * twice in the same ink and buys nothing. The minor tier is therefore the FINEST of the two that
+ * clears the floor, which is the ladder §7.2 measures: on a 1,059-day plan quarter (17.2 px) and
+ * year (69.0 px); on a 4,385-day plan year (16.7 px) alone.
+ */
+export function minimapTiers(
+  spanDays: number,
+  boxWidth: number,
+): { minor: 'month' | 'quarter' | null; year: boolean } {
+  const pxPerDay = boxWidth / Math.max(1, spanDays);
+  const fits = (tier: keyof typeof TIER_DAYS): boolean =>
+    pxPerDay * TIER_DAYS[tier] >= MINIMAP_TIER_MIN_PX;
+  return {
+    minor: fits('month') ? 'month' : fits('quarter') ? 'quarter' : null,
+    year: fits('year'),
+  };
+}
 
 /**
  * The world→minimap mapping. `view` is a real {@link Viewport} so every x lands via
@@ -194,6 +282,9 @@ export interface MinimapRect {
   readonly w: number;
   readonly h: number;
   readonly critical: boolean;
+  /** Near-critical (minimap-visual M2). Its own field rather than a three-valued `criticality`
+   *  so the existing `critical` consumers are untouched — the parity the epic relies on. */
+  readonly nearCritical: boolean;
 }
 
 /**
@@ -225,6 +316,7 @@ export function minimapRects(
       w: Math.max(1, x1 - x0),
       h: Math.max(1, pxPerLane),
       critical: a.isCritical === true,
+      nearCritical: a.isNearCritical === true,
     });
   }
   return rects;
@@ -232,10 +324,13 @@ export function minimapRects(
 
 /**
  * Build the invariant plan picture into `ctx` (the caller's detached canvas). Two passes by
- * decision (see {@link minimapRects}); draw order IS the decimation policy — ground, then
- * non-critical, then critical, then the data-date vertical — because later strokes
- * overwrite earlier ones, so **the critical path survives the merge** wherever a critical
- * and a non-critical bar collapse onto the same pixel. Returns the mapping so the caller
+ * decision (see {@link minimapRects}); draw order IS the decimation policy — ground, tiers,
+ * the data-date vertical, then non-critical, near-critical and critical bars — because later
+ * strokes overwrite earlier ones, so **the critical path survives the merge** wherever a
+ * critical and a non-critical bar collapse onto the same pixel. The data date moved beneath
+ * the bars at M7: it outranks texture and does not outrank plan data, because a mark that
+ * outranks the whole bar ladder removes an activity class from the picture rather than
+ * winning a pixel. Returns the mapping so the caller
  * can place the DOM rectangle/overlays without re-deriving it, or `null` when nothing is
  * placeable (the caller shows the empty-state sentence instead of a blank picture).
  */
@@ -255,11 +350,76 @@ export function buildMinimapBitmap(
   if (extent === null) return null;
 
   const mapping = minimapViewport(extent, box);
+
+  // ── Temporal tiers, BENEATH the bars (minimap-visual M3, ADR-0100 D5 as amended).
+  //
+  // Beneath is the whole affordability argument: their only ground is `--canvas`, and
+  // `--canvas-grid-month`/`--canvas-grid-year` are already asserted ≥ 3:1 against it, so this
+  // adds **no new contrast pair**. Drawn over the bars they would need gating against both bar
+  // inks as well, and would be reading as noise over the very thing the picture is for.
+  //
+  // The boundaries come from `calendarBoundaries`, the same walk the scene's ruler uses — a
+  // second date walk is how two views drift about where a Monday is (ADR-0059). Minor first, year
+  // last, so a coarser boundary wins at a coincident x (ADR-0056's rule for the scene's tiers).
+  //
+  // Cost is bounded by the floor rather than by the plan: a tier is refused below
+  // `MINIMAP_TIER_MIN_PX`, so at most `box.width / 6` ≈ 33 rules per tier and at most two tiers.
+  // Still fillRect-only, still one `fillStyle` write per drawn tier, and a span that admits
+  // neither tier writes nothing at all.
+  const tiers = minimapTiers(mapping.spanDays, box.width);
+  if (tiers.minor !== null || tiers.year) {
+    const bounds = calendarBoundaries(extent.minDay, extent.maxDay, dataDate);
+    const stroke = (days: readonly number[], ink: string): void => {
+      ctx.fillStyle = ink;
+      for (const day of days) {
+        const x = Math.round(screenXOfDay(day, mapping.view));
+        if (x >= 0 && x <= box.width) ctx.fillRect(x, 0, 1, box.height);
+      }
+    };
+    if (tiers.minor !== null) {
+      stroke(tiers.minor === 'month' ? bounds.months : bounds.quarters, palette.gridMinor);
+    }
+    if (tiers.year) stroke(bounds.years, palette.gridYear);
+  }
+
+  // ── The data-date vertical (day 0 by definition — dates are drawn about the data date).
+  //
+  // **Beneath the bars, above the tiers** (minimap-visual M7). It used to be the last draw call,
+  // which painted out every zero-duration activity sitting on the data date — 76 milestones on the
+  // flagship plan (`m0-measurement.md` §10/§11.4). That is not a collision the decimation policy
+  // resolves: draw order IS that policy (ADR-0100 D5) and it ranks by urgency, so a mark that
+  // outranks the entire bar ladder removes a whole activity class from the picture rather than
+  // winning a pixel. It is also the one class of bar with no width to lose it in, and the loss is
+  // unreportable — a bar that is never drawn looks exactly like a bar that does not exist.
+  //
+  // It still outranks the tiers, which is the part that stays true: a grid rule is texture and the
+  // data date is plan data. At minimap scale the vertical crosses mostly empty lanes, so it reads
+  // as a full-height line regardless of the handful of bars now painted over it.
+  const dataDateX = screenXOfDay(0, mapping.view);
+  if (dataDateX >= 0 && dataDateX <= box.width) {
+    ctx.fillStyle = palette.dataDate;
+    ctx.fillRect(dataDateX, 0, 1, box.height);
+  }
+
   const rects = minimapRects(activities, dataDate, mapping);
   ctx.fillStyle = palette.bar;
   for (const r of rects) {
-    if (!r.critical) ctx.fillRect(r.x, r.y, r.w, r.h);
+    if (!r.critical && !r.nearCritical) ctx.fillRect(r.x, r.y, r.w, r.h);
   }
+  const anyNearCritical = rects.some((r) => r.nearCritical && !r.critical);
+  if (anyNearCritical) {
+    ctx.fillStyle = palette.nearCritical;
+    for (const r of rects) {
+      if (r.nearCritical && !r.critical) ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+  }
+  // Near-critical, between ordinary and critical — draw order IS the decimation policy (ADR-0100
+  // D5), so the ladder is painted in ascending urgency and the most urgent survives the 1px merge.
+  //
+  // **Guarded, so a plan with none pays nothing.** Without the guard every existing budget
+  // assertion would move from 4 style writes to 5 for a pass that draws zero rects, which is a
+  // gate loosened to accommodate a feature rather than a cost the feature actually has. The
+  // `fringed` guard immediately below is the same shape and the precedent.
   // The critical fringe (WCAG 1.4.1): where the row can carry it, a critical bar is a
   // foreground-luminance rect with the critical fill inset — lightness, not hue alone.
   // Still fillRect-only and still batched (one fillStyle write per pass), so the budget
@@ -279,11 +439,5 @@ export function buildMinimapBitmap(
     }
   }
 
-  // The data-date vertical (day 0 by definition — dates are drawn about the data date).
-  const dataDateX = screenXOfDay(0, mapping.view);
-  if (dataDateX >= 0 && dataDateX <= box.width) {
-    ctx.fillStyle = palette.dataDate;
-    ctx.fillRect(dataDateX, 0, 1, box.height);
-  }
   return mapping;
 }

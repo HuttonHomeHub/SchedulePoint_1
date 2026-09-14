@@ -49,13 +49,21 @@ import { describe, expect, it } from 'vitest';
 const SRC = resolve(__dirname, '..');
 
 /**
- * The one legitimate exception, and it is narrow: `--canvas-minimap-frame` and its halo are a PACK
- * pair rather than a surface-family member. They are not rebound by any scope, so the alias and the
- * unprefixed name are the same value everywhere — and `token-contrast.test.ts` separately asserts
- * that both halves are reachable THROUGH `@theme inline`, which is the only reason the alias exists.
- * Naming the alias there is correct rather than tolerated.
+ * The one legitimate exception, and it is narrow: the minimap indicator's `--canvas-minimap-frame`,
+ * its halo and its fill are a PACK rather than surface-family members. They are not rebound by any
+ * scope, so the alias and the unprefixed name are the same value everywhere — and
+ * `token-contrast.test.ts` separately asserts that all three are reachable THROUGH `@theme inline`,
+ * which is the only reason the alias exists. Naming the alias there is correct rather than
+ * tolerated.
+ *
+ * The fill joined them at minimap-visual M1-T2, and the exemption widened **only** because its
+ * premise holds for it identically: `token-architecture.test.ts` places it in the same `packs` set,
+ * so "not rebound by any scope" is asserted rather than assumed, and the alias-reachability
+ * assertion covers the fill's name too. If a later change ever rebinds one of these per scope, the
+ * architecture gate fails first and this exemption must go with it — they are one decision in two
+ * files.
  */
-const ALIAS_EXEMPT = /^--color-canvas-minimap-frame(-halo)?$/;
+const ALIAS_EXEMPT = /^--color-canvas-minimap-frame(-halo|-fill)?$/;
 
 function sourceFiles(dir: string = SRC, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

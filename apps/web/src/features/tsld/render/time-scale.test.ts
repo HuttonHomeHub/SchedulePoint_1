@@ -207,6 +207,21 @@ describe('calendarBoundaries', () => {
     expect(months).toContain(29); // Mar 1 — proves Feb had 29 days
   });
 
+  /**
+   * `quarters`' own selection rule, which the M5 component review found had no content coverage:
+   * the shape assertions pinned an EMPTY array on a degenerate span, so a transposed month test
+   * (`m === 2` for `m === 1`) would have shipped undetected — on a computation that is visible on
+   * every plan whose minimap admits the quarter tier.
+   */
+  it('selects Jan/Apr/Jul/Oct as the quarter starts, a subset of the month starts', () => {
+    // A full year from 1 Jan 2026. Month starts fall on the 1st of each month; the quarter
+    // starts are 1 Jan (0), 1 Apr (90), 1 Jul (181) and 1 Oct (273) — 2026 is not a leap year.
+    const { months, quarters } = calendarBoundaries(0, 365, '2026-01-01');
+    expect(months).toHaveLength(13); // 1 Jan 2026 … 1 Jan 2027 inclusive
+    expect(quarters).toEqual([0, 90, 181, 273, 365]);
+    for (const q of quarters) expect(months, 'every quarter start is a month start').toContain(q);
+  });
+
   it('returns empty rows when the span contains no boundary', () => {
     // Mid-month span with no 1st-of-month: 2026-03-10 (offset 0) .. 2026-03-14 (offset 4).
     // `startMonthIndex` is still reported — it is the absolute month ordinal of the first visible
@@ -214,6 +229,7 @@ describe('calendarBoundaries', () => {
     // happens to contain a boundary.
     expect(calendarBoundaries(0, 4, '2026-03-10')).toEqual({
       months: [],
+      quarters: [],
       years: [],
       startMonthIndex: 2026 * 12 + 2,
     });

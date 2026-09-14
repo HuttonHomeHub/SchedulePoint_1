@@ -4271,6 +4271,14 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
    draggable — `cursor-grab` is invisible before hover and absent on touch. Click-to-jump
    and the keyboard cover the function; the convention (IDE minimaps) covers most readers.
    If first-contact feedback says otherwise, corner ticks or a faint fill are the shape.
+   > **CLOSED 2026-09-14** (minimap-visual M1). First-contact feedback said otherwise — the
+   > product owner called the minimap "extremely basic" and said it does not pop — and the
+   > remedy is the one **this item named**: a faint fill. The rectangle now carries
+   > `--canvas-minimap-frame-fill` beside its two-tone frame, so the region reads as an object
+   > rather than as a boundary without hover and on touch. Measured in the shipped render at
+   > **ΔE 5.01** against the canvas behind the panel (ratio 1.126:1 — which is why the
+   > perceptibility gate is a ΔE one; a contrast ratio calls a visible chroma shift invisible).
+   > Gated by two assertions in `token-contrast.test.ts`, both verified red.
 2. **Q2 (command-strip promotion) was decided against pre-Graphite arithmetic** (ux): the
    "no room" conclusion cites measurements taken before ADR-0099 reshaped the strip. The
    default stands (product owner Q2) and the minimap item still sits in `View ▾`; if it is
@@ -4287,6 +4295,15 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
    copy bar but offers no route; reachable only when an open panel's plan loses its
    computed dates, and the canvas beneath carries its own actionable prompt. One "add an
    activity" line if it ever surfaces in use.
+   > **RE-FILED, not folded in, 2026-09-14** (minimap-visual M4-T2). This item's own condition is
+   > _"if it ever surfaces in use"_, and it **has not**: every screenshot the epic took — the
+   > 10-activity fixture, the 2,160-activity scale plan, the today-spanning plan, band on and
+   > band off — had computed dates, so the empty state was never reached. The epic was one
+   > milestone away and touched the same component, which is exactly the circumstance in which a
+   > deferred item gets folded in on the strength of being nearby; it stays deferred because its
+   > trigger is a fact about use rather than about proximity. Recorded rather than left silent,
+   > per ADR-0114: a deferral whose reason has lapsed reads exactly like one whose reason still
+   > holds — and so does the reverse.
 4. **`handleClose`'s chain has no last resort** (accessibility): if both the captured
    opener and `dismissFocusRef` are unusable, focus stays put. Unreachable today —
    `TsldPanel` always wires the listbox ref — noted in the handler's comment.
@@ -10240,7 +10257,7 @@ stale.
 
 ### 322. Nothing stops a NEW dependency claim being registered with a non-unique anchor
 
-**Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (the better-auth 1.7.1 → 1.7.4 bump) · **Size:** S · **Owner:** repo
+**Status:** deferred · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (the better-auth 1.7.1 → 1.7.4 bump) · **Size:** S · **Owner:** repo
 
 **The exposure this row was filed for is CLOSED; what remains is recurrence.** Read the history
 below before acting, because the remedy changed once the cost was measured.
@@ -10282,3 +10299,108 @@ widened, so the assertion would go green on the day it lands rather than red aga
 register. That ordering was the reason the widening went first.
 
 Sized **S**: one assertion plus its red-verified test, against a register that already satisfies it.
+
+**Deferred on the product owner's decision (2026-09-14), and the status word is doing work.**
+`open` would read as "the register can be fooled", which is precisely what the widening closed —
+all 112 anchors are unique today and each of the 13 was proven to reject its own old location. What
+is deferred is **enforcement against a future registration**, which is a different and smaller
+claim. Two things follow. The exposure returns the moment somebody registers a one-line anchor that
+happens to occur twice, and nothing will say so — so until the assertion lands, **checking
+uniqueness is a manual step when adding a claim**, which is exactly the vigilance ADR-0058 says to
+replace and is therefore not a stable resting place. And the ordering argument above still holds in
+its favour: the assertion would go green on the day it lands, so this gets cheaper to do and never
+harder. Re-open when a claim is next added to `scripts/dependency-claims.json` — the one moment the
+hole is reachable, and the one moment somebody is already in the file.
+
+### 323. The minimap at scale is compressed by the DAY axis, and no lane remedy touches it
+
+**Status:** deferred · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (minimap-visual M6) · **Size:** M · **Owner:** web
+
+**This row exists so the next reader starts from the measurement rather than from the intuition
+that has now been wrong twice.** ADR-0142 D1 carries the decision; this is the number and the
+trigger.
+
+The M5 UX review judged the lane compression — 178 lane indices mapped linearly into 120 px — the
+dominant remaining term for the minimap's legibility on a real programme. Two remedies were
+approved on that reading and **neither survived being measured before it was built**:
+
+- **Omit `WBS_SUMMARY` and `LEVEL_OF_EFFORT`** (approved, then withdrawn — `m0-measurement.md`
+  §10.4). It moves the lane count 178 → **164**, not 178 → 9, because six ordinary tasks sit at
+  lanes up to 163; and it removes the 14 LOE bars, which are the only visible thing in that region.
+- **Map by occupied-lane rank** (approved, then withdrawn — §15). It collapses **zero** lanes on
+  every one of the eight seeded plans, and structurally so: `packLanes`
+  (`packages/layout/src/pack-lanes.ts:78-84`) opens a lane only when no existing lane is free, so a
+  packer cannot leave an empty one. It is not universally inert — it would help a plan the packer
+  never reached, i.e. an import whose best-effort phase 3 failed (ADR-0069), or one whose lanes have
+  been emptied by deletion or hand-placement — but none of those is the plan the complaint was about.
+
+**What the dominant term is**, measured on the flagship 2,160-activity plan at the shipped 200 × 120
+geometry (§15.2): the box is **9.5 % inked** (2,287 of 24,000 px); **every one of the 120 rows
+carries ink**; bars collide at **0.94 per inked pixel**, so the decimation policy is barely firing;
+and **99 % of bars (2,146 of 2,160) are floored to the 1 px minimum**. At 0.0456 px/day an activity
+must run 22 days to earn a second pixel and almost none do. The picture is a dust field because the
+plan is 2,160 short activities across twelve years, and that is a faithful rendering.
+
+**Every remaining candidate trades truthfulness or canvas for ink**, which is why this is a product
+decision and not a defect fix:
+
+- raise the bar-width floor to 2–3 px — a short activity becomes visible and its duration is
+  overstated by 22–44 days at this scale, and bars-per-inked-pixel rises, so the criticality
+  decimation starts firing where today it barely does;
+- a taller or wider box — buys pixels linearly and costs the diagram the same pixels, on the surface
+  ADR-0090/0091/0092/0099/0112 spent five epics recovering 45 px from;
+- accept it — the picture shows shape, density and viewport position, which is what a minimap is
+  for, and per-activity legibility at 1 px was never available.
+
+**Recommendation on record: accept.** Deferred rather than open because there is nothing to build
+until that is decided.
+
+**Re-open when** a planner reports the overview as unreadable on a plan they actually work on — and
+when they do, take the ink measurement on **that** plan first, because this row is the third time an
+intuition about this picture has disagreed with its own arithmetic.
+
+**Two measurements are owed before this is treated as settled rather than deferred**, both raised by
+the M8 UX review and both agreed. Every plan measured above is **freshly packed**, and the flagship
+is the fixture `m0-measurement.md` §10.3 disowned — its 160 `WBS_SUMMARY` rows are zero-span
+placeholders at the data date, and §10.3 says outright that whether a **genuine** subtree rollup
+forces its own lane is untested. So:
+
+1. a plan whose lanes the packer never reached — an import whose ADR-0069 phase 3 failed, or one
+   edited by dissolve/regroup (ADR-0063), bulk delete/restore, or hand-placement (ADR-0052). That is
+   the shape where occupied-lane rank is **not** the identity, and it is closer to an aged
+   programme than a scale generator's output;
+2. a plan with multi-day WBS rollups, which is what "real WBS structure" meant in the original
+   finding.
+
+Both are a SQL query away — the same cheap move that produced this row. Neither changes the
+structural argument (a packer still leaves no gaps); both bear on whether the **domain** claim was
+right, and it is the domain claim that was refused here.
+
+### 324. Every focus ring in the product is a `box-shadow`, and `forced-colors` suppresses box-shadow
+
+**Status:** unverified · **Raised:** 2026-09-14 (the minimap M8 accessibility review, out of scope for that diff) · **Size:** M · **Owner:** web
+
+The house convention is `focus-visible:outline-none` plus a `focus-visible:ring-*` box-shadow —
+**61 occurrences across 49 files** in `apps/web/src`. Windows High Contrast (`forced-colors: active`)
+suppresses `box-shadow` and does **not** suppress a native `outline`, so in that mode a control
+following this convention would show **no focus indicator at all**. That is WCAG 2.2 §2.4.7 Focus
+Visible (level A) on every focusable control in the product, not a corner of one.
+
+**Filed `unverified` deliberately, and the word is doing work.** The mechanism is documented
+behaviour rather than something observed here: nothing in this repository has ever been run under
+`forced-colors`, there is no `@media (forced-colors: active)` block in `globals.css`, no
+`forced-color-adjust` anywhere, and no gate that could see it — axe does not emulate the mode, and
+Playwright's `forcedColors` option has never been set in any of the 43 configs. So the claim to
+check first is not "is box-shadow suppressed" (it is) but **"does this product actually lose its
+focus ring there"**, which wants one run before any remedy is designed.
+
+**It is not the minimap's and it is not M8's.** The convention predates both; M8 changed a border
+colour and inherited the pattern. It is recorded here rather than in that milestone precisely so it
+is not mistaken for something that epic introduced — and because a finding raised in a review of
+something else is the easiest kind to lose.
+
+**The cheap first step** is a `forcedColors: 'active'` Playwright project over one existing journey,
+which answers the question for real and costs a config entry. The remedy, if it fires, is likely the
+standard one — pair the ring with a transparent `outline` so the forced-colors palette has something
+to paint — and that is a change to a shared primitive's focus treatment, so ADR-0111 §19.13 applies
+and it needs a review before release rather than after.

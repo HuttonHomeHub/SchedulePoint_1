@@ -76,6 +76,7 @@ D7 built a parallel a11y layer instead.
    only channel where the row can carry more; below 3 px the picture degrades to hue plus
    the scene's own dash/outline cues one surface up — REPORTED, not asserted, in
    `token-contrast.test.ts` per the day-tier precedent.
+
 6. **The culled-id set is not the minimap's subject**, and `paintScene`'s docblock
    claiming the minimap as its consumer is corrected — the culled set is what is ON
    screen; the minimap's subject is the whole plan.

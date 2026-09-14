@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { compositeOver, fmtRatio, parseColour, relativeLuminance, type Srgb } from '@/test/colour';
+import {
+  compositeOver,
+  contrastRatio,
+  deltaE76,
+  fmtRatio,
+  parseColour,
+  relativeLuminance,
+  type Srgb,
+} from '@/test/colour';
 import {
   blockBody,
   declarations,
@@ -351,6 +359,11 @@ const MINIMAP_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
   ['the minimap ground', '--canvas'],
   ['non-critical bar ink', '--primary'],
   ['critical bar ink', '--destructive'],
+  // The THIRD bar ink, added at minimap-visual M2. The M5 accessibility review caught its
+  // absence, and the reason it matters is this file's own recorded failure mode: a sweep that
+  // does not contain the ground a mark actually crosses is green for not having looked. The
+  // Today marker and the viewport frame both cross near-critical bars now.
+  ['near-critical bar ink', '--warning'],
 ];
 
 describe('the minimap rectangle frame is perceivable on everything it crosses', () => {
@@ -369,6 +382,123 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     ).toBeGreaterThanOrEqual(3);
   });
 
+  /**
+   * **The fill's own pair, and it takes a DIFFERENT instrument** (minimap-visual M1-T1).
+   *
+   * Two assertions, because the fill has two jobs and one number cannot judge both:
+   *
+   * 1. The tinted region must be **perceptible** against the untinted one, or the fill is
+   *    decoration. That is a ΔE question, not a contrast-ratio one — a ratio is blind to a
+   *    chroma shift at equal lightness, and M0 measured the old app's amber viewport fill at
+   *    **1.073:1** (which reads as "invisible") and **ΔE 8.33** (which is what a reader sees).
+   *    Asserting the ratio here would have picked a dark neutral at α=0.21 — three and a half
+   *    times the ink, for a picture that dims the region the reader is looking at.
+   * 2. Criticality must **survive** the tint, since the fill sits over both bar inks. This is
+   *    the spec's original assertion, kept — and M0's measurement reframes it as a CEILING on
+   *    alpha rather than the thing that picks it: a neutral fill holds 2.02:1 at α=0.40,
+   *    against a 1.5 floor, so it never binds at any alpha a designer would choose.
+   *
+   * Both verified red: (1) against α=0.01, which gives ΔE ≈ 0.9 — necessary because a ΔE
+   * assertion passes at every alpha once the fill is visible at all, so it is exactly the shape
+   * of gate that can be green for having tested nothing; (2) against an alpha high enough to
+   * collapse the pair.
+   */
+  it('the viewport fill is PERCEPTIBLE against the untinted ground (ΔE ≥ 5)', () => {
+    const ground = fillOf(tokens);
+    const tinted = compositeOver(parseColour(tokens.get('--canvas-minimap-frame-fill')!), ground);
+    const delta = deltaE76(tinted, ground);
+    expect(
+      delta,
+      `the viewport fill over --canvas is ΔE ${delta.toFixed(2)} — below 5 it is decoration`,
+    ).toBeGreaterThanOrEqual(5);
+  });
+
+  /**
+   * **The whole criticality ladder through the fill, not one pair of it** (M4).
+   *
+   * M1 shipped this as an `it.each` over two grounds whose body ignored the parameter and
+   * computed `--primary` vs `--destructive` both times — the same assertion twice, reading as
+   * two. It also predated M2, which gave the minimap a **third** bar state, so the two pairs
+   * involving `--warning` were composited by nothing.
+   *
+   * That mattered: measured from the shipped render, critical vs near-critical is **1.54:1** and
+   * near-critical vs ordinary **1.53:1**, against the 1.5 floor. The margin is three hundredths,
+   * so these are exactly the pairs an un-composited gate would let drift.
+   *
+   * `CRITICALITY_PAIRS` is reused rather than restated, so a fourth bar state is swept here the
+   * day it is added to that list — the alternative is a second list that agrees until it does not.
+   */
+  it.each(CRITICALITY_PAIRS)(
+    'the fill preserves %s vs %s (%s)',
+    (a: string, b: string, why: string) => {
+      const fill = parseColour(tokens.get('--canvas-minimap-frame-fill')!);
+      const through = (token: string): Srgb =>
+        compositeOver(fill, compositeOver(parseColour(tokens.get(token)!), fillOf(tokens)));
+      const value = contrastRatio(through(a), through(b));
+      expect(
+        value,
+        `${why} THROUGH the viewport fill is ${fmtRatio(value)}`,
+      ).toBeGreaterThanOrEqual(1.5);
+    },
+  );
+
+  /**
+   * **The Today marker's pair** (minimap-visual M2). Same shape as the frame's assertion and for a
+   * sharper reason: the marker IS `--destructive`, so on a critical bar the pair's first half is
+   * 1.00:1 by definition and the halo carries the whole thing. M0 §6 proved that live — the
+   * marker's computed background is `oklch(0.439 0.175 27)`, and sampling its column found
+   * `rgb(156,7,17)` over ground, byte-identical to the critical bar it crosses.
+   *
+   * The acceptance condition is deliberately "distinguishable **where it crosses a critical
+   * bar**", not "the two tokens differ": the second is satisfiable by a change that leaves them
+   * close, and closeness is not the defect — identity on one specific ground is.
+   */
+  it.each(MINIMAP_GROUNDS)('the Today marker or its halo clears 3:1 on %s', (_name, ground) => {
+    const line = ratio(tokens, ground, '--destructive');
+    const halo = ratio(tokens, ground, '--canvas-minimap-frame-halo');
+    expect(
+      Math.max(line, halo),
+      `Today pair on ${ground}: line ${fmtRatio(line)}, halo ${fmtRatio(halo)}`,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **The panel's own edge** (minimap-visual M8).
+   *
+   * The widget floats over the diagram and its ground is `--canvas` — the SAME token as the
+   * thing it floats over. So its border is not decoration: it is the only colour separating
+   * the panel from the picture behind it, and `shadow-md` is the only other channel.
+   *
+   * Measured, the incumbent `border-border` (→ `--plot-border` → `--page-border` inside the
+   * canvas scope) is **1.17:1** against that ground, ΔE 6.10. That is ADR-0141's opening
+   * finding one element further out: that ADR was written because the picture area measured
+   * 1.03:1 against the canvas it floats over and "read as a hole in the panel rather than as a
+   * picture" — and nothing had asked the same question about the panel.
+   *
+   * The M5 UX review challenged the chrome on the old application's treatment (a primary-
+   * coloured border) and I recorded it as "left as it is … the alternative is changing a
+   * shipped surface on an eye rather than a measurement". The measurement exists now and it
+   * agrees with the reviewer, which is the part worth keeping: the challenge was right on a
+   * number, and the reason it went unbuilt was that nobody had taken the number.
+   *
+   * Gated at 3:1 — WCAG 1.4.11's non-text floor. **The SC applies because of the widget, not
+   * because the grounds match**, which is the M8 accessibility review's correction to this
+   * docblock's first version: ADR-0055 settled that `--border` is decoration and 1.4.11-exempt,
+   * so a same-background `Card` stays exempt at 1.17:1. What puts this boundary in scope is that
+   * the panel is a `role="group" tabIndex={0}` composite widget with its own keyboard contract —
+   * a control boundary, not a divider. The matching grounds are why the old value was invisible;
+   * they are not why the floor applies. `--primary` resolves through the canvas scope to
+   * `--plot-primary` and clears it at 3.15:1.
+   */
+  it('the panel border separates the widget from the diagram it floats over (3:1)', () => {
+    const value = ratio(tokens, '--canvas', '--primary');
+    expect(
+      value,
+      `the minimap panel's border on --canvas is ${fmtRatio(value)} — the panel's ground is the ` +
+        'same token as the diagram behind it, so this border is the whole separation',
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it('both halves are REACHABLE — the @theme inline block aliases them to --color-* names', () => {
     // The M4 component review's finding: the pair was declared at :root and referenced from the
     // component as var(--color-canvas-minimap-frame) — but only the `@theme inline` block turns a
@@ -378,7 +508,14 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     // asserted geometry, and the journey asserted visibility. Verified red against the
     // alias-less CSS before the aliases were added.
     const css = readGlobalsCss();
-    for (const name of ['canvas-minimap-frame', 'canvas-minimap-frame-halo']) {
+    for (const name of [
+      'canvas-minimap-frame',
+      'canvas-minimap-frame-halo',
+      // M1-T1: the fill joins the list for the same reason the other two are on it — a :root
+      // token with no `@theme inline` alias paints NOTHING in a real browser while every
+      // computed assertion above stays green, because they read the :root value directly.
+      'canvas-minimap-frame-fill',
+    ]) {
       expect(css, `@theme inline must alias --${name}`).toMatch(
         new RegExp(String.raw`--color-${name}:\s*var\(--${name}\);`),
       );

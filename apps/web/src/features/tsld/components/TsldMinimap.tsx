@@ -354,7 +354,50 @@ export function TsldMinimap({
       tabIndex={0}
       onKeyDown={onGroupKeyDown}
       aria-describedby="tsld-minimap-keys"
-      className="border-border bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border shadow-md focus-visible:ring-2 focus-visible:outline-none"
+      // **`border-primary`, not `border-border`** (minimap-visual M8). The panel's ground is
+      // `--canvas` and so is the diagram it floats over, so this border is the entire separation
+      // between the two and `shadow-md` is the only other channel. Measured, the grey was
+      // **1.17:1** against that ground (ΔE 6.10) — ADR-0141's opening finding one element
+      // further out, since that ADR exists because the picture area measured 1.03:1 against the
+      // same ground and read as a hole rather than a picture. `--primary` resolves through
+      // `[data-surface="canvas"]` to `--plot-primary` and reaches 3.15:1, gated in
+      // `token-contrast.test.ts`.
+      //
+      // **Why WCAG 1.4.11 applies here is the widget, NOT the matching grounds** — the M8
+      // accessibility review's correction, and it matters because the wrong reason generalises
+      // badly. ADR-0055 settled that `--border` is decoration and 1.4.11-exempt while `--input`
+      // identifies a control and is gated; by that rule a `Card` sharing its background with the
+      // page stays exempt at 1.17:1, so "same ground on both sides" cannot be what brings a
+      // boundary into scope. What does is that this panel is a `role="group" tabIndex={0}`
+      // composite widget — arrow-key pan, a draggable rectangle, Escape to dismiss — so its edge
+      // is a control boundary rather than a divider. The matching grounds are the evidence that
+      // the old value was invisible; the interactivity is the reason the floor applies at all.
+      //
+      // It is a Tailwind utility deliberately: `border-primary` compiles to `var(--primary)`
+      // because the theme mapping is `@theme inline`, so it follows the surface rebind. A
+      // `getComputedStyle` read of `--color-primary` would NOT — that alias is substituted where
+      // it is declared, which is ADR-0102's finding and is why the painter takes its inks by raw
+      // name.
+      //
+      // **`p-px` is load-bearing, not spacing.** The border shares its value with the
+      // non-critical bar ink exactly, and the bitmap is flush to three of the panel's edges by
+      // CONSTRUCTION rather than by accident: `worldExtent` takes `minDay`/`maxDay`/`maxLane`
+      // from the actual extremes, so on every plan the earliest activity's bar starts at x=0,
+      // the latest ends at x=width, and the highest lane's bar bottom is at y=height. A bar
+      // therefore touches the border on any plan whose extreme activity is non-critical — the
+      // common case — and the two merge at 1:1 (sampled: rgb(75,140,202) against
+      // rgb(71,132,189)). The M8 write-up called that a property of the fixture; the M8 UX
+      // review showed it is a property of the mapping, and it was right.
+      //
+      // One pixel of the panel's own ground between the border and the bitmap makes the
+      // border's inside neighbour `--canvas` on every plan, which is the pair it is gated
+      // against at 3.15:1. It costs 2px of panel size and NO data — the bitmap keeps its full
+      // 200×120. The alternatives were measured and are worse: the old application's own
+      // `--primary-color` is `#14213D`, which is **1.00:1** against `--canvas-minimap-frame`,
+      // so copying it exactly would have collided the panel border with the viewport rectangle
+      // beside it (that app paired navy with an AMBER viewport band; ours is dark), and no blue
+      // clears 3:1 from both the near-white ground and the bar ink at once.
+      className="border-primary bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border p-px shadow-md focus-visible:ring-2 focus-visible:outline-none"
       style={{ bottom: 12 + bottomOffsetPx }}
     >
       {/* The keyboard contract, spoken once on focus (M4 a11y gate): role="group" carries no
@@ -419,24 +462,58 @@ export function TsldMinimap({
               }}
             />
           ) : null}
-          {/* Today vertical — positioned on the same minute tick as the canvas Today marker. */}
+          {/* Today vertical — positioned on the same minute tick as the canvas Today marker.
+              Its **halo** is not decoration (minimap-visual M2). `today` and `critical` are the
+              same token, `--destructive`, which M0 proved live rather than by reading: the
+              marker's computed background is `oklch(0.439 0.175 27)` and a critical bar paints
+              `rgb(156,7,17)`, so sampling the marker's column found it byte-identical to the bar
+              over ground and INVISIBLE wherever it crosses one. On a real programme that is most
+              of the ink, and the mark saying "where we are now" was disappearing on exactly the
+              rows a planner cares most about.
+
+              The fix keeps the scene's hue — the ADR-0059 rule that two views of one plan do not
+              disagree about what a thing looks like — and buys legibility with a second channel
+              instead, which is the `--canvas-minimap-frame` pair's answer to the same problem one
+              element over. `box-shadow` rather than `outline` because the rectangle beside it
+              already uses `outline` for its own halo, and two meanings for one property on
+              sibling nodes is how the next reader gets it wrong. */}
           {todayX !== null ? (
             <div
               aria-hidden="true"
               data-testid="tsld-minimap-today"
               className="pointer-events-none absolute inset-y-0"
-              style={{ left: todayX, width: 1, background: 'var(--destructive)' }}
+              style={{
+                left: todayX,
+                width: 1,
+                background: 'var(--destructive)',
+                boxShadow: '0 0 0 1px var(--color-canvas-minimap-frame-halo)',
+              }}
             />
           ) : null}
           {/* The viewport rectangle: moved by the HOST's frame loop via style.transform. The
               two-tone frame pair is the WCAG 1.4.11 answer measured at M2-T1 — no single
               colour clears the ground and both bar inks, so the stroke holds the dark ground
-              and the halo holds the bars. */}
+              and the halo holds the bars.
+
+              **The fill is what makes it a region rather than a boundary** (minimap-visual
+              M1-T2). M0 measured the border at 14.13:1 against the ground — the loudest mark
+              in the widget by a factor of five — and found that at whole-plan zoom it is
+              congruent with the picture's own edge TO THE PIXEL, so the loudest thing on
+              screen delimits everything and therefore says nothing. The fix is not a bolder
+              line; a bolder line would make it worse. Alpha and hue are both derived, in
+              `globals.css` beside the token and in `token-contrast.test.ts`, which asserts
+              the fill's perceptibility in ΔE and criticality's survival in contrast ratio —
+              two instruments, because one number cannot judge both.
+
+              This node is the one the frame loop writes `style.transform` to, so it must not
+              be moved, renamed or wrapped: a wrapper would silently break the ADR-0026 D3
+              no-React-render contract. The fill is one more declaration on the same element. */}
           <div
             ref={rectRef}
             data-testid="tsld-minimap-rect"
             className="absolute top-0 left-0 will-change-transform"
             style={{
+              background: 'var(--color-canvas-minimap-frame-fill)',
               border: '1px solid var(--color-canvas-minimap-frame)',
               outline: '1px solid var(--color-canvas-minimap-frame-halo)',
               outlineOffset: '-2px',

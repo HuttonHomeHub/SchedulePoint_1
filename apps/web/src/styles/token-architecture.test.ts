@@ -133,6 +133,13 @@ const OUTSIDE_THE_CLOSURE = {
     // (MINIMAP_GROUNDS in token-contrast.test.ts), not by a scope's completeness.
     '--canvas-minimap-frame',
     '--canvas-minimap-frame-halo',
+    // Its FILL (minimap-visual M1-T1), by the same discriminator one step on: the fill and the
+    // frame are two properties of one object, so whatever governs the frame governs the fill.
+    // Its perceptibility is likewise gated by its own pairs rather than by a scope's
+    // completeness — and by a DIFFERENT instrument from the frame's, because "is this tint
+    // visible at all" is a chroma question a luminance ratio is blind to (ΔE, in
+    // `token-contrast.test.ts`; the measurement is in the minimap-visual M0 document).
+    '--canvas-minimap-frame-fill',
     '--ground',
     '--ground-end',
   ],

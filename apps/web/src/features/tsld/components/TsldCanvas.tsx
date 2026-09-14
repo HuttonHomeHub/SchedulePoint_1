@@ -1923,8 +1923,16 @@ export function TsldCanvas({
                   ground: palette.canvasGround,
                   bar: palette.bar,
                   critical: palette.critical,
+                  // The scene's third bar state, which the minimap did not have (M0 §2.3): every
+                  // near-critical activity painted as an ordinary one, so the picture showed two
+                  // states where the diagram beside it shows three.
+                  nearCritical: palette.nearCritical,
                   outline: palette.outline,
                   dataDate: palette.dataDate,
+                  // The temporal tiers (M3). The scene's own gridline inks — a whole-plan picture
+                  // with no time structure at all reads as a smear rather than a programme.
+                  gridMinor: palette.gridLineMonth,
+                  gridYear: palette.gridLineYear,
                 },
                 dpr,
               );
