@@ -597,7 +597,23 @@ describe('weight is a governed axis', () => {
   // the alternative considered — emphasising the count itself — was rejected for the reason the
   // 167 -> 168 entry gives: the metadata line beside it is already `text-muted-foreground`, so a
   // weight on the number would be a second channel doing the first one's job.
-  const SCREEN_WEIGHT_CEILING = 173;
+  // ...and 173 -> 168 (staff console design, M1-M5): FIVE weights OUT, and the epic's own
+  // falsification condition FC-3 asked for exactly that — it says this number must FALL to land the
+  // redesign, so a design needing it raised would have been a one-off wearing the archetypes'
+  // clothes. Four came from adopting the page archetypes rather than from cutting anything: three
+  // in `routes/staff.tsx` (9 -> 6) and one in `features/staff/ui/panel.tsx` (1 -> 0), where a
+  // hand-rolled panel title and hand-rolled metric tiles moved into `SectionCard` and `StatGrid` —
+  // both primitives, so the weights are still placed, just no longer by a screen. The fifth is a
+  // cut: the dual-hat `Alert`'s bold lead-in, the same category the 168 -> 170 entry above records
+  // removing three of, because an `Alert` already carries a tone colour, a coloured left accent
+  // bar, a leading icon and a role, so a bold opening clause is a fourth channel saying what four
+  // things already said. The console's other four `Alert` lead-ins STAY, and the discriminator is
+  // length rather than taste: a bold opening earns its place when the block is long enough that a
+  // scanning reader would otherwise have to READ it to tell which condition it is. That one is two
+  // sentences; the mail, retention-disabled, retention-failing and policy-caveat alerts run to
+  // three and four, and a reader scrolled to one of those cards is most of a page from the `Status`
+  // summary that would otherwise identify it.
+  const SCREEN_WEIGHT_CEILING = 168;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

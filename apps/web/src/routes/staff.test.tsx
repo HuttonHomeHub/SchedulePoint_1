@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StaffConsoleScreen } from './staff';
@@ -25,6 +25,43 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, apiFetch: vi.fn() };
 });
+
+/**
+ * The text of the panel's polite region — the `sr-only` `aria-live` sentence `Panel` renders.
+ *
+ * Read as text rather than queried by exact string, because the M2 merge made mail and retention
+ * ONE card with ONE composed sentence, so each subject's clause is now a substring. Asserting on
+ * the region rather than on the document is the part that must not be lost: the visible alerts say
+ * the same words, so a document-wide query would stay green while the announced line went back to
+ * claiming health during a failure — which is the exact defect the accessibility review found.
+ *
+ * Returns every polite region joined, so a future second one cannot silently drop out of the
+ * assertion; today there is one per rendered `Panel`.
+ */
+/**
+ * Assert a sentence inside a named section, not across the whole document.
+ *
+ * **Since the M3 summary, the console states each condition TWICE on purpose** — tersely at the top
+ * ("No mail transport is configured, so nothing is being delivered.") and in full in the panel that
+ * owns it ("… Every message is being written to the log instead of sent — which produces no
+ * failures, and is why the counts below read as healthy."). A summary that did not name the
+ * condition would not be a summary; FC-1 asks for exactly this. So five document-wide `getByText`
+ * assertions became ambiguous, and scoping them is the fix rather than weakening them to `getAll`:
+ * a `getAllByText(...).length > 0` would pass if the PANEL's sentence disappeared and only the
+ * summary's remained, which is the half these tests are about.
+ *
+ * It is also the ADR-0073 C2.5 rule this file already cites one helper up: a document-scoped
+ * assertion passed on a page's prose alone and proved nothing about the thing it named.
+ */
+function withinSection(name: string | RegExp): ReturnType<typeof within> {
+  return within(screen.getByRole('region', { name }));
+}
+
+function politeRegionText(): string {
+  return [...document.querySelectorAll('[aria-live="polite"]')]
+    .map((node) => node.textContent ?? '')
+    .join(' ');
+}
 
 function notFound(): ApiFetchError {
   return new ApiFetchError(404, { code: 'NOT_FOUND', message: 'Not found' });
@@ -282,7 +319,10 @@ describe('StaffConsoleScreen', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'Unverified accounts' })).toBeVisible();
-    expect(await screen.findByText(/3 accounts cannot complete/i)).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Unverified accounts' });
+    expect(
+      withinSection('Unverified accounts').getByText(/3 accounts cannot complete/i),
+    ).toBeInTheDocument();
     expect(await screen.findByText('stuck@example.test')).toBeInTheDocument();
   });
 
@@ -303,6 +343,49 @@ describe('StaffConsoleScreen', () => {
     expect(await screen.findByText(/panel read · accounts/i)).toBeInTheDocument();
   });
 
+  /**
+   * **The grouping is wired, not merely written.** `groupActivity` has its own suite; this asserts
+   * the panel actually renders through it, which is the seam ADR-0081 records milestones shipping
+   * unreached — a pure model with unit tests and no caller looks finished from every angle except
+   * the product.
+   *
+   * The fixture is one page load: six reads in the same second by one actor, which is what opening
+   * this console writes. Before the grouping, fifty entries were seven of these and almost nothing
+   * else.
+   */
+  it("collapses the console's own reads so the rows that matter are findable", async () => {
+    const at = '2026-08-09T10:00:00.000Z';
+    renderStaffWith({
+      '/staff/activity': [
+        ...['performance', 'installation', 'accounts', 'security', 'health', 'activity'].map(
+          (panel, index) => ({
+            id: `p${String(index)}`,
+            occurredAt: at,
+            action: 'staff.panel_read',
+            actorLabel: 'ops@schedulepoint.test',
+            subjectLabel: panel,
+          }),
+        ),
+        {
+          id: 'probe',
+          occurredAt: '2026-08-09T09:59:00.000Z',
+          action: 'staff.probe_recorded',
+          actorLabel: 'ops@schedulepoint.test',
+          subjectLabel: 'canvas-draw',
+        },
+      ],
+    });
+
+    // One row for the page load, naming every panel and its own size — nothing is hidden.
+    expect(
+      await screen.findByText(
+        '6 panel reads · performance, installation, accounts, security, health, activity',
+      ),
+    ).toBeInTheDocument();
+    // And the row that matters is no longer buried between six of them.
+    expect(screen.getByText('probe recorded · canvas-draw')).toBeInTheDocument();
+  });
+
   it('says an empty policy table is NOT proof the policy is clean', async () => {
     // The assertion that matters most on this panel. Delivery from a browser to the sink has never
     // been verified end to end (TECH_DEBT #117), so silence means "nothing arrived", not "nothing
@@ -311,7 +394,143 @@ describe('StaffConsoleScreen', () => {
     renderStaffWith({ '/staff/csp-reports': [] });
 
     expect(await screen.findByText(/No violations recorded/i)).toBeInTheDocument();
-    expect(screen.getByText(/not yet proof the policy is clean/i)).toBeInTheDocument();
+    expect(screen.getByText(/not proof the policy is clean/i)).toBeInTheDocument();
+  });
+
+  /**
+   * **The caveat qualifies the ROWS, so it renders when there are some.**
+   *
+   * It used to live in `DataTable`'s `empty` slot, which had it backwards in both directions: the
+   * reader looking at three violations — the state where an under-count actually misleads — was
+   * never told the list is a floor rather than a census, and the reader looking at none met the
+   * message inside two frames, because a non-blank `empty` node is wrapped in `EMPTY_FRAME` and an
+   * `Alert` brings its own. Only the second half was visible, and only in a photograph.
+   *
+   * Asserted with a row present, because the empty case above passes either way.
+   */
+  it('keeps the policy caveat when the table has rows, and wires it to the table', async () => {
+    renderStaffWith({
+      '/staff/csp-reports': [
+        {
+          id: 'c1',
+          effectiveDirective: 'script-src-elem',
+          blockedUri: 'inline',
+          documentUri: 'https://app.example/sign-in',
+          disposition: 'report',
+          count: 12,
+          firstSeenAt: '2026-08-09T09:00:00.000Z',
+          lastSeenAt: '2026-08-09T10:00:00.000Z',
+          sourceFile: null,
+          lineNumber: null,
+          columnNumber: null,
+        },
+      ],
+    });
+
+    expect(await screen.findByText('script-src-elem')).toBeInTheDocument();
+    const caveat = screen.getByText(/not proof the policy is clean/i).closest('[id]');
+    expect(caveat).not.toBeNull();
+
+    // A screen-reader user navigating by landmark lands INSIDE the table's region, so placement
+    // above it is not enough (ADR-0073 C2.5). The link is what makes the caveat reachable there.
+    const region = screen.getByRole('region', {
+      name: /Distinct policy violations, most recent activity first/i,
+    });
+    expect(region.getAttribute('aria-describedby')).toBe(caveat?.getAttribute('id'));
+  });
+
+  /**
+   * **No two elements on the page share an `id`.**
+   *
+   * M6 sent the alerting check to the section that answers it and left `InstallationPanel` holding
+   * `CHECK_SECTION_ID.alerting` as its own `id` — so two sections carried `staff-section-health`,
+   * which is invalid and makes every anchor to it ambiguous. One correct pattern applied to a
+   * control and not its neighbour, committed inside the commit fixing an instance of exactly that.
+   *
+   * **The journey found it and no unit test could**, because each component test renders its own
+   * subtree and the collision exists only in the whole page. This is the cheap version of that
+   * catch: it runs everywhere, in milliseconds, against the same composed screen.
+   */
+  it('gives no two elements the same id', async () => {
+    renderStaffWith({});
+    await screen.findByRole('heading', { name: 'Mail and retention' });
+
+    const ids = [...document.querySelectorAll('[id]')].map((el) => el.id);
+    expect(
+      ids.length,
+      'nothing on the page carries an id — the query has stopped working',
+    ).toBeGreaterThan(3);
+
+    const seen = new Set<string>();
+    const duplicated = ids.filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
+    expect(
+      [...new Set(duplicated)],
+      'two elements share an id, so an anchor to it has no single destination',
+    ).toEqual([]);
+  });
+
+  /**
+   * **Every caveat on this page is wired to the region it qualifies, and two were not.**
+   *
+   * `DataTable` is a focusable `role="region"`, so a screen-reader user navigating by landmark lands
+   * INSIDE it having skipped whatever sits above — the ADR-0073 C2.5 finding. The retention notes
+   * and the policy caveat were wired; the mail-transport note (which explains why the counts read as
+   * healthy) and the `audit_events` note (which says the most sensitive table in the system is
+   * deliberately not swept) were not, while the epic's own record listed all four as wired. Found by
+   * the M6 accessibility review — an asserted-rather-than-checked claim about accessibility, which is
+   * the one place this register has overstated before.
+   *
+   * Asserted as a resolution rather than as a string: every id a region names must be on the page.
+   */
+  it('wires every caveat to the region it qualifies, with nothing dangling', async () => {
+    // No transport, so the note that explains why the counts read as healthy is on the page — it is
+    // one of the two the review found unwired, and it renders only in this state.
+    renderStaffWith({
+      '/staff/health': {
+        failuresLast24h: 0,
+        failuresLastHour: 0,
+        lastFailureAt: null,
+        transportConfigured: false,
+        alertingConfigured: true,
+        heartbeatConfigured: true,
+        // One failure, so the table renders as a `role="region"` rather than as its empty branch —
+        // which is a plain `<div>` and therefore outside the sweep below.
+        recentFailures: [
+          {
+            id: 'f1',
+            occurredAt: '2026-09-14T10:00:00.000Z',
+            kind: 'email_verification',
+            recipient: 'someone@example.test',
+            errorClass: 'ESOCKET',
+          },
+        ],
+        retention: healthyRetention(),
+      },
+    });
+    await screen.findByRole('heading', { name: 'Mail and retention' });
+
+    const regions = screen.getAllByRole('region');
+    const described = regions.filter((region) => region.hasAttribute('aria-describedby'));
+    expect(described.length, 'no region carries a description at all').toBeGreaterThan(0);
+
+    for (const region of described) {
+      for (const id of (region.getAttribute('aria-describedby') ?? '')
+        .split(/\s+/)
+        .filter(Boolean)) {
+        expect(
+          document.getElementById(id),
+          `a region points at "${id}", which is not on the page`,
+        ).not.toBeNull();
+      }
+    }
+
+    // The two the review found unwired, by the text each one carries.
+    const ids = described.flatMap((region) =>
+      (region.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean),
+    );
+    const text = ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+    expect(text).toMatch(/written to the log instead of sent/i);
+    expect(text).toMatch(/only tables swept on a schedule/i);
   });
 
   it('says a missing transport is NOT health', async () => {
@@ -341,7 +560,10 @@ describe('StaffConsoleScreen', () => {
 
     renderScreen();
 
-    expect(await screen.findByText(/No mail transport is configured/i)).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Mail and retention' });
+    expect(
+      withinSection('Mail and retention').getByText(/No mail transport is configured/i),
+    ).toBeInTheDocument();
     expect(screen.getByText('Failure alerting: off')).toBeInTheDocument();
     expect(screen.getByText('Heartbeat: off')).toBeInTheDocument();
   });
@@ -442,6 +664,65 @@ describe('StaffConsoleScreen', () => {
  * ADR-0064 §7 all record that this is precisely where the defects live — a control that renders,
  * looks right, and states something the response does not say.
  */
+describe('a failed refetch', () => {
+  /**
+   * **A failure must never render above the previous run's numbers** — the ADR-0140 M4 finding,
+   * which applies to four panels here.
+   *
+   * `query.data` is NOT cleared by a failed refetch nor while one is in flight, so a panel written
+   * as `{isError && <failure/>}` followed by `{data !== undefined && <content/>}` renders BOTH: a
+   * red "could not read" sentence sitting directly above figures from the last successful read,
+   * with nothing saying they are stale. It is the worst of the three possible states, because it
+   * looks like a page that is partly working.
+   *
+   * Verified red against the code as it stood before this milestone, where both blocks rendered.
+   */
+  it('does not render stale figures beneath the failure message', async () => {
+    let calls = 0;
+    vi.mocked(apiFetch).mockImplementation((path: string) => {
+      if (path === '/staff/me') {
+        return Promise.resolve({
+          userId: 'u1',
+          email: 'ops@schedulepoint.test',
+          dualHatted: false,
+        });
+      }
+      if (path !== '/staff/health') return otherPanels(path);
+      calls += 1;
+      // The first read succeeds and paints figures; every later one fails, which is what a refetch
+      // after a transient outage looks like.
+      if (calls > 1) return Promise.reject(new ApiFetchError(500, { code: 'X', message: 'boom' }));
+      return Promise.resolve({
+        failuresLast24h: 7,
+        failuresLastHour: 0,
+        lastFailureAt: null,
+        transportConfigured: true,
+        alertingConfigured: true,
+        heartbeatConfigured: true,
+        recentFailures: [],
+        retention: healthyRetention(),
+      });
+    });
+    renderScreen();
+
+    // The figures land.
+    await waitFor(() => {
+      expect(screen.getByText('7')).toBeInTheDocument();
+    });
+
+    // Now make it fail, the way a reader would: the retry button.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Try again' })[0]!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not read mail health.')).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText('7'),
+      "the previous run's figures are still on screen beneath a failure message",
+    ).toBeNull();
+  });
+});
+
 async function renderRetention(
   over: Partial<Retention>,
   options: { alertingConfigured?: boolean } = {},
@@ -514,7 +795,9 @@ describe('the Retention section', () => {
     // because the panel could reintroduce it beside the sentence rather than inside it.
     await renderRetention({ enabled: false, lastRunAt: new Date().toISOString() });
 
-    expect(screen.getByText(/Retention sweeping is disabled/)).toBeInTheDocument();
+    expect(
+      withinSection('Mail and retention').getByText(/Retention sweeping is disabled/),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Last swept/)).not.toBeInTheDocument();
   });
 
@@ -544,7 +827,9 @@ describe('the Retention section', () => {
   it('surfaces a run of failures, and says where the reason is', async () => {
     await renderRetention({ consecutiveFailures: 3 });
 
-    expect(screen.getByText(/The last 3 sweeps failed/)).toBeInTheDocument();
+    expect(
+      withinSection('Mail and retention').getByText(/The last 3 sweeps failed/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/retention\.sweep_failed/)).toBeInTheDocument();
   });
 
@@ -573,10 +858,17 @@ describe('the Retention section', () => {
     // Asserted on the POLITE REGION specifically, not on the document: the visible alert says the
     // same words, and matching either would let the sr-only line go back to claiming health while
     // the test stayed green — which is exactly the shape of the defect.
+    //
+    // Read as the region's TEXT rather than by `getByText`, since the M2 merge: mail and retention
+    // are one card and one polite sentence, so the retention clause is now a substring of it and an
+    // exact-text query cannot see it. The property under test is unchanged — this region says the
+    // sweep is failing and does not say everything is inside its period — and the discrimination
+    // that matters is unchanged too, because it is still the sr-only region being read and not the
+    // document.
     await waitFor(() => {
-      expect(screen.getByText('Retention: the last 3 sweeps failed.')).toBeInTheDocument();
+      expect(politeRegionText()).toContain('Retention: the last 3 sweeps failed.');
     });
-    expect(screen.queryByText('Retention: every table is inside its period.')).toBeNull();
+    expect(politeRegionText()).not.toContain('Retention: every table is inside its period.');
   });
 
   it('ties the disabled and failing caveats to the table they qualify', async () => {
@@ -627,7 +919,7 @@ describe('the Retention section', () => {
     await renderRetention({});
 
     await waitFor(() => {
-      expect(screen.getByText('Retention: every table is inside its period.')).toBeInTheDocument();
+      expect(politeRegionText()).toContain('Retention: every table is inside its period.');
     });
   });
 
@@ -688,8 +980,13 @@ describe('the Retention section', () => {
     });
 
     // ── The pinned positive: the conditions are on screen and readable.
-    expect(await screen.findByText(/No mail transport is configured/)).toBeInTheDocument();
-    expect(await screen.findByText(/Retention sweeping is disabled/)).toBeInTheDocument();
+    await screen.findByRole('region', { name: 'Mail and retention' });
+    expect(
+      withinSection('Mail and retention').getByText(/No mail transport is configured/),
+    ).toBeInTheDocument();
+    expect(
+      withinSection('Mail and retention').getByText(/Retention sweeping is disabled/),
+    ).toBeInTheDocument();
 
     // ── Nothing on this screen interrupts. `role="alert"` is assertive, and not one of the facts
     //    here is worth cutting across whatever a reader is doing.

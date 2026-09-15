@@ -1,9 +1,13 @@
 import { useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
+import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { CardTitle } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { PageContainer, PageGrid, PageGridItem, PageHeader, StatGrid } from '@/components/ui/page';
+import { QueryErrorState } from '@/components/ui/query-error-state';
 import { Spinner } from '@/components/ui/spinner';
 import { PerformanceProbePanel } from '@/features/perf-probe/ui/performance-probe-panel';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
@@ -15,6 +19,12 @@ import {
   useStaffInstallation,
 } from '@/features/staff/api/staff-panels';
 import {
+  describeActivity,
+  groupActivity,
+  type ActivityGroup,
+} from '@/features/staff/model/activity-rows';
+import { CHECK_SECTION_ID, deriveConsoleStatus } from '@/features/staff/model/console-status';
+import {
   lastRunSentence,
   oldestSentence,
   overdueSentence,
@@ -24,6 +34,7 @@ import {
 } from '@/features/staff/model/retention-copy';
 import { DiagnosticsPanel } from '@/features/staff/ui/diagnostics-panel';
 import { Panel } from '@/features/staff/ui/panel';
+import { StaffStatusSummary } from '@/features/staff/ui/status-summary';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 
 /**
@@ -45,6 +56,33 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
  */
 export function StaffConsoleScreen(): React.ReactElement {
   const identity = useStaffIdentity();
+  /**
+   * The four queries the summary reads, called HERE and passed down as facts.
+   *
+   * **This adds no request.** Each key is the one its panel already uses, so TanStack dedupes them
+   * — which is the same mechanism that already lets the Mail and Retention halves share one
+   * response. The one that needed checking rather than assuming is `useStaffAccounts`, which is
+   * keyed by its cursor: called with none here, it is the identical key the panel starts on, and
+   * when a reader presses *Show older* the panel moves to a new key while this one stays cached and
+   * does not refetch. Two requests either way.
+   *
+   * It matters because reading a staff panel is an audited act — a second request is a second
+   * `staff.panel_read` row on every page load, forever, in the table that refuses `DELETE`.
+   */
+  const health = useStaffHealth();
+  const security = useStaffCspReports();
+  const accounts = useStaffAccounts();
+  const installation = useStaffInstallation();
+  const status = deriveConsoleStatus({
+    health: { isPending: health.isPending, isError: health.isError, data: health.data },
+    security: { isPending: security.isPending, isError: security.isError, data: security.data },
+    accounts: { isPending: accounts.isPending, isError: accounts.isError, data: accounts.data },
+    installation: {
+      isPending: installation.isPending,
+      isError: installation.isError,
+      data: installation.data,
+    },
+  });
   // Both landable states name themselves. `/staff` is reached only by typing the address — there is
   // deliberately no link to it — so the title is the first thing a screen reader announces on
   // arrival, and this was the one sibling of the authenticated shell that skipped the hook every
@@ -65,57 +103,152 @@ export function StaffConsoleScreen(): React.ReactElement {
   // the surface exists and is worth attacking.
   if (identity.isError || identity.data === null) {
     return (
-      <main className="mx-auto max-w-2xl p-6">
-        <h1 className="text-2xl font-semibold">Not found</h1>
-        <p className="text-muted-foreground mt-2">
-          There is nothing at this address.{' '}
-          <a className="underline" href="/">
-            Go to SchedulePoint
-          </a>
-          .
-        </p>
+      <main>
+        <PageContainer width="narrow">
+          <PageHeader
+            title="Not found"
+            description={
+              <>
+                There is nothing at this address.{' '}
+                <a className="underline" href="/">
+                  Go to SchedulePoint
+                </a>
+                .
+              </>
+            }
+          />
+        </PageContainer>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Staff console</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Signed in as {identity.data.email}. This console operates the installation — it cannot
-          reach any customer&rsquo;s clients, projects or plans.
-        </p>
-        {/* ADR-0086 D4 permits dual-hatting rather than refusing it — refusing would lock the only
+    /**
+     * **`/staff` had no live region at all, and nothing had noticed because nothing used one.**
+     *
+     * `AnnouncerProvider` is mounted by the authenticated app shell and by the auth shell; this
+     * route is a sibling of both (ADR-0086) and had neither. `useAnnounce()` returns a **no-op** when
+     * there is no provider above it, so the first component here to announce anything would have
+     * done so into nothing — silently, with no error and nothing on screen looking wrong. Three of
+     * `useClipboardCopy`'s five call sites are on this page, so mounting it is part of that change
+     * rather than an extra: a mechanism that looks right and does nothing is worse than the defect
+     * it replaces.
+     */
+    <AnnouncerProvider>
+      <main>
+        <PageContainer width="wide" className="space-y-6">
+          {/* `actions` carries the way back, and until now there was none. The authenticated branch
+            rendered a header with no link home while the NOT-FOUND branch above has one — so the
+            branch for people who cannot use this page had a way out and the branch for people who
+            can did not, and there is no app shell here to supply one. Nobody had noticed: not the
+            spec, not M0's pictures. `docs/UX_STANDARDS.md:122`, and spec §8.15. */}
+          <PageHeader
+            title="Staff console"
+            description={
+              <>
+                Signed in as {identity.data.email}. This console operates the installation — it
+                cannot reach any customer&rsquo;s clients, projects or plans.
+              </>
+            }
+            actions={
+              /* A plain `<a>`, not a router `<Link>`: `/staff` is outside the `_authed` shell and a
+               staff account need not be a member of anything, so the destination is the app's front
+               door rather than a route this one knows about. `buttonVariants` is the established way
+               to give a link a button's treatment (`InviteExitLinks.tsx:29`) — `Button` renders a
+               `<button>` and has no `asChild`. */
+              <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/">
+                Back to SchedulePoint
+              </a>
+            }
+          />
+          {/* ADR-0086 D4 permits dual-hatting rather than refusing it — refusing would lock the only
             staff member out on day one — and the compensation it named was that the console says
-            which hat is active. That was decided and never built; the UX review found it. */}
-        {identity.data.dualHatted && (
-          <Alert purpose="condition" tone="info" className="mt-3">
-            <strong className="font-medium">This account is also an organisation member.</strong>{' '}
-            Staff-ness confers nothing inside any organisation, and nothing you do here is done as a
-            member. Anything you reach in the app itself, you reach with your ordinary membership.
-          </Alert>
-        )}
-      </header>
-      <MailHealthPanel />
-      <PerformanceProbePanel />
-      <DiagnosticsPanel />
-      <RetentionPanel />
-      <SecurityPanel />
-      <InstallationPanel />
-      <AccountsPanel />
-      <ActivityPanel />
-    </main>
-  );
-}
+            which hat is active. That was decided and never built; the UX review found it.
 
-/** A metric. Local helper — the codebase has no promoted primitive for this shape (TECH_DEBT). */
-function Stat({ label, value }: { label: string; value: string }): React.ReactElement {
-  return (
-    <div>
-      <dt className="text-muted-foreground text-sm">{label}</dt>
-      <dd className="text-xl font-semibold tabular-nums">{value}</dd>
-    </div>
+            It is a SIBLING of `PageHeader` and deliberately not one of its `actions`: that slot
+            renders in a `flex shrink-0 items-center gap-2` (`page-header.tsx:60`), which is right
+            for a button and wrong for a full-width banner. The plan's "keep it exactly as it is"
+            was ambiguous about placement (spec §8.19). */}
+          {identity.data.dualHatted && (
+            <Alert purpose="condition" tone="info">
+              {/* **The weight came out, and the third sentence with it** (M5-T1). A bold lead-in
+                  earns its place when an alert is long enough that a scanning reader would
+                  otherwise have to READ it to tell which condition it is — which is why the other
+                  four on this page keep theirs. This one is two sentences inside a tinted block
+                  with a leading icon and a tone colour, so the weight was a fourth channel saying
+                  what three already said: the ADR-0097 precedent the weight ratchet's own comment
+                  chain records. The dropped sentence restated "nothing you do here is done as a
+                  member" in the other direction. */}
+              This account is also an organisation member. Staff-ness confers nothing inside any
+              organisation, and nothing you do here is done as a member.
+            </Alert>
+          )}
+          {/* **Zone 1: never columned.** A status answer must not sit beside anything — placed in a
+            column it would be one of two things a reader's eye has to choose between, on the screen
+            whose entire job is to answer one question before anything else is read.
+
+            The derivation takes the page's OWN query results as arguments and issues nothing.
+            Reading a staff panel is an audited act, so a summary that fetched for itself would
+            write a second `staff.panel_read` row on every page load — and `useStaffAccounts` is
+            keyed by its cursor, so a summary calling it with no cursor while the panel below holds
+            one after *Show older* would be a different query rather than a deduped one. */}
+          <StaffStatusSummary status={status} />
+          {/* **The order is priority, and the spans are content width demand — two separate
+            decisions that a single-column stack conflated.**
+
+            ORDER answers "what does an operator arrive wanting to know?", and it is also DOM order
+            and therefore the order a screen reader walks. Conditions first (mail, policy
+            violations, accounts that cannot sign in), then what this installation IS, then the
+            tools, then the record. M0 measured the old order's cost: Performance and Diagnostics
+            sat at positions 2 and 3, inert until a button is pressed, taking ~550 px of the best
+            space on the page between the panel reporting a live failure and the panels reporting
+            standing conditions.
+
+            SPAN answers "how wide does this body need to be?" — never "how important is it". A
+            section whose body is a `DataTable` is `wide`, because the console's tables carry up to
+            five columns including `break-all` URI and address fields, and "the tables look cramped"
+            is the diagnosis this epic was opened on. At `width="wide"` a spanning section gets
+            1,438 px of table against today's 798 (+80 %); the pair below gets 732 px each, which is
+            ample for four facts or three buttons.
+
+            **Only one pair falls out of that rule, and it is recorded rather than engineered.**
+            Five of the seven sections are table-bodied, so the two-column grid buys exactly one
+            paired row. That is a smaller win than "two columns" sounds like, and it is the honest
+            one: what actually fixes this page is the WIDTH the spanning sections gain, the ORDER,
+            and (M3) the summary. Pairing more would mean either narrowing a table — which FC-4
+            forbids, and which is the regression the whole span rule exists to prevent — or making a
+            span depend on how much data happened to arrive, which would make the layout a function
+            of the database. */}
+          <PageGrid>
+            <PageGridItem span="wide">
+              <MailAndRetentionPanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <SecurityPanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <AccountsPanel />
+            </PageGridItem>
+            {/* The one paired row: four facts beside two controls. Installation says what this
+              installation is; Diagnostics is how you ask it a question. Neither has a table, and
+              neither is an order of magnitude taller than the other — which is the condition that
+              keeps a two-column row from leaving the ragged void that reads as unfinished. */}
+            <PageGridItem span="narrow">
+              <InstallationPanel />
+            </PageGridItem>
+            <PageGridItem span="narrow">
+              <DiagnosticsPanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <PerformanceProbePanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <ActivityPanel />
+            </PageGridItem>
+          </PageGrid>
+        </PageContainer>
+      </main>
+    </AnnouncerProvider>
   );
 }
 
@@ -126,61 +259,124 @@ function Stat({ label, value }: { label: string; value: string }): React.ReactEl
  * failures with **no transport configured** is not health, it means every send is being logged
  * instead of delivered, which looks identical in a count.
  */
-function MailHealthPanel(): React.ReactElement {
+function MailSection(): React.ReactElement {
   const health = useStaffHealth();
   const data = health.data;
 
   const columns: Column<NonNullable<typeof data>['recentFailures'][number]>[] = [
-    { header: 'When', cell: (row) => new Date(row.occurredAt).toLocaleString() },
-    { header: 'Message', cell: (row) => row.kind.replace(/_/g, ' ') },
-    { header: 'Recipient', cell: (row) => row.recipient ?? '—', cellClassName: 'break-all' },
+    /**
+     * **Leading columns carry a width so the trailing one soaks the surplus.**
+     *
+     * Measured in Chromium: this page's four short tables want 371-660 px of content and are given
+     * 1,438, and with `table-layout: auto` the surplus goes to whichever column holds the widest
+     * content — which put an address at x=104 and its date at x=1,209, more than a thousand pixels
+     * apart on one row. That is ADR-0098's recorded defect verbatim ("a plan's name and its change
+     * time sat ~800 px apart at 1646"), where the remedy was a narrower measure.
+     *
+     * The measure cannot narrow here: FC-4 forbids any table on this page being narrower than the
+     * 798 px it measures today, and softening a committed condition to fix a spacing complaint is
+     * tuning the bar to the answer.
+     *
+     * **`w-full` on the TRAILING column was tried first and is withdrawn on measurement.** It does
+     * take the surplus, and it squeezes every other column to `min-content` doing it: "Policy
+     * violation reports" wrapped onto three lines, "Keeps for" onto two, and a recipient address
+     * broke mid-word across four — the page grew from 11,066 px to 13,172. A width on the leading
+     * columns is a preference rather than a claim on the remainder, so a column still grows past it
+     * when its content needs to. `md:` because the widths only make sense where the surplus exists;
+     * below it the table is byte-for-byte what it was.
+     */
+    {
+      header: 'When',
+      cell: (row) => new Date(row.occurredAt).toLocaleString(),
+      cellClassName: 'py-2 pr-4 md:w-44',
+    },
+    {
+      header: 'Message',
+      cell: (row) => row.kind.replace(/_/g, ' '),
+      cellClassName: 'py-2 pr-4 md:w-36',
+    },
+    {
+      header: 'Recipient',
+      cell: (row) => row.recipient ?? '—',
+      // `break-all` alone REPLACED the default `py-2 pr-4`, so these cells had no padding at all
+      // and no gap to the next column — a pre-existing defect the widths made visible.
+      cellClassName: 'py-2 pr-4 break-all md:w-80',
+    },
+    /**
+     * **The last column soaks the surplus, so the others cluster at the left.**
+     *
+     * Measured in Chromium: this page's four short tables want 371-660 px of content and are given
+     * 1,438, and with `table-layout: auto` the surplus goes to whichever column holds the widest
+     * content — which put an address at x=104 and its date at x=1,209, more than a thousand pixels
+     * apart on one row. That is ADR-0098's recorded defect verbatim ("a plan's name and its change
+     * time sat ~800 px apart at 1646"), where the remedy was a narrower measure.
+     *
+     * Here the measure cannot narrow: FC-4 forbids any table on this page being narrower than the
+     * 798 px it measures today, because the epic's whole layout case was that span-by-demand
+     * WIDENS the tables — and softening a committed condition to fix a spacing complaint is tuning
+     * the bar to the answer. `w-full` on the trailing column takes the surplus instead, so every
+     * other column falls back to its natural width and a row reads as one thing. The table's own
+     * width is unchanged, so FC-4 is untouched rather than reinterpreted.
+     */
     { header: 'Error', cell: (row) => row.errorClass ?? '—' },
   ];
 
   return (
-    <Panel
-      title="Mail"
-      status={
-        health.isPending
-          ? ''
-          : health.isError
-            ? 'Mail health could not be read.'
-            : `Mail: ${String(data?.failuresLast24h ?? 0)} failures in the last 24 hours.`
-      }
-    >
+    <section aria-labelledby={MAIL_HEADING_ID} className="space-y-4">
+      <CardTitle id={MAIL_HEADING_ID} level={3} className="text-sm">
+        Mail
+      </CardTitle>
       {health.isPending && <Spinner label="Loading mail health…" />}
       {health.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read mail health.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void health.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState
+          label="Could not read mail health."
+          onRetry={() => void health.refetch()}
+        />
       )}
-      {data !== undefined && (
+      {/* **`!isError &&`, not just `data !== undefined`.** `query.data` is not cleared by a failed
+          refetch nor while one is in flight, so without this the failure message above renders
+          directly on top of the previous run's figures, with nothing saying they are stale — the
+          ADR-0140 M4 finding, which applies to four panels here. It is the worst of the three
+          states, because it looks like a page that is partly working. */}
+      {!health.isError && data !== undefined && (
         <>
           {!data.transportConfigured && (
-            <Alert purpose="condition" tone="info">
+            <Alert purpose="condition" tone="info" id={MAIL_TRANSPORT_ID}>
               <strong className="font-medium">No mail transport is configured.</strong> Every
               message is being written to the log instead of sent — which produces no failures, and
               is why the counts below read as healthy.
             </Alert>
           )}
 
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Stat label="Failures, last hour" value={String(data.failuresLastHour)} />
-            <Stat label="Failures, last 24 hours" value={String(data.failuresLast24h)} />
-            <Stat
-              label="Last failure"
-              value={
-                data.lastFailureAt === null
-                  ? 'Never'
-                  : new Date(data.lastFailureAt).toLocaleString()
-              }
-            />
-          </dl>
+          {/* **The two figures that can be a problem now look like it** (spec §8.15). Until this,
+              a failure count and "API version 0.64.0" rendered identically, so on the page whose
+              whole job is *is anything wrong* the two most alarming numbers on it carried no signal
+              at all. Colour is the SECOND channel and never the only one (WCAG 1.4.1): each label
+              says what it counts, and the `Status` summary above states the same condition in
+              words. `Last failure` is deliberately NOT toned — a timestamp is a fact about when,
+              and a date in red says "this is bad" about the one field that cannot be. */}
+          <StatGrid
+            columns={3}
+            items={[
+              {
+                label: 'Failures, last hour',
+                value: String(data.failuresLastHour),
+                ...(data.failuresLastHour > 0 ? { tone: 'alarm' as const } : {}),
+              },
+              {
+                label: 'Failures, last 24 hours',
+                value: String(data.failuresLast24h),
+                ...(data.failuresLast24h > 0 ? { tone: 'alarm' as const } : {}),
+              },
+              {
+                label: 'Last failure',
+                value:
+                  data.lastFailureAt === null
+                    ? 'Never'
+                    : new Date(data.lastFailureAt).toLocaleString(),
+              },
+            ]}
+          />
 
           {/* **The badge states the fact; the sentence states the cost.** These two switches are
               what the whole epic exists to surface, and "off" alone left a reader unable to tell
@@ -211,6 +407,13 @@ function MailHealthPanel(): React.ReactElement {
 
           <DataTable
             caption="Recent mail failures, newest first"
+            // **Wired, not merely placed above.** `DataTable` is a focusable `role="region"`, so a
+            // screen-reader user navigating by landmark lands INSIDE it having skipped whatever sits
+            // above — and this note is the one that explains why the counts read as healthy. The
+            // M6 accessibility review found that the epic's own record listed it as an
+            // `aria-describedby` target when it had never been one; the retention notes and the
+            // policy caveat were wired, this and the `audit_events` note were not.
+            {...(data.transportConfigured ? {} : { describedById: MAIL_TRANSPORT_ID })}
             columns={columns}
             query={{
               isPending: false,
@@ -220,11 +423,11 @@ function MailHealthPanel(): React.ReactElement {
             }}
             getRowKey={(row) => row.id}
             loadingLabel="Loading mail failures…"
-            empty={<p className="text-muted-foreground text-sm">No failures recorded.</p>}
+            empty="No failures recorded."
           />
         </>
       )}
-    </Panel>
+    </section>
   );
 }
 
@@ -241,10 +444,14 @@ function MailHealthPanel(): React.ReactElement {
  * staff panel is an audited act, so a second route would have written a second `staff.panel_read`
  * row on every page load (spec §4.6). TanStack Query dedupes the call with the Mail panel above.
  */
+const MAIL_HEADING_ID = 'staff-mail-heading';
+const MAIL_TRANSPORT_ID = 'staff-mail-transport-note';
+const RETENTION_HEADING_ID = 'staff-retention-heading';
 const RETENTION_DISABLED_ID = 'retention-disabled-note';
 const RETENTION_FAILING_ID = 'retention-failing-note';
+const AUDIT_RETENTION_ID = 'staff-audit-retention-note';
 
-function RetentionPanel(): React.ReactElement {
+function RetentionSection(): React.ReactElement {
   const health = useStaffHealth();
   const retention = health.data?.retention;
   // Read from the SAME response, because "the sweep is failing" and "anybody outside this screen
@@ -254,10 +461,15 @@ function RetentionPanel(): React.ReactElement {
   const alertingConfigured = health.data?.alertingConfigured ?? false;
 
   const columns: Column<RetentionTable>[] = [
-    { header: 'Table', cell: (row) => tableLabel(row.table) },
-    { header: 'Keeps for', cell: (row) => `${String(row.retentionDays)} days` },
+    { header: 'Table', cell: (row) => tableLabel(row.table), cellClassName: 'py-2 pr-4 md:w-56' },
+    {
+      header: 'Keeps for',
+      cell: (row) => `${String(row.retentionDays)} days`,
+      cellClassName: 'py-2 pr-4 md:w-28',
+    },
     {
       header: 'Oldest row',
+      cellClassName: 'py-2 pr-4 md:w-40',
       cell: (row) => (
         <>
           <span className="tabular-nums">{oldestSentence(row)}</span>
@@ -286,39 +498,43 @@ function RetentionPanel(): React.ReactElement {
   const notes = [
     retention?.enabled === false ? RETENTION_DISABLED_ID : undefined,
     retention !== undefined && retention.consecutiveFailures > 0 ? RETENTION_FAILING_ID : undefined,
+    // **The `audit_events` note joins the list, and it is unconditional because the fact is.** It
+    // is the one that says the most sensitive table in the system is deliberately NOT swept — the
+    // "non-obvious consequence" class §4's rule keeps — and it sits AFTER the table, so a reader
+    // who lands inside the region by landmark passes it in neither direction. The epic's own
+    // record listed it as a wired target when it had never been one (M6 accessibility review).
+    AUDIT_RETENTION_ID,
   ].filter((id): id is string => id !== undefined);
 
   return (
-    <Panel
-      title="Retention"
-      status={
-        health.isPending
-          ? ''
-          : health.isError
-            ? 'Retention state could not be read.'
-            : retention === undefined
-              ? ''
-              : statusSentence(retention)
-      }
-    >
+    <section aria-labelledby={RETENTION_HEADING_ID} className="space-y-4">
+      <CardTitle id={RETENTION_HEADING_ID} level={3} className="text-sm">
+        Retention
+      </CardTitle>
       {health.isPending && <Spinner label="Loading retention…" />}
       {health.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read retention state.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void health.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState
+          label="Could not read retention state."
+          onRetry={() => void health.refetch()}
+        />
       )}
-      {retention !== undefined && (
+      {/* **`!isError &&`, not just `data !== undefined`.** `query.data` is not cleared by a failed
+          refetch nor while one is in flight, so without this the failure message above renders
+          directly on top of the previous run's figures, with nothing saying they are stale — the
+          ADR-0140 M4 finding, which applies to four panels here. It is the worst of the three
+          states, because it looks like a page that is partly working. */}
+      {!health.isError && retention !== undefined && (
         <>
           {!retention.enabled && (
             <Alert purpose="condition" tone="info" id={RETENTION_DISABLED_ID}>
-              <strong className="font-medium">Retention sweeping is disabled.</strong> Nothing is
-              being deleted. Set <code>RETENTION_SWEEP_ENABLED=true</code> to resume — the ages
-              below are still real, and will keep growing until you do.
+              {/* "Nothing is being deleted" came out: the `Status` summary at the top of the
+                  page now says exactly that, in those words, and this is one of the two conditions
+                  it names. What a summary row cannot carry is the remedy and the caveat, which is
+                  what is left. The lead-in STAYS — a reader scrolled to this card is most of a
+                  page from the summary and needs to know which condition the block is about. */}
+              <strong className="font-medium">Retention sweeping is disabled.</strong> Set{' '}
+              <code>RETENTION_SWEEP_ENABLED=true</code> to resume — the ages below are still real,
+              and will keep growing until you do.
             </Alert>
           )}
           {retention.consecutiveFailures > 0 && (
@@ -365,12 +581,12 @@ function RetentionPanel(): React.ReactElement {
             getRowKey={(row) => row.table}
             loadingLabel="Loading retention…"
             describedById={notes.length > 0 ? notes.join(' ') : undefined}
-            empty={<p className="text-muted-foreground text-sm">Nothing is swept on a schedule.</p>}
+            empty="Nothing is swept on a schedule."
           />
           {/* The scope, stated in the product rather than only in DEPLOYMENT.md. "Every table is
               inside its period" is otherwise an invitation to conclude that everything is bounded,
               and the most sensitive table in the system is deliberately not. */}
-          <p className="text-muted-foreground text-sm">
+          <p id={AUDIT_RETENTION_ID} className="text-muted-foreground text-sm">
             These are the only tables swept on a schedule. <code>audit_events</code> is{' '}
             <strong className="font-medium">not</strong> — it refuses <code>DELETE</code> in the
             database by design (ADR-0085), so it is retained indefinitely and that is a decision
@@ -378,6 +594,59 @@ function RetentionPanel(): React.ReactElement {
           </p>
         </>
       )}
+    </section>
+  );
+}
+
+/**
+ * Mail and retention, in one card — CQ-3.
+ *
+ * **Why they are one section at all.** Both are rendered from a single `useStaffHealth` response,
+ * so two cards drew a boundary the data does not have. They are also the same kind of question:
+ * *what is this installation doing with data over time* — messages going out, rows being deleted —
+ * and an operator who wants one usually wants the other.
+ *
+ * **The title is neutral and both halves are `<h3>`s of equal rank, which departs from the spec's
+ * own resolution** (`feature-spec.md` §8.12 said the card keeps the title "Mail" with retention as
+ * a subsection). That would make retention read as a KIND of mail, which it is not, and it would
+ * demote the panel an operator goes looking for by name when they want to know whether the sweep is
+ * arming. A neutral parent with two equal children says what is true; a "Mail" parent says
+ * something false about the hierarchy, in the one channel — the heading tree — that a screen-reader
+ * user navigates by.
+ *
+ * **Retention keeps a heading, and that was the accepted cost of the merge.** Today it is an
+ * `<h2>`, independently reachable by heading navigation; folded into mail's prose it would have
+ * left the heading list entirely, and a reader would have had to open "Mail" and read its body to
+ * find it. That cuts against exactly the "seasoned admin navigating with ease" framing this epic
+ * was given, because **an expert AT user relies on heading and landmark shortcuts more, not less**.
+ * `CardTitle` already supports `level={3}`, so this costs no shared contract change — §4.5's
+ * objection was to pushing EVERY section heading down a level across the whole page, which is a
+ * different and much larger thing.
+ *
+ * **The status sentence is composed, not concatenated.** `Panel` announces one polite sentence and
+ * there are now two independently-settling facts behind it. They are joined with a full stop and a
+ * space and each names its own subject ("Mail: …", "Retention: …"), so a screen reader speaks two
+ * complete sentences rather than one run-on whose halves a listener has to separate by ear. While
+ * either half is still pending its clause is absent rather than empty — a trailing separator is a
+ * pause that means nothing.
+ */
+function MailAndRetentionPanel(): React.ReactElement {
+  const health = useStaffHealth();
+  const retention = health.data?.retention;
+
+  const clauses = health.isPending
+    ? []
+    : health.isError
+      ? ['Mail and retention state could not be read.']
+      : [
+          `Mail: ${String(health.data?.failuresLast24h ?? 0)} failures in the last 24 hours.`,
+          retention === undefined ? null : statusSentence(retention),
+        ].filter((clause): clause is string => clause !== null);
+
+  return (
+    <Panel title="Mail and retention" id={CHECK_SECTION_ID.mail} status={clauses.join(' ')}>
+      <MailSection />
+      <RetentionSection />
     </Panel>
   );
 }
@@ -392,6 +661,8 @@ function RetentionPanel(): React.ReactElement {
  * evidence would be worse than no panel, because it would point the wrong way on the one decision
  * it exists to inform.
  */
+const CSP_CAVEAT_ID = 'staff-csp-caveat';
+
 function SecurityPanel(): React.ReactElement {
   const reports = useStaffCspReports();
 
@@ -422,6 +693,7 @@ function SecurityPanel(): React.ReactElement {
   return (
     <Panel
       title="Content-Security-Policy"
+      id={CHECK_SECTION_ID.security}
       status={
         reports.isPending
           ? ''
@@ -430,22 +702,34 @@ function SecurityPanel(): React.ReactElement {
             : `Content-Security-Policy: ${String(reports.data?.length ?? 0)} distinct violations recorded.`
       }
     >
+      {/* **The caveat is about the TABLE, not about its being empty — so it renders either way.**
+          It used to live in `empty=`, which had it exactly backwards in both directions. A reader
+          looking at three violations was never told the list may be incomplete, which is the state
+          where an under-count actually misleads; and a reader looking at none met the message
+          inside TWO frames, because `DataTable` wraps a non-blank `empty` node in `EMPTY_FRAME` and
+          an `Alert` brings its own border, tint and icon — with the frame's `text-center` fighting
+          the alert's left-aligned icon row. Visible in a photograph and invisible to jsdom, which
+          has no layout to be wrong about.
+
+          `describedById` rather than mere placement: this region is focusable and carries
+          `role="region"`, so a screen-reader user navigating by landmark lands INSIDE the table
+          having skipped whatever sits above it (the ADR-0073 C2.5 finding). A safety caveat
+          reachable only by reading serially is the wrong contract, and this is one. */}
+      <Alert purpose="condition" tone="info" id={CSP_CAVEAT_ID}>
+        <strong className="font-medium">An empty table is not proof the policy is clean.</strong>{' '}
+        Delivery from a browser to this sink has never been verified end&nbsp;to&nbsp;end, so what
+        is listed here is a floor rather than a census. To check it yourself, open the app and load
+        a blocked resource, then look here.
+      </Alert>
       <DataTable
         caption="Distinct policy violations, most recent activity first"
         columns={columns}
         query={reports}
         getRowKey={(row) => row.id}
+        describedById={CSP_CAVEAT_ID}
         loadingLabel="Loading policy reports…"
         errorLabel="Could not read policy reports."
-        empty={
-          <Alert purpose="condition" tone="info">
-            <strong className="font-medium">No violations recorded.</strong> That is not yet proof
-            the policy is clean — delivery from a browser to this sink has never been verified
-            end&nbsp;to&nbsp;end, so an empty table means nothing has arrived rather than nothing
-            has happened. To check it yourself, open the app and load a blocked resource, then look
-            here.
-          </Alert>
-        }
+        empty="No violations recorded."
       />
     </Panel>
   );
@@ -459,6 +743,14 @@ function InstallationPanel(): React.ReactElement {
   return (
     <Panel
       title="Installation"
+      // **No `id`, deliberately.** It carried `CHECK_SECTION_ID.alerting` only because the alerting
+      // check used to point here, and when M6 sent that check to the section that answers it this
+      // panel kept the constant — so two sections shared one `id`, which is invalid and makes the
+      // anchor's destination ambiguous. Found by the journey on the first run after the fix; no unit
+      // test could see it, because each renders its own subtree and the collision exists only in the
+      // whole page. `id` is what makes a section a focus target, and nothing links here, so the
+      // honest state is to have neither. One correct pattern applied to a control and not its
+      // neighbour — inside the commit fixing an instance of exactly that.
       status={
         installation.isPending
           ? ''
@@ -469,23 +761,23 @@ function InstallationPanel(): React.ReactElement {
     >
       {installation.isPending && <Spinner label="Loading installation…" />}
       {installation.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read installation state.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void installation.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState
+          label="Could not read installation state."
+          onRetry={() => void installation.refetch()}
+        />
       )}
-      {data !== undefined && (
+      {/* `!isError &&` for the reason the Mail section records: a failed refetch does not clear
+          `query.data`, so without it the failure message sits on top of stale figures. */}
+      {!installation.isError && data !== undefined && (
         <>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="API version" value={data.apiVersion} />
-            <Stat label="Environment" value={data.environment} />
-            <Stat label="Mail host" value={data.mailHost ?? 'Not configured'} />
-            <Stat label="Staff addresses" value={String(data.staffCount)} />
-          </dl>
+          <StatGrid
+            items={[
+              { label: 'API version', value: data.apiVersion },
+              { label: 'Environment', value: data.environment },
+              { label: 'Mail host', value: data.mailHost ?? 'Not configured' },
+              { label: 'Staff addresses', value: String(data.staffCount) },
+            ]}
+          />
           <div className="flex flex-wrap gap-2">
             <Badge variant={data.requireEmailVerification ? 'neutral' : 'warning'}>
               {data.requireEmailVerification
@@ -516,13 +808,17 @@ function AccountsPanel(): React.ReactElement {
   const data = accounts.data;
 
   const columns: Column<NonNullable<typeof data>['unverified'][number]>[] = [
-    { header: 'Address', cell: (row) => row.email, cellClassName: 'break-all' },
-    { header: 'Registered', cell: (row) => new Date(row.createdAt).toLocaleDateString() },
+    { header: 'Address', cell: (row) => row.email, cellClassName: 'py-2 pr-4 break-all md:w-96' },
+    {
+      header: 'Registered',
+      cell: (row) => new Date(row.createdAt).toLocaleDateString(),
+    },
   ];
 
   return (
     <Panel
       title="Unverified accounts"
+      id={CHECK_SECTION_ID.accounts}
       status={
         accounts.isPending
           ? ''
@@ -533,16 +829,11 @@ function AccountsPanel(): React.ReactElement {
     >
       {accounts.isPending && <Spinner label="Loading accounts…" />}
       {accounts.isError && (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-destructive-text text-sm">
-            Could not read accounts.
-          </p>
-          <Button variant="outline" size="sm" onClick={() => void accounts.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <QueryErrorState label="Could not read accounts." onRetry={() => void accounts.refetch()} />
       )}
-      {data !== undefined && (
+      {/* `!isError &&` for the reason the Mail section records: a failed refetch does not clear
+          `query.data`, so without it the failure message sits on top of stale figures. */}
+      {!accounts.isError && data !== undefined && (
         <>
           <p className="text-muted-foreground text-sm">
             {data.unverifiedTotal === 0
@@ -587,15 +878,25 @@ function AccountsPanel(): React.ReactElement {
  */
 function ActivityPanel(): React.ReactElement {
   const activity = useStaffActivity();
+  // **Consecutive panel reads by one actor collapse into one row** (spec §8.15). Opening this
+  // console writes one `staff.panel_read` per panel, so a page of fifty entries was seven page
+  // loads and almost nothing else — the rows that matter sat between them. Nothing is hidden: the
+  // count is printed and every panel is named. Client-side, because the API and the audit table are
+  // right as they are; this is a presentation of the rows they returned.
+  const groups = groupActivity(activity.data ?? []);
 
-  const columns: Column<NonNullable<typeof activity.data>[number]>[] = [
-    { header: 'When', cell: (row) => new Date(row.occurredAt).toLocaleString() },
-    { header: 'Who', cell: (row) => row.actorLabel ?? '—', cellClassName: 'break-all' },
+  const columns: Column<ActivityGroup>[] = [
     {
-      header: 'What',
-      cell: (row) =>
-        `${row.action.replace('staff.', '').replace(/_/g, ' ')}${row.subjectLabel === null ? '' : ` · ${row.subjectLabel}`}`,
+      header: 'When',
+      cell: (row) => new Date(row.occurredAt).toLocaleString(),
+      cellClassName: 'py-2 pr-4 md:w-52',
     },
+    {
+      header: 'Who',
+      cell: (row) => row.actorLabel ?? '—',
+      cellClassName: 'py-2 pr-4 break-all md:w-72',
+    },
+    { header: 'What', cell: (row) => describeActivity(row) },
   ];
 
   return (
@@ -612,11 +913,18 @@ function ActivityPanel(): React.ReactElement {
       <DataTable
         caption="Staff actions, most recent first"
         columns={columns}
-        query={activity}
+        // The query's own three states, with the grouped rows in place of the raw ones. Handing it
+        // the real flags is what keeps loading, error and empty exactly as they were.
+        query={{
+          isPending: activity.isPending,
+          isError: activity.isError,
+          data: activity.isPending || activity.isError ? undefined : groups,
+          refetch: () => activity.refetch(),
+        }}
         getRowKey={(row) => row.id}
         loadingLabel="Loading staff activity…"
         errorLabel="Could not read staff activity."
-        empty={<p className="text-muted-foreground text-sm">Nothing recorded yet.</p>}
+        empty="Nothing recorded yet."
       />
     </Panel>
   );

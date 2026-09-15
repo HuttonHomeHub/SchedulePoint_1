@@ -221,13 +221,61 @@ describe('ProbeSittings', () => {
   });
 
   it('links the comparability caveat to the table rather than merely placing it above', () => {
-    view(sweepRows());
+    // TWO sittings, because the caveat is now rendered only when there is something to compare
+    // with. A `DataTable` is a focusable region, so a landmark-navigating reader lands INSIDE it
+    // having skipped whatever sits above.
+    view([...sweepRows(), row({ id: 'e', runId: 'r9', sweepId: null })]);
 
-    // A `DataTable` is a focusable region, so a landmark-navigating reader lands INSIDE it having
-    // skipped whatever sits above.
     const table = screen.getByRole('table', { name: /Sweep of 4 readings/ });
     const region = table.closest('[role="region"]');
     expect(region?.getAttribute('aria-describedby')).toContain('comparability');
+  });
+
+  /**
+   * **A caveat about comparing readings is advice about an act the reader cannot perform yet**, on
+   * a panel whose empty state already tells them to run a measurement — and a note that is always
+   * on screen is one a reader learns to skip before the day it matters (spec §8.15).
+   *
+   * The second assertion is the one that matters more: an `aria-describedby` pointing at an element
+   * that is not on the page reads to a screen reader as a MISSING description rather than an absent
+   * one, which is the rule this component already applies to its two conditional warnings. Making
+   * the note conditional without threading its id would have introduced exactly that.
+   */
+  it('withholds the comparability caveat until there is a second sitting, and drops its reference', () => {
+    view(sweepRows());
+
+    expect(
+      screen.queryByText(/only comparable to another taken at the same canvas size/),
+    ).toBeNull();
+
+    const region = screen
+      .getByRole('table', { name: /Sweep of 4 readings/ })
+      .closest('[role="region"]');
+    for (const id of (region?.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .filter(Boolean)) {
+      expect(
+        document.getElementById(id),
+        `aria-describedby points at "${id}", which is not on the page`,
+      ).not.toBeNull();
+    }
+  });
+
+  /**
+   * **Each sitting says where it begins.** `DataTable`'s caption is `sr-only`, so the sitting's name
+   * reached a screen-reader user and nobody else — five blocks ran together as one stream of facts,
+   * table, Copy, facts, table, Copy. Found by photographing the console (`#165(e)`).
+   *
+   * The heading is deliberately NOT also the `<section>`'s accessible name: a named `<section>` is a
+   * `region` landmark, and the table inside is already a region with the same name.
+   */
+  it('gives every sitting a visible heading, without a second landmark', () => {
+    view([...sweepRows(), row({ id: 'e', runId: 'r9', sweepId: null })]);
+
+    expect(screen.getByRole('heading', { level: 3, name: /Sweep of 4 readings/ })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 3, name: /One reading/ })).toBeVisible();
+    // One region per table, and not one per table plus one per section.
+    expect(screen.getAllByRole('region', { name: /readings|reading/i })).toHaveLength(2);
   });
 
   it('shows a stored reading with its verdict and both halves of the cull', () => {

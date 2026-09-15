@@ -1,8 +1,8 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Children, Fragment, isValidElement } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/page/skeleton';
+import { QueryErrorState } from '@/components/ui/query-error-state';
 
 /** A column definition for {@link DataTable}. */
 export interface Column<T> {
@@ -173,16 +173,11 @@ export function DataTable<T>({
   }
 
   if (query.isError) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <p role="alert" className="text-destructive-text text-sm">
-          {errorLabel}
-        </p>
-        <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
-          Try again
-        </Button>
-      </div>
-    );
+    // The ONE failure shape (`components/ui/query-error-state.tsx`). `DataTable` consumes it rather
+    // than rendering its own copy, which is the condition the extraction was taken on: a shared
+    // component this primitive did not use would be two implementations of one shape held together
+    // by a test, and they drift invisibly.
+    return <QueryErrorState label={errorLabel} onRetry={() => void query.refetch()} />;
   }
 
   const rows = query.data ?? [];

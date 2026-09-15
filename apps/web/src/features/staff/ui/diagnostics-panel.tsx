@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useId } from 'react';
 
 import { useStaffDiagnostics, type StaffDiagnosticRow } from '../api/staff-diagnostics';
 import {
@@ -14,6 +14,7 @@ import { Panel } from './panel';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 
 /**
  * The Diagnostics panel — a staff member presses one control and gets a count (ADR-0140).
@@ -39,7 +40,6 @@ import { Spinner } from '@/components/ui/spinner';
  */
 export function DiagnosticsPanel(): React.ReactElement {
   const query = useStaffDiagnostics();
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const copyBlockedId = useId();
 
   const running = query.isFetching;
@@ -59,28 +59,31 @@ export function DiagnosticsPanel(): React.ReactElement {
    */
   const result = running || query.isError ? undefined : query.data;
 
+  // **The rejection branch this file used to own alone now lives in the shared hook.** Its comment
+  // recorded the M4 accessibility review finding that setting `copied` back to `false` is
+  // indistinguishable from never having pressed the button (WCAG 4.1.3) — and three sibling call
+  // sites still carried exactly that. Moving the fix into `useClipboardCopy` is what stops the
+  // fourth from arriving.
+  const clipboard = useClipboardCopy({
+    copiedMessage: 'Diagnostics report copied to the clipboard.',
+    failedMessage: 'Could not reach the clipboard. The numbers are below — copy them by hand.',
+  });
+
   const copy = useCallback(() => {
     // The guard the shading promises. A shaded control that still fires is a shading in appearance
     // only, which is worse than none because it looks considered.
     if (result === undefined) return;
-    void navigator.clipboard.writeText(formatDiagnosticsReport(result)).then(
-      () => setCopyState('copied'),
-      // **A rejection says so.** It used to set `copied` false, which is indistinguishable from
-      // never having pressed the button: no visible change, nothing in the live region, nothing
-      // announced — on a browser that refuses clipboard access, which is an ordinary configuration
-      // rather than an edge case (WCAG 4.1.3, the M4 accessibility review).
-      () => setCopyState('failed'),
-    );
-  }, [result]);
+    clipboard.copy(formatDiagnosticsReport(result));
+  }, [clipboard, result]);
 
   const run = useCallback(() => {
     // A shaded control that still fires is a shading in appearance only — the same rule as Copy.
     if (running) return;
     // Clearing the copy state on a new run rather than leaving it: "Report copied." beside numbers
     // that have since been replaced describes a clipboard holding the PREVIOUS reading.
-    setCopyState('idle');
+    clipboard.reset();
     void query.refetch();
-  }, [query, running]);
+  }, [clipboard, query, running]);
 
   return (
     <Panel title="Diagnostics" status={diagnosticsStatus(result)}>
@@ -126,9 +129,13 @@ export function DiagnosticsPanel(): React.ReactElement {
           </span>
         ) : null}
 
-        <span aria-live="polite" className="text-muted-foreground text-sm">
-          {copyState === 'copied' ? 'Report copied.' : ''}
-          {copyState === 'failed'
+        {/* **Not a live region any more, and that is the point of the shared hook.** It announces
+            through the app's one polite region, so a second `aria-live` here would read the same
+            sentence twice to the same reader. What stays is the visible cue a sighted user needs,
+            which the announcement cannot give them. */}
+        <span className="text-muted-foreground text-sm">
+          {clipboard.state === 'copied' ? 'Report copied.' : ''}
+          {clipboard.state === 'failed'
             ? 'Could not reach the clipboard. The numbers are below — copy them by hand.'
             : ''}
         </span>

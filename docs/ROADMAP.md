@@ -395,6 +395,17 @@ built next.
 - **The staff console** — mail health, CSP violations, installation state, unverified accounts, and
   a record of what staff themselves have done. Every route is audited **including reads**, because
   on this surface the read _is_ the privileged act.
+- **The console answers before it reports** (ADR-0143). It shipped as five correct panels in one
+  column and had never been photographed. Measured on the unhealthy recipe at 1646, **three of the
+  five non-healthy conditions were above the fold and only because they belonged to the same panel**
+  — the other two by 562 px and 1,445 px — while 48 % of the window sat unused down 5.6 screens of
+  page. A derived `Status` summary now names every check in words, severity-ordered, each linking to
+  the section that answers it, and the sections are two columns whose spans follow content width
+  demand rather than being equal (equal columns would have made every table on the page **narrower**
+  while the page got wider). Measured in one sitting: conditions above the fold **3 → 5 of 5**, page
+  **−16.4 %**, every table **+80 %** wider. Three defects it found were invisible to every gate here
+  because jsdom has no layout — a container query that could never match, an empty state rendered
+  inside two frames, and four tables spreading 371 px of content across 1,438.
 - **CSP violations are collected instead of discarded** (staff console M4). The policy now reports;
   a public, throttled, deduplicated sink stores what arrives, so the decision to enforce can be made
   from evidence rather than from whatever somebody saw in a console during a six-surface walk.

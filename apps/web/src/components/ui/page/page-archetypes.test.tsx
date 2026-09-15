@@ -9,6 +9,7 @@ import {
   PageHeader,
   SectionCard,
   Skeleton,
+  StatGrid,
 } from './index';
 
 /**
@@ -62,6 +63,40 @@ describe('PageHeader', () => {
 });
 
 describe('SectionCard', () => {
+  /**
+   * **A focus destination has to be visible when focus lands on it** (WCAG 2.2 §2.4.7, AA).
+   *
+   * `id` exists to make a section a place focus can be SENT — the staff console's status summary
+   * links every check to the section that answers it. It shipped applying
+   * `focus-visible:outline-none` with no replacement, so a keyboard reader who followed such a link
+   * arrived with no visible sign that they had. Every assertion that existed checked `tabindex="-1"`
+   * was present; none checked that focus could be seen. Found by the M6 component review.
+   *
+   * The second half matters too: the classes were unconditional, so three overview sections that
+   * pass no `id` — and are therefore not focusable at all — carried focus styling for a behaviour
+   * they do not have.
+   */
+  it('gives a focus destination a visible ring, and gives a plain section no focus styling at all', () => {
+    const { rerender, container } = render(
+      <SectionCard id="somewhere" title="Destination">
+        body
+      </SectionCard>,
+    );
+
+    const destination = container.querySelector('section');
+    expect(destination).toHaveAttribute('tabindex', '-1');
+    expect(destination?.className, 'the focus destination has no visible indicator').toMatch(
+      /focus-visible:ring-2/,
+    );
+
+    rerender(<SectionCard title="Ordinary">body</SectionCard>);
+    const ordinary = container.querySelector('section');
+    expect(ordinary).not.toHaveAttribute('tabindex');
+    expect(ordinary?.className, 'a section nobody can focus is carrying focus styling').not.toMatch(
+      /focus-visible:/,
+    );
+  });
+
   it('renders its title as an h2, so a section never claims the page heading', () => {
     // The archetype owns the rank. `CardTitle` defaults to h1 because eleven call sites are a
     // page's only heading; a section inside a page is not one of those, and deciding that here
@@ -174,5 +209,52 @@ describe('Skeleton', () => {
     // It carries no information; the region it sits in carries the `aria-busy`.
     const { container } = render(<Skeleton className="h-4 w-24" />);
     expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+  });
+});
+
+/**
+ * **`StatGrid`'s two axes, both of which shipped with no test at all.**
+ *
+ * `tone` exists because the console's job is *is anything wrong*, and until it was added a failure
+ * count and "API version 0.64.0" rendered identically — so the two most alarming numbers on the
+ * screen carried no signal (spec §8.15). A regression in the wiring or in the class map would have
+ * gone undetected by everything in the suite. `columns` shipped **inert**: `@container` and its own
+ * `@md:` variant were on the same element, so the rule could never match and the grid was two
+ * columns at every width in both modes. Both found by the M6 component review.
+ */
+describe('StatGrid', () => {
+  it('renders a toned figure with the alarm treatment, and an untoned one without it', () => {
+    render(
+      <StatGrid
+        items={[
+          { label: 'Failures, last 24 hours', value: '5', tone: 'alarm' },
+          { label: 'API version', value: '0.64.0' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('5').className).toMatch(/text-destructive-text/);
+    expect(
+      screen.getByText('0.64.0').className,
+      'an ordinary fact is being painted as a problem',
+    ).not.toMatch(/text-destructive-text/);
+  });
+
+  /**
+   * The `@container` must be on a WRAPPER, never on the grid itself — an element is not its own
+   * query container, so the variant would query an ancestor that does not exist and the base class
+   * would win silently, at every width. That is exactly what shipped.
+   */
+  it('declares its container on a wrapper, so the column rule can match at all', () => {
+    const { container } = render(<StatGrid columns={3} items={[{ label: 'A', value: '1' }]} />);
+
+    const wrapper = container.querySelector('.\\@container');
+    expect(wrapper, 'nothing declares a query container').not.toBeNull();
+    const list = container.querySelector('dl');
+    expect(
+      list?.className,
+      'the grid is its own query container, so its rule cannot fire',
+    ).not.toMatch(/@container/);
+    expect(list?.className).toMatch(/@md:grid-cols-3/);
   });
 });

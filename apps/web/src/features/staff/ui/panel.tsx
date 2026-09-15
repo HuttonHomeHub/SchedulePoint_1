@@ -1,23 +1,39 @@
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { SectionCard } from '@/components/ui/page';
 
 /**
- * One shape for every panel: `Card` composed through its own `CardHeader`/`CardContent` parts
- * rather than a hand-rolled `p-4`, and one heading treatment.
+ * One shape for every panel: the page archetype, plus the one thing the archetype does not have —
+ * a polite status region.
  *
- * Written after the component review found this file was the **only** place in the codebase using
- * `Card` against its documented composition contract, five times, each reinventing the spacing
- * scale — and that two of the five panels rendered a failure as a bare un-carded `Alert` while the
- * other three boxed it, for no reason a reader could infer.
+ * **It composes `SectionCard` rather than reimplementing it** (ADR-0062's extraction argument,
+ * applied before the divergence rather than after it), so a staff panel and every other titled
+ * section in the product cannot drift apart. That drift would be invisible: each looks right alone,
+ * and only a reader who opened two screens side by side would ever see one is a version behind.
  *
- * `CardTitle` is deliberately not used: it renders an `h1` (`card.tsx:50`) and this page already
- * has one. The composition contract is what was worth reusing, not the heading element.
+ * Written originally after the component review found this file was the **only** place in the
+ * codebase using `Card` against its documented composition contract, five times, each reinventing
+ * the spacing scale. The archetype is the general answer to that, and the console was simply
+ * written before it existed.
+ *
+ * **What changes on screen, and none of it is a defect** (spec §8.5). The heading goes from
+ * `text-lg font-medium` (18 px / 500) to the archetype's `text-base` + `font-semibold` (16 px /
+ * 600) — the system's rank treatment, applied here for the first time. And `CardContent`'s
+ * `space-y-4` is lost, because `SectionCardProps` is a closed interface that passes `className` to
+ * the `Card` and not to its content: the fix is the `<div>` below rather than widening the
+ * archetype for one caller's spacing.
+ *
+ * The old docblock's reason for avoiding `CardTitle` — *"it renders an `h1` and this page already
+ * has one"* — was right and is now the archetype's problem rather than this file's: `SectionCard`
+ * passes `level={2}` once, centrally, so eight panels stop each making the same decision.
  */
 export function Panel({
   title,
   status,
   children,
+  id,
 }: {
   title: string;
+  /** The section's anchor id — the target of the status summary's "jump to" link (spec §8.4). */
+  id?: string;
   /**
    * What this panel says once its query settles, announced politely — WCAG 4.1.3.
    *
@@ -31,16 +47,15 @@ export function Panel({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="text-lg font-medium">{title}</h2>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    // `exactOptionalPropertyTypes` is on, so an explicit `undefined` is not the same as omitting
+    // the prop — spread it conditionally rather than widening `SectionCardProps` to accept one.
+    <SectionCard title={title} {...(id === undefined ? {} : { id })}>
+      <div className="space-y-4">
         <p aria-live="polite" className="sr-only">
           {status}
         </p>
         {children}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }

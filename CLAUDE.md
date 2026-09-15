@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1232 web
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1249 web
 > source files with 42 Playwright suites beside the base journey, and
-> 142 ADRs.
+> 143 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4824,6 +4824,117 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   down to its one remaining limb (M0-T4's unmeasured ≤ 5 ms p95) and **deferred on that count**, its
   number kept rather than ledgered so the ADRs citing it resolve to a live row.
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0141** _(Accepted 2026-09-14)_ — A thumbnail's legibility is a pitch, not a zoom. The
+  product owner used the shipped minimap and reported it _"extremely basic in appearance"_ — it
+  _"doesn't pop."_ Measured, that was not taste: the picture drew **five marks in three colours**,
+  two pairs of which were literally the same token value (`today` and `critical` are both
+  `--destructive`; the critical fringe and the data-date vertical are both `--foreground`), and its
+  ground was the diagram's own, so the panel measured **1.03:1** against the canvas it floats over
+  and read as a hole rather than a picture. The viewport indicator was two hairlines with no fill,
+  and at whole-plan zoom it is congruent with the picture's own edge **to the pixel**, so the
+  loudest mark in the widget (14.13:1) delimited everything and therefore said nothing. It now
+  carries a filled indicator, the diagram's **third** bar state (near-critical had no minimap mark
+  at all — a scene state with no mark, not two marks sharing a token), a Today marker that survives
+  a critical bar of its own colour, and **temporal tiers admitted by measured pitch** — the floor
+  (6 px) set from rendered images rather than inherited from `DAY_GRID_MIN_PX`, whose docblock gives
+  a reason and cites no measurement. **D4 records a stale remedy caught before it was built**: the
+  plan's step 3 assumed the criticality fills needed separating, and they already carry a lightness
+  ladder (0.2152 / 0.1234 / 0.0626). Amends ADR-0100 D5/D7/D9. **The CPM engine is not imported and
+  no migration runs.**
+
+- **ADR-0142** _(Accepted 2026-09-14)_ — A remedy is measured before it is built. ADR-0141 closed
+  with two questions left open for the product owner and the M5 UX review added a third; all three
+  were answered, **two were built and one was not**, because measuring it first showed it does
+  nothing. **D1 is the refusal with its evidence.** Mapping the lane axis by occupied rank collapses
+  **zero** lanes on every plan in the catalogue — structurally, because `packLanes`
+  (`packages/layout/src/pack-lanes.ts:78-84`) opens a lane only when none is free, so a packer
+  cannot leave an empty one. It is not universally inert (an import whose ADR-0069 phase 3 failed,
+  or a plan emptied by deletion), and the refusal is not widened past what was measured. The real
+  term is the **day** axis: the box is 9.5 % inked, **every** one of the 120 rows carries ink, bars
+  collide at 0.94 per inked pixel, and **99 % of bars floor to 1 px** at 0.0456 px/day, so the
+  minimap at scale is a dust field and that is a faithful rendering. **D2** gives ADR-0100 D5 the
+  rule it was missing — the data date outranks texture and does **not** outrank plan data, since a
+  mark placed above the whole bar ladder does not win a pixel, it removes an activity class from the
+  picture (76 milestones). **D3** is the panel border, and WCAG 1.4.11 applies **because the panel is
+  a focusable keyboard-operable widget, not because its two grounds match** — the M8 accessibility
+  review's correction, kept because the wrong reason would license gating every same-background
+  container. The colour remedies were measured and rejected first: the old application's border was
+  **navy** (`#14213D`), which is 1.00:1 against our viewport frame, because that app paired navy with
+  an amber viewport band where ours is dark. **D4** is the general form — ADR-0058 says verify the
+  claim and ADR-0081 extends it to a plan's tasks; this extends it to a plan's **remedies**, since an
+  approved action is a claim that it will work and approval does not make it one. Third instance in
+  one epic. Amends ADR-0100 D5 and ADR-0141. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0143** _(Accepted; M0–M6 landed 2026-09-15)_ — A console answers before it reports, and a
+  page is what it is made of. The staff console (ADR-0086) shipped as five correct panels stacked in
+  one column, and **had never been photographed** — `shoot.mjs` covered nine screens and not this one
+  (`docs/TECH_DEBT.md` #319), so the first picture of it was taken as this epic's M0. Measured at
+  1646 on the unhealthy recipe: **5,553 px, 5.6 screens**, with the content column **848 px at 1280,
+  1440 and 1646 alike** — the page did not respond to width at all above 896 px, so 48 % of the
+  window sat unused down its whole length. And **three of the five non-healthy conditions were above
+  the fold only because they belonged to the same panel, which happened to sit first**; the other two
+  were below by 562 px and 1,445 px, so an operator opening the console to ask _is anything wrong?_
+  was told about mail and had to scroll past two inert panels — roughly 550 px of the most valuable
+  space on the page, neither of which does anything until a button is pressed — to learn that nothing
+  had been deleted from any table since the sweep was switched off.
+  **The decisions.** A derived `Status` summary answers first: one row per check, always all of them,
+  severity-ordered, each stating its verdict as a **word** (WCAG 1.4.1) and linking to the section
+  that answers it. It takes the page's own query results as **arguments** — reading a staff panel is
+  an audited act, so a summary that fetched for itself would write a second `staff.panel_read` row on
+  every page load, forever, in the table that refuses `DELETE`, and `useStaffAccounts(cursor)` is
+  keyed by its cursor so it would be a genuinely different query rather than a deduped one. Its
+  vocabulary is **`health-rows.ts`'s** rather than a new one, which is what stops the page removing
+  four competing severity vocabularies and the product gaining a fifth. `CheckState` has four values
+  and **no fifth meaning "probably fine"**: `PENDING` and `UNREADABLE` are exactly the two a careless
+  summary folds into `HEALTHY`, and a console that says everything is fine while a request is in
+  flight answers the reader's question wrongly. It is deliberately **not a live region** (ADR-0132's
+  discriminator: every condition here is a standing fact that would read the same to somebody who
+  arrived five minutes later).
+  **Two columns, spans by content demand, never equal** — the arithmetic nobody had done says two
+  equal columns give 787 px against a single column's 848, so every table would have got **narrower**
+  while the page got wider (measured: 798 today, 737 equal, **1,438 by demand, +80 %**). `PageGrid`
+  re-orders nothing — no `order`, no `dense` — as a gate rather than a paragraph, because a
+  two-column layout satisfies WCAG 1.3.2 only if the DOM sequence IS the reading sequence and the
+  natural implementation breaks that **silently**. `QueryErrorState` is extracted from five
+  character-identical sites and **`DataTable` consumes it**, which is load-bearing rather than tidy:
+  the approved plan proposed a shared component `DataTable` would not use, held together by a test,
+  which is two implementations that drift invisibly.
+  **Three defects were found by looking at a photograph, and every gate here was blind to all three
+  because jsdom has no layout.** `StatGrid` declared `@container` and `@md:grid-cols-4` on the **same
+  element**, and `container-type: inline-size` establishes a query container for an element's
+  _descendants_ — never itself — so the rule could not fire in either `columns` mode (Chromium:
+  `width: 1438px`, `grid-template-columns: 711px 711px`). Three empty states rendered **one message
+  in two frames**, an `Alert`'s own border and tint inside `DataTable`'s dashed `EMPTY_FRAME`, with
+  the frame's `text-center` fighting the alert's left-aligned icon row — and the policy panel's
+  caveat was in the wrong slot in the other direction too, shown only when the table was empty, so
+  the reader looking at three violations was never told the list is a floor rather than a census.
+  And four tables spread **371–660 px** of content across 1,438, putting an address at x=104 and its
+  date at **x=1,209** on one row, which is ADR-0098's recorded defect verbatim. A fourth was found by
+  reading: **`/staff` had no `AnnouncerProvider` at all**, being a sibling of both shells, so
+  `useAnnounce()` there is a no-op — harmless while nothing announced, and silently fatal the moment
+  a shared hook did.
+  **The table remedy was withdrawn on its own measurement** (ADR-0142 D4, one epic later): `w-full`
+  on the trailing column does take the surplus and squeezes every other column to `min-content` doing
+  it — "Policy violation reports" over three lines, an address broken mid-word over four, the page
+  11,066 → 13,172 px. A width on the **leading** columns is a preference rather than a claim on the
+  remainder. **FC-4 also nearly got softened and the record of that is the useful part**: the two
+  obvious fixes both make a table narrower than the 798 px the condition forbids, its failure clause
+  arguably does not fire for a table whose content occupies 371 px either way, and reading a
+  committed condition's intent clause in order to get past it is what makes conditions decoration.
+  The third option cost nothing and needed no reinterpretation, which is the only reason it shipped.
+  **Judged in ONE sitting**, because `m0-measurement.md` §10 had already recorded the baseline
+  drifting **+555 px with no product change** — staff activity grows by about seven rows every time
+  the console is opened, including by the harness. Conditions above the fold **3 → 5 of 5**; height
+  **15,286 → 12,696–12,770 px (−16.4 %)**; narrowest table **798 → 1,438**; `weightSites()` outside
+  `components/ui/` **173 → 168**, four of the five removed by adopting the archetypes rather than by
+  cutting anything. The after/after spread is 74 px, an order of magnitude below the delta, which is
+  what makes those verdicts verdicts rather than noise (ADR-0128's INDETERMINATE, avoided by
+  reporting the spread). Three gates ship with it — a `@container` beside its own variant, a framed
+  node in an `empty` prop, a `writeText` outside `useClipboardCopy` — each **verified red against the
+  shipped defect**, each reading balanced expressions rather than lines, each with a pinned positive
+  case. **The CPM engine is not imported and no migration runs**; `apps/api` contributes zero files
+  to the diff.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
