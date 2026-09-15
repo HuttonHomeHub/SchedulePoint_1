@@ -153,15 +153,35 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
           </>
         ) : (
           <>
+            {/*
+              **The order is measured, not preferred, and it corrects the approved plan.**
+
+              `implementation-plan.md` M5-T1 step 1 specified
+              `Jump back in -> Where the work stands -> Recently changed -> Needs your attention`,
+              on the principle that "worst news is not first; the reader's own work is". The
+              principle stands and this order keeps it. The sequence did not survive measurement.
+
+              M0's finding was that Q3 ("is anything waiting on me?") is answered at `y = 1053`,
+              **53 px below the fold** on the product owner's own screen — the one question the spec
+              agreed was already answered, answered somewhere the reader has to go looking. The
+              plan's order was written before any section had been measured, and it puts that
+              section LAST behind two ~750 px lists: Q3 lands at **2006**, twice as far away as the
+              defect M0 opened this on.
+
+              Measured section heights at 1646 are 158 / 749 / 789 / 463 (`m5-verdict.md`), and an
+              exhaustive search of all 24 orderings scores this one joint-best at **4 of 7**. Of the
+              two that tie while still leading with the reader's own work, this is the one that puts
+              the programme's HEALTH above the fold rather than the activity feed — which is the
+              content this epic exists to add.
+            */}
             <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} />
-            <RecentlyChangedSection
-              plans={data?.recentlyChanged ?? []}
-              orgSlug={orgSlug}
-              now={now}
-              pending={isPending}
-              error={isError}
-              onRetry={() => void refetch()}
-            />
+            {isWriter && !isError ? (
+              <NeedsAttentionSection
+                attention={data?.attention}
+                orgSlug={orgSlug}
+                pending={isPending}
+              />
+            ) : null}
             {/*
               **Rendered only when the server sent the field.** `planStanding` is OMITTED for a
               caller who may not read schedules, rather than sent as `[]` — so `=== undefined` is
@@ -181,13 +201,14 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
             {data?.planStanding !== undefined ? (
               <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} />
             ) : null}
-            {isWriter && !isError ? (
-              <NeedsAttentionSection
-                attention={data?.attention}
-                orgSlug={orgSlug}
-                pending={isPending}
-              />
-            ) : null}
+            <RecentlyChangedSection
+              plans={data?.recentlyChanged ?? []}
+              orgSlug={orgSlug}
+              now={now}
+              pending={isPending}
+              error={isError}
+              onRetry={() => void refetch()}
+            />
           </>
         )}
       </div>

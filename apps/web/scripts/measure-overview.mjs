@@ -266,6 +266,58 @@ for (const w of WIDTHS) {
   for (const s of widths) p(`| ${String(w)} | ${s.name} | ${String(s.width)} |`);
 }
 p();
+/**
+ * **Section geometry at 1646 — not a falsification condition, an INPUT to one.**
+ *
+ * FC-1 asks whether each answer sits above `y = 1000`, and when one does not, its sanctioned
+ * remedies are "the layout is re-ordered, or a section is cut". Choosing between those needs each
+ * section's HEIGHT, and nothing was measuring it. The answer positions alone let a reader INFER
+ * section boundaries — `y = 1237` for Q5 says the standing section starts somewhere above 1237 and
+ * says nothing about how tall it is — so an ordering was being chosen by arithmetic over guessed
+ * boundaries, which is the reasoning this repository keeps replacing with a number.
+ *
+ * `rows` counts `li` inside the region, because every section here is a list and its height is
+ * very nearly its row count times a row.
+ */
+p('## Section geometry at 1646 (the input to the ordering decision)');
+p();
+p('| Section | top | height | rows | bottom |');
+p('| ------- | --: | -----: | ---: | -----: |');
+await page.setViewportSize({ width: 1646, height: FOLD });
+await page.waitForTimeout(300);
+const geometry = await page.evaluate(
+  (sel) =>
+    [...document.querySelectorAll(sel)].map((el) => {
+      const labelled = el.getAttribute('aria-labelledby');
+      const name =
+        el.getAttribute('aria-label') ??
+        (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
+      const r = el.getBoundingClientRect();
+      return {
+        name: name.trim(),
+        top: Math.round(r.top + window.scrollY),
+        height: Math.round(r.height),
+        rows: el.querySelectorAll('li').length,
+      };
+    }),
+  REGION_SELECTOR,
+);
+if (geometry.length === 0) {
+  throw new Error(
+    'Section geometry found no named regions — every ordering decision below would be arithmetic over nothing.',
+  );
+}
+for (const g of geometry) {
+  p(
+    `| ${g.name} | ${String(g.top)} | ${String(g.height)} | ${String(g.rows)} | ${String(g.top + g.height)} |`,
+  );
+}
+p();
+p(
+  `Page content runs to **${String(Math.max(...geometry.map((g) => g.top + g.height)))} px**; the fold is ${String(FOLD)}.`,
+);
+p();
+
 p(`## FC-5 — requests to \`…/overview\` on one landing load`);
 p();
 p(`Counted **${String(overviewRequests.length)}** (bar: exactly 1).`);
