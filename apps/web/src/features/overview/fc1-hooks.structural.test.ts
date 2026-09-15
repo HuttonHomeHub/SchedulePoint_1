@@ -85,6 +85,27 @@ describe("FC-1's hooks exist in the product", () => {
     const qs = questions();
     expect(qs.length).toBe(7);
     expect(qs.every((q) => q.region !== '' && q.answer !== '')).toBe(true);
+
+    /*
+      **The FILTERED subset is pinned too, and the first version of this gate did not do that.**
+
+      The attribute block below iterates `questions().filter(q => q.answer.startsWith('[data-'))`,
+      and a derived subset that comes back empty makes an `it.each` produce **zero** sub-tests while
+      the file still reports green. The M6 test review proved it rather than raised it: dropping the
+      brackets from the four answers in the harness — `'[data-overview-freshness]'` becoming
+      `'data-overview-freshness'` — took that block from four assertions to none, and the suite said
+      "passed".
+
+      That is this file's own docblock happening to this file. It exists because the harness could
+      name a selector the product did not have, producing a plausible FAIL; the gate could name a
+      selector the harness did not have, producing a plausible PASS. Same shape, opposite polarity,
+      and the silent-green direction is the worse one.
+
+      The sibling gate in the same diff gets this right — `freshness-copy.structural.test.ts` pins
+      `files.length` in a case separate from its fixed-size `it.each(BANNED)` — so the pattern was
+      one file away (ADR-0093).
+    */
+    expect(qs.filter((q) => q.answer.startsWith('[data-')).length).toBe(4);
   });
 
   it.each(questions().filter((q) => q.answer.startsWith('[data-')))(

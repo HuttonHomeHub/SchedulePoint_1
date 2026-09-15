@@ -446,6 +446,83 @@ describe('OverviewScreen — announcements', () => {
   });
 
   /**
+   * **ADR-0098's omit-never-zero rule, on the rendering side, where nothing was guarding it.**
+   *
+   * The server omits `planStanding` for a caller who may not read schedules and sends it
+   * (possibly empty) for one who may — so `undefined` means "you may not see this" and `[]` means
+   * "there is nothing to see", and the screen owes those two different treatments: no frame at all
+   * versus a frame with an empty state.
+   *
+   * The M6 test review mutated `data?.planStanding !== undefined` to `(data?.planStanding ?? [])` —
+   * the exact collapse the twelve-line comment above that line exists to forbid — and **122 of 122
+   * web cases still passed.** The API side pins its half (`overview.service.spec.ts` asserts the
+   * read is never issued), and the rendering half had nothing.
+   *
+   * **A journey cannot cover this and that is why it has to be here.** Every mintable organisation
+   * role holds `schedule:read` (`org-permissions.spec.ts:108`), so no real account can produce the
+   * omitted state; a mocked fetch is the only way it exists at all. Without these cases a
+   * regression would tell a future role with no `schedule:read` "there is nothing to see" — a false
+   * statement, which is worse than the missing frame.
+   */
+  it.each([
+    ['omitted', undefined, false],
+    ['empty', [], true],
+  ] as const)(
+    'renders no standing frame when the field is %s',
+    async (_name, planStanding, expectFrame) => {
+      renderScreen({ payload: overview({ recentlyChanged: [plan()], planStanding }) });
+
+      // **Waited on SETTLED content, not on a heading.** "Recently changed" renders its heading
+      // during the pending window, above a skeleton — so waiting for it resolves while `data` is
+      // still undefined, which is indistinguishable from the omitted case and made the empty case
+      // fail against a correct component. A row's name only exists once the payload has arrived.
+      await waitFor(() => {
+        expect(screen.getByText('Northgate — Phase 1')).toBeVisible();
+      });
+
+      const heading = screen.queryByRole('heading', { level: 2, name: 'Where the work stands' });
+      expect(heading === null).toBe(!expectFrame);
+      // The empty case owes a sentence, not a bare frame — and the omitted case owes neither.
+      expect(screen.queryByText('No programmes to report on yet.') !== null).toBe(expectFrame);
+    },
+  );
+
+  it('renders a standing row when the caller may read schedules and there is one', async () => {
+    renderScreen({
+      payload: overview({
+        recentlyChanged: [plan()],
+        planStanding: [
+          {
+            planId: 'p1',
+            planName: 'Northgate — Phase 1',
+            projectName: 'Northgate',
+            clientName: 'Bellway',
+            status: 'ACTIVE',
+            activityCount: 24,
+            projectFinish: '2026-10-09',
+            scheduleComputedAt: '2026-09-15T11:50:00.000Z',
+            editedSinceCalculated: false,
+            baselineMovement: {
+              kind: 'UNCHANGED',
+              baselineFinish: '2026-10-09',
+              baselineName: 'Contract award',
+            },
+            flags: {},
+          },
+        ],
+      }),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Where the work stands' }),
+      ).toBeVisible();
+    });
+    expect(screen.getByText(/Finishing as planned/)).toBeVisible();
+    expect(screen.queryByText('No programmes to report on yet.')).toBeNull();
+  });
+
+  /**
    * **The section order is M5's entire result, and nothing was pinning it.**
    *
    * `m5-verdict.md` scores all 24 orderings against measured section heights and the offset of each

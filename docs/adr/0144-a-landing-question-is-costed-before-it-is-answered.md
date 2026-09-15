@@ -210,6 +210,22 @@ never crosses `jit_above_cost`.
 `EXPLAIN (ANALYZE, BUFFERS)` on the standing query and kept only a boolean from it; the text reached
 no report, so FC-3(M3)'s conclusion rested on the one quantity blind to this. It is printed now.
 
+**And the test review found this epic's own newest gate vacuous, in the shape that gate was written
+to close.** `fc1-hooks.structural.test.ts` iterates a filtered subset — the four questions whose
+answer is a `[data-…]` selector — and pinned only the **unfiltered** count. Dropping the brackets in
+the harness took the block from four assertions to **zero sub-tests** and the file still reported
+green. That is the gate's own docblock happening to the gate: it exists because the harness could
+name a selector the product did not have, producing a plausible FAIL, and it could itself name a
+selector the harness did not have, producing a plausible **PASS** — same shape, opposite polarity,
+and the silent-green direction is the worse one. The sibling gate in the same diff already did it
+correctly, one file away.
+
+The same review mutated `data?.planStanding !== undefined` to `(data?.planStanding ?? [])` — the
+exact collapse the twelve-line comment above that line forbids — and **122 of 122 web cases still
+passed**. The API side pinned its half; the rendering half of D3 had nothing, and **no journey can
+cover it**, because every mintable role holds `schedule:read` so no real account produces the
+omitted state. It is a unit case or it is unguarded, and it is now three, verified red.
+
 Four findings are recorded rather than rushed (`docs/TECH_DEBT.md` #328, #329, #330), and two more
 claims of mine were narrowed: `loadCalendarPort` caught everything and logged every failure as "has
 no working time", asserting a diagnosis that is false for any other error — it still catches

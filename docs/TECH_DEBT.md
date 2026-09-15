@@ -10556,3 +10556,27 @@ ADR-0073 C3.0, one active baseline per plan) and re-take FC-2/FC-3 in one sittin
 rather than a commit because it changes what every recorded number in this epic was measured
 against, and re-baselining at the end of a milestone would leave the epic's own documents
 describing a harness that no longer produced them.
+
+### 331. The web coverage ratchet was not measured for the landing epic, and the API branch floor has 0.23pp of headroom
+
+**Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, test review) · **Size:** S · **Owner:** web
+
+Two separate facts about the coverage ratchets, both surfaced by the M6 test review.
+
+**The web figure was not taken.** `vitest run --coverage` for `apps/web` was started twice and was
+still running after several minutes both times on this hardware — a ~1,260-source-file workspace
+with heavy jsdom re-creation — and was terminated rather than left indefinitely. So the
+**87 / 85 / 79 / 81** web ratchet was not verified for this epic. What is known instead: the diff is
+purely additive with no test deletions, and 127 of 127 cases in the touched features pass. That is
+an inference about regression risk, **not a measurement**, and it is recorded as one.
+
+**The API figure was taken and is tight.** 74.22 % statements / **70.23 % branches** / 58.65 %
+functions / 75 % lines against a floor of 73 / 70 / 51 / 74 — so **branches clears by 0.23 pp**.
+Not this epic's doing: its structural specs read source as text and contribute no code coverage by
+design, and `overview.repository.ts`'s SQL path is covered by the Supertest suite, which is measured
+separately. But the next change to land has almost no room, and will look like it caused a failure
+it merely revealed.
+
+Neither is a defect in the shipped code. The action is to re-take the web number somewhere it can
+finish, and to decide whether a floor with a quarter of a point of headroom is still a ratchet or
+has become a tripwire.
