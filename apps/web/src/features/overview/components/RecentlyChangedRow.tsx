@@ -47,11 +47,15 @@ function FreshnessLine({
   now: Date;
 }): React.ReactElement | null {
   if (plan.scheduleComputedAt === null) {
-    return <p className="text-warning-text text-sm">Not yet calculated</p>;
+    return (
+      <p data-overview-freshness className="text-warning-text text-sm">
+        Not yet calculated
+      </p>
+    );
   }
   if (!plan.editedSinceCalculated) return null;
   return (
-    <p className="text-warning-text text-sm">
+    <p data-overview-freshness className="text-warning-text text-sm">
       Edited since it was last calculated{' '}
       <time dateTime={exactInstant(plan.scheduleComputedAt)} className="text-muted-foreground">
         ({formatRelative(plan.scheduleComputedAt, now)})

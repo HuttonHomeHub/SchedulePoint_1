@@ -78,9 +78,16 @@ const QUESTIONS = [
     answer: 'a',
   },
   { id: 'Q3', asks: 'Is anything waiting on me?', region: 'Needs your attention', answer: 'a, p' },
-  // The four this epic adds. Each is a per-row fact inside "Recently changed", so it is located by
-  // the data attribute the rows will carry — absent today, and named here so the AFTER run measures
-  // the same thing the BEFORE run failed to find.
+  // The four this epic adds, each located by the data attribute its row carries.
+  //
+  // **Three of the four regions below were WRONG in the version written at M0, and the error was
+  // silent.** That table put all four inside "Recently changed"; M3 then decided that finish,
+  // variance and flags belong in a section of their own, and this harness scopes an answer selector
+  // INSIDE the named region — so it would have found nothing for Q5–Q7 and reported three failures
+  // about a screen that answers all seven. The obvious reading of that verdict is "the layout is
+  // wrong", which would have sent M5 to re-order a screen that was already right. Corrected by
+  // reading the components rather than by running this, because running it produces a plausible
+  // number either way.
   {
     id: 'Q4',
     asks: 'Are these figures current, or stale?',
@@ -90,19 +97,19 @@ const QUESTIONS = [
   {
     id: 'Q5',
     asks: 'When does each programme finish?',
-    region: 'Recently changed',
+    region: 'Where the work stands',
     answer: '[data-overview-finish]',
   },
   {
     id: 'Q6',
     asks: 'Has that moved against what we committed?',
-    region: 'Recently changed',
+    region: 'Where the work stands',
     answer: '[data-overview-variance]',
   },
   {
     id: 'Q7',
     asks: 'Is anything flagged in the schedule?',
-    region: 'Recently changed',
+    region: 'Where the work stands',
     answer: '[data-overview-flags]',
   },
 ];
