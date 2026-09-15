@@ -40,8 +40,10 @@ state the product is in today; no "after" was taken, for the reason §4 gives.
 
 ## 3. FC-3 — the gate, and it failed
 
-The bounded rung (R2, shipped) over the same four shapes: **201 / 222 / 245 / 642**. Flat, as
-designed — the plan-id filter does the work.
+The bounded rung (R2, shipped) over the same four shapes: **201 / 222 / 245 / 642** — flat, which
+is what says the plan-id filter is doing the work.
+
+**A flat ESTIMATE is not evidence that the wall-clock cost is flat, and §7 records that correction.**
 
 The organisation-wide rung:
 
@@ -188,3 +190,49 @@ interleaving; `plan_id` correlation is now **−0.0038** where it was −0.028. 
 within 0.4% of §3's figure, but **`breadth` now reads 88,766 against the 95,602 recorded above — 7%
 lower**. If a re-run disagrees with this document at that shape, that is the re-clustering plus the
 ANALYZE drift of §4, and **not** a product change.
+
+## 7. A correction to §3's own reading, from the M6 backend review
+
+§3 says the bounded rung is "flat across shapes", and treats that as evidence the read is cheap
+everywhere. **The estimate is flat; the wall clock is not, and the estimate structurally cannot see
+the difference.**
+
+`activities.plan_id` is a high-cardinality UUID, so Postgres's default statistics give it **one
+blended per-value row estimate** — measured at `rows=47` in every shape, whether the plan holds 40
+activities or 2,000. Run against the scale tier (10 plans × 2,000 activities, which is ADR-0066's
+own scale tier and the density ADR-0026 treats as a realistic worst-case plan), the real aggregate
+reports:
+
+```
+Aggregate (actual time=5.317..5.317 rows=1 loops=8)
+  -> Bitmap Heap Scan on activities act  (cost=4.79..183.49 rows=47 width=16)
+                                          (actual time=0.567..5.108 rows=2000 loops=8)
+       Heap Blocks: exact=14397
+Execution Time: 43.479 ms
+```
+
+47 estimated against 2,000 actual, and **43 ms for that component alone** under an estimate
+identical to the 40-activity shapes'.
+
+**Nothing here breaches FC-2** — 43 ms sits well inside a 200 ms bar, and the end-to-end p95 for
+that shape measured 30.5 ms. What is corrected is the **claim**: R2 is bounded in **plan count**
+(≤ 8, the property that actually matters, and it holds) and **not** in per-plan activity count. The
+same mechanism M4's own database-architect diagnosis names for R3 — "of the per-plan 184.33, the
+aggregation is 0.83 and the other 178.7 is heap access" — applies to R2; it simply never got the
+scrutiny, because R2's estimate never crosses `jit_above_cost`.
+
+**The signal that would have shown this was being computed and thrown away.** The harness ran
+`EXPLAIN (ANALYZE, BUFFERS)` on the standing query and used the result only to derive a boolean;
+its text reached no report. It is printed now.
+
+### Two things the harness still does not measure, and the claims that rest on them
+
+`seedShape` bulk-inserts **plans and activities only** — zero dependencies, zero baselines, at all
+four shapes. So FC-2 and FC-3's numbers never exercise the two `LEFT JOIN LATERAL`s at realistic
+volume, and `findPlanStanding`'s docstring claim that the baseline lookup is "a one-row-per-plan
+indexed lookup on `uq_baselines_plan_active`" was **asserted rather than measured by anything in the
+tree**. The review checked it by hand inside rolled-back transactions and it holds at scale — the
+planner switches to `Index Scan using uq_baselines_plan_active` (0.022 ms) once 6,000 baseline rows
+exist, and to `Index Only Scan using idx_dependencies_plan_updated_at` (0.039 ms) once 117,000
+dependencies do — but at the fixture's actual volume it seq-scans near-empty tables, so a regression
+in either index's applicability would not show up in FC-3's numbers. `docs/TECH_DEBT.md` #330.

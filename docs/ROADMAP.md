@@ -304,6 +304,17 @@ keep `main` releasable.
   dependencies — not `plans.updated_at`, which does not move when an activity is edited, so the
   naive ordering ranks a plan somebody worked in all morning below one whose name was corrected last
   week **and every row still looks correct**.
+- **A landing question is costed before it is answered** (ADR-0144). The product owner asked for the
+  landing to be "revitalised" — _"it contains very little info… all the information they will ever
+  need"_ — and it answered **2 of the 7** questions a returning planner arrives with. It now answers
+  all seven on the page and **4 above the fold**, adding per-row schedule freshness and a
+  "Where the work stands" section carrying each programme's finish date, its movement against the
+  active baseline in working days, and the counts the last recalculation flagged. It also repaired a
+  dead end nobody could get past: the landing counted pending invitations and linked to Members,
+  which listed only members. Answers arrive as a **ladder of rungs, each with its own cost gate** —
+  and the organisation-wide rung was **withdrawn on measurement** (an estimated query cost 5.8× over
+  the JIT cliff), with its remedy designed, priced and deliberately not built, because the index that
+  would fix it spends the recalculation exemption ADR-0098 protected and serves nothing else.
 - **Deleted work expires, and purge is refused structurally** (ADR-0096). The recycle
   bin was reported as hard to browse, with an unhelpful "Restore its parent first" and a duplicated
   heading — and reading the code changed two of the three answers. Deleting stamps a whole subtree

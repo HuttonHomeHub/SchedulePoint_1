@@ -6,6 +6,7 @@ import { ForbiddenError } from '../../common/errors/domain-errors';
 import { AppConfigService } from '../../config/app-config.service';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { EmptyWorkingTimeCalendarError } from '../schedule/engine/errors';
 import { buildPlanCalendar } from '../schedule/plan-calendar';
 
 import type {
@@ -255,10 +256,18 @@ export class OverviewService {
    * Compose each plan's standing, resolving every distinct calendar ONCE.
    *
    * Eight plans on this screen, and measured against the deployed database seven distinct calendars
-   * serve 4,032 plans — so the dedupe is the difference between a handful of reads and one per row,
-   * and the reads that remain are an index scan on the primary key (0.06 ms) plus a four-page scan
-   * of a hundred-row table (0.11 ms), issued in parallel. That was measured before this frame was
-   * committed to, against the 156.8 ms of headroom M0 recorded at the worst shape (M0-T6).
+   * serve 4,032 plans — so the dedupe is the difference between a handful of reads and one per row.
+   * That was measured before this frame was committed to, against the 156.8 ms of headroom M0
+   * recorded at the worst shape (M0-T6).
+   *
+   * **What each remaining read costs was understated here, and the M6 backend review corrected it.**
+   * This said "an index scan on the primary key (0.06 ms) plus a four-page scan of a hundred-row
+   * table (0.11 ms)" — two reads. `loadPlanCalendar` is a Prisma `findFirst` with nested selects on
+   * shifts and on exceptions (which themselves nest windows), and `schema.prisma` enables no
+   * `relationJoins` preview feature, so Prisma's default strategy issues it as **three to four
+   * small queries per calendar**, not two. The conclusion is unchanged — they are bounded by the
+   * number of DISTINCT calendars rather than by rows, capped at eight, and run in parallel — but
+   * the figure was a floor presented as the whole cost.
    */
   private async toStanding(
     organizationId: string,
@@ -354,11 +363,22 @@ export class OverviewService {
       // A missing or soft-deleted calendar reads `null` and falls back to all-minutes-work, which
       // is what every other seam does with it.
       return buildPlanCalendar(calendar);
-    } catch {
-      this.logger.warn(
-        { organizationId, calendarId },
-        'plan calendar has no working time; standing movement not assessable',
-      );
+    } catch (error) {
+      // **Everything is caught and the MESSAGE is what narrows, not the catch.** Rethrowing
+      // anything unrecognised would 500 the first screen after sign-in over one plan's calendar,
+      // which is the trade this whole path exists to refuse — so the availability guarantee is
+      // kept. What the bare version got wrong is that it asserted a diagnosis: every failure was
+      // logged as "has no working time", including one that is not that, which would send a reader
+      // of the logs to the wrong place. `EmptyWorkingTimeCalendarError` is the documented case
+      // (TECH_DEBT #79's window-only base week); anything else is a real defect and now says so at
+      // a level that matches. Raised by the M6 backend review.
+      const expected = error instanceof EmptyWorkingTimeCalendarError;
+      const context = { organizationId, calendarId, err: error };
+      if (expected) {
+        this.logger.warn(context, 'plan calendar has no working time; movement not assessable');
+      } else {
+        this.logger.error(context, 'plan calendar could not be built; movement not assessable');
+      }
       return null;
     }
   }

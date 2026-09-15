@@ -382,10 +382,40 @@ for (const r of results) {
 }
 p();
 p(
-  'The standing read is bounded by the recently-changed page (≤ 8 plans), so its cost should be ' +
-    'flat across shapes. A cost that tracks the shape means the aggregate is not using the ' +
-    'plan-id filter, which is the failure the milestone stops on.',
+  'The standing read is bounded by the recently-changed page (≤ 8 plans), so its ESTIMATE is flat ' +
+    'across shapes. A cost that tracks the shape means the aggregate is not using the plan-id ' +
+    'filter, which is the failure the milestone stops on.',
 );
+p();
+p(
+  '**A flat estimate is NOT evidence that the wall-clock cost is shape-independent, and the ' +
+    'plans below are printed because of it.** `activities.plan_id` is a high-cardinality UUID, so ' +
+    "Postgres's default statistics assign it one blended per-value row estimate — measured at " +
+    '`rows=47` at every shape — whether the plan holds 40 activities or 2,000. The M6 backend ' +
+    'review ran the real query against the scale tier (10 plans × 2,000) and found the aggregate ' +
+    'doing **2,000 rows per plan and 43 ms** for that component alone, under an estimate that ' +
+    'reads identically to the 40-activity shapes. So R2 is bounded in **plan count** (≤ 8, which ' +
+    'is the property that matters and does hold) and **not** in per-plan activity count. It stays ' +
+    'comfortably inside FC-2, and the claim is narrowed rather than the number being defended.',
+);
+p();
+p('## The standing query, `EXPLAIN (ANALYZE, BUFFERS)` per shape');
+p();
+p(
+  'Printed because the harness was already computing this and discarding everything but a ' +
+    'boolean: `standingAnalyzed` fed `standingJit` and its text reached no report, so FC-3(M3)' +
+    "'s conclusion rested on the estimate alone — the one quantity that cannot see the paragraph " +
+    'above. Raised by the M6 backend review.',
+);
+p();
+for (const r of results) {
+  p(`### ${r.shape.label} — bounded standing`);
+  p();
+  p('```');
+  p(r.standingAnalyzed.trim());
+  p('```');
+  p();
+}
 p();
 
 p('## `EXPLAIN (ANALYZE, BUFFERS)` per shape');

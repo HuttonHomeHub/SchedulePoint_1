@@ -10527,3 +10527,32 @@ It is a row rather than a commit because the third copy arrived in this epic and
 extracting a primitive on the strength of three call sites, in an epic's last milestone, is the
 shared-change-late-in-an-epic move ADR-0105 exists to stop. **The trigger is a fourth call site, or
 the first change to either treatment.**
+
+### 330. The landing benchmark seeds no dependencies and no baselines
+
+**Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, backend-performance review) · **Size:** S · **Owner:** api
+
+`apps/web/scripts/measure-overview-endpoint.mjs`'s `seedShape()` bulk-inserts **plans and activities
+only**. All four ADR-0098 organisation shapes therefore hold zero `dependencies` and zero
+`baselines`, so FC-2's timings and FC-3's estimates never exercise `findPlanStanding`'s two
+`LEFT JOIN LATERAL`s at any realistic volume — both seq-scan near-empty tables instead.
+
+The consequence is a claim nothing in the tree measures. `findPlanStanding`'s own docstring says the
+baseline lookup is "a one-row-per-plan indexed lookup on `uq_baselines_plan_active`", and the review
+had to check that by hand, inside rolled-back transactions, to find out whether it was true. **It
+is** — the planner switches to `Index Scan using uq_baselines_plan_active` (0.022 ms) once ~6,000
+baseline rows exist, and to `Index Only Scan using idx_dependencies_plan_updated_at` (0.039 ms) once
+~117,000 dependencies do. But at the harness's actual volume a regression in either index's
+applicability would not move FC-3's numbers at all, and the sibling index migration's own "TWO
+INSTRUCTIONS" note warns that the `deleted_at IS NULL` predicate can be dropped from a lateral
+without any error.
+
+`apps/api/test/plan-standing-active-baseline-index.e2e-spec.ts` does **not** close this: it asserts
+the index's _shape_ in `pg_indexes`, never that the planner chooses it.
+
+The fix is to extend `seedShape` with a plausible per-shape dependency and baseline volume (the
+review's figures above are a reasonable starting density: ~1.6 dependencies per activity from
+ADR-0073 C3.0, one active baseline per plan) and re-take FC-2/FC-3 in one sitting. It is a row
+rather than a commit because it changes what every recorded number in this epic was measured
+against, and re-baselining at the end of a milestone would leave the epic's own documents
+describing a harness that no longer produced them.
