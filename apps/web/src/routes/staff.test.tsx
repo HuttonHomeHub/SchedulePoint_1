@@ -440,6 +440,36 @@ describe('StaffConsoleScreen', () => {
   });
 
   /**
+   * **No two elements on the page share an `id`.**
+   *
+   * M6 sent the alerting check to the section that answers it and left `InstallationPanel` holding
+   * `CHECK_SECTION_ID.alerting` as its own `id` — so two sections carried `staff-section-health`,
+   * which is invalid and makes every anchor to it ambiguous. One correct pattern applied to a
+   * control and not its neighbour, committed inside the commit fixing an instance of exactly that.
+   *
+   * **The journey found it and no unit test could**, because each component test renders its own
+   * subtree and the collision exists only in the whole page. This is the cheap version of that
+   * catch: it runs everywhere, in milliseconds, against the same composed screen.
+   */
+  it('gives no two elements the same id', async () => {
+    renderStaffWith({});
+    await screen.findByRole('heading', { name: 'Mail and retention' });
+
+    const ids = [...document.querySelectorAll('[id]')].map((el) => el.id);
+    expect(
+      ids.length,
+      'nothing on the page carries an id — the query has stopped working',
+    ).toBeGreaterThan(3);
+
+    const seen = new Set<string>();
+    const duplicated = ids.filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
+    expect(
+      [...new Set(duplicated)],
+      'two elements share an id, so an anchor to it has no single destination',
+    ).toEqual([]);
+  });
+
+  /**
    * **Every caveat on this page is wired to the region it qualifies, and two were not.**
    *
    * `DataTable` is a focusable `role="region"`, so a screen-reader user navigating by landmark lands

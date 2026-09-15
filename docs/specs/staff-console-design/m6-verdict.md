@@ -157,6 +157,22 @@ counting: the ADR-0076 class this epic cites elsewhere, committed by its own aut
 untrue by reusing it for the summary — the gate only ever asserted presence, so nothing failed and
 the comment simply went stale.
 
+### 5.6b The seventh defect, found by the journey on the first run after the fix
+
+Sending the alerting check to the section that answers it (§5.1) left `InstallationPanel` holding
+`CHECK_SECTION_ID.alerting` as its **own** `id` — so two sections carried `staff-section-health`,
+which is invalid and makes every anchor to it ambiguous. **One correct pattern applied to a control
+and not its neighbour, committed inside the commit fixing an instance of exactly that.**
+
+`scripts/e2e-local.sh web:staff` caught it immediately (`strict mode violation: resolved to 2
+elements`) and **no unit test could have**: each component test renders its own subtree, and the
+collision exists only in the composed page. The cheap version now exists beside it — a route-level
+assertion that no two elements share an `id`, which runs everywhere in milliseconds — and it is
+verified red against the exact state that shipped for the length of one commit.
+
+`InstallationPanel` now carries no `id` at all, which is the honest state: `id` is what makes a
+section a focus target, and after §5.1 nothing links there.
+
 ### 5.7 Recorded rather than fixed
 
 - **`DataTable`'s `cellClassName ?? default` replaces rather than merges**, which is the primitive-level

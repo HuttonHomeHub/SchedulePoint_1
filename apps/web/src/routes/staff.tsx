@@ -743,7 +743,14 @@ function InstallationPanel(): React.ReactElement {
   return (
     <Panel
       title="Installation"
-      id={CHECK_SECTION_ID.alerting}
+      // **No `id`, deliberately.** It carried `CHECK_SECTION_ID.alerting` only because the alerting
+      // check used to point here, and when M6 sent that check to the section that answers it this
+      // panel kept the constant — so two sections shared one `id`, which is invalid and makes the
+      // anchor's destination ambiguous. Found by the journey on the first run after the fix; no unit
+      // test could see it, because each renders its own subtree and the collision exists only in the
+      // whole page. `id` is what makes a section a focus target, and nothing links here, so the
+      // honest state is to have neither. One correct pattern applied to a control and not its
+      // neighbour — inside the commit fixing an instance of exactly that.
       status={
         installation.isPending
           ? ''
