@@ -444,4 +444,50 @@ describe('OverviewScreen — announcements', () => {
       expect(screen.getByTestId('announcer')).toHaveTextContent('2 recently changed plans.');
     });
   });
+
+  /**
+   * **The section order is M5's entire result, and nothing was pinning it.**
+   *
+   * `m5-verdict.md` scores all 24 orderings against measured section heights and the offset of each
+   * answer within its own section; the maximum is 4 of 7 and this is the ordering that reaches it
+   * while still leading with the reader's own work. Until this case existed, a later change could
+   * re-order the JSX and give that back with nothing going red — the measurement lives in a
+   * hand-run script, which is not a gate. Raised by the M6 UX review.
+   *
+   * It asserts the **rendered heading sequence**, not the JSX, because that is what a reader and a
+   * screen reader walk: `SectionCard` fixes every section heading at `h2`, and DOM order is reading
+   * order here (there is no `order`, no grid placement — which is also what keeps WCAG 1.3.2 true).
+   */
+  it('renders the four sections in the order M5 measured', async () => {
+    renderScreen({
+      payload: overview({
+        recentlyChanged: [plan()],
+        planStanding: [],
+        // "Jump back in" renders nothing when it has nothing, so the fixture has to give it
+        // something or this case would silently pin a three-section order — which is exactly the
+        // shape of vacuity it exists to prevent.
+        recentPlans: [
+          {
+            planId: 'p1',
+            planName: 'Tower B',
+            projectName: 'Riverside',
+            clientName: 'Riverside Developments',
+          },
+        ],
+      }),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Where the work stands' }),
+      ).toBeVisible();
+    });
+
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim())).toEqual([
+      'Jump back in',
+      'Needs your attention',
+      'Where the work stands',
+      'Recently changed',
+    ]);
+  });
 });

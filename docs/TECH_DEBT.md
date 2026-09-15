@@ -10482,3 +10482,48 @@ Neither blocks the height win, which is measured and taken. Both become worth do
 installation's history is large enough that scanning fifteen rows stops being the fast path —
 `docs/TECH_DEBT.md` #271 (a total on the read, so the panel can say "showing 50 of 312") is the
 signal that the moment has arrived.
+
+### 328. The measurement harnesses will bulk-write to whatever `DATABASE_URL` points at
+
+**Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, security review) · **Size:** S · **Owner:** web
+
+`apps/web/scripts/measure-overview-endpoint.mjs`, `measure-overview.mjs` and `landing-fixture.mjs`
+resolve their connection with `process.env.DATABASE_URL ?? 'postgresql://app:app@localhost:5432/app'`
+and then issue bulk `INSERT`s (3,000 plans and 120,000 activities at the largest shape), plus
+`UPDATE`s that expire an invitation. **No credential is baked in** — the fallback is the standard
+local development string — and nothing here is a regression: it is the convention every
+`measure-*.mjs` harness in this repository already uses, and none of them is wired into
+`package.json`, turbo or CI, so all of them run only by explicit manual invocation.
+
+What is missing is a guard on the one case that would hurt: a developer with `DATABASE_URL` exported
+to a shared or staging database in their shell runs a benchmark and seeds a hundred thousand rows
+into it. The harness would report perfectly plausible numbers while doing it.
+
+The cheap fix is a host check — refuse unless the resolved host is `localhost` or `127.0.0.1`, with
+an explicit opt-out flag for anyone who means it. It belongs to the whole harness family rather than
+to this epic's two scripts, which is why it is a row rather than a commit: changing a shared
+convention in an epic's last milestone is what ADR-0105 exists to stop.
+
+### 329. Three overview rows repeat the same plan-identity block
+
+**Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, component review) · **Size:** S · **Owner:** web
+
+`JumpBackInSection.tsx`, `RecentlyChangedRow.tsx` and `PlanStandingRow.tsx` now each render the same
+two things by hand: a plan-name `Link` carrying `rowLinkClass` with an optional `Draft` badge beside
+it, and a `<p className="text-muted-foreground truncate text-sm">{projectName} · {clientName}</p>`
+subtitle. The subtitle line is **verbatim in all three**; the name-and-badge block is verbatim in two.
+
+Nothing is wrong today, which is the point — this is the ADR-0065/ADR-0121 shape, where two or three
+implementations of one rule each look correct alone and the drift is invisible because only somebody
+comparing the three would ever see it. A change to the truncation rule, or to how a `DRAFT` plan is
+marked, currently has no way of reaching the other call sites.
+
+`ListRow`'s own docblock records `rowLinkClass` being extracted for exactly this reason — "the same
+four declarations were repeated at every row call site" — so the precedent for pulling it out is one
+layer down in the same file. The natural move is a shared row-identity element taking
+`{ orgSlug, planId, planName, projectName, clientName, status? }`.
+
+It is a row rather than a commit because the third copy arrived in this epic and a fourth has not:
+extracting a primitive on the strength of three call sites, in an epic's last milestone, is the
+shared-change-late-in-an-epic move ADR-0105 exists to stop. **The trigger is a fourth call site, or
+the first change to either treatment.**

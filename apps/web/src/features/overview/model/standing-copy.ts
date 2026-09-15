@@ -18,6 +18,32 @@ import type { BaselineMovement, PlanStanding } from '@repo/types';
  * chasing template literals through a component tree.
  */
 
+/** The fixed label beside the finish date. Here so the module's claim to own the sentences is true. */
+export const FINISH_LABEL = 'Finishes';
+
+/** The finish half of a plan with no computed finish. Never a dash (see the module docblock). */
+export const NO_FINISH_SENTENCE = 'No finish date yet';
+
+/**
+ * The caveat on a row whose figures predate an edit.
+ *
+ * **This exists because M5's reorder gave the epic's own premise a way to fail.** "Where the work
+ * stands" deliberately showed no freshness, on the M3 reasoning that "Recently changed" already
+ * says it once for the same eight plans. That was true while it sat BELOW — and M5 moved this
+ * section above it, so a planner read "14 working days later than Contract award" roughly 630 px
+ * before the one sentence qualifying it. Two locally-correct decisions composing into a number that
+ * outruns its own caveat, which is the exact failure this epic exists to remove. Found by the M6 UX
+ * review, which also observed that the caveat had ended up FURTHER from its number than it was
+ * before the epic began.
+ *
+ * It names the **consequence** rather than the event — a reader does not need to know when the
+ * recalculation happened, they need to know the dates above it may have moved since. The wording
+ * avoids "behind" and "out of date" is deliberate: `freshness-copy.structural.test.ts` bans
+ * "behind" as a verdict the data cannot support, and it would be a verdict here too.
+ */
+export const STALE_FIGURES_SENTENCE =
+  'Edited since it was calculated, so these figures may have moved';
+
 /** What a reader should do next, per reason. Five reasons, five different actions. */
 const NOT_ASSESSABLE_COPY: Record<
   Extract<BaselineMovement, { kind: 'NOT_ASSESSABLE' }>['reason'],

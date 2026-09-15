@@ -89,6 +89,15 @@ sections up by roughly 250 px each, which still leaves the fourth section's answ
 a five-row list would not contain it at all. The remedy would remove the question rather than
 answer it.
 
+### The 4 is thin, and the margins are stated rather than left to be discovered
+
+Q5 lands at **951** and Q6 at **973** against a 1,000 px fold — **49 px and 27 px of margin**. A
+plan name long enough to wrap the first standing row to a second line, a different font-rendering
+pass, or a visible scrollbar narrowing the content box would tip one or both back below. Raised by
+the M6 UX review, and recorded here rather than absorbed: "4 of 7" is a measurement of one fixture
+at one width on one machine, not a property of the screen. The two answers above it (Q1 at 238,
+Q3 at 420) are not close to anything.
+
 ### Q7 is not a layout property, and that is a finding about the condition
 
 `[data-overview-finish]` and `[data-overview-variance]` are on **every** row, so Q5 and Q6 measure

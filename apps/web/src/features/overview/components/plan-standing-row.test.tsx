@@ -75,12 +75,29 @@ describe('a standing row', () => {
     // `<time datetime>` rather than a hover `title`: people accountable for dates need the exact
     // one, and a title is invisible to keyboard and touch (`docs/UX_STANDARDS.md` §6).
     //
-    // Asserted on the ATTRIBUTE rather than the rendered words, deliberately: the visible form goes
-    // through `toLocaleDateString` with the runner's locale, so pinning "9 Oct 2026" would pin
-    // en-GB and go red the day CI runs anywhere else. The attribute is the contract.
+    // **The visible form is pinned exactly, and it could not be before.** This case used to assert
+    // only that the year appeared, with a comment explaining that pinning "9 Oct 2026" would pin
+    // en-GB. That was true of the code as written and was the wrong conclusion: the row was
+    // building its own `Intl.DateTimeFormat` with the BROWSER's locale, where every other calendar
+    // date in the product goes through `lib/format-date.ts`'s module-scoped en-GB formatter. The
+    // M6 component review found it; the test had been softened to tolerate the inconsistency
+    // rather than the inconsistency being removed. With the shared formatter the output is fixed,
+    // so the assertion can be a real one.
     const time = document.querySelector('time');
     expect(time).toHaveAttribute('datetime', '2026-10-09');
-    expect(time?.textContent ?? '').toContain('2026');
+    expect(time?.textContent ?? '').toBe('09 Oct 2026');
+  });
+
+  it('carries a staleness caveat only when the figures predate an edit', () => {
+    // The caveat exists because M5's reorder moved this section ABOVE "Recently changed", which is
+    // where the plan's freshness had been stated once for the same eight plans. Without it a
+    // planner reads a movement figure roughly 630 px before the sentence qualifying it.
+    const { unmount } = renderRow({ editedSinceCalculated: true });
+    expect(screen.getByText(/Edited since it was calculated/)).toBeVisible();
+    unmount();
+
+    renderRow({ editedSinceCalculated: false });
+    expect(screen.queryByText(/Edited since it was calculated/)).toBeNull();
   });
 
   it('renders the finish in UTC, so it does not slide by a day for half the world', () => {

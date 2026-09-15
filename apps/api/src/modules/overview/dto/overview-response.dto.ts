@@ -184,25 +184,33 @@ export class MovementUnchangedDto {
 /**
  * There is no movement to report, and the reason says which of five situations this is — each with
  * a different remedy, which is why they are not one absence.
+ *
+ * **Listed in the order `baselineMovementOf` evaluates them** (`plan-standing.ts`), not
+ * alphabetically and not in the order they were added. That function is a ladder — the first
+ * condition that holds wins — so the sequence carries information: a plan with no activities is
+ * `PLAN_EMPTY` and never `NO_BASELINE`, whatever else is also true of it. The API review of this
+ * epic caught the two orders disagreeing, and the reason it is worth a line rather than a shrug is
+ * that this file's own comments are unusually careful about ordering being load-bearing, so a
+ * reader of the generated Swagger page would reasonably read the enum as the ladder.
  */
 export class MovementNotAssessableDto {
   @ApiProperty({ enum: ['NOT_ASSESSABLE'], example: 'NOT_ASSESSABLE' }) kind!: 'NOT_ASSESSABLE';
 
   @ApiProperty({
     enum: [
+      'PLAN_EMPTY',
+      'PLAN_NOT_SCHEDULED',
       'NO_BASELINE',
       'BASELINE_HAS_NO_FINISH',
-      'PLAN_NOT_SCHEDULED',
-      'PLAN_EMPTY',
       'CALENDAR_UNUSABLE',
     ],
     example: 'NO_BASELINE',
   })
   reason!:
+    | 'PLAN_EMPTY'
+    | 'PLAN_NOT_SCHEDULED'
     | 'NO_BASELINE'
     | 'BASELINE_HAS_NO_FINISH'
-    | 'PLAN_NOT_SCHEDULED'
-    | 'PLAN_EMPTY'
     | 'CALENDAR_UNUSABLE';
 }
 

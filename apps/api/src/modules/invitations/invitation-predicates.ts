@@ -43,9 +43,16 @@ export function pendingInvitationWhere(organizationId: string): Prisma.Invitatio
 /**
  * A pending invitation somebody can still accept.
  *
- * `expiresAt > now` is strict: an invitation expiring at this exact instant is expired, matching
- * `accept()`'s `expiresAt.getTime() < Date.now()` refusal at the boundary rather than one
- * millisecond either side of it.
+ * `expiresAt > now` is strict, so an invitation expiring at this exact instant is not live.
+ *
+ * **That is STRICTER than `accept()`, not the same as it**, and the docblock said "matching" until
+ * the M6 UX review read both: `invitations.service.ts:217` refuses on
+ * `expiresAt.getTime() < Date.now()`, so at the one instant where `expiresAt === now` it still
+ * accepts while this predicate already calls the invitation expired. The window is a single
+ * millisecond that two separate HTTP requests would have to land in, so nothing is chased — but a
+ * file this careful about boundaries should not carry a false "matching" (ADR-0076 Class 3), and
+ * the direction is the safe one: the landing under-counts what is live rather than offering a
+ * reader an invitation the API would refuse.
  */
 export function liveInvitationWhere(
   organizationId: string,

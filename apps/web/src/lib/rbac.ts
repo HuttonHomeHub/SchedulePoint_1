@@ -134,7 +134,7 @@ export function canReadAuditLog(role: OrganizationRole | undefined): boolean {
  * **omitted** without the permission (ADR-0082's first omit clause: the reader cannot change this
  * and there is nothing to show), and inside it Revoke is simply available.
  *
- * The coupling is pinned by `invitation-permissions.structural.test.ts`, so if the API ever splits
+ * The coupling is pinned by `invitation-permissions.structural.spec.ts`, so if the API ever splits
  * them this predicate fails rather than silently offering a control the server refuses.
  *
  * The client mirror decides what to *show*; the API decides what is *allowed*.
