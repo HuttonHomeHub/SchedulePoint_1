@@ -27,6 +27,7 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { Dialog } from '@/components/ui/dialog';
 import { TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
+import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 import { formatCalendarDate, formatTimestamp } from '@/lib/format-date';
 
 /** Human state for a link — active, revoked, or expired (a link past its `expiresAt` but not revoked). */
@@ -42,31 +43,28 @@ function shareState(share: ShareLink): { label: string; variant: 'neutral' | 'cr
  * copied now. A read-only field + a Copy button (Clipboard API); the token is never logged.
  */
 function CreatedLinkPanel({ created }: { created: CreatedShare }): React.ReactElement {
-  const announce = useAnnounce();
-  const [copied, setCopied] = useState(false);
-
-  // Revert the "Copied" label back to "Copy link" after a moment; clear the timer on unmount.
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 2000);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  /**
+   * **This site had it right, and the other four did not** — the absent-API guard, both
+   * announcements, and the 2 s label revert. `useClipboardCopy` is that behaviour extracted rather
+   * than a new one: the guard exists because `navigator.clipboard` is undefined in an insecure
+   * context, so `navigator.clipboard.writeText(…)` throws SYNCHRONOUSLY and the `.then(onError)` the
+   * other four relied on could never run in the one configuration it was written for.
+   *
+   * The revert survives as an option because it is a real behaviour, not an inconsistency to
+   * flatten: here the BUTTON'S LABEL is the signal, and a button permanently reading "Copied" stops
+   * reading as something you can press.
+   *
+   * The URL carries the token in its fragment — copied, never logged.
+   */
+  const clipboard = useClipboardCopy({
+    copiedMessage: 'Share link copied to the clipboard.',
+    failedMessage: 'Couldn’t copy the link. Select and copy it manually.',
+    revertAfterMs: 2000,
+  });
+  const copied = clipboard.state === 'copied';
 
   const copy = (): void => {
-    // The URL carries the token in its fragment — copy it, never log it. Guard the Clipboard API being
-    // absent (older / insecure contexts) so we hit the manual-copy path instead of throwing synchronously.
-    const clipboard = navigator.clipboard;
-    if (!clipboard) {
-      announce('Couldn’t copy the link. Select and copy it manually.');
-      return;
-    }
-    void clipboard.writeText(created.url).then(
-      () => {
-        setCopied(true);
-        announce('Share link copied to the clipboard.');
-      },
-      () => announce('Couldn’t copy the link. Select and copy it manually.'),
-    );
+    clipboard.copy(created.url);
   };
 
   return (

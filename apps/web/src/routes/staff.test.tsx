@@ -351,7 +351,49 @@ describe('StaffConsoleScreen', () => {
     renderStaffWith({ '/staff/csp-reports': [] });
 
     expect(await screen.findByText(/No violations recorded/i)).toBeInTheDocument();
-    expect(screen.getByText(/not yet proof the policy is clean/i)).toBeInTheDocument();
+    expect(screen.getByText(/not proof the policy is clean/i)).toBeInTheDocument();
+  });
+
+  /**
+   * **The caveat qualifies the ROWS, so it renders when there are some.**
+   *
+   * It used to live in `DataTable`'s `empty` slot, which had it backwards in both directions: the
+   * reader looking at three violations — the state where an under-count actually misleads — was
+   * never told the list is a floor rather than a census, and the reader looking at none met the
+   * message inside two frames, because a non-blank `empty` node is wrapped in `EMPTY_FRAME` and an
+   * `Alert` brings its own. Only the second half was visible, and only in a photograph.
+   *
+   * Asserted with a row present, because the empty case above passes either way.
+   */
+  it('keeps the policy caveat when the table has rows, and wires it to the table', async () => {
+    renderStaffWith({
+      '/staff/csp-reports': [
+        {
+          id: 'c1',
+          effectiveDirective: 'script-src-elem',
+          blockedUri: 'inline',
+          documentUri: 'https://app.example/sign-in',
+          disposition: 'report',
+          count: 12,
+          firstSeenAt: '2026-08-09T09:00:00.000Z',
+          lastSeenAt: '2026-08-09T10:00:00.000Z',
+          sourceFile: null,
+          lineNumber: null,
+          columnNumber: null,
+        },
+      ],
+    });
+
+    expect(await screen.findByText('script-src-elem')).toBeInTheDocument();
+    const caveat = screen.getByText(/not proof the policy is clean/i).closest('[id]');
+    expect(caveat).not.toBeNull();
+
+    // A screen-reader user navigating by landmark lands INSIDE the table's region, so placement
+    // above it is not enough (ADR-0073 C2.5). The link is what makes the caveat reachable there.
+    const region = screen.getByRole('region', {
+      name: /Distinct policy violations, most recent activity first/i,
+    });
+    expect(region.getAttribute('aria-describedby')).toBe(caveat?.getAttribute('id'));
   });
 
   it('says a missing transport is NOT health', async () => {

@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useId } from 'react';
 
 import type { ProbeResultRow } from '../api/probe-results';
 import type { Sitting, SittingLimb } from '../model/sitting';
@@ -19,6 +19,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 
 /**
  * Every reading taken on this installation, **grouped into the sittings they were taken in**.
@@ -109,12 +110,10 @@ export function ProbeSittings({
           describedById={COMPARABILITY_ID}
           loadingLabel="Loading recorded readings…"
           errorLabel="Could not read the recorded readings."
-          empty={
-            <Alert purpose="condition" tone="info">
-              No readings recorded yet. Run a measurement above and it will be stored here, with the
-              machine it ran on and the app version that drew the frames.
-            </Alert>
-          }
+          // Plain copy, not an `Alert`: `DataTable` frames a non-blank `empty` node itself, so an
+          // alert here renders one message inside two boxes — its own border and tint inside the
+          // dashed empty frame, whose `text-center` then fights the alert's left-aligned icon row.
+          empty="No readings recorded yet. Run a measurement above and it will be stored here, with the machine it ran on and the app version that drew the frames."
         />
       ) : (
         <div className="space-y-8">
@@ -269,11 +268,7 @@ function SittingBlock({
         getRowKey={(limb) => `${limb.scenarioId}/${limb.preset}/${limb.limbLabel}`}
         describedById={describedBy}
         loadingLabel="Loading readings…"
-        empty={
-          <Alert purpose="condition" tone="info">
-            This sitting recorded no readings.
-          </Alert>
-        }
+        empty="This sitting recorded no readings."
       />
 
       <CopySittingButton sitting={sitting} label={caption} />
@@ -494,7 +489,13 @@ function CopySittingButton({
   /** The block's caption, so N of these buttons are told apart by name and not by position. */
   label: string;
 }): React.ReactElement {
-  const [copied, setCopied] = useState(false);
+  // **The rejection used to set `copied` back to `false`** — byte-identical to never having pressed
+  // the button, in the one configuration the branch exists for. The shared hook owns both outcomes,
+  // and names this sitting in what it announces, for the same reason the button's own label does.
+  const clipboard = useClipboardCopy({
+    copiedMessage: `Report copied to the clipboard — ${label}.`,
+    failedMessage: `Could not reach the clipboard. Select the report text and copy it by hand.`,
+  });
 
   return (
     <span className="flex items-center gap-2">
@@ -507,18 +508,16 @@ function CopySittingButton({
         // word stays short; the accessible name carries the caption the block is already titled by.
         aria-label={`Copy report — ${label}`}
         onClick={() => {
-          void navigator.clipboard.writeText(formatSitting(sitting)).then(
-            () => setCopied(true),
-            () => setCopied(false),
-          );
+          clipboard.copy(formatSitting(sitting));
         }}
       >
         Copy report
       </Button>
-      {/* Announced, because a Copy button changes nothing visible and is otherwise silent to a
-          screen reader — the same WCAG 4.1.3 finding the live panel's copy control already carries. */}
-      <span aria-live="polite" className="text-muted-foreground text-xs">
-        {copied ? 'Copied.' : ''}
+      {/* The visible cue only. The hook announces through the app's one polite region, so a second
+          `aria-live` here would read the same sentence twice to the same reader. */}
+      <span className="text-muted-foreground text-xs">
+        {clipboard.state === 'copied' ? 'Copied.' : ''}
+        {clipboard.state === 'failed' ? 'Could not copy.' : ''}
       </span>
     </span>
   );

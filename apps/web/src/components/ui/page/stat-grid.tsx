@@ -13,7 +13,29 @@ export interface StatItem {
    * `definition-list`, WCAG 1.3.1).
    */
   sub?: React.ReactNode;
+  /**
+   * Whether this figure is itself a problem.
+   *
+   * **Colour is a SECOND channel here and never the only one** (WCAG 1.4.1): a toned figure is
+   * always a count whose own label says what it counts ("Failures, last 24 hours"), and the page's
+   * `Status` summary states the same condition in words above it. Nothing on this page is knowable
+   * only by noticing that a number is red.
+   *
+   * It exists because the console's job is *is anything wrong*, and until now a failure count and
+   * "API version 0.64.0" rendered identically — so the two most alarming numbers on the screen
+   * carried no signal at all (spec §8.15). `--destructive-text` is a gated token, not a literal.
+   */
+  tone?: StatTone;
 }
+
+/** Two values, because a figure is either a problem or it is not. */
+export type StatTone = 'plain' | 'alarm';
+
+/** One table, so the two values cannot drift into being set in two places. */
+const TONE_CLASS: Record<StatTone, string> = {
+  plain: '',
+  alarm: 'text-destructive-text',
+};
 
 export interface StatGridProps {
   /** The metrics, in reading order. */
@@ -54,22 +76,42 @@ export interface StatGridProps {
  */
 export function StatGrid({ items, columns = 4, className }: StatGridProps): React.ReactElement {
   return (
-    <dl
-      className={cn(
-        '@container grid grid-cols-2 gap-4',
-        columns === 4 ? '@md:grid-cols-4' : '@md:grid-cols-3',
-        className,
-      )}
-    >
-      {items.map((item) => (
-        <div key={item.label}>
-          <dt className="text-muted-foreground text-sm">{item.label}</dt>
-          <dd className="text-xl font-semibold tabular-nums">{item.value}</dd>
-          {item.sub === undefined ? null : (
-            <dd className="text-muted-foreground mt-0.5 text-xs">{item.sub}</dd>
-          )}
-        </div>
-      ))}
-    </dl>
+    /**
+     * **The `@container` is a WRAPPER, and that is the whole reason this element exists.**
+     *
+     * `container-type: inline-size` establishes a query container for an element's **descendants**;
+     * an element is never its own query container. So `@container` and `@md:grid-cols-4` on the same
+     * `<dl>` — which is what shipped in M4 — declares a container nothing queries and a query with no
+     * container, and the grid falls back to `grid-cols-2` at **every** width, in both `columns`
+     * modes, silently. Measured in Chromium before this was changed: the Mail card's `<dl>` reported
+     * `container-type: inline-size`, `width: 1438px` and
+     * `grid-template-columns: 711px 711px` — two columns in a 1,438 px card, under a `@md:grid-cols-3`
+     * that can never match. The `columns` prop was inert.
+     *
+     * Nothing about it looked wrong, which is why it took a photograph: two big figures spread across
+     * a wide card reads as a spacing choice rather than as a rule that never fired.
+     */
+    <div className={cn('@container', className)}>
+      <dl
+        className={cn(
+          'grid grid-cols-2 gap-4',
+          columns === 4 ? '@md:grid-cols-4' : '@md:grid-cols-3',
+        )}
+      >
+        {items.map((item) => (
+          <div key={item.label}>
+            <dt className="text-muted-foreground text-sm">{item.label}</dt>
+            <dd
+              className={cn('text-xl font-semibold tabular-nums', TONE_CLASS[item.tone ?? 'plain'])}
+            >
+              {item.value}
+            </dd>
+            {item.sub === undefined ? null : (
+              <dd className="text-muted-foreground mt-0.5 text-xs">{item.sub}</dd>
+            )}
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
+import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardTitle } from '@/components/ui/card';
@@ -117,33 +118,45 @@ export function StaffConsoleScreen(): React.ReactElement {
   }
 
   return (
-    <main>
-      <PageContainer width="wide" className="space-y-6">
-        {/* `actions` carries the way back, and until now there was none. The authenticated branch
+    /**
+     * **`/staff` had no live region at all, and nothing had noticed because nothing used one.**
+     *
+     * `AnnouncerProvider` is mounted by the authenticated app shell and by the auth shell; this
+     * route is a sibling of both (ADR-0086) and had neither. `useAnnounce()` returns a **no-op** when
+     * there is no provider above it, so the first component here to announce anything would have
+     * done so into nothing — silently, with no error and nothing on screen looking wrong. Three of
+     * `useClipboardCopy`'s five call sites are on this page, so mounting it is part of that change
+     * rather than an extra: a mechanism that looks right and does nothing is worse than the defect
+     * it replaces.
+     */
+    <AnnouncerProvider>
+      <main>
+        <PageContainer width="wide" className="space-y-6">
+          {/* `actions` carries the way back, and until now there was none. The authenticated branch
             rendered a header with no link home while the NOT-FOUND branch above has one — so the
             branch for people who cannot use this page had a way out and the branch for people who
             can did not, and there is no app shell here to supply one. Nobody had noticed: not the
             spec, not M0's pictures. `docs/UX_STANDARDS.md:122`, and spec §8.15. */}
-        <PageHeader
-          title="Staff console"
-          description={
-            <>
-              Signed in as {identity.data.email}. This console operates the installation — it cannot
-              reach any customer&rsquo;s clients, projects or plans.
-            </>
-          }
-          actions={
-            /* A plain `<a>`, not a router `<Link>`: `/staff` is outside the `_authed` shell and a
+          <PageHeader
+            title="Staff console"
+            description={
+              <>
+                Signed in as {identity.data.email}. This console operates the installation — it
+                cannot reach any customer&rsquo;s clients, projects or plans.
+              </>
+            }
+            actions={
+              /* A plain `<a>`, not a router `<Link>`: `/staff` is outside the `_authed` shell and a
                staff account need not be a member of anything, so the destination is the app's front
                door rather than a route this one knows about. `buttonVariants` is the established way
                to give a link a button's treatment (`InviteExitLinks.tsx:29`) — `Button` renders a
                `<button>` and has no `asChild`. */
-            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/">
-              Back to SchedulePoint
-            </a>
-          }
-        />
-        {/* ADR-0086 D4 permits dual-hatting rather than refusing it — refusing would lock the only
+              <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/">
+                Back to SchedulePoint
+              </a>
+            }
+          />
+          {/* ADR-0086 D4 permits dual-hatting rather than refusing it — refusing would lock the only
             staff member out on day one — and the compensation it named was that the console says
             which hat is active. That was decided and never built; the UX review found it.
 
@@ -151,14 +164,15 @@ export function StaffConsoleScreen(): React.ReactElement {
             renders in a `flex shrink-0 items-center gap-2` (`page-header.tsx:60`), which is right
             for a button and wrong for a full-width banner. The plan's "keep it exactly as it is"
             was ambiguous about placement (spec §8.19). */}
-        {identity.data.dualHatted && (
-          <Alert purpose="condition" tone="info">
-            <strong className="font-medium">This account is also an organisation member.</strong>{' '}
-            Staff-ness confers nothing inside any organisation, and nothing you do here is done as a
-            member. Anything you reach in the app itself, you reach with your ordinary membership.
-          </Alert>
-        )}
-        {/* **Zone 1: never columned.** A status answer must not sit beside anything — placed in a
+          {identity.data.dualHatted && (
+            <Alert purpose="condition" tone="info">
+              <strong className="font-medium">This account is also an organisation member.</strong>{' '}
+              Staff-ness confers nothing inside any organisation, and nothing you do here is done as
+              a member. Anything you reach in the app itself, you reach with your ordinary
+              membership.
+            </Alert>
+          )}
+          {/* **Zone 1: never columned.** A status answer must not sit beside anything — placed in a
             column it would be one of two things a reader's eye has to choose between, on the screen
             whose entire job is to answer one question before anything else is read.
 
@@ -167,8 +181,8 @@ export function StaffConsoleScreen(): React.ReactElement {
             write a second `staff.panel_read` row on every page load — and `useStaffAccounts` is
             keyed by its cursor, so a summary calling it with no cursor while the panel below holds
             one after *Show older* would be a different query rather than a deduped one. */}
-        <StaffStatusSummary status={status} />
-        {/* **The order is priority, and the spans are content width demand — two separate
+          <StaffStatusSummary status={status} />
+          {/* **The order is priority, and the spans are content width demand — two separate
             decisions that a single-column stack conflated.**
 
             ORDER answers "what does an operator arrive wanting to know?", and it is also DOM order
@@ -194,35 +208,36 @@ export function StaffConsoleScreen(): React.ReactElement {
             forbids, and which is the regression the whole span rule exists to prevent — or making a
             span depend on how much data happened to arrive, which would make the layout a function
             of the database. */}
-        <PageGrid>
-          <PageGridItem span="wide">
-            <MailAndRetentionPanel />
-          </PageGridItem>
-          <PageGridItem span="wide">
-            <SecurityPanel />
-          </PageGridItem>
-          <PageGridItem span="wide">
-            <AccountsPanel />
-          </PageGridItem>
-          {/* The one paired row: four facts beside three controls. Installation says what this
+          <PageGrid>
+            <PageGridItem span="wide">
+              <MailAndRetentionPanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <SecurityPanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <AccountsPanel />
+            </PageGridItem>
+            {/* The one paired row: four facts beside three controls. Installation says what this
               installation is; Diagnostics is how you ask it a question. Neither has a table, and
               neither is an order of magnitude taller than the other — which is the condition that
               keeps a two-column row from leaving the ragged void that reads as unfinished. */}
-          <PageGridItem span="narrow">
-            <InstallationPanel />
-          </PageGridItem>
-          <PageGridItem span="narrow">
-            <DiagnosticsPanel />
-          </PageGridItem>
-          <PageGridItem span="wide">
-            <PerformanceProbePanel />
-          </PageGridItem>
-          <PageGridItem span="wide">
-            <ActivityPanel />
-          </PageGridItem>
-        </PageGrid>
-      </PageContainer>
-    </main>
+            <PageGridItem span="narrow">
+              <InstallationPanel />
+            </PageGridItem>
+            <PageGridItem span="narrow">
+              <DiagnosticsPanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <PerformanceProbePanel />
+            </PageGridItem>
+            <PageGridItem span="wide">
+              <ActivityPanel />
+            </PageGridItem>
+          </PageGrid>
+        </PageContainer>
+      </main>
+    </AnnouncerProvider>
   );
 }
 
@@ -271,11 +286,26 @@ function MailSection(): React.ReactElement {
             </Alert>
           )}
 
+          {/* **The two figures that can be a problem now look like it** (spec §8.15). Until this,
+              a failure count and "API version 0.64.0" rendered identically, so on the page whose
+              whole job is *is anything wrong* the two most alarming numbers on it carried no signal
+              at all. Colour is the SECOND channel and never the only one (WCAG 1.4.1): each label
+              says what it counts, and the `Status` summary above states the same condition in
+              words. `Last failure` is deliberately NOT toned — a timestamp is a fact about when,
+              and a date in red says "this is bad" about the one field that cannot be. */}
           <StatGrid
             columns={3}
             items={[
-              { label: 'Failures, last hour', value: String(data.failuresLastHour) },
-              { label: 'Failures, last 24 hours', value: String(data.failuresLast24h) },
+              {
+                label: 'Failures, last hour',
+                value: String(data.failuresLastHour),
+                ...(data.failuresLastHour > 0 ? { tone: 'alarm' as const } : {}),
+              },
+              {
+                label: 'Failures, last 24 hours',
+                value: String(data.failuresLast24h),
+                ...(data.failuresLast24h > 0 ? { tone: 'alarm' as const } : {}),
+              },
               {
                 label: 'Last failure',
                 value:
@@ -324,7 +354,7 @@ function MailSection(): React.ReactElement {
             }}
             getRowKey={(row) => row.id}
             loadingLabel="Loading mail failures…"
-            empty={<p className="text-muted-foreground text-sm">No failures recorded.</p>}
+            empty="No failures recorded."
           />
         </>
       )}
@@ -464,7 +494,7 @@ function RetentionSection(): React.ReactElement {
             getRowKey={(row) => row.table}
             loadingLabel="Loading retention…"
             describedById={notes.length > 0 ? notes.join(' ') : undefined}
-            empty={<p className="text-muted-foreground text-sm">Nothing is swept on a schedule.</p>}
+            empty="Nothing is swept on a schedule."
           />
           {/* The scope, stated in the product rather than only in DEPLOYMENT.md. "Every table is
               inside its period" is otherwise an invitation to conclude that everything is bounded,
@@ -544,6 +574,8 @@ function MailAndRetentionPanel(): React.ReactElement {
  * evidence would be worse than no panel, because it would point the wrong way on the one decision
  * it exists to inform.
  */
+const CSP_CAVEAT_ID = 'staff-csp-caveat';
+
 function SecurityPanel(): React.ReactElement {
   const reports = useStaffCspReports();
 
@@ -583,22 +615,34 @@ function SecurityPanel(): React.ReactElement {
             : `Content-Security-Policy: ${String(reports.data?.length ?? 0)} distinct violations recorded.`
       }
     >
+      {/* **The caveat is about the TABLE, not about its being empty — so it renders either way.**
+          It used to live in `empty=`, which had it exactly backwards in both directions. A reader
+          looking at three violations was never told the list may be incomplete, which is the state
+          where an under-count actually misleads; and a reader looking at none met the message
+          inside TWO frames, because `DataTable` wraps a non-blank `empty` node in `EMPTY_FRAME` and
+          an `Alert` brings its own border, tint and icon — with the frame's `text-center` fighting
+          the alert's left-aligned icon row. Visible in a photograph and invisible to jsdom, which
+          has no layout to be wrong about.
+
+          `describedById` rather than mere placement: this region is focusable and carries
+          `role="region"`, so a screen-reader user navigating by landmark lands INSIDE the table
+          having skipped whatever sits above it (the ADR-0073 C2.5 finding). A safety caveat
+          reachable only by reading serially is the wrong contract, and this is one. */}
+      <Alert purpose="condition" tone="info" id={CSP_CAVEAT_ID}>
+        <strong className="font-medium">An empty table is not proof the policy is clean.</strong>{' '}
+        Delivery from a browser to this sink has never been verified end&nbsp;to&nbsp;end, so what
+        is listed here is a floor rather than a census. To check it yourself, open the app and load
+        a blocked resource, then look here.
+      </Alert>
       <DataTable
         caption="Distinct policy violations, most recent activity first"
         columns={columns}
         query={reports}
         getRowKey={(row) => row.id}
+        describedById={CSP_CAVEAT_ID}
         loadingLabel="Loading policy reports…"
         errorLabel="Could not read policy reports."
-        empty={
-          <Alert purpose="condition" tone="info">
-            <strong className="font-medium">No violations recorded.</strong> That is not yet proof
-            the policy is clean — delivery from a browser to this sink has never been verified
-            end&nbsp;to&nbsp;end, so an empty table means nothing has arrived rather than nothing
-            has happened. To check it yourself, open the app and load a blocked resource, then look
-            here.
-          </Alert>
-        }
+        empty="No violations recorded."
       />
     </Panel>
   );
@@ -766,7 +810,7 @@ function ActivityPanel(): React.ReactElement {
         getRowKey={(row) => row.id}
         loadingLabel="Loading staff activity…"
         errorLabel="Could not read staff activity."
-        empty={<p className="text-muted-foreground text-sm">Nothing recorded yet.</p>}
+        empty="Nothing recorded yet."
       />
     </Panel>
   );

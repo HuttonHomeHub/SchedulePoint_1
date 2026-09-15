@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
 import { Panel } from '@/features/staff/ui/panel';
+import { useClipboardCopy, type ClipboardCopyState } from '@/hooks/use-clipboard-copy';
 
 /**
  * The Performance panel — a staff member presses one control and gets a real-hardware reading.
@@ -174,7 +175,16 @@ export function PerformanceProbePanel(): React.ReactElement {
   const [progress, setProgress] = useState('');
   const [outcome, setOutcome] = useState<SweepOutcome | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // **The rejection used to set `copied` back to `false`** — indistinguishable from never having
+  // pressed the button, which is precisely the defect `diagnostics-panel.tsx` records having had
+  // fixed by the M4 accessibility review, in its own file, while this sibling kept it.
+  const clipboard = useClipboardCopy({
+    copiedMessage: 'Full report copied to the clipboard.',
+    failedMessage: 'Could not reach the clipboard. Select the report text and copy it by hand.',
+  });
+  // Destructured because it is the STABLE half. Depending on the whole object would re-create the
+  // sweep callback whenever a copy settles, which is a different subject entirely.
+  const { reset: resetCopyState } = clipboard;
   const [machineLabel, setMachineLabel] = useState('');
 
   const record = useRecordProbeResult();
@@ -359,7 +369,7 @@ export function PerformanceProbePanel(): React.ReactElement {
       // been lost. They are in the database; only the screen would have forgotten them.
       if (resume === null) setOutcome(null);
       setFailure(null);
-      setCopied(false);
+      resetCopyState();
       cancelledRef.current = false;
       setRunning(true);
       setProgress('Preparing…');
@@ -444,7 +454,7 @@ export function PerformanceProbePanel(): React.ReactElement {
         setProgress('');
       }
     },
-    [machineLabel, record, refreshHistory],
+    [machineLabel, record, refreshHistory, resetCopyState],
   );
 
   const copy = useCallback(() => {
@@ -466,11 +476,8 @@ export function PerformanceProbePanel(): React.ReactElement {
             ),
       )
       .join('\n\n');
-    void navigator.clipboard.writeText(text).then(
-      () => setCopied(true),
-      () => setCopied(false),
-    );
-  }, [machineLabel, outcome]);
+    clipboard.copy(text);
+  }, [clipboard, machineLabel, outcome]);
 
   /**
    * What the panel says, in the one channel a screen-reader user has.
@@ -675,7 +682,7 @@ export function PerformanceProbePanel(): React.ReactElement {
           <SittingResult
             outcome={outcome}
             onCopy={copy}
-            copied={copied}
+            copyState={clipboard.state}
             onRetry={retryStore}
             retrying={retrying}
             missingCount={missing.length}
@@ -989,7 +996,7 @@ function recordedCount(outcome: SweepOutcome): number {
 function SittingResult({
   outcome,
   onCopy,
-  copied,
+  copyState,
   onRetry,
   retrying,
   missingCount,
@@ -997,7 +1004,7 @@ function SittingResult({
 }: {
   outcome: SweepOutcome;
   onCopy: () => void;
-  copied: boolean;
+  copyState: ClipboardCopyState;
   onRetry: (key: string, body: ProbeResultBody) => void;
   retrying: ReadonlySet<string>;
   /** How many readings were refused or never taken. Counted by the caller, from one definition. */
@@ -1148,10 +1155,11 @@ function SittingResult({
         <Button variant="outline" onClick={onCopy}>
           Copy full report
         </Button>
-        {/* Announced, because a Copy button that changes nothing visible is silent to a screen
-            reader — and the report is the deliverable, so knowing it was taken matters. */}
-        <span aria-live="polite" className="text-muted-foreground text-sm">
-          {copied ? 'Report copied.' : ''}
+        {/* The visible cue only — `useClipboardCopy` announces through the app's one polite region,
+            so a second `aria-live` here would read the same sentence twice to the same reader. */}
+        <span className="text-muted-foreground text-sm">
+          {copyState === 'copied' ? 'Report copied.' : ''}
+          {copyState === 'failed' ? 'Could not copy the report.' : ''}
         </span>
       </div>
     </div>

@@ -14,11 +14,17 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 
 /** Dialog to invite a member by email + role. Shows the accept link on success. */
 export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [acceptUrl, setAcceptUrl] = useState<string | null>(null);
+  const clipboard = useClipboardCopy({
+    copiedMessage: 'Invitation link copied to the clipboard.',
+    failedMessage: 'Couldn’t copy the link. Select and copy it manually.',
+    revertAfterMs: 2000,
+  });
   const create = useCreateInvitation(orgSlug);
   const {
     register,
@@ -57,11 +63,13 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
             </p>
             <div className="flex items-center gap-2">
               <Input readOnly aria-label="Invitation link" value={acceptUrl} className="bg-muted" />
-              <Button
-                variant="outline"
-                onClick={() => void navigator.clipboard?.writeText(acceptUrl)}
-              >
-                Copy
+              {/* **The fifth clipboard site, and the one the plan's count of four missed.** It
+                  announced nothing in either direction and showed nothing either, so a reader had
+                  no way to tell a successful copy from a refused one — on the link that is the
+                  whole point of the dialog. The optional chain suppressed the synchronous throw
+                  and left the failure completely silent. */}
+              <Button variant="outline" onClick={() => clipboard.copy(acceptUrl)}>
+                {clipboard.state === 'copied' ? 'Copied' : 'Copy'}
               </Button>
             </div>
             <Button onClick={close}>Done</Button>
