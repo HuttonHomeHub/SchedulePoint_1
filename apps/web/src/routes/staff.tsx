@@ -229,7 +229,7 @@ export function StaffConsoleScreen(): React.ReactElement {
             <PageGridItem span="wide">
               <AccountsPanel />
             </PageGridItem>
-            {/* The one paired row: four facts beside three controls. Installation says what this
+            {/* The one paired row: four facts beside two controls. Installation says what this
               installation is; Diagnostics is how you ask it a question. Neither has a table, and
               neither is an order of magnitude taller than the other — which is the condition that
               keeps a two-column row from leaving the ragged void that reads as unfinished. */}
@@ -341,7 +341,7 @@ function MailSection(): React.ReactElement {
       {!health.isError && data !== undefined && (
         <>
           {!data.transportConfigured && (
-            <Alert purpose="condition" tone="info">
+            <Alert purpose="condition" tone="info" id={MAIL_TRANSPORT_ID}>
               <strong className="font-medium">No mail transport is configured.</strong> Every
               message is being written to the log instead of sent — which produces no failures, and
               is why the counts below read as healthy.
@@ -407,6 +407,13 @@ function MailSection(): React.ReactElement {
 
           <DataTable
             caption="Recent mail failures, newest first"
+            // **Wired, not merely placed above.** `DataTable` is a focusable `role="region"`, so a
+            // screen-reader user navigating by landmark lands INSIDE it having skipped whatever sits
+            // above — and this note is the one that explains why the counts read as healthy. The
+            // M6 accessibility review found that the epic's own record listed it as an
+            // `aria-describedby` target when it had never been one; the retention notes and the
+            // policy caveat were wired, this and the `audit_events` note were not.
+            {...(data.transportConfigured ? {} : { describedById: MAIL_TRANSPORT_ID })}
             columns={columns}
             query={{
               isPending: false,
@@ -438,9 +445,11 @@ function MailSection(): React.ReactElement {
  * row on every page load (spec §4.6). TanStack Query dedupes the call with the Mail panel above.
  */
 const MAIL_HEADING_ID = 'staff-mail-heading';
+const MAIL_TRANSPORT_ID = 'staff-mail-transport-note';
 const RETENTION_HEADING_ID = 'staff-retention-heading';
 const RETENTION_DISABLED_ID = 'retention-disabled-note';
 const RETENTION_FAILING_ID = 'retention-failing-note';
+const AUDIT_RETENTION_ID = 'staff-audit-retention-note';
 
 function RetentionSection(): React.ReactElement {
   const health = useStaffHealth();
@@ -489,6 +498,12 @@ function RetentionSection(): React.ReactElement {
   const notes = [
     retention?.enabled === false ? RETENTION_DISABLED_ID : undefined,
     retention !== undefined && retention.consecutiveFailures > 0 ? RETENTION_FAILING_ID : undefined,
+    // **The `audit_events` note joins the list, and it is unconditional because the fact is.** It
+    // is the one that says the most sensitive table in the system is deliberately NOT swept — the
+    // "non-obvious consequence" class §4's rule keeps — and it sits AFTER the table, so a reader
+    // who lands inside the region by landmark passes it in neither direction. The epic's own
+    // record listed it as a wired target when it had never been one (M6 accessibility review).
+    AUDIT_RETENTION_ID,
   ].filter((id): id is string => id !== undefined);
 
   return (
@@ -571,7 +586,7 @@ function RetentionSection(): React.ReactElement {
           {/* The scope, stated in the product rather than only in DEPLOYMENT.md. "Every table is
               inside its period" is otherwise an invitation to conclude that everything is bounded,
               and the most sensitive table in the system is deliberately not. */}
-          <p className="text-muted-foreground text-sm">
+          <p id={AUDIT_RETENTION_ID} className="text-muted-foreground text-sm">
             These are the only tables swept on a schedule. <code>audit_events</code> is{' '}
             <strong className="font-medium">not</strong> — it refuses <code>DELETE</code> in the
             database by design (ADR-0085), so it is retained indefinitely and that is a decision

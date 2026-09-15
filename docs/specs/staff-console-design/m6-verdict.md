@@ -72,3 +72,122 @@ measured at both ends.
 - **FC-2 remains the weakest of the five**, for the reason §6 of the plan gives and `m0-measurement.md`
   §10 gives independently: two columns shorten a page by construction. It is reported because it was
   committed, not because it decides anything. **FC-1 decides this epic, and it failed at M0.**
+
+---
+
+## 5. The gate pass — four reviews, three blocking, and what the assertions could not see
+
+Six blocking findings across ux, accessibility and component (frontend-performance passed, having
+re-derived the bundle figures from clean builds at both ends of the diff: **+557 B gzip** on the
+entry graph, and `/staff` still lazy and dependency-free in its own chunk). Every fix below carries a
+regression test **verified red against the shipped code first**.
+
+**Two of the six were found independently by two reviewers, and both sit in the same gap: every
+assertion this epic wrote checked a MECHANISM and none checked an OUTCOME.**
+
+### 5.1 The alerting row linked to a section that says nothing about alerting (ux, component)
+
+`CHECK_SECTION_ID.alerting` pointed at the Installation card. Installation renders the API version,
+the environment, the mail host and the staff count; the alerting and heartbeat badges, and the two
+sentences naming `MAIL_ALERT_URL` and `HEARTBEAT_URL`, are in the health card. So a reader who saw
+_"Failure alerting — Needs attention"_ and activated the row was moved to, and focused on, a section
+containing nothing about what they had just been told.
+
+**This epic's own headline feature, with the mechanism built correctly and pointed at the wrong
+place.** And nothing could see it: the model suite asserted `sectionId.length > 0`, the component
+suite asserted the href matched `/^#staff-section-/`, and the journey asserted the target carried
+`tabindex="-1"`. All three pass against a link pointing anywhere at all.
+`check-answers-its-link.test.tsx` asserts the pairing from a **subject vocabulary** rather than from
+a second copy of the mapping — a test that restates `CHECK_SECTION_ID` agrees with whatever that file
+says and proves nothing.
+
+### 5.2 The headline called "still loading" and "could not be read" the same thing as "needs attention" (ux)
+
+The sentence folded everything that is not `HEALTHY` into the words "need attention". So **on every
+ordinary page load, before any of the four queries had settled, the console's first paint read "5 of
+5 checks need attention: mail delivery, retention sweeping, …"** — an alarming, false claim on the
+one screen whose job is answering _is anything wrong right now?_, and a direct contradiction of the
+module's own docblock, which says in as many words that a console answering that question wrongly
+while a request is in flight is worse than one that says nothing.
+
+The badges were right throughout, which is why neither file looked wrong: the per-check channel and
+the aggregate channel disagreed, and only the aggregate was false. **Every existing sentence
+assertion was for the all-healthy case or for a per-check sentence** — so the whole suite passed
+through the fix unchanged, which is the finding rather than a reassurance. The two states are named
+verbatim in the spec's own edge-case table and had no test.
+
+### 5.3 `SectionCard` deleted the focus indicator from the element it had just made focusable (component)
+
+§8.4 widened `SectionCard` with `id` + `tabIndex={-1}` precisely so a section could be a focus
+**destination**. It shipped applying `focus-visible:outline-none` with no replacement — so a keyboard
+reader following "jump to the section that answers this" landed with no visible sign that they had
+(WCAG 2.2 §2.4.7, AA). Every other focusable primitive in `components/ui/` pairs `outline-none` with
+a ring; this was the one exception, in the one place the epic created a focus target. The classes
+were also **unconditional**, so three overview sections that pass no `id` — and are therefore not
+focusable at all — carried focus styling for a behaviour they do not have. Both halves fixed.
+
+### 5.4 Two caveats the epic's own record called wired were not (accessibility)
+
+`m5-every-element.md` listed "all four `aria-describedby` caveat targets" as kept. Two were: the
+retention notes, and the policy caveat this milestone moved. The mail-transport note — which explains
+why the counts read as healthy — and the `audit_events` note — which says the most sensitive table in
+the system is deliberately not swept — carried no `id` and were referenced by nothing. Unchanged from
+the pre-epic code, so not a regression, but **the record describes a shipped state that did not
+exist**, and it is a claim about accessibility, which is the one subject this register has overstated
+before and corrected. Both are wired; the test asserts **resolution** — every id a region names is on
+the page — rather than placement.
+
+### 5.5 Two smaller ones, and one that was promised and not built
+
+A refusal to copy said so only in the live region at the two dialog sites, while every staff panel
+converted in the same milestone renders a visible sentence for both outcomes — **the review's
+namesake failure landing inside the task meant to remove it**. `InviteMemberDialog` cleared every
+piece of per-invitation state on close except the clipboard's, so copy → close → invite somebody else
+reopened with the button reading "Copied" about a link it had never touched. And spec §8.3 promised
+the archetype gate would refuse a hand-rolled page grid on this surface; it was never added, so the
+specific regression the spec named — an author reaching for `grid grid-cols-2` instead of `PageGrid`,
+silently giving up the DOM-order guarantee — was guarded by nothing. Delivered.
+
+### 5.6 Two claims of mine the reviews disproved by counting
+
+"The one paired row: four facts beside **three** controls" — `DiagnosticsPanel` renders two. Written
+in `m2-frame.md` and copied into `staff.tsx`'s comment, so it appeared twice and was disprovable by
+counting: the ADR-0076 class this epic cites elsewhere, committed by its own author. And
+`archetypes.structural.test.ts` still said `ListRow` is "not this screen's shape", which M3 made
+untrue by reusing it for the summary — the gate only ever asserted presence, so nothing failed and
+the comment simply went stale.
+
+### 5.7 Recorded rather than fixed
+
+- **`DataTable`'s `cellClassName ?? default` replaces rather than merges**, which is the primitive-level
+  cause of the padding loss §2 records fixing locally. **Measured before deciding: 30 call sites
+  override it, and about a dozen right-aligned action columns appear to drop `pr-4` deliberately** —
+  so merging is a shared-contract change with a real blast radius, which ADR-0105 says needs a spec
+  and ADR-0136 says must not be folded into an epic's last milestone. `docs/TECH_DEBT.md`.
+- **Two `warning` badges on Installation** — "Email verification: off", "Edit lock: off" — correspond
+  to no check in the five-item vocabulary, so a reader who trusts "nothing needs attention" and stops
+  reading never learns they are flagged. Filed rather than folded, because whether a configuration
+  fact is an operational condition is a product question, not a gate-pass fix.
+- **Both new expression-scanning gates see only literal JSX**, so an `empty={someVariable}` or a
+  `className={someVariable}` escapes. Not exploited anywhere today (checked), and now named in each
+  docblock rather than left as an unstated blind spot — ADR-0131's rule about a gate not quietly
+  reading less than it claims.
+- **The bundle floor's drift predates this epic**: `bundle-budget.json` was measured 2026-09-11 and
+  the **pre-epic** commit already stood ~18.5 kB above it, of which this epic spent 557 B. Filed so
+  the next small change is not blamed for drift it did not cause.
+- **Two deviations from the approved plan, recorded because a plan is a claim too.** The grid order
+  puts Accounts before the Installation/Diagnostics pair rather than in the plan's Band B, because
+  Accounts is one of the five derived checks and Installation is not. And the summary links retention
+  to the merged card rather than to the subsection §8.12 asked for — the only choice that works: just
+  the outer `SectionCard` carries `tabIndex={-1}`, so an anchor to the inner `<h3>` would move the
+  viewport and leave focus where it was, silently dropping the guarantee the link exists for.
+
+### 5.8 One claim left open rather than closed
+
+The §8.13 checklist says "the whole row is the target" for a summary link, and the accessibility
+review is right that the anchor wraps only the check's label — the trailing badge and the sentence
+beneath are outside it. The reviewer declined to cite SC 2.5.8 without a browser measurement, which
+is the correct restraint: the pattern is copied verbatim from `NeedsAttentionSection`, an already
+shipped and reviewed component this epic cites as its precedent, so any defect predates it and the
+`block` this diff adds makes the target wider, not narrower. Left as an open measurement rather than
+recorded as met, because "verified by reading" is what this register keeps having to correct.

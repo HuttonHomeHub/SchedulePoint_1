@@ -79,6 +79,65 @@ describe('deriveConsoleStatus', () => {
   // less than it claims. Asserting the CONTENT would let a check be dropped from the vocabulary with
   // the sentence still reading plausibly; asserting that the sentence NAMES each subject is what
   // makes a removal visible. `health-rows.ts` carries the same rule for the same reason.
+  /**
+   * **The headline distinguishes the same four states the badges do, and it did not.**
+   *
+   * It folded everything that is not `HEALTHY` into the words "need attention", so on every ordinary
+   * page load — before any of the four queries had settled — the console's first paint read
+   * "5 of 5 checks need attention: …". An alarming, false claim on the one screen whose job is
+   * answering *is anything wrong right now?*, and a direct contradiction of this module's own
+   * docblock, which says a console that answers the reader's question wrongly while a request is in
+   * flight is worse than one that says nothing.
+   *
+   * The badges were right throughout, which is why neither file looked wrong: the per-check channel
+   * and the aggregate channel disagreed and only the aggregate was false. **Every existing sentence
+   * assertion was for the all-healthy case or for a per-check sentence**, so the whole M6 suite
+   * passed through the fix unchanged — which is the finding, not a reassurance. The two cases below
+   * are named verbatim in the spec's own edge-case table and had no test.
+   *
+   * Found by the M6 UX review. Verified red against the shipped `problems.length` sentence.
+   */
+  it('says it is still checking rather than that everything needs attention', () => {
+    const status = deriveConsoleStatus({
+      health: pending,
+      security: pending,
+      accounts: pending,
+      installation: pending,
+    });
+
+    expect(status.sentence).not.toContain('need attention');
+    expect(status.sentence).toContain('still checking');
+    // No count, because there is no verdict yet: "0 of 5 checks" beside "still checking" reads as
+    // one.
+    expect(status.sentence).not.toMatch(/\d+ of \d+ checks/);
+  });
+
+  it('says a failed read could not be read, which is not the same as needing attention', () => {
+    const status = deriveConsoleStatus({
+      health: failed,
+      security: failed,
+      accounts: failed,
+      installation: failed,
+    });
+
+    expect(status.sentence).toContain('could not be read');
+    expect(status.sentence).not.toContain('need attention');
+  });
+
+  /** A mixed page says all three things rather than picking the loudest and hiding the rest. */
+  it('states attention, unreadable and pending together when all three are present', () => {
+    const status = deriveConsoleStatus({
+      ...allHealthy(),
+      health: settled(health({ transportConfigured: false })),
+      security: failed,
+      accounts: pending,
+    });
+
+    expect(status.sentence).toContain('needs attention: mail delivery');
+    expect(status.sentence).toContain('could not be read: content-security-policy');
+    expect(status.sentence).toContain('still checking: account verification');
+  });
+
   it('enumerates what was checked, so removing a check would change the sentence', () => {
     const status = deriveConsoleStatus(allHealthy());
 

@@ -65,7 +65,31 @@ export function SectionCard({
     <Card
       as="section"
       aria-labelledby={titleId}
-      className={cn('scroll-mt-6 focus-visible:outline-none', className)}
+      /**
+       * **The focus treatment is conditional on `id`, and it is a RING rather than nothing.**
+       *
+       * This shipped as an unconditional `scroll-mt-6 focus-visible:outline-none`, which is two
+       * defects in one string. The first is the sharp one: `outline-none` with no replacement takes
+       * the focus indicator OFF the element this prop exists to make a focus destination — a
+       * keyboard reader following "jump to the section that answers this" would have landed
+       * somewhere with no visible sign that they had (WCAG 2.2 §2.4.7 Focus Visible, AA). Every
+       * other focusable primitive here pairs `outline-none` with a ring (`button.tsx`, `input.tsx`,
+       * `combobox.tsx`, `select.tsx`, `textarea.tsx`, `tabs.tsx`, `text-link.tsx` …); this was the
+       * one exception, in the one place the epic turned an element into a focus target. Found by
+       * the M6 component review; every assertion that existed checked that `tabindex="-1"` was
+       * PRESENT and none that focus could be seen.
+       *
+       * The second is smaller and worth not repeating: the classes were applied to every
+       * `SectionCard` in the product, including the three overview sections that pass no `id` and
+       * are therefore not focusable at all — an unconditional change to a shared primitive for a
+       * behaviour one screen uses.
+       */
+      className={cn(
+        id === undefined
+          ? undefined
+          : 'focus-visible:ring-ring focus-visible:ring-offset-background scroll-mt-6 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+        className,
+      )}
       {...(id === undefined ? {} : { id, tabIndex: -1 })}
     >
       <CardHeader className={cn('flex items-start justify-between gap-4', flush && 'pb-4')}>

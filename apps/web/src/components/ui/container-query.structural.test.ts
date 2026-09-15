@@ -28,6 +28,11 @@ import { describe, expect, it } from 'vitest';
  * none. Comments are stripped first — this docblock names the exact pair it forbids, and four gates
  * in this repository have now shipped a scan that matched its own prose.
  *
+ * **The other half of what it cannot see**: it reads the `className` expression itself, so a pair
+ * assembled in a variable and passed in — `const cls = '@container @md:grid-cols-4'` — escapes.
+ * Nothing does that today (checked), and the honest answer is that no cheap predicate resolves an
+ * identifier; the reach is named rather than implied by silence.
+ *
  * **Verified red** by putting `@container` back on the `<dl>` beside its `@md:grid-cols-4`.
  */
 const ROOT = 'src';

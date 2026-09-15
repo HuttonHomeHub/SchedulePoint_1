@@ -41,6 +41,11 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
     setAcceptUrl(null);
     create.reset();
     reset();
+    // **The clipboard state is part of what closing discards.** Without this, copy → close → invite
+    // somebody else reopens the dialog with the button already reading "Copied", about a link it has
+    // never touched (M6 performance review, found while tracing the memo). Every other piece of
+    // per-invitation state is cleared here; this one was missed.
+    clipboard.reset();
   };
 
   const onSubmit = handleSubmit((values) => {
@@ -72,6 +77,12 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
                 {clipboard.state === 'copied' ? 'Copied' : 'Copy'}
               </Button>
             </div>
+            {/* A refusal says so on screen, not only in the live region (M6 UX review). */}
+            {clipboard.state === 'failed' && (
+              <p className="text-destructive-text text-sm">
+                Couldn&rsquo;t copy the link. Select it above and copy it manually.
+              </p>
+            )}
             <Button onClick={close}>Done</Button>
           </div>
         ) : (

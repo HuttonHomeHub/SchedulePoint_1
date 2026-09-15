@@ -62,6 +62,12 @@ const HAND_ROLLED = [
   },
   { name: "a page title's type treatment (PageHeader owns it)", pattern: /<h1[\s>]/ },
   { name: 'a section heading rank (SectionCard owns it)', pattern: /<h2[\s>]/ },
+  // **Promised by spec §8.3 and not delivered until the M6 accessibility review asked for it.** The
+  // regression it names is an author hand-rolling `grid grid-cols-2` at the page root instead of
+  // reaching for `PageGrid`, which silently gives up the DOM-order guarantee that primitive exists
+  // to keep (WCAG 1.3.2) with nothing looking wrong. Harmless today — this surface hand-rolls no
+  // grid at all — which is exactly what the pinned positive case below is for.
+  { name: 'a hand-rolled page grid', pattern: /\bgrid-cols-\d/ },
 ];
 
 describe('the staff console is built from the archetypes', () => {
@@ -104,9 +110,12 @@ describe('the staff console is built from the archetypes', () => {
         for (const name of match[1]!.split(',')) used.add(name.trim());
       }
     }
-    // Deliberately a shorter list than the overview's. This screen is a page with a heading and
-    // eight sections; it has no resource list, so `ListRow` and `EmptyState` are not its shapes and
-    // demanding them would be demanding a screen look like a different one.
+    // Deliberately a shorter list than the overview's: this is a page with a heading and eight
+    // sections, and `EmptyState` is not its shape — every absence here is a table's, which
+    // `DataTable` frames itself. **The sentence used to say the same of `ListRow` and was made wrong
+    // by M3**, which reuses `ListRow` + `rowLinkClass` for the status summary precisely because
+    // `NeedsAttentionSection` is the same problem already solved. The gate never asserted absence,
+    // only presence, so nothing failed and the comment simply went stale (M6 UX review).
     for (const archetype of ['PageContainer', 'PageHeader', 'SectionCard']) {
       expect([...used], `${archetype} is no longer used by the staff console`).toContain(archetype);
     }

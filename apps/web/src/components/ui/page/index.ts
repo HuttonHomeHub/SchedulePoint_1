@@ -14,4 +14,4 @@ export { EmptyState, type EmptyStateProps } from './empty-state';
 export { Skeleton } from './skeleton';
 export { ListRow, ListRowSkeleton, rowLinkClass, type ListRowProps } from './list-row';
 export { PageGrid, PageGridItem, type PageGridProps, type PageGridItemProps } from './page-grid';
-export { StatGrid, type StatGridProps, type StatItem } from './stat-grid';
+export { StatGrid, type StatGridProps, type StatItem, type StatTone } from './stat-grid';

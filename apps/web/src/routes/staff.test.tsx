@@ -439,6 +439,70 @@ describe('StaffConsoleScreen', () => {
     expect(region.getAttribute('aria-describedby')).toBe(caveat?.getAttribute('id'));
   });
 
+  /**
+   * **Every caveat on this page is wired to the region it qualifies, and two were not.**
+   *
+   * `DataTable` is a focusable `role="region"`, so a screen-reader user navigating by landmark lands
+   * INSIDE it having skipped whatever sits above — the ADR-0073 C2.5 finding. The retention notes
+   * and the policy caveat were wired; the mail-transport note (which explains why the counts read as
+   * healthy) and the `audit_events` note (which says the most sensitive table in the system is
+   * deliberately not swept) were not, while the epic's own record listed all four as wired. Found by
+   * the M6 accessibility review — an asserted-rather-than-checked claim about accessibility, which is
+   * the one place this register has overstated before.
+   *
+   * Asserted as a resolution rather than as a string: every id a region names must be on the page.
+   */
+  it('wires every caveat to the region it qualifies, with nothing dangling', async () => {
+    // No transport, so the note that explains why the counts read as healthy is on the page — it is
+    // one of the two the review found unwired, and it renders only in this state.
+    renderStaffWith({
+      '/staff/health': {
+        failuresLast24h: 0,
+        failuresLastHour: 0,
+        lastFailureAt: null,
+        transportConfigured: false,
+        alertingConfigured: true,
+        heartbeatConfigured: true,
+        // One failure, so the table renders as a `role="region"` rather than as its empty branch —
+        // which is a plain `<div>` and therefore outside the sweep below.
+        recentFailures: [
+          {
+            id: 'f1',
+            occurredAt: '2026-09-14T10:00:00.000Z',
+            kind: 'email_verification',
+            recipient: 'someone@example.test',
+            errorClass: 'ESOCKET',
+          },
+        ],
+        retention: healthyRetention(),
+      },
+    });
+    await screen.findByRole('heading', { name: 'Mail and retention' });
+
+    const regions = screen.getAllByRole('region');
+    const described = regions.filter((region) => region.hasAttribute('aria-describedby'));
+    expect(described.length, 'no region carries a description at all').toBeGreaterThan(0);
+
+    for (const region of described) {
+      for (const id of (region.getAttribute('aria-describedby') ?? '')
+        .split(/\s+/)
+        .filter(Boolean)) {
+        expect(
+          document.getElementById(id),
+          `a region points at "${id}", which is not on the page`,
+        ).not.toBeNull();
+      }
+    }
+
+    // The two the review found unwired, by the text each one carries.
+    const ids = described.flatMap((region) =>
+      (region.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean),
+    );
+    const text = ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+    expect(text).toMatch(/written to the log instead of sent/i);
+    expect(text).toMatch(/only tables swept on a schedule/i);
+  });
+
   it('says a missing transport is NOT health', async () => {
     // Zero failures with no transport configured means every send is being logged rather than
     // delivered — identical in a count, and the state a stock deployment is actually in. A panel

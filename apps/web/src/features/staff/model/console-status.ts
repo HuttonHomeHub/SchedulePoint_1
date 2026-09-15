@@ -77,13 +77,35 @@ const VERDICT: Record<CheckState, { verdictLabel: string; tone: CheckView['tone'
   HEALTHY: { verdictLabel: 'OK', tone: 'pass' },
 };
 
-/** The section each check links to. Kept beside the ids so a new check cannot forget one. */
+/**
+ * The section each check links to — **the section that ANSWERS it**, not the one whose name sounds
+ * closest.
+ *
+ * `alerting` pointed at `staff-section-installation` until the M6 gate pass, and two reviewers found
+ * it independently. Installation renders the API version, the environment, the mail host and the
+ * staff count; it says nothing about alerting or heartbeats in its body or its status sentence.
+ * Everything a reader needs — the two badges and the two remedy sentences naming `MAIL_ALERT_URL`
+ * and `HEARTBEAT_URL` — is in `MailSection`, inside the merged health card. So a reader who saw
+ * "Failure alerting — Needs attention" and activated the row was moved to, and focused on, a section
+ * containing nothing about what they had just been told.
+ *
+ * That is the shape this epic exists to remove, arriving inside its own headline feature: the
+ * mechanism was built correctly — a whole-row link, a focusable destination, announced focus — and
+ * pointed at the wrong place. `check-answers-its-link.test.tsx` is the gate, because every
+ * assertion that existed checked the href's SHAPE and never that the destination says anything
+ * about the check.
+ *
+ * `retention` shares `mail`'s id deliberately and not by oversight: the spec asked the summary to
+ * link to the **subsection**, and only the outer `SectionCard` carries `tabIndex={-1}`, so an
+ * anchor to the inner `<h3>` would move the viewport and leave focus where it was — silently
+ * dropping the guarantee the link exists for. The card's heading names both subjects.
+ */
 export const CHECK_SECTION_ID: Record<CheckId, string> = {
   mail: 'staff-section-health',
   retention: 'staff-section-health',
   security: 'staff-section-security',
   accounts: 'staff-section-accounts',
-  alerting: 'staff-section-installation',
+  alerting: 'staff-section-health',
 };
 
 const LABEL: Record<CheckId, string> = {
@@ -219,12 +241,56 @@ export function deriveConsoleStatus(input: ConsoleStatusInput): ConsoleStatus {
   const problems = checks.filter((check) => check.state !== 'HEALTHY');
   const allHealthy = problems.length === 0;
 
-  return {
-    checks,
-    problems,
-    allHealthy,
-    sentence: allHealthy
-      ? `Nothing needs attention. Checked ${CHECK_IDS.map((id) => LABEL[id].toLowerCase()).join(', ')}.`
-      : `${String(problems.length)} of ${String(CHECK_IDS.length)} checks need attention: ${problems.map((check) => check.label.toLowerCase()).join(', ')}.`,
-  };
+  return { checks, problems, allHealthy, sentence: sentenceFor(checks) };
+}
+
+/** The checks in a given state, lower-cased and joined, for a clause. */
+function named(checks: CheckView[], state: CheckState): string {
+  return checks
+    .filter((check) => check.state === state)
+    .map((check) => check.label.toLowerCase())
+    .join(', ');
+}
+
+/**
+ * The console's headline, which must distinguish the same four states the badges do.
+ *
+ * **It did not, and the M6 UX review found it.** The sentence folded everything that is not
+ * `HEALTHY` into the words "need attention" — so on every ordinary page load, before any of the four
+ * queries had settled, the console's first paint read
+ * **"5 of 5 checks need attention: mail delivery, retention sweeping, …"**. An alarming, false claim,
+ * on the one screen whose entire job is answering _is anything wrong right now?_, and a direct
+ * contradiction of this module's own docblock four screens up — which says in as many words that a
+ * console answering the reader's question wrongly while a request is in flight is worse than one
+ * that says nothing.
+ *
+ * The badges were right throughout (`VERDICT` has four entries), which is why nothing looked wrong
+ * in either file: the per-check channel and the aggregate channel disagreed, and only the aggregate
+ * was false. Untested, too — every sentence assertion was for the all-healthy case or for a
+ * per-check sentence, and the spec's own edge-case table named both of these states explicitly.
+ *
+ * Clauses are ordered by severity and only non-empty ones are emitted, so a mixed page says all
+ * three things in one sentence rather than picking the loudest and hiding the rest.
+ */
+function sentenceFor(checks: CheckView[]): string {
+  const attention = named(checks, 'ATTENTION');
+  const unreadable = named(checks, 'UNREADABLE');
+  const pending = named(checks, 'PENDING');
+
+  const clauses = [
+    attention === '' ? null : `needs attention: ${attention}`,
+    unreadable === '' ? null : `could not be read: ${unreadable}`,
+    pending === '' ? null : `still checking: ${pending}`,
+  ].filter((clause): clause is string => clause !== null);
+
+  if (clauses.length === 0) {
+    return `Nothing needs attention. Checked ${CHECK_IDS.map((id) => LABEL[id].toLowerCase()).join(', ')}.`;
+  }
+
+  // The count is of what NEEDS ATTENTION, and it is omitted entirely when nothing does — "0 of 5
+  // checks" beside "still checking: …" reads as a verdict on a page that has not got one yet.
+  const attentionCount = checks.filter((check) => check.state === 'ATTENTION').length;
+  const head =
+    attentionCount === 0 ? '' : `${String(attentionCount)} of ${String(CHECK_IDS.length)} checks `;
+  return `${head}${clauses.join('; ')}.`;
 }

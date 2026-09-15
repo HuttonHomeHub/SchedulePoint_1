@@ -121,9 +121,20 @@ call sites would have announced into nothing, silently. Mounting one is part of 
 
 **Kept, with reason:**
 
-- All four `aria-describedby` caveat targets — the two retention notes, the `audit_events` note and
-  the mail-transport note. A sighted admin loses nothing if the paragraph stays; a screen-reader user
-  landing inside the region it is wired to gets it read every time (§8.14).
+- All four caveats — the two retention notes, the `audit_events` note and the mail-transport note. A
+  sighted admin loses nothing if the paragraph stays; a screen-reader user landing inside the region
+  it is wired to gets it read every time (§8.14).
+
+  > **Corrected 2026-09-15 (M6 accessibility review): this said "all four `aria-describedby` caveat
+  > targets", and only two of them were targets.** The retention notes were wired and the policy
+  > caveat was wired by this milestone; the mail-transport note and the `audit_events` note carried
+  > no `id` and were referenced by nothing — unchanged from the pre-epic code, so not a regression,
+  > but the sentence describes a shipped state that did not exist. An asserted-rather-than-checked
+  > claim **about accessibility**, which is the one subject this register has overstated before and
+  > corrected (ADR-0082). Both are wired at M6, and `staff.test.tsx` now asserts the resolution
+  > rather than the placement: every id a region names must be on the page, and the two the review
+  > found are asserted by the text they carry.
+
 - `<strong>not</strong>` at `staff.tsx`: emphasis inside a sentence whose meaning inverts without it.
 - Every `Badge`, `<code>` span, `Show older`, and the retention `<details>`: correct as they are. This
   epic must not change a correct control to look busy.

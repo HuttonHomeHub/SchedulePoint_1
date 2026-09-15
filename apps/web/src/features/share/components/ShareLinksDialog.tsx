@@ -88,6 +88,15 @@ function CreatedLinkPanel({ created }: { created: CreatedShare }): React.ReactEl
         <Button type="button" size="sm" onClick={copy}>
           {copied ? 'Copied' : 'Copy link'}
         </Button>
+        {/* **A refusal says so on screen, not only in the live region** (M6 UX review). Every staff
+            panel converted in the same milestone renders a visible sentence for both outcomes; these
+            two dialogs got the announcement and not the visible half — the review's namesake failure
+            landing inside the task meant to remove it. */}
+        {clipboard.state === 'failed' && (
+          <p className="text-destructive-text mt-2 text-sm">
+            Couldn&rsquo;t copy the link. Select it above and copy it manually.
+          </p>
+        )}
       </div>
     </div>
   );

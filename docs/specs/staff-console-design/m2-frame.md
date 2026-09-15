@@ -47,7 +47,7 @@ fact a summary states in a clause, which is the argument for M3 rather than for 
 ## 3. The two-column grid buys exactly one paired row, and that is recorded rather than dressed up
 
 Five of the seven sections are table-bodied and therefore `wide`, so the only pair is **Installation
-beside Diagnostics** — four facts beside three controls, neither an order of magnitude taller than
+beside Diagnostics** — four facts beside **two** controls, neither an order of magnitude taller than
 the other. That is a smaller win than "two columns" sounds like.
 
 **What actually fixed this page is width and order, not columns.** The tables gained 80 %, the
@@ -113,3 +113,10 @@ It guards the **primitive**, so the next surface to reach for `PageGrid` inherit
 having to know it exists. Its blind spot is stated in its own docblock: a consumer that hand-rolls
 `order` on a child _inside_ a `PageGridItem` is invisible to it, and nothing that reads source can
 close that — the compensating control is a rendered DOM-sequence assertion.
+
+> **Corrected 2026-09-15 (M6 UX review): "three controls" was two.** `DiagnosticsPanel` renders
+> `Run diagnostics` and `Copy for the record`, and nothing else. The wrong figure was written here
+> and copied into `staff.tsx`'s own comment, so it appeared in two places and was disprovable by
+> counting — the ADR-0076 class this epic invokes elsewhere, committed by its own author. The
+> pairing argument is unaffected: what makes the row work is that neither panel has a table and
+> neither is an order of magnitude taller than the other.

@@ -10353,6 +10353,49 @@ Both are a SQL query away — the same cheap move that produced this row. Neithe
 structural argument (a packer still leaves no gaps); both bear on whether the **domain** claim was
 right, and it is the domain claim that was refused here.
 
+### 326. Four findings the staff-console gate pass recorded rather than folded
+
+**Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (ADR-0143 M6) · **Size:** M · **Owner:** web
+
+Four reviews over the staff-console epic; six blocking defects were folded with regression tests
+verified red. These four were not, each for a reason, and they are here rather than in the gate-pass
+write-up so they are findable by symptom (`#312`'s lesson).
+
+**(a) `DataTable`'s `cellClassName` replaces the default padding rather than merging with it.**
+`data-table.tsx` renders `className={column.cellClassName ?? 'py-2 pr-4'}`, so any caller that sets
+`cellClassName` for width or wrapping silently loses the cell padding and the gap to the next column.
+ADR-0143 M5 hit exactly that (three `break-all` columns with no padding) and fixed it by retyping
+`py-2 pr-4` into each call site, which leaves the footgun for the next consumer.
+
+**Measured before deciding, and the measurement is why it is filed rather than fixed: 30 call sites
+override `cellClassName`, and roughly a dozen are right-aligned action columns spelling
+`py-2 text-right whitespace-nowrap` — i.e. dropping `pr-4` on purpose, or at least depending on
+today's look.** So `cn('py-2 pr-4', column.cellClassName)` is a shared-contract change that
+repaints a dozen tables across the product. ADR-0105 makes that a spec-level change and ADR-0136
+records that folding a shared-gate change into an epic's last milestone is the thing ADR-0105 exists
+to stop. What a fix needs first is a decision about whether those twelve want `pr-4` back.
+
+**(b) Two `warning` badges sit outside the console's derived vocabulary.** `InstallationPanel`
+renders "Email verification: off" and "Edit lock: off" as `Badge variant="warning"`, and neither
+corresponds to a check in `console-status.ts`'s five. A reader who trusts the Status summary's
+"Nothing needs attention" and stops reading never learns those two are flagged. It may be a correct
+scope line — they are configuration facts rather than operational conditions — but that line is
+written nowhere, and it sits in tension with a summary whose stated job is to enumerate what was
+checked. The decision is a product one: either they join `CHECK_IDS`, or the summary says what it
+does not cover, or the badges stop being `warning`.
+
+**(c) Both expression-scanning gates see only literal JSX.** `container-query.structural.test.ts`
+and `data-table.empty.structural.test.ts` read the `className=`/`empty=` expression itself, so a
+value assembled in a variable and passed in escapes either. Nothing in the tree does that today
+(checked), and no cheap predicate resolves an identifier — the reach is now named in both docblocks
+rather than implied by silence (ADR-0131), which is the honest state and not a fix.
+
+**(d) The bundle floor's drift predates this epic and the remaining headroom is thin.**
+`apps/web/bundle-budget.json` records `measuredAt: 2026-09-11` at 404,744 B; the **pre-epic** commit
+of 2026-09-14 already measured 423,207 B, so about 18.5 kB of what the gate reports as drift belongs
+to other work merged in between. ADR-0143 spent 557 B of it. Re-measure the floor, or the next small
+change trips a gate for drift it did not cause and gets blamed for it.
+
 ### 325. Four hand-rolled metric tiles remain, each with its own type ramp
 
 **Status:** open · **Verified:** 2026-09-14 · **Raised:** 2026-09-14 (staff-console design, M4) · **Size:** S · **Owner:** web

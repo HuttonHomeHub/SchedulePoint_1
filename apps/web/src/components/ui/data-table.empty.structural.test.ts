@@ -23,6 +23,12 @@ import { describe, expect, it } from 'vitest';
  * state and not only in the absent one. Putting it in `empty` also means the reader who most needs
  * it, the one looking at three rows, never sees it.
  *
+ * **What it cannot see, stated rather than left implicit** (ADR-0131's rule about a gate not
+ * quietly reading less than it claims): it reads the `empty=` expression itself, so
+ * `const state = <Alert>…</Alert>; <DataTable empty={state} />` escapes it. Nothing in the tree does
+ * that today — checked — and there is no cheap predicate for "what does this identifier resolve to",
+ * which is exactly why the reach is named here instead of being implied by silence.
+ *
  * **Verified red** against the three sites as they shipped.
  */
 const ROOT = 'src';
