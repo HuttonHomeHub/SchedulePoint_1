@@ -873,11 +873,86 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   string collapses the last two into an absence a reader cannot tell from a defect. Names are
   resolved **through the organisation's membership**, never through `users` directly — which is
   what stops this endpoint turning an arbitrary user id into a display name.
-- **Sections the caller may not read are OMITTED, not zeroed.** `pendingInvitationCount` is
-  absent without `invitation:read`; `expiringDeletedCount` is absent unless the caller may
-  restore **and** hierarchy retention is armed on this host. A zero is a fact about the
-  organisation; an absence is a fact about the reader, and sending `0` would tell a Contributor
-  there is an answer they may not have.
+- **Sections the caller may not read are OMITTED, not zeroed.** `liveInvitationCount` and
+  `expiredInvitationCount` are absent without `invitation:read`, **together or not at all** — one
+  permission, one read, and "1 has expired" with no idea whether any are live reads as worse news
+  than it is. `expiringDeletedCount` is absent unless the caller may restore **and** hierarchy
+  retention is armed on this host. A zero is a fact about the organisation; an absence is a fact
+  about the reader, and sending `0` would tell a Contributor there is an answer they may not have.
+- **Invitations are counted in two, and `pendingInvitationCount` is gone.** That field summed two
+  facts a reader acts on differently — one they chase, one they must re-send, because `accept()`
+  refuses an invitation past `expiresAt` — and it filtered on `status` alone, so it counted
+  soft-deleted rows that `GET …/invitations` excludes. The landing's number and the list it links
+  to could therefore disagree. Both now use one shared predicate
+  (`modules/invitations/invitation-predicates.ts`), and both counts are computed against a single
+  instant so a row expiring between two reads cannot land in neither or in both. They are separate
+  counts rather than a total and a subtrahend: the two are different actions, and subtracting two
+  separately-read numbers can go negative under concurrency.
+
+- **Each row says whether its figures are current**, in three states that are deliberately not one
+  flag. `scheduleComputedAt` is `null` for a plan that has never been calculated;
+  `editedSinceCalculated` is true when the plan has been touched since it was. "Never calculated"
+  and "calculated and then edited" are different facts a planner acts on differently, and a single
+  `stale` boolean collapses them into an absence the reader cannot tell from a defect. The third
+  state — current — is `scheduleComputedAt` set and `editedSinceCalculated` false, and the screen
+  renders **nothing** for it.
+
+  The comparison is `changedAt > scheduleComputedAt`, computed once in the repository rather than as
+  a fourth SQL column: PostgreSQL cannot reference a select-list alias from the same select list, so
+  an SQL form would have to repeat the three-term `GREATEST`, giving two copies of the rule for what
+  "changed" means. It costs **no extra query** — one more column on the read that already runs.
+
+  **What it does NOT claim.** It knows only that nothing has been WRITTEN since the calculation, not
+  that the dates are right; a plan whose calendar changed under it is stale in every sense that
+  matters while this says nothing at all. It rests on a property of the write path —
+  `stampScheduleComputedAt` writes `schedule_computed_at` and never `plans.updated_at` (ADR-0022),
+  pinned by `schedule/stamp-no-user-columns.structural.spec.ts`, because a recalculation that
+  bumped `updated_at` would leave every freshly-calculated plan reporting as edited-since, for ever,
+  with nothing looking wrong. And Auto-arrange is a known false positive: it writes `lane_index` on
+  every activity it moves, which is an edit by this rule and not one by a planner's.
+
+- **`planStanding` is where each recently-changed programme stands**, and it is **omitted rather
+  than emptied** for a caller without `schedule:read` — the same rule as the invitation counts, at
+  section granularity. Present-and-empty means "you may see this, and there is nothing to see";
+  absent means "this is not yours to see". The gate runs **before the read is issued**, never after
+  it returns, so the cost is not paid for an answer that is then deleted. In practice every member
+  role holds `schedule:read` (pinned by `common/auth/org-permissions.spec.ts`), so the absent branch
+  is unreachable through any role this product can currently mint — it is pinned in the service unit
+  suite rather than the API e2e for that reason.
+
+  It covers exactly the plans `recentlyChanged` covers, and reads **only columns the last
+  recalculation persisted**: `MAX(early_finish)` for the finish, the flag counts, and the active
+  baseline's frozen finish. **The CPM engine is not invoked** — `computeSchedule` is not imported by
+  the read or by the pure derivation beside it, pinned by
+  `modules/overview/plan-standing-engine-free.structural.spec.ts` — so the ADR-0034 recalculation
+  parity gate is untouched by construction.
+
+- **`baselineMovement` is a three-valued union, never a nullable number.** `MOVED` carries signed
+  `workingDays` (positive is later); `UNCHANGED` carries the baseline it matched; `NOT_ASSESSABLE`
+  carries one of five reasons — `PLAN_EMPTY`, `PLAN_NOT_SCHEDULED`, `NO_BASELINE`,
+  `BASELINE_HAS_NO_FINISH`, `CALENDAR_UNUSABLE`. A `?? 0` would tell a reader their unbaselined
+  programme is exactly on the plan they never captured, so the union has **no numeric fallback** and
+  the compiler refuses that shape. The reasons are ordered by what the reader can do about it, so a
+  brand-new plan (for which the first three are all true at once) is told the first thing that needs
+  doing rather than the last thing that failed.
+
+  **The measurement frame is the revision comparison's**, not a second one: working time on the
+  **plan's own calendar**, divided by the **baseline's frozen** hours-per-day factor (ADR-0068,
+  ADR-0125 D4). Two numbers on one product derived on different calendars is a worse defect than any
+  residual in either. `CALENDAR_UNUSABLE` exists because that frame can legitimately fail for one
+  plan — a calendar with no working time at all is reachable from ordinary input
+  (`docs/TECH_DEBT.md` #79) — and a per-plan fault must not answer the first screen after sign-in
+  with an error for the whole organisation. (Unguarded it is a **500**, because the read builds the
+  port with `buildPlanCalendar` rather than the 422-raising `buildPlanCalendarOrReject` the two
+  recalculation seams use; either way one emptied calendar among eight would take the landing down
+  for every member.)
+
+- **`flags` omits zero-valued keys.** A row printing four zeroes buries the one that is not; an
+  absent key means "nothing to report", which is a different statement from "reported: none". The
+  response carries **no cost, rate or budget field at any depth**, so `cost:read` changes nothing
+  about it — pinned by `modules/overview/plan-standing.cost-keys.structural.spec.ts`, because the
+  plausible failure is a later edit adding a money column "for completeness" on the one screen every
+  member of the organisation sees.
 
 **"Recently changed" is ordered by `GREATEST(plan, newest activity, newest dependency)`**, not by
 `plans.updated_at` — editing an activity does not stamp its plan, and neither does the CPM

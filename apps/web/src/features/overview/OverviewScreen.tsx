@@ -5,6 +5,7 @@ import { JumpBackInSection } from './components/JumpBackInSection';
 import { NeedsAttentionSection } from './components/NeedsAttentionSection';
 import { OrganisationEmptyState } from './components/OrganisationEmptyState';
 import { RecentlyChangedSection } from './components/RecentlyChangedSection';
+import { WhereWorkStandsSection } from './components/WhereWorkStandsSection';
 import { prunePlans, readRecentPlanIds } from './model/recent-plans';
 
 import { PageContainer, PageHeader } from '@/components/ui/page';
@@ -89,6 +90,34 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
 
   const showEmptyOrganisation = data !== undefined && (data.isNewOrganisation || !data.hasPlans);
 
+  /**
+   * Whether anything is genuinely waiting on this reader — independently of whether the
+   * organisation has any work in it yet.
+   *
+   * **An empty organisation can still have something waiting on you, and the screen used to deny
+   * it.** `OrganisationEmptyState` replaced *every* section, so an Org Admin who created an
+   * organisation and invited their colleagues before adding a client was told "This organisation is
+   * empty" while two invitations sat outstanding — the landing failing to say something true, which
+   * is the defect class this whole epic exists to remove, in the one state where the reader has
+   * least else to go on.
+   *
+   * Found by `e2e-overview/members.spec.ts` on its first run (ADR-0081: the journey is the gate).
+   * No unit test could have: the screen tests render a populated organisation, because that is the
+   * interesting one.
+   *
+   * It is deliberately NOT `!showEmptyOrganisation`: the empty state still owns the *work*
+   * sections, because there genuinely is no work to show. What it may not own is the reader's own
+   * inbox.
+   */
+  const hasWaitingItems =
+    isWriter &&
+    !isError &&
+    data !== undefined &&
+    (data.attention.heldLocks.length > 0 ||
+      (data.attention.liveInvitationCount ?? 0) > 0 ||
+      (data.attention.expiredInvitationCount ?? 0) > 0 ||
+      (data.attention.expiringDeletedCount ?? 0) > 0);
+
   return (
     <PageContainer width="narrow">
       <PageHeader
@@ -108,14 +137,70 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
 
       <div className="mt-6 flex flex-col gap-6">
         {showEmptyOrganisation ? (
-          <OrganisationEmptyState
-            orgSlug={orgSlug}
-            isNewOrganisation={data.isNewOrganisation}
-            canAddClients={isWriter}
-          />
+          <>
+            <OrganisationEmptyState
+              orgSlug={orgSlug}
+              isNewOrganisation={data.isNewOrganisation}
+              canAddClients={isWriter}
+            />
+            {/* Only when there is something to say. An empty organisation with nothing waiting
+                shows the empty state alone, exactly as it did — a "Needs your attention" frame
+                reading "Nothing needs you right now" beneath "This organisation is empty" would be
+                two ways of saying the same nothing. */}
+            {hasWaitingItems ? (
+              <NeedsAttentionSection attention={data.attention} orgSlug={orgSlug} pending={false} />
+            ) : null}
+          </>
         ) : (
           <>
+            {/*
+              **The order is measured, not preferred, and it corrects the approved plan.**
+
+              `implementation-plan.md` M5-T1 step 1 specified
+              `Jump back in -> Where the work stands -> Recently changed -> Needs your attention`,
+              on the principle that "worst news is not first; the reader's own work is". The
+              principle stands and this order keeps it. The sequence did not survive measurement.
+
+              M0's finding was that Q3 ("is anything waiting on me?") is answered at `y = 1053`,
+              **53 px below the fold** on the product owner's own screen — the one question the spec
+              agreed was already answered, answered somewhere the reader has to go looking. The
+              plan's order was written before any section had been measured, and it puts that
+              section LAST behind two ~750 px lists: Q3 lands at **2006**, twice as far away as the
+              defect M0 opened this on.
+
+              Measured section heights at 1646 are 158 / 749 / 789 / 463 (`m5-verdict.md`), and an
+              exhaustive search of all 24 orderings scores this one joint-best at **4 of 7**. Of the
+              two that tie while still leading with the reader's own work, this is the one that puts
+              the programme's HEALTH above the fold rather than the activity feed — which is the
+              content this epic exists to add.
+            */}
             <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} />
+            {isWriter && !isError ? (
+              <NeedsAttentionSection
+                attention={data?.attention}
+                orgSlug={orgSlug}
+                pending={isPending}
+              />
+            ) : null}
+            {/*
+              **Rendered only when the server sent the field.** `planStanding` is OMITTED for a
+              caller who may not read schedules, rather than sent as `[]` — so `=== undefined` is
+              "you may not see this" and `[]` is "there is nothing to see", and the two get
+              different treatment: no frame at all, versus a frame with an empty state
+              (ADR-0098; ADR-0082's first omit clause at section granularity).
+
+              It is deliberately NOT `(data?.planStanding ?? [])`, which would collapse the two
+              and render a permanently empty frame for a reader with no right to the answer — and
+              would ALSO render one during the pending window, since `data` is undefined then.
+
+              There is therefore **no skeleton for this section, on purpose**: it cannot be drawn
+              without first assuming this reader is entitled to the answer, which would flash a
+              frame at a Viewer who never gets one. The screen's single query means its single
+              loading and failure states are already reported once, by "Recently changed".
+            */}
+            {data?.planStanding !== undefined ? (
+              <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} />
+            ) : null}
             <RecentlyChangedSection
               plans={data?.recentlyChanged ?? []}
               orgSlug={orgSlug}
@@ -124,13 +209,6 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               error={isError}
               onRetry={() => void refetch()}
             />
-            {isWriter && !isError ? (
-              <NeedsAttentionSection
-                attention={data?.attention}
-                orgSlug={orgSlug}
-                pending={isPending}
-              />
-            ) : null}
           </>
         )}
       </div>

@@ -45,6 +45,10 @@ const STAFF_SMTP_PORT = Number(process.env.E2E_SMTP_PORT ?? '3026');
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
+// The landing fixture lives in its own module because `measure-overview.mjs` needs the SAME one —
+// two seeds for one fixture drift, and the drift is invisible (ADR-0065, ADR-0121).
+import { assertLandingStates, expireInvitation, seedLandingStates } from './landing-fixture.mjs';
+
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const OUT = '.screenshots';
 
@@ -1058,6 +1062,12 @@ for (const width of widths) {
       } else {
         if (shot.seedFirst && !seeded) {
           await seed(page, slug);
+          // The organisation landing's own fixture, beside the canvas one and never inside it.
+          // The control runs immediately: a shot of a page with nothing to say is worse than no
+          // shot, because it still looks like a result.
+          const landing = await seedLandingStates(page, slug);
+          expireInvitation(landing.expiredInvite);
+          assertLandingStates(landing);
           seeded = true;
         }
         if (shot.programme && !ids) ids = await seedProgramme(page, slug);

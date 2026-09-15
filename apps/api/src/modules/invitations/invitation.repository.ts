@@ -3,6 +3,8 @@ import { Prisma, type Invitation, type Organization } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
+import { pendingInvitationWhere } from './invitation-predicates';
+
 /** An invitation joined with its organisation (for token preview/accept). */
 export type InvitationWithOrg = Prisma.InvitationGetPayload<{ include: { organization: true } }>;
 
@@ -46,7 +48,9 @@ export class InvitationRepository {
     cursor?: string;
   }): Promise<Invitation[]> {
     return this.prisma.invitation.findMany({
-      where: this.active({ organizationId: params.organizationId, status: 'PENDING' }),
+      // The SHARED predicate, so this list and the landing's count cannot mean different things by
+      // "pending" — they did, and the drift was invisible because each file read correctly alone.
+      where: pendingInvitationWhere(params.organizationId),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: params.take,
       ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),

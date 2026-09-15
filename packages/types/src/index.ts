@@ -2413,6 +2413,16 @@ export interface RecentlyChangedPlan {
    * `plans.updated_at`, which does not move when an activity is edited.
    */
   changedAt: string;
+  /**
+   * When the plan's schedule was last computed, or `null` if it never has been.
+   *
+   * `null` is a STATE. "Never calculated" and "calculated and then edited" are different facts a
+   * planner acts on differently, and a single `stale` boolean collapses them into an absence the
+   * reader cannot tell from a defect.
+   */
+  scheduleComputedAt: string | null;
+  /** Whether the plan has been touched since that computation. `false` when it never has been. */
+  editedSinceCalculated: boolean;
   changedBy: OverviewActor;
 }
 
@@ -2431,7 +2441,19 @@ export interface OverviewHeldLock {
  */
 export interface OverviewAttention {
   heldLocks: OverviewHeldLock[];
-  pendingInvitationCount?: number;
+  /**
+   * Invitations awaiting an answer that can still be accepted.
+   *
+   * **Replaces `pendingInvitationCount`, rather than supplementing it.** That field summed two
+   * facts a reader acts on differently — one they chase, one they must re-send — and it counted
+   * soft-deleted rows the list excluded, so the landing's number and the Members list could
+   * disagree. Keeping it beside these two would leave a third number that agrees with neither.
+   *
+   * Appears together with {@link expiredInvitationCount} or not at all: one permission, one read.
+   */
+  liveInvitationCount?: number;
+  /** Invitations still marked `PENDING` whose lease has lapsed. Accept refuses them. */
+  expiredInvitationCount?: number;
   expiringDeletedCount?: number;
 }
 
@@ -2462,6 +2484,68 @@ export interface OrganisationOverview {
    */
   recentPlans: RecentPlan[];
   attention: OverviewAttention;
+  /**
+   * Where each recently-changed programme stands.
+   *
+   * **Optional because it is OMITTED, not emptied**, for a caller who may not read schedules — a
+   * zero-length array is a fact about the organisation and an absence is a fact about the reader
+   * (ADR-0098). Present and empty means "you may see this, and there is nothing to see".
+   */
+  planStanding?: PlanStanding[];
+}
+
+/**
+ * How far a plan's finish has moved against its active baseline — **three-valued, never a nullable
+ * number**.
+ *
+ * `?? 0` on a missing baseline would tell a reader their unbaselined programme is exactly on the
+ * plan they never captured, so the union has no numeric fallback and the compiler refuses that
+ * shape. Each `NOT_ASSESSABLE` reason has a different remedy, which is why they are five reasons
+ * and not one absence: capture a baseline, capture one that has a finish, recalculate, add some
+ * activities, or give the plan's calendar some working time.
+ */
+export type BaselineMovement =
+  | {
+      kind: 'MOVED';
+      /**
+       * Signed working days on the plan's own calendar, converted with the baseline's frozen
+       * hours-per-day factor (ADR-0068) — the frame the revision comparison uses (ADR-0125 D4).
+       * Positive means the finish is LATER than the baseline's.
+       */
+      workingDays: number;
+      baselineFinish: string;
+      baselineName: string;
+    }
+  | { kind: 'UNCHANGED'; baselineFinish: string; baselineName: string }
+  | {
+      kind: 'NOT_ASSESSABLE';
+      reason:
+        | 'NO_BASELINE'
+        | 'BASELINE_HAS_NO_FINISH'
+        | 'PLAN_NOT_SCHEDULED'
+        | 'PLAN_EMPTY'
+        | 'CALENDAR_UNUSABLE';
+    };
+
+/** One programme's standing: where it finishes, how that has moved, and what was flagged. */
+export interface PlanStanding {
+  planId: string;
+  planName: string;
+  projectName: string;
+  clientName: string;
+  status: PlanStatus;
+  /** Active activities. Zero is a real state and is reported as one, never as an absence. */
+  activityCount: number;
+  /** `MAX(early_finish)` as `YYYY-MM-DD`, or null when the plan is empty or was never calculated. */
+  projectFinish: string | null;
+  scheduleComputedAt: string | null;
+  editedSinceCalculated: boolean;
+  baselineMovement: BaselineMovement;
+  /**
+   * Engine-flagged counts, with **zero-valued keys omitted**. A row printing four zeroes buries
+   * the one that is not; absence here means "nothing to report".
+   */
+  flags: Record<string, number>;
 }
 
 export {};

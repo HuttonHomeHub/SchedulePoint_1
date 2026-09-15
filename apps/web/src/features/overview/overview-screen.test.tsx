@@ -19,7 +19,7 @@ import { apiFetch } from '@/lib/api/client';
  * exists to prevent.
  *
  * **An absent count and a zero count are different facts and are tested separately.** The endpoint
- * omits `pendingInvitationCount` for a reader who may not see it and sends `0` for a reader who may
+ * omits the two invitation counts for a reader who may not see them and sends `0` for one who may
  * see it and has none. A component testing `!count` collapses those, and both look identical on
  * screen — so the retention-off case asserts the item is absent while a real zero also renders
  * nothing, and the distinction lives in what the payload carries.
@@ -70,6 +70,11 @@ function plan(over: Partial<OrganisationOverview['recentlyChanged'][number]> = {
     clientName: 'Bellway',
     status: 'ACTIVE' as const,
     changedAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+    // The default is a calculated, current plan, so the freshness line renders NOTHING unless a
+    // case asks for it — silence is the healthy state, and a fixture that is stale by default
+    // would make every unrelated assertion read past a line about staleness.
+    scheduleComputedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    editedSinceCalculated: false,
     changedBy: { kind: 'MEMBER' as const, name: 'Sarah Okonkwo' },
     ...over,
   };
@@ -260,6 +265,51 @@ describe('OverviewScreen — the new organisation, role-aware', () => {
     expect(screen.queryByRole('link', { name: 'Add your first client' })).toBeNull();
     expect(screen.getByText('Ask a Planner or Org Admin to add the first client.')).toBeVisible();
   });
+
+  /**
+   * **An empty organisation can still have something waiting on you.**
+   *
+   * The empty state used to replace EVERY section, so an Org Admin who created an organisation and
+   * invited their colleagues before adding a client was told "This organisation is empty" while two
+   * invitations sat outstanding. The landing failing to say something true — the defect class this
+   * epic exists to remove — in the one state where the reader has least else to go on.
+   *
+   * Found by `e2e-overview/members.spec.ts` on its first run, not by a unit test: every screen test
+   * here renders a POPULATED organisation, because that is the interesting one.
+   */
+  it('still says what is waiting, even when there is no work yet', async () => {
+    renderScreen({
+      role: 'ORG_ADMIN',
+      payload: overview({
+        isNewOrganisation: true,
+        hasPlans: false,
+        attention: { heldLocks: [], liveInvitationCount: 2, expiredInvitationCount: 0 },
+      }),
+    });
+
+    // Both, in one render: the empty state still owns the WORK sections, because there genuinely
+    // is no work — what it may not own is the reader's own inbox.
+    expect(await screen.findByText('This organisation is empty')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: '2 invitations are waiting to be accepted' }),
+    ).toBeVisible();
+  });
+
+  it('shows the empty state alone when nothing is waiting', async () => {
+    renderScreen({
+      role: 'ORG_ADMIN',
+      payload: overview({
+        isNewOrganisation: true,
+        hasPlans: false,
+        attention: { heldLocks: [], liveInvitationCount: 0, expiredInvitationCount: 0 },
+      }),
+    });
+
+    // "Nothing needs you right now" beneath "This organisation is empty" is two ways of saying the
+    // same nothing. Without this case the fix above could have rendered the frame unconditionally.
+    expect(await screen.findByText('This organisation is empty')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Needs your attention' })).toBeNull();
+  });
 });
 
 describe('OverviewScreen — needs your attention', () => {
@@ -315,17 +365,41 @@ describe('OverviewScreen — needs your attention', () => {
     expect(await screen.findByText('Nothing needs you right now.')).toBeVisible();
   });
 
-  it('links pending invitations to Members', async () => {
+  it('links live invitations to Members', async () => {
     renderScreen({
       role: 'ORG_ADMIN',
       payload: overview({
         recentlyChanged: [plan()],
-        attention: { heldLocks: [], pendingInvitationCount: 3 },
+        attention: { heldLocks: [], liveInvitationCount: 3, expiredInvitationCount: 0 },
       }),
     });
 
     expect(
-      await screen.findByRole('link', { name: '3 invitations are still pending' }),
+      await screen.findByRole('link', { name: '3 invitations are waiting to be accepted' }),
+    ).toBeVisible();
+    // The expired row is absent at zero, not rendered saying "0 have expired".
+    expect(screen.queryByText(/expired/)).toBeNull();
+  });
+
+  // **Two rows, because they are two different actions.** Chasing somebody about an invitation
+  // they cannot accept achieves nothing, and the summed sentence this replaces told the reader to
+  // do exactly that. Both states are asserted in ONE render, because two separate tests each pass
+  // against a screen that renders only the row that test looks for.
+  it('separates expired invitations from live ones, with what to do about each', async () => {
+    renderScreen({
+      role: 'ORG_ADMIN',
+      payload: overview({
+        recentlyChanged: [plan()],
+        attention: { heldLocks: [], liveInvitationCount: 2, expiredInvitationCount: 1 },
+      }),
+    });
+
+    expect(
+      await screen.findByRole('link', { name: '2 invitations are waiting to be accepted' }),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: '1 invitation has expired' })).toBeVisible();
+    expect(
+      screen.getByText(/It can no longer be accepted\. Send it again from Members\./),
     ).toBeVisible();
   });
 
@@ -334,15 +408,17 @@ describe('OverviewScreen — needs your attention', () => {
       role: 'ORG_ADMIN',
       payload: overview({
         recentlyChanged: [plan()],
-        attention: { heldLocks: [], pendingInvitationCount: 0 },
+        attention: { heldLocks: [], liveInvitationCount: 0, expiredInvitationCount: 0 },
       }),
     });
 
     await screen.findByText('Nothing needs you right now.');
     expect(screen.queryByText(/removed for good/)).toBeNull();
     // A zero invitation count is a fact about the organisation and still renders nothing —
-    // the item exists to be acted on, and there is nothing to act on.
-    expect(screen.queryByText(/still pending/)).toBeNull();
+    // the item exists to be acted on, and there is nothing to act on. Both rows, because a
+    // regression could easily leave one of them rendering at zero.
+    expect(screen.queryByText(/waiting to be accepted/)).toBeNull();
+    expect(screen.queryByText(/expired/)).toBeNull();
   });
 
   it('warns about work about to be removed for good', async () => {
@@ -367,5 +443,130 @@ describe('OverviewScreen — announcements', () => {
     await waitFor(() => {
       expect(screen.getByTestId('announcer')).toHaveTextContent('2 recently changed plans.');
     });
+  });
+
+  /**
+   * **ADR-0098's omit-never-zero rule, on the rendering side, where nothing was guarding it.**
+   *
+   * The server omits `planStanding` for a caller who may not read schedules and sends it
+   * (possibly empty) for one who may — so `undefined` means "you may not see this" and `[]` means
+   * "there is nothing to see", and the screen owes those two different treatments: no frame at all
+   * versus a frame with an empty state.
+   *
+   * The M6 test review mutated `data?.planStanding !== undefined` to `(data?.planStanding ?? [])` —
+   * the exact collapse the twelve-line comment above that line exists to forbid — and **122 of 122
+   * web cases still passed.** The API side pins its half (`overview.service.spec.ts` asserts the
+   * read is never issued), and the rendering half had nothing.
+   *
+   * **A journey cannot cover this and that is why it has to be here.** Every mintable organisation
+   * role holds `schedule:read` (`org-permissions.spec.ts:108`), so no real account can produce the
+   * omitted state; a mocked fetch is the only way it exists at all. Without these cases a
+   * regression would tell a future role with no `schedule:read` "there is nothing to see" — a false
+   * statement, which is worse than the missing frame.
+   */
+  it.each([
+    { field: 'omitted', over: {}, expectFrame: false },
+    { field: 'empty', over: { planStanding: [] }, expectFrame: true },
+  ])('renders no standing frame when the field is $field', async ({ over, expectFrame }) => {
+    // **The omitted case omits the KEY, it does not pass `undefined` for it.** That is what the
+    // server does — and under `exactOptionalPropertyTypes` it is also the only thing that
+    // typechecks, since an optional property will not accept an explicit `undefined`. The first
+    // version passed `undefined` through an `as const` tuple and the compiler refused it, which
+    // is the stricter setting making the fixture describe the real payload.
+    renderScreen({ payload: overview({ recentlyChanged: [plan()], ...over }) });
+
+    // **Waited on SETTLED content, not on a heading.** "Recently changed" renders its heading
+    // during the pending window, above a skeleton — so waiting for it resolves while `data` is
+    // still undefined, which is indistinguishable from the omitted case and made the empty case
+    // fail against a correct component. A row's name only exists once the payload has arrived.
+    await waitFor(() => {
+      expect(screen.getByText('Northgate — Phase 1')).toBeVisible();
+    });
+
+    const heading = screen.queryByRole('heading', { level: 2, name: 'Where the work stands' });
+    expect(heading === null).toBe(!expectFrame);
+    // The empty case owes a sentence, not a bare frame — and the omitted case owes neither.
+    expect(screen.queryByText('No programmes to report on yet.') !== null).toBe(expectFrame);
+  });
+
+  it('renders a standing row when the caller may read schedules and there is one', async () => {
+    renderScreen({
+      payload: overview({
+        recentlyChanged: [plan()],
+        planStanding: [
+          {
+            planId: 'p1',
+            planName: 'Northgate — Phase 1',
+            projectName: 'Northgate',
+            clientName: 'Bellway',
+            status: 'ACTIVE',
+            activityCount: 24,
+            projectFinish: '2026-10-09',
+            scheduleComputedAt: '2026-09-15T11:50:00.000Z',
+            editedSinceCalculated: false,
+            baselineMovement: {
+              kind: 'UNCHANGED',
+              baselineFinish: '2026-10-09',
+              baselineName: 'Contract award',
+            },
+            flags: {},
+          },
+        ],
+      }),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Where the work stands' }),
+      ).toBeVisible();
+    });
+    expect(screen.getByText(/Finishing as planned/)).toBeVisible();
+    expect(screen.queryByText('No programmes to report on yet.')).toBeNull();
+  });
+
+  /**
+   * **The section order is M5's entire result, and nothing was pinning it.**
+   *
+   * `m5-verdict.md` scores all 24 orderings against measured section heights and the offset of each
+   * answer within its own section; the maximum is 4 of 7 and this is the ordering that reaches it
+   * while still leading with the reader's own work. Until this case existed, a later change could
+   * re-order the JSX and give that back with nothing going red — the measurement lives in a
+   * hand-run script, which is not a gate. Raised by the M6 UX review.
+   *
+   * It asserts the **rendered heading sequence**, not the JSX, because that is what a reader and a
+   * screen reader walk: `SectionCard` fixes every section heading at `h2`, and DOM order is reading
+   * order here (there is no `order`, no grid placement — which is also what keeps WCAG 1.3.2 true).
+   */
+  it('renders the four sections in the order M5 measured', async () => {
+    renderScreen({
+      payload: overview({
+        recentlyChanged: [plan()],
+        planStanding: [],
+        // "Jump back in" renders nothing when it has nothing, so the fixture has to give it
+        // something or this case would silently pin a three-section order — which is exactly the
+        // shape of vacuity it exists to prevent.
+        recentPlans: [
+          {
+            planId: 'p1',
+            planName: 'Tower B',
+            projectName: 'Riverside',
+            clientName: 'Riverside Developments',
+          },
+        ],
+      }),
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Where the work stands' }),
+      ).toBeVisible();
+    });
+
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim())).toEqual([
+      'Jump back in',
+      'Needs your attention',
+      'Where the work stands',
+      'Recently changed',
+    ]);
   });
 });

@@ -6,7 +6,7 @@ import { ForbiddenError } from '../../common/errors/domain-errors';
 import type { AppConfigService } from '../../config/app-config.service';
 import type { OrganizationsService } from '../organizations/organizations.service';
 
-import type { HeldLockRow, RecentlyChangedRow } from './overview.repository';
+import type { HeldLockRow, PlanStandingRow, RecentlyChangedRow } from './overview.repository';
 import { OverviewService } from './overview.service';
 
 const ORG_ID = 'org-1';
@@ -22,7 +22,34 @@ function changedRow(overrides: Partial<RecentlyChangedRow> = {}): RecentlyChange
     clientName: 'Riverside Developments',
     status: 'ACTIVE',
     changedAt: new Date('2026-08-18T09:41:07.221Z'),
+    scheduleComputedAt: new Date('2026-08-18T09:41:07.221Z'),
+    editedSinceCalculated: false,
     changedByUserId: 'user-2',
+    ...overrides,
+  };
+}
+
+function standingRow(overrides: Partial<PlanStandingRow> = {}): PlanStandingRow {
+  return {
+    planId: 'plan-1',
+    planName: 'Tower B',
+    projectName: 'Riverside',
+    clientName: 'Riverside Developments',
+    status: 'ACTIVE',
+    scheduleComputedAt: new Date('2026-08-18T09:41:07.221Z'),
+    editedSinceCalculated: false,
+    projectFinish: '2026-10-09',
+    activityCount: 24,
+    baselineFinish: '2026-09-25',
+    baselineName: 'Contract award',
+    // 1440 = an all-day calendar, so a working-day walk over the all-minutes port is whole
+    // calendar days and the arithmetic below is checkable by hand.
+    baselineHoursPerDayMinutes: 1440,
+    planCalendarId: null,
+    constraintViolatedCount: 0,
+    loeNoSpanCount: 0,
+    resourceDriverMissingCount: 0,
+    visualConflictCount: 0,
     ...overrides,
   };
 }
@@ -41,13 +68,15 @@ describe('OverviewService', () => {
   let repo: {
     findRecentlyChanged: Mocked;
     findHeldLocks: Mocked;
-    countPendingInvitations: Mocked;
+    countInvitations: Mocked;
     countExpiringDeleted: Mocked;
     hasActiveClients: Mocked;
     hasActivePlans: Mocked;
     resolveMemberNames: Mocked;
     resolveRecentPlans: Mocked;
+    findPlanStanding: Mocked;
   };
+  let baselines: { loadPlanCalendar: ReturnType<typeof vi.fn> };
   let appConfig: { retentionHierarchyDays: number; retentionHierarchyEnabled: boolean };
   let service: OverviewService;
 
@@ -56,6 +85,7 @@ describe('OverviewService', () => {
     return new OverviewService(
       organizations as unknown as OrganizationsService,
       repo as unknown as never,
+      baselines as unknown as never,
       appConfig as unknown as AppConfigService,
       logger,
     );
@@ -70,13 +100,17 @@ describe('OverviewService', () => {
     repo = {
       findRecentlyChanged: vi.fn().mockResolvedValue([]),
       findHeldLocks: vi.fn().mockResolvedValue([]),
-      countPendingInvitations: vi.fn().mockResolvedValue(2),
+      countInvitations: vi.fn().mockResolvedValue({ live: 2, expired: 1 }),
       countExpiringDeleted: vi.fn().mockResolvedValue(1),
       hasActiveClients: vi.fn().mockResolvedValue(true),
       hasActivePlans: vi.fn().mockResolvedValue(true),
       resolveMemberNames: vi.fn().mockResolvedValue(new Map()),
       resolveRecentPlans: vi.fn().mockResolvedValue([]),
+      findPlanStanding: vi.fn().mockResolvedValue([]),
     };
+    // Null = a plan with no calendar of its own, which resolves to all-minutes-work exactly as a
+    // recalculation resolves it. Cases that need a real calendar override this.
+    baselines = { loadPlanCalendar: vi.fn().mockResolvedValue(null) };
     // A non-default period on purpose: a test written against 90 cannot tell a configured
     // value from a hardcoded one.
     appConfig = { retentionHierarchyDays: 45, retentionHierarchyEnabled: true };
@@ -102,16 +136,29 @@ describe('OverviewService', () => {
       // Omitted, NOT zero. A zero is a fact about the organisation; an absence is a fact
       // about the reader, and `0` would tell a Contributor there is an answer they may not
       // have.
-      expect(overview.attention).not.toHaveProperty('pendingInvitationCount');
+      expect(overview.attention).not.toHaveProperty('liveInvitationCount');
+      expect(overview.attention).not.toHaveProperty('expiredInvitationCount');
       expect(overview.attention).not.toHaveProperty('expiringDeletedCount');
-      expect(repo.countPendingInvitations).not.toHaveBeenCalled();
+      expect(repo.countInvitations).not.toHaveBeenCalled();
       expect(repo.countExpiringDeleted).not.toHaveBeenCalled();
     });
 
-    it('sends the invitation count only to a caller who may read invitations', async () => {
+    it('sends BOTH invitation counts only to a caller who may read invitations', async () => {
       const overview = await service.get(principalWith(['client:read', 'invitation:read']), 'acme');
-      expect(overview.attention.pendingInvitationCount).toBe(2);
+      expect(overview.attention.liveInvitationCount).toBe(2);
+      expect(overview.attention.expiredInvitationCount).toBe(1);
       expect(overview.attention).not.toHaveProperty('expiringDeletedCount');
+    });
+
+    // **The pair appears together or not at all.** They are one permission and one read, so a
+    // payload carrying "1 has expired" without saying whether any are live would read as worse
+    // news than it is. Asserted as a pair rather than twice, because two separate assertions pass
+    // against a payload carrying exactly one of them.
+    it('never sends one invitation count without the other', async () => {
+      for (const permissions of [['client:read'], ['client:read', 'invitation:read']] as const) {
+        const { attention } = await service.get(principalWith([...permissions]), 'acme');
+        expect('liveInvitationCount' in attention).toBe('expiredInvitationCount' in attention);
+      }
     });
 
     it('sends the expiring count only to a writer, and only when retention is armed', async () => {
@@ -286,5 +333,183 @@ describe('OverviewService', () => {
       expect(overview.recentPlans).toHaveLength(1);
       expect(overview.recentPlans[0]?.planId).toBe('p1');
     });
+  });
+});
+
+/**
+ * **The standing section's gate, and the read it is supposed to prevent.**
+ *
+ * The plan's own risk for this task is "issuing and filtering" — the shape ADR-0098 refuses,
+ * where the payload is right and the cost is paid anyway and the next refactor to touch the
+ * projection leaks it. So the assertion is not only that the field is absent: it is that
+ * `findPlanStanding` was **never called**. A test asserting absence alone passes perfectly against
+ * a service that reads the whole section and then deletes it.
+ */
+describe('OverviewService — where the work stands', () => {
+  type Mocked = ReturnType<typeof vi.fn>;
+  let organizations: { resolveScope: Mocked };
+  // Named rather than `Record<string, Mocked>`: `noUncheckedIndexedAccess` makes every lookup on an
+  // index signature possibly-undefined, and the `?.` that silences it would silence a typo too.
+  let repo: {
+    findRecentlyChanged: Mocked;
+    findHeldLocks: Mocked;
+    countInvitations: Mocked;
+    countExpiringDeleted: Mocked;
+    hasActiveClients: Mocked;
+    hasActivePlans: Mocked;
+    resolveMemberNames: Mocked;
+    resolveRecentPlans: Mocked;
+    findPlanStanding: Mocked;
+  };
+  let baselines: { loadPlanCalendar: Mocked };
+  let service: OverviewService;
+
+  beforeEach(() => {
+    organizations = {
+      resolveScope: vi
+        .fn()
+        .mockResolvedValue({ organization: { id: ORG_ID, name: ORG_NAME }, role: 'PLANNER' }),
+    };
+    repo = {
+      findRecentlyChanged: vi.fn().mockResolvedValue([changedRow()]),
+      findHeldLocks: vi.fn().mockResolvedValue([]),
+      countInvitations: vi.fn().mockResolvedValue({ live: 0, expired: 0 }),
+      countExpiringDeleted: vi.fn().mockResolvedValue(0),
+      hasActiveClients: vi.fn().mockResolvedValue(true),
+      hasActivePlans: vi.fn().mockResolvedValue(true),
+      resolveMemberNames: vi.fn().mockResolvedValue(new Map()),
+      resolveRecentPlans: vi.fn().mockResolvedValue([]),
+      findPlanStanding: vi.fn().mockResolvedValue([standingRow()]),
+    };
+    baselines = { loadPlanCalendar: vi.fn().mockResolvedValue(null) };
+    service = new OverviewService(
+      organizations as unknown as OrganizationsService,
+      repo as unknown as never,
+      baselines as unknown as never,
+      {
+        retentionHierarchyDays: 45,
+        retentionHierarchyEnabled: false,
+      } as unknown as AppConfigService,
+      { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger,
+    );
+  });
+
+  it('never issues the read for a caller without schedule:read', async () => {
+    const result = await service.get(principalWith(['client:read']), 'acme');
+
+    expect(repo.findPlanStanding).not.toHaveBeenCalled();
+    // OMITTED, not empty. "You cannot see this" and "there is nothing to see" are different facts,
+    // and `[]` collapses the first into the second.
+    expect('planStanding' in result).toBe(false);
+  });
+
+  it('is present and EMPTY for a reader with nothing to stand on', async () => {
+    repo.findPlanStanding.mockResolvedValue([]);
+
+    const result = await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    // The other half of the pair. Without it the assertion above passes equally against a service
+    // that omits the field for everybody, and a green suite could not tell the gate from the
+    // section being gone (ADR-0093's pinned positive case).
+    expect(result.planStanding).toEqual([]);
+  });
+
+  it('reports the movement, and only the flags that are not zero', async () => {
+    repo.findPlanStanding.mockResolvedValue([
+      standingRow({ constraintViolatedCount: 2, visualConflictCount: 0 }),
+    ]);
+
+    const result = await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    expect(result.planStanding?.[0]?.baselineMovement).toEqual({
+      kind: 'MOVED',
+      // 2026-09-25 → 2026-10-09 on an all-minutes calendar at 1440 min/day: fourteen days later.
+      workingDays: 14,
+      baselineFinish: '2026-09-25',
+      baselineName: 'Contract award',
+    });
+    expect(result.planStanding?.[0]?.flags).toEqual({ constraintViolated: 2 });
+  });
+
+  it('orders the rows as "Recently changed" orders them, not as the database returns them', async () => {
+    repo.findRecentlyChanged.mockResolvedValue([
+      changedRow({ planId: 'a' }),
+      changedRow({ planId: 'b' }),
+      changedRow({ planId: 'c' }),
+    ]);
+    // The read filters on `id = ANY(...)` with no ORDER BY, so Postgres may hand back any order
+    // and need not be consistent between two executions. Reversed here to stand for that.
+    repo.findPlanStanding.mockResolvedValue([
+      standingRow({ planId: 'c' }),
+      standingRow({ planId: 'a' }),
+      standingRow({ planId: 'b' }),
+    ]);
+
+    const result = await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    expect(result.planStanding?.map((row) => row.planId)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('drops a plan the standing read did not return, rather than leaving a hole', async () => {
+    repo.findRecentlyChanged.mockResolvedValue([
+      changedRow({ planId: 'a' }),
+      changedRow({ planId: 'b' }),
+    ]);
+    // The read excludes ARCHIVED and soft-deleted plans independently, so the two lists can
+    // legitimately differ by a row. `undefined` must never reach the payload.
+    repo.findPlanStanding.mockResolvedValue([standingRow({ planId: 'b' })]);
+
+    const result = await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    expect(result.planStanding?.map((row) => row.planId)).toEqual(['b']);
+  });
+
+  it('resolves each distinct calendar ONCE, however many plans share it', async () => {
+    // The recently-changed list is what the standing section is ordered and filtered by, so a
+    // fixture whose two lists name different plans measures the filter rather than the calendars.
+    repo.findRecentlyChanged.mockResolvedValue(
+      ['a', 'b', 'c', 'd'].map((planId) => changedRow({ planId })),
+    );
+    repo.findPlanStanding.mockResolvedValue([
+      standingRow({ planId: 'a', planCalendarId: 'cal-1' }),
+      standingRow({ planId: 'b', planCalendarId: 'cal-1' }),
+      standingRow({ planId: 'c', planCalendarId: 'cal-2' }),
+      standingRow({ planId: 'd', planCalendarId: null }),
+    ]);
+
+    await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    // Two reads for four plans — the measured shape, where seven calendars serve 4,032 plans. A
+    // per-row resolution would read four times and nothing about the payload would differ.
+    expect(baselines.loadPlanCalendar).toHaveBeenCalledTimes(2);
+    expect(baselines.loadPlanCalendar.mock.calls.map((call) => call[1]).sort()).toEqual([
+      'cal-1',
+      'cal-2',
+    ]);
+  });
+
+  it('answers CALENDAR_UNUSABLE for one bad calendar rather than failing the landing', async () => {
+    // A window-only base week with no working exception — reachable from ordinary input
+    // (`docs/TECH_DEBT.md` #79), and what `buildPlanCalendarOrReject` turns into a 422.
+    baselines.loadPlanCalendar.mockResolvedValue({ name: 'Emptied', shifts: [], exceptions: [] });
+    repo.findRecentlyChanged.mockResolvedValue(
+      ['bad', 'good'].map((planId) => changedRow({ planId })),
+    );
+    repo.findPlanStanding.mockResolvedValue([
+      standingRow({ planId: 'bad', planCalendarId: 'cal-1' }),
+      standingRow({ planId: 'good', planCalendarId: null }),
+    ]);
+
+    const result = await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    // The landing came back at all — which is the assertion. One plan of eight on an emptied
+    // calendar must not be the reason nobody in the organisation can sign in to anything.
+    expect(result.planStanding).toHaveLength(2);
+    expect(result.planStanding?.[0]?.baselineMovement).toEqual({
+      kind: 'NOT_ASSESSABLE',
+      reason: 'CALENDAR_UNUSABLE',
+    });
+    // Its neighbour is unaffected — the fault is per row, not per request.
+    expect(result.planStanding?.[1]?.baselineMovement).toMatchObject({ kind: 'MOVED' });
   });
 });

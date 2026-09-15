@@ -46,6 +46,8 @@ interface OverviewBody {
     clientName: string;
     status: string;
     changedAt: string;
+    scheduleComputedAt: string | null;
+    editedSinceCalculated: boolean;
     changedBy: { kind: string; name?: string };
   }>;
   recentPlans: Array<{
@@ -56,9 +58,26 @@ interface OverviewBody {
   }>;
   attention: {
     heldLocks: Array<{ planId: string; planName: string; requestedBy: { kind: string } | null }>;
-    pendingInvitationCount?: number;
+    liveInvitationCount?: number;
+    expiredInvitationCount?: number;
     expiringDeletedCount?: number;
   };
+  planStanding?: Array<{
+    planId: string;
+    planName: string;
+    projectName: string;
+    clientName: string;
+    status: string;
+    activityCount: number;
+    projectFinish: string | null;
+    scheduleComputedAt: string | null;
+    editedSinceCalculated: boolean;
+    baselineMovement:
+      | { kind: 'MOVED'; workingDays: number; baselineFinish: string; baselineName: string }
+      | { kind: 'UNCHANGED'; baselineFinish: string; baselineName: string }
+      | { kind: 'NOT_ASSESSABLE'; reason: string };
+    flags: Record<string, number>;
+  }>;
 }
 
 describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
@@ -144,6 +163,100 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
     const res = await actor.agent.get(query ? `${OVERVIEW}?${query}` : OVERVIEW).expect(200);
     return res.body.data as OverviewBody;
   }
+
+  /**
+   * R1 — "are these figures current?" — proved BOTH WAYS against a real recalculation.
+   *
+   * A marker that never clears is indistinguishable from a marker that is always on, so asserting
+   * only that an edited plan reports `editedSinceCalculated` would pass against a field hard-wired
+   * to `true`. The recalculation has to actually turn it off.
+   *
+   * It needs a real database because the whole signal rests on a property of the WRITE path:
+   * `stampScheduleComputedAt` stamps `schedule_computed_at` and deliberately does not touch
+   * `plans.updated_at` (ADR-0022; pinned structurally by
+   * `schedule/stamp-no-user-columns.structural.spec.ts`). A mocked repository would agree with
+   * whatever it was handed and could not be wrong about a column it never wrote.
+   */
+  describe('freshness (R1)', () => {
+    it('reports never-calculated as a null cursor, not as edited-since', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Never calculated');
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/edit-lock`)
+        .send({})
+        // **200, not 201.** Acquiring the pen is an idempotent upsert of a lease, so
+        // `PlanLockController` declares `@HttpCode(HttpStatus.OK)` and says so in its own
+        // `@ApiOkResponse` description. These two cases shipped in M2 asserting 201 — a status
+        // read from memory rather than from the controller — so they could never have passed,
+        // and the red was misattributed to an environment difference before anybody opened the
+        // file. ADR-0076 Class 3, and a reminder that "it fails on the clean tree too" proves the
+        // failure pre-dates the change, not that it is somebody else's.
+        .expect(200);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Pour slab', code: 'A0001', durationDays: 5 })
+        .expect(201);
+
+      const row = (await fetchOverview(actor)).recentlyChanged.find((r) => r.planId === planId);
+
+      expect(row?.scheduleComputedAt).toBeNull();
+      // Not "edited since" — there is no since. Two different facts, and the row says which.
+      expect(row?.editedSinceCalculated).toBe(false);
+    });
+
+    it('flips to edited-since on an activity edit, and back on a recalculation', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Recalculated then edited');
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/edit-lock`)
+        .send({})
+        // **200, not 201.** Acquiring the pen is an idempotent upsert of a lease, so
+        // `PlanLockController` declares `@HttpCode(HttpStatus.OK)` and says so in its own
+        // `@ApiOkResponse` description. These two cases shipped in M2 asserting 201 — a status
+        // read from memory rather than from the controller — so they could never have passed,
+        // and the red was misattributed to an environment difference before anybody opened the
+        // file. ADR-0076 Class 3, and a reminder that "it fails on the clean tree too" proves the
+        // failure pre-dates the change, not that it is somebody else's.
+        .expect(200);
+      const activity = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Pour slab', code: 'A0001', durationDays: 5 })
+        .expect(201);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+      const rowOf = async () =>
+        (await fetchOverview(actor)).recentlyChanged.find((r) => r.planId === planId);
+
+      const calculated = await rowOf();
+      expect(calculated?.scheduleComputedAt).not.toBeNull();
+      expect(calculated?.editedSinceCalculated).toBe(false);
+
+      // An ordinary activity edit — the commonest way a plan's dates go stale.
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/activities/${activity.body.data.id}`)
+        .send({ durationDays: 9, version: activity.body.data.version })
+        .expect(200);
+
+      const edited = await rowOf();
+      expect(edited?.editedSinceCalculated).toBe(true);
+
+      // And a recalculation clears it. WITHOUT this the assertion above passes against a field
+      // hard-wired to `true`, and the landing would carry a warning nobody could ever remove.
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+      const recalculated = await rowOf();
+      expect(recalculated?.editedSinceCalculated).toBe(false);
+      expect(new Date(recalculated?.scheduleComputedAt ?? 0).getTime()).toBeGreaterThan(
+        new Date(calculated?.scheduleComputedAt ?? 0).getTime(),
+      );
+    });
+  });
 
   describe('the ordering key', () => {
     it('ranks a plan by its newest activity, not by plans.updated_at', async () => {
@@ -259,7 +372,71 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
       const overview = await fetchOverview(actor);
 
-      expect(overview.attention.pendingInvitationCount).toBe(1);
+      expect(overview.attention.liveInvitationCount).toBe(1);
+      expect(overview.attention.expiredInvitationCount).toBe(0);
+    });
+
+    /**
+     * FC-6: the two numbers on the landing agree with the list the landing sends you to.
+     *
+     * **This is the defect the product owner reported**, in its general form: "1 invitation
+     * pending" on the landing beside a Members page that showed nothing. It needs a real database
+     * because the four row kinds are distinguished by columns, and a mocked repository would agree
+     * with whatever the service asked it for.
+     *
+     * Two of the four are unreachable through the API and are written directly, which is stated
+     * rather than hidden: `expiresAt` is fixed at seven days by `INVITATION_TTL_MS`, and a
+     * soft-deleted invitation has no endpoint at all. Both are real states of the table — the
+     * expired one is reached by nothing more exotic than a week passing.
+     */
+    it('agrees with the list: live + expired equals what GET …/invitations returns', async () => {
+      const { actor } = await adminWithOrg();
+
+      const invite = async (email: string) => {
+        const response = await actor.agent
+          .post('/api/v1/organizations/acme/invitations')
+          .send({ email, role: 'PLANNER' })
+          .expect(201);
+        return response.body.data.id as string;
+      };
+
+      const liveOne = await invite('live-one@example.com');
+      const liveTwo = await invite('live-two@example.com');
+      const expiredId = await invite('expired@example.com');
+      const revokedId = await invite('revoked@example.com');
+      const deletedId = await invite('deleted@example.com');
+
+      // Aged past its lease. Still PENDING, because nothing reaps it — which is exactly why it
+      // was being counted as something a reader could chase.
+      await prisma.invitation.update({
+        where: { id: expiredId },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+      await actor.agent.delete(`/api/v1/organizations/acme/invitations/${revokedId}`).expect(204);
+      await prisma.invitation.update({
+        where: { id: deletedId },
+        data: { deletedAt: new Date() },
+      });
+
+      const overview = await fetchOverview(actor);
+      const list = await actor.agent.get('/api/v1/organizations/acme/invitations').expect(200);
+      const listed = list.body.data as Array<{ id: string }>;
+
+      // Each addend is correct, not merely their sum — a sum can be right for two wrong reasons.
+      expect(overview.attention.liveInvitationCount).toBe(2);
+      expect(overview.attention.expiredInvitationCount).toBe(1);
+      expect(
+        overview.attention.liveInvitationCount! + overview.attention.expiredInvitationCount!,
+      ).toBe(listed.length);
+
+      // And the revoked and soft-deleted rows are in NEITHER number and NEITHER list. Named
+      // explicitly rather than left to the arithmetic: the soft-deleted one is the case that WAS
+      // counted and never listed, so a test that only checks the total would pass against a
+      // version that miscounts it and miscounts something else by one the other way.
+      const listedIds = listed.map((row) => row.id).sort();
+      expect(listedIds).toEqual([expiredId, liveOne, liveTwo].sort());
+      expect(listedIds).not.toContain(revokedId);
+      expect(listedIds).not.toContain(deletedId);
     });
 
     it('omits the invitation count entirely for a Planner', async () => {
@@ -275,7 +452,8 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
       // Omitted, not zeroed. Sending `0` would tell a Planner there is an answer they may
       // not have, which is exactly the leak the omission exists to close.
-      expect(overview.attention).not.toHaveProperty('pendingInvitationCount');
+      expect(overview.attention).not.toHaveProperty('liveInvitationCount');
+      expect(overview.attention).not.toHaveProperty('expiredInvitationCount');
     });
 
     it('omits both counts for a Viewer and a Contributor', async () => {
@@ -286,7 +464,8 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
       for (const reader of [viewer, contributor]) {
         const overview = await fetchOverview(reader);
-        expect(overview.attention).not.toHaveProperty('pendingInvitationCount');
+        expect(overview.attention).not.toHaveProperty('liveInvitationCount');
+        expect(overview.attention).not.toHaveProperty('expiredInvitationCount');
         expect(overview.attention).not.toHaveProperty('expiringDeletedCount');
       }
     });
@@ -525,7 +704,174 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
       const overview = await fetchOverview(viewer, [planId]);
       expect(overview.recentPlans.map((p) => p.planId)).toEqual([planId]);
       // …while the attention section stays absent for them.
-      expect(overview.attention.pendingInvitationCount).toBeUndefined();
+      expect(overview.attention.liveInvitationCount).toBeUndefined();
+      expect(overview.attention.expiredInvitationCount).toBeUndefined();
+    });
+  });
+
+  /**
+   * **R2 — where each programme stands**, against a real recalculation and a real baseline.
+   *
+   * This is the one place the movement arithmetic can be checked at all. `baselineMovementOf` is
+   * pure and its unit cases inject a frame, so they pin the reason ladder and prove nothing about
+   * which calendar the product walks or which factor it divides by. Here the engine computes the
+   * finish, `BaselinesService` freezes it with its hours-per-day factor, and the landing reports
+   * the difference — so a frame that read the wrong calendar, or divided by 1440 where the plan
+   * works eight hours, is visible.
+   *
+   * **The gate's absent half is deliberately not tested here, and that is a finding rather than a
+   * gap.** M3-T2's plan says to assert the omission for a caller without `schedule:read` by
+   * comparing whole payloads — and `schedule:read` is granted to **every member role**
+   * (`common/auth/org-permissions.spec.ts:108` pins that). There is no role this API can mint that
+   * reaches the landing without it, so the state is unreachable through the public surface, exactly
+   * as ADR-0116 found for `PLAN_START_REQUIRED` and M1 found for the shaded `Revoke`. The gate is
+   * pinned where it IS reachable — `overview.service.spec.ts`, with a principal built by hand, and
+   * asserting `findPlanStanding` was never CALLED rather than merely that the field is absent.
+   */
+  describe('where the work stands (R2)', () => {
+    /** An activity with a real duration, so a recalculation produces a finish to compare. */
+    async function addActivity(
+      actor: Actor,
+      planId: string,
+      name: string,
+      durationDays = 10,
+    ): Promise<void> {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name, durationDays, laneIndex: 0 })
+        .expect(201);
+    }
+
+    const recalculate = (actor: Actor, planId: string) =>
+      actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+    const standingFor = (body: OverviewBody, planId: string) =>
+      body.planStanding?.find((row) => row.planId === planId);
+
+    it('reports NO_BASELINE rather than a zero, for a plan that has one to capture', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Tower B');
+      await addActivity(actor, planId, 'Piling');
+      await recalculate(actor, planId);
+
+      const row = standingFor(await fetchOverview(actor), planId);
+
+      expect(row?.projectFinish).not.toBeNull();
+      // Not `{ kind: 'UNCHANGED', ... }` and not a `workingDays: 0`. "Nothing to measure against"
+      // and "has not moved" are different facts, and the union has no numeric fallback to collapse
+      // them into.
+      expect(row?.baselineMovement).toEqual({ kind: 'NOT_ASSESSABLE', reason: 'NO_BASELINE' });
+    });
+
+    it('reports PLAN_EMPTY before PLAN_NOT_SCHEDULED — the first thing that needs doing', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Empty');
+
+      const row = standingFor(await fetchOverview(actor), planId);
+
+      // Both are true of a brand-new plan. The ladder's order is what decides which one a planner
+      // is told, and "add some activities" is the action; "recalculate" is not available yet.
+      expect(row?.activityCount).toBe(0);
+      expect(row?.baselineMovement).toEqual({ kind: 'NOT_ASSESSABLE', reason: 'PLAN_EMPTY' });
+    });
+
+    it('reports UNCHANGED against a baseline captured from the same schedule', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Tower C');
+      await addActivity(actor, planId, 'Piling');
+      await recalculate(actor, planId);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Contract award' })
+        .expect(201);
+
+      const row = standingFor(await fetchOverview(actor), planId);
+
+      expect(row?.baselineMovement).toMatchObject({
+        kind: 'UNCHANGED',
+        baselineName: 'Contract award',
+      });
+      // The capture froze the finish the schedule had — so the baseline's date IS the plan's, which
+      // is what makes the UNCHANGED reading meaningful rather than a coincidence of two nulls.
+      expect(
+        (row?.baselineMovement as { baselineFinish: string } | undefined)?.baselineFinish,
+      ).toBe(row?.projectFinish);
+    });
+
+    it('reports MOVED, signed and in working days, after the programme slips', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Tower D');
+      await addActivity(actor, planId, 'Piling');
+      await recalculate(actor, planId);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Contract award' })
+        .expect(201);
+
+      // **A LONGER activity, not a second equal one.** The first version added a second 10-day
+      // activity and expected the finish to move; with no dependency between them the two run in
+      // parallel from the data date, `MAX(early_finish)` is unchanged, and the case reported
+      // UNCHANGED — correctly. Forty days beats the ten already there, so the programme's finish
+      // really does slip. Added AFTER the capture, so the baseline holds the shorter programme.
+      await addActivity(actor, planId, 'Substructure', 40);
+      await recalculate(actor, planId);
+
+      const row = standingFor(await fetchOverview(actor), planId);
+      const movement = row?.baselineMovement as
+        { kind: string; workingDays: number; baselineFinish: string } | undefined;
+
+      expect(movement?.kind).toBe('MOVED');
+      // POSITIVE means later. The sign convention is the one thing a reader acts on, and an
+      // inverted one would say a slipping job is pulling in — which is worse than no number.
+      expect(movement?.workingDays).toBeGreaterThan(0);
+      // `YYYY-MM-DD` sorts lexicographically, so a plain string comparison is the date comparison.
+      expect((row?.projectFinish ?? '') > (movement?.baselineFinish ?? '')).toBe(true);
+    });
+
+    it('omits a flag that is zero, and carries one that is not', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Tower E');
+      await addActivity(actor, planId, 'Piling');
+      await recalculate(actor, planId);
+
+      const row = standingFor(await fetchOverview(actor), planId);
+
+      // A healthy plan reports `{}` — not four zeroes, which is what buries the one that is not.
+      expect(row?.flags).toEqual({});
+    });
+
+    it('stands on exactly the plans "recently changed" carries — one section, one list', async () => {
+      const { actor } = await adminWithOrg();
+      const first = await createPlan(actor, 'One', 'Client A');
+      const second = await createPlan(actor, 'Two', 'Client B');
+
+      const body = await fetchOverview(actor);
+
+      // Whole-list comparison rather than "contains": the two sections are rendered as one table,
+      // so a standing list that drifted from the changed list would leave rows with no facts and
+      // facts with no rows, and a `toContain` would pass through either.
+      expect([...(body.planStanding ?? [])].map((row) => row.planId).sort()).toEqual(
+        [...body.recentlyChanged].map((row) => row.planId).sort(),
+      );
+      expect(body.planStanding?.map((row) => row.planId).sort()).toEqual([first, second].sort());
+    });
+
+    it('serves it to every member role, because schedule:read is every role’s', async () => {
+      const { actor: admin, orgId } = await adminWithOrg();
+      const planId = await createPlan(admin, 'Tower F');
+      await addActivity(admin, planId, 'Piling');
+
+      for (const role of ['PLANNER', 'CONTRIBUTOR', 'VIEWER'] as const) {
+        const member = await memberWith(orgId, role, `${role.toLowerCase()}@example.com`);
+        const body = await fetchOverview(member);
+        // PRESENT — the reachable half of the gate. Absent would mean this member cannot see where
+        // the organisation's work stands, which no role in this product is supposed to mean.
+        expect(body.planStanding, `${role} should receive the standing section`).toBeDefined();
+        expect(body.planStanding?.map((row) => row.planId)).toEqual([planId]);
+      }
     });
   });
 });
