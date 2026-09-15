@@ -1,5 +1,138 @@
 # @repo/web
 
+## 0.130.0
+
+### Minor Changes
+
+- [#610](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/610) [`7b09cf5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b09cf5569ac9156bbb7c95e986fed39be6a2d1f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console answers before it reports.
+  
+  It shipped as five correct panels stacked in one column and had never been photographed. Measured at
+  1646 on an unhealthy installation: 5.6 screens of page, a content column that was 848 px wide at
+  1280, 1440 and 1646 alike — so 48 % of the window sat unused down its whole length — and **three of
+  the five things that were wrong were above the fold only because they happened to share a panel**.
+  The other two were a screen and a half down, past two panels that do nothing until a button is
+  pressed.
+  
+  Now a **Status** summary answers first: one row per check, always all of them, worst first, each
+  stating its verdict in words and linking to the section that explains it. Below it the panels sit in
+  two columns whose widths follow what each one's content needs — a table-bodied section gets the whole
+  width, a row of facts takes half — rather than two equal columns, which would have made every table
+  on the page narrower while the page got wider.
+  
+  Measured in one sitting, before and after: everything that is wrong is now named in the first
+  screen (3 → 5 of 5), the page is 16 % shorter, and every table is 80 % wider.
+  
+  Three defects were found by looking at a picture, and no test here could have seen any of them: a
+  layout rule that could never fire, so two figures spread across a wide card; an empty state drawn
+  inside two boxes; and four tables spreading a third of a screen's worth of content across a full
+  one, putting an address and its date a thousand pixels apart on the same row. A fourth was found by
+  reading — the console had no live region at all, so anything it announced would have reached nobody.
+  
+  Also: staff activity stops drowning in the console's own reads (a page load writes one row per panel,
+  so fifty entries were seven page loads and almost nothing else — consecutive reads now collapse into
+  one row that names every panel and its own size, hiding nothing), each performance sitting gets a
+  heading a sighted reader can see, and copying anything to the clipboard now says whether it worked.
+
+### Patch Changes
+
+- [#610](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/610) [`7b09cf5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b09cf5569ac9156bbb7c95e986fed39be6a2d1f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console is built from the page archetypes, and it has a way back to the application.
+  
+  `/staff` hand-rolled its own page frame and its own section heading rank — the shapes ADR-0097's
+  archetypes exist to own — so it took `PageContainer` + `PageHeader`, and `Panel` now composes
+  `SectionCard` rather than reimplementing `Card`. A structural gate over the whole surface (the route
+  file, the feature and the performance probe's UI) refuses a hand-rolled frame, `<h1>` or `<h2>` in
+  any of them.
+  
+  It also gains the way back that nobody had noticed was missing: the authenticated branch rendered a
+  header with no link home, while the not-found branch beside it has one — so the branch for people
+  who cannot use the page had a way out and the branch for people who can did not, and there is no app
+  shell here to supply one.
+  
+  Deliberately a no-op on measure, and verified as one rather than assumed: 8,793 px before against
+  8,781 px after, both measured in the same sitting. Comparing against the figure recorded earlier
+  would have shown +3,228 px and sent somebody looking for a defect that does not exist — the page's
+  height drifts upward on its own, because two of its tables only grow.
+
+- [#610](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/610) [`7b09cf5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b09cf5569ac9156bbb7c95e986fed39be6a2d1f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console gets its frame: a two-column grid whose spans are assigned by content width
+  demand, a new order, and mail and retention in one card.
+  
+  The console laid out in an 896px column inside a 1646px window — 46% of the screen unused, down all
+  of its 8,781px — while several of its tables looked cramped. Both are the same defect, and the
+  obvious fix would have made half of it worse: two EQUAL columns are 787px, narrower than the single
+  column they replace, so every table on the page would have shrunk while the page got wider.
+  
+  So spans follow content. A section whose body is a table spans both columns and gets 1,438px of
+  table against today's 798 (+80%); a stat grid and a row of tool buttons pair at 732px each. Measured
+  same-sitting: the page falls from 8,781px to 7,686px (-12%), the unused margin from 46% to 7%, and
+  every table is wider at every width from 1280 up.
+  
+  The order is priority and is also DOM order: conditions first, then what this installation is, then
+  the tools, then the record. Performance and Diagnostics no longer sit at positions 2 and 3, inert
+  until a button is pressed, taking ~550px of the best space on the page. "Retention sweeping is
+  disabled" moves from 562px below the fold to 716px above it.
+  
+  Mail and retention become one card, since both are rendered from a single response. The card is
+  titled "Mail and retention" with two headings of equal rank rather than keeping the title "Mail" —
+  retention is not a kind of mail, and subordinating it would demote the panel an operator goes
+  looking for by name when they want to know whether the sweep is arming.
+  
+  `PageGrid` joins the page archetypes, and it never re-orders: no CSS `order`, no dense auto-flow, no
+  explicit placement, so the DOM sequence stays the reading sequence. A gate refuses all three in the
+  primitive, verified red against each.
+
+- [#610](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/610) [`7b09cf5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b09cf5569ac9156bbb7c95e986fed39be6a2d1f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff console's first viewport answers "is anything wrong right now?".
+  
+  A derived, four-state status summary leads the page: every check the console can make, severity
+  ordered, each naming the number its claim rests on and linking to the section that answers it. Five
+  checks — mail delivery, retention sweeping, Content-Security-Policy, account verification, and
+  whether anybody would learn of a failure at all.
+  
+  Measured on the unhealthy recipe at 1646: **all five conditions are now named within the first
+  viewport, against three of five before**. The two that were below it — retention sweeping disabled,
+  and 93 accounts that cannot complete sign-in — sat 562px and 1,445px down at the start of this epic.
+  
+  It never reports a pending or unreadable check as healthy: four states with no defaulting, and a
+  total record so a check added without a state is a typecheck failure rather than a silently missing
+  row. It is deliberately not a live region, by either mechanism — these are standing conditions, not
+  events — and the test pins the absence of `aria-live` as well as of `role`, because `aria-live` with
+  no role is still a live region.
+  
+  It issues no request of its own: the derivation takes the page's existing query results as
+  arguments, because reading a staff panel is an audited act and a second request would write a second
+  row on every page load, forever, in the table that refuses DELETE.
+  
+  `SectionCard` gains an optional `id`, which also makes it focusable, so a summary row's link has
+  somewhere to send a keyboard reader rather than only moving the viewport.
+
+- [#610](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/610) [`7b09cf5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b09cf5569ac9156bbb7c95e986fed39be6a2d1f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - One failure shape and one metric shape on the staff console — and a real defect closed on the way.
+  
+  Five call sites rendered a failed query as character-identical markup, down to the gap and the
+  button's variant: `DataTable` and four staff panels. They are now one `QueryErrorState`, and
+  **`DataTable` consumes it** — a shared component the table did not use would be two implementations
+  of one shape held together by a test, which drift invisibly because each looks right alone.
+  
+  The loading half is deliberately NOT unified. `DataTable` shows a content-shaped skeleton, whose own
+  docblock argues that a skeleton of the wrong shape reflows the page under the reader's cursor; a
+  panel whose settled content is a stat grid has no table shape to skeleton. Forcing one component
+  would have regressed a shipped decision, so it stays a rule.
+  
+  The defect: `query.data` is not cleared by a failed refetch, so a panel written as "if error show
+  this, if data show that" rendered **both** — a red "could not read" sentence sitting directly above
+  figures from the last successful read, with nothing saying they were stale. Four panels did this.
+  Verified red before the fix.
+  
+  `StatGrid` is promoted from the console's local helper, whose docblock claimed the codebase had no
+  primitive for this shape — untrue when written, since `ContextStrip` exists. Both docblocks now
+  state the discriminator, and the API is designed against the widest existing caller so the others
+  can adopt it. The four that remain are recorded as debt rather than converted carelessly: they
+  disagree about the figure's size, and two are deliberately quiet.
+
+- [#610](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/610) [`7b09cf5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7b09cf5569ac9156bbb7c95e986fed39be6a2d1f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The screenshot harness can reach the staff console. Its `/staff` shot has been on the list all
+  along and could never produce a picture: it signed up a timestamped address against an allow-list
+  the API reads before it boots, and the guard demands a verified address whose token is stored
+  hashed. The harness now uses a knowable address and receives the verification mail through the
+  same SMTP sink the journeys use, so the console can be photographed for the first time.
+
 ## 0.129.0
 
 ### Minor Changes
