@@ -343,6 +343,49 @@ describe('StaffConsoleScreen', () => {
     expect(await screen.findByText(/panel read · accounts/i)).toBeInTheDocument();
   });
 
+  /**
+   * **The grouping is wired, not merely written.** `groupActivity` has its own suite; this asserts
+   * the panel actually renders through it, which is the seam ADR-0081 records milestones shipping
+   * unreached — a pure model with unit tests and no caller looks finished from every angle except
+   * the product.
+   *
+   * The fixture is one page load: six reads in the same second by one actor, which is what opening
+   * this console writes. Before the grouping, fifty entries were seven of these and almost nothing
+   * else.
+   */
+  it("collapses the console's own reads so the rows that matter are findable", async () => {
+    const at = '2026-08-09T10:00:00.000Z';
+    renderStaffWith({
+      '/staff/activity': [
+        ...['performance', 'installation', 'accounts', 'security', 'health', 'activity'].map(
+          (panel, index) => ({
+            id: `p${String(index)}`,
+            occurredAt: at,
+            action: 'staff.panel_read',
+            actorLabel: 'ops@schedulepoint.test',
+            subjectLabel: panel,
+          }),
+        ),
+        {
+          id: 'probe',
+          occurredAt: '2026-08-09T09:59:00.000Z',
+          action: 'staff.probe_recorded',
+          actorLabel: 'ops@schedulepoint.test',
+          subjectLabel: 'canvas-draw',
+        },
+      ],
+    });
+
+    // One row for the page load, naming every panel and its own size — nothing is hidden.
+    expect(
+      await screen.findByText(
+        '6 panel reads · performance, installation, accounts, security, health, activity',
+      ),
+    ).toBeInTheDocument();
+    // And the row that matters is no longer buried between six of them.
+    expect(screen.getByText('probe recorded · canvas-draw')).toBeInTheDocument();
+  });
+
   it('says an empty policy table is NOT proof the policy is clean', async () => {
     // The assertion that matters most on this panel. Delivery from a browser to the sink has never
     // been verified end to end (TECH_DEBT #117), so silence means "nothing arrived", not "nothing

@@ -18,6 +18,11 @@ import {
   useStaffActivity,
   useStaffInstallation,
 } from '@/features/staff/api/staff-panels';
+import {
+  describeActivity,
+  groupActivity,
+  type ActivityGroup,
+} from '@/features/staff/model/activity-rows';
 import { CHECK_SECTION_ID, deriveConsoleStatus } from '@/features/staff/model/console-status';
 import {
   lastRunSentence,
@@ -166,10 +171,16 @@ export function StaffConsoleScreen(): React.ReactElement {
             was ambiguous about placement (spec §8.19). */}
           {identity.data.dualHatted && (
             <Alert purpose="condition" tone="info">
-              <strong className="font-medium">This account is also an organisation member.</strong>{' '}
-              Staff-ness confers nothing inside any organisation, and nothing you do here is done as
-              a member. Anything you reach in the app itself, you reach with your ordinary
-              membership.
+              {/* **The weight came out, and the third sentence with it** (M5-T1). A bold lead-in
+                  earns its place when an alert is long enough that a scanning reader would
+                  otherwise have to READ it to tell which condition it is — which is why the other
+                  four on this page keep theirs. This one is two sentences inside a tinted block
+                  with a leading icon and a tone colour, so the weight was a fourth channel saying
+                  what three already said: the ADR-0097 precedent the weight ratchet's own comment
+                  chain records. The dropped sentence restated "nothing you do here is done as a
+                  member" in the other direction. */}
+              This account is also an organisation member. Staff-ness confers nothing inside any
+              organisation, and nothing you do here is done as a member.
             </Alert>
           )}
           {/* **Zone 1: never columned.** A status answer must not sit beside anything — placed in a
@@ -253,9 +264,60 @@ function MailSection(): React.ReactElement {
   const data = health.data;
 
   const columns: Column<NonNullable<typeof data>['recentFailures'][number]>[] = [
-    { header: 'When', cell: (row) => new Date(row.occurredAt).toLocaleString() },
-    { header: 'Message', cell: (row) => row.kind.replace(/_/g, ' ') },
-    { header: 'Recipient', cell: (row) => row.recipient ?? '—', cellClassName: 'break-all' },
+    /**
+     * **Leading columns carry a width so the trailing one soaks the surplus.**
+     *
+     * Measured in Chromium: this page's four short tables want 371-660 px of content and are given
+     * 1,438, and with `table-layout: auto` the surplus goes to whichever column holds the widest
+     * content — which put an address at x=104 and its date at x=1,209, more than a thousand pixels
+     * apart on one row. That is ADR-0098's recorded defect verbatim ("a plan's name and its change
+     * time sat ~800 px apart at 1646"), where the remedy was a narrower measure.
+     *
+     * The measure cannot narrow here: FC-4 forbids any table on this page being narrower than the
+     * 798 px it measures today, and softening a committed condition to fix a spacing complaint is
+     * tuning the bar to the answer.
+     *
+     * **`w-full` on the TRAILING column was tried first and is withdrawn on measurement.** It does
+     * take the surplus, and it squeezes every other column to `min-content` doing it: "Policy
+     * violation reports" wrapped onto three lines, "Keeps for" onto two, and a recipient address
+     * broke mid-word across four — the page grew from 11,066 px to 13,172. A width on the leading
+     * columns is a preference rather than a claim on the remainder, so a column still grows past it
+     * when its content needs to. `md:` because the widths only make sense where the surplus exists;
+     * below it the table is byte-for-byte what it was.
+     */
+    {
+      header: 'When',
+      cell: (row) => new Date(row.occurredAt).toLocaleString(),
+      cellClassName: 'py-2 pr-4 md:w-44',
+    },
+    {
+      header: 'Message',
+      cell: (row) => row.kind.replace(/_/g, ' '),
+      cellClassName: 'py-2 pr-4 md:w-36',
+    },
+    {
+      header: 'Recipient',
+      cell: (row) => row.recipient ?? '—',
+      // `break-all` alone REPLACED the default `py-2 pr-4`, so these cells had no padding at all
+      // and no gap to the next column — a pre-existing defect the widths made visible.
+      cellClassName: 'py-2 pr-4 break-all md:w-80',
+    },
+    /**
+     * **The last column soaks the surplus, so the others cluster at the left.**
+     *
+     * Measured in Chromium: this page's four short tables want 371-660 px of content and are given
+     * 1,438, and with `table-layout: auto` the surplus goes to whichever column holds the widest
+     * content — which put an address at x=104 and its date at x=1,209, more than a thousand pixels
+     * apart on one row. That is ADR-0098's recorded defect verbatim ("a plan's name and its change
+     * time sat ~800 px apart at 1646"), where the remedy was a narrower measure.
+     *
+     * Here the measure cannot narrow: FC-4 forbids any table on this page being narrower than the
+     * 798 px it measures today, because the epic's whole layout case was that span-by-demand
+     * WIDENS the tables — and softening a committed condition to fix a spacing complaint is tuning
+     * the bar to the answer. `w-full` on the trailing column takes the surplus instead, so every
+     * other column falls back to its natural width and a row reads as one thing. The table's own
+     * width is unchanged, so FC-4 is untouched rather than reinterpreted.
+     */
     { header: 'Error', cell: (row) => row.errorClass ?? '—' },
   ];
 
@@ -390,10 +452,15 @@ function RetentionSection(): React.ReactElement {
   const alertingConfigured = health.data?.alertingConfigured ?? false;
 
   const columns: Column<RetentionTable>[] = [
-    { header: 'Table', cell: (row) => tableLabel(row.table) },
-    { header: 'Keeps for', cell: (row) => `${String(row.retentionDays)} days` },
+    { header: 'Table', cell: (row) => tableLabel(row.table), cellClassName: 'py-2 pr-4 md:w-56' },
+    {
+      header: 'Keeps for',
+      cell: (row) => `${String(row.retentionDays)} days`,
+      cellClassName: 'py-2 pr-4 md:w-28',
+    },
     {
       header: 'Oldest row',
+      cellClassName: 'py-2 pr-4 md:w-40',
       cell: (row) => (
         <>
           <span className="tabular-nums">{oldestSentence(row)}</span>
@@ -445,9 +512,14 @@ function RetentionSection(): React.ReactElement {
         <>
           {!retention.enabled && (
             <Alert purpose="condition" tone="info" id={RETENTION_DISABLED_ID}>
-              <strong className="font-medium">Retention sweeping is disabled.</strong> Nothing is
-              being deleted. Set <code>RETENTION_SWEEP_ENABLED=true</code> to resume — the ages
-              below are still real, and will keep growing until you do.
+              {/* "Nothing is being deleted" came out: the `Status` summary at the top of the
+                  page now says exactly that, in those words, and this is one of the two conditions
+                  it names. What a summary row cannot carry is the remedy and the caveat, which is
+                  what is left. The lead-in STAYS — a reader scrolled to this card is most of a
+                  page from the summary and needs to know which condition the block is about. */}
+              <strong className="font-medium">Retention sweeping is disabled.</strong> Set{' '}
+              <code>RETENTION_SWEEP_ENABLED=true</code> to resume — the ages below are still real,
+              and will keep growing until you do.
             </Alert>
           )}
           {retention.consecutiveFailures > 0 && (
@@ -714,8 +786,11 @@ function AccountsPanel(): React.ReactElement {
   const data = accounts.data;
 
   const columns: Column<NonNullable<typeof data>['unverified'][number]>[] = [
-    { header: 'Address', cell: (row) => row.email, cellClassName: 'break-all' },
-    { header: 'Registered', cell: (row) => new Date(row.createdAt).toLocaleDateString() },
+    { header: 'Address', cell: (row) => row.email, cellClassName: 'py-2 pr-4 break-all md:w-96' },
+    {
+      header: 'Registered',
+      cell: (row) => new Date(row.createdAt).toLocaleDateString(),
+    },
   ];
 
   return (
@@ -781,15 +856,25 @@ function AccountsPanel(): React.ReactElement {
  */
 function ActivityPanel(): React.ReactElement {
   const activity = useStaffActivity();
+  // **Consecutive panel reads by one actor collapse into one row** (spec §8.15). Opening this
+  // console writes one `staff.panel_read` per panel, so a page of fifty entries was seven page
+  // loads and almost nothing else — the rows that matter sat between them. Nothing is hidden: the
+  // count is printed and every panel is named. Client-side, because the API and the audit table are
+  // right as they are; this is a presentation of the rows they returned.
+  const groups = groupActivity(activity.data ?? []);
 
-  const columns: Column<NonNullable<typeof activity.data>[number]>[] = [
-    { header: 'When', cell: (row) => new Date(row.occurredAt).toLocaleString() },
-    { header: 'Who', cell: (row) => row.actorLabel ?? '—', cellClassName: 'break-all' },
+  const columns: Column<ActivityGroup>[] = [
     {
-      header: 'What',
-      cell: (row) =>
-        `${row.action.replace('staff.', '').replace(/_/g, ' ')}${row.subjectLabel === null ? '' : ` · ${row.subjectLabel}`}`,
+      header: 'When',
+      cell: (row) => new Date(row.occurredAt).toLocaleString(),
+      cellClassName: 'py-2 pr-4 md:w-52',
     },
+    {
+      header: 'Who',
+      cell: (row) => row.actorLabel ?? '—',
+      cellClassName: 'py-2 pr-4 break-all md:w-72',
+    },
+    { header: 'What', cell: (row) => describeActivity(row) },
   ];
 
   return (
@@ -806,7 +891,14 @@ function ActivityPanel(): React.ReactElement {
       <DataTable
         caption="Staff actions, most recent first"
         columns={columns}
-        query={activity}
+        // The query's own three states, with the grouped rows in place of the raw ones. Handing it
+        // the real flags is what keeps loading, error and empty exactly as they were.
+        query={{
+          isPending: activity.isPending,
+          isError: activity.isError,
+          data: activity.isPending || activity.isError ? undefined : groups,
+          refetch: () => activity.refetch(),
+        }}
         getRowKey={(row) => row.id}
         loadingLabel="Loading staff activity…"
         errorLabel="Could not read staff activity."

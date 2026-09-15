@@ -18,6 +18,7 @@ import { formatSitting } from './probe-report';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { CardTitle } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
 
@@ -78,13 +79,23 @@ export function ProbeSittings({
         What replaces it is the pair that survives BECAUSE it was taken inside a single sitting, so
         no machine-state confound is possible, and no coefficient is derived from two points.
       */}
-      <p id={COMPARABILITY_ID} className="text-muted-foreground mb-3 text-sm">
-        A reading is only comparable to another taken at the same canvas size, and the difference is
-        not a rounding term: measured inside one sitting, the same plan on the same machine drew at
-        35.2&nbsp;fps at 1912×948 and 32.2&nbsp;fps at 1920×1080 — about 3&nbsp;fps for 14% more
-        area. Compare readings whose canvas figures match, and read the display interval and
-        attention facts before explaining an outlier.
-      </p>
+      {/* **Rendered once there is a second reading to compare with** (spec §8.15). Before that it
+          is advice about an act the reader cannot perform, on the panel whose empty state already
+          says to run a measurement — and a caveat that is always on screen is one a reader learns
+          to skip before the day it matters. `sittings.length` rather than a row count, because
+          comparability is between SITTINGS: two readings inside one sitting share a machine, a
+          canvas and a clock, which is the whole reason the surviving figure pair was taken that
+          way. The id is still referenced by `describedById`, so when the paragraph is absent the
+          reference is dropped with it rather than pointing at nothing. */}
+      {sittings.length > 1 && (
+        <p id={COMPARABILITY_ID} className="text-muted-foreground mb-3 text-sm">
+          A reading is only comparable to another taken at the same canvas size, and the difference
+          is not a rounding term: measured inside one sitting, the same plan on the same machine
+          drew at 35.2&nbsp;fps at 1912×948 and 32.2&nbsp;fps at 1920×1080 — about 3&nbsp;fps for
+          14% more area. Compare readings whose canvas figures match, and read the display interval
+          and attention facts before explaining an outlier.
+        </p>
+      )}
 
       {/*
         **Loading, error and empty stay with one `DataTable` fed the live query**, so those three
@@ -107,7 +118,9 @@ export function ProbeSittings({
             refetch: query.refetch,
           }}
           getRowKey={() => ''}
-          describedById={COMPARABILITY_ID}
+          // Deliberately NOT `describedById={COMPARABILITY_ID}`: this branch runs when there are no
+          // sittings, so the note it pointed at is not on the page. It was a dangling reference in
+          // every state this branch has.
           loadingLabel="Loading recorded readings…"
           errorLabel="Could not read the recorded readings."
           // Plain copy, not an `Alert`: `DataTable` frames a non-blank `empty` node itself, so an
@@ -147,6 +160,11 @@ export function ProbeSittings({
               // from the stored history, which is a natural companion to `docs/TECH_DEBT.md` #271.
               // Raised independently by the M7 ux and database reviews; filed as #273.
               mayBeTruncated={index === sittings.length - 1}
+              // Null when the paragraph is not rendered. An `aria-describedby` pointing at no
+              // element reads to a screen reader as a missing description rather than an absent
+              // one — the rule this file already states for its two conditional warnings, applied
+              // to the note that is now conditional too.
+              comparabilityId={sittings.length > 1 ? COMPARABILITY_ID : null}
             />
           ))}
         </div>
@@ -173,16 +191,27 @@ const settled = <T,>(data: T[]): SettledQuery<T> => ({
 /**
  * One sitting: the facts its readings share, then the readings.
  *
- * The heading is the table's caption rather than a separate `<h3>`, per spec §4.6 — a `DataTable`
- * already exposes a labelled region, and a heading above it would name the same thing twice.
+ * **The caption is `sr-only` (`data-table.tsx:144,226`), so until this it named the sitting for a
+ * screen-reader user and for nobody else.** The docblock here used to say the caption WAS the
+ * heading, citing the spec — and the spec's sentence is about not inventing a grouped-table pattern,
+ * not about refusing a visible one. Photographed (`#165(e)`), five blocks ran together as one
+ * stream: facts, table, Copy, facts, table, Copy, with no painted boundary anywhere. The asymmetry
+ * is the finding: the spec's own stated worry was "gives a screen-reader user no structure to
+ * navigate", which was solved, while the sighted reader was left with none.
+ *
+ * The `<h3>` and the region now name the same thing deliberately, which is ordinary: one is the
+ * block's heading and the other is the table's label.
  */
 function SittingBlock({
   sitting,
   mayBeTruncated,
+  comparabilityId,
 }: {
   sitting: Sitting;
   /** True for the oldest block, whose missing readings may be on the next page rather than absent. */
   mayBeTruncated: boolean;
+  /** The comparability note's id, or `null` when there is nothing to compare and it is not rendered. */
+  comparabilityId: string | null;
 }): React.ReactElement {
   const factsId = useId();
   const spreadId = useId();
@@ -210,15 +239,39 @@ function SittingBlock({
    * rendered contributes nothing rather than an id pointing at no element, which reads to a screen
    * reader as a missing description rather than an absent one.
    */
+  const headingId = `${factsId}-heading`;
+
   const describedBy = [
     factsId,
     ...(spread !== null && spread > SITTING_SPREAD_LIMIT_MS ? [spreadId] : []),
     ...(missing > 0 ? [missingId] : []),
-    COMPARABILITY_ID,
+    ...(comparabilityId === null ? [] : [comparabilityId]),
   ].join(' ');
 
   return (
+    /**
+     * **Each sitting says where it begins.** Photographed for the first time (`#165(e)`), five
+     * blocks ran together as one continuous stream: a facts list, a table, a Copy button, then
+     * another facts list, with nothing on screen marking the boundary — the table's caption is the
+     * region's accessible NAME and is not painted, so a sighted reader had no heading at all while
+     * a screen-reader user had one. `CardTitle level={3}` at `text-sm` is the same treatment the
+     * console's Mail and Retention subsections already use, so the panel's headings match rather
+     * than each surface inventing its own; using the primitive also keeps the weight inside
+     * `components/ui`, where the screen ceiling does not count it and should not.
+     *
+     * The rule above the first block is a separator and not a decoration: `space-y-8` alone spaces
+     * blocks the same way a block spaces its own parts, only more so, which is the ambiguity.
+     */
+    /* **Deliberately NOT `aria-labelledby`.** A `<section>` with an accessible name IS a `region`
+       landmark, so naming it would put a landmark around a table that is already a region with the
+       SAME name — a landmark-navigating reader would meet the sitting twice, one nested in the
+       other. Caught by the existing suite going ambiguous on `getByRole('region', …)`, which is the
+       assertion noticing rather than breaking. The `<h3>` gives heading navigation the structure;
+       nothing needs a second landmark to carry it. */
     <section className="space-y-3">
+      <CardTitle id={headingId} level={3} className="text-sm">
+        {caption}
+      </CardTitle>
       <SittingFacts sitting={sitting} id={factsId} />
 
       {/*
