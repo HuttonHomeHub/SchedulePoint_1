@@ -1,29 +1,39 @@
 import { execFileSync } from 'node:child_process';
 
 /**
- * One `psql` seam for the benchmark and fixture harnesses, with a guard on where it connects.
+ * One `psql` seam for the benchmark and fixture harnesses, with a guard on where it connects and
+ * **no connection string on the command line at all**.
  *
  * **These scripts bulk-write.** The landing benchmark inserts 3,000 plans and 120,000 activities at
- * its largest shape; the fixture ages an invitation with an `UPDATE`. They resolve their target
- * from `DATABASE_URL`, and a developer who happens to have that exported to a shared or staging
- * database in their shell would seed a hundred thousand rows into it — while the harness reported
- * perfectly plausible numbers the whole time. That is `docs/TECH_DEBT.md` #328, and this closes it.
+ * its largest shape; the fixture ages an invitation with an `UPDATE`. They resolve their target from
+ * `DATABASE_URL`, and a developer who happens to have that exported to a shared or staging database
+ * in their shell would seed a hundred thousand rows into it — while the harness reported perfectly
+ * plausible numbers the whole time. That was `docs/TECH_DEBT.md` #328.
  *
- * **The guard is an allow-list on the resolved HOST, and the URL is rebuilt from parsed parts.**
- * Not a substring check: `postgresql://user@evil.example/db?host=localhost` contains the word and is
- * not local. `new URL` decides what the hostname is, the same way the client will.
+ * Two independent things are wrong with handing that URL to `psql` as an argument, and this fixes
+ * both rather than guarding one.
  *
- * Set `SP_ALLOW_REMOTE_PSQL=1` to mean it deliberately — an opt-out that has to be typed, rather
- * than a default that has to be noticed.
+ * **1. A connection URL in `argv` puts the password where anyone on the box can read it.** Process
+ * arguments are world-readable (`ps -ef`, `/proc/<pid>/cmdline`); the environment of a child is not
+ * readable by other users on Linux. So the parts go through `PGHOST`/`PGPORT`/`PGUSER`/
+ * `PGPASSWORD`/`PGDATABASE` on the child's own environment, and `psql` is invoked with no
+ * connection argument. This is the fix that removes the dataflow rather than barring it: nothing
+ * derived from `DATABASE_URL` reaches a command line.
  *
- * CodeQL flagged the ungated version of this dataflow on the pull request that introduced it
- * (environment value reaching a command line). The row above had already named the same weakness
- * from the other direction, which is why this is a fix rather than a dismissal.
+ * **2. The target could be anywhere.** The allow-list is on the hostname **`new URL` resolves**,
+ * not on a substring — `postgresql://u:p@evil.example/app?host=localhost` contains the word and is
+ * not local. `SP_ALLOW_REMOTE_PSQL=1` is the opt-out, which has to be typed rather than noticed.
+ *
+ * CodeQL flagged the ungated version of this on the pull request that introduced it, and #328 had
+ * already named the same weakness from the other direction. A dismissal was never an option
+ * (CLAUDE.md §19.7), and a guard alone would have left the argv exposure in place — which nobody
+ * had noticed until the alert made somebody read the line.
  */
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
 const DEFAULT_URL = 'postgresql://app:app@localhost:5432/app?schema=public';
 
-export function psqlUrl() {
+/** The connection, as environment variables `psql` reads for itself. */
+export function psqlEnv() {
   const parsed = new URL(process.env.DATABASE_URL ?? DEFAULT_URL);
 
   if (!LOCAL_HOSTS.has(parsed.hostname) && process.env.SP_ALLOW_REMOTE_PSQL !== '1') {
@@ -34,18 +44,24 @@ export function psqlUrl() {
     );
   }
 
-  // `psql` refuses the `?schema=public` Prisma appends (`invalid URI query parameter: "schema"`).
-  // Deleting the parameter and re-serialising is exact where the previous regex was approximate,
-  // and it means the string handed to the command line is one this module composed rather than one
-  // it was handed.
-  parsed.searchParams.delete('schema');
-  return parsed.toString();
+  return {
+    ...process.env,
+    PGHOST: parsed.hostname,
+    PGPORT: parsed.port === '' ? '5432' : parsed.port,
+    PGUSER: decodeURIComponent(parsed.username),
+    PGPASSWORD: decodeURIComponent(parsed.password),
+    // Prisma's `?schema=` is not part of the database name, and `psql` refuses it as a URI
+    // parameter (`invalid URI query parameter: "schema"`). Taking the path is exact where the
+    // regex this replaced was approximate.
+    PGDATABASE: parsed.pathname.replace(/^\//, ''),
+  };
 }
 
-/** One query, ON_ERROR_STOP so a failed statement is an exception rather than a quiet zero. */
+/** One query. `ON_ERROR_STOP` so a failed statement is an exception rather than a quiet zero. */
 export function psql(sql, { flag = '-tAc', maxBuffer = 64 * 1024 * 1024 } = {}) {
-  return execFileSync('psql', [psqlUrl(), '-v', 'ON_ERROR_STOP=1', flag, sql], {
+  return execFileSync('psql', ['-v', 'ON_ERROR_STOP=1', flag, sql], {
     encoding: 'utf8',
     maxBuffer,
+    env: psqlEnv(),
   });
 }
