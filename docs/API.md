@@ -911,6 +911,49 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   with nothing looking wrong. And Auto-arrange is a known false positive: it writes `lane_index` on
   every activity it moves, which is an edit by this rule and not one by a planner's.
 
+- **`planStanding` is where each recently-changed programme stands**, and it is **omitted rather
+  than emptied** for a caller without `schedule:read` — the same rule as the invitation counts, at
+  section granularity. Present-and-empty means "you may see this, and there is nothing to see";
+  absent means "this is not yours to see". The gate runs **before the read is issued**, never after
+  it returns, so the cost is not paid for an answer that is then deleted. In practice every member
+  role holds `schedule:read` (pinned by `common/auth/org-permissions.spec.ts`), so the absent branch
+  is unreachable through any role this product can currently mint — it is pinned in the service unit
+  suite rather than the API e2e for that reason.
+
+  It covers exactly the plans `recentlyChanged` covers, and reads **only columns the last
+  recalculation persisted**: `MAX(early_finish)` for the finish, the flag counts, and the active
+  baseline's frozen finish. **The CPM engine is not invoked** — `computeSchedule` is not imported by
+  the read or by the pure derivation beside it, pinned by
+  `modules/overview/plan-standing-engine-free.structural.spec.ts` — so the ADR-0034 recalculation
+  parity gate is untouched by construction.
+
+- **`baselineMovement` is a three-valued union, never a nullable number.** `MOVED` carries signed
+  `workingDays` (positive is later); `UNCHANGED` carries the baseline it matched; `NOT_ASSESSABLE`
+  carries one of five reasons — `PLAN_EMPTY`, `PLAN_NOT_SCHEDULED`, `NO_BASELINE`,
+  `BASELINE_HAS_NO_FINISH`, `CALENDAR_UNUSABLE`. A `?? 0` would tell a reader their unbaselined
+  programme is exactly on the plan they never captured, so the union has **no numeric fallback** and
+  the compiler refuses that shape. The reasons are ordered by what the reader can do about it, so a
+  brand-new plan (for which the first three are all true at once) is told the first thing that needs
+  doing rather than the last thing that failed.
+
+  **The measurement frame is the revision comparison's**, not a second one: working time on the
+  **plan's own calendar**, divided by the **baseline's frozen** hours-per-day factor (ADR-0068,
+  ADR-0125 D4). Two numbers on one product derived on different calendars is a worse defect than any
+  residual in either. `CALENDAR_UNUSABLE` exists because that frame can legitimately fail for one
+  plan — a calendar with no working time at all is reachable from ordinary input
+  (`docs/TECH_DEBT.md` #79) — and a per-plan fault must not answer the first screen after sign-in
+  with an error for the whole organisation. (Unguarded it is a **500**, because the read builds the
+  port with `buildPlanCalendar` rather than the 422-raising `buildPlanCalendarOrReject` the two
+  recalculation seams use; either way one emptied calendar among eight would take the landing down
+  for every member.)
+
+- **`flags` omits zero-valued keys.** A row printing four zeroes buries the one that is not; an
+  absent key means "nothing to report", which is a different statement from "reported: none". The
+  response carries **no cost, rate or budget field at any depth**, so `cost:read` changes nothing
+  about it — pinned by `modules/overview/plan-standing.cost-keys.structural.spec.ts`, because the
+  plausible failure is a later edit adding a money column "for completeness" on the one screen every
+  member of the organisation sees.
+
 **"Recently changed" is ordered by `GREATEST(plan, newest activity, newest dependency)`**, not by
 `plans.updated_at` — editing an activity does not stamp its plan, and neither does the CPM
 recalculation (ADR-0022). An ordering on the plan row alone ranks a plan somebody has been working

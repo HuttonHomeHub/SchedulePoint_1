@@ -44,9 +44,21 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
   const [error, setError] = useState<string | null>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  // ONE instant for the whole render. Comparing each row against its own `Date.now()` would let a
-  // list straddle the boundary and show two rows with the same expiry in different states.
-  const now = Date.now();
+  /**
+   * ONE instant for the whole render — comparing each row against its own `Date.now()` would let a
+   * list straddle the boundary and show two rows with the same expiry in different states.
+   *
+   * **It comes from `dataUpdatedAt`, not from the wall clock.** `Date.now()` during render is an
+   * impure call, which the React Compiler lint rejects outright, and the rejection is pointing at
+   * something real: a value read during render makes the component's output depend on when React
+   * happened to run it. `dataUpdatedAt` is the moment this payload actually arrived, which is the
+   * instant these `expiresAt` values are honestly relative to — the same choice, for the same
+   * reason, that `OverviewScreen` makes for its relative timestamps.
+   *
+   * It is `0` until the first successful fetch, which is exactly the window in which there are no
+   * rows to compare against it — so the epoch this yields is never rendered against anything.
+   */
+  const now = invitations.dataUpdatedAt;
 
   /**
    * **Focus is sent back into the section, not left on the removed row.**

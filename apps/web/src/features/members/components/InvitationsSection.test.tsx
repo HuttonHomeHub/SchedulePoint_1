@@ -130,7 +130,7 @@ describe('InvitationsSection', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }),
+      vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) }),
     );
 
     renderSection(undefined);

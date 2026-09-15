@@ -10,15 +10,21 @@ import type { PlanStandingRow } from './overview.repository';
  * captured. The union has no numeric fallback, so the compiler refuses that shape rather than
  * leaving it to a reviewer to notice (ADR-0126's rule, and ADR-0098 D3's).
  *
- * The four reasons are distinguishable and each is actionable in a different way: capture a
- * baseline, capture one that has a finish, recalculate, or add some activities.
+ * The five reasons are distinguishable and each is actionable in a different way: capture a
+ * baseline, capture one that has a finish, recalculate, add some activities, or give the plan's
+ * calendar some working time.
  */
 export type BaselineMovement =
   | { kind: 'MOVED'; workingDays: number; baselineFinish: string; baselineName: string }
   | { kind: 'UNCHANGED'; baselineFinish: string; baselineName: string }
   | {
       kind: 'NOT_ASSESSABLE';
-      reason: 'NO_BASELINE' | 'BASELINE_HAS_NO_FINISH' | 'PLAN_NOT_SCHEDULED' | 'PLAN_EMPTY';
+      reason:
+        | 'NO_BASELINE'
+        | 'BASELINE_HAS_NO_FINISH'
+        | 'PLAN_NOT_SCHEDULED'
+        | 'PLAN_EMPTY'
+        | 'CALENDAR_UNUSABLE';
     };
 
 /**
@@ -50,7 +56,7 @@ export function baselineMovementOf(
     | 'baselineName'
     | 'baselineHoursPerDayMinutes'
   >,
-  movementDaysBetween: (from: string, to: string) => number = calendarDaysBetween,
+  movementDaysBetween: (from: string, to: string) => number | null = calendarDaysBetween,
 ): BaselineMovement {
   if (row.activityCount === 0) return { kind: 'NOT_ASSESSABLE', reason: 'PLAN_EMPTY' };
   if (row.projectFinish === null) {
@@ -65,6 +71,15 @@ export function baselineMovementOf(
   }
 
   const workingDays = movementDaysBetween(row.baselineFinish, row.projectFinish);
+  // **The frame declining is a fifth reason, not a zero.** A plan whose calendar cannot be built or
+  // walked has no working-day frame at all, and the only alternatives were both worse: falling back
+  // to calendar days would print a number in a DIFFERENT frame from every other row on the screen
+  // (the "two numbers meaning different things on one product" ADR-0125 D4 warns against), and
+  // letting the throw out would answer the first screen after sign-in with a 422 because one plan
+  // of eight sits on a calendar somebody emptied.
+  if (workingDays === null) {
+    return { kind: 'NOT_ASSESSABLE', reason: 'CALENDAR_UNUSABLE' };
+  }
   if (workingDays === 0) {
     return {
       kind: 'UNCHANGED',

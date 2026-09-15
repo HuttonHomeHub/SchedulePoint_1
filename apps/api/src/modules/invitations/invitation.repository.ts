@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type Invitation, type Organization } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+
 import { pendingInvitationWhere } from './invitation-predicates';
 
 /** An invitation joined with its organisation (for token preview/accept). */

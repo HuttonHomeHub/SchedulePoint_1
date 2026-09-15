@@ -5,6 +5,7 @@ import { JumpBackInSection } from './components/JumpBackInSection';
 import { NeedsAttentionSection } from './components/NeedsAttentionSection';
 import { OrganisationEmptyState } from './components/OrganisationEmptyState';
 import { RecentlyChangedSection } from './components/RecentlyChangedSection';
+import { WhereWorkStandsSection } from './components/WhereWorkStandsSection';
 import { prunePlans, readRecentPlanIds } from './model/recent-plans';
 
 import { PageContainer, PageHeader } from '@/components/ui/page';
@@ -161,6 +162,25 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               error={isError}
               onRetry={() => void refetch()}
             />
+            {/*
+              **Rendered only when the server sent the field.** `planStanding` is OMITTED for a
+              caller who may not read schedules, rather than sent as `[]` — so `=== undefined` is
+              "you may not see this" and `[]` is "there is nothing to see", and the two get
+              different treatment: no frame at all, versus a frame with an empty state
+              (ADR-0098; ADR-0082's first omit clause at section granularity).
+
+              It is deliberately NOT `(data?.planStanding ?? [])`, which would collapse the two
+              and render a permanently empty frame for a reader with no right to the answer — and
+              would ALSO render one during the pending window, since `data` is undefined then.
+
+              There is therefore **no skeleton for this section, on purpose**: it cannot be drawn
+              without first assuming this reader is entitled to the answer, which would flash a
+              frame at a Viewer who never gets one. The screen's single query means its single
+              loading and failure states are already reported once, by "Recently changed".
+            */}
+            {data?.planStanding !== undefined ? (
+              <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} />
+            ) : null}
             {isWriter && !isError ? (
               <NeedsAttentionSection
                 attention={data?.attention}

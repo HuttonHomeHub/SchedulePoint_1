@@ -27,6 +27,7 @@
  *   PLAYWRIGHT_CHROMIUM_PATH=… node scripts/measure-overview-endpoint.mjs > /tmp/m0-endpoint.md
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 import { chromium } from '@playwright/test';
 
@@ -73,53 +74,66 @@ const psql = (sql) =>
   });
 
 /**
- * The recently-changed query, byte-for-byte from `overview.repository.ts:82-125`, with the two
- * Prisma bind parameters replaced by literals. Kept here rather than re-derived so FC-3 grades the
- * query the endpoint runs; if that file changes, this must be re-copied, and the harness says so
- * in its output rather than relying on somebody remembering.
+ * **The queries are EXTRACTED from `overview.repository.ts`, not copied into this file.**
+ *
+ * This was a hand-copy with a docblock saying "if that file changes, this must be re-copied, and
+ * the harness says so in its output rather than relying on somebody remembering". It did not say
+ * so, and nobody remembered: M2 added `p.schedule_computed_at` to the real query and the copy here
+ * was never updated, so **FC-3 was grading a query the endpoint no longer ran** — silently, with a
+ * green verdict, in the harness whose whole premise is that a paraphrase measures the paraphrase.
+ * Found by opening the file rather than by anything failing.
+ *
+ * So the drift class is removed instead of being warned about (ADR-0058: replace vigilance with
+ * something computed). The extractor reads the tagged template out of the named method and
+ * substitutes the Prisma binds with literals; it THROWS rather than returning something plausible
+ * if it cannot find the method or the template, because a harness that silently measures nothing is
+ * the failure mode this repository keeps recording.
  */
-const recentlyChangedSql = (orgId, take) => `
-      SELECT p.id            AS plan_id,
-             p.name          AS plan_name,
-             pr.id           AS project_id,
-             pr.name         AS project_name,
-             cl.name         AS client_name,
-             p.status        AS status,
-             GREATEST(
-               p.updated_at,
-               COALESCE(a.at, 'epoch'::timestamptz),
-               COALESCE(d.at, 'epoch'::timestamptz)
-             )               AS changed_at,
-             CASE
-               WHEN p.updated_at >= COALESCE(a.at, 'epoch'::timestamptz)
-                AND p.updated_at >= COALESCE(d.at, 'epoch'::timestamptz) THEN p.updated_by
-               WHEN COALESCE(a.at, 'epoch'::timestamptz) >= COALESCE(d.at, 'epoch'::timestamptz)
-                 THEN a.by
-               ELSE d.by
-             END             AS changed_by
-        FROM plans p
-        JOIN projects pr ON pr.id = p.project_id
-        JOIN clients  cl ON cl.id = pr.client_id
-        LEFT JOIN LATERAL (
-          SELECT act.updated_at AS at, act.updated_by AS by
-            FROM activities act
-           WHERE act.plan_id = p.id AND act.deleted_at IS NULL
-           ORDER BY act.updated_at DESC
-           LIMIT 1
-        ) a ON true
-        LEFT JOIN LATERAL (
-          SELECT dep.updated_at AS at, dep.updated_by AS by
-            FROM dependencies dep
-           WHERE dep.plan_id = p.id AND dep.deleted_at IS NULL
-           ORDER BY dep.updated_at DESC
-           LIMIT 1
-        ) d ON true
-       WHERE p.organization_id = '${orgId}'::uuid
-         AND p.deleted_at IS NULL
-         AND p.status <> 'ARCHIVED'::"PlanStatus"
-       ORDER BY changed_at DESC, p.id ASC
-       LIMIT ${String(take)}
-`;
+const REPO_SOURCE = readFileSync(
+  new URL('../../api/src/modules/overview/overview.repository.ts', import.meta.url),
+  'utf8',
+);
+
+/**
+ * The `$queryRaw` tagged template inside one method, as written. `${...}` placeholders are left in
+ * place for the caller to substitute — none of them contains a backtick, so finding the closing
+ * backtick is unambiguous, and the assertions below are what prove that held.
+ */
+function extractSql(methodName) {
+  const at = REPO_SOURCE.indexOf(`async ${methodName}(`);
+  if (at === -1) throw new Error(`FC-3 cannot find ${methodName} — it was renamed or removed`);
+  const rawAt = REPO_SOURCE.indexOf('$queryRaw', at);
+  if (rawAt === -1) throw new Error(`FC-3 found ${methodName} but no $queryRaw in it`);
+  const open = REPO_SOURCE.indexOf('`', rawAt);
+  const close = REPO_SOURCE.indexOf('`', open + 1);
+  if (open === -1 || close === -1) throw new Error(`FC-3 could not bound ${methodName}'s template`);
+  const sql = REPO_SOURCE.slice(open + 1, close);
+  // Non-vacuity: a one-line result means the bounding went wrong and every EXPLAIN below would
+  // grade a fragment. Cheaper to fail here than to publish a number nobody can trust.
+  if (sql.split('\n').length < 10 || !/SELECT/i.test(sql)) {
+    throw new Error(`FC-3 extracted something too small to be ${methodName}'s query`);
+  }
+  return sql;
+}
+
+/** The recently-changed query, extracted, with its two binds replaced by literals. */
+const recentlyChangedSql = (orgId, take) =>
+  extractSql('findRecentlyChanged')
+    // QUOTED, because Prisma binds the parameter and the source therefore reads
+    // `${organizationId}::uuid` with no quotes of its own. The hand-copy this replaced had baked
+    // them in, which is precisely the kind of detail a copy silently owns and an extractor must
+    // restate — the first run failed on `trailing junk after numeric literal`.
+    .replace('${organizationId}', `'${orgId}'`)
+    .replace('${take}', String(take));
+
+/**
+ * The M3 standing query, extracted the same way. `planIds` is a Prisma array bind, which becomes a
+ * literal `uuid[]` here; the ids are the ones the endpoint would pass — the recently-changed page.
+ */
+const planStandingSql = (orgId, planIds) =>
+  extractSql('findPlanStanding')
+    .replace('${organizationId}', `'${orgId}'`)
+    .replace('${[...planIds]}', `ARRAY[${planIds.map((id) => `'${id}'`).join(',')}]`);
 
 /**
  * Bulk-inserts one shape. Everything is generated in ONE statement per table so the cost is the
@@ -282,6 +296,34 @@ for (const shape of SHAPES) {
   const analyzed = psql(`EXPLAIN (ANALYZE, BUFFERS) ${recentlyChangedSql(orgId, 8)}`);
   const jit = /^\s*JIT:/m.test(analyzed);
 
+  /**
+   * **M3's standing query, graded at the same four shapes.** The milestone's own risk note says R2
+   * "is bounded by ≤ 13 plans and is expected to be cheap — **expected is not measured**", and that
+   * if JIT fires at any shape the milestone stops and M4's `database-architect` engagement is
+   * brought forward. So it is EXPLAINed here rather than argued about.
+   *
+   * The ids are the page the endpoint would actually pass: the same eight the recently-changed
+   * query returns, taken FROM that query rather than invented, so the aggregate is graded over the
+   * plans it will really be handed.
+   */
+  const standingIds = psql(
+    `SELECT string_agg(plan_id::text, ',') FROM (${recentlyChangedSql(orgId, 8)}) q`,
+  )
+    .trim()
+    .split(',')
+    .filter(Boolean);
+  if (standingIds.length === 0) {
+    throw new Error(
+      `${shape.key}: no plan ids for the standing query — it would grade an empty IN`,
+    );
+  }
+  const standingPlan = psql(`EXPLAIN (FORMAT JSON) ${planStandingSql(orgId, standingIds)}`);
+  const standingEstimated = JSON.parse(standingPlan)[0].Plan['Total Cost'];
+  const standingAnalyzed = psql(
+    `EXPLAIN (ANALYZE, BUFFERS) ${planStandingSql(orgId, standingIds)}`,
+  );
+  const standingJit = /^\s*JIT:/m.test(standingAnalyzed);
+
   results.push({
     shape,
     planCount,
@@ -294,6 +336,10 @@ for (const shape of SHAPES) {
     estimated,
     jit,
     analyzed,
+    standingIds: standingIds.length,
+    standingEstimated,
+    standingJit,
+    standingAnalyzed,
   });
 }
 
@@ -324,6 +370,24 @@ for (const r of results) {
   );
 }
 p();
+p('## FC-3 (M3) — the standing query, same bar');
+p();
+p('| Shape | Plans graded | Estimated total cost | `JIT:` node? | Verdict |');
+p('| ----- | -----------: | -------------------: | ------------ | ------- |');
+for (const r of results) {
+  const ok = !r.standingJit && r.standingEstimated < 100000;
+  p(
+    `| ${r.shape.label} | ${String(r.standingIds)} | ${String(Math.round(r.standingEstimated))} | ${r.standingJit ? '**yes**' : 'no'} | ${ok ? '**PASS**' : '**FAIL**'} |`,
+  );
+}
+p();
+p(
+  'The standing read is bounded by the recently-changed page (≤ 8 plans), so its cost should be ' +
+    'flat across shapes. A cost that tracks the shape means the aggregate is not using the ' +
+    'plan-id filter, which is the failure the milestone stops on.',
+);
+p();
+
 p('## `EXPLAIN (ANALYZE, BUFFERS)` per shape');
 p();
 for (const r of results) {

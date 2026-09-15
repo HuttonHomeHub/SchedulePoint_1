@@ -61,7 +61,11 @@ describe('the plan-standing read does not import the CPM engine', () => {
     // that has been emptied, and a green suite could not tell "engine-free" from "gone"
     // (ADR-0093's pinned-positive-case rule).
     const text = readFileSync(join(HERE, 'plan-standing.ts'), 'utf8');
-    expect(text).toMatch(/movementDaysBetween:\s*\(from: string, to: string\) => number/);
+    // `| null` is not decoration: it is what lets the frame DECLINE — a calendar that will not
+    // build, or a walk past the engine's horizon — instead of the pure module inventing a number in
+    // some other frame. Pinned as written, so widening it back to a bare `number` (which would
+    // force a `?? 0` or a throw at the seam) is a failure here rather than a review comment.
+    expect(text).toMatch(/movementDaysBetween:\s*\(from: string, to: string\) => number \| null/);
     expect(text).toMatch(/export function baselineMovementOf/);
   });
 });

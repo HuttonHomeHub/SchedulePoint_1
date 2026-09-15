@@ -1,6 +1,8 @@
 import { ApiExtraModels, ApiProperty, ApiPropertyOptional, getSchemaPath } from '@nestjs/swagger';
 import { PlanStatus } from '@prisma/client';
 
+import type { BaselineMovement } from '../plan-standing';
+
 /**
  * Who made a change.
  *
@@ -155,6 +157,122 @@ export class RecentPlanDto {
   clientName!: string;
 }
 
+/** The finish has moved against the active baseline. `workingDays` is signed: positive is later. */
+export class MovementMovedDto {
+  @ApiProperty({ enum: ['MOVED'], example: 'MOVED' }) kind!: 'MOVED';
+
+  @ApiProperty({
+    example: 12,
+    description:
+      'Signed working days on the PLAN’s calendar, converted with the BASELINE’s frozen ' +
+      'hours-per-day factor — the frame the revision comparison already uses (ADR-0125 D4). ' +
+      'Positive means the finish is later than the baseline’s.',
+  })
+  workingDays!: number;
+
+  @ApiProperty({ format: 'date' }) baselineFinish!: string;
+  @ApiProperty({ example: 'Contract award' }) baselineName!: string;
+}
+
+/** The finish is exactly where the active baseline froze it. */
+export class MovementUnchangedDto {
+  @ApiProperty({ enum: ['UNCHANGED'], example: 'UNCHANGED' }) kind!: 'UNCHANGED';
+  @ApiProperty({ format: 'date' }) baselineFinish!: string;
+  @ApiProperty({ example: 'Contract award' }) baselineName!: string;
+}
+
+/**
+ * There is no movement to report, and the reason says which of five situations this is — each with
+ * a different remedy, which is why they are not one absence.
+ */
+export class MovementNotAssessableDto {
+  @ApiProperty({ enum: ['NOT_ASSESSABLE'], example: 'NOT_ASSESSABLE' }) kind!: 'NOT_ASSESSABLE';
+
+  @ApiProperty({
+    enum: [
+      'NO_BASELINE',
+      'BASELINE_HAS_NO_FINISH',
+      'PLAN_NOT_SCHEDULED',
+      'PLAN_EMPTY',
+      'CALENDAR_UNUSABLE',
+    ],
+    example: 'NO_BASELINE',
+  })
+  reason!:
+    | 'NO_BASELINE'
+    | 'BASELINE_HAS_NO_FINISH'
+    | 'PLAN_NOT_SCHEDULED'
+    | 'PLAN_EMPTY'
+    | 'CALENDAR_UNUSABLE';
+}
+
+/**
+ * Where one programme stands: its finish, how far that has moved against what was committed, and
+ * what the last recalculation flagged.
+ *
+ * **Every field here is a column the last recalculation already persisted.** The CPM engine is not
+ * invoked to build this — `computeSchedule` is not imported by the read or by the pure derivation
+ * beside it, pinned structurally — so the ADR-0034 recalculation parity gate is untouched **by
+ * construction** rather than by argument.
+ */
+@ApiExtraModels(MovementMovedDto, MovementUnchangedDto, MovementNotAssessableDto)
+export class PlanStandingDto {
+  @ApiProperty({ format: 'uuid' }) planId!: string;
+  @ApiProperty({ example: 'Tower B — Substructure' }) planName!: string;
+  @ApiProperty({ example: 'Riverside Phase 2' }) projectName!: string;
+  @ApiProperty({ example: 'Riverside Developments' }) clientName!: string;
+  @ApiProperty({ enum: PlanStatus }) status!: PlanStatus;
+
+  @ApiProperty({
+    example: 24,
+    description: 'Active activities on the plan. Zero is a real state and is reported as one.',
+  })
+  activityCount!: number;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    description:
+      'The latest computed finish across the plan’s active activities (`MAX(early_finish)`), or ' +
+      '`null` when the plan has none or was never calculated.',
+  })
+  projectFinish!: string | null;
+
+  @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    description: 'When this plan’s schedule was last computed, or `null` if it never has been.',
+  })
+  scheduleComputedAt!: string | null;
+
+  @ApiProperty({
+    description: 'The plan has been touched since that calculation, so its figures are behind.',
+  })
+  editedSinceCalculated!: boolean;
+
+  @ApiProperty({
+    description:
+      'How far the finish has moved against the active baseline — a three-valued union, never a ' +
+      'nullable number. `NOT_ASSESSABLE` carries a reason, because "nothing to measure against" ' +
+      'and "has not moved" are different facts a planner acts on differently.',
+    oneOf: [
+      { $ref: getSchemaPath(MovementMovedDto) },
+      { $ref: getSchemaPath(MovementUnchangedDto) },
+      { $ref: getSchemaPath(MovementNotAssessableDto) },
+    ],
+  })
+  baselineMovement!: BaselineMovement;
+
+  @ApiProperty({
+    description:
+      'Engine-flagged counts, with zero-valued keys OMITTED. A row printing four zeroes buries ' +
+      'the one that is not zero; absence here means "nothing to report".',
+    example: { constraintViolated: 2 },
+    additionalProperties: { type: 'integer' },
+  })
+  flags!: Record<string, number>;
+}
+
 export class OverviewResponseDto {
   @ApiProperty({ example: 'Acme Construction' })
   organisationName!: string;
@@ -179,4 +297,14 @@ export class OverviewResponseDto {
 
   @ApiProperty({ type: AttentionDto })
   attention!: AttentionDto;
+
+  @ApiPropertyOptional({
+    type: [PlanStandingDto],
+    description:
+      'Where each recently-changed programme stands. **Omitted entirely** — not an empty array — ' +
+      'when the caller may not read schedules, because a zero is a fact about the organisation ' +
+      'and an absence is a fact about the reader (ADR-0098). Present and empty when the caller ' +
+      'may read but there is nothing to stand on.',
+  })
+  planStanding?: PlanStandingDto[];
 }
