@@ -175,6 +175,8 @@ export class OverviewService {
         clientName: row.clientName,
         status: row.status,
         changedAt: row.changedAt.toISOString(),
+        scheduleComputedAt: row.scheduleComputedAt?.toISOString() ?? null,
+        editedSinceCalculated: row.editedSinceCalculated,
         changedBy: this.toActor(row.changedByUserId, names),
       })),
       recentPlans,

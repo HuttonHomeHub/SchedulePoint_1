@@ -889,6 +889,28 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   counts rather than a total and a subtrahend: the two are different actions, and subtracting two
   separately-read numbers can go negative under concurrency.
 
+- **Each row says whether its figures are current**, in three states that are deliberately not one
+  flag. `scheduleComputedAt` is `null` for a plan that has never been calculated;
+  `editedSinceCalculated` is true when the plan has been touched since it was. "Never calculated"
+  and "calculated and then edited" are different facts a planner acts on differently, and a single
+  `stale` boolean collapses them into an absence the reader cannot tell from a defect. The third
+  state — current — is `scheduleComputedAt` set and `editedSinceCalculated` false, and the screen
+  renders **nothing** for it.
+
+  The comparison is `changedAt > scheduleComputedAt`, computed once in the repository rather than as
+  a fourth SQL column: PostgreSQL cannot reference a select-list alias from the same select list, so
+  an SQL form would have to repeat the three-term `GREATEST`, giving two copies of the rule for what
+  "changed" means. It costs **no extra query** — one more column on the read that already runs.
+
+  **What it does NOT claim.** It knows only that nothing has been WRITTEN since the calculation, not
+  that the dates are right; a plan whose calendar changed under it is stale in every sense that
+  matters while this says nothing at all. It rests on a property of the write path —
+  `stampScheduleComputedAt` writes `schedule_computed_at` and never `plans.updated_at` (ADR-0022),
+  pinned by `schedule/stamp-no-user-columns.structural.spec.ts`, because a recalculation that
+  bumped `updated_at` would leave every freshly-calculated plan reporting as edited-since, for ever,
+  with nothing looking wrong. And Auto-arrange is a known false positive: it writes `lane_index` on
+  every activity it moves, which is an edit by this rule and not one by a planner's.
+
 **"Recently changed" is ordered by `GREATEST(plan, newest activity, newest dependency)`**, not by
 `plans.updated_at` — editing an activity does not stamp its plan, and neither does the CPM
 recalculation (ADR-0022). An ordering on the plan row alone ranks a plan somebody has been working

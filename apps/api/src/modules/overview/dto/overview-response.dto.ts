@@ -50,6 +50,24 @@ export class RecentlyChangedPlanDto {
   changedAt!: string;
 
   @ApiProperty({
+    format: 'date-time',
+    nullable: true,
+    description:
+      'When this plan’s schedule was last computed, or `null` if it never has been. `null` is a ' +
+      'STATE — "never calculated" and "calculated then edited" are different facts a planner acts ' +
+      'on differently, so they are not collapsed into one staleness flag.',
+  })
+  scheduleComputedAt!: string | null;
+
+  @ApiProperty({
+    description:
+      'Whether the plan has been touched since that computation, so its dates answer an older ' +
+      'question. `false` for a plan that has never been calculated — there is no "since" — which ' +
+      'that plan reports through a null `scheduleComputedAt` instead.',
+  })
+  editedSinceCalculated!: boolean;
+
+  @ApiProperty({
     oneOf: [
       { $ref: getSchemaPath(ActorMemberDto) },
       { $ref: getSchemaPath(ActorFormerMemberDto) },

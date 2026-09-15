@@ -2413,6 +2413,16 @@ export interface RecentlyChangedPlan {
    * `plans.updated_at`, which does not move when an activity is edited.
    */
   changedAt: string;
+  /**
+   * When the plan's schedule was last computed, or `null` if it never has been.
+   *
+   * `null` is a STATE. "Never calculated" and "calculated and then edited" are different facts a
+   * planner acts on differently, and a single `stale` boolean collapses them into an absence the
+   * reader cannot tell from a defect.
+   */
+  scheduleComputedAt: string | null;
+  /** Whether the plan has been touched since that computation. `false` when it never has been. */
+  editedSinceCalculated: boolean;
   changedBy: OverviewActor;
 }
 

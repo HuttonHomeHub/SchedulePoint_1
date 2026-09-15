@@ -1,6 +1,6 @@
 import type { InvitationSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { invitationKeys } from '../api/use-invitations';
@@ -84,8 +84,17 @@ describe('InvitationsSection', () => {
       screen.getByRole('button', { name: 'Revoke the invitation to priya@example.com' }),
     );
 
-    expect(await screen.findByText(/Revoke the invitation to priya@example\.com\?/)).toBeVisible();
-    expect(screen.getByText(/The link they were sent will stop working\./)).toBeVisible();
+    // **Scoped to the dialog, not to the document.** An unscoped `getByText` says the copy exists
+    // somewhere, not that it is inside the thing the reader is looking at — which is exactly the
+    // gap that let `e2e-overview/members.spec.ts` fail on its first run while this passed.
+    // `ConfirmDialog` is `role="alertdialog"` (`confirm-dialog.tsx:46`), which OVERRIDES the native
+    // `<dialog>`'s implicit `dialog` role; naming it here is what keeps the unit suite and the
+    // journey talking about the same element.
+    const confirm = await screen.findByRole('alertdialog');
+    expect(
+      within(confirm).getByText(/Revoke the invitation to priya@example\.com\?/),
+    ).toBeVisible();
+    expect(within(confirm).getByText(/The link they were sent will stop working\./)).toBeVisible();
   });
 
   /**

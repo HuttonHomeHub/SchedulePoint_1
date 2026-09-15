@@ -70,6 +70,11 @@ function plan(over: Partial<OrganisationOverview['recentlyChanged'][number]> = {
     clientName: 'Bellway',
     status: 'ACTIVE' as const,
     changedAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+    // The default is a calculated, current plan, so the freshness line renders NOTHING unless a
+    // case asks for it — silence is the healthy state, and a fixture that is stale by default
+    // would make every unrelated assertion read past a line about staleness.
+    scheduleComputedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    editedSinceCalculated: false,
     changedBy: { kind: 'MEMBER' as const, name: 'Sarah Okonkwo' },
     ...over,
   };
@@ -259,6 +264,51 @@ describe('OverviewScreen — the new organisation, role-aware', () => {
     expect(await screen.findByText('This organisation is empty')).toBeVisible();
     expect(screen.queryByRole('link', { name: 'Add your first client' })).toBeNull();
     expect(screen.getByText('Ask a Planner or Org Admin to add the first client.')).toBeVisible();
+  });
+
+  /**
+   * **An empty organisation can still have something waiting on you.**
+   *
+   * The empty state used to replace EVERY section, so an Org Admin who created an organisation and
+   * invited their colleagues before adding a client was told "This organisation is empty" while two
+   * invitations sat outstanding. The landing failing to say something true — the defect class this
+   * epic exists to remove — in the one state where the reader has least else to go on.
+   *
+   * Found by `e2e-overview/members.spec.ts` on its first run, not by a unit test: every screen test
+   * here renders a POPULATED organisation, because that is the interesting one.
+   */
+  it('still says what is waiting, even when there is no work yet', async () => {
+    renderScreen({
+      role: 'ORG_ADMIN',
+      payload: overview({
+        isNewOrganisation: true,
+        hasPlans: false,
+        attention: { heldLocks: [], liveInvitationCount: 2, expiredInvitationCount: 0 },
+      }),
+    });
+
+    // Both, in one render: the empty state still owns the WORK sections, because there genuinely
+    // is no work — what it may not own is the reader's own inbox.
+    expect(await screen.findByText('This organisation is empty')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: '2 invitations are waiting to be accepted' }),
+    ).toBeVisible();
+  });
+
+  it('shows the empty state alone when nothing is waiting', async () => {
+    renderScreen({
+      role: 'ORG_ADMIN',
+      payload: overview({
+        isNewOrganisation: true,
+        hasPlans: false,
+        attention: { heldLocks: [], liveInvitationCount: 0, expiredInvitationCount: 0 },
+      }),
+    });
+
+    // "Nothing needs you right now" beneath "This organisation is empty" is two ways of saying the
+    // same nothing. Without this case the fix above could have rendered the frame unconditionally.
+    expect(await screen.findByText('This organisation is empty')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Needs your attention' })).toBeNull();
   });
 });
 

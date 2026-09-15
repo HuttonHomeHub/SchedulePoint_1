@@ -22,6 +22,8 @@ function changedRow(overrides: Partial<RecentlyChangedRow> = {}): RecentlyChange
     clientName: 'Riverside Developments',
     status: 'ACTIVE',
     changedAt: new Date('2026-08-18T09:41:07.221Z'),
+    scheduleComputedAt: new Date('2026-08-18T09:41:07.221Z'),
+    editedSinceCalculated: false,
     changedByUserId: 'user-2',
     ...overrides,
   };

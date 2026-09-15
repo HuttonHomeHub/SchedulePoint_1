@@ -18,6 +18,30 @@ export interface RecentlyChangedRow {
   status: PlanStatus;
   changedAt: Date;
   /**
+   * When this plan's schedule was last computed, or `null` if it never has been.
+   *
+   * **`null` is a state, not a missing value.** "Never calculated" and "calculated and then
+   * edited" are different facts a planner acts on differently, and collapsing them into one
+   * "stale" flag is the absence-a-reader-cannot-distinguish-from-a-fact defect (ADR-0073 C3.1).
+   */
+  scheduleComputedAt: Date | null;
+  /**
+   * Whether the plan has been touched since that computation — so the dates on it are the engine's
+   * answer to an older question.
+   *
+   * **Derived here in TypeScript rather than as a fourth SQL column, and that is deliberate.** The
+   * comparison is `changedAt > scheduleComputedAt`, and `changedAt` is the `GREATEST(...)` the
+   * query already computes. PostgreSQL cannot reference a select-list alias from the same select
+   * list, so an SQL form would have to REPEAT that three-term expression — two copies of the rule
+   * for what "changed" means, drifting invisibly the first time one is edited (the ADR-0065
+   * `routeOrthogonal` argument). One expression, compared once.
+   *
+   * It is a SERVER fact all the same: the client is told the answer, never the inputs plus the
+   * rule, because "has this been edited since it was calculated" is a scheduling question and
+   * `apps/web` has no business holding a second opinion about it.
+   */
+  editedSinceCalculated: boolean;
+  /**
    * The `updated_by` of whichever source won the `GREATEST(...)`, or null. A Better Auth
    * user id (opaque TEXT), NOT yet a name — resolving it to a name is a separate,
    * org-scoped step, which is what stops this endpoint turning an arbitrary user id into
@@ -77,6 +101,7 @@ export class OverviewRepository {
         client_name: string;
         status: PlanStatus;
         changed_at: Date;
+        schedule_computed_at: Date | null;
         changed_by: string | null;
       }>
     >`
@@ -91,6 +116,7 @@ export class OverviewRepository {
                COALESCE(a.at, 'epoch'::timestamptz),
                COALESCE(d.at, 'epoch'::timestamptz)
              )               AS changed_at,
+             p.schedule_computed_at AS schedule_computed_at,
              -- Attribution follows whichever source won. Ties resolve plan → activity →
              -- dependency, which is arbitrary but total: a tie means the same instant,
              -- so no ordering of the three is more correct than another, and picking one
@@ -134,6 +160,12 @@ export class OverviewRepository {
       clientName: row.client_name,
       status: row.status,
       changedAt: row.changed_at,
+      scheduleComputedAt: row.schedule_computed_at,
+      // A plan that has never been calculated is NOT "edited since" — there is no since. It is its
+      // own state, and the row says so in its own words rather than through this flag.
+      editedSinceCalculated:
+        row.schedule_computed_at !== null &&
+        row.changed_at.getTime() > row.schedule_computed_at.getTime(),
       changedByUserId: row.changed_by,
     }));
   }

@@ -89,6 +89,34 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
 
   const showEmptyOrganisation = data !== undefined && (data.isNewOrganisation || !data.hasPlans);
 
+  /**
+   * Whether anything is genuinely waiting on this reader — independently of whether the
+   * organisation has any work in it yet.
+   *
+   * **An empty organisation can still have something waiting on you, and the screen used to deny
+   * it.** `OrganisationEmptyState` replaced *every* section, so an Org Admin who created an
+   * organisation and invited their colleagues before adding a client was told "This organisation is
+   * empty" while two invitations sat outstanding — the landing failing to say something true, which
+   * is the defect class this whole epic exists to remove, in the one state where the reader has
+   * least else to go on.
+   *
+   * Found by `e2e-overview/members.spec.ts` on its first run (ADR-0081: the journey is the gate).
+   * No unit test could have: the screen tests render a populated organisation, because that is the
+   * interesting one.
+   *
+   * It is deliberately NOT `!showEmptyOrganisation`: the empty state still owns the *work*
+   * sections, because there genuinely is no work to show. What it may not own is the reader's own
+   * inbox.
+   */
+  const hasWaitingItems =
+    isWriter &&
+    !isError &&
+    data !== undefined &&
+    (data.attention.heldLocks.length > 0 ||
+      (data.attention.liveInvitationCount ?? 0) > 0 ||
+      (data.attention.expiredInvitationCount ?? 0) > 0 ||
+      (data.attention.expiringDeletedCount ?? 0) > 0);
+
   return (
     <PageContainer width="narrow">
       <PageHeader
@@ -108,11 +136,20 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
 
       <div className="mt-6 flex flex-col gap-6">
         {showEmptyOrganisation ? (
-          <OrganisationEmptyState
-            orgSlug={orgSlug}
-            isNewOrganisation={data.isNewOrganisation}
-            canAddClients={isWriter}
-          />
+          <>
+            <OrganisationEmptyState
+              orgSlug={orgSlug}
+              isNewOrganisation={data.isNewOrganisation}
+              canAddClients={isWriter}
+            />
+            {/* Only when there is something to say. An empty organisation with nothing waiting
+                shows the empty state alone, exactly as it did — a "Needs your attention" frame
+                reading "Nothing needs you right now" beneath "This organisation is empty" would be
+                two ways of saying the same nothing. */}
+            {hasWaitingItems ? (
+              <NeedsAttentionSection attention={data.attention} orgSlug={orgSlug} pending={false} />
+            ) : null}
+          </>
         ) : (
           <>
             <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} />

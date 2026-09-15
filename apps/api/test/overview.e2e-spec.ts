@@ -46,6 +46,8 @@ interface OverviewBody {
     clientName: string;
     status: string;
     changedAt: string;
+    scheduleComputedAt: string | null;
+    editedSinceCalculated: boolean;
     changedBy: { kind: string; name?: string };
   }>;
   recentPlans: Array<{
@@ -145,6 +147,86 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
     const res = await actor.agent.get(query ? `${OVERVIEW}?${query}` : OVERVIEW).expect(200);
     return res.body.data as OverviewBody;
   }
+
+  /**
+   * R1 — "are these figures current?" — proved BOTH WAYS against a real recalculation.
+   *
+   * A marker that never clears is indistinguishable from a marker that is always on, so asserting
+   * only that an edited plan reports `editedSinceCalculated` would pass against a field hard-wired
+   * to `true`. The recalculation has to actually turn it off.
+   *
+   * It needs a real database because the whole signal rests on a property of the WRITE path:
+   * `stampScheduleComputedAt` stamps `schedule_computed_at` and deliberately does not touch
+   * `plans.updated_at` (ADR-0022; pinned structurally by
+   * `schedule/stamp-no-user-columns.structural.spec.ts`). A mocked repository would agree with
+   * whatever it was handed and could not be wrong about a column it never wrote.
+   */
+  describe('freshness (R1)', () => {
+    it('reports never-calculated as a null cursor, not as edited-since', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Never calculated');
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/edit-lock`)
+        .send({})
+        .expect(201);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Pour slab', code: 'A0001', durationDays: 5 })
+        .expect(201);
+
+      const row = (await fetchOverview(actor)).recentlyChanged.find((r) => r.planId === planId);
+
+      expect(row?.scheduleComputedAt).toBeNull();
+      // Not "edited since" — there is no since. Two different facts, and the row says which.
+      expect(row?.editedSinceCalculated).toBe(false);
+    });
+
+    it('flips to edited-since on an activity edit, and back on a recalculation', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Recalculated then edited');
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/edit-lock`)
+        .send({})
+        .expect(201);
+      const activity = await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .send({ name: 'Pour slab', code: 'A0001', durationDays: 5 })
+        .expect(201);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+      const rowOf = async () =>
+        (await fetchOverview(actor)).recentlyChanged.find((r) => r.planId === planId);
+
+      const calculated = await rowOf();
+      expect(calculated?.scheduleComputedAt).not.toBeNull();
+      expect(calculated?.editedSinceCalculated).toBe(false);
+
+      // An ordinary activity edit — the commonest way a plan's dates go stale.
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/activities/${activity.body.data.id}`)
+        .send({ durationDays: 9, version: activity.body.data.version })
+        .expect(200);
+
+      const edited = await rowOf();
+      expect(edited?.editedSinceCalculated).toBe(true);
+
+      // And a recalculation clears it. WITHOUT this the assertion above passes against a field
+      // hard-wired to `true`, and the landing would carry a warning nobody could ever remove.
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+      const recalculated = await rowOf();
+      expect(recalculated?.editedSinceCalculated).toBe(false);
+      expect(new Date(recalculated?.scheduleComputedAt ?? 0).getTime()).toBeGreaterThan(
+        new Date(calculated?.scheduleComputedAt ?? 0).getTime(),
+      );
+    });
+  });
 
   describe('the ordering key', () => {
     it('ranks a plan by its newest activity, not by plans.updated_at', async () => {

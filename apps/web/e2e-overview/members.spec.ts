@@ -70,7 +70,13 @@ test.describe('invitations, from the landing to Members and back', () => {
     await page
       .getByRole('button', { name: `Revoke the invitation to first-${stamp}@example.com` })
       .click();
-    const confirm = page.getByRole('dialog');
+    // **`alertdialog`, not `dialog`.** `ConfirmDialog` sets `role="alertdialog"` explicitly
+    // (`confirm-dialog.tsx:46`), which OVERRIDES the native `<dialog>`'s implicit `dialog` role, and
+    // ARIA role matching is exact rather than by inheritance. The invite dialog above uses the plain
+    // `Dialog` and really is `dialog` — so this one journey spans two primitives with two roles, and
+    // assuming one is how the first run failed here. The unit suite could not catch it: it asserts
+    // the copy with an UNSCOPED `screen.getByText`, so it never says where the text lives.
+    const confirm = page.getByRole('alertdialog');
     await expect(confirm.getByText(/will stop working/)).toBeVisible();
     await confirm.getByRole('button', { name: 'Revoke', exact: true }).click();
 
