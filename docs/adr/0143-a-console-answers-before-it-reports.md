@@ -175,13 +175,61 @@ elsewhere in the product that `StatGrid` was designed wide enough to absorb and 
 untouched in its honest form: there is nothing here to hold parity for. `apps/api` contributes zero
 files to the diff.
 
+## M7 — the reading history, and why it is not a dropdown
+
+**Landed 2026-09-15.** The console was judged at M6 over a database carrying about fifteen
+accumulated performance sittings, and that ADR's own §4 says so — but it never separated that
+history from the rest of the page. Asked whether the history should be "the last report plus a
+dropdown", M0 measured it: **8,487 px of a 12,842 px document, 66.1 %**, against 4,355 px for the
+seven other panels combined. The console this ADR redesigned was two thirds one panel's history.
+
+Roughly 3,400 px of that was per-block chrome rather than measurements. The shared-facts list is a
+constant **140 px on every block whatever it holds**, so fifteen blocks repeated the same six facts
+for 2,100 px, and on a one-reading block the facts were nearly twice the height of the reading they
+described. That is the finding the complaint was pointing at, and it is what makes the compression
+work at all: an index row has to carry those facts in one line, not omit them.
+
+**D8 — the newest sitting is expanded; every other is one row in a scannable index.** A dropdown
+clears the height just as well and **hides the set**: a reader cannot learn how many sittings exist,
+scan their dates, or spot two taken at the same canvas without opening it and holding the answer in
+their head — and that comparison is precisely what this panel's own comparability note asks of them,
+because `docs/TECH_DEBT.md` #261/#283 establish that readings are comparable only at equal canvas.
+So the canvas is a column of the index, pinned by its own case, and is not negotiable when somebody
+later tries to shorten the row.
+
+**D9 — the control on the sitting already shown is shaded with its reason, never removed and never
+natively `disabled`.** Whether a row is the shown one flips when the reader presses a **different**
+row's button, so the control under their finger changes state as a consequence of their own press —
+and native `disabled` blurs to `<body>` at exactly that moment (WCAG 2.2 §2.4.3, the class this
+register records shipping four times). The row carries the state as a badge rather than the button
+changing its word, because relabelling "Show" to "Shown" would leave the visible text outside the
+accessible name (§2.5.3).
+
+**Measured after, same database and width: the history is 1,666 px and the page 6,021 — a fall of
+6,821 px, 12.8 → 6.0 screens.** The two readings were taken fifteen minutes apart rather than in one
+sitting, which `m0-measurement.md` §10 warns about (this page's baseline has drifted 555 px with no
+product change). It is answered by arithmetic rather than a caveat: **the non-history part of the
+page is 4,355 px in both runs, to the pixel**, so nothing outside the history moved between them and
+the whole delta is the history. Four falsification conditions were committed before a line was
+built; all four clear.
+
+**One instrument was wrong before the product was**, the fifth consecutive epic here to record that:
+the journey's first version read the detail table's `aria-label` to detect the swap, and `DataTable`
+names its table with an `sr-only` `<caption>` — so it compared `'' !== ''` and was permanently red
+against a correct product. It now reads the caption and additionally asserts the before-value is
+non-empty, because a comparison against an empty string passes equally against a table that has
+vanished.
+
 ## References
 
 - `docs/specs/staff-console-design/` — the spec (§8 is the design review gate), the plan and its five
   falsification conditions, and the four measurement records `m0-measurement.md`, `m2-frame.md`,
-  `m5-every-element.md`, `m6-verdict.md`.
+  `m5-every-element.md`, `m6-verdict.md`, and `m7-probe-history.md` (the reading history, measured
+  before and after).
 - ADR-0086 (the staff console, and why it may not reach customer data), ADR-0097 (surface scopes and
   the single theme), ADR-0098 (the page archetypes, and the measure defect this reproduces),
   ADR-0132 (`Alert`'s `purpose`), ADR-0128 (a measurement belongs on the machine that can take it),
   ADR-0142 (a remedy is measured before it is built).
-- `docs/TECH_DEBT.md` #319 (the console had never been photographed — closed), #325.
+- `docs/TECH_DEBT.md` #319 (the console had never been photographed — closed), #325, #327 (what the
+  history index deliberately leaves out), #271 (a total on the read, which would let the cap note
+  say "showing 50 of 312").

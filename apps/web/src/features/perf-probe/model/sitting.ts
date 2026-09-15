@@ -311,6 +311,34 @@ export function sittingsFromRows(rows: readonly ProbeResultRow[]): readonly Sitt
  * the difference between "one of four readings" and "the only reading", and it is not recoverable
  * from the row count — a sweep whose other three steps were refused stores exactly one row.
  */
+/**
+ * How a sitting's machine is named, wherever it is named.
+ *
+ * **Extracted because it was written twice**, once in the expanded block's facts list and once in
+ * the index row — byte-identical, with nothing able to notice if one changed. That is precisely the
+ * ADR-0121 shape `sitting-index.ts` cites to justify its own existence: a rule living in a renderer
+ * is a rule the next renderer restates, and the two only disagree for a reader who compares them.
+ * Caught by the M7 component review, which correctly pointed out that the file quoting the rule had
+ * broken it one field along.
+ */
+export function machineLabelOf(context: SittingContext): string {
+  return context.machineLabel ?? context.gpu ?? '(masked or not recorded)';
+}
+
+/**
+ * How a sitting's canvas is named — including the case where it has more than one.
+ *
+ * `varies between readings` is not "unknown": it is "this sitting holds two", which the rows then
+ * state individually. Collapsing it to one reading's value would settle the confound the register
+ * calls its most decision-relevant (#261) by accident, in the one field a reader consults to decide
+ * whether two sittings are comparable at all.
+ */
+export function canvasLabelOf(context: SittingContext): string {
+  return context.viewport === null
+    ? 'varies between readings'
+    : `${String(context.viewport.width)}×${String(context.viewport.height)} @${String(context.devicePixelRatio)}x`;
+}
+
 export function groupKeyOf(row: ProbeResultRow): string {
   return row.sweepId === null || row.sweepId === undefined
     ? `run:${row.runId}`

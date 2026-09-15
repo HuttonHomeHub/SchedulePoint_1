@@ -803,6 +803,55 @@ test('a staff member takes every reading in one press', async ({ browser }) => {
     await expect(staff.getByRole('table', { name: SITTING_TABLE }).first()).toHaveAccessibleName(
       /^Sweep of \d+ readings? — /,
     );
+
+    // **The index, driven — because a capability with no journey is one nobody has proved reaches a
+    // planner** (ADR-0081, and this repository's fifth recorded instance of a milestone shipping
+    // dark). The history expands the newest sitting and indexes the rest; the unit suite proves the
+    // rules and cannot prove that a press in a real browser moves a real sitting into the slot.
+    //
+    // Conditional on a second sitting existing, which on a local database it does after the first
+    // run and in a fresh container it may not — so the branch is announced rather than skipped
+    // silently, for the same reason the M3 diagnosis above is printed.
+    const index = staff.getByRole('table', { name: /Every sitting/ });
+    if (await index.isVisible().catch(() => false)) {
+      // **The caption, not `aria-label`.** `DataTable` names its table with a `sr-only` `<caption>`,
+      // which is what `SITTING_TABLE` resolves against — so reading the attribute returned `null`
+      // for every state and the comparison below was `'' !== ''`, i.e. permanently red against a
+      // perfectly correct product. Caught on this assertion's first run; the instrument was wrong.
+      const shownName = async (): Promise<string> =>
+        (await staff
+          .getByRole('table', { name: SITTING_TABLE })
+          .first()
+          .locator('caption')
+          .textContent()) ?? '';
+      const shownBefore = await shownName();
+
+      // The second row's control: row 1 is the sitting already shown, whose button is shaded.
+      const others = index.getByRole('button', { name: /^Show / });
+      const count = await others.count();
+      // eslint-disable-next-line no-console
+      console.log(`INDEX DIAGNOSIS: ${String(count)} sittings listed`);
+
+      if (count > 1) {
+        await others.nth(1).click();
+        // The slot holds a DIFFERENT sitting — asserted as a change rather than as a fixed name,
+        // because which sittings a local database holds is a property of how often this ran.
+        await expect
+          .poll(shownName, {
+            message: 'pressing Show moved a different sitting into the detail slot',
+          })
+          .not.toBe(shownBefore);
+        // Non-vacuous: a comparison against an empty string would pass against a table that had
+        // vanished, which is how the first version of this assertion was wrong.
+        expect(shownBefore).not.toBe('');
+
+        // **Focus did not drop**, which is the reason the shaded control is `aria-disabled` and
+        // never natively `disabled`: the button under the reader's finger changes state as a
+        // consequence of their own press, and the native attribute blurs to `<body>` at exactly
+        // that moment (WCAG 2.2 §2.4.3). jsdom has no focus ring, so only this tier can ask.
+        await expect(others.nth(1)).toBeFocused();
+      }
+    }
   }
 
   // The console is a real screen and gets the same accessibility bar as every other one — and this

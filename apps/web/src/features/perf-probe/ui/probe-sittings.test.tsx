@@ -1,9 +1,11 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ProbeResultRow } from '../api/probe-results';
 
 import { ProbeSittings } from './probe-sittings';
+
+import { AnnouncerProvider } from '@/components/ui/announcer';
 
 /**
  * The sittings view, which replaces a flat twelve-column table of rows.
@@ -74,16 +76,23 @@ const row = (over: Partial<ProbeResultRow> = {}): ProbeResultRow => ({
 
 const view = (rows: ProbeResultRow[]): ReturnType<typeof render> =>
   render(
-    <ProbeSittings
-      query={
-        {
-          isPending: false,
-          isError: false,
-          data: rows,
-          refetch: () => undefined,
-        } as never
-      }
-    />,
+    // **Wrapped, because the route is.** `staff.tsx:137` mounts an `AnnouncerProvider`, and
+    // `useAnnounce()` outside one is a silent no-op — so a suite that omits it reports an
+    // announcement as absent when the product makes it, and would equally report one as present
+    // if the provider were later removed from the route. That exact no-op shipped once
+    // (`/staff` had no provider at all until the console redesign).
+    <AnnouncerProvider>
+      <ProbeSittings
+        query={
+          {
+            isPending: false,
+            isError: false,
+            data: rows,
+            refetch: () => undefined,
+          } as never
+        }
+      />
+    </AnnouncerProvider>,
   );
 
 /** A complete sweep: two scenarios at two framings, four readings under one id. */
@@ -95,12 +104,25 @@ const sweepRows = (): ProbeResultRow[] => [
 ];
 
 describe('ProbeSittings', () => {
-  it('renders one block per sitting, and a single press in the same shape as a sweep', () => {
-    view([...sweepRows(), row({ id: 'e', runId: 'r9', sweepId: null })]);
-
-    // Two tables, not five rows in one — and the captions name the ACT rather than the data.
-    expect(screen.getByRole('table', { name: /Sweep of 4 readings/ })).toBeInTheDocument();
+  /**
+   * **One block expanded, and it is the newest.** The blocks were 8,487 px of a 12,842 px page over
+   * fifteen sittings (`docs/specs/staff-console-design/m7-probe-history.md`), so the panel expands
+   * one and indexes the rest. What must survive the compression is that a single press still
+   * renders in the SAME shape as a sweep — a reader should not have to learn two layouts, and the
+   * sitting of one is the commonest thing in the history.
+   */
+  it('expands the newest sitting, in the same shape whether it is a sweep or one press', () => {
+    // Newest first: the single press is given a later timestamp, so it is the one expanded.
+    view([
+      row({ id: 'e', runId: 'r9', sweepId: null, recordedAt: '2026-09-08T19:00:00.000Z' }),
+      ...sweepRows(),
+    ]);
     expect(screen.getByRole('table', { name: /One reading/ })).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: /Sweep of 4 readings/ })).not.toBeInTheDocument();
+
+    // And the sweep, expanded, is the same shape — not a second layout for the plural case.
+    view(sweepRows());
+    expect(screen.getByRole('table', { name: /Sweep of 4 readings/ })).toBeInTheDocument();
   });
 
   it('states what the readings share exactly once, not on every row', () => {
@@ -269,13 +291,13 @@ describe('ProbeSittings', () => {
    * The heading is deliberately NOT also the `<section>`'s accessible name: a named `<section>` is a
    * `region` landmark, and the table inside is already a region with the same name.
    */
-  it('gives every sitting a visible heading, without a second landmark', () => {
+  it('gives the expanded sitting a visible heading, without a second landmark', () => {
     view([...sweepRows(), row({ id: 'e', runId: 'r9', sweepId: null })]);
 
     expect(screen.getByRole('heading', { level: 3, name: /Sweep of 4 readings/ })).toBeVisible();
-    expect(screen.getByRole('heading', { level: 3, name: /One reading/ })).toBeVisible();
-    // One region per table, and not one per table plus one per section.
-    expect(screen.getAllByRole('region', { name: /readings|reading/i })).toHaveLength(2);
+    // One region for the expanded sitting's table and one for the index — and not one per table
+    // plus one per section, which is what naming the `<section>` would produce.
+    expect(screen.getAllByRole('region', { name: /readings|sitting/i })).toHaveLength(2);
   });
 
   it('shows a stored reading with its verdict and both halves of the cull', () => {
@@ -324,5 +346,216 @@ describe('ProbeSittings', () => {
     view(sweepRows());
 
     expect(screen.queryByText(/not at one time/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The index, and what the compression is not allowed to lose.
+ *
+ * Every assertion here is one of `docs/specs/staff-console-design/m7-probe-history.md`'s
+ * falsification conditions, or the focus rule that decides how the control is shaded.
+ */
+describe('the sittings index', () => {
+  /** Three sittings, newest first, distinguishable by canvas and by machine. */
+  const threeSittings = (): ProbeResultRow[] => [
+    row({
+      id: 'n1',
+      runId: 'rn',
+      sweepId: null,
+      recordedAt: '2026-09-08T20:00:00.000Z',
+      machineLabel: 'Newest machine',
+    }),
+    ...sweepRows(),
+    row({
+      id: 'o1',
+      runId: 'ro',
+      sweepId: null,
+      recordedAt: '2026-09-08T09:00:00.000Z',
+      machineLabel: 'Oldest machine',
+      viewportWidth: 1016,
+      viewportHeight: 636,
+    }),
+  ];
+
+  /**
+   * **FC-B — the set stays visible.** This is the whole difference between what shipped and the
+   * dropdown that was asked for: a select clears the height just as well and hides how many
+   * sittings exist, so a reader cannot scan their dates or spot two taken at the same canvas
+   * without opening it. Nothing here is behind a disclosure.
+   */
+  it('names and dates every sitting at rest, with nothing opened', () => {
+    view(threeSittings());
+
+    const index = within(screen.getByRole('table', { name: /Every sitting/ }));
+    expect(index.getAllByRole('row')).toHaveLength(4); // header + three sittings
+    expect(index.getByText('Newest machine')).toBeInTheDocument();
+    expect(index.getByText('Oldest machine')).toBeInTheDocument();
+    expect(index.getByText(/Sweep — 4 of 6/)).toBeInTheDocument();
+  });
+
+  /**
+   * **FC-C — comparison survives.** `docs/TECH_DEBT.md` #261/#283 establish that two readings are
+   * comparable only at the same canvas. A reader told to compare sittings cannot do it from a list
+   * that omits the one fact deciding which are comparable, so this column is not negotiable when
+   * somebody later tries to shorten the row.
+   */
+  it('states each sitting’s canvas, so comparable sittings can be found from the list', () => {
+    view(threeSittings());
+
+    const index = within(screen.getByRole('table', { name: /Every sitting/ }));
+    expect(index.getAllByText('1912×1068 @1x').length).toBeGreaterThan(0);
+    expect(index.getByText('1016×636 @1x')).toBeInTheDocument();
+  });
+
+  it('moves a chosen sitting into the detail slot', () => {
+    view(threeSittings());
+
+    // The newest is expanded on arrival.
+    expect(screen.getByRole('table', { name: /One reading — .*8:00/ })).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: /Sweep of 4 readings/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Show .* — Sweep$/ }));
+
+    expect(screen.getByRole('table', { name: /Sweep of 4 readings/ })).toBeInTheDocument();
+  });
+
+  /**
+   * **The control is shaded, never removed, and never natively `disabled`.**
+   *
+   * Whether a row is the shown one flips when the reader presses a DIFFERENT row's button — so the
+   * control under their finger changes state as a consequence of their own press. Removing it, or
+   * setting the native attribute, drops focus to `<body>` at that moment: WCAG 2.2 §2.4.3, and the
+   * class this repository has recorded shipping four times (ADR-0060 M6, ADR-0063 M6, ADR-0096,
+   * ADR-0133).
+   */
+  it('keeps the shown sitting’s control focusable, with its reason', () => {
+    view(threeSittings());
+
+    // Disambiguated by time: the fixture holds two single-press sittings and only the newest is
+    // the one shown.
+    const shown = screen.getByRole('button', { name: /^Show .*8:00:00 PM — One reading$/ });
+    expect(shown).toHaveAttribute('aria-disabled', 'true');
+    expect(shown).not.toBeDisabled();
+    expect(shown).toHaveAccessibleDescription('This sitting is already shown above.');
+  });
+
+  it('refuses the press on the sitting already shown, rather than relying on the attribute', () => {
+    view(threeSittings());
+
+    // Press the sweep, then press its own control again: the slot must not change, and nothing
+    // may throw. `aria-disabled` is a statement to assistive technology and stops no pointer.
+    fireEvent.click(screen.getByRole('button', { name: /^Show .* — Sweep$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Show .* — Sweep$/ }));
+    expect(screen.getByRole('table', { name: /Sweep of 4 readings/ })).toBeInTheDocument();
+  });
+
+  /**
+   * The detail slot sits ABOVE the control that changed it and outside the reader's focus, so
+   * nothing about the press announces itself. Without this a screen-reader user presses a button
+   * and is told nothing at all.
+   */
+  it('announces which sitting the detail slot now holds', async () => {
+    view(threeSittings());
+    fireEvent.click(screen.getByRole('button', { name: /^Show .* — Sweep$/ }));
+
+    // `AnnouncerProvider` clears the region and re-fills it on the next frame, so that
+    // re-announcing the same sentence still fires. A synchronous read lands in the cleared gap and
+    // reports silence — which is what a reader would conclude about the product.
+    await waitFor(() => {
+      expect(screen.getByTestId('announcer').textContent).toContain(
+        'Showing 9/8/2026, 6:00:00 PM — Sweep, 4 of 6.',
+      );
+    });
+  });
+
+  /**
+   * **Only the failing segment is painted.** Colouring the whole tally put "5 passed" in alarm ink
+   * beside "1 failed", which breaks the rule `sitting-index.ts` states in its own docblock and
+   * `VerdictCell` already honours one level down: an ungraded or indeterminate reading is not bad
+   * news. Found by the M7 ux review.
+   */
+  it('paints the failing count and leaves the passing one alone', () => {
+    const failing = row({
+      id: 'f',
+      runId: 'rf',
+      sweepId: 'sf',
+      recordedAt: '2026-09-08T21:00:00.000Z',
+      samples: [
+        { droppedPct: 40, intervalP50: 60, intervalP95: 80, fps: 12 },
+        { droppedPct: 40, intervalP50: 60, intervalP95: 80, fps: 12 },
+        { droppedPct: 40, intervalP50: 60, intervalP95: 80, fps: 12 },
+      ],
+    });
+    view([
+      failing,
+      row({ id: 'p', runId: 'rp', sweepId: 'sf', recordedAt: '2026-09-08T21:00:01.000Z' }),
+      // A second sitting, because the index only renders when there is more than one to choose
+      // between — an index of one is furniture.
+      row({ id: 'other', runId: 'ro', sweepId: null, recordedAt: '2026-09-08T08:00:00.000Z' }),
+    ]);
+
+    const index = within(screen.getByRole('table', { name: /Every sitting/ }));
+    expect(index.getByText('1 failed').className).toMatch(/text-destructive-text/);
+    // Every "passed" segment on the page, including the one sharing a cell with the failure —
+    // scoped to all of them rather than one, because the assertion is that NO passing count is
+    // painted, which is stronger than picking a row.
+    for (const passed of index.getAllByText('1 passed')) {
+      expect(passed.className, 'a passing reading is being painted as a failure').not.toMatch(
+        /text-destructive-text/,
+      );
+    }
+  });
+
+  /**
+   * **The other two confounds, on the row rather than behind a press.** The Canvas column is there
+   * because readings are comparable only at equal canvas (#261/#283); a sitting that spans hours or
+   * lost the window is untrustworthy for the same kind of reason, and both were previously reachable
+   * only by opening each sitting in turn — the cost this index exists to remove. Raised by the M7 ux
+   * review.
+   */
+  it('marks a sitting that lost focus or spans more than an hour', () => {
+    view([
+      row({ id: 'a', runId: 'ra', sweepId: 'sx', recordedAt: '2026-09-08T09:00:00.000Z' }),
+      row({
+        id: 'b',
+        runId: 'rb',
+        sweepId: 'sx',
+        recordedAt: '2026-09-08T20:00:00.000Z',
+        lostFocusDuringRun: true,
+      }),
+      // A second sitting, so the index renders at all.
+      row({ id: 'other', runId: 'ro', sweepId: null, recordedAt: '2026-09-08T07:00:00.000Z' }),
+    ]);
+
+    const index = within(screen.getByRole('table', { name: /Every sitting/ }));
+    expect(index.getByText('Spans time')).toBeInTheDocument();
+    expect(index.getByText('Lost focus')).toBeInTheDocument();
+  });
+
+  /**
+   * **The cap caveat reaches the expanded block, not only the index.**
+   *
+   * `DataTable` is a focusable `role="region"`, so a reader who jumps straight to the expanded
+   * sitting has skipped the note above it — and with ONE sitting the index does not render at all,
+   * which is precisely the state the note's own docblock says it matters most in ("a single sitting
+   * can itself be truncated at fifty rows"). It was wired to the index alone, so that docblock
+   * described an intent the code did not have. Found by the M7 accessibility review; nothing here
+   * could see it, because the note was visible on screen throughout.
+   */
+  it('links the page caveat to the expanded sitting, even when there is no index', () => {
+    view(sweepRows());
+    expect(screen.queryByRole('table', { name: /Every sitting/ })).not.toBeInTheDocument();
+    expect(describedText()).toContain('Showing the most recent readings');
+  });
+
+  /** One sitting is not a list to choose from, and an index of one is furniture. */
+  it('renders no index when there is only one sitting', () => {
+    view(sweepRows());
+    expect(screen.queryByRole('table', { name: /Every sitting/ })).not.toBeInTheDocument();
+    // …but the history is still stated to be a page, because a single sitting can itself be cut
+    // at fifty rows.
+    expect(
+      screen.getByText('Showing the most recent readings. Older sittings are not listed.'),
+    ).toBeInTheDocument();
   });
 });

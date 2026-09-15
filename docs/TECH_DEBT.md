@@ -10455,3 +10455,30 @@ which answers the question for real and costs a config entry. The remedy, if it 
 standard one — pair the ring with a transparent `outline` so the forced-colors palette has something
 to paint — and that is a change to a shared primitive's focus treatment, so ADR-0111 §19.13 applies
 and it needs a review before release rather than after.
+
+### 327. The reading history has no "show all", and the index cannot be sorted or filtered
+
+**Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (probe-history M7) · **Size:** S · **Owner:** web
+
+The staff console's reading history now expands the newest sitting and indexes the rest
+(`docs/specs/staff-console-design/m7-probe-history.md`). Two things that shape left out, both
+deliberately and neither free:
+
+**(a) There is no way to expand more than one sitting at a time.** Comparing two sittings side by
+side — the act the panel's own comparability note asks for — means pressing Show, reading, pressing
+Show, and holding the first in your head. The index carries the facts that decide _which_ two are
+comparable (canvas, machine, when), which is why FC-C made that column non-negotiable, but the
+readings themselves are one at a time. A second detail slot, or a "compare these two" control, is
+the natural next move and was not costed here.
+
+**(b) The index is newest-first and cannot be reordered or filtered.** At fifteen sittings that is
+fine; the read is capped at fifty rows, so the worst case is a fifty-row table with no way to sort
+by canvas or machine. Adding a filter would first require the distinction ADR-0073 C1 records —
+"nothing recorded yet" and "nothing matches what you asked for" are different facts, and this panel
+has exactly one empty state today precisely because it has no filters. So a filter is not a small
+change here, and the row says so rather than implying it.
+
+Neither blocks the height win, which is measured and taken. Both become worth doing when an
+installation's history is large enough that scanning fifteen rows stops being the fast path —
+`docs/TECH_DEBT.md` #271 (a total on the read, so the panel can say "showing 50 of 312") is the
+signal that the moment has arrived.
