@@ -3,7 +3,39 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-const SOURCE = readFileSync(join(__dirname, 'overview.repository.ts'), 'utf8');
+const FILE = readFileSync(join(__dirname, 'overview.repository.ts'), 'utf8');
+
+/**
+ * The text of ONE method, comments stripped.
+ *
+ * **This gate used to scan the whole file, and a second query broke it.** `findPlanStanding` landed
+ * with three laterals of its own plus a docblock that NAMES `LEFT JOIN LATERAL` in prose, and the
+ * "exactly two laterals" assertion below went from 2 to 6 — reporting a defect in a query it is not
+ * about, for a reason that was half comment. Both halves are this repository's recorded classes: a
+ * whole-file scan that stops meaning what it says when the file grows a second subject, and a scan
+ * that reads its own documentation (ADR-0106 M4, and three siblings).
+ *
+ * Scoping is what keeps "exactly two" a statement about the ordering key rather than a running
+ * total of the file, and it is why the assertions below did not have to be weakened to accommodate
+ * a query they were never written about.
+ */
+function methodText(name: string): string {
+  const start = FILE.indexOf(`async ${name}(`);
+  if (start === -1)
+    throw new Error(`${name} has been renamed or removed — this gate reads nothing`);
+  // The next class-level docblock or method, whichever comes first. NOT the next `\n  }`: a
+  // method's own `params: { … }` closes at that indent, which truncated this to the signature and
+  // turned four assertions red against perfectly correct code the first time it was tried.
+  const after = FILE.slice(start + 1);
+  const candidates = [after.indexOf('\n  /**'), after.indexOf('\n  async ')].filter((i) => i > -1);
+  const end = candidates.length > 0 ? start + 1 + Math.min(...candidates) : FILE.length;
+  return FILE.slice(start, end)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/--[^\n]*/g, '')
+    .replace(/\/\/[^\n]*/g, '');
+}
+
+const SOURCE = methodText('findRecentlyChanged');
 
 /**
  * The ordering key of "Recently changed" is a **derived** instant, not a stored one.
@@ -50,6 +82,7 @@ describe('OverviewRepository (structural)', () => {
   });
 
   it('resolves actor names through org membership and never through users directly', () => {
+    const SOURCE = methodText('resolveMemberNames');
     // The control, not a convenience: `users` alone would let this endpoint turn any user
     // id in the system into a display name.
     expect(SOURCE).toContain('this.prisma.orgMember.findMany');
