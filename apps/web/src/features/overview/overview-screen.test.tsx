@@ -19,7 +19,7 @@ import { apiFetch } from '@/lib/api/client';
  * exists to prevent.
  *
  * **An absent count and a zero count are different facts and are tested separately.** The endpoint
- * omits `pendingInvitationCount` for a reader who may not see it and sends `0` for a reader who may
+ * omits the two invitation counts for a reader who may not see them and sends `0` for one who may
  * see it and has none. A component testing `!count` collapses those, and both look identical on
  * screen — so the retention-off case asserts the item is absent while a real zero also renders
  * nothing, and the distinction lives in what the payload carries.
@@ -315,17 +315,41 @@ describe('OverviewScreen — needs your attention', () => {
     expect(await screen.findByText('Nothing needs you right now.')).toBeVisible();
   });
 
-  it('links pending invitations to Members', async () => {
+  it('links live invitations to Members', async () => {
     renderScreen({
       role: 'ORG_ADMIN',
       payload: overview({
         recentlyChanged: [plan()],
-        attention: { heldLocks: [], pendingInvitationCount: 3 },
+        attention: { heldLocks: [], liveInvitationCount: 3, expiredInvitationCount: 0 },
       }),
     });
 
     expect(
-      await screen.findByRole('link', { name: '3 invitations are still pending' }),
+      await screen.findByRole('link', { name: '3 invitations are waiting to be accepted' }),
+    ).toBeVisible();
+    // The expired row is absent at zero, not rendered saying "0 have expired".
+    expect(screen.queryByText(/expired/)).toBeNull();
+  });
+
+  // **Two rows, because they are two different actions.** Chasing somebody about an invitation
+  // they cannot accept achieves nothing, and the summed sentence this replaces told the reader to
+  // do exactly that. Both states are asserted in ONE render, because two separate tests each pass
+  // against a screen that renders only the row that test looks for.
+  it('separates expired invitations from live ones, with what to do about each', async () => {
+    renderScreen({
+      role: 'ORG_ADMIN',
+      payload: overview({
+        recentlyChanged: [plan()],
+        attention: { heldLocks: [], liveInvitationCount: 2, expiredInvitationCount: 1 },
+      }),
+    });
+
+    expect(
+      await screen.findByRole('link', { name: '2 invitations are waiting to be accepted' }),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: '1 invitation has expired' })).toBeVisible();
+    expect(
+      screen.getByText(/It can no longer be accepted\. Send it again from Members\./),
     ).toBeVisible();
   });
 
@@ -334,15 +358,17 @@ describe('OverviewScreen — needs your attention', () => {
       role: 'ORG_ADMIN',
       payload: overview({
         recentlyChanged: [plan()],
-        attention: { heldLocks: [], pendingInvitationCount: 0 },
+        attention: { heldLocks: [], liveInvitationCount: 0, expiredInvitationCount: 0 },
       }),
     });
 
     await screen.findByText('Nothing needs you right now.');
     expect(screen.queryByText(/removed for good/)).toBeNull();
     // A zero invitation count is a fact about the organisation and still renders nothing —
-    // the item exists to be acted on, and there is nothing to act on.
-    expect(screen.queryByText(/still pending/)).toBeNull();
+    // the item exists to be acted on, and there is nothing to act on. Both rows, because a
+    // regression could easily leave one of them rendering at zero.
+    expect(screen.queryByText(/waiting to be accepted/)).toBeNull();
+    expect(screen.queryByText(/expired/)).toBeNull();
   });
 
   it('warns about work about to be removed for good', async () => {

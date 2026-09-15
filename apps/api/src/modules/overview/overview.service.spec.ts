@@ -41,7 +41,7 @@ describe('OverviewService', () => {
   let repo: {
     findRecentlyChanged: Mocked;
     findHeldLocks: Mocked;
-    countPendingInvitations: Mocked;
+    countInvitations: Mocked;
     countExpiringDeleted: Mocked;
     hasActiveClients: Mocked;
     hasActivePlans: Mocked;
@@ -70,7 +70,7 @@ describe('OverviewService', () => {
     repo = {
       findRecentlyChanged: vi.fn().mockResolvedValue([]),
       findHeldLocks: vi.fn().mockResolvedValue([]),
-      countPendingInvitations: vi.fn().mockResolvedValue(2),
+      countInvitations: vi.fn().mockResolvedValue({ live: 2, expired: 1 }),
       countExpiringDeleted: vi.fn().mockResolvedValue(1),
       hasActiveClients: vi.fn().mockResolvedValue(true),
       hasActivePlans: vi.fn().mockResolvedValue(true),
@@ -102,16 +102,29 @@ describe('OverviewService', () => {
       // Omitted, NOT zero. A zero is a fact about the organisation; an absence is a fact
       // about the reader, and `0` would tell a Contributor there is an answer they may not
       // have.
-      expect(overview.attention).not.toHaveProperty('pendingInvitationCount');
+      expect(overview.attention).not.toHaveProperty('liveInvitationCount');
+      expect(overview.attention).not.toHaveProperty('expiredInvitationCount');
       expect(overview.attention).not.toHaveProperty('expiringDeletedCount');
-      expect(repo.countPendingInvitations).not.toHaveBeenCalled();
+      expect(repo.countInvitations).not.toHaveBeenCalled();
       expect(repo.countExpiringDeleted).not.toHaveBeenCalled();
     });
 
-    it('sends the invitation count only to a caller who may read invitations', async () => {
+    it('sends BOTH invitation counts only to a caller who may read invitations', async () => {
       const overview = await service.get(principalWith(['client:read', 'invitation:read']), 'acme');
-      expect(overview.attention.pendingInvitationCount).toBe(2);
+      expect(overview.attention.liveInvitationCount).toBe(2);
+      expect(overview.attention.expiredInvitationCount).toBe(1);
       expect(overview.attention).not.toHaveProperty('expiringDeletedCount');
+    });
+
+    // **The pair appears together or not at all.** They are one permission and one read, so a
+    // payload carrying "1 has expired" without saying whether any are live would read as worse
+    // news than it is. Asserted as a pair rather than twice, because two separate assertions pass
+    // against a payload carrying exactly one of them.
+    it('never sends one invitation count without the other', async () => {
+      for (const permissions of [['client:read'], ['client:read', 'invitation:read']] as const) {
+        const { attention } = await service.get(principalWith([...permissions]), 'acme');
+        expect('liveInvitationCount' in attention).toBe('expiredInvitationCount' in attention);
+      }
     });
 
     it('sends the expiring count only to a writer, and only when retention is armed', async () => {

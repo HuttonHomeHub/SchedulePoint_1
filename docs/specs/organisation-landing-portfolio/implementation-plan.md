@@ -179,9 +179,18 @@ end (ADR-0081 §2).
   `OverviewRepository` and `InvitationRepository` both call it; add the expired/live split.
 - **Complexity:** S
 - **Dependencies:** none
-- **Risks:** `expiresAt` is compared against two clocks → the split is computed in **one** SQL
-  expression against `now()`, matching how `findHeldLocks` already evaluates lease expiry
-  server-side.
+- **Risks:** `live` and `expired` are computed against two different instants, so an invitation
+  expiring between them lands in neither count or in both → both predicates take **one** `Date` the
+  caller passes in, which makes that impossible by construction.
+
+  > **This risk line originally said to compute the split "in one SQL expression against `now()`,
+  > matching how `findHeldLocks` already evaluates lease expiry server-side", and that claim is
+  > false.** `overview.repository.ts:156` writes `expiresAt: { gt: new Date() }` — Node's clock,
+  > sent as a bind parameter. Checked while building M1-T1 (ADR-0076 Class 2: a claim about
+  > existing code, used as the model for a new decision). Worse, following it would have split one
+  > instant into two separate `now()` evaluations in two separate statements — the exact race the
+  > line was written to prevent. The existing precedent is kept and the reason corrected.
+
 - **Testing:** a unit case per row kind, **verified red** against today's `count()` for the
   soft-deleted case; an API e2e asserting FC-6.
 - **Development steps:**
@@ -221,11 +230,21 @@ end (ADR-0081 §2).
 - **Complexity:** M
 - **Dependencies:** M1-T2
 - **Risks:** the section renders an empty frame for a non-admin → **omitted entirely** on
-  `invitation:read`, per ADR-0082 at section granularity. `Revoke` disappears without
-  `invitation:revoke` → it is **shaded with its reason** (ADR-0082's discriminator: shut by a role
-  the reader could in principle change is a shade, not an omission), using `disabledReason`.
-  Focus drops to `<body>` when the confirm dialog closes and its row unmounts → the recorded class
-  in ADR-0096/ADR-0099/ADR-0143; focus returns to the section heading, asserted in the journey.
+  `invitation:read`, per ADR-0082 at section granularity.
+
+  > **The shaded-`Revoke` state this task asked for is UNREACHABLE and is not built.**
+  > `org-permissions.ts:292-301` grants `invitation:read` and `invitation:revoke` together in one
+  > `ADMIN` bundle, and `ROLE_PERMISSIONS` (`:303-341`) gives that bundle to `ORG_ADMIN` and to
+  > nobody else — so no role can read an invitation and not revoke it. A "Revoke is shaded because
+  > of your role" branch would be code with no way in, validated by its own tests: ADR-0081's shape
+  > inverted, which is the defect that ADR exists to record. The section is omitted without the
+  > permission and `Revoke` is simply available inside it, and the coupling the design rests on is
+  > pinned by `invitation-permissions.structural.test.ts` — verified red two ways, including the
+  > vacuous case where both permissions are removed and only the pinned positive assertion
+  > notices.
+  > Focus drops to `<body>` when the confirm dialog closes and its row unmounts → the recorded class
+  > in ADR-0096/ADR-0099/ADR-0143; focus returns to the section heading, asserted in the journey.
+
 - **Testing:** unit (five states: loading, error, empty, admin, non-admin); axe scan in the journey.
 - **Development steps:**
   1. Build the section on `DataTable` + `ConfirmDialog` + `QueryErrorState`, following
@@ -234,15 +253,26 @@ end (ADR-0081 §2).
      **unchanged** — it queries by role and caption, which is the contract the conversion preserves.
   3. 409 handling: report it as a sentence and refetch; never retry.
 
-##### Task M1-T4 — `apps/web/e2e-members/`, its config and its CI step
+##### Task M1-T4 — the journey, in the EXISTING `apps/web/e2e-overview/` suite
 
-- **Description:** the journey named in the milestone header, with its own Playwright config, its
-  own `package.json` script and its own CI step.
+> **This task originally read "`apps/web/e2e-members/`, its config and its CI step", and that was
+> specified without checking what already exists.** `apps/web/e2e-overview/` is a suite about
+> **this exact screen** (ADR-0098), with `playwright.overview.config.ts`, a
+> `test:e2e:overview` script (`apps/web/package.json:61`) and a CI step
+> (`.github/workflows/ci.yml:1004`). A second suite would cost a new config, a new CI step, an
+> ADR-0138 roster entry and another shard's worth of wall clock — and would buy a **worse** test:
+> the thing worth asserting is the ROUND TRIP (the landing says N, click through, revoke one, come
+> back, it says N−1), and a landing suite and a Members suite can each assert only half of it.
+> The journey is therefore `e2e-overview/members.spec.ts`. Recorded rather than silently departed
+> from; §19's rule is to re-verify a plan's remedy, and this one had gone stale against a suite
+> that predates the plan.
+
+- **Description:** the journey named in the milestone header, added to the suite that already
+  drives this screen.
 - **Complexity:** M
 - **Dependencies:** M1-T3
-- **Risks:** a new CI step must be added to `ci.yml` **and** to the e2e shard roster, or
-  `check:e2e-roster` refuses the PR (ADR-0138) → do both in this task. `scripts/e2e-sweep.sh`'s list
-  is derived, so it picks the suite up; confirm rather than assume.
+- **Risks:** none of the ADR-0138 roster kind — no new config, script, CI step or shard entry, so
+  `check:e2e-roster` and `check:ci-roster` are untouched. Confirmed rather than assumed.
 - **Testing:** the journey is the test. It must **fail first** against `main`.
 - **Development steps:**
   1. Config + script + CI step + roster entry, in one change.

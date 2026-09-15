@@ -173,11 +173,25 @@ A plan with no active baseline is `NO_BASELINE` — a named reason, never `0` an
 
 ### 0.7 Two instruments are not fit to judge this, and that is M0's job
 
-- **The screenshot fixture is two plans, one of them empty.** `apps/web/scripts/shoot.mjs` has the
-  `org-home` shot (`:420`) and its seed (`:253-351`) creates **one** client, **one** project, **one**
-  plan of 10 activities, plus one empty plan (`seedEmptyPlan`, `:368-385`). A landing-page redesign
-  judged on a two-row page is judged on nothing — the ADR-0143 M0 finding ("the redesign must not
-  tune itself to a fixture") one screen along, in the opposite direction.
+- **The screenshot fixture is three plans of one activity each, none of them calculated.**
+  `apps/web/scripts/shoot.mjs` has the `org-home` shot (`:558`) and its seed (`seed()`, `:199-228`)
+  creates **one** client ("Bellway Homes"), **one** project ("Northgate Quarter") and **three** plans
+  ("Enabling works", "Substructure", "Frame & envelope"), each with a single 5-day activity, and
+  **recalculates none of them**. A landing-page redesign judged on a three-row page of identical
+  rows is judged on nothing — the ADR-0143 M0 finding ("the redesign must not tune itself to a
+  fixture") one screen along, in the opposite direction.
+
+  > **This bullet said "two plans, one of them empty … one plan of 10 activities" until M0-T1 opened
+  > the file**, and all three of its line citations (`:420`, `:253-351`, `:368-385`) were wrong too.
+  > `seedEmptyPlan` is real but belongs to a **different** shot (`shot.emptyPlan`, `:1088`) and never
+  > runs for `org-home`. ADR-0076 Class 2, in a spec written for this epic — the same shape ADR-0080
+  > and ADR-0097 record, found the same way, by opening the file instead of trusting the sentence.
+  > It is corrected rather than quietly dropped because the correction **changes a design fact**: all
+  > three of `main`'s plans are uncalculated, so "never calculated" is **ambiently true** of the old
+  > fixture. A non-vacuity control phrased as "some plan has never been calculated" would therefore
+  > have passed against a fixture that can exhibit nothing else — which is exactly the trap M0-T2's
+  > risk line names, arriving before M0-T2 was written.
+
 - **`GET …/overview` has never been measured.** `docs/specs/organisation-landing/feature-spec.md`
   §"Success criteria" promises "p95 < 200 ms … measured against a seeded database, **not
   estimated**", and the index migration's own LIMITS section closes with "**The endpoint was not
@@ -866,7 +880,7 @@ a real database.
 ### 5.2 The fixture, and the non-vacuity control — checked FIRST
 
 **A verdict taken on a page with nothing to say is not a verdict.** `shoot.mjs`'s `org-home` seed is
-one client, one project, one 10-activity plan and one empty plan (§0.7). It cannot exhibit a single
+one client, one project and three one-activity plans, none calculated (§0.7). It cannot exhibit a single
 state this epic adds.
 
 The fixture is extended to hold **at least one plan in each reportable state**:

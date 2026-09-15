@@ -2431,7 +2431,19 @@ export interface OverviewHeldLock {
  */
 export interface OverviewAttention {
   heldLocks: OverviewHeldLock[];
-  pendingInvitationCount?: number;
+  /**
+   * Invitations awaiting an answer that can still be accepted.
+   *
+   * **Replaces `pendingInvitationCount`, rather than supplementing it.** That field summed two
+   * facts a reader acts on differently — one they chase, one they must re-send — and it counted
+   * soft-deleted rows the list excluded, so the landing's number and the Members list could
+   * disagree. Keeping it beside these two would leave a third number that agrees with neither.
+   *
+   * Appears together with {@link expiredInvitationCount} or not at all: one permission, one read.
+   */
+  liveInvitationCount?: number;
+  /** Invitations still marked `PENDING` whose lease has lapsed. Accept refuses them. */
+  expiredInvitationCount?: number;
   expiringDeletedCount?: number;
 }
 

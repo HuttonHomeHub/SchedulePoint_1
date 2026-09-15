@@ -8,8 +8,10 @@ import { ListRow, ListRowSkeleton, SectionCard, rowLinkClass } from '@/component
 /**
  * "Needs your attention" — the things with somebody or something waiting behind them.
  *
- * **It returns `null` for a reader who can hold none of these items** — no heading, no empty box,
- * no shaded placeholder. That is ADR-0082's "when every item would be shaded, show no trigger at
+ * **It is not rendered at all for a reader who can hold none of these items** — no heading, no
+ * empty box, no shaded placeholder. The gate is at the call site (`OverviewScreen.tsx:127`, on
+ * `isWriter`) rather than here, because the decision needs the reader's role and this component is
+ * given only the payload. That is ADR-0082's "when every item would be shaded, show no trigger at
  * all", applied one level up at section granularity: a Viewer cannot take the pen, cannot invite,
  * and cannot restore, so a section addressed to them personally would be a permanently empty frame
  * on the first screen after every sign-in.
@@ -34,7 +36,8 @@ export function NeedsAttentionSection({
   pending: boolean;
 }): React.ReactElement {
   const locks = attention?.heldLocks ?? [];
-  const invitations = attention?.pendingInvitationCount;
+  const liveInvitations = attention?.liveInvitationCount;
+  const expiredInvitations = attention?.expiredInvitationCount;
   const expiring = attention?.expiringDeletedCount;
 
   const items: React.ReactNode[] = [];
@@ -67,18 +70,48 @@ export function NeedsAttentionSection({
     );
   }
 
-  if (invitations !== undefined && invitations > 0) {
+  // **Two rows, because they are two different actions.** A live invitation is waiting on the
+  // person you sent it to; an expired one is waiting on YOU, and chasing it achieves nothing
+  // because `accept()` refuses it. Summed into "N invitations are still pending" — which is what
+  // this said — the reader is told to chase somebody who could not accept if they wanted to.
+  //
+  // `undefined` is tested explicitly, never falsiness: `0` is a fact about the organisation and
+  // `undefined` is a fact about the reader, and `!count` collapses them (this component's own
+  // docblock, above).
+  if (liveInvitations !== undefined && liveInvitations > 0) {
     items.push(
       <ListRow
-        key="invitations"
+        key="invitations-live"
         primary={
           <>
             <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={rowLinkClass}>
-              {invitations === 1
-                ? '1 invitation is still pending'
-                : `${invitations} invitations are still pending`}
+              {liveInvitations === 1
+                ? '1 invitation is waiting to be accepted'
+                : `${liveInvitations} invitations are waiting to be accepted`}
             </Link>
             <p className="text-muted-foreground text-sm">Review them on Members.</p>
+          </>
+        }
+      />,
+    );
+  }
+
+  if (expiredInvitations !== undefined && expiredInvitations > 0) {
+    items.push(
+      <ListRow
+        key="invitations-expired"
+        primary={
+          <>
+            <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={rowLinkClass}>
+              {expiredInvitations === 1
+                ? '1 invitation has expired'
+                : `${expiredInvitations} invitations have expired`}
+            </Link>
+            <p className="text-muted-foreground text-sm">
+              {expiredInvitations === 1
+                ? 'It can no longer be accepted. Send it again from Members.'
+                : 'They can no longer be accepted. Send them again from Members.'}
+            </p>
           </>
         }
       />,

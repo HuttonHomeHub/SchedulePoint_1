@@ -56,7 +56,8 @@ interface OverviewBody {
   }>;
   attention: {
     heldLocks: Array<{ planId: string; planName: string; requestedBy: { kind: string } | null }>;
-    pendingInvitationCount?: number;
+    liveInvitationCount?: number;
+    expiredInvitationCount?: number;
     expiringDeletedCount?: number;
   };
 }
@@ -259,7 +260,71 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
       const overview = await fetchOverview(actor);
 
-      expect(overview.attention.pendingInvitationCount).toBe(1);
+      expect(overview.attention.liveInvitationCount).toBe(1);
+      expect(overview.attention.expiredInvitationCount).toBe(0);
+    });
+
+    /**
+     * FC-6: the two numbers on the landing agree with the list the landing sends you to.
+     *
+     * **This is the defect the product owner reported**, in its general form: "1 invitation
+     * pending" on the landing beside a Members page that showed nothing. It needs a real database
+     * because the four row kinds are distinguished by columns, and a mocked repository would agree
+     * with whatever the service asked it for.
+     *
+     * Two of the four are unreachable through the API and are written directly, which is stated
+     * rather than hidden: `expiresAt` is fixed at seven days by `INVITATION_TTL_MS`, and a
+     * soft-deleted invitation has no endpoint at all. Both are real states of the table — the
+     * expired one is reached by nothing more exotic than a week passing.
+     */
+    it('agrees with the list: live + expired equals what GET …/invitations returns', async () => {
+      const { actor } = await adminWithOrg();
+
+      const invite = async (email: string) => {
+        const response = await actor.agent
+          .post('/api/v1/organizations/acme/invitations')
+          .send({ email, role: 'PLANNER' })
+          .expect(201);
+        return response.body.data.id as string;
+      };
+
+      const liveOne = await invite('live-one@example.com');
+      const liveTwo = await invite('live-two@example.com');
+      const expiredId = await invite('expired@example.com');
+      const revokedId = await invite('revoked@example.com');
+      const deletedId = await invite('deleted@example.com');
+
+      // Aged past its lease. Still PENDING, because nothing reaps it — which is exactly why it
+      // was being counted as something a reader could chase.
+      await prisma.invitation.update({
+        where: { id: expiredId },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+      await actor.agent.delete(`/api/v1/organizations/acme/invitations/${revokedId}`).expect(204);
+      await prisma.invitation.update({
+        where: { id: deletedId },
+        data: { deletedAt: new Date() },
+      });
+
+      const overview = await fetchOverview(actor);
+      const list = await actor.agent.get('/api/v1/organizations/acme/invitations').expect(200);
+      const listed = list.body.data as Array<{ id: string }>;
+
+      // Each addend is correct, not merely their sum — a sum can be right for two wrong reasons.
+      expect(overview.attention.liveInvitationCount).toBe(2);
+      expect(overview.attention.expiredInvitationCount).toBe(1);
+      expect(
+        overview.attention.liveInvitationCount! + overview.attention.expiredInvitationCount!,
+      ).toBe(listed.length);
+
+      // And the revoked and soft-deleted rows are in NEITHER number and NEITHER list. Named
+      // explicitly rather than left to the arithmetic: the soft-deleted one is the case that WAS
+      // counted and never listed, so a test that only checks the total would pass against a
+      // version that miscounts it and miscounts something else by one the other way.
+      const listedIds = listed.map((row) => row.id).sort();
+      expect(listedIds).toEqual([expiredId, liveOne, liveTwo].sort());
+      expect(listedIds).not.toContain(revokedId);
+      expect(listedIds).not.toContain(deletedId);
     });
 
     it('omits the invitation count entirely for a Planner', async () => {
@@ -275,7 +340,8 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
       // Omitted, not zeroed. Sending `0` would tell a Planner there is an answer they may
       // not have, which is exactly the leak the omission exists to close.
-      expect(overview.attention).not.toHaveProperty('pendingInvitationCount');
+      expect(overview.attention).not.toHaveProperty('liveInvitationCount');
+      expect(overview.attention).not.toHaveProperty('expiredInvitationCount');
     });
 
     it('omits both counts for a Viewer and a Contributor', async () => {
@@ -286,7 +352,8 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
       for (const reader of [viewer, contributor]) {
         const overview = await fetchOverview(reader);
-        expect(overview.attention).not.toHaveProperty('pendingInvitationCount');
+        expect(overview.attention).not.toHaveProperty('liveInvitationCount');
+        expect(overview.attention).not.toHaveProperty('expiredInvitationCount');
         expect(overview.attention).not.toHaveProperty('expiringDeletedCount');
       }
     });
@@ -525,7 +592,8 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
       const overview = await fetchOverview(viewer, [planId]);
       expect(overview.recentPlans.map((p) => p.planId)).toEqual([planId]);
       // …while the attention section stays absent for them.
-      expect(overview.attention.pendingInvitationCount).toBeUndefined();
+      expect(overview.attention.liveInvitationCount).toBeUndefined();
+      expect(overview.attention.expiredInvitationCount).toBeUndefined();
     });
   });
 });

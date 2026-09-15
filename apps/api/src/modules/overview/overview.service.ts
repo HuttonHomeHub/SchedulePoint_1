@@ -86,7 +86,7 @@ export class OverviewService {
       heldLocks,
       hasClients,
       hasPlans,
-      pendingInvitations,
+      invitationCounts,
       expiringDeleted,
       recentPlanRows,
     ] = await Promise.all([
@@ -101,9 +101,7 @@ export class OverviewService {
       }),
       this.repo.hasActiveClients(organization.id),
       this.repo.hasActivePlans(organization.id),
-      mayReadInvitations
-        ? this.repo.countPendingInvitations(organization.id)
-        : Promise.resolve(null),
+      mayReadInvitations ? this.repo.countInvitations(organization.id) : Promise.resolve(null),
       mayRestore && retentionArmed
         ? this.repo.countExpiringDeleted({
             organizationId: organization.id,
@@ -144,7 +142,16 @@ export class OverviewService {
         // A pen somebody is waiting for outranks one nobody has asked about — that is the
         // only item on this screen with another person blocked behind it.
         .sort((a, b) => Number(b.requestedBy !== null) - Number(a.requestedBy !== null)),
-      ...(pendingInvitations !== null ? { pendingInvitationCount: pendingInvitations } : {}),
+      // **Both fields appear together or neither does.** They are one permission and one read, so
+      // emitting one without the other would let a reader see "3 have expired" with no idea whether
+      // any are live — a fact that reads as worse news than it is. ADR-0098's omit-never-zero rule
+      // applies to the PAIR, which is why this is one spread rather than two.
+      ...(invitationCounts !== null
+        ? {
+            liveInvitationCount: invitationCounts.live,
+            expiredInvitationCount: invitationCounts.expired,
+          }
+        : {}),
       ...(expiringDeleted !== null ? { expiringDeletedCount: expiringDeleted } : {}),
     };
 

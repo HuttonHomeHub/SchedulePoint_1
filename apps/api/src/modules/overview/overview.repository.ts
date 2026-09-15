@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { PlanStatus } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { expiredInvitationWhere, liveInvitationWhere } from '../invitations/invitation-predicates';
 
 /**
  * A plan in the organisation, with the instant it was last touched by ANY of the three
@@ -174,11 +175,27 @@ export class OverviewRepository {
     }));
   }
 
-  /** How many invitations are still awaiting an answer. */
-  async countPendingInvitations(organizationId: string): Promise<number> {
-    return this.prisma.invitation.count({
-      where: { organizationId, status: 'PENDING' },
-    });
+  /**
+   * How many invitations are still awaiting an answer, split into the two facts a reader can act
+   * on differently: one they can chase, and one they must re-send.
+   *
+   * **Both are counted against ONE instant**, taken once here and passed to both predicates. Two
+   * instants would let an invitation expiring between them land in neither count or in both, and
+   * the landing would print a total that disagrees with the list it sends the reader to — which is
+   * the whole defect this replaces.
+   *
+   * This method used to be `countPendingInvitations` and filtered on `status` alone: it counted
+   * soft-deleted rows the list excluded, and counted lapsed ones `accept()` refuses. The predicate
+   * now lives in `invitation-predicates.ts` and is the same one `InvitationRepository` uses, so the
+   * count and the list cannot mean different things by `pending` again.
+   */
+  async countInvitations(organizationId: string): Promise<{ live: number; expired: number }> {
+    const now = new Date();
+    const [live, expired] = await Promise.all([
+      this.prisma.invitation.count({ where: liveInvitationWhere(organizationId, now) }),
+      this.prisma.invitation.count({ where: expiredInvitationWhere(organizationId, now) }),
+    ]);
+    return { live, expired };
   }
 
   /**

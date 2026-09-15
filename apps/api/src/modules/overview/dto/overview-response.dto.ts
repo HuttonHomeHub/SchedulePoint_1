@@ -88,10 +88,22 @@ export class AttentionDto {
   heldLocks!: HeldLockDto[];
 
   @ApiPropertyOptional({
-    description: 'Omitted entirely unless the caller may read invitations.',
+    description:
+      'Invitations still awaiting an answer that can still be accepted. Omitted entirely — ' +
+      'together with `expiredInvitationCount` — unless the caller may read invitations.',
     example: 2,
   })
-  pendingInvitationCount?: number;
+  liveInvitationCount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Invitations still marked PENDING whose `expiresAt` has passed. They are listed by ' +
+      '`GET …/invitations` and refused by accept, so they need re-sending rather than chasing. ' +
+      'A separate count rather than a subtraction: the two are different actions, and a ' +
+      'subtraction of two separately-read numbers can go negative under concurrency.',
+    example: 1,
+  })
+  expiredInvitationCount?: number;
 
   @ApiPropertyOptional({
     description:

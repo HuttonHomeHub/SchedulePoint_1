@@ -873,11 +873,21 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   string collapses the last two into an absence a reader cannot tell from a defect. Names are
   resolved **through the organisation's membership**, never through `users` directly — which is
   what stops this endpoint turning an arbitrary user id into a display name.
-- **Sections the caller may not read are OMITTED, not zeroed.** `pendingInvitationCount` is
-  absent without `invitation:read`; `expiringDeletedCount` is absent unless the caller may
-  restore **and** hierarchy retention is armed on this host. A zero is a fact about the
-  organisation; an absence is a fact about the reader, and sending `0` would tell a Contributor
-  there is an answer they may not have.
+- **Sections the caller may not read are OMITTED, not zeroed.** `liveInvitationCount` and
+  `expiredInvitationCount` are absent without `invitation:read`, **together or not at all** — one
+  permission, one read, and "1 has expired" with no idea whether any are live reads as worse news
+  than it is. `expiringDeletedCount` is absent unless the caller may restore **and** hierarchy
+  retention is armed on this host. A zero is a fact about the organisation; an absence is a fact
+  about the reader, and sending `0` would tell a Contributor there is an answer they may not have.
+- **Invitations are counted in two, and `pendingInvitationCount` is gone.** That field summed two
+  facts a reader acts on differently — one they chase, one they must re-send, because `accept()`
+  refuses an invitation past `expiresAt` — and it filtered on `status` alone, so it counted
+  soft-deleted rows that `GET …/invitations` excludes. The landing's number and the list it links
+  to could therefore disagree. Both now use one shared predicate
+  (`modules/invitations/invitation-predicates.ts`), and both counts are computed against a single
+  instant so a row expiring between two reads cannot land in neither or in both. They are separate
+  counts rather than a total and a subtrahend: the two are different actions, and subtracting two
+  separately-read numbers can go negative under concurrency.
 
 **"Recently changed" is ordered by `GREATEST(plan, newest activity, newest dependency)`**, not by
 `plans.updated_at` — editing an activity does not stamp its plan, and neither does the CPM

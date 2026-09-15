@@ -120,3 +120,25 @@ export function canExportSchedule(role: OrganizationRole | undefined): boolean {
 export function canReadAuditLog(role: OrganizationRole | undefined): boolean {
   return role === 'ORG_ADMIN';
 }
+
+/**
+ * Roles allowed to see and revoke this organisation's pending invitations (mirrors the API's
+ * `invitation:read` and `invitation:revoke` — Org Admin only).
+ *
+ * **One predicate for both, deliberately, because the two permissions are inseparable.**
+ * `org-permissions.ts:293-301` grants them together in the `ADMIN` bundle, and `ROLE_PERMISSIONS`
+ * gives that bundle to `ORG_ADMIN` and to nobody else — so there is no role that can read an
+ * invitation and not revoke it, and a "Revoke is shaded because of your role" state is unreachable
+ * by any user. The implementation plan asked for one; building it would have been a branch with no
+ * way in, validated by its own tests (ADR-0081's shape, inverted). The section is therefore
+ * **omitted** without the permission (ADR-0082's first omit clause: the reader cannot change this
+ * and there is nothing to show), and inside it Revoke is simply available.
+ *
+ * The coupling is pinned by `invitation-permissions.structural.test.ts`, so if the API ever splits
+ * them this predicate fails rather than silently offering a control the server refuses.
+ *
+ * The client mirror decides what to *show*; the API decides what is *allowed*.
+ */
+export function canAdministerInvitations(role: OrganizationRole | undefined): boolean {
+  return role === 'ORG_ADMIN';
+}
