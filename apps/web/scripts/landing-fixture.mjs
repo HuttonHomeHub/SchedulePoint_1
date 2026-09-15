@@ -18,16 +18,22 @@
  * leaving the expired case out — is how the fixture ends up unable to exhibit the very distinction
  * CQ-2 asked for.
  */
-import { execFileSync } from 'node:child_process';
+import { psql } from './local-psql.mjs';
 
 /**
- * `psql` refuses the `?schema=public` Prisma appends (`invalid URI query parameter: "schema"`), so
- * it is stripped rather than the URL being written out a second time — a second connection string
- * is one more thing that can disagree with the first.
+ * A UUID, or this throws before anything reaches a command line.
+ *
+ * `psql -c` takes no bind parameters, so the id below is interpolated — and an id that is not a
+ * UUID has no business being interpolated into SQL whatever its provenance. The ids here come from
+ * the harness's own REST calls, so this is not expected to fire; it is here because "the caller
+ * would never" is the assumption every injection is built on, and because the alternative is a
+ * string of unknown shape reaching `psql`.
  */
-function psqlUrl() {
-  const url = process.env.DATABASE_URL ?? 'postgresql://app:app@localhost:5432/app?schema=public';
-  return url.replace(/[?&]schema=[^&]*/, '');
+function assertUuid(value, what) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value))) {
+    throw new Error(`${what} is not a UUID: ${JSON.stringify(value)}`);
+  }
+  return String(value);
 }
 /**
  * The states the organisation landing can report — one plan in each.
@@ -209,10 +215,9 @@ export async function seedLandingStates(page, slug) {
  * the measurement still prints a number.
  */
 export function expireInvitation(invitationId) {
-  const sql = `UPDATE invitations SET expires_at = now() - interval '2 days' WHERE id = '${invitationId}'`;
-  const out = execFileSync('psql', [psqlUrl(), '-v', 'ON_ERROR_STOP=1', '-c', sql], {
-    encoding: 'utf8',
-  });
+  const id = assertUuid(invitationId, 'expireInvitation: invitationId');
+  const sql = `UPDATE invitations SET expires_at = now() - interval '2 days' WHERE id = '${id}'`;
+  const out = psql(sql, { flag: '-c' });
   // `psql` exits 0 for an UPDATE that matched nothing, so the row count is read rather than the
   // status. A fixture that silently aged no invitation is exactly the empty measurement this
   // module's control exists to refuse.
@@ -243,10 +248,7 @@ export function expireInvitation(invitationId) {
  * single run into six.
  */
 export function assertLandingStates(ids) {
-  const q = (sql) =>
-    execFileSync('psql', [psqlUrl(), '-v', 'ON_ERROR_STOP=1', '-tAc', sql], {
-      encoding: 'utf8',
-    }).trim();
+  const q = (sql) => psql(sql).trim();
   const one = (sql) => q(sql) === 't';
 
   const checks = [

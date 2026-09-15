@@ -26,10 +26,11 @@
  * Run with both dev servers up:
  *   PLAYWRIGHT_CHROMIUM_PATH=… node scripts/measure-overview-endpoint.mjs > /tmp/m0-endpoint.md
  */
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import { chromium } from '@playwright/test';
+
+import { psql } from './local-psql.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const API = process.env.E2E_API_URL ?? 'http://localhost:3000';
@@ -62,16 +63,6 @@ const SHAPES = [
   { key: 'breadth', label: 'breadth', plans: 459, activities: 40 },
   { key: 'xl', label: 'extra-large', plans: 3000, activities: 40 },
 ];
-
-function psqlUrl() {
-  const url = process.env.DATABASE_URL ?? 'postgresql://app:app@localhost:5432/app?schema=public';
-  return url.replace(/[?&]schema=[^&]*/, '');
-}
-const psql = (sql) =>
-  execFileSync('psql', [psqlUrl(), '-v', 'ON_ERROR_STOP=1', '-tAc', sql], {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
 
 /**
  * **The queries are EXTRACTED from `overview.repository.ts`, not copied into this file.**
