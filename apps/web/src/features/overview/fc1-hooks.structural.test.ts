@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -36,14 +36,24 @@ const HARNESS = readFileSync(
   'utf8',
 );
 
-/** Every `.ts`/`.tsx` under the overview feature, read once. */
+/**
+ * Every `.ts`/`.tsx` under the overview feature, read once.
+ *
+ * `withFileTypes` is not a micro-optimisation, and it is what every other structural gate in this
+ * repository already does — including `archetypes.structural.test.ts`, in this same directory. The
+ * first version of this walker called `statSync(full)` and then `readFileSync(full)`, which is a
+ * check on a path followed by a use of that path, and CodeQL's `js/file-system-race` reported it as
+ * a HIGH alert on this epic's release PR. A `Dirent` carries `isDirectory()` from the single
+ * `readdirSync` call, so there is no second look at the filesystem to disagree with the first — the
+ * rule has no source left rather than a suppressed one.
+ */
 function sourcesUnder(dir: string): string[] {
   const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
       out.push(...sourcesUnder(full));
-    } else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) {
+    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
       out.push(readFileSync(full, 'utf8'));
     }
   }
