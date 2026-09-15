@@ -465,27 +465,29 @@ describe('OverviewScreen — announcements', () => {
    * statement, which is worse than the missing frame.
    */
   it.each([
-    ['omitted', undefined, false],
-    ['empty', [], true],
-  ] as const)(
-    'renders no standing frame when the field is %s',
-    async (_name, planStanding, expectFrame) => {
-      renderScreen({ payload: overview({ recentlyChanged: [plan()], planStanding }) });
+    { field: 'omitted', over: {}, expectFrame: false },
+    { field: 'empty', over: { planStanding: [] }, expectFrame: true },
+  ])('renders no standing frame when the field is $field', async ({ over, expectFrame }) => {
+    // **The omitted case omits the KEY, it does not pass `undefined` for it.** That is what the
+    // server does — and under `exactOptionalPropertyTypes` it is also the only thing that
+    // typechecks, since an optional property will not accept an explicit `undefined`. The first
+    // version passed `undefined` through an `as const` tuple and the compiler refused it, which
+    // is the stricter setting making the fixture describe the real payload.
+    renderScreen({ payload: overview({ recentlyChanged: [plan()], ...over }) });
 
-      // **Waited on SETTLED content, not on a heading.** "Recently changed" renders its heading
-      // during the pending window, above a skeleton — so waiting for it resolves while `data` is
-      // still undefined, which is indistinguishable from the omitted case and made the empty case
-      // fail against a correct component. A row's name only exists once the payload has arrived.
-      await waitFor(() => {
-        expect(screen.getByText('Northgate — Phase 1')).toBeVisible();
-      });
+    // **Waited on SETTLED content, not on a heading.** "Recently changed" renders its heading
+    // during the pending window, above a skeleton — so waiting for it resolves while `data` is
+    // still undefined, which is indistinguishable from the omitted case and made the empty case
+    // fail against a correct component. A row's name only exists once the payload has arrived.
+    await waitFor(() => {
+      expect(screen.getByText('Northgate — Phase 1')).toBeVisible();
+    });
 
-      const heading = screen.queryByRole('heading', { level: 2, name: 'Where the work stands' });
-      expect(heading === null).toBe(!expectFrame);
-      // The empty case owes a sentence, not a bare frame — and the omitted case owes neither.
-      expect(screen.queryByText('No programmes to report on yet.') !== null).toBe(expectFrame);
-    },
-  );
+    const heading = screen.queryByRole('heading', { level: 2, name: 'Where the work stands' });
+    expect(heading === null).toBe(!expectFrame);
+    // The empty case owes a sentence, not a bare frame — and the omitted case owes neither.
+    expect(screen.queryByText('No programmes to report on yet.') !== null).toBe(expectFrame);
+  });
 
   it('renders a standing row when the caller may read schedules and there is one', async () => {
     renderScreen({
