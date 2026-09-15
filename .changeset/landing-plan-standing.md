@@ -29,6 +29,13 @@ pinned structurally — and the recalculation parity gate is untouched by constr
 read is issued rather than after it returns.
 
 Measured before it shipped: at 3,000 plans and 120,000 activities the endpoint's p95 is 59.3 ms
-against a 200 ms bar, and the standing query's estimated cost is flat across every shape — 1,388 at
-the largest — which is the signature of a read driving off its plan-id filter rather than scanning the
+against a 200 ms bar, and the standing query's estimated cost is flat across every shape — 642 at the
+largest — which is the signature of a read driving off its plan-id filter rather than scanning the
 organisation.
+
+**Flat is a property of the estimate and not of the wall clock**, and the distinction is stated
+rather than glossed: `activities.plan_id` is a high-cardinality UUID, so Postgres assigns it one
+blended per-value row estimate whatever a plan actually holds. Measured against a 2,000-activity
+plan the aggregate really does 2,000 rows per plan and 43 ms, under an estimate that reads like the
+40-activity shapes'. The read is bounded by the **number of plans** on the page (at most eight, which
+is the property that matters) and not by how large each one is.
