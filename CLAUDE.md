@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1249 web
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1251 web
 > source files with 42 Playwright suites beside the base journey, and
 > 143 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -4935,6 +4935,52 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   shipped defect**, each reading balanced expressions rather than lines, each with a pinned positive
   case. **The CPM engine is not imported and no migration runs**; `apps/api` contributes zero files
   to the diff.
+  **M7 (2026-09-15) finishes the job on the panel M6 measured over and never separated out.** Asked
+  whether the reading history should become "the last report plus a dropdown", M0 measured it first:
+  **8,487 px of a 12,842 px document, 66.1 %** — two thirds of the console was one panel's history,
+  against 4,355 px for the seven other panels combined. Roughly 3,400 px of that was per-block
+  chrome rather than measurements, because the shared-facts list is a constant **140 px on every
+  block whatever it holds**: fifteen blocks repeated the same six facts for 2,100 px, and on a
+  one-reading block the facts were nearly twice the height of the reading they described. **The
+  dropdown was declined and an index shipped instead**, because a select clears the height just as
+  well and **hides the set** — a reader cannot learn how many sittings exist, scan their dates, or
+  spot two taken at the same canvas without opening it, and that last comparison is exactly what
+  this panel's own note asks of them (#261/#283: readings are comparable only at equal canvas). So
+  the canvas is a column of the index, pinned by its own case. Measured after: **1,666 px and a
+  6,021 px page**, a fall of 6,821 (12.8 → 6.0 screens), against four conditions committed before a
+  line was built. The two runs were fifteen minutes apart rather than one sitting — which
+  `m0-measurement.md` §10 warns about, this page having drifted 555 px with no product change — and
+  it is answered by arithmetic rather than a caveat: **the non-history page is 4,355 px in both
+  runs, to the pixel**, so the whole delta is the history. The control on the sitting already shown
+  is **shaded with its reason, never natively `disabled`**: whether a row is the shown one flips
+  when the reader presses a _different_ row, so the native attribute would blur focus to `<body>` at
+  exactly that moment. And the fifth consecutive epic here records an instrument wrong before the
+  product was — the journey read the detail table's `aria-label` to detect the swap, and `DataTable`
+  names its table with an `sr-only` `<caption>`, so it compared `'' !== ''` and was permanently red
+  against a correct product. `docs/TECH_DEBT.md` #327 records what the index deliberately leaves out.
+  **The gate pass blocked on all three reviews, and its sharpest finding is a docblock describing an
+  intent the code did not have.** The cap caveat was wired to the index and never to the expanded
+  block — in exactly the state that docblock names as the one where it matters most, since the index
+  does not render when there is one sitting — and **the fix then passed a mutation sweep**, because
+  nothing asserted the wiring; the test written afterwards was verified red. Next, a count appended
+  unconditionally produced **"One reading — 2 readings"** on the likeliest single press there is
+  (`canvas-draw` is the default scenario and measures two scales in one press), reintroducing the
+  conflation the expanded block's own caption exists to avoid. The verdict tally painted **"5 passed"
+  in alarm ink** whenever a failure sat beside it, breaking the rule stated in the same file's
+  docblock and honoured by `VerdictCell` one level down. And two component findings: a JS ternary
+  where three call sites already spell the shaded state as `aria-disabled:` classes — the ternary
+  also omitting `pointer-events-none`, so the shaded button lit its hover fill while refusing the
+  click — and the machine/canvas fallbacks written twice, byte-identical, inside the file whose
+  docblock cites ADR-0121 about exactly that. **One suggestion earned its keep by failing**: the
+  scroll-into-view added so a sighted reader sees what their press changed threw in jsdom _before_
+  `announce` ran, so a cosmetic enhancement swallowed the accessible channel — caught by the suite
+  going red on the announcement rather than on the scroll. Re-measured after the fold-ins: 1,715 px
+  over sixteen sittings against 1,666 over fifteen, so they cost nothing measurable, and the
+  non-history page read **4,355 px for the third consecutive time**. The ux review's last point is
+  taken as a correction to the spec rather than the code: FC-A1's bar was derived from the chosen
+  design's own projected cost, so the honest framing is that FC-B and FC-C are bought at roughly
+  **double a dropdown's footprint** (≈1,715 px against ≈900), on a page that still falls from 12.8
+  screens to 6.1.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

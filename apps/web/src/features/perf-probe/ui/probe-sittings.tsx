@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useId } from 'react';
+import { useId, useRef, useState } from 'react';
 
 import type { ProbeResultRow } from '../api/probe-results';
 import type { Sitting, SittingLimb } from '../model/sitting';
@@ -10,12 +10,20 @@ import {
   sittingSpreadMs,
   sittingsFromRows,
 } from '../model/sitting';
+import {
+  describeReadings,
+  sittingCaveats,
+  sittingIndexRow,
+  verdictSegment,
+  type SittingIndexRow,
+} from '../model/sitting-index';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
 import { sweepPlan } from '../sweep/sweep-plan';
 
 import { formatSitting } from './probe-report';
 
 import { Alert } from '@/components/ui/alert';
+import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CardTitle } from '@/components/ui/card';
@@ -35,6 +43,20 @@ import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
  * a reader should not have to learn two layouts, and the sitting of one is the commonest thing in
  * the table.
  *
+ * **One sitting is expanded and the rest are an index, because the blocks were the page.** Measured
+ * at 1646 over fifteen accumulated sittings, this list was 8,487 px of a 12,842 px document — 66.1 %
+ * — and the remedy took it to 1,666 px with the page at 6,021
+ * (`docs/specs/staff-console-design/m7-probe-history.md`). The compression is chrome rather than
+ * content: the shared-facts list is a constant 140 px on every block whatever it holds, so fifteen
+ * of them repeated the same six facts for 2,100 px, and on a one-reading block the facts were nearly
+ * twice the height of the reading they described.
+ *
+ * **An index and not a dropdown, which was the decision rather than the default.** A select clears
+ * the height just as well and hides the SET: a reader cannot learn how many sittings exist, scan
+ * their dates, or spot two taken at the same canvas without opening it and holding the answer in
+ * their head — and that comparison is exactly what the comparability note below asks of them. So
+ * every sitting stays named, dated and CANVASED at rest, and only its readings are behind a press.
+ *
  * **Reading this is an audited act**, like every other panel on this console, so it is fetched once
  * on load and neither polled nor refetched on window focus.
  *
@@ -44,6 +66,15 @@ import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
  * distinction first.
  */
 const COMPARABILITY_ID = 'probe-sittings-comparability';
+/**
+ * The cap note's id.
+ *
+ * **Module-level, and rendered above the detail block rather than inside the index**, because the
+ * cap is a property of the READ and not of the index: a single sitting can itself be truncated at
+ * fifty rows, and hiding the caveat until a second sitting exists would withhold it from the one
+ * history where the reader has nothing else to compare against.
+ */
+const CAP_ID = 'probe-sittings-cap';
 
 export function ProbeSittings({
   query,
@@ -52,6 +83,30 @@ export function ProbeSittings({
 }): React.ReactElement {
   const rows = query.data ?? [];
   const sittings = sittingsFromRows(rows);
+  /**
+   * Which sitting the detail slot holds — **`null` meaning "the newest", never a copied id.**
+   *
+   * Storing the newest sitting's id at mount would freeze the selection against a refetch: a
+   * reader who has not chosen anything would keep looking at what used to be the newest. `null`
+   * follows the data, and a chosen id that falls off the capped page falls back to the newest
+   * rather than emptying the slot.
+   */
+  const [shownId, setShownId] = useState<string | null>(null);
+  const shown = sittings.find((s) => s.id === shownId) ?? sittings[0];
+  /**
+   * The expanded block's heading, so a press can bring the thing it changed into view.
+   *
+   * The detail slot sits ABOVE the index, so pressing Show on a row near the bottom of fifteen
+   * changes something off-screen: a screen-reader user hears the announcement and a sighted one
+   * sees a badge appear beside the button they pressed and nothing else. Raised independently by
+   * the M7 ux and accessibility reviews. `block: 'nearest'` rather than a jump — if the block is
+   * already visible nothing moves, which is the common case at the top of the list.
+   *
+   * **On the `<section>` and not the heading**, because `CardTitle` does not forward a ref and
+   * teaching it to would be a change to a shared primitive's public contract — an ADR-0105 trigger
+   * that stops the work for a spec. The section is this file's own element.
+   */
+  const blockRef = useRef<HTMLElement>(null);
 
   return (
     <>
@@ -104,7 +159,7 @@ export function ProbeSittings({
         settled table — `DataTable`'s `query` prop is structurally typed, which is what makes that
         possible without a second primitive.
       */}
-      {query.isPending || query.isError || sittings.length === 0 ? (
+      {query.isPending || query.isError || sittings.length === 0 || shown === undefined ? (
         <DataTable
           caption="Readings recorded on this installation, newest first"
           columns={READING_COLUMNS}
@@ -129,45 +184,271 @@ export function ProbeSittings({
           empty="No readings recorded yet. Run a measurement above and it will be stored here, with the machine it ran on and the app version that drew the frames."
         />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-8" data-probe-history-list>
           {/*
-            **The list is a page, and saying so is what stops the block below lying.** The read is
-            capped at 50 rows and returns no total and no cursor (`staff-probe.service.ts:14,136`),
-            so an installation that has taken more than fifty readings simply stops seeing the
-            oldest — with nothing on screen distinguishing that from having taken fifty. Stated
-            without a number, because the client is not told the cap and inventing one would be the
-            confident-wrong sentence this whole epic removes. `docs/TECH_DEBT.md` #271 is the real
-            fix: a total, so this can say "showing 50 of 312".
+            **The newest sitting is expanded and the rest are an index, because the blocks were the
+            page.** Measured at 1646 over fifteen accumulated sittings, this list was **8,487 px of
+            a 12,842 px document — 66.1 %** (`docs/specs/staff-console-design/m7-probe-history.md`),
+            and roughly 3,400 px of that was per-block chrome rather than measurements: the facts
+            list is a constant 140 px on every block, so fifteen of them repeat the same six facts
+            for 2,100 px, and on a one-reading block the facts are nearly twice the height of the
+            reading they describe.
+
+            **An index rather than a dropdown, and that was the decision rather than the default.**
+            A select clears the height just as well and hides the SET: the reader cannot learn how
+            many sittings exist, scan their dates, or spot two taken at the same canvas without
+            opening it and holding the answer in their head — which is exactly the comparison the
+            note above asks them to make. So every sitting stays named and dated at rest, and only
+            its detail is behind a press.
           */}
-          <p className="text-muted-foreground text-sm">
+          {/*
+            **The list is a page, and saying so is what stops the blocks lying.** The read is capped
+            at 50 rows and returns no total and no cursor (`staff-probe.service.ts:14,136`), so an
+            installation past fifty simply stops seeing the oldest — with nothing on screen
+            distinguishing that from having taken fifty. Stated without a number, because the client
+            is not told the cap and inventing one would be the confidently-wrong sentence this whole
+            epic removes. `docs/TECH_DEBT.md` #271 is the real fix: a total, so this can say
+            "showing 50 of 312".
+          */}
+          <p id={CAP_ID} className="text-muted-foreground text-sm">
             Showing the most recent readings. Older sittings are not listed.
           </p>
-          {sittings.map((sitting, index) => (
-            <SittingBlock
-              key={sitting.id}
-              sitting={sitting}
-              // **The oldest block is the one the page boundary can cut**, because the read is
-              // ordered newest-first. It is therefore the one block that must not claim a missing
-              // reading was refused.
-              //
-              // **The premise is narrower than it looks, and the narrowing is recorded rather than
-              // relied on.** This said "a sitting's readings are adjacent in time", which M6-T4
-              // made untrue: a resumed sitting's newest row sorts near the top while its original
-              // rows can fall past the fifty-row cap, so a NON-oldest block could in principle be
-              // truncated and would then print "N were refused or never taken" about stored data.
-              // It is not reachable today — `resume` is read from the panel's in-memory outcome, so
-              // it is session-scoped — and it becomes reachable the moment a resume can be started
-              // from the stored history, which is a natural companion to `docs/TECH_DEBT.md` #271.
-              // Raised independently by the M7 ux and database reviews; filed as #273.
-              mayBeTruncated={index === sittings.length - 1}
-              // Null when the paragraph is not rendered. An `aria-describedby` pointing at no
-              // element reads to a screen reader as a missing description rather than an absent
-              // one — the rule this file already states for its two conditional warnings, applied
-              // to the note that is now conditional too.
-              comparabilityId={sittings.length > 1 ? COMPARABILITY_ID : null}
+          <SittingBlock
+            blockRef={blockRef}
+            sitting={shown}
+            // **The oldest block is the one the page boundary can cut**, because the read is
+            // ordered newest-first — so the claim "the rest were refused" is only safe to make
+            // about a sitting that is not the last one. It used to be an index comparison over a
+            // list; with one block on screen it is a comparison against the list's last id, which
+            // is the same rule stated for the block that is actually rendered.
+            mayBeTruncated={shown.id === sittings[sittings.length - 1]?.id}
+            // Null when the paragraph is not rendered. An `aria-describedby` pointing at no
+            // element reads to a screen reader as a missing description rather than an absent
+            // one — the rule this file already states for its two conditional warnings, applied
+            // to the note that is now conditional too.
+            comparabilityId={sittings.length > 1 ? COMPARABILITY_ID : null}
+          />
+          {sittings.length > 1 && (
+            <SittingIndex
+              sittings={sittings}
+              shownId={shown.id}
+              onShow={(id) => {
+                setShownId(id);
+                // **Guarded, and last.** `scrollIntoView` is a progressive enhancement that jsdom
+                // does not implement — the `combobox.tsx:311` precedent — and an unguarded call
+                // here threw before `announce` ran, so a cosmetic scroll would have swallowed the
+                // one channel a screen-reader user has. Found by the suite going red on the
+                // announcement rather than on the scroll, which is the right way round.
+                const block = blockRef.current;
+                if (block !== null && typeof block.scrollIntoView === 'function') {
+                  block.scrollIntoView({ block: 'nearest' });
+                }
+              }}
             />
-          ))}
+          )}
         </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Every sitting, one row each — the list the reader chooses from.
+ *
+ * **It lists ALL of them, including the one on screen**, rather than "the others". A list that
+ * removes its own selection re-orders under the reader's cursor on every press and never tells them
+ * where they are; keeping the row and marking it costs nothing and answers both.
+ *
+ * **The cap note lives here** because the cap is a property of this list. The read returns at most
+ * fifty rows with no total and no cursor (`staff-probe.service.ts:14,136`), so an installation past
+ * fifty simply stops seeing the oldest with nothing distinguishing that from having taken fifty.
+ * Stated without a number, because the client is not told the cap and inventing one would be the
+ * confidently-wrong sentence this panel exists to remove; `docs/TECH_DEBT.md` #271 is the real fix.
+ */
+function SittingIndex({
+  sittings,
+  shownId,
+  onShow,
+}: {
+  sittings: readonly Sitting[];
+  shownId: string;
+  onShow: (id: string) => void;
+}): React.ReactElement {
+  const announce = useAnnounce();
+  const rows = sittings.map((sitting) => sittingIndexRow(sitting, EXPECTED_READINGS));
+
+  const columns: Column<SittingIndexRow>[] = [
+    {
+      header: 'Taken',
+      cell: (row) => (
+        <span>
+          {row.when}
+          {/*
+            **The other two confounds, on the row rather than behind a press.** The Canvas column is
+            here because readings are comparable only at equal canvas (#261/#283); a sitting that
+            spans hours or lost the window is untrustworthy for the same kind of reason, and both
+            facts were previously reachable only by opening each sitting in turn — which is the cost
+            this index exists to remove. Raised by the M7 ux review.
+          */}
+          {sittingCaveats(row.sitting, sittingSpreadMs(row.sitting), SITTING_SPREAD_LIMIT_MS).map(
+            (caveat) => (
+              <span key={caveat} className="mt-1 block">
+                <Badge variant="warning">{caveat}</Badge>
+              </span>
+            ),
+          )}
+          {row.id === shownId && (
+            <span className="mt-1 block">
+              {/*
+                **The row carries the state, not the button.** Swapping the button's word from
+                "Show" to "Shown" would change its accessible name under the reader who just
+                pressed it, and leave the visible text outside that name (WCAG 2.5.3 Label in
+                Name). The badge says where they are; the control keeps one name and one job.
+              */}
+              <Badge variant="neutral">Shown above</Badge>
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      header: 'Sitting',
+      // **The count is appended only when it says something the kind does not.** `describeReadings`
+      // returns `null` for a single press of one reading, because "One reading — 1 reading" is a
+      // tautology and "One reading — 2 readings" — the shape the default two-limb scenario
+      // produces — is a contradiction.
+      cell: (row) => {
+        const readings = describeReadings(row);
+        return readings === null ? row.kind : `${row.kind} — ${readings}`;
+      },
+    },
+    { header: 'Machine', cell: (row) => row.machine },
+    // FC-C: the one fact that decides which sittings are comparable at all (#261/#283). It is not
+    // a nice-to-have column and must survive any later attempt to shorten this row.
+    { header: 'Canvas', cell: (row) => row.canvas },
+    {
+      header: 'Verdicts',
+      // **Only the failing segment is painted.** Colouring the whole string put "5 passed" in
+      // alarm ink beside "1 failed", which breaks the rule `sitting-index.ts` states in its own
+      // docblock and `VerdictCell` already honours one level down: an ungraded or indeterminate
+      // reading is not bad news. The word "failed" is always present, so the colour is a second
+      // channel and never the only one (WCAG 1.4.1).
+      cell: (row) =>
+        row.verdicts.length === 0 ? (
+          'no readings'
+        ) : (
+          <span>
+            {row.verdicts.map((entry, i) => (
+              <span key={entry.label}>
+                {i > 0 && ' · '}
+                <span className={entry.failing ? 'text-destructive-text' : undefined}>
+                  {verdictSegment(entry)}
+                </span>
+              </span>
+            ))}
+          </span>
+        ),
+    },
+    {
+      header: 'Show this sitting',
+      srHeader: true,
+      cell: (row) => (
+        <ShowSittingButton
+          row={row}
+          isShown={row.id === shownId}
+          onShow={() => {
+            onShow(row.id);
+            // The detail slot is above the control that changed it and outside the reader's
+            // focus, so nothing about the press announces itself. `Panel`'s polite region is the
+            // app's one channel for that, and `/staff` has carried an `AnnouncerProvider` since
+            // the console redesign — before that `useAnnounce()` there was a silent no-op.
+            // `describeReadings` is `null` where a count would be a tautology, so the sentence is
+            // assembled rather than interpolated — "Showing …, One reading, null." was the
+            // alternative.
+            const readings = describeReadings(row);
+            announce(
+              `Showing ${row.when} — ${row.kind}${readings === null ? '' : `, ${readings}`}.`,
+            );
+          }}
+        />
+      ),
+    },
+  ];
+
+  return (
+    <section className="space-y-3">
+      <CardTitle level={3} className="text-sm">
+        All sittings
+      </CardTitle>
+      <DataTable
+        caption="Every sitting recorded on this installation, newest first"
+        columns={columns}
+        query={settled(rows)}
+        getRowKey={(row) => row.id}
+        // `DataTable` is a focusable `role="region"`, so a landmark-navigating reader lands INSIDE
+        // it having skipped the note above — the ADR-0073 C2.5 finding, which is why the cap is
+        // linked rather than merely placed.
+        describedById={CAP_ID}
+        loadingLabel="Loading sittings…"
+        empty="No sittings recorded yet."
+      />
+    </section>
+  );
+}
+
+/**
+ * The control that moves a sitting into the detail slot.
+ *
+ * **`aria-disabled` and a guard, never native `disabled`** — and that is not a style preference.
+ * Whether a row is the shown one flips when the reader presses a DIFFERENT row's button, so the
+ * control under their finger changes state as a consequence of their own press. A native
+ * `disabled` blurs to `<body>` at that moment, which is a WCAG 2.4.3 failure this repository has
+ * now recorded shipping four times (ADR-0060 M6, ADR-0063 M6, ADR-0096, ADR-0133). Shaded with its
+ * reason, focus never moves.
+ *
+ * The reason is an `sr-only` **sibling** plus `aria-describedby`, never folded into the name — the
+ * `ToolbarButton` pattern, for the reason its own docblock records: a button's name comes from its
+ * content, so a reason inside it is appended to the name as well as the description.
+ */
+function ShowSittingButton({
+  row,
+  isShown,
+  onShow,
+}: {
+  row: SittingIndexRow;
+  isShown: boolean;
+  onShow: () => void;
+}): React.ReactElement {
+  const reasonId = useId();
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        // Named for its own sitting: fifteen of these on screen, and an assistive-technology user
+        // browsing by button list meets a column of identical "Show" entries otherwise. The same
+        // reason the Copy button carries its sitting's caption.
+        aria-label={`Show ${row.when} — ${row.kind}`}
+        {...(isShown ? { 'aria-disabled': true, 'aria-describedby': reasonId } : {})}
+        // **The established idiom, not a JS ternary** (`confirm-dialog.tsx`, `scope-save-bar.tsx`,
+        // `WbsBulkAssignBar.tsx` all spell it this way). Static classes reacting to the attribute
+        // that is already conditional — and `pointer-events-none` matters: without it the shown
+        // row's button still lit its hover fill while refusing the click, which is the
+        // looks-live-but-refuses defect ADR-0082 exists to remove. Found by the M7 component review.
+        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+        onClick={() => {
+          // The guard, not the attribute. `aria-disabled` is a statement to assistive technology
+          // and does nothing to the pointer.
+          if (isShown) return;
+          onShow();
+        }}
+      >
+        Show
+      </Button>
+      {isShown && (
+        <span id={reasonId} className="sr-only">
+          This sitting is already shown above.
+        </span>
       )}
     </>
   );
@@ -206,8 +487,12 @@ function SittingBlock({
   sitting,
   mayBeTruncated,
   comparabilityId,
+  blockRef,
 }: {
   sitting: Sitting;
+  /** The block itself, so the host can bring a newly-promoted sitting into view. Optional: the
+   *  block renders in states that have no index to be promoted from. */
+  blockRef?: React.RefObject<HTMLElement | null>;
   /** True for the oldest block, whose missing readings may be on the next page rather than absent. */
   mayBeTruncated: boolean;
   /** The comparability note's id, or `null` when there is nothing to compare and it is not rendered. */
@@ -239,10 +524,15 @@ function SittingBlock({
    * rendered contributes nothing rather than an id pointing at no element, which reads to a screen
    * reader as a missing description rather than an absent one.
    */
-  const headingId = `${factsId}-heading`;
-
   const describedBy = [
     factsId,
+    // **The cap reaches this block too, and not only the index.** `DataTable` is a focusable
+    // `role="region"`, so a reader who jumps straight to the expanded sitting skipped the note
+    // above it — and with ONE sitting the index does not render at all, which is precisely the
+    // state `CAP_ID`'s own docblock says the caveat matters most in. It was wired to the index
+    // alone, so that docblock described an intent the code did not have. Found by the M7
+    // accessibility review.
+    CAP_ID,
     ...(spread !== null && spread > SITTING_SPREAD_LIMIT_MS ? [spreadId] : []),
     ...(missing > 0 ? [missingId] : []),
     ...(comparabilityId === null ? [] : [comparabilityId]),
@@ -268,8 +558,12 @@ function SittingBlock({
        other. Caught by the existing suite going ambiguous on `getByRole('region', …)`, which is the
        assertion noticing rather than breaking. The `<h3>` gives heading navigation the structure;
        nothing needs a second landmark to carry it. */
-    <section className="space-y-3">
-      <CardTitle id={headingId} level={3} className="text-sm">
+    <section className="space-y-3" ref={blockRef}>
+      {/* **Deliberately un-`id`'d.** It carried a `headingId` nothing ever read — a stray id the
+          M7 accessibility review flagged as one a later edit could wire into the `<section>`'s
+          `aria-labelledby`, silently reintroducing the nested-region problem the comment above
+          warns against. The scroll target is the section, which needs no id at all. */}
+      <CardTitle level={3} className="text-sm">
         {caption}
       </CardTitle>
       <SittingFacts sitting={sitting} id={factsId} />
