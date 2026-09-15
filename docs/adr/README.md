@@ -166,3 +166,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0140](0140-a-diagnostic-takes-no-input.md)                                                     | A diagnostic takes no input, so it cannot ask about anybody                     | Accepted           |
 | [0141](0141-a-thumbnails-legibility-is-a-pitch-not-a-zoom.md)                                   | A thumbnail's legibility is a pitch, not a zoom                                 | Accepted           |
 | [0142](0142-a-remedy-is-measured-before-it-is-built.md)                                         | A remedy is measured before it is built                                         | Accepted           |
+| [0143](0143-a-console-answers-before-it-reports.md)                                             | A console answers before it reports, and a page is what it is made of           | Accepted           |
