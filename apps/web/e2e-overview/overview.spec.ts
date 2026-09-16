@@ -113,6 +113,57 @@ test('the settled overview has no accessibility violations', async ({ page }) =>
  * fourth — that the store holds no name — is a unit assertion, and it is the reason the third
  * works.
  */
+/**
+ * **The landing lays out in two columns, asserted where layout exists.**
+ *
+ * The epic that built this screen withdrew its two-column grid on FC-4 and shipped one column, and
+ * the reason was a bar measured inside a container capped at 846 px **at every viewport** — so the
+ * grid could never have passed, at any width, on any monitor. The product owner asked why the page
+ * was still one column while ~650 px of their 1920 screen sat empty (`m6-two-column.md`).
+ *
+ * This is the assertion that would have caught the revert, and it has to run in a browser: the
+ * whole effect is CSS grid, which jsdom does not lay out, so all 152 unit cases for this feature
+ * pass identically either way. **Two sections sharing a `top` is what "two columns" means** —
+ * checked as a geometric fact rather than by reading a class name, because a class assertion
+ * passes against a grid whose columns never resolve (ADR-0100 M4's token pair, which painted
+ * nothing in a real browser while its gate stayed green).
+ *
+ * It deliberately does NOT assert a pixel width. The columns are 730 px at 1920 and 647 at 1646,
+ * both of which are fluid and both of which are meant to change when the drawer moves — pinning
+ * either would make a correct resize fail.
+ */
+test('the landing uses the width it has, in two columns', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createClient(page, 'Bellway');
+  await createProject(page, 'Northgate');
+  await createPlan(page, 'Northgate — Phase 1');
+
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await openOverview(page, orgSlug);
+
+  // `getByRole('region')`, not a CSS selector. A `SectionCard` names itself with `aria-labelledby`
+  // OR `aria-label` depending on the call site, so `section[aria-labelledby]` found two of the four
+  // here and this assertion failed against a CORRECT two-column page — the same trap
+  // `measure-overview.mjs` records hitting with `[role="region"]`, which matched nothing at all.
+  // Playwright computes the implicit role; a CSS attribute selector cannot.
+  const sections = await page.getByRole('region').all();
+  const tops = await Promise.all(
+    sections.map(async (s) => Math.round((await s.boundingBox())?.y ?? -1)),
+  );
+
+  // The pinned positive case first: "no two sections share a top" is satisfied perfectly by a page
+  // with no sections on it, which is how a green run could mean the locator found nothing.
+  expect(
+    tops.length,
+    'no named sections found — the assertion below would be vacuous',
+  ).toBeGreaterThan(1);
+  expect(
+    new Set(tops).size,
+    `sections at ${tops.join(', ')} — expected a pair to share a row`,
+  ).toBeLessThan(tops.length);
+});
+
 test('the landing offers the plans this browser was recently in', async ({ page }) => {
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);

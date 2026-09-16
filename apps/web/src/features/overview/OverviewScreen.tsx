@@ -8,7 +8,7 @@ import { RecentlyChangedSection } from './components/RecentlyChangedSection';
 import { WhereWorkStandsSection } from './components/WhereWorkStandsSection';
 import { prunePlans, readRecentPlanIds } from './model/recent-plans';
 
-import { PageContainer, PageHeader } from '@/components/ui/page';
+import { PageContainer, PageGrid, PageGridItem, PageHeader } from '@/components/ui/page';
 import { useSession } from '@/features/auth';
 import { useOrganizations } from '@/features/organizations';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -119,7 +119,21 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
       (data.attention.expiringDeletedCount ?? 0) > 0);
 
   return (
-    <PageContainer width="narrow">
+    /*
+      **`wide`, not `narrow`, and the change is the whole point of the grid below.**
+
+      ADR-0098 chose `narrow` (`max-w-4xl`, 896 px − 48 px padding = **846 px of content**) because
+      at the default measure a plan's name and its change time sat ~800 px apart at 1646. That
+      reason is real and this does not discard it — it serves it better. `narrow` caps the content
+      at 846 px **at every viewport**, measured 846 at 1280, 1440, 1646 AND 1920
+      (`m6-two-column.md` §1), so on a 1920 screen roughly 650 px of the window is empty gutter
+      while the rows inside are still as wide as the rule was introduced to narrow.
+
+      A two-column grid answers both: each section is NARROWER than 846, so a row's name and its
+      trailing fact are closer together than `narrow` ever made them, and the page uses the width
+      it has. The measure argument survives; the single column was only ever one way of honouring it.
+    */
+    <PageContainer width="wide">
       <PageHeader
         title={title}
         // **Role-aware, because the fixed version was false for two of the four roles.** The
@@ -152,7 +166,7 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
             ) : null}
           </>
         ) : (
-          <>
+          <PageGrid>
             {/*
               **The order is measured, not preferred, and it corrects the approved plan.**
 
@@ -174,13 +188,17 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               the programme's HEALTH above the fold rather than the activity feed — which is the
               content this epic exists to add.
             */}
-            <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} />
+            <PageGridItem span="narrow">
+              <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} />
+            </PageGridItem>
             {isWriter && !isError ? (
-              <NeedsAttentionSection
-                attention={data?.attention}
-                orgSlug={orgSlug}
-                pending={isPending}
-              />
+              <PageGridItem span="narrow">
+                <NeedsAttentionSection
+                  attention={data?.attention}
+                  orgSlug={orgSlug}
+                  pending={isPending}
+                />
+              </PageGridItem>
             ) : null}
             {/*
               **Rendered only when the server sent the field.** `planStanding` is OMITTED for a
@@ -199,17 +217,21 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               loading and failure states are already reported once, by "Recently changed".
             */}
             {data?.planStanding !== undefined ? (
-              <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} />
+              <PageGridItem span="narrow">
+                <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} />
+              </PageGridItem>
             ) : null}
-            <RecentlyChangedSection
-              plans={data?.recentlyChanged ?? []}
-              orgSlug={orgSlug}
-              now={now}
-              pending={isPending}
-              error={isError}
-              onRetry={() => void refetch()}
-            />
-          </>
+            <PageGridItem span="narrow">
+              <RecentlyChangedSection
+                plans={data?.recentlyChanged ?? []}
+                orgSlug={orgSlug}
+                now={now}
+                pending={isPending}
+                error={isError}
+                onRetry={() => void refetch()}
+              />
+            </PageGridItem>
+          </PageGrid>
         )}
       </div>
     </PageContainer>

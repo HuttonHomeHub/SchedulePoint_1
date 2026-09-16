@@ -10538,6 +10538,31 @@ rather than a commit because it changes what every recorded number in this epic 
 against, and re-baselining at the end of a milestone would leave the epic's own documents
 describing a harness that no longer produced them.
 
+### 333. The landing's two-column rows are cramped at 1280
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (organisation-landing M6, measured) · **Size:** S · **Owner:** web
+
+M6 put the organisation landing into two columns (`m6-two-column.md`), which is a large win at the
+widths it is used at — sections are 730 px at 1920 and 647 at 1646, FC-1 goes 4 → 6 of 7 and the page
+gets 39 % shorter. **At 1280 the same change gives 464 px columns**, and the photograph
+(`landing-1280.png`) shows the cost: a plan name wraps to two lines and its
+`project · client` subtitle truncates mid-word. Legible, not comfortable.
+
+**It is filed rather than fixed because the obvious remedies are both wrong.** Widening the container
+back is the defect M6 exists to repair. Raising `PageGrid`'s `md:` breakpoint would change a
+**shared** primitive whose other consumer is the staff console — a shared-gate change, which
+ADR-0105 says stops the work and earns its own spec, and which would be decided here on one screen's
+evidence.
+
+The right lever is **row density**: the rows carry a name, a badge, a `project · client` subtitle, up
+to three sentences and a trailing fact, and at 464 px the trailing fact is taking ~130 px from a
+~330 px name. That is the denser-row question already put to the product owner and not yet answered
+(`m5-verdict.md` §3), now with a second reason to do it and a width at which to judge it.
+
+**Neither of the product owner's two screens is affected** — both are ≥ 1646, both measured
+comfortable. Below `md` (768 px) the grid correctly collapses to one column, so this is a band
+roughly 768–1400 px wide.
+
 ### 331. The web coverage ratchet was not measured for the landing epic, and the API branch floor has 0.23pp of headroom
 
 **Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, test review) · **Size:** S · **Owner:** web
