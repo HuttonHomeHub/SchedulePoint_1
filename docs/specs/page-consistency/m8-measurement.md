@@ -192,6 +192,76 @@ against a threshold of exactly 8 (ADR-0120's T = 8, derived from p75 = 7.50). It
 design and is recorded here rather than actioned inside this epic: a reconciliation pass is its own
 work under §21, and folding one into an epic's last milestone is what ADR-0105 exists to stop.
 
+## 6c. The sweep, and the two findings nothing else could reach
+
+The full 43-suite sweep had not run since M4. It was run in full: **44 suites, 41 pass, 3 fail** —
+and the three are worth reading together, because they are three different kinds of wrong.
+
+| Suite              | Verdict                   | Subject                                              |
+| ------------------ | ------------------------- | ---------------------------------------------------- |
+| `public`           | **the product was wrong** | a defect introduced by this very gate pass           |
+| `recently-deleted` | **the test was wrong**    | a locator, and a docblock this epic had made false   |
+| `staff`            | **flake**                 | re-run alone: 3 of 3, including the case that failed |
+
+### The product one: a gate written the same day, wrong for one of its seventeen subjects
+
+`public` failed at **all six viewports** on `/verify-email`:
+_"primary action is covered by another element"_. `e2e-public/support.ts:189-193` takes
+`document.elementFromPoint` at the button's centre and asserts the hit is the button —
+and `pointer-events: none` makes that call return the element **behind**, so the check was correct
+and the button genuinely was not pointer-reachable.
+
+§2's fix added `aria-disabled:pointer-events-none aria-disabled:opacity-60` to all seventeen
+guarded submits. Sixteen bind `aria-disabled` to `mutation.isPending` — **transient**, about a
+second — where inertness to the pointer is exactly right. `ResendVerificationButton` binds
+`send.isPending || address.trim() === ''`, so on `/verify-email` reached **without `?email=`** — a
+bookmark, a retyped URL — it is `aria-disabled` **at rest, from first paint**. The result was that
+the only route back into an unverified account became pointer-unreachable in its resting state:
+the dead end ADR-0074 and ADR-0077 exist to close, and the exact inverse of that component's own
+rule that _"a button that silently does nothing is worse than a field"_.
+
+**The discriminator is not in the tag and cannot be** — _is the `aria-disabled` expression
+transient, or can it be the control's resting state?_ — so the gate takes a **named exception with
+its reason** (`POINTER_EVENTS_EXEMPT`) rather than a loosened regex, in the shape
+`dependency-claims.json` and `flag-retirement.json` already use and ADR-0083's "a named exception
+with its cost stated". Two pinned cases prove it discriminates **both ways**: the resting shape
+passes for the file that owns the exemption and still fails for a dialog that never asked for it.
+A third asserts every exemption names a file that exists and a reason of substance, so a rename
+cannot leave the rule silently unenforced.
+
+**This is ADR-0081's argument landing on this epic's own instrument.** A structural gate written
+hours earlier enforced a rule correct for 16 of 17 subjects, every unit test stayed green, and the
+thing that caught it was a journey driving the real product in a real browser.
+
+### The test one: a docblock this epic made false
+
+`recently-deleted` timed out on `getByRole('button', { name: 'Delete Northgate' })`. That button
+does not exist: **M4 moved Delete behind the `⋯` menu on all five tables**, which is the shape the
+product owner chose. The helper's docblock is the more instructive half — it read _"The tables
+render Edit/Delete buttons directly rather than a row menu"_, true when written and made false by
+this epic, so it asserted the opposite of the code in the file a later reader would most trust.
+Corrected rather than merely rerouted (ADR-0058).
+
+`context` becomes a **required** argument (`Clients`, `Plans`) because the Project Explorer names
+its own node menus `Actions for <name>`; without the qualifier the locator resolves to two elements,
+which is ambiguity rather than failure and the harder thing to read. `e2e-audit` had already been
+updated at M4 and passed throughout — so the fix was applied to one suite and not its neighbour,
+which is this register's most-recorded shape, in the sweep's own findings.
+
+### The instrument that lied about all of it
+
+`pgrep -f "e2e-sweep"` **matches its own command line**. Two consequences, both live:
+
+- it reported a sweep **alive that had never started** (`sweep2.log` did not exist), and
+- every wait-loop written `while pgrep -f "..."; do sleep; done` **can never exit** — which is why
+  two monitors expired reporting _no events_ rather than a verdict. Those expiries read as "nothing
+  has happened yet" and meant "this instrument cannot finish".
+
+The bracket-class trick (`[e]2e-sweep`) does not rescue it when the pattern text is itself on the
+command line. The check that worked is **content in the log** — the sweep's own `SWEEP-DONE`
+marker, which was read correctly at exactly the moment `pgrep` was insisting the finished sweep was
+still running.
+
 ## 7. Filed rather than fixed
 
 - **#338** — two hand-rolled `<details>`, two `<summary>` treatments. Both pre-date the epic; a

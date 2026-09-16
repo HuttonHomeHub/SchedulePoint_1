@@ -303,6 +303,22 @@ ADR-0071 failure `docs/TECH_DEBT.md` #291 records happening three times already,
 missing with it, and `docs/API.md` had never been told the clients list takes a `q`. Found by a
 reviewer, not by anything automatic.
 
+**The sweep then found the gate pass's own defect, which is the entry's sharpest note.** The full
+43-suite journey sweep had not run since M4; run in full it reported **44 suites, 41 pass, 3 fail**,
+and the three were three different kinds of wrong. `public` failed at all six viewports because the
+class pair above was applied to a seventeenth button whose `aria-disabled` is a **resting state**
+(`send.isPending || address.trim() === ''`) rather than a mutation in flight — so
+`pointer-events: none` made `document.elementFromPoint` return the element behind it and left
+`/verify-email`'s only action pointer-unreachable, which is the dead end ADR-0074 and ADR-0077 exist
+to close. The discriminator — _transient, or the control's resting state?_ — is not in the tag and
+cannot be, so the gate takes a **named exception carrying its reason** rather than a loosened
+regex, with cases proving it discriminates in both directions and that every exemption names a real
+file. `recently-deleted` was the inverse: a stale locator over correct product, whose docblock this
+epic had made **false** by moving Delete behind the `⋯`. And `staff` was a flake, established by
+re-running it rather than by inheriting the label. A gate written the same day, correct for sixteen
+of seventeen subjects, green in every unit suite, caught only by something driving the real product
+— ADR-0081's argument landing on this epic's own instrument.
+
 Every fix carries a regression test verified red first. Two findings are recorded rather than
 rushed: `docs/TECH_DEBT.md` **#338** (two `<details>`, two treatments — and the ADR-0105 trigger to
 build a primitive) and **#339** (`SectionCard`'s description has no measure, which is
