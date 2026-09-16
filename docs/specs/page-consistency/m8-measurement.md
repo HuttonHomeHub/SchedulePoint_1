@@ -273,3 +273,59 @@ still running.
 - **#57** gains a note: the `apiFetchAllPages` + Prisma disjunctive-cursor cost recurs at every such
   consumer rather than only the recycle bin. Measured here at 0.15 ms (depth 20) / 0.93 ms (depth
   4,900) — real, immaterial at this product's scale, and unchanged by M7.
+
+## 8. What CI found that the local gate could not, and the budget it moved
+
+Two jobs went red on the first CI run of the epic's branch (`a67ceeac`), and **neither was a test
+failure**.
+
+**Shard 2 of the web end-to-end matrix** ran every suite green or skipped and then died at step 56,
+`Upload Playwright report`: `Failed to FinalizeArtifact: Received non-retryable error: Failed
+request: (403) Forbidden: Error from intermediary with HTTP status code 403 "Forbidden"` — after
+`Uploaded bytes 2743051` and `Finished uploading artifact content to blob storage!`. The artefact
+had transferred; the finalize call was refused by something between the runner and the artifact
+service. Nothing in this repository causes it and nothing here fixes it. Established by reading the
+job's step list rather than by re-running and hoping: fifty-five test steps, every one `success` or
+`skipped`, one `failure`, and it is the upload.
+
+**`check:bundle-size` is the real one, and the honest framing is not the one the failure invites.**
+It reported the entry graph at 416.58 kB gzip against a 416.00 kB budget, over by 0.58 kB. The
+tempting reading is that this epic is heavy. It is not, and the numbers say so:
+
+| build                       | entry graph gzip      | against the 416.00 kB budget |
+| --------------------------- | --------------------- | ---------------------------- |
+| `origin/main` at `b85a6d31` | 415.82 kB (425,798 B) | **0.18 kB of headroom left** |
+| this branch at `a67ceeac`   | 416.58 kB (426,581 B) | over by 0.58 kB              |
+
+So the epic adds **0.76 kB** to a budget that was already 99.96 % spent. Both builds were taken on
+one machine in one sitting, and the gate reproduces the CI figure to the byte locally, so this is
+not a CI artefact.
+
+**What the gate exists to ask was asked and answered.** Its whole purpose is to catch a library
+arriving in the first paint, so the two reports' entry graphs were compared rather than their
+totals: the package set is **identical** — 26 either side, none new, none gone — and `paint.js`
+(39,889 B) and `rolldown.js` (368 B) are byte-identical. The entire +783 gzip bytes is application
+code in `index.js`. That is precisely what `headroomRatioIsAJudgement` describes as "room for an
+ordinary feature without a conversation".
+
+The budget is therefore **re-floored rather than nudged**. A raise of 0.58 kB would leave the next
+change red on the same line, and a gate that fires on every push is one that gets bypassed rather
+than obeyed (ADR-0058). The floor is re-measured against `main` — never against the branch, or the
+change under test sets its own bar — and each budget re-derived by the rule the 2026-09-11 numbers
+were derived by, the smallest whole kB at or above floor × 1.05. Only the entry graph moves, to
+**437 kB**; 1.05 × today's CSS and largest lazy chunk round to the whole kB they already held.
+
+Three things are worth carrying out of it.
+
+- **The 2026-09-11 floor's spend is recorded in prose, not in a key.** `runGate`'s B7 reads a fixed
+  key set and refuses an unknown one, so the `previousFloor` block this was first drafted as would
+  have failed the gate it was being written for. It lives in `floor._` instead.
+- **Re-flooring against `main` makes the summary line mean something again.** It read "+20.56 kB
+  since the floor was measured" — five days and eight ADRs of accumulated growth, in which a
+  branch's own contribution is invisible. It now reads **+0.76 kB**, which is this epic's.
+- **This gate is deliberately outside `pnpm prepush` and that is not a §19.8 miss.** Its own
+  docblock gives the reason: it needs a production build, and making every push wait on one is how
+  a gate gets bypassed. It is a CI-only gate by design, and `check:ci-roster` excludes it
+  explicitly from both sides. The instinct to file this as the `check:adr-coverage` failure of
+  earlier in the same session was wrong, and checking the docblock rather than acting on the
+  instinct is the only reason it is not recorded here as one.
