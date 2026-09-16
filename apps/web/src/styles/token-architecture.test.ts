@@ -613,7 +613,14 @@ describe('weight is a governed axis', () => {
   // sentences; the mail, retention-disabled, retention-failing and policy-caveat alerts run to
   // three and four, and a reader scrolled to one of those cards is most of a page from the `Status`
   // summary that would otherwise identify it.
-  const SCREEN_WEIGHT_CEILING = 168;
+  // ...and 168 -> 157 (page consistency, M1): **ELEVEN** weights out, all of them the conversion
+  // rather than a cut. Eight screens hand-rolled `<h1 className="text-2xl font-semibold
+  // tracking-tight">` and `account.tsx` a ninth; `client-detail` and `project-detail` carried two
+  // each, the subject's name and the not-found branch. Every one moved into `PageHeader`, so the
+  // weights are still placed — just no longer by a screen, which is the distinction this ratchet
+  // exists to measure. FC-4 asked for a fall of at least ten against a derived thirteen; the
+  // remaining two are M2's three `<h2>` sites minus the one `SectionCard` reintroduces.
+  const SCREEN_WEIGHT_CEILING = 157;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

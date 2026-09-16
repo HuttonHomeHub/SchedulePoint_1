@@ -48,6 +48,25 @@ a reason that is not drift. Uniformity here means **the same rhythm within the f
 override, the archetype is wrong, and the finding goes back to the product owner rather than being
 papered over.
 
+### FC-1 amended at M1, in place and with the reason
+
+M1-T3 anticipated this outcome in writing before the measurement, and it is what happened:
+**`h1.top` reaches two values, not one — 75 px on seven screens and 103 px on the two that sit
+under `Breadcrumbs`.** The 28 px difference is the breadcrumb trail's own height, and the two
+breadcrumbed screens agree with each other to the pixel at both widths.
+
+**Clause 1 is therefore restated as: one value per group of screens with the same preceding
+chrome, and no more than two groups, each internally exact.** A screen that shows a trail starts
+lower than one that does not, and forcing them level would mean either deleting the trail or
+overlapping it — neither of which is a uniformity fix. This is an amendment, not a pass declared
+against a condition that meant something else, and it is written here rather than argued at judging
+time (ADR-0143: reading a condition's intent clause to get past it is what makes conditions
+decoration).
+
+**Clause 2 is unchanged and now passes structurally rather than coincidentally** — see
+`m1-measurement.md` §3 for the archetype defect it exposed and the instrument defect it exposed
+first.
+
 ---
 
 ## FC-2 — the chrome before the first row converges

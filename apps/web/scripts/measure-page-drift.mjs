@@ -172,6 +172,32 @@ const probe = () => {
         }
       : null,
     frameMaxWidth: frame ? getComputedStyle(frame).maxWidth : null,
+    /**
+     * **The page description, located semantically rather than positionally.**
+     *
+     * `descriptions` below is "every paragraph before the first table", which was the only thing
+     * available before `PageHeader` was adopted and which conflates three different things: the
+     * page's own description, a `SectionCard`'s, and a filter bar's prose. FC-1 clause 2 is about
+     * the **page** description's measure, and a probe that cannot tell those apart reports a
+     * divergence that is not there and a convergence that is not either — which is exactly what it
+     * did at M1's first run.
+     *
+     * `PageHeader` wires its description with `aria-describedby` from the `<h1>`, so the link is
+     * the locator: there is no guessing, and a screen that stops using the archetype reports
+     * `null` rather than silently reporting its next paragraph instead.
+     */
+    pageDescription: (() => {
+      const id = h1?.getAttribute('aria-describedby');
+      const el = id ? document.getElementById(id) : null;
+      if (!el) return null;
+      const box = el.getBoundingClientRect();
+      return {
+        chars: el.textContent.trim().length,
+        width: Math.round(box.width),
+        maxWidth: getComputedStyle(el).maxWidth,
+        top: Math.round(box.top),
+      };
+    })(),
     frameWidth: frame ? Math.round(frame.getBoundingClientRect().width) : null,
     descriptions: paras.slice(0, 4).map((p) => ({
       chars: p.textContent.trim().length,

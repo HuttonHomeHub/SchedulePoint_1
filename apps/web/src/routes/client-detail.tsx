@@ -1,7 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useClient } from '@/features/clients';
 import { CreateProjectButton, ProjectsTable } from '@/features/projects';
@@ -32,7 +32,7 @@ export function ClientDetailScreen(): React.ReactElement {
             { label: 'Not found' },
           ]}
         />
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Client not found</h1>
+        <PageHeader className="mt-2" title="Client not found" />
         {/* **An error, not an empty state** (`docs/specs/empty-state-consolidation/` §1.5.2, M2).
             This branch is `query.isError` — the client does not exist, was deleted, or the reader
             has no access. Drawn as a dashed centred box it read as "there is nothing here", which
@@ -64,15 +64,12 @@ export function ClientDetailScreen(): React.ReactElement {
           { label: client.data.name },
         ]}
       />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{client.data.name}</h1>
-          {client.data.description ? (
-            <p className="text-muted-foreground mt-1 text-sm">{client.data.description}</p>
-          ) : null}
-        </div>
-        {canWrite ? <CreateProjectButton orgSlug={orgSlug} clientId={clientId} /> : null}
-      </div>
+      <PageHeader
+        className="mt-2"
+        title={client.data.name}
+        description={client.data.description ?? undefined}
+        actions={canWrite ? <CreateProjectButton orgSlug={orgSlug} clientId={clientId} /> : null}
+      />
       <h2 className="mt-6 text-lg font-medium">Projects</h2>
       <div className="mt-3">
         <ProjectsTable orgSlug={orgSlug} clientId={clientId} canWrite={canWrite} />

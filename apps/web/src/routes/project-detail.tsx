@@ -1,7 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { ProjectCalendarsSection } from '@/features/calendars';
@@ -55,7 +55,7 @@ export function ProjectDetailScreen(): React.ReactElement {
             { label: 'Not found' },
           ]}
         />
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Project not found</h1>
+        <PageHeader className="mt-2" title="Project not found" />
         {/* **An error, not an empty state** (`docs/specs/empty-state-consolidation/` §1.5.2, M2).
             This branch is `query.isError` — the project does not exist, was deleted, or the reader
             has no access. Drawn as a dashed centred box it read as "there is nothing here", which
@@ -92,30 +92,29 @@ export function ProjectDetailScreen(): React.ReactElement {
   return (
     <PageContainer>
       <Breadcrumbs items={crumbs} />
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{project.data.name}</h1>
-          {project.data.description ? (
-            <p className="text-muted-foreground mt-1 text-sm">{project.data.description}</p>
-          ) : null}
-        </div>
-        {/* Flag OFF ⇒ render exactly the prior surface (byte-for-byte, no wrapper). Flag ON ⇒ the
-            "Import from file…" entry sits beside "New plan" (the entry self-gates on interchange:import). */}
-        {SCHEDULE_INTERCHANGE_ENABLED ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <ImportScheduleButton
-              orgSlug={orgSlug}
-              projectId={projectId}
-              projectName={project.data.name}
-              canImport={canImport}
-              canManageOrgCalendars={canManageOrgCals}
-            />
-            {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
-          </div>
-        ) : canWrite ? (
-          <CreatePlanButton orgSlug={orgSlug} projectId={projectId} />
-        ) : null}
-      </div>
+      {/* Flag OFF ⇒ render exactly the prior surface. Flag ON ⇒ the "Import from file…" entry sits
+          beside "New plan" (the entry self-gates on interchange:import). */}
+      <PageHeader
+        className="mt-2"
+        title={project.data.name}
+        description={project.data.description ?? undefined}
+        actions={
+          SCHEDULE_INTERCHANGE_ENABLED ? (
+            <>
+              <ImportScheduleButton
+                orgSlug={orgSlug}
+                projectId={projectId}
+                projectName={project.data.name}
+                canImport={canImport}
+                canManageOrgCalendars={canManageOrgCals}
+              />
+              {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
+            </>
+          ) : canWrite ? (
+            <CreatePlanButton orgSlug={orgSlug} projectId={projectId} />
+          ) : null
+        }
+      />
       <h2 className="mt-6 text-lg font-medium">Plans</h2>
       <div className="mt-3">
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />

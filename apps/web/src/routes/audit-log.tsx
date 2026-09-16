@@ -1,7 +1,7 @@
 import { useParams } from '@tanstack/react-router';
 
 import { NoticeStrip } from '@/components/ui/notice-strip';
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
@@ -38,7 +38,6 @@ export function AuditLogScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
       {/*
         Say what is recorded, not what an audit log sounds like it records — and say it as a RULE
         rather than an inventory. This sentence has now been wrong twice, in opposite directions.
@@ -55,17 +54,22 @@ export function AuditLogScreen(): React.ReactElement {
         the list never will. See the empty state below, which had the first problem from the other
         side.
       */}
-      <p className="text-muted-foreground mt-1 text-sm">
-        Newest first: everything that{' '}
-        <strong className="text-foreground font-medium">removes</strong> something — deleted or
-        restored clients, projects, plans and activities, dissolved summaries, removed links,
-        deleted calendars and resources — and everything that{' '}
-        <strong className="text-foreground font-medium">
-          changes the rules other people&rsquo;s work is judged by
-        </strong>
-        : who has access, scheduling settings, a shared calendar&rsquo;s working time, baselines,
-        what the shared libraries offer, and where an imported programme came from.
-      </p>
+      <PageHeader
+        title="Audit log"
+        description={
+          <>
+            Newest first: everything that{' '}
+            <strong className="text-foreground font-medium">removes</strong> something — deleted or
+            restored clients, projects, plans and activities, dissolved summaries, removed links,
+            deleted calendars and resources — and everything that{' '}
+            <strong className="text-foreground font-medium">
+              changes the rules other people&rsquo;s work is judged by
+            </strong>
+            : who has access, scheduling settings, a shared calendar&rsquo;s working time,
+            baselines, what the shared libraries offer, and where an imported programme came from.
+          </>
+        }
+      />
       <p className="text-muted-foreground mt-1 text-sm">
         Editing an activity&rsquo;s own fields — its name, dates, duration, lane or progress — is{' '}
         <strong className="text-foreground font-medium">deliberately not recorded</strong>: it

@@ -1,6 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { ClientsTable, CreateClientButton } from '@/features/clients';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -12,10 +12,10 @@ export function ClientsScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
-        {canWrite ? <CreateClientButton orgSlug={orgSlug} /> : null}
-      </div>
+      <PageHeader
+        title="Clients"
+        actions={canWrite ? <CreateClientButton orgSlug={orgSlug} /> : null}
+      />
       <div className="mt-6">
         <ClientsTable orgSlug={orgSlug} canWrite={canWrite} />
       </div>

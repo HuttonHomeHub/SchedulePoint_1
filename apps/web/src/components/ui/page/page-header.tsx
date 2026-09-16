@@ -44,7 +44,15 @@ export function PageHeader({
   const describedBy = description ? descriptionId : undefined;
   return (
     <div className={cn('flex items-start justify-between gap-4', className)}>
-      <div className="min-w-0">
+      {/* **`flex-1` and `max-w-prose` together are what make the description ONE measure.**
+          With `min-w-0` alone this column is an `auto`-width flex item, so it shrink-wraps to its
+          content: a 42-character description rendered 267 px wide and a 116-character one 736 px,
+          on screens sitting side by side in the same product. That is not a measure at all — it is
+          the text's own width wearing one — and M1 measured exactly that divergence
+          (`docs/specs/page-consistency/m1-measurement.md`). `flex-1` gives the column the frame's
+          width and `max-w-prose` caps the line length inside it, which is the same pairing
+          `EmptyState` already uses one file over. */}
+      <div className="min-w-0 flex-1">
         <h1
           className="text-2xl font-semibold tracking-tight wrap-anywhere"
           {...(describedBy ? { 'aria-describedby': describedBy } : {})}
@@ -52,7 +60,7 @@ export function PageHeader({
           {title}
         </h1>
         {description ? (
-          <p id={describedBy} className="text-muted-foreground mt-1 text-sm">
+          <p id={describedBy} className="text-muted-foreground mt-1 max-w-prose text-sm">
             {description}
           </p>
         ) : null}

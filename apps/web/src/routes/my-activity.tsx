@@ -1,4 +1,4 @@
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { AUDIT_FILTERS_ENABLED, AUDIT_SELF_SECURITY_ENABLED } from '@/config/env';
 import { useSelfAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
@@ -35,16 +35,15 @@ export function MyActivityScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <h1 className="text-2xl font-semibold tracking-tight">My activity</h1>
       {/*
         This screen is the only place sign-ins are visible — they carry no organisation, so the
         organisation log structurally cannot show them. Say so here, because a reader who went
         looking there first needs to know they are not missing.
       */}
-      <p className="text-muted-foreground mt-1 text-sm">
-        What you did, across every organisation you belong to — including your sign-ins, which
-        appear here and nowhere else.
-      </p>
+      <PageHeader
+        title="My activity"
+        description="What you did, across every organisation you belong to — including your sign-ins, which appear here and nowhere else."
+      />
       <p className="text-muted-foreground mt-1 text-sm">
         Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
         is on their organisation&rsquo;s audit log, not here. Inside a plan, deletions and
