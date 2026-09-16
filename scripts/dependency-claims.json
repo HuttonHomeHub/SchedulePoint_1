@@ -16,7 +16,8 @@
     "playwright-core": "1.63.0",
     "tailwindcss": "4.3.3",
     "@tanstack/query-core": "5.102.8",
-    "@nestjs/core": "11.2.3"
+    "@nestjs/core": "11.2.3",
+    "@nestjs/common": "11.2.3"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -1151,6 +1152,14 @@
         "docs/specs/staff-console-design/feature-spec.md",
         "docs/specs/staff-console-design/implementation-plan.md"
       ]
+    },
+    {
+      "ref": "parse-uuid.pipe.js:37-52",
+      "package": "@nestjs/common",
+      "path": "pipes/parse-uuid.pipe.js",
+      "lines": "37-52",
+      "anchor": "isUUID(str, version = 'all') {",
+      "citedBy": ["apps/api/src/common/validation/uuid.ts", "docs/TECH_DEBT.md"]
     }
   ]
 }

@@ -4982,6 +4982,69 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   **double a dropdown's footprint** (≈1,715 px against ≈900), on a page that still falls from 12.8
   screens to 6.1.
 
+- **ADR-0144** _(Accepted; M0–M6 landed 2026-09-15)_ — A landing question is costed before it is
+  answered. The product owner asked to _"fully revitalise the landing page"_ and reported a second
+  thing with it — the landing counted pending invitations and linked to Members, and Members listed
+  members, so there was **nowhere in the product to see the invitation the landing was counting**.
+  Measured on a fixture built to hold every reportable state, `/orgs/:slug` answered **2 of the 7**
+  questions a returning planner arrives with, against the spec's own estimate of 3 — and the
+  difference was not rounding: Q3 ("is anything waiting on me?") **is** answered, at `y = 1053`,
+  **fifty-three pixels below the fold** on the product owner's own 1646 px screen. The one question
+  the spec conceded was already answered is answered where the reader has to go looking.
+  **The decision is a ladder whose rungs are ordered by whether their cost was known**, each with
+  its own gate and the last explicitly withdrawable: R1 freshness (zero marginal rows), R2 the
+  standing of the plans already on the page (`O(activities in ≤ 8 plans)`), R3 the same for **every**
+  active plan. R3 is the only part whose cost was unknown and the only part that can go without
+  leaving a hole, because R2 already covers what a reader is looking at. The standing read is
+  **engine-free by construction** — every column was written by the last recalculation or frozen by
+  a baseline capture, and `computeSchedule` is not called, not imported and not reachable from the
+  module graph (ADR-0125 D1's strong form, deliberately not ADR-0116 D7's weaker sibling), pinned by
+  `plan-standing-engine-free.structural.spec.ts`. A section the caller may not read is **omitted,
+  never zeroed**, and the gate is a **soft** `can()` rather than the plan's `assertCan`, which is
+  wrong in a way worth recording: it would 403 the whole landing for a Viewer, and **you cannot omit
+  a field from a payload you threw**. Movement is measured in the revision comparison's frame, not a
+  second one, with the walker injected rather than imported; it returns `null` and a fifth
+  `NOT_ASSESSABLE` reason rather than a number in some other frame.
+  **Three of its own decisions were withdrawn or reversed on measurement, and all three are the
+  entry's point.** **R3** measured `3,051 / 2,129 / 95,602 / 578,024` with a real `JIT:` node —
+  **5.8× over** a condition written as an _estimate_ deliberately, because a JIT cliff fires on a
+  small tenant _because a different tenant grew_, which no timing on one database can see; taken
+  before the rung was wired to anything, so withdrawing cost a `git stash drop`.
+  `database-architect` then **corrected the diagnosis** (178.7 of 184.33 is heap access, not
+  aggregation) and designed an `INCLUDE` index that is faster at every shape — and it is **not
+  built**, because it spends ADR-0098's HOT exemption: measured over five recalculations, HOT goes
+  **28.4% → 0.0%** and index growth **+92% → +447%**, deterministically, since any index making this
+  aggregate index-only must contain `early_finish`. It serves nothing else, and its cost falls on
+  every recalculation forever while the deployed installation holds 28 activities. Two named
+  triggers reopen it. The **two-column grid** went the same way on arithmetic over the viewport —
+  two columns at the measured 846 px need 1,716 px and the viewport is 1646 — the seventh
+  consecutive width expectation in this repository contradicted by its own measurement, and the
+  seventh in the same direction. And the **section order was searched rather than preferred**: all
+  24 orderings scored against measured section heights, the maximum is **4 of 7**, and the plan's
+  specified sequence puts Q3 at **2006** — twice as far past the fold as the defect the epic was
+  opened on.
+  **The M6 gate pass found a defect that was in no single file.** M3 decided the standing section
+  would not repeat freshness because "Recently changed" states it once for the same eight plans —
+  true and correct **while that section sat below it**; M5 moved it **above**, so a planner read
+  "14 working days later" some 630 px before the sentence qualifying it, leaving the caveat further
+  from its number than before the epic began. Neither decision is wrong; the composition is, which
+  is this epic's own premise failing. The same two fields had been reported one review earlier as
+  dead payload to delete — both readings reasonable, only one right: **they were not dead, they were
+  unbuilt**. Also folded: a flags list announced as prose because Tailwind v4's Preflight drops the
+  implicit roles (ADR-0122's third instance, first shipped without the fix — and the unit case
+  asserting `getAllByRole('listitem')` **passed against the broken markup**, since jsdom does not
+  model CSS-triggered role suppression); a date formatted by a per-render `Intl.DateTimeFormat` in
+  the **browser's** locale beside a shared module-scoped en-GB helper, under a test that had been
+  **softened to tolerate** the inconsistency rather than remove it; and **nothing pinning the
+  section order at all**, M5's whole result living in a hand-run script. The backend review then
+  corrected the epic's reading of its own central number: the bounded rung's estimate is flat across
+  shapes and **the wall clock is not**, because `activities.plan_id` is a high-cardinality UUID and
+  Postgres's default statistics give it one blended per-value estimate.
+  **This entry was missing from this register until the 2026-09-16 reconciliation pass** — Accepted,
+  indexed in `docs/adr/README.md`, cited by number, and absent from the file a reader treats as the
+  register. Eighth recorded instance of the class `docs/TECH_DEBT.md` #291 tracks, found by the one
+  check that row says nothing automates: comparing every `docs/adr/*.md` against this section.
+
 - **ADR-0145** _(Accepted; M0–M8 landed 2026-09-16)_ — A screen is assembled from the archetypes,
   and a table answers one question one way. ADR-0097 Landing B built eight page archetypes and made
   assembling from them a **gate on one screen**; nine others kept their hand-rolled frames, and the

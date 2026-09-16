@@ -722,12 +722,22 @@ jobs:
         if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:copy-paste
 
-      # Theme-parametrised accessibility (ADR-0055 §5). Every other suite scans the DEFAULT
-      # theme, which is how the Corporate theme shipped with six contrast defects past a green
-      # axe run. This one boots the shell once per picker option — light, dark, corporate, and
-      # system under dark emulation — and additionally asserts the six defect sites by name,
-      # because an invisible button is not an axe rule and axe measures no hover state.
-      - name: Web end-to-end tests (all four themes, accessibility, flag OFF)
+      # Accessibility across every STORED THEME PREFERENCE (ADR-0055 §5, rescoped by ADR-0097).
+      # This comment and the step name below described four themes and a picker until the
+      # 2026-09-16 reconciliation pass — more than a month after ADR-0097 withdrew light, dark
+      # and system, leaving `THEME_SELECTORS` a one-element list. The SUITE had been rescoped
+      # correctly and says so in its own docblock; only the description beside it had not, which
+      # is the one copy a reader of this file meets.
+      #
+      # What it proves now: a reader whose storage still holds `dark`, `system`, `light` or
+      # `corporate` from before the collapse gets the SAME shell as everyone else. The boot
+      # script stamps nothing and the provider stamps nothing, so a flash is unrepresentable —
+      # but that claim spans a parser-blocking `<script src>`, the real bundle and an actual
+      # first paint, and jsdom has none of the three. `system` keeps its dark emulation because
+      # `prefers-color-scheme` no longer selects anything and only a browser that really prefers
+      # dark can show that. It also asserts the six original Corporate defect sites by name:
+      # an invisible button is not an axe rule, and axe measures no hover or `aria-current` state.
+      - name: Web end-to-end tests (every stored theme preference, accessibility, flag OFF)
         if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:designed-ui
 
