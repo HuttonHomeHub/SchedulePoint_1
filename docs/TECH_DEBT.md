@@ -10563,6 +10563,33 @@ to three sentences and a trailing fact, and at 464 px the trailing fact is takin
 comfortable. Below `md` (768 px) the grid correctly collapses to one column, so this is a band
 roughly 768–1400 px wide.
 
+### 334. The activities panel renders every row of a plan, under a docblock claiming it does not
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M0, read) · **Size:** M · **Owner:** web
+
+`components/layout/workspace/activity-bottom-panel.tsx:19`'s docblock credits `ActivitiesTable` with
+**virtualization**. It has none — `grep virtual` in `features/activities/components/ActivitiesTable.tsx`
+returns nothing, and `DataTable` (`components/ui/data-table.tsx:247`) `rows.map`s every row it is
+given. So the panel renders a full `<tr>` per activity, inside the capped scroller at `:108`
+(`min-h-0 flex-1 overflow-y-auto`), with **no sticky `<thead>`** — the header scrolls away on the
+first wheel click and the columns are then unlabelled for the rest of the list.
+
+**The scale is the plan's, not a page's.** ADR-0026's own gate is written at 2,000 activities and the
+seed catalogue ships plans at that size (ADR-0066), so this is up to ~2,000 un-virtualized rows in a
+~400 px box on the product's primary surface.
+
+**It is filed rather than fixed because it is canvas-adjacent and was found sideways.** The
+page-consistency epic's M0 turned it up while establishing that the landing's capped-box model does
+not transfer to the table screens — this is that same model, already shipped, at the one scale where
+it hurts. The product owner scoped it out of that epic deliberately (2026-09-16) so it would not
+widen into the plan workspace.
+
+**What is NOT yet known**, and should be measured before anyone designs a fix: whether it is
+actually slow. Nobody has profiled it, and `docs/TECH_DEBT.md` #75's history here is that the
+alarming reading and the reassuring one were both half-truths. The cheap first step is the ADR-0128
+staff probe or a `measure-*` harness at 500 and 2,000 activities; the stale docblock should be
+corrected either way, because a false claim of virtualization is exactly what stops anyone looking.
+
 ### 331. The web coverage ratchet was not measured for the landing epic, and the API branch floor has 0.23pp of headroom
 
 **Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, test review) · **Size:** S · **Owner:** web
