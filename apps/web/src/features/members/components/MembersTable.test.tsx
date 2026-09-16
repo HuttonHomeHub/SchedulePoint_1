@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { memberKeys } from '../api/use-members';
 
-import { apiFetch } from '@/lib/api/client';
-
 import { MembersTable } from './MembersTable';
+
+import { apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

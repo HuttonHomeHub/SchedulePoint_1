@@ -18,10 +18,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { MenuItem } from '@/components/ui/menu';
-import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { SectionCard } from '@/components/ui/page';
 import { Label } from '@/components/ui/label';
+import { MenuItem } from '@/components/ui/menu';
+import { SectionCard } from '@/components/ui/page';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { Select } from '@/components/ui/select';
 import {
   ARCHIVED_BADGE,

@@ -11,7 +11,7 @@ import { Menu } from '@/components/ui/menu';
  * a second copy of a naming contract is what this component exists to remove, and a test is as
  * good a place for one to drift as a screen.
  */
-export function rowActionsLabel(subject: string, context?: string | undefined): string {
+export function rowActionsLabel(subject: string, context?: string): string {
   return context === undefined ? `Actions for ${subject}` : `Actions for ${subject} in ${context}`;
 }
 

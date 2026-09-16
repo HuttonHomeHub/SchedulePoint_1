@@ -6,9 +6,9 @@ import { axe } from 'vitest-axe';
 
 import { ResourcesTable } from './ResourcesTable';
 
-import { clickRowAction } from '@/test/row-actions';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
+import { clickRowAction } from '@/test/row-actions';
 
 /**
  * The resource library's M4 management layer with `VITE_LIBRARY_SCOPING` ON (ADR-0053 §4): search,

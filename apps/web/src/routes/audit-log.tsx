@@ -2,12 +2,12 @@ import { useParams } from '@tanstack/react-router';
 
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { PageContainer, PageHeader } from '@/components/ui/page';
-import { CoverageDisclosure } from '@/features/audit/components/CoverageDisclosure';
 import { Spinner } from '@/components/ui/spinner';
 import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
 import { AuditFilterBar } from '@/features/audit/components/AuditFilterBar';
+import { CoverageDisclosure } from '@/features/audit/components/CoverageDisclosure';
 import {
   EMPTY_AUDIT_FILTER,
   isAuditFilterEmpty,

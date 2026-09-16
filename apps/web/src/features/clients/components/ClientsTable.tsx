@@ -1,5 +1,6 @@
 import type { ClientSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
+import { X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -10,14 +11,13 @@ import { ClientFormDialog } from './ClientFormDialog';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { DataTable, type Column } from '@/components/ui/data-table';
 import { MenuItem } from '@/components/ui/menu';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { DataTable, type Column } from '@/components/ui/data-table';
 import { SearchField } from '@/components/ui/search-field';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
-import { X } from 'lucide-react';
 
 /**
  * The organisation's clients as a table. Each name links to the client's

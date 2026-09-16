@@ -8,9 +8,9 @@ import { resourceKeys } from '../api/use-resources';
 
 import { ResourcesTable } from './ResourcesTable';
 
-import { clickRowAction, openRowActions } from '@/test/row-actions';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
+import { clickRowAction, openRowActions } from '@/test/row-actions';
 
 // `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE library table —
 // a flat list with no search field, no kind/archived filters, no Group column and no archive row

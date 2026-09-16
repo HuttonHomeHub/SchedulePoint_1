@@ -155,6 +155,43 @@ and the class-pair rule; `docs/UX_STANDARDS.md`'s row-action threshold and the p
 rule), and both are now written — which is the point of §5 of the spec: they exist so the _next_
 table is not a judgement call.
 
+## 6b. The gate nobody ran, and what it had been holding
+
+**`pnpm prepush` was not run once between M1 and M8**, and the first complete run of this epic
+found **49 lint errors in `apps/web`, every one of them this epic's**:
+
+| Source                                                                                                   | Errors             |
+| -------------------------------------------------------------------------------------------------------- | ------------------ |
+| `import/order` — the M4 `RowActionsMenu` imports and M8's `CoverageDisclosure`                           | 26 across 13 files |
+| `no-undef` — the two M0 harnesses' browser-context `probe()` functions                                   | 27 across 2 files  |
+| `@typescript-eslint/no-duplicate-type-constituents` — `context?: string \| undefined` on a **parameter** | 1                  |
+
+None of it was pre-existing: `git diff b85a6d31..HEAD` touches neither `apps/web/eslint.config.js`
+nor `packages/config`, and the one sibling harness that looked implicated
+(`measure-staff-history.mjs`) lints clean on its own, carrying the per-line `no-undef` disables the
+new pair lacked. That last point is worth stating because the first attribution was **wrong**: a
+`grep -B2` over eslint's text output assigned those errors to the wrong file, and only a
+`--format json` pass gave a per-file count. An instrument reporting a filename it did not measure is
+this epic's own §2.1 finding in miniature.
+
+**The cause is §19.8 exactly.** That section says the gate is **one command** and that running its
+parts by hand is how a gate gets missed — and across seven milestones the parts were what ran:
+targeted `vitest` runs, `tsc --noEmit`, individual `check:*` scripts. `pnpm lint` was never among
+them. It did not surface in CI either, and that is not CI's fault: `main` carries no branch
+protection (§8), so the `quality` job reports and cannot block, and **§19.9 is the only merge gate**
+— a person reading the check runs. This epic reached its merge boundary with nothing having read
+them yet.
+
+The two harnesses' fix is scoped rather than blanket: a `/* eslint-disable no-undef */` around the
+**one browser-context function** in each, with the Node half above and below it keeping the rule.
+A file-level disable would have been shorter and would have switched the rule off for the Playwright
+driver code that is the rest of the file.
+
+**`check:reconcile-due` also WARNed on the same run** — 8 ADRs filed since the 2026-09-11 pass,
+against a threshold of exactly 8 (ADR-0120's T = 8, derived from p75 = 7.50). It is advisory by
+design and is recorded here rather than actioned inside this epic: a reconciliation pass is its own
+work under §21, and folding one into an epic's last milestone is what ADR-0105 exists to stop.
+
 ## 7. Filed rather than fixed
 
 - **#338** — two hand-rolled `<details>`, two `<summary>` treatments. Both pre-date the epic; a

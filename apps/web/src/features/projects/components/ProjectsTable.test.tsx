@@ -4,11 +4,11 @@ import type * as ReactRouter from '@tanstack/react-router';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { openRowActions } from '@/test/row-actions';
-
 import { projectKeys } from '../api/use-projects';
 
 import { ProjectsTable } from './ProjectsTable';
+
+import { openRowActions } from '@/test/row-actions';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),

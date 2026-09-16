@@ -52,6 +52,14 @@ const PAGES = [
   ['account (declared exception)', () => `/account`],
 ];
 
+/*
+ * **This function is serialised and runs INSIDE the browser**, so `document`, `window` and
+ * `getComputedStyle` are the page's globals rather than Node's. The lint config's browser block
+ * covers `public/**` only (ADR-0074's theme boot), and this file is a Node script that happens to
+ * carry one browser-context function, so the disable is scoped to exactly that function rather
+ * than to the file — the Node half above and below it keeps `no-undef`.
+ */
+/* eslint-disable no-undef */
 const probe = () => {
   const main = document.querySelector('main');
   const r = (el) => (el ? el.getBoundingClientRect() : null);
@@ -229,6 +237,7 @@ const probe = () => {
     tables,
   };
 };
+/* eslint-enable no-undef */
 
 // The same discovery the shoot harness does — this container ships Chromium under
 // /opt/pw-browsers and has no headless-shell build, so a bare launch() throws.

@@ -8,9 +8,9 @@ import { calendarKeys } from '../api/use-calendars';
 
 import { ProjectCalendarsSection } from './ProjectCalendarsSection';
 
-import { clickRowAction, openRowActions } from '@/test/row-actions';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
+import { clickRowAction, openRowActions } from '@/test/row-actions';
 
 // The section only ever renders behind the flag (the project screen gates it), so it is on here.
 vi.mock('@/config/env', async (importOriginal) => ({

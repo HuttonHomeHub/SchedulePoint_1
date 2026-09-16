@@ -117,6 +117,14 @@ const seeded = await page.evaluate(
 );
 console.error(`seeded ${JSON.stringify(seeded)}`);
 
+/*
+ * **This function is serialised and runs INSIDE the browser**, so `document`, `window` and
+ * `getComputedStyle` are the page's globals rather than Node's. The lint config's browser block
+ * covers `public/**` only (ADR-0074's theme boot), and this file is a Node script that happens to
+ * carry one browser-context function, so the disable is scoped to exactly that function rather
+ * than to the file — the Node half above and below it keeps `no-undef`.
+ */
+/* eslint-disable no-undef */
 const probe = () => {
   const main = document.querySelector('main');
   const h1 = document.querySelector('h1');
@@ -156,6 +164,7 @@ const probe = () => {
     h1Top: h1 ? Math.round(h1.getBoundingClientRect().top) : null,
   };
 };
+/* eslint-enable no-undef */
 
 const PAGES = [
   ['clients', `/orgs/${SLUG}/clients`],
