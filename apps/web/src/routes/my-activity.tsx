@@ -14,6 +14,9 @@ import { useUrlFilterState } from '@/hooks/use-url-filter-state';
 /** Ties the "what a Not signed in row means" note to the table it qualifies (`aria-describedby`). */
 const ATTEMPTS_NOTE_ID = 'my-activity-attempts-note';
 
+/** Ties the relocated coverage rule to the same table (`aria-describedby` takes a list). */
+const COVERAGE_ID = 'my-activity-coverage';
+
 /**
  * The caller's own audit events (`/me/activity`, ADR-0072).
  *
@@ -44,12 +47,19 @@ export function MyActivityScreen(): React.ReactElement {
         title="My activity"
         description="What you did, across every organisation you belong to — including your sign-ins, which appear here and nowhere else."
       />
-      <p className="text-muted-foreground mt-1 text-sm">
-        Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
-        is on their organisation&rsquo;s audit log, not here. Inside a plan, deletions and
-        structural changes appear; editing an activity&rsquo;s own fields is{' '}
-        <strong className="text-foreground font-medium">deliberately not recorded</strong>.
-      </p>
+      {/* **Relocated, not cut** — and the split is deliberate: this is a coverage rule, while the
+          paragraph BELOW the disclosure is a security caveat. Only the coverage moves. */}
+      <details className="mt-3">
+        <summary className="text-muted-foreground cursor-pointer text-sm select-none">
+          What this records
+        </summary>
+        <p id={COVERAGE_ID} className="text-muted-foreground mt-2 text-sm">
+          Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
+          is on their organisation&rsquo;s audit log, not here. Inside a plan, deletions and
+          structural changes appear; editing an activity&rsquo;s own fields is{' '}
+          <strong className="text-foreground font-medium">deliberately not recorded</strong>.
+        </p>
+      </details>
       {/*
         What a "Not signed in" row means, and — as importantly — what it does NOT mean. This screen
         is telling somebody they may be under attack, and the two things a reader will jump to are
@@ -84,7 +94,11 @@ export function MyActivityScreen(): React.ReactElement {
           // `role="region"`, so a reader navigating by landmark lands inside it having skipped
           // whatever precedes it — and what precedes it here is the sentence saying a row does not
           // mean anyone got in.
-          describedById={AUDIT_SELF_SECURITY_ENABLED ? ATTEMPTS_NOTE_ID : undefined}
+          /* Both, space-separated: `aria-describedby` takes a list, and the two notes answer
+             different questions — what this log covers, and what a "Not signed in" row proves. */
+          describedById={
+            AUDIT_SELF_SECURITY_ENABLED ? `${COVERAGE_ID} ${ATTEMPTS_NOTE_ID}` : COVERAGE_ID
+          }
           emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation and anything you deleted or restructured in a plan."
           emptyFilteredMessage={
             narrowed

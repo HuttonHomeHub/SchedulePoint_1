@@ -131,9 +131,19 @@ describe('self-security surface, flag ON (ADR-0073 C2.4)', () => {
     const region = screen.getByRole('region', { name: 'My audit events' });
     const describedBy = region.getAttribute('aria-describedby');
     expect(describedBy).not.toBeNull();
-    expect(document.getElementById(describedBy ?? '')).toHaveTextContent(
-      /Failed sign-ins against your email address/,
-    );
+
+    // **A LIST, not an id.** This read `getElementById(describedBy)` until the page-consistency
+    // epic's M3, when the relocated coverage rule joined this caveat on the same attribute — at
+    // which point a single-id lookup returned `null` and the test failed while the screen was
+    // correct. `aria-describedby` has always taken a space-separated list; the assertion simply
+    // never had to cope with one. What it is really asserting is unchanged: this caveat is among
+    // the things that describe the region.
+    const described = (describedBy ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(described).toMatch(/Failed sign-ins against your email address/);
   });
 
   it('marks the failure as failed in text, not by colour alone', async () => {

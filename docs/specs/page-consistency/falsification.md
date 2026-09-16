@@ -97,6 +97,31 @@ be presented later as something the epic quietly achieved or quietly missed.
 **Withdrawal bar (unchanged):** if the worst screen falls by **< 60 px**, the **density half is
 withdrawn** and the epic ships as uniformity only, standing on FC-1/FC-4/FC-5.
 
+### FC-2 FAILED at M3, and the bar fired. The density half is WITHDRAWN.
+
+Measured 2026-09-16 in one sitting (`m3-measurement.md`): **spread 234 → 210 px against a bar of
+≤ 80, and the worst screen fell 32 px against a bar of ≥ 100 and a withdrawal threshold of 60.**
+
+Nothing built in M3 is reverted — it is a real 32 px and a tenth row on the densest screen in the
+estate. What is withdrawn is the epic's **claim** to density as an outcome, and any later milestone
+justified by it. M4 proceeds on uniformity, which is the ground the product owner approved it on.
+
+**Two faults in the condition's own derivation are recorded rather than used to relax it after the
+fact**, because the bar is not re-read and the judging point is not deferred to a milestone that
+would answer better:
+
+1. It costed the prose being removed and not the **affordance replacing it**. The disclosure's
+   summary and margin are **32 px** — most of a third of the ~108 px block it hides.
+2. It reasoned about the term in front of it rather than the total it constrained. The dominant
+   term is the **filter bar at 138 px**, present on three of the five screens and absent from
+   clients — so a spread of ≤ 80 was unreachable by editing prose even if every paragraph on every
+   screen had been deleted outright.
+
+A third finding is an interaction nobody costed: **FC-1's `max-w-prose` cap took 20 px back from
+FC-2** on the one screen the density half was aimed at, because the audit log's one-sentence
+description wraps to two lines at 546 px where it was one at 1104. Neither change is wrong; they
+were never measured together.
+
 **Instrument:** `apps/web/scripts/measure-page-density.mjs`.
 
 ---
