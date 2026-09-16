@@ -6,6 +6,7 @@ import { axe } from 'vitest-axe';
 
 import { ResourcesTable } from './ResourcesTable';
 
+import { clickRowAction } from '@/test/row-actions';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
@@ -135,7 +136,7 @@ describe('ResourcesTable — search, filters & archive (flag on)', () => {
 
   it('archives with the row version and unarchives an archived row', async () => {
     renderTable();
-    fireEvent.click(await screen.findByRole('button', { name: 'Archive Crew A' }));
+    await clickRowAction('Crew A', 'Archive');
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(apiFetch).toHaveBeenCalledWith('/organizations/acme/resources/crew/archive', {
@@ -144,7 +145,7 @@ describe('ResourcesTable — search, filters & archive (flag on)', () => {
     });
 
     vi.mocked(apiFetch).mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Unarchive CR600 Crawler Crane' }));
+    await clickRowAction('CR600 Crawler Crane', 'Unarchive');
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(apiFetch).toHaveBeenCalledWith('/organizations/acme/resources/crane/unarchive', {
       method: 'POST',
@@ -157,7 +158,7 @@ describe('ResourcesTable — search, filters & archive (flag on)', () => {
     vi.mocked(apiFetch).mockRejectedValue(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'This was changed elsewhere.' }),
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Archive Crew A' }));
+    await clickRowAction('Crew A', 'Archive');
 
     expect(await screen.findByText('This was changed elsewhere.')).toBeInTheDocument();
   });

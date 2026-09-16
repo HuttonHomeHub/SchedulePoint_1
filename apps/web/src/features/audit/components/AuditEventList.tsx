@@ -129,7 +129,18 @@ export function AuditEventList({
             <>
               <p className="text-muted-foreground text-sm">{emptyFilteredMessage}</p>
               {onClearFilter === undefined ? null : (
-                <Button variant="outline" size="sm" className="mt-3" onClick={onClearFilter}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={onClearFilter}
+                  /* Named for its context: `AuditFilterBar` renders a `Clear filters` of its own
+                     and both are visible on a filtered-to-nothing log, so the bare string was two
+                     controls a reader could not tell apart by name. Pre-existing; found while
+                     copying this bar's shape to the two library screens (page-consistency M4). The
+                     visible text is unchanged and the accessible name contains it (WCAG 2.5.3). */
+                  aria-label="Clear filters and show all events"
+                >
                   Clear filters
                 </Button>
               )}

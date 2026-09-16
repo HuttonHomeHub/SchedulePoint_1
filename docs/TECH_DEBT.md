@@ -10590,6 +10590,32 @@ alarming reading and the reassuring one were both half-truths. The cheap first s
 staff probe or a `measure-*` harness at 500 and 2,000 activities; the stale docblock should be
 corrected either way, because a false claim of virtualization is exactly what stops anyone looking.
 
+### 335. `DataTable`'s `headClassName` / `cellClassName` replace the default rather than merging it
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M4-T2, read) · **Size:** S · **Owner:** web
+
+`components/ui/data-table.tsx:151`, `:162`, `:233` and `:253` each read
+`column.headClassName ?? 'py-2 pr-4 font-medium'` — a **replacement**, not a merge. `cn()` is not
+called. So a caller adding one class to a column (a width preference, an alignment) silently drops
+the cell padding and, on a header, the weight — and the loss is invisible at the call site, because
+the caller wrote one class and got exactly the one class they wrote.
+
+**It is not currently causing a defect**, which is why this is a row rather than a fix: every caller
+in the estate restates the default alongside whatever it adds, including the four width preferences
+page-consistency M4-T2 added. The exposure is that nothing makes them, and the failure mode is a
+table row losing its padding in one column on one screen — which looks like a nudge rather than a
+bug.
+
+**The fix is `cn(DEFAULT, column.headClassName)`, and it is not free**, which is the reason to
+measure before doing it: `cn` merges through `tailwind-merge`, so a caller that today overrides the
+default by replacing it — `'hidden py-2 pr-4 font-medium lg:table-cell'` is the shape used for
+responsive columns — would keep working, but a caller who relies on the padding being **absent**
+would silently regain it. Every `headClassName` and `cellClassName` in the estate needs reading
+before the merge lands, and the conversion is what proves it safe rather than the change itself.
+
+Raised while adding width preferences to four tables, where restating `py-2 pr-4 font-medium` beside
+`md:w-32` felt like ceremony until the `??` was read.
+
 ### 331. The web coverage ratchet was not measured for the landing epic, and the API branch floor has 0.23pp of headroom
 
 **Status:** open · **Verified:** 2026-09-15 · **Raised:** 2026-09-15 (organisation-landing M6, test review) · **Size:** S · **Owner:** web

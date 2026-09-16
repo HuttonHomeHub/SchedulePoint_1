@@ -9,6 +9,8 @@ import { ClientFormDialog } from './ClientFormDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { MenuItem } from '@/components/ui/menu';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
@@ -61,8 +63,16 @@ export function ClientsTable({
       srHeader: true,
       headClassName: 'py-2 font-medium',
       cellClassName: 'py-2 text-right whitespace-nowrap',
+      /* **One row-action shape** (page-consistency M4): the primary action stays visible and the
+         rest move behind a `⋯`, which is the shape ADR-0097 Landing F1 decided on the calendars
+         table. Landing F asked "which tables are crowded?" and correctly answered "one", leaving
+         this one alone; this epic asks a different question — "do these tables answer the same
+         question three ways?" — and the answer was yes. The cost is stated rather than glossed:
+         deleting a client is two presses instead of one, which the product owner accepted on the
+         grounds that the buried action is the destructive one and a moment's friction is cheapest
+         there. */
       cell: (client) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -71,17 +81,17 @@ export function ClientsTable({
           >
             Edit
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setDeleteError(null);
-              setDeleting(client);
-            }}
-            aria-label={`Delete ${client.name}`}
-          >
-            Delete
-          </Button>
+          <RowActionsMenu subject={client.name}>
+            <MenuItem
+              destructive
+              onSelect={() => {
+                setDeleteError(null);
+                setDeleting(client);
+              }}
+            >
+              Delete
+            </MenuItem>
+          </RowActionsMenu>
         </div>
       ),
     });

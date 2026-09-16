@@ -166,9 +166,12 @@ So it went to the product owner with both consequences costed — accept 2 px an
 treatment, or revert M2 and keep three — and **they accepted the 2 px**.
 
 **Clause amended: a table may lose width attributable to a section frame it did not previously
-have, bounded at 2 px.** Anything else, and any loss on a table whose framing is unchanged, still
-fails and is still reverted rather than reinterpreted. The bound is the measured border, not a
-tolerance chosen to fit: a fourth pixel would be something other than the frame.
+have — 2 px of border, which reads as 1–3 px once it lands either side of a sub-pixel column
+boundary.** That range is what was measured and what the product owner accepted (`m2-measurement.md`
+§1); this clause said "bounded at 2 px" until M4 re-measured and the compression was corrected
+rather than left to be argued about later. Anything else, and any loss on a table whose framing is
+unchanged, still fails and is still reverted rather than reinterpreted. The bound is the measured
+border, not a tolerance chosen to fit: a fourth pixel would be something other than the frame.
 
 ---
 

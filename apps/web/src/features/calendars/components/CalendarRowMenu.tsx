@@ -1,9 +1,7 @@
 import type { CalendarSummary } from '@repo/types';
-import { MoreHorizontal } from 'lucide-react';
-import { useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
-import { Menu, MenuItem } from '@/components/ui/menu';
+import { MenuItem } from '@/components/ui/menu';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 
 /**
  * A calendar row's **secondary** actions (ADR-0097 Landing F1).
@@ -42,57 +40,26 @@ export function CalendarRowMenu({
   onToggleArchived: () => void;
   onDelete: () => void;
 }): React.ReactElement {
-  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
   return (
-    <>
-      <Button
-        ref={triggerRef}
-        variant="ghost"
-        size="icon-sm"
-        // The name carries the row's subject, because a table of these renders one per row and a
-        // bare "Actions" repeated forty times tells a screen-reader user nothing about which. It is
-        // the SAME string as the menu's own label, so the phrase a reader hears opening the menu is
-        // the phrase they hear landing inside it — the convention `GanttRowMenu`, `HierarchyTree`
-        // and `ActivitiesTable` already share. This read `More actions: …` until the component gate
-        // pointed out it was a one-off on an otherwise identical control.
-        aria-label={`Actions for ${calendar.name}`}
-        aria-haspopup="menu"
-        aria-expanded={anchor !== null}
-        onClick={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          setAnchor({ x: rect.left, y: rect.bottom });
-        }}
-      >
-        <MoreHorizontal aria-hidden="true" className="size-4" />
-      </Button>
-      <Menu
-        open={anchor !== null}
-        onClose={() => setAnchor(null)}
-        anchor={anchor ?? { x: 0, y: 0 }}
-        label={`Actions for ${calendar.name}`}
-        restoreFocusRef={triggerRef}
-      >
-        {calendar.scope === 'PROJECT' ? (
-          <MenuItem
-            onSelect={onMoveToOrg}
-            disabled={!canManageOrg}
-            {...(canManageOrg
-              ? {}
-              : {
-                  disabledReason:
-                    'Only an Org Admin or Planner can move a calendar into the shared library.',
-                })}
-          >
-            Move to organisation
-          </MenuItem>
-        ) : null}
-        <MenuItem onSelect={onToggleArchived}>{archived ? 'Unarchive' : 'Archive'}</MenuItem>
-        <MenuItem destructive onSelect={onDelete}>
-          Delete
+    <RowActionsMenu subject={calendar.name}>
+      {calendar.scope === 'PROJECT' ? (
+        <MenuItem
+          onSelect={onMoveToOrg}
+          disabled={!canManageOrg}
+          {...(canManageOrg
+            ? {}
+            : {
+                disabledReason:
+                  'Only an Org Admin or Planner can move a calendar into the shared library.',
+              })}
+        >
+          Move to organisation
         </MenuItem>
-      </Menu>
-    </>
+      ) : null}
+      <MenuItem onSelect={onToggleArchived}>{archived ? 'Unarchive' : 'Archive'}</MenuItem>
+      <MenuItem destructive onSelect={onDelete}>
+        Delete
+      </MenuItem>
+    </RowActionsMenu>
   );
 }

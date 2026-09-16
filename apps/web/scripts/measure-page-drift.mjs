@@ -114,12 +114,32 @@ const probe = () => {
           (el.textContent.trim() || el.getAttribute('aria-label') || '?').slice(0, 18),
         )
       : [];
+    /**
+     * **`factSpread` exists because `lastCellX` was measuring the wrong thing**, and the arithmetic
+     * proves it rather than suggesting it: on every table here, `lastCellX − firstCellX` equals the
+     * table's width minus its last column's width, exactly. The last column is `Actions`, so the
+     * number was reporting **where the actions column starts** — not how far a reader's eye travels
+     * between a row's first fact and its last, which is what M0-T2's attribution was about and what
+     * a remedy would be aimed at.
+     *
+     * It matters because the two move in opposite directions. Page-consistency M4 replaced three
+     * text buttons with one `⋯`, which narrows `Actions` and therefore **grows** `lastCellX −
+     * firstCellX` by up to 196 px — while the facts themselves did not move at all.
+     *
+     * `factSpread` measures to the last **content** cell instead. Both are reported, because the
+     * old number is what the M0 baseline holds and a comparison needs it.
+     */
+    const factIndex = heads.findIndex((h) => h.text === 'Actions');
+    const lastFact = factIndex > 0 ? (cells[factIndex - 1] ?? null) : (cells.at(-1) ?? null);
+
     return {
       rows: rows.length,
       headers: heads,
       rowHeights: heights,
       firstCellX: cells[0] ?? null,
       lastCellX: cells.length ? cells[cells.length - 1] : null,
+      lastFactX: lastFact,
+      factSpread: lastFact !== null && cells[0] !== undefined ? lastFact - cells[0] : null,
       actions,
     };
   });

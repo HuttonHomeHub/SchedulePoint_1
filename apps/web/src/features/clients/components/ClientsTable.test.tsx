@@ -1,8 +1,10 @@
 import type { ClientSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+
+import { clickRowAction, openRowActions } from '@/test/row-actions';
 
 import { clientKeys } from '../api/use-clients';
 
@@ -64,7 +66,9 @@ describe('ClientsTable', () => {
     expect(screen.getByText('Retail fit-out')).toBeInTheDocument();
     // Null description renders a placeholder.
     expect(screen.getByRole('button', { name: 'Edit Harbour' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete Northgate' })).toBeInTheDocument();
+    expect(
+      within(openRowActions('Northgate')).getByRole('menuitem', { name: 'Delete' }),
+    ).toBeInTheDocument();
   });
 
   it('hides write actions for non-writers', () => {
@@ -72,7 +76,7 @@ describe('ClientsTable', () => {
 
     expect(screen.getByRole('link', { name: 'Northgate' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit Harbour' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Delete Northgate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Actions for Northgate' })).not.toBeInTheDocument();
   });
 
   it('shows an empty state when there are no clients', () => {
@@ -80,9 +84,9 @@ describe('ClientsTable', () => {
     expect(screen.getByText(/No clients yet/)).toBeInTheDocument();
   });
 
-  it('confirms before deleting (no immediate destructive action)', () => {
+  it('confirms before deleting (no immediate destructive action)', async () => {
     renderTable(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Northgate' }));
+    await clickRowAction('Northgate', 'Delete');
     // A confirm dialog appears rather than deleting straight away.
     expect(screen.getByRole('heading', { name: 'Delete client' })).toBeInTheDocument();
     expect(

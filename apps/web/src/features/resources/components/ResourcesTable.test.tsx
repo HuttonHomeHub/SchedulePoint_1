@@ -8,6 +8,7 @@ import { resourceKeys } from '../api/use-resources';
 
 import { ResourcesTable } from './ResourcesTable';
 
+import { clickRowAction, openRowActions } from '@/test/row-actions';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
@@ -121,7 +122,9 @@ describe('ResourcesTable', () => {
     expect(concreteRow.getByText('Concrete')).toBeInTheDocument();
     expect(concreteRow.getByText('Material')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Crew A' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete Concrete' })).toBeInTheDocument();
+    expect(
+      within(openRowActions('Concrete')).getByRole('menuitem', { name: 'Delete' }),
+    ).toBeInTheDocument();
   });
 
   it('hides write actions for non-writers but offers a read-only View', () => {
@@ -145,7 +148,7 @@ describe('ResourcesTable', () => {
     );
     renderTable(true);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Crew A' }));
+    await clickRowAction('Crew A', 'Delete');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(await screen.findByText(/Assigned to one or more activities/)).toBeInTheDocument();
