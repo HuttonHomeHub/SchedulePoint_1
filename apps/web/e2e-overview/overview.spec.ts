@@ -121,6 +121,28 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
     )
     .toEqual({ count: 4, distinct: 2 });
 
+  // -------------------------------------------------- 5c. A capped box can be scrolled by keyboard
+  //
+  // **What this asserts, and what it deliberately does not.** The density work caps each box and
+  // lets its body scroll, so the body is a scroll container — and a scroll container that cannot
+  // take focus cannot be scrolled without a pointer (WCAG 2.2 §2.1.1, level A). Browsers have been
+  // inconsistent about focusing them implicitly, so `SectionCard fill` sets `tabIndex={0}` and this
+  // proves focus really lands there in a real browser, which jsdom structurally cannot.
+  //
+  // It does NOT assert that the workspace stops scrolling, which is the claim the whole milestone
+  // is about. That was written, run, and **found to be vacuous**: this organisation holds one plan,
+  // so `<main>` does not overflow with the cap or without it — removing the cap entirely left the
+  // assertion green. A test that passes against the defect it names is worse than no test, so the
+  // claim stays where a fixture can exhibit it: `measure-landing-density.mjs`, on twelve plans,
+  // reported in `m9-density-design.md` §5. The blind spot is stated rather than papered over.
+  const scrollable = overviewPage.locator('section [tabindex="0"]').first();
+  await expect(scrollable).toHaveCount(1);
+  await scrollable.focus();
+  expect(
+    await overviewPage.evaluate(() => document.activeElement?.getAttribute('tabindex')),
+    'the capped box body did not take focus, so it cannot be scrolled from the keyboard',
+  ).toBe('0');
+
   // -------------------------------------------------- 6. The row is the way back into work
   await row.click();
   await expect(overviewPage).toHaveURL(/\/plans\/[0-9a-f-]{36}/);

@@ -7,6 +7,7 @@ import {
   ListRowSkeleton,
   PageContainer,
   PageHeader,
+  RowSubject,
   SectionCard,
   Skeleton,
   StatGrid,
@@ -256,5 +257,102 @@ describe('StatGrid', () => {
       'the grid is its own query container, so its rule cannot fire',
     ).not.toMatch(/@container/);
     expect(list?.className).toMatch(/@md:grid-cols-3/);
+  });
+});
+
+describe('RowSubject', () => {
+  it('puts the subject and its context in ONE line box', () => {
+    // The whole reason this exists: the two used to be separate block elements, at a measured cost
+    // of 20 px on every row of the organisation landing.
+    const { container } = render(<RowSubject name="Tower B" context="Riverside · Acme" />);
+
+    const paragraphs = container.querySelectorAll('p');
+    expect(paragraphs).toHaveLength(1);
+    expect(paragraphs[0]?.textContent).toContain('Tower B');
+    expect(paragraphs[0]?.textContent).toContain('Riverside · Acme');
+  });
+
+  it('renders nothing for the context when there is none', () => {
+    const { container } = render(<RowSubject name="Tower B" />);
+
+    expect(container.textContent).toBe('Tower B');
+  });
+
+  it('lets the context give way before the name does', () => {
+    // The truncation rule is the decision this component owns. A call site must not be able to
+    // answer it differently, and a name clipped in favour of its project is the wrong sacrifice.
+    const { container } = render(<RowSubject name="Tower B" context="Riverside · Acme" />);
+
+    const spans = [...container.querySelectorAll('span')];
+    const nameSpan = spans.find((el) => el.textContent === 'Tower B');
+    const contextSpan = spans.find((el) => el.textContent === 'Riverside · Acme');
+
+    expect(nameSpan?.className).toMatch(/\btruncate\b/);
+    expect(contextSpan?.className).toMatch(/\btruncate\b/);
+    // Three times faster, so the name survives a long project and client.
+    expect(contextSpan?.className).toMatch(/shrink-\[3\]/);
+    expect(nameSpan?.className).not.toMatch(/shrink-\[3\]/);
+  });
+});
+
+describe('SectionCard fill', () => {
+  it('makes the body a keyboard-operable scroll region', () => {
+    // WCAG 2.2 §2.1.1: a scroll container that cannot take focus cannot be scrolled without a
+    // pointer. Browsers have been inconsistent about focusing them implicitly.
+    const { container } = render(
+      <SectionCard title="Recently changed" fill>
+        <p>row</p>
+      </SectionCard>,
+    );
+
+    const body = container.querySelector('[tabindex="0"]');
+    expect(body, 'the scrollable body is not reachable from the keyboard').not.toBeNull();
+    expect(body?.className).toMatch(/overflow-y-auto/);
+  });
+
+  it('leaves the body alone when it is not filling', () => {
+    // The rollback contract: every other screen in the product passes no `fill` and must be
+    // byte-identical. A card that acquired a focus stop by default would put an unnamed tab
+    // stop into sixteen screens.
+    const { container } = render(
+      <SectionCard title="Recently changed">
+        <p>row</p>
+      </SectionCard>,
+    );
+
+    expect(container.querySelector('[tabindex="0"]')).toBeNull();
+    expect(container.innerHTML).not.toMatch(/overflow-y-auto/);
+  });
+
+  it('keeps the heading out of the scroll, because it names what you scrolled into', () => {
+    const { container } = render(
+      <SectionCard title="Recently changed" fill>
+        <p>row</p>
+      </SectionCard>,
+    );
+
+    const heading = screen.getByRole('heading', { name: 'Recently changed' });
+    const header = heading.closest('div')?.parentElement;
+    expect(header?.className).toMatch(/shrink-0/);
+    expect(container.querySelector('[tabindex="0"]')?.contains(heading)).toBe(false);
+  });
+
+  it('puts the action beside the title rather than under it', () => {
+    /*
+      `CardHeader`'s own base is `flex flex-col`, and `flex` does not displace it — different
+      utility groups, so `tailwind-merge` keeps both and the column wins. `SectionCard` declared
+      `items-start justify-between` describing a row that did not exist, and no consumer passed an
+      action until the landing's counts, so nothing ever showed it. Verified red against the
+      version without `flex-row`.
+    */
+    render(
+      <SectionCard title="Recently changed" action={<span>8 plans</span>}>
+        <p>row</p>
+      </SectionCard>,
+    );
+
+    const heading = screen.getByRole('heading', { name: 'Recently changed' });
+    const header = heading.closest('div')?.parentElement;
+    expect(header?.className).toMatch(/\bflex-row\b/);
   });
 });

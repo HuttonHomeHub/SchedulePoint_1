@@ -47,6 +47,35 @@ import { canManageHierarchy } from '@/hooks/use-org-role';
  * mount: re-reading on every render would make the query key a new value each time the workspace
  * re-rendered, and the ids do not change while this screen is open.
  */
+/**
+ * What a box in the capped grid wears.
+ *
+ * The explicit `min-h` does two jobs at once, which is why there is no `min-h-0` beside it — they
+ * are the same CSS property and a pair of them is a coin toss decided by stylesheet order. It lets
+ * the item shrink below its content (a flex item's default floor is `auto`, i.e. its content, and
+ * any explicit `min-height` replaces that), and it is **the floor that hands the page its scroll
+ * back** (M9 D5). Below a window height that can give each box
+ * its heading plus two rows, a quarter of the screen is one row and a scrollbar — worse than the
+ * page scroll it replaced. So the floor is a minimum height rather than a breakpoint: when the
+ * viewport cannot afford it the minimum wins, the grid outgrows `<main>`, and `<main>` scrolls
+ * exactly as it does today. The degradation is the ABSENCE of the constraint rather than a second
+ * layout, which is also why there is no separate small-window design to keep in step.
+ *
+ * `self-start` with `max-h-full` is what stops a box padding out to match its neighbour: a grid
+ * item stretches to its row by default, so a "Jump back in" holding one plan would be as tall as a
+ * "Needs your attention" holding six and the difference would be empty card. Sized to content and
+ * capped at the row, the box ends where its content does and the leftover is page rather than a
+ * hole inside a border.
+ *
+ * 220 px is derived, not chosen: the worst heading block on this screen measured 97 px and a row
+ * measured 61 px after M9.1's tightening, so 97 + 2 × 61 = 219 (`m8-density-measurement.md`,
+ * `m9-density-design.md` D5). It is spelled `min-h-55` — 55 × the 4 px spacing step — rather than
+ * `min-h-[220px]`, because the sizing ratchet in `token-architecture.test.ts` counts an arbitrary
+ * value as drift and is right to: the same number on the spacing scale is the same 220 px and one
+ * fewer one-off.
+ */
+const GRID_ITEM_CLASS = 'flex max-h-full min-h-55 flex-col self-start';
+
 export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactElement {
   const { data: session } = useSession();
   const userId = session?.user.id;
@@ -133,7 +162,18 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
       trailing fact are closer together than `narrow` ever made them, and the page uses the width
       it has. The measure argument survives; the single column was only ever one way of honouring it.
     */
-    <PageContainer width="wide">
+    /*
+      **`flex min-h-0 flex-col` is what lets the grid below cap its own height** (M9 D4). `<main>`
+      is the app's scroll container — an `h-dvh` shell with `overflow: hidden` above it, so the
+      DOCUMENT has never scrolled — and it was being asked for 1302 px of room in 949
+      (`m8-density-measurement.md`). Without `min-h-0` a flex child's floor is its content, so the
+      grid can never be told to be shorter than its rows and the overflow lands on `<main>`.
+
+      It is passed as a class rather than added to `PageContainer`, because every other screen in
+      the product wants today's behaviour and a shared primitive should not acquire a layout mode
+      for one caller.
+    */
+    <PageContainer width="wide" className="flex min-h-0 flex-col">
       <PageHeader
         title={title}
         // **Role-aware, because the fixed version was false for two of the four roles.** The
@@ -149,7 +189,7 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
         }
       />
 
-      <div className="mt-6 flex flex-col gap-6">
+      <div className="mt-6 flex min-h-0 flex-1 flex-col gap-6">
         {showEmptyOrganisation ? (
           <>
             <OrganisationEmptyState
@@ -166,7 +206,19 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
             ) : null}
           </>
         ) : (
-          <PageGrid>
+          <PageGrid
+            /*
+              Two rows that share the height rather than take what their content asks for.
+              `minmax(0, 1fr)` and not `1fr`: a grid track's implicit minimum is `auto`, which is
+              its content, so plain `1fr` rows grow to fit eight rows of plan and the cap never
+              binds.
+
+              **Only from `md`, where the grid is two columns.** Below that it is a single column
+              of four boxes and capping each at a quarter of the screen would be four scrollbars on
+              a phone — there, the workspace scrolls exactly as it does today.
+            */
+            className="min-h-0 flex-1 md:grid-rows-[repeat(2,minmax(0,1fr))]"
+          >
             {/*
               **The order is measured, not preferred, and it corrects the approved plan.**
 
@@ -188,15 +240,16 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               the programme's HEALTH above the fold rather than the activity feed — which is the
               content this epic exists to add.
             */}
-            <PageGridItem span="narrow">
-              <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} />
+            <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
+              <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} fill />
             </PageGridItem>
             {isWriter && !isError ? (
-              <PageGridItem span="narrow">
+              <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
                 <NeedsAttentionSection
                   attention={data?.attention}
                   orgSlug={orgSlug}
                   pending={isPending}
+                  fill
                 />
               </PageGridItem>
             ) : null}
@@ -217,11 +270,11 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               loading and failure states are already reported once, by "Recently changed".
             */}
             {data?.planStanding !== undefined ? (
-              <PageGridItem span="narrow">
-                <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} />
+              <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
+                <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} fill />
               </PageGridItem>
             ) : null}
-            <PageGridItem span="narrow">
+            <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
               <RecentlyChangedSection
                 plans={data?.recentlyChanged ?? []}
                 orgSlug={orgSlug}
@@ -229,6 +282,7 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
                 pending={isPending}
                 error={isError}
                 onRetry={() => void refetch()}
+                fill
               />
             </PageGridItem>
           </PageGrid>

@@ -15,6 +15,21 @@ export interface SectionCardProps {
   /** Omits the card's own padding, for a section whose content is a full-bleed table. */
   flush?: boolean;
   /**
+   * Fill the height the parent gives, keeping the heading in place and scrolling the body.
+   *
+   * **For a section inside a height-constrained grid, and only there.** The parent has to supply a
+   * definite height — a `1fr` grid row or a flex child with `min-h-0` — or `h-full` resolves
+   * against an `auto` parent and the card simply sizes to its content, which looks exactly like
+   * this prop not being passed.
+   *
+   * It exists because the organisation landing asked its workspace region for 1302 px of room in
+   * 949 (`m8-density-measurement.md`), and the honest way to fit is for the boxes to absorb the
+   * overflow rather than the page. A caller that turns this on owes its reader a count — content
+   * below the fold of a card is content nobody can tell from content that does not exist — which
+   * is the `action` slot's job and not this prop's, because the count is a fact about the data.
+   */
+  fill?: boolean | undefined;
+  /**
    * The section's `id`, making it an anchor target and a place focus can be sent.
    *
    * **Taken deliberately rather than stumbled into** (staff-console design, spec §8.4). A
@@ -58,6 +73,7 @@ export function SectionCard({
   children,
   className,
   flush,
+  fill,
   id,
 }: SectionCardProps): React.ReactElement {
   const titleId = useId();
@@ -88,11 +104,30 @@ export function SectionCard({
         id === undefined
           ? undefined
           : 'focus-visible:ring-ring focus-visible:ring-offset-background scroll-mt-6 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
+        fill === true && 'flex h-full min-h-0 flex-col',
         className,
       )}
       {...(id === undefined ? {} : { id, tabIndex: -1 })}
     >
-      <CardHeader className={cn('flex items-start justify-between gap-4', flush && 'pb-4')}>
+      <CardHeader
+        className={cn(
+          /*
+            **`flex-row` is load-bearing and was missing, so `action` has never sat beside the
+            title.** `CardHeader`'s own base is `flex flex-col`, and `flex` in this string does not
+            displace it — they are different utility groups, so `tailwind-merge` keeps both and the
+            column wins. `items-start justify-between` then described a row that did not exist.
+
+            It is a latent defect rather than a visible one only because this archetype had no
+            consumer passing `action` until M9's counts; every reader of this line, including the
+            one who wrote it, would have said the action was on the title row.
+          */
+          'flex flex-row items-start justify-between gap-4',
+          flush && 'pb-4',
+          // The heading must not be what gets scrolled away — it is the only thing naming the
+          // region a reader has scrolled into.
+          fill === true && 'shrink-0',
+        )}
+      >
         <div className="min-w-0">
           <CardTitle id={titleId} level={2} className="text-base">
             {title}
@@ -101,7 +136,23 @@ export function SectionCard({
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </CardHeader>
-      <CardContent className={cn(flush && 'p-0')}>{children}</CardContent>
+      <CardContent
+        className={cn(flush && 'p-0', fill === true && 'min-h-0 flex-1 overflow-y-auto')}
+        /**
+         * **`tabIndex={0}` is what makes a scrollable body operable from the keyboard** (WCAG 2.2
+         * §2.1.1, level A). A scroll container that cannot take focus cannot be scrolled by
+         * anything but a pointer; browsers have been inconsistent about focusing them implicitly
+         * and it is not a behaviour to rely on.
+         *
+         * It carries no role and no name of its own on purpose. It already sits inside a named
+         * `region` (this card's `<section aria-labelledby>`), so a second name would be announced
+         * twice, and a `role="group"` here would put an unnamed group between the region and its
+         * content for no gain.
+         */
+        {...(fill === true ? { tabIndex: 0 } : {})}
+      >
+        {children}
+      </CardContent>
     </Card>
   );
 }

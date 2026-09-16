@@ -1,6 +1,7 @@
 import type { PlanStanding } from '@repo/types';
 
 import { PlanStandingRow } from './PlanStandingRow';
+import { SectionCount } from './SectionCount';
 
 import { EmptyState, SectionCard } from '@/components/ui/page';
 
@@ -36,14 +37,21 @@ import { EmptyState, SectionCard } from '@/components/ui/page';
 export function WhereWorkStandsSection({
   standing,
   orgSlug,
+  fill,
 }: {
   standing: PlanStanding[];
   orgSlug: string;
+  /** Fill the height the grid gives and scroll the body — see `SectionCard`. */
+  fill?: boolean;
 }): React.ReactElement {
   return (
     <SectionCard
       title="Where the work stands"
       description="How each recently-changed programme is tracking against its baseline."
+      fill={fill}
+      action={
+        standing.length === 0 ? null : <SectionCount count={standing.length} noun="programme" />
+      }
     >
       {standing.length === 0 ? (
         <EmptyState

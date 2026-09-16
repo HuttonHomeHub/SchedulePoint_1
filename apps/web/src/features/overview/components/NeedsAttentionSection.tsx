@@ -2,6 +2,7 @@ import type { OverviewAttention } from '@repo/types';
 import { Link } from '@tanstack/react-router';
 
 import { ActorName } from './ActorName';
+import { SectionCount } from './SectionCount';
 
 import { ListRow, ListRowSkeleton, SectionCard, rowLinkClass } from '@/components/ui/page';
 
@@ -30,10 +31,20 @@ export function NeedsAttentionSection({
   attention,
   orgSlug,
   pending,
+  fill,
 }: {
   attention: OverviewAttention | undefined;
   orgSlug: string;
   pending: boolean;
+  /**
+   * Fill the height the grid gives and scroll the body — see `SectionCard`.
+   *
+   * It is a prop rather than always-on because this section renders in TWO places: inside the
+   * capped grid, and beneath `OrganisationEmptyState` for an organisation with nothing in it but
+   * outstanding invitations. In the second there is no grid row to fill, so `h-full` would resolve
+   * against an auto parent and the prop would be a no-op that reads like a decision.
+   */
+  fill?: boolean;
 }): React.ReactElement {
   const locks = attention?.heldLocks ?? [];
   const liveInvitations = attention?.liveInvitationCount;
@@ -141,7 +152,17 @@ export function NeedsAttentionSection({
   }
 
   return (
-    <SectionCard title="Needs your attention">
+    <SectionCard
+      title="Needs your attention"
+      fill={fill}
+      // "items" rather than a kind, because this box is the one that genuinely mixes them: held
+      // locks, invitations and expiring deletions are three different things and no noun covers
+      // all three. Withheld while pending and when there is nothing — "0 items" beside "Nothing
+      // needs you right now." says the same thing twice, in a worse register.
+      action={
+        pending || items.length === 0 ? null : <SectionCount count={items.length} noun="item" />
+      }
+    >
       {pending ? (
         <ListRowSkeleton rows={2} />
       ) : items.length === 0 ? (

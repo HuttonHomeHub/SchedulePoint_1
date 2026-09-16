@@ -1,7 +1,9 @@
 import type { RecentPlan } from '@repo/types';
 import { Link } from '@tanstack/react-router';
 
-import { ListRow, SectionCard, rowLinkClass } from '@/components/ui/page';
+import { SectionCount } from './SectionCount';
+
+import { ListRow, RowSubject, SectionCard, rowLinkClass } from '@/components/ui/page';
 
 /**
  * "Jump back in" — the plans this reader was recently working in.
@@ -24,31 +26,38 @@ import { ListRow, SectionCard, rowLinkClass } from '@/components/ui/page';
 export function JumpBackInSection({
   plans,
   orgSlug,
+  fill,
 }: {
   plans: RecentPlan[];
   orgSlug: string;
+  /** Fill the height the grid gives and scroll the body — see `SectionCard`. */
+  fill?: boolean;
 }): React.ReactElement | null {
   if (plans.length === 0) return null;
 
   return (
-    <SectionCard title="Jump back in">
+    <SectionCard
+      title="Jump back in"
+      fill={fill}
+      action={<SectionCount count={plans.length} noun="plan" />}
+    >
       <div>
         {plans.map((plan) => (
           <ListRow
             key={plan.planId}
             primary={
-              <>
-                <Link
-                  to="/orgs/$orgSlug/plans/$planId"
-                  params={{ orgSlug, planId: plan.planId }}
-                  className={rowLinkClass}
-                >
-                  {plan.planName}
-                </Link>
-                <p className="text-muted-foreground truncate text-sm">
-                  {plan.projectName} · {plan.clientName}
-                </p>
-              </>
+              <RowSubject
+                name={
+                  <Link
+                    to="/orgs/$orgSlug/plans/$planId"
+                    params={{ orgSlug, planId: plan.planId }}
+                    className={rowLinkClass}
+                  >
+                    {plan.planName}
+                  </Link>
+                }
+                context={`${plan.projectName} · ${plan.clientName}`}
+              />
             }
           />
         ))}
