@@ -423,6 +423,7 @@ export function ResourceFormDialog({
             {readOnly ? null : (
               <Button
                 type="submit"
+                className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
                 aria-disabled={mutation.isPending}
                 aria-busy={mutation.isPending}
                 onClick={(event) => {

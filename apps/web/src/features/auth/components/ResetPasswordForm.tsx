@@ -69,6 +69,7 @@ export function ResetPasswordForm({
       />
       <Button
         type="submit"
+        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
         aria-disabled={reset.isPending}
         aria-busy={reset.isPending}
         onClick={(event) => {

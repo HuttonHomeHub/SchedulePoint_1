@@ -15,6 +15,7 @@ import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { SearchField } from '@/components/ui/search-field';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
 import { X } from 'lucide-react';
 
@@ -51,6 +52,33 @@ export function ClientsTable({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ClientSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // A debounced search that silently reshapes the table is invisible to a screen-reader user
+  // (WCAG 4.1.3). Both sibling library tables have announced their settled count since ADR-0053 M6
+  // and this one did not — one correct pattern applied to a control and not its neighbour, inside
+  // the epic whose subject is exactly that, found by the M8 accessibility gate.
+  useResultCountAnnouncement({
+    pending: clients.isPending || clients.isFetching,
+    count: clients.data?.length ?? 0,
+    filterKey: debouncedSearch,
+    noun: 'client',
+    emptyMessage: 'No clients match this search.',
+  });
+
+  /**
+   * **Focus goes to the list, because the list is what the press produced.**
+   *
+   * The empty state's `Clear filters` removes itself by succeeding — rows return, the empty state
+   * unmounts, and focus falls to `<body>`, which on this screen silently ends keyboard navigation.
+   * That is the failure this table's own docblocks name four times about the *bar* button, and the
+   * reasoning had never been applied to the *empty-state* one, which is the copy that actually has
+   * it. The region is always mounted and `tabIndex={-1}`, so it is a destination rather than a
+   * guess.
+   */
+  const clearSearchAndFocusList = (): void => {
+    setSearch('');
+    regionRef.current?.focus();
+  };
 
   const editing = editingId ? clients.data?.find((client) => client.id === editingId) : undefined;
 
@@ -181,7 +209,7 @@ export function ClientsTable({
                 variant="outline"
                 size="sm"
                 className="mt-3"
-                onClick={() => setSearch('')}
+                onClick={clearSearchAndFocusList}
                 // Named for its context: its twin in the bar above is always present, and two
                 // buttons whose accessible name is the bare string are indistinguishable to a
                 // reader who hears them (M4's finding, applied here on the day it was made).

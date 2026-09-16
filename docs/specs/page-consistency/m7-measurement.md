@@ -42,10 +42,24 @@ epic"). It buys taking 123 rows to 3, which is not a quantity FC-2 was ever writ
 **No index and no migration.** `database-architect` was engaged per §19.3 and answered no change,
 having re-measured for clients rather than inheriting ADR-0053 M4's figures: **3.6 ms** at that
 ADR's own 5,000-row ceiling for a term matching nothing — the worst case, since `LIMIT` can never
-stop early — against CLAUDE.md §15's 200 ms budget, on a tenant roughly **190× larger than this
+stop early — against CLAUDE.md §15's 200 ms budget, on a tenant roughly **40× larger than this
 entire installation** (which holds 124 clients across 2 organisations). A candidate partial
 composite was measured and saves ~0 ms for 1,768 kB. Recorded as _the agent was run and said no
 change_, which §19.3 treats as a different fact from _the agent was not run_.
+
+**Two corrections from the M8 gate, both to this paragraph rather than to the decision.** It read
+**190×** in two places, here and in `client.repository.ts`; 5,000 / 124 is **40×**, an arithmetic
+slip in a checkable number, which is the class §19 asks to carry its evidence. And it justified the
+cost with "a bitmap scan bounded to one tenant" — a sentence inherited from ADR-0053 M4, true of
+**that** measurement's table composition (target tenant at 20.8% of the table) and not of this one.
+Independently re-measured by **backend-performance-reviewer** on a clean Postgres 16: the planner
+seq-scans the **whole table** while the tenant is a majority share, and only takes the org-bound
+bitmap plan below roughly a 25–33% share — and the deployed database is in the seq-scan regime
+today, one org holding 123 of 124 clients. The verdict is unchanged and now rests on the right
+thing: 2.34 ms (100% share, seq) → 6.97 ms (33%, seq) → 2.53 ms (25%, bitmap) → 2.68 ms (10%,
+bitmap), every point two orders inside the budget, and the candidate index changes nothing in
+**either** regime. The trigger is phrased on a single org's row count rather than on a plan shape,
+which is why it survives the correction.
 
 **The escalation trigger, should it ever fire:** a single organisation past ~2,000 active clients,
 or the list's p95 past ~20 ms. The remedy is `CREATE EXTENSION pg_trgm` and a GIN index on

@@ -3,7 +3,6 @@ import { Prisma, type Client } from '@prisma/client';
 import type { PageMeta } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
-import { normaliseSearchTerm } from '../../common/query/library-filters';
 import type { Permission, Principal } from '../../common/auth/principal';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/domain-errors';
@@ -11,6 +10,7 @@ import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { normaliseSearchTerm } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';

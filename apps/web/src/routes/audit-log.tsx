@@ -2,6 +2,7 @@ import { useParams } from '@tanstack/react-router';
 
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { PageContainer, PageHeader } from '@/components/ui/page';
+import { CoverageDisclosure } from '@/features/audit/components/CoverageDisclosure';
 import { Spinner } from '@/components/ui/spinner';
 import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
@@ -71,30 +72,25 @@ export function AuditLogScreen(): React.ReactElement {
         a list a reader came here to read. It stays `aria-describedby`-linked to the table, so it is
         not a fact you have to find; it is a fact you no longer have to scroll past.
       */}
-      <details className="mt-3">
-        <summary className="text-muted-foreground cursor-pointer text-sm select-none">
-          What this records
-        </summary>
-        <div id={COVERAGE_ID} className="text-muted-foreground mt-2 flex flex-col gap-2 text-sm">
-          <p>
-            Everything that <strong className="text-foreground font-medium">removes</strong>{' '}
-            something — deleted or restored clients, projects, plans and activities, dissolved
-            summaries, removed links, deleted calendars and resources — and everything that{' '}
-            <strong className="text-foreground font-medium">
-              changes the rules other people’s work is judged by
-            </strong>
-            : who has access, scheduling settings, a shared calendar’s working time, baselines, what
-            the shared libraries offer, and where an imported programme came from.
-          </p>
-          <p>
-            Editing an activity’s own fields — its name, dates, duration, lane or progress — is{' '}
-            <strong className="text-foreground font-medium">deliberately not recorded</strong>: it
-            changes nothing outside that activity, and the row already carries who last changed it.
-            Your own sign-ins are on{' '}
-            <strong className="text-foreground font-medium">My activity</strong>, not here.
-          </p>
-        </div>
-      </details>
+      <CoverageDisclosure contentId={COVERAGE_ID}>
+        <p>
+          Everything that <strong className="text-foreground font-medium">removes</strong> something
+          — deleted or restored clients, projects, plans and activities, dissolved summaries,
+          removed links, deleted calendars and resources — and everything that{' '}
+          <strong className="text-foreground font-medium">
+            changes the rules other people’s work is judged by
+          </strong>
+          : who has access, scheduling settings, a shared calendar’s working time, baselines, what
+          the shared libraries offer, and where an imported programme came from.
+        </p>
+        <p>
+          Editing an activity’s own fields — its name, dates, duration, lane or progress — is{' '}
+          <strong className="text-foreground font-medium">deliberately not recorded</strong>: it
+          changes nothing outside that activity, and the row already carries who last changed it.
+          Your own sign-ins are on{' '}
+          <strong className="text-foreground font-medium">My activity</strong>, not here.
+        </p>
+      </CoverageDisclosure>
       {isPending ? (
         <div className="mt-6 p-6">
           <Spinner label="Checking your access…" />

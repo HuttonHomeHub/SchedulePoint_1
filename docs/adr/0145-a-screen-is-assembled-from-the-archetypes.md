@@ -81,14 +81,35 @@ landed in `Name`, the **first** column, and the distance grew by 76 px. Applying
 two tables worse before it was measured. Final: **−34, −122, −65, −65** on the four tables with
 bounded columns.
 
-**D5 — Prose that is a standing rule goes behind a disclosure and stays announced with its list.**
-The audit log opened with two long paragraphs and My activity with three, in front of every reader
-including the ones who already know, while `AuditEventList`'s own empty state says the same thing
-compressed. Nothing is cut: the coverage rule is the one fact on that screen a reader cannot infer
-and it went wrong twice in opposite directions before reaching its present wording. **My activity's
-security caveat stays visible** — burying "what a _Not signed in_ row does and does not prove" was
-named the riskiest single change in the epic and declined, with a test asserting it is not inside a
-`<details>`.
+**D5 — Prose that is a standing rule goes behind a disclosure and stays announced with its list —
+and a `<details>` cannot be that disclosure.** The audit log opened with two long paragraphs and My
+activity with three, in front of every reader including the ones who already know, while
+`AuditEventList`'s own empty state says the same thing compressed. Nothing is cut: the coverage rule
+is the one fact on that screen a reader cannot infer and it went wrong twice in opposite directions
+before reaching its present wording. **My activity's security caveat stays visible** — burying "what
+a _Not signed in_ row does and does not prove" was named the riskiest single change in the epic and
+declined.
+
+**The mechanism is the half this decision got wrong first, and it was found by doing the thing.**
+M3 shipped a `<details>`, and labelled the claim that `aria-describedby` resolves into a closed one
+as _reasoned from specification, not observed_ — the honest label ADR-0083 and ADR-0122 both carry.
+Probed in Chromium over CDP during this epic's own gate pass, it is **false**: the accessible
+description of the described table is `null` while the disclosure is closed and populated once it is
+open. So the rule was announced **only when it was already visible**, which is the one state in
+which it needs no announcing — a link to nothing that reads identically to a correct one in every
+DOM-shape assertion, and in jsdom, which computes no accessibility tree at all. Two further probes
+established the discriminator rather than assuming it: the description **does** resolve to an
+`sr-only` (clipped) element and **does** resolve to a `hidden` one, so what defeats it is
+specifically a closed `<details>`'s skipped subtree and not invisibility as such.
+
+`CoverageDisclosure` is therefore a button carrying `aria-expanded` + `aria-controls` over content
+that is always in the DOM and `sr-only` while collapsed — the one state that takes it off the screen
+and leaves it in the accessibility tree. The tests that replace the `<details>` assertion assert the
+**structural property that makes the description resolvable**, because jsdom cannot assert the
+description itself; and the security-caveat test was rewritten with them, because
+`caveat.closest('details')` was meaningful while the disclosure was a `<details>` and became
+**vacuously true** the moment it stopped being one — a guard that keeps passing while no longer able
+to fail, which is the one failure mode a green suite cannot report.
 
 **D6 — A control that clears state is always rendered and shaded when there is nothing to clear.**
 `Clear filters` moves into the calendars and resources filter bars, copied from `AuditFilterBar`
@@ -125,10 +146,18 @@ wrong, so the documentation is what changes.**
   node actions" would suggest read out of context — that standard is written for dense list and
   tree rows, which have nowhere to show actions at all. These tables have an actions column, and
   burying `Edit` would trade the frequent interaction for the infrequent.
-- **A `Disclosure` primitive.** Not built. Three hand-rolled `<details>` now exist with two
-  different `<summary>` treatments between them, which is this epic's own subject one tier down —
-  but a new shared primitive is an ADR-0105 trigger and this spec does not cover one. Matching an
-  existing treatment is the interim; a fourth consumer should make it a primitive.
+- **A shared `Disclosure` primitive.** Not built, and the reason narrowed once the `<details>`
+  came out. The count in this bullet was **wrong twice in opposite directions** and is recorded
+  rather than quietly corrected: it first read "three hand-rolled `<details>` now exist", counting
+  the two this epic added; the component review corrected it to four, because `resource-strip-panel`
+  and `performance-probe-panel` both pre-existed and neither had been counted; and D5's probe then
+  took the epic's own two back out again, leaving **two, both pre-existing, with two different
+  `<summary>` treatments between them**. So this epic adds no `<details>` and inherits a treatment
+  split it did not create. `CoverageDisclosure` is a **feature-local** component rather than a `ui/`
+  primitive on ADR-0105's trigger: a second consumer of the button/`aria-controls`/`sr-only` shape
+  is what should make it one, and until then generalising from a single call site would be inventing
+  a contract rather than extracting one. The `<details>` treatment split is `docs/TECH_DEBT.md`
+  #338.
 - **Cap the trailing column with `w-full`.** Not re-proposed. ADR-0143 M5 withdrew it on
   measurement: it squeezes every other column to `min-content`.
 - **Revert the section cards when FC-3 failed by 2 px.** Put to the product owner with both
@@ -209,8 +238,75 @@ on this surface — but the gate exists so nobody adds an undeclared param silen
 the default rather than merging it, found while adding the D4 caps. Not currently a defect — every
 caller restates the default — but nothing makes them.
 
-**The CPM engine is not imported and no migration runs**; `apps/api` contributes zero files to the
-diff, which is what makes the whole epic revertible.
+**The CPM engine is not imported and no migration runs.** The second half of this sentence read
+"`apps/api` contributes zero files to the diff, which is what makes the whole epic revertible" until
+the M8 gate, and it was **false four paragraphs below D7**, which says in as many words that the
+clients search is an API change rather than a UI one. The honest form is narrower and still worth
+having: the API change is **additive and absent-is-byte-identical** — one optional query parameter
+composing as a spreadable `where` fragment, with no model, no column, no index and no migration — so
+`database-architect` was engaged under §19.3 and answered **no change**, and reverting the web half
+alone leaves a parameter nobody sends.
+
+## The gate pass
+
+Six specialists over the combined diff; full record in
+[`m8-measurement.md`](../specs/page-consistency/m8-measurement.md). Two passed with nothing blocking,
+four blocked on **seven defects that had passed a human read**, and the largest is this epic's own
+subject landing on it.
+
+**All ten M5 submit conversions dropped the visual half of the swap**, and re-deriving found
+**seven more that pre-dated the epic** — including all six public auth forms, so pressing **Sign in**
+on the product's front door changed one word and nothing else. `Button`'s CVA base is
+`disabled:pointer-events-none disabled:opacity-50`: Tailwind's `disabled:` variant fires on the
+**native attribute only**, so removing that attribute silently removes every visual consequence of
+it. Seventeen sites fixed, and the rule is now in `docs/DESIGN_SYSTEM.md` where the next author will
+meet it.
+
+**The gate that should have caught it was asserting the easy half of a two-part rule, and its tag
+reader had a hole of its own.** `/<Button\b[^>]*?>/` ends at the first `>`, which
+`onClick={(event) => …}` supplies — so anything written after the guard was invisible, and every
+site this gate exists for is written in exactly that shape. It was invisible only because the
+attribute happened to sit _before_ the arrow at all ten. Both halves are asserted now, the arrow
+hole pinned as a fixture **verified red against the old matcher (0 against 1)**, and the
+comment-stripping fixture kept beside it and labelled as **not** a second defect found, because it
+already passed. Two fixtures that look alike, one of which proves nothing new; saying which is which
+is the difference between a gate and a decoration.
+
+**D5's central claim was probed and is false** — recorded in D5 itself rather than here, along with
+the guard beside it that had gone **vacuous**: `caveat.closest('details')` was meaningful while the
+disclosure was a `<details>` and became unconditionally true the moment it stopped being one.
+
+**The two passing reviews corrected the author twice**, both on D7's measurement, and both matter
+more than the finding count suggests. The clients search runs at **40×** this installation's size
+and not 190× — 5,000 / 124, an arithmetic slip in a checkable number, in two places. And the cost
+is bounded by the **escalation trigger, not by a guaranteed plan shape**: the "bitmap scan bounded
+to one tenant" sentence was inherited from ADR-0053 M4, true of that measurement's table composition
+and not of this one, and Postgres seq-scans the whole table while the tenant is a majority share —
+which is the deployed database's state today. Re-measured across both regimes the verdict is
+unchanged (2.3–7.0 ms against a 200 ms budget), because the trigger was phrased on a single
+organisation's row count rather than on a plan.
+
+**Three more are one correct pattern applied to a control and not its neighbour**, which is what
+this epic exists to remove: the clients search **announced nothing** while both sibling library
+tables have announced their settled count since ADR-0053 M6; the empty state's `Clear filters`
+**dropped focus to `<body>`** on all three library screens, which is the failure those files' own
+docblocks name four times about the _bar_ button — the reasoning never having been applied to the
+copy that has it, the bar's being always mounted and shaded and therefore obliged to leave focus
+alone; and CQ-3's answer unblocked the **eleventh** submit site, the members role `<select>` M5 left
+behind. Plus a live `import/order` lint failure that `pnpm prepush` would have caught and which had
+not been run since M7.
+
+**And the register itself was the finding.** This ADR was filed, Accepted, indexed in
+`docs/adr/README.md` and cited by `docs/ROADMAP.md`, and **absent from `CLAUDE.md` §16** — the
+ADR-0071 failure `docs/TECH_DEBT.md` #291 records happening three times already, invisible because
+`check:adr-coverage` structurally cannot read that file. Two documents the spec promised were
+missing with it, and `docs/API.md` had never been told the clients list takes a `q`. Found by a
+reviewer, not by anything automatic.
+
+Every fix carries a regression test verified red first. Two findings are recorded rather than
+rushed: `docs/TECH_DEBT.md` **#338** (two `<details>`, two treatments — and the ADR-0105 trigger to
+build a primitive) and **#339** (`SectionCard`'s description has no measure, which is
+character-for-character the shape `PageHeader` had before M1).
 
 ## References
 

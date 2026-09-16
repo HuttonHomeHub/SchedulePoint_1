@@ -1,4 +1,5 @@
 import { PageContainer, PageHeader } from '@/components/ui/page';
+import { CoverageDisclosure } from '@/features/audit/components/CoverageDisclosure';
 import { AUDIT_FILTERS_ENABLED, AUDIT_SELF_SECURITY_ENABLED } from '@/config/env';
 import { useSelfAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
@@ -49,17 +50,14 @@ export function MyActivityScreen(): React.ReactElement {
       />
       {/* **Relocated, not cut** — and the split is deliberate: this is a coverage rule, while the
           paragraph BELOW the disclosure is a security caveat. Only the coverage moves. */}
-      <details className="mt-3">
-        <summary className="text-muted-foreground cursor-pointer text-sm select-none">
-          What this records
-        </summary>
-        <p id={COVERAGE_ID} className="text-muted-foreground mt-2 text-sm">
+      <CoverageDisclosure contentId={COVERAGE_ID}>
+        <p>
           Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
           is on their organisation&rsquo;s audit log, not here. Inside a plan, deletions and
           structural changes appear; editing an activity&rsquo;s own fields is{' '}
           <strong className="text-foreground font-medium">deliberately not recorded</strong>.
         </p>
-      </details>
+      </CoverageDisclosure>
       {/*
         What a "Not signed in" row means, and — as importantly — what it does NOT mean. This screen
         is telling somebody they may be under attack, and the two things a reader will jump to are

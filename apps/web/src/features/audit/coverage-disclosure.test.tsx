@@ -117,32 +117,63 @@ describe('the coverage rule is behind a disclosure and still says everything it 
   ])('$screen', ({ screen: which, phrases }) => {
     it('keeps every sentence of the rule, and keeps it in the DOM while collapsed', async () => {
       await renderScreen(which);
-      const disclosure = screen.getByText('What this records').closest('details');
-      expect(disclosure, 'the disclosure is missing entirely').not.toBeNull();
+      const toggle = screen.getByRole('button', { name: 'What this records' });
       // Collapsed is the state a reader arrives in, and it is the state in which a relocated fact
-      // is likeliest to have been lost — `open` is not set anywhere.
-      expect(disclosure).not.toHaveAttribute('open');
+      // is likeliest to have been lost.
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+      const contentId = toggle.getAttribute('aria-controls') ?? '';
+      const content = document.getElementById(contentId);
+      expect(content, 'the toggle controls nothing').not.toBeNull();
       for (const phrase of phrases) {
-        expect(within(disclosure!).getByText(phrase, { exact: false })).toBeInTheDocument();
+        expect(within(content!).getByText(phrase, { exact: false })).toBeInTheDocument();
       }
+    });
+
+    /**
+     * **The property the first version of this screen got wrong.**
+     *
+     * M3 put the rule inside a `<details>`, on the stated-but-unverified belief that
+     * `aria-describedby` resolves into a collapsed one. Probed in Chromium, it does not — the
+     * description is `null` while closed — so the rule was announced only when the disclosure was
+     * already open, which is exactly when a reader can see it anyway.
+     *
+     * jsdom computes no accessibility tree, so this cannot assert the description directly. What
+     * it CAN assert is the structural property that makes the description resolvable, and which
+     * the `<details>` version failed: the target is in the DOM, is not `hidden`, and is not inside
+     * an element whose subtree a browser skips.
+     */
+    it('leaves the described element reachable while collapsed — not hidden, not in a <details>', async () => {
+      await renderScreen(which);
+      const toggle = screen.getByRole('button', { name: 'What this records' });
+      const content = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+
+      expect(content).not.toBeNull();
+      expect(content).not.toHaveAttribute('hidden');
+      expect(
+        content!.closest('details'),
+        'a closed <details> is skipped by the accessible-description computation (probed in ' +
+          'Chromium) — the rule would be announced only once it is already visible',
+      ).toBeNull();
+      // Clipped rather than removed: sr-only is the one state that hides it from sight and leaves
+      // it in the accessibility tree.
+      expect(content!.className).toContain('sr-only');
     });
 
     it('describes the list it qualifies, while collapsed', async () => {
       await renderScreen(which);
 
-      // **Found from the disclosure's own id, not from a role.** `DataTable` carries
+      // **Found from the toggle's own `aria-controls`, not from a role.** `DataTable` carries
       // `aria-describedby` on the scroll region when there are rows and on a plain wrapper when
       // there are none (`data-table.tsx:207`, `:221`), so a role-based query asserts the fixture's
       // state rather than the wiring. Two earlier versions of this assertion went red against a
       // perfectly correct product for exactly that reason, once on the `<table>` and once on the
       // region.
-      const content = screen
-        .getByText('What this records')
-        .closest('details')!
-        .querySelector('[id]');
+      const toggle = screen.getByRole('button', { name: 'What this records' });
+      const id = toggle.getAttribute('aria-controls') ?? '';
+      expect(id, 'the toggle controls nothing').not.toBe('');
+      const content = document.getElementById(id);
       expect(content, 'the disclosure holds no identified content to point at').not.toBeNull();
-      const id = content!.id;
-      expect(id).not.toBe('');
 
       const describers = [...document.querySelectorAll('[aria-describedby]')].filter((el) =>
         (el.getAttribute('aria-describedby') ?? '').split(/\s+/).includes(id),
@@ -161,9 +192,21 @@ describe('the coverage rule is behind a disclosure and still says everything it 
   it('leaves my-activity’s security caveat visible, outside the disclosure', async () => {
     await renderScreen('my-activity');
     const caveat = screen.getByText(/Failed sign-ins against your email address/);
+    const toggle = screen.getByRole('button', { name: 'What this records' });
+    const content = document.getElementById(toggle.getAttribute('aria-controls') ?? '');
+
+    expect(content, 'the toggle controls nothing').not.toBeNull();
+    // **Asked of the disclosure's controlled element, not of a `<details>`.** The first version of
+    // this assertion read `caveat.closest('details')`, which was meaningful while the disclosure
+    // WAS a `<details>` and became vacuously true the moment it stopped being one — a guard that
+    // keeps passing while no longer able to fail, which is the one failure mode a green suite
+    // cannot report.
     expect(
-      caveat.closest('details'),
+      content!.contains(caveat),
       'the security caveat was moved behind a press — it is a decision that it is not',
-    ).toBeNull();
+    ).toBe(false);
+    // And visible, not merely outside: `sr-only` on an ancestor would satisfy the containment test
+    // above while taking the sentence off the screen it was written for.
+    expect(caveat.closest('.sr-only')).toBeNull();
   });
 });

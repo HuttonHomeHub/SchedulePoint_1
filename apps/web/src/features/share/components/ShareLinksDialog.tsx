@@ -311,6 +311,7 @@ export function ShareLinksDialog({
             <div className="flex justify-end">
               <Button
                 type="submit"
+                className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
                 aria-disabled={create.isPending}
                 aria-busy={create.isPending}
                 onClick={(event) => {

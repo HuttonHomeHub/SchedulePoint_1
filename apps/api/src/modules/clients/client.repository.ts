@@ -67,12 +67,21 @@ export class ClientRepository {
    * without either clobbering the other.
    *
    * **No index, and that is a measured decision rather than an omission.** The term compiles to a
-   * leading-wildcard `name ILIKE $1`, which no btree can serve — but the leading equality on
-   * `organization_id` bounds the candidate set to one tenant in cursor order and the `ILIKE` is a
-   * recheck over that bounded set. Measured at ADR-0053's own 5,000-row ceiling: **3.6 ms** for a
-   * term matching nothing (the worst case, because `LIMIT` can never stop early), against
-   * CLAUDE.md §15's 200 ms p95 budget. That is a tenant roughly 190× larger than this whole
-   * installation. A candidate partial composite was measured too and saves ~0 ms for 1,768 kB.
+   * leading-wildcard `name ILIKE $1`, which no btree can serve. Measured at ADR-0053's own
+   * 5,000-row ceiling: **3.6 ms** for a term matching nothing (the worst case, because `LIMIT` can
+   * never stop early), against CLAUDE.md §15's 200 ms p95 budget — a tenant roughly **40×** larger
+   * than this whole installation, which holds 124 clients across 2 organisations. A candidate
+   * partial composite was measured too and saves ~0 ms for 1,768 kB.
+   *
+   * **What bounds the cost is the escalation trigger below, NOT a guaranteed plan shape**, and this
+   * paragraph said otherwise until the M8 gate: it claimed a bitmap scan bounded to one tenant,
+   * inheriting a sentence from ADR-0053 M4 whose own table composition (target tenant at 20.8% of
+   * the table) made it true there and does not hold here. Re-measured independently, Postgres
+   * **seq-scans the whole table** while the tenant is a majority share and switches to the
+   * org-bound bitmap plan only below roughly 25–33% — and the deployed database is in the
+   * seq-scan regime today (one org holds 123 of 124 clients). The number survives in both regimes,
+   * 2.3–7.0 ms across the sweep, because the table stays proportional to the tenant's own ceiling;
+   * the trigger is phrased on that ceiling for exactly this reason.
    *
    * **Escalate** if a single organisation passes ~2,000 active clients, or the list's p95 passes
    * ~20 ms: `CREATE EXTENSION pg_trgm` then a GIN index on **`name`** — not `lower(name)`, which

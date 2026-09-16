@@ -695,6 +695,30 @@ security controls are the write-time rejects above, applied server-side whatever
 case-insensitive substring match bounded by the org filter; there is deliberately no index for it (see
 `docs/TECH_DEBT.md` for the measured `pg_trgm` escalation).
 
+#### Clients gained the same `q` (ADR-0145 D7)
+
+The clients list was the only one of the three that could not be searched — not a missing screen but a
+**missing parameter**: the endpoint accepted no `q` at all, so the web side had nothing to call.
+
+| Method | Path                               | Notes                                                                                                                                              |
+| ------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `…/organizations/:orgSlug/clients` | **+ query** `q` (name, case-insensitive substring, ≤ 100 chars, trimmed; blank ⇒ absent). No `archived`, no `scope` — a client has neither column. |
+
+Absent `q` is **byte-identical** to the previous contract: the same `where`, the same page, the same
+envelope. The term composes with the org and soft-delete predicates as a spreadable fragment rather
+than replacing them, so a soft-deleted or foreign-organisation row can never surface through a search
+— which is what the API e2e case asserts, a repository test of the fragment alone being structurally
+unable to see it. Over-length `q` is the ordinary `422` from the global `ValidationPipe`; there is no
+per-endpoint declaration, matching every other list route.
+
+**No index**, measured rather than assumed and re-measured independently at the ADR-0145 gate:
+2.3–7.0 ms at ADR-0053's 5,000-row ceiling for a term matching nothing, across both plan regimes,
+against CLAUDE.md §15's 200 ms budget. The escalation trigger is a single organisation past ~2,000
+active clients or a p95 past ~20 ms, and the remedy is a `pg_trgm` GIN index on **`name`** — not
+`lower(name)`, which cannot serve `ILIKE` at all (`docs/TECH_DEBT.md` #336). `#337` applies here
+verbatim: `%` and `_` in a term are wildcards, parameterised and therefore not an injection risk, and
+a correctness wart shared with the two library searches.
+
 ### The audit log (ADR-0072)
 
 Two read endpoints over the append-only `audit_events` table. There is no write endpoint and there

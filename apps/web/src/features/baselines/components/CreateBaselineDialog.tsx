@@ -92,6 +92,7 @@ export function CreateBaselineDialog({
           </Button>
           <Button
             type="submit"
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
             aria-disabled={capture.isPending}
             aria-busy={capture.isPending}
             onClick={(event) => {

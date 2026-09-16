@@ -113,6 +113,7 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
             </SelectField>
             <Button
               type="submit"
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
               aria-disabled={create.isPending}
               aria-busy={create.isPending}
               onClick={(event) => {

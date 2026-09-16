@@ -153,6 +153,22 @@ export function ResourcesTable({
 
   const clearFilters = (): void => setFilters(DEFAULT_RESOURCE_LIBRARY_FILTERS);
 
+  /**
+   * **The empty state's copy focuses the list; the filter bar's copy does not.**
+   *
+   * They run the same clear and have different focus obligations, which is the distinction this
+   * table had not drawn. The bar's button is always mounted and shaded when there is nothing to
+   * clear, so focus stays where the reader put it. The empty state's button **removes itself by
+   * succeeding** — rows return, the empty state unmounts, and focus falls to `<body>`. That is the
+   * failure this file's own docblocks name about the bar button; nobody had applied the reasoning
+   * to the copy that actually has it (M8 accessibility gate). The region is always mounted and
+   * `tabIndex={-1}`, so it is a destination rather than a guess.
+   */
+  const clearFiltersAndFocusList = (): void => {
+    clearFilters();
+    regionRef.current?.focus();
+  };
+
   // A debounced search that silently reshapes the table is invisible to a screen-reader user
   // (WCAG 4.1.3) — announce the settled count, exactly as the Combobox does for its listbox.
   useResultCountAnnouncement({
@@ -473,7 +489,7 @@ export function ResourcesTable({
                 variant="outline"
                 size="sm"
                 className="mt-3"
-                onClick={clearFilters}
+                onClick={clearFiltersAndFocusList}
                 /* **Named for its context, because its twin in the filter bar is now always
                    present** (page-consistency M4). Two buttons whose accessible name is the bare
                    string `Clear filters`, both visible at once, are indistinguishable to a reader

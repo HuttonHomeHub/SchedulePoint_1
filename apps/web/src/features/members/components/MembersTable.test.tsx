@@ -1,11 +1,15 @@
 import type { OrgMemberSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { memberKeys } from '../api/use-members';
 
+import { apiFetch } from '@/lib/api/client';
+
 import { MembersTable } from './MembersTable';
+
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const MEMBERS: OrgMemberSummary[] = [
   {
@@ -35,6 +39,49 @@ function renderTable() {
 }
 
 describe('MembersTable', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+  });
+
+  /**
+   * **M5-T3, the eleventh site** — the one the ten-dialog submit-guard milestone left behind, and
+   * the answer accessibility-reviewer gave to CQ-3 at the M8 gate.
+   *
+   * A native `disabled` select leaves the tab order the instant the request starts and returns when
+   * it settles, so an Org Admin changing a colleague's role with the keyboard is thrown to `<body>`
+   * and back, twice, per change (`docs/TECH_DEBT.md` #17a). The two halves are asserted separately
+   * because they fail separately: the attribute swap is what keeps focus, and the `onChange` guard
+   * is what stops a second change being sent — the select is **controlled**, so ignoring the change
+   * re-renders it at the stored role with no manual revert.
+   */
+  it('keeps focus and discards a second role change while the first is in flight', async () => {
+    let settle: () => void = () => {};
+    vi.mocked(apiFetch).mockReturnValue(
+      new Promise((resolve) => {
+        settle = () => resolve(undefined);
+      }),
+    );
+    renderTable();
+
+    const select = screen.getByLabelText('Role for Val Viewer');
+    select.focus();
+    fireEvent.change(select, { target: { value: 'PLANNER' } });
+
+    await waitFor(() => expect(select).toHaveAttribute('aria-busy', 'true'));
+    expect(select).toHaveAttribute('aria-disabled', 'true');
+    // The property the swap was made for. A natively disabled control could not be the focused one.
+    expect(select).not.toBeDisabled();
+    expect(document.activeElement).toBe(select);
+
+    // The second change a reader makes when nothing appears to have happened.
+    fireEvent.change(select, { target: { value: 'CONTRIBUTOR' } });
+    settle();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    // Controlled, so the displayed value is the stored role rather than either attempt.
+    expect(select).toHaveValue('VIEWER');
+  });
+
   it('renders each member with an accessible role control and remove action', () => {
     renderTable();
 
