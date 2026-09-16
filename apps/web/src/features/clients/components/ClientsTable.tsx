@@ -1,6 +1,6 @@
 import type { ClientSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useClients, useDeleteClient } from '../api/use-clients';
@@ -9,11 +9,14 @@ import { ClientFormDialog } from './ClientFormDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { MenuItem } from '@/components/ui/menu';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { SearchField } from '@/components/ui/search-field';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
+import { X } from 'lucide-react';
 
 /**
  * The organisation's clients as a table. Each name links to the client's
@@ -25,11 +28,23 @@ import { deleteCascadeWarning } from '@/lib/delete-copy';
 export function ClientsTable({
   orgSlug,
   canWrite,
+  filters,
+  onFiltersChange,
 }: {
   orgSlug: string;
   canWrite: boolean;
+  /** The screen's URL-backed filters. Absent ⇒ the table renders unsearched, as it always did. */
+  filters?: { q: string } | undefined;
+  onFiltersChange?: ((patch: { q: string }) => void) | undefined;
 }): React.ReactElement {
-  const clients = useClients(orgSlug);
+  const search = filters?.q ?? '';
+  const setSearch = (q: string): void => onFiltersChange?.({ q });
+  // The request is driven by the SETTLED term, so a typing burst costs one round trip; the input
+  // renders `search` and stays instant. The same split the two library screens use.
+  const debouncedSearch = useDebouncedValue(search);
+  const clients = useClients(orgSlug, debouncedSearch);
+  const searchId = useId();
+  const filtered = search.trim() !== '';
   const deleteClient = useDeleteClient(orgSlug);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
@@ -118,6 +133,37 @@ export function ClientsTable({
 
   return (
     <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+      {onFiltersChange === undefined ? null : (
+        <div className="flex flex-wrap items-end gap-3">
+          <SearchField
+            id={searchId}
+            className="min-w-56 flex-1"
+            label="Search clients"
+            placeholder="Search by name"
+            clearLabel="Clear client search"
+            value={search}
+            onChange={setSearch}
+          />
+          {/* Always rendered and shaded when there is nothing to clear — the shape M4 gave the two
+              library bars, and the reason is the same: a control that removes itself by succeeding
+              drops focus to `<body>` at the moment it is pressed. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-disabled={!filtered}
+            onClick={() => {
+              if (!filtered) return;
+              setSearch('');
+            }}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          >
+            <X aria-hidden="true" className="size-4" />
+            Clear filters
+          </Button>
+        </div>
+      )}
+
       <DataTable
         caption="Clients"
         columns={columns}
@@ -125,7 +171,29 @@ export function ClientsTable({
         getRowKey={(client) => client.id}
         loadingLabel="Loading clients…"
         errorLabel="Couldn’t load clients. Please try again."
-        empty={<>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>}
+        empty={
+          filtered ? (
+            // **A filtered-to-nothing list is a different fact from an empty organisation**, and
+            // must never read as one — it says so, and offers the way back.
+            <>
+              <p className="text-muted-foreground text-sm">No clients match this search.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setSearch('')}
+                // Named for its context: its twin in the bar above is always present, and two
+                // buttons whose accessible name is the bare string are indistinguishable to a
+                // reader who hears them (M4's finding, applied here on the day it was made).
+                aria-label="Clear filters and show all clients"
+              >
+                Clear filters
+              </Button>
+            </>
+          ) : (
+            <>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>
+          )
+        }
       />
 
       {canWrite ? (

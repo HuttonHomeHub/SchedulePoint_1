@@ -83,9 +83,14 @@ paragraphs are 410 and 249 characters at `text-sm` across a 1104 px measure — 
 `6 × 20 px` of line-height plus two `mt-1` margins ≈ 128 px, and that block is entirely reducible.
 
 **Judged at the M3 boundary, before M7.** M7 adds a filter bar to clients, which **raises** its
-chrome from 180 px to ≈ 270 px. That is a capability the product owner chose knowing the cost, not
-a regression, so it is measured and reported separately rather than allowed to move this bar in
-either direction.
+chrome. That is a capability the product owner chose knowing the cost, not a regression, so it is
+measured and reported separately rather than allowed to move this bar in either direction.
+
+**Measured at M7: 180 → 240 px, one row rather than two** — this clause predicted ≈ 270 px and is
+corrected here rather than quietly replaced. The resulting spread is 142 px, and **that number does
+not reopen FC-2**: M7 narrows the spread by making the _best_ screen worse, giving no reader an
+extra row anywhere and costing the densest list one. A condition that scored that as progress would
+be measuring the wrong thing.
 
 **A cost this condition cannot see, stated now.** FC-2 measures **chrome**, and audit-log has a
 second density cost the epic does not touch: its rows are **57 px, and 69 px on 3 of 27**, against

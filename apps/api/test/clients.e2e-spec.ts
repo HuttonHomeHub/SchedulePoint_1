@@ -104,6 +104,53 @@ describe.skipIf(!hasDatabase)('Clients API (e2e)', () => {
     expect(list.body.meta).toMatchObject({ hasMore: false });
   });
 
+  /**
+   * **`?q=` — the clients list gains the search the libraries already had** (page-consistency M7).
+   *
+   * Asserted end to end rather than at the repository, because the thing that can go wrong is the
+   * composition: the fragment has to merge with the org scope and the soft-delete filter without
+   * either clobbering the other, and a unit test of `clientSearchWhere` alone cannot see that.
+   * The deleted-row case is the one that would be silently wrong.
+   */
+  it('filters clients by ?q= — case-insensitive, trimmed, and still org-scoped and soft-delete aware', async () => {
+    const { actor } = await adminWithOrg();
+    await createClient(actor, 'Northgate Developments');
+    await createClient(actor, 'Bellway Homes');
+    const goneId = await createClient(actor, 'Northgate Retail');
+
+    const url = '/api/v1/organizations/acme/clients';
+
+    // Case-insensitive, and a substring rather than a prefix.
+    const hit = await actor.agent.get(`${url}?q=NORTHGATE`).expect(200);
+    expect((hit.body.data as { name: string }[]).map((c) => c.name).sort()).toEqual([
+      'Northgate Developments',
+      'Northgate Retail',
+    ]);
+    const middle = await actor.agent.get(`${url}?q=way%20Hom`).expect(200);
+    expect((middle.body.data as { name: string }[]).map((c) => c.name)).toEqual(['Bellway Homes']);
+
+    // A term matching nothing is an empty page, never an error.
+    const none = await actor.agent.get(`${url}?q=nonexistent`).expect(200);
+    expect(none.body.data).toHaveLength(0);
+
+    // A whitespace-only term is no search at all — the full list comes back.
+    const blank = await actor.agent.get(`${url}?q=${encodeURIComponent('   ')}`).expect(200);
+    expect(blank.body.data).toHaveLength(3);
+
+    // **The composition, which is the point.** A soft-deleted row must not come back through the
+    // search — the filter merges with `active(…)` rather than replacing it.
+    await actor.agent.delete(`${url}/${goneId}`).expect(204);
+    const afterDelete = await actor.agent.get(`${url}?q=northgate`).expect(200);
+    expect((afterDelete.body.data as { name: string }[]).map((c) => c.name)).toEqual([
+      'Northgate Developments',
+    ]);
+  });
+
+  it('422s a ?q= over the max length', async () => {
+    const { actor } = await adminWithOrg();
+    await actor.agent.get(`/api/v1/organizations/acme/clients?q=${'x'.repeat(201)}`).expect(422);
+  });
+
   it('rejects a duplicate active name (409) but allows reuse after delete', async () => {
     const { actor } = await adminWithOrg();
     const id = await createClient(actor, 'Dup');
