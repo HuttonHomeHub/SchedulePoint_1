@@ -61,11 +61,15 @@ import { canManageHierarchy } from '@/hooks/use-org-role';
  * exactly as it does today. The degradation is the ABSENCE of the constraint rather than a second
  * layout, which is also why there is no separate small-window design to keep in step.
  *
- * `self-start` with `max-h-full` is what stops a box padding out to match its neighbour: a grid
- * item stretches to its row by default, so a "Jump back in" holding one plan would be as tall as a
- * "Needs your attention" holding six and the difference would be empty card. Sized to content and
- * capped at the row, the box ends where its content does and the leftover is page rather than a
- * hole inside a border.
+ * **It stretches to its row, and the row is what was wrong before.** M9 shipped this as `self-start`
+ * with `max-h-full`, so a box ended where its content did — on the reasoning that a short box
+ * padding out to match its neighbour is an empty card, which a screenshot had just demonstrated.
+ * That observation was true of the configuration it was taken in and the conclusion drawn from it
+ * was too broad: the hole came from EQUAL `1fr` rows, which give a four-plan shortlist the same
+ * half-screen as an eight-row list, not from stretching as such. With the rows sized to what each
+ * needs (see `PageGrid` below), stretching leaves no hole and buys something worth having — the two
+ * boxes in a row end level. Reversed on the product owner's report against `web-v0.134.0`: "if
+ * there is free space the boxes should fill them rather than shrink".
  *
  * 220 px is derived, not chosen: the worst heading block on this screen measured 97 px and a row
  * measured 61 px after M9.1's tightening, so 97 + 2 × 61 = 219 (`m8-density-measurement.md`,
@@ -74,7 +78,7 @@ import { canManageHierarchy } from '@/hooks/use-org-role';
  * value as drift and is right to: the same number on the spacing scale is the same 220 px and one
  * fewer one-off.
  */
-const GRID_ITEM_CLASS = 'flex max-h-full min-h-55 flex-col self-start';
+const GRID_ITEM_CLASS = 'flex min-h-55 flex-col';
 
 export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactElement {
   const { data: session } = useSession();
@@ -208,16 +212,25 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
         ) : (
           <PageGrid
             /*
-              Two rows that share the height rather than take what their content asks for.
-              `minmax(0, 1fr)` and not `1fr`: a grid track's implicit minimum is `auto`, which is
-              its content, so plain `1fr` rows grow to fit eight rows of plan and the cap never
-              binds.
+              **The top row takes what it needs; the bottom row takes the rest.** Not two equal
+              halves, which is what M9 shipped and what the product owner reported against: "Jump
+              back in" holds at most five plans and "Needs your attention" is an inbox that is
+              usually short, so an equal split leaves surplus in the top row while the bottom row —
+              the two eight-row lists this screen exists to show — scrolls. The asymmetry is a
+              property of the content rather than of the position: the top row is naturally
+              bounded and small, the bottom holds the long lists.
+
+              `minmax(0, auto)` rather than bare `auto` for the top row so it can still shrink when
+              the window is short; `minmax(0, 1fr)` rather than `1fr` for the bottom because a grid
+              track's implicit minimum is its content, so plain `1fr` grows to fit eight rows and
+              the cap never binds. The floor that hands the page its scroll back is the items'
+              `min-h-55`, not these tracks.
 
               **Only from `md`, where the grid is two columns.** Below that it is a single column
-              of four boxes and capping each at a quarter of the screen would be four scrollbars on
+              of four boxes and capping each at a share of the screen would be four scrollbars on
               a phone — there, the workspace scrolls exactly as it does today.
             */
-            className="min-h-0 flex-1 md:grid-rows-[repeat(2,minmax(0,1fr))]"
+            className="min-h-0 flex-1 md:grid-rows-[minmax(0,auto)_minmax(0,1fr)]"
           >
             {/*
               **The order is measured, not preferred, and it corrects the approved plan.**

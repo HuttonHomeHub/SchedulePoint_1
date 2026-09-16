@@ -200,3 +200,48 @@ its own comment rather than leaving a reader to assume it is covered.
 nineteenth arbitrary value; it is spelled `min-h-55` — the same 220 px on the 4 px spacing step —
 which is the better answer rather than a raised ceiling. And `check:counts` caught the banner's web
 source-file count going stale in the commit that added `SectionCount.tsx`.
+
+---
+
+## 7. M9.4 — the rows take what they need (a reversal, on the product owner's report)
+
+Shipped as `web-v0.134.0`, the product owner said: _"i like it but if there is free space the boxes
+should fill them rather than shrink?"_ Their screen showed the top row ending well short of its
+track while "Where the work stands" scrolled — **surplus in one row, shortage in the other**.
+
+Two things from §1 are reversed, and the more interesting one is that §6's own evidence was read too
+broadly.
+
+**The rows stop being equal halves.** `md:grid-rows-[repeat(2,minmax(0,1fr))]` becomes
+`md:grid-rows-[minmax(0,auto)_minmax(0,1fr)]`: the top row takes its content's height, the bottom
+row takes the rest. That asymmetry is a property of the content rather than of the position — "Jump
+back in" holds at most five plans (`RECENT_PLANS_CAP`) and "Needs your attention" is an inbox that is
+usually short, while the bottom row holds the two eight-row lists this screen exists to show. An
+equal split was always going to leave surplus above and shortage below.
+
+**D4's third bullet is withdrawn: the boxes stretch to their row again.** §6 recorded a screenshot
+"disagreeing flatly" with stretching — one plan in a 399 px box with 250 px of nothing. That
+observation was accurate **about the configuration it was taken in**, and the rule drawn from it
+("size to content, never stretch") was too broad: the hole came from **equal `1fr` rows**, which
+hand a four-plan shortlist the same half-screen as an eight-row list. It did not come from
+stretching. With the rows sized to need there is no hole to avoid, and stretching buys something
+worth having — the two boxes in a row end level instead of raggedly.
+
+Recorded rather than edited into §1, because "a correct observation generalised one step too far" is
+a more useful thing to have written down than a tidy decision.
+
+### Measured
+
+|                                        |  M9 (`web-v0.134.0`) |            M9.4 |
+| -------------------------------------- | -------------------: | --------------: |
+| `<main>` content / room at 1646 × 1000 |            949 / 949 |   **949 / 949** |
+| Top-row boxes                          | 261 and 280 (ragged) | **280 and 280** |
+| Bottom-row boxes                       |                  399 |         **517** |
+| Rows visible in a bottom-row box       |                    4 |           **6** |
+| Questions above the fold               |               7 of 7 |          7 of 7 |
+
+The 118 px the bottom row gained is the surplus the top row was holding. `<main>` still does not
+scroll, which is the condition the whole milestone turns on.
+
+**What is unchanged and deliberately so:** the `min-h-55` floor still lives on the grid items rather
+than on the tracks, so a short window still hands the page its scroll back the same way.
