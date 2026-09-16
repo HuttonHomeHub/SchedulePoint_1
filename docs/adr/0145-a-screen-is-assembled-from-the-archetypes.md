@@ -95,7 +95,20 @@ named the riskiest single change in the epic and declined, with a test asserting
 rather than re-derived — including that property, which is what makes the milestone's stated risk
 (focus dropped when a control removes itself by succeeding) not apply at all.
 
-**D7 — A claim about a token is retired when the token does not govern what the claim says.**
+**D7 — The clients list gains the search it was the only one of the three to lack**, and it is an
+API change rather than a UI one, because the endpoint accepted no `q` at all. It mirrors
+`calendarSearchWhere` — a spreadable fragment rather than an `OR`, so it composes with the
+soft-delete and org-scope terms instead of replacing them; that composition is what the API e2e case
+asserts, since a repository test of the fragment alone structurally cannot see a soft-deleted row
+returning through a search.
+
+**No index and no migration**, and that is a measured decision recorded as such: `database-architect`
+was engaged per §19.3 and re-measured for clients rather than inheriting ADR-0053 M4's figures —
+**3.6 ms** at that ADR's own 5,000-row ceiling for a term matching nothing, on a tenant roughly 190×
+larger than this whole installation, against a 200 ms budget. §19.3 treats _the agent was run and
+said no change_ as a different fact from _the agent was not run_, and this is the first.
+
+**D8 — A claim about a token is retired when the token does not govern what the claim says.**
 `globals.css` said `--row-h` was "ONE rhythm for the Gantt and the tables"; **no table reads it and
 none ever has**. `list-row.tsx` said "its height comes from `--row-h`" over a class string reading
 `border-b py-2`. Adopting the claim would re-value every table row by 21 px to satisfy a sentence;
@@ -159,9 +172,38 @@ behaviour the component had.
 267 px wide and a 116-character one 736 px on screens sitting side by side. `flex-1` plus
 `max-w-prose` — the pairing `EmptyState` has used one file over since the archetypes shipped.
 
-**Journeys changed by design.** Moving `Delete` behind a menu breaks any test locating it at the row;
-those were updated in the same change, through a shared `clickRowAction` helper rather than by
-restating the `Actions for ${subject}` format in a dozen places.
+**Journeys changed by design**, and one of them found a defect nothing else could. Moving `Delete`
+behind a menu breaks any test locating it at the row; those were updated through a shared
+`clickRowAction` helper rather than by restating the name format in a dozen places — which earned
+its keep immediately, because **the format changed once inside the milestone.**
+
+`Actions for Northgate` resolved to **two elements**: the Project Explorer is docked on every
+organisation-scoped route and names its own node menus the same way, so the moment the clients table
+grew a `⋯` a reader had two controls with the identical accessible name offering different actions.
+Three of the five converted tables. **M4 created it**, and it is the same class as the `Clear
+filters` collision the same milestone had fixed an hour earlier — fixed by the same rule, the new
+control naming its context (`Actions for Northgate in Clients`), and passed only where a collision
+exists rather than everywhere for symmetry. **No unit suite could have found it**: each table's
+tests mount that table alone, and the Explorer exists only in a full render.
+
+**The weight ratchet caught a second-order effect of #335.** The width caps first went on
+`headClassName`, which _replaces_ its default — so adding a width meant restating `font-medium`,
+moving weight out of a primitive and into a screen: 157 → 159. Fixing #335 properly was considered
+and **declined on measurement**: seven `cellClassName` sites deliberately omit the padding and
+`cn()` would have silently given it back — seven columns changing, unmeasured, in a consistency
+milestone. The caps moved to the cell, whose default carries no weight, and the re-measured figures
+are identical to the pixel.
+
+**The clients filter bar raises that screen's chrome 180 → 240 px and costs one row**, against a
+prediction of ≈ 270 px and two. The resulting 142 px spread does **not** reopen FC-2, and the reason
+is worth stating because the number looks like progress: M7 narrows the spread by making the **best**
+screen worse, giving no reader an extra row anywhere and costing the densest list one. A condition
+that scored that as progress would be measuring the wrong thing — the same lesson D3 records about
+`lastCellX`.
+
+**ADR-0123's search-consumer census failed** the moment the clients route read a param, and is now
+classified with a sentence. Nothing was wrong — it reads `q` through `pickText` like every other `q`
+on this surface — but the gate exists so nobody adds an undeclared param silently, and it held.
 
 **`docs/TECH_DEBT.md` #335** records that `DataTable`'s `headClassName` / `cellClassName` **replace**
 the default rather than merging it, found while adding the D4 caps. Not currently a defect — every
