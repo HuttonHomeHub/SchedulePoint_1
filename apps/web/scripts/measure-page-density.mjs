@@ -16,6 +16,7 @@
  * reuses the assembly it is meant to be testing.
  */
 import { chromium } from '@playwright/test';
+import { execSync } from 'node:child_process';
 import { globSync } from 'node:fs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
@@ -129,7 +130,17 @@ const probe = () => {
   // How much of the first screenful is chrome before a single row of data appears.
   const firstRowTop = firstRow ? Math.round(firstRow.getBoundingClientRect().top) : null;
   const vh = window.innerHeight;
+  // The state every offset below is conditional on (ADR-0113, one instrument along). `main`'s left
+  // offset IS the Explorer column's width: the shell is `grid-cols-[auto_minmax(0,1fr)]` with the
+  // Explorer alone in column 1 (`app-shell.tsx:134`, `:174`, `:203`). Two runs that do not record
+  // it cannot be compared, and disagreeing looks like drift.
+  const mainRect = main?.getBoundingClientRect();
   return {
+    state: {
+      viewport: { w: window.innerWidth, h: vh },
+      explorerWidth: mainRect ? Math.round(mainRect.left) : null,
+      mainWidth: mainRect ? Math.round(mainRect.width) : null,
+    },
     rows: rows.length,
     rowHeights: tally,
     tableTop,
@@ -153,7 +164,15 @@ const PAGES = [
   ['members', `/orgs/${SLUG}/members`],
   ['audit-log', `/orgs/${SLUG}/audit-log`],
 ];
-const out = {};
+const out = {
+  run: {
+    sha: execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim(),
+    width: WIDTH,
+    slug: SLUG,
+    takenAt: new Date().toISOString(),
+    seeded,
+  },
+};
 for (const [name, path] of PAGES) {
   await page.goto(`${BASE}${path}`);
   await page.waitForLoadState('networkidle');

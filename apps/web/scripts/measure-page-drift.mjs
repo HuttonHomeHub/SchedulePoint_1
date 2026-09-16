@@ -11,6 +11,7 @@
  * a second fixture drifts and the drift is invisible (ADR-0065, ADR-0121).
  */
 import { chromium } from '@playwright/test';
+import { execSync } from 'node:child_process';
 import { globSync } from 'node:fs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
@@ -18,15 +19,37 @@ const WIDTH = Number(process.env.WIDTH ?? '1646');
 const SLUG = process.env.SLUG;
 if (!SLUG) throw new Error('SLUG is required — pass the org slug the shoot harness created');
 
+/**
+ * **The nine in-scope screens, plus `account` labelled as what it is.**
+ *
+ * This list was wrong on its first run and the correction is the reason it now carries a comment.
+ * It measured `account` — a **declared exception** to the page frame
+ * (`page-container.structural.test.ts`) and therefore deliberately different — while OMITTING
+ * `client-detail` and `project-detail`, which are in scope, carry four of the ten hand-rolled
+ * `<h1>` sites and two of the three `<h2>` sites, and are the only two that sit under
+ * `Breadcrumbs`. So every "three h1 rhythms across eight screens" statement taken from the first
+ * run was about the wrong eight.
+ *
+ * `account` is **kept and labelled** rather than dropped: a measurement of what is deliberately
+ * different is worth having, and dropping it would make the exception invisible to the instrument
+ * that exists to see differences.
+ *
+ * The two detail screens resolve their ids at run time by following the links the list screens
+ * render, rather than taking them as environment variables — two values that have to agree and
+ * are written down twice is how they stop agreeing (the rule this file already applies to EMAIL).
+ */
 const PAGES = [
-  ['clients', `/orgs/${SLUG}/clients`],
-  ['calendars', `/orgs/${SLUG}/calendars`],
-  ['resources', `/orgs/${SLUG}/resources`],
-  ['members', `/orgs/${SLUG}/members`],
-  ['audit-log', `/orgs/${SLUG}/audit-log`],
-  ['recently-deleted', `/orgs/${SLUG}/recently-deleted`],
-  ['my-activity', `/me/activity`],
-  ['account', `/account`],
+  ['clients', (slug) => `/orgs/${slug}/clients`],
+  ['client-detail', (slug, ids) => `/orgs/${slug}/clients/${ids.clientId}`],
+  ['project-detail', (slug, ids) => `/orgs/${slug}/projects/${ids.projectId}`],
+  ['calendars', (slug) => `/orgs/${slug}/calendars`],
+  ['resources', (slug) => `/orgs/${slug}/resources`],
+  ['members', (slug) => `/orgs/${slug}/members`],
+  ['audit-log', (slug) => `/orgs/${slug}/audit-log`],
+  ['recently-deleted', (slug) => `/orgs/${slug}/recently-deleted`],
+  ['my-activity', () => `/me/activity`],
+  // Out of scope, measured as the control: a declared exception to the frame gate.
+  ['account (declared exception)', () => `/account`],
 ];
 
 const probe = () => {
@@ -55,10 +78,29 @@ const probe = () => {
   });
 
   const tables = [...document.querySelectorAll('table')].map((t) => {
-    const heads = [...t.querySelectorAll('thead th')].map((th) => ({
+    // Natural width is what ADR-0143 M5 used to tell a table that is genuinely wide from one that
+    // is merely spread: a column rendered at 300px whose content wants 90px is slack, and a column
+    // rendered at 300px whose content wants 290px is the table.
+    const naturalOf = (col) => {
+      const cells = [...t.querySelectorAll('tbody tr')]
+        .slice(0, 40)
+        .map((tr) => tr.querySelectorAll('td')[col])
+        .filter(Boolean);
+      const head = t.querySelectorAll('thead th')[col];
+      let widest = 0;
+      for (const el of [head, ...cells]) {
+        if (!el) continue;
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        widest = Math.max(widest, Math.ceil(range.getBoundingClientRect().width));
+      }
+      return widest;
+    };
+    const heads = [...t.querySelectorAll('thead th')].map((th, i) => ({
       text: th.textContent.trim().slice(0, 24),
       x: Math.round(th.getBoundingClientRect().left),
       w: Math.round(th.getBoundingClientRect().width),
+      natural: naturalOf(i),
     }));
     const rows = [...t.querySelectorAll('tbody tr')];
     const first = rows[0];
@@ -90,7 +132,33 @@ const probe = () => {
     boxed: getComputedStyle(s).backgroundColor,
   }));
 
+  /**
+   * **The state every `x` in this output is conditional on.**
+   *
+   * ADR-0113's finding, one instrument along: the Project Explorer is a resizable drawer, so the
+   * content column's left edge — and therefore every column offset and every row spread below —
+   * is a function of a width the reader chose and the harness never recorded. A run that does not
+   * say how wide the Explorer was cannot be compared with another run, and two such runs disagreeing
+   * looks like drift.
+   */
+  // Measured as `main`'s LEFT OFFSET rather than by finding the Explorer's own box. The shell is
+  // `grid-cols-[auto_minmax(0,1fr)]` with the Explorer alone in column 1 and `<main>` in column 2
+  // (`app-shell.tsx:134`, `:174`, `:203`), so the offset IS the column's width — and it stays right
+  // when the Explorer is folded to its spine, hidden below `lg`, or absent on a route that has no
+  // organisation (ADR-0104), where a selector would find nothing and report a misleading 0.
+  const explorerNav = document.querySelector('nav[aria-label="Project Explorer"]');
+  const frameCs = frame ? getComputedStyle(frame) : null;
+
   return {
+    state: {
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      explorerWidth: main ? Math.round(main.getBoundingClientRect().left) : null,
+      explorerPresent: Boolean(explorerNav),
+      mainWidth: main ? Math.round(main.getBoundingClientRect().width) : null,
+      mainLeft: main ? Math.round(main.getBoundingClientRect().left) : null,
+      frameMaxWidthComputed: frameCs ? frameCs.maxWidth : null,
+      framePadding: frameCs ? `${frameCs.paddingTop} ${frameCs.paddingLeft}` : null,
+    },
     mainScrolls: main ? main.scrollHeight > main.clientHeight + 1 : null,
     mainScrollHeight: main ? main.scrollHeight : null,
     mainClientHeight: main ? main.clientHeight : null,
@@ -105,13 +173,11 @@ const probe = () => {
       : null,
     frameMaxWidth: frame ? getComputedStyle(frame).maxWidth : null,
     frameWidth: frame ? Math.round(frame.getBoundingClientRect().width) : null,
-    descriptions: paras
-      .slice(0, 4)
-      .map((p) => ({
-        chars: p.textContent.trim().length,
-        width: Math.round(p.getBoundingClientRect().width),
-        top: Math.round(p.getBoundingClientRect().top),
-      })),
+    descriptions: paras.slice(0, 4).map((p) => ({
+      chars: p.textContent.trim().length,
+      width: Math.round(p.getBoundingClientRect().width),
+      top: Math.round(p.getBoundingClientRect().top),
+    })),
     sectionCount: sections.length,
     sections,
     tables,
@@ -137,9 +203,37 @@ await page.getByLabel(/email/i).fill(EMAIL);
 await page.getByLabel(/password/i).fill('correct-horse-battery');
 await page.getByRole('button', { name: /sign in/i }).click();
 await page.waitForURL(/\/orgs\//, { timeout: 20000 });
-const out = {};
+/**
+ * The two detail screens need a client id and a project id. They are FOLLOWED from the list
+ * screens rather than passed in, so the harness cannot be pointed at a fixture that does not
+ * contain them — and so it fails loudly if a list renders no navigable row, rather than silently
+ * measuring a 404 (ADR-0143's rule: a probe that reports a plausible number for the wrong subject
+ * is worse than one that throws).
+ */
+await page.goto(`${BASE}/orgs/${SLUG}/clients`);
+await page.waitForLoadState('networkidle');
+const clientHref = await page
+  .locator(`a[href*="/orgs/${SLUG}/clients/"]`)
+  .first()
+  .getAttribute('href');
+if (!clientHref) throw new Error('No client row to follow — seed the fixture first');
+const clientId = clientHref.split('/').pop();
+
+await page.goto(`${BASE}${clientHref}`);
+await page.waitForLoadState('networkidle');
+const projectHref = await page
+  .locator(`a[href*="/orgs/${SLUG}/projects/"]`)
+  .first()
+  .getAttribute('href');
+if (!projectHref) throw new Error(`Client ${clientId} has no project to follow`);
+const ids = { clientId, projectId: projectHref.split('/').pop() };
+
+const sha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+const out = {
+  run: { sha, width: WIDTH, slug: SLUG, takenAt: new Date().toISOString(), ids },
+};
 for (const [name, path] of PAGES) {
-  await page.goto(`${BASE}${path}`);
+  await page.goto(`${BASE}${path(SLUG, ids)}`);
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(400);
   out[name] = await page.evaluate(probe);
