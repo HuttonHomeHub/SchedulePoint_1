@@ -10590,6 +10590,63 @@ alarming reading and the reassuring one were both half-truths. The cheap first s
 staff probe or a `measure-*` harness at 500 and 2,000 activities; the stale docblock should be
 corrected either way, because a false claim of virtualization is exactly what stops anyone looking.
 
+### 336. The documented `pg_trgm` escalation names an index the shipped query cannot use
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M7, `database-architect`) · **Size:** S · **Owner:** api
+
+`docs/adr/0053-calendar-scoping-and-resource-management.md:303` and `:425`, `docs/TECH_DEBT.md` #53,
+`docs/API.md:696` and two spec files all state the library-search escalation as **a `pg_trgm` GIN
+index on `lower(name)`**. Measured against a real database: **that index is not used by the query
+this repository emits.**
+
+`calendar.repository.ts:25-28` is `{ name: { contains: search, mode: 'insensitive' } }`, which Prisma
+compiles to `name ILIKE $1`. The left-hand side is `name`. PostgreSQL matches an expression index
+only when the predicate contains **that exact expression**, so an index on `lower(name)` cannot serve
+it whatever its operator class — the same rule ADR-0086 already records as "expression equality, not
+pattern containment", one level along. Confirmed both ways in `EXPLAIN`: with
+`gin (lower(name) gin_trgm_ops)` present the planner ignores it entirely and the ILIKE costs what it
+did with no trgm index at all (~3.7 ms at the ADR-0053 ceiling); with `gin (name gin_trgm_ops)` it is
+used, at **0.11 ms**.
+
+**The failure mode is worse than a slow query**, which is why this is filed rather than left: the
+remedy looks done. Somebody hitting the documented trigger follows the documented instruction, ships
+a 1.5–2.2 MB index, pays GIN maintenance on every library write, sees no improvement, and closes the
+register row.
+
+**#53's own wording is what makes the trap easy to walk into.** It correctly lists "not an expression
+index on `lower(name)` (prefix only)" among the things that _cannot_ serve the search — that clause
+is about a **btree** expression index — and then prescribes a **GIN** one on the same expression. The
+two are consistent as written and lead a reader straight past the real constraint, which is the
+left-hand side rather than the index type.
+
+**The correct form is `gin (name gin_trgm_ops)`** for calendars, resources and clients. Resources
+additionally OR on `code`, so it needs a second index on `code` or a
+`gin ((name || ' ' || code) gin_trgm_ops)` with a matching query rewrite — which is a decision, not a
+transcription.
+
+**Not fixed in the epic that found it.** It is a shared-doc change across an ADR, this register,
+`docs/API.md` and two specs, and rewriting an accepted ADR's escalation fires ADR-0105's trigger.
+Nothing is broken today: no installation is near the trigger (the deployed database holds 124 clients
+across 2 organisations), so this is wrong advice rather than a live defect — but it is wrong advice
+that will be followed exactly when somebody is under pressure.
+
+### 337. Prisma's `contains` does not escape `%` or `_`, so a searched literal is a wildcard
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M7, `database-architect`) · **Size:** S · **Owner:** api
+
+Measured: `contains: '50%'` is sent as the parameter `'%50%%'`, and `'Acme 5000 Ltd' ILIKE '%50%%'`
+is **true**. `a_b` likewise matches `aXb`. Live today on the calendars and resources library searches
+and inherited verbatim by the clients search M7 adds.
+
+**Not an injection risk** — the term is parameterised, and it is not a denial-of-service vector
+either: measured at the ADR-0053 ceiling, 100 underscores cost **6.81 ms** and an alternating `_%`
+term **6.93 ms** against a plain zero-match **3.66 ms**, so under 2×. It is a correctness and
+usability wart: a planner searching for a resource literally named `50%` gets rows that do not
+contain it, with nothing saying why.
+
+Escaping it is a shared change across every `contains` call site and changes what existing searches
+return, so it is its own decision rather than a fix to fold into a screen epic.
+
 ### 335. `DataTable`'s `headClassName` / `cellClassName` replace the default rather than merging it
 
 **Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M4-T2, read) · **Size:** S · **Owner:** web
