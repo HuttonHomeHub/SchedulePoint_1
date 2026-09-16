@@ -364,7 +364,14 @@ export function AddCrossPlanLinkDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
+            <Button
+              type="submit"
+              aria-disabled={create.isPending}
+              aria-busy={create.isPending}
+              onClick={(event) => {
+                if (create.isPending) event.preventDefault();
+              }}
+            >
               {create.isPending ? 'Saving…' : 'Add cross-plan link'}
             </Button>
           </div>

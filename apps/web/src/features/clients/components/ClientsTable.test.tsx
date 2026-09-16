@@ -67,7 +67,7 @@ describe('ClientsTable', () => {
     // Null description renders a placeholder.
     expect(screen.getByRole('button', { name: 'Edit Harbour' })).toBeInTheDocument();
     expect(
-      within(openRowActions('Northgate')).getByRole('menuitem', { name: 'Delete' }),
+      within(openRowActions('Northgate', 'Clients')).getByRole('menuitem', { name: 'Delete' }),
     ).toBeInTheDocument();
   });
 
@@ -76,7 +76,9 @@ describe('ClientsTable', () => {
 
     expect(screen.getByRole('link', { name: 'Northgate' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit Harbour' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Actions for Northgate' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Actions for Northgate in Clients' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows an empty state when there are no clients', () => {
@@ -86,7 +88,7 @@ describe('ClientsTable', () => {
 
   it('confirms before deleting (no immediate destructive action)', async () => {
     renderTable(true);
-    await clickRowAction('Northgate', 'Delete');
+    await clickRowAction('Northgate', 'Delete', 'Clients');
     // A confirm dialog appears rather than deleting straight away.
     expect(screen.getByRole('heading', { name: 'Delete client' })).toBeInTheDocument();
     expect(

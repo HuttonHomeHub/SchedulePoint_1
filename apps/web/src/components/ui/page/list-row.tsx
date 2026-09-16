@@ -69,9 +69,14 @@ export interface ListRowProps extends React.HTMLAttributes<HTMLDivElement> {
 /**
  * One row of a list: a primary block, an optional trailing block, one rhythm.
  *
- * Its height comes from `--row-h` (ADR-0097 CQ-B), the same token the Gantt's virtualizer
- * duplicates as a number — so a list row, a table row and a Gantt bar share one rhythm instead of
- * three that drift.
+ * **Its height is its content plus `py-2`, and it is deliberately not a fixed rhythm.** This
+ * docblock claimed the height came from `--row-h` (ADR-0097 CQ-B) until 2026-09-16, and the class
+ * string four lines below it is `border-b py-2` — no height, no `min-h`, no token. A row here holds
+ * a name with an optional secondary line beneath, so a fixed 28 px would clip the two-line case
+ * that is the archetype's main reason to exist.
+ *
+ * Retired rather than made true (page-consistency M6): the token governs the Gantt and nothing
+ * else, and making this component obey it would be a layout change made to satisfy a sentence.
  */
 export function ListRow({
   primary,

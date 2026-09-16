@@ -62,7 +62,8 @@ test('a deleted client cascade is shown and restored from the recycle bin (acces
 
   // Delete the client (cascades to the project + plan).
   await navLink(page, 'Clients').click();
-  await page.getByRole('button', { name: 'Delete Northgate' }).click();
+  await page.getByRole('button', { name: 'Actions for Northgate in Clients' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText(/No clients yet/)).toBeVisible();
 
@@ -125,7 +126,8 @@ test('a directly-deleted plan can be restored from the recycle bin', async ({ pa
   await expect(page.getByRole('link', { name: 'Baseline' })).toBeVisible();
 
   // Delete just the plan.
-  await page.getByRole('button', { name: 'Delete Baseline' }).click();
+  await page.getByRole('button', { name: 'Actions for Baseline in Plans' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText(/No plans yet/)).toBeVisible();
 

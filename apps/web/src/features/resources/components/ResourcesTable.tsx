@@ -257,15 +257,23 @@ export function ResourcesTable({
          last is the summed width of every column BEFORE the last fact column — so a cap helps only
          there. Capping the last fact column itself cannot shrink that distance, and its surplus has
          to land somewhere: on the plans table it landed in `Name`, the FIRST column, and the
-         distance grew by 76 px. Cap what sits before the last fact; leave the last fact alone. */
+         distance grew by 76 px. Cap what sits before the last fact; leave the last fact alone.
+
+         **It goes on `cellClassName`, not `headClassName`, and the reason is `DataTable`'s `??`.**
+         Both props REPLACE their default rather than merging it (`docs/TECH_DEBT.md` #335), so
+         adding a width to a header means restating `py-2 pr-4 font-medium` beside it — which moves
+         a `font-medium` out of the primitive and into a screen, and ADR-0097's weight ratchet
+         counts exactly that. The first version of these caps did it and pushed the count 157 → 159.
+         The cell default carries no weight, so restating it costs nothing, and a width on a `<td>`
+         constrains the column under `table-layout: auto` just as a width on its `<th>` does. */
     {
       header: 'Kind',
-      headClassName: 'py-2 pr-4 font-medium md:w-32',
+      cellClassName: 'py-2 pr-4 md:w-32',
       cell: ({ resource }) => RESOURCE_KIND_LABELS[resource.kind],
     },
     {
       header: 'Code',
-      headClassName: 'py-2 pr-4 font-medium md:w-24',
+      cellClassName: 'py-2 pr-4 md:w-24',
       cell: ({ resource }) =>
         resource.code ? (
           <span className="font-mono text-xs">{resource.code}</span>
@@ -275,8 +283,8 @@ export function ResourcesTable({
     },
     {
       header: 'Group',
-      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell lg:w-36',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
+      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell lg:w-36',
       cell: ({ resource }: ResourceTreeRow) => {
         const parentName = resource.parentId ? groupNameById.get(resource.parentId) : undefined;
         return parentName ? (

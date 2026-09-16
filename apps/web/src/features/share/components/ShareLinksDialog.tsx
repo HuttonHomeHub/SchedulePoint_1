@@ -309,7 +309,14 @@ export function ShareLinksDialog({
               />
             </FieldGrid>
             <div className="flex justify-end">
-              <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
+              <Button
+                type="submit"
+                aria-disabled={create.isPending}
+                aria-busy={create.isPending}
+                onClick={(event) => {
+                  if (create.isPending) event.preventDefault();
+                }}
+              >
                 {create.isPending ? 'Creating…' : 'Create link'}
               </Button>
             </div>

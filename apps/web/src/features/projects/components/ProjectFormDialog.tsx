@@ -107,7 +107,14 @@ export function ProjectFormDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
+          <Button
+            type="submit"
+            aria-disabled={mutation.isPending}
+            aria-busy={mutation.isPending}
+            onClick={(event) => {
+              if (mutation.isPending) event.preventDefault();
+            }}
+          >
             {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create project'}
           </Button>
         </div>

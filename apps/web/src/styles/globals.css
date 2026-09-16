@@ -933,8 +933,24 @@
   /* is worth stating because the task was briefed as a toolbar measurement:   */
   /* the toolbar rows do not move, and the gain is in forms and dialogs.       */
   /*                                                                          */
-  /* `--row-h` is 28 px (CQ-B): ONE rhythm for the Gantt (down from 32) and    */
-  /* the tables, rather than two that drift.                                   */
+  /* `--row-h` is 28 px (CQ-B) and governs the GANTT, and only the Gantt.      */
+  /*                                                                          */
+  /* This said "ONE rhythm for the Gantt and the tables, rather than two that  */
+  /* drift" until 2026-09-16, and the second half was never true: **no table   */
+  /* in this product reads this token, and none ever has.** A table row is 49  */
+  /* px — `--control-h-sm` (32) plus `py-2` twice plus a 1 px border — and     */
+  /* that is arithmetic from the classes the tables actually carry, measured   */
+  /* at 49 px on every list in the estate (page-consistency M0).               */
+  /*                                                                          */
+  /* The claim is RETIRED rather than made true. Adopting it would re-value    */
+  /* every table row in the product by 21 px to satisfy a sentence, which is   */
+  /* a layout change dressed as a consistency fix; re-valuing the token to 49  */
+  /* would move the Gantt, which is the one surface that does read it. What    */
+  /* was wrong was the documentation, so the documentation is what changes.    */
+  /*                                                                          */
+  /* The one consumer is `GanttPanel`'s `GANTT_ROW_HEIGHT`, which duplicates   */
+  /* the number deliberately (a virtualizer needs a number, not a CSS var) and */
+  /* is held in step by `row-rhythm.structural.test.ts`.                       */
   /* ----------------------------------------------------------------------- */
   --control-h: 2.25rem;
   --control-h-sm: 2rem;

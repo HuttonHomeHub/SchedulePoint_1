@@ -111,7 +111,14 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
                 </option>
               ))}
             </SelectField>
-            <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
+            <Button
+              type="submit"
+              aria-disabled={create.isPending}
+              aria-busy={create.isPending}
+              onClick={(event) => {
+                if (create.isPending) event.preventDefault();
+              }}
+            >
               {create.isPending ? 'Sending…' : 'Send invitation'}
             </Button>
           </form>

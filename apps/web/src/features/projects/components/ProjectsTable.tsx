@@ -86,7 +86,7 @@ export function ProjectsTable({
           >
             Edit
           </Button>
-          <RowActionsMenu subject={project.name}>
+          <RowActionsMenu subject={project.name} context="Projects">
             <MenuItem
               destructive
               onSelect={() => {

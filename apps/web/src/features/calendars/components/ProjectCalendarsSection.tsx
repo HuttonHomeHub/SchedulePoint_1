@@ -126,7 +126,7 @@ export function ProjectCalendarsSection({
       header: 'Working days',
       // A bounded column: a width preference stops `table-layout: auto` handing it slack it
       // does not want, which pushed a row's last fact away from its first (M4-T2).
-      headClassName: 'py-2 pr-4 font-medium md:w-44',
+      cellClassName: 'py-2 pr-4 md:w-44',
       cell: (calendar) => formatWorkingWeekdays(calendar.workingWeekdays),
     },
     {

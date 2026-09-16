@@ -56,7 +56,7 @@ describe('ProjectsTable', () => {
     expect(screen.getByRole('link', { name: 'Riverside' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Riverside' })).toBeInTheDocument();
     expect(
-      within(openRowActions('Riverside')).getByRole('menuitem', { name: 'Delete' }),
+      within(openRowActions('Riverside', 'Projects')).getByRole('menuitem', { name: 'Delete' }),
     ).toBeInTheDocument();
   });
 

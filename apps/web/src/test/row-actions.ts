@@ -1,5 +1,7 @@
 import { fireEvent, screen, within } from '@testing-library/react';
 
+import { rowActionsLabel } from '@/components/ui/row-actions-menu';
+
 /**
  * **Reach a row's secondary action, which now lives behind the `⋯`.**
  *
@@ -8,13 +10,15 @@ import { fireEvent, screen, within } from '@testing-library/react';
  * that used to click `Delete Northgate` directly now opens `Actions for Northgate` first.
  *
  * It is a helper rather than two lines copied into a dozen tests because the **name format** is the
- * thing that would drift — `RowActionsMenu` builds `Actions for ${subject}` from one string, and a
- * test restating that format is a second copy of a contract, which is the drift this epic exists to
- * remove, one tier down.
+ * thing that would drift — and it did, one milestone in: the format grew an optional list qualifier
+ * when a journey found the clients table's `⋯` colliding with the Project Explorer's. The helper
+ * calls `rowActionsLabel`, the product's own builder, so a test names a control the way the screen
+ * does rather than restating a format that has already changed once.
  */
-export function openRowActions(subject: string): HTMLElement {
-  fireEvent.click(screen.getByRole('button', { name: `Actions for ${subject}` }));
-  return screen.getByRole('menu', { name: `Actions for ${subject}` });
+export function openRowActions(subject: string, context?: string): HTMLElement {
+  const name = rowActionsLabel(subject, context);
+  fireEvent.click(screen.getByRole('button', { name }));
+  return screen.getByRole('menu', { name });
 }
 
 /**
@@ -26,8 +30,12 @@ export function openRowActions(subject: string): HTMLElement {
  * mechanically dropped the second, and two tests failed looking for a trigger on a row that had not
  * rendered yet — a failure that reads exactly like the feature being broken.
  */
-export async function clickRowAction(subject: string, item: string | RegExp): Promise<void> {
-  await screen.findByRole('button', { name: `Actions for ${subject}` });
-  const menu = openRowActions(subject);
+export async function clickRowAction(
+  subject: string,
+  item: string | RegExp,
+  context?: string,
+): Promise<void> {
+  await screen.findByRole('button', { name: rowActionsLabel(subject, context) });
+  const menu = openRowActions(subject, context);
   fireEvent.click(within(menu).getByRole('menuitem', { name: item }));
 }

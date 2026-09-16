@@ -59,7 +59,7 @@ export function PlansTable({
     // does not want, which pushed a row's last fact away from its first (M4-T2).
     {
       header: 'Status',
-      headClassName: 'py-2 pr-4 font-medium md:w-28',
+      cellClassName: 'py-2 pr-4 md:w-28',
       cell: (plan) => PLAN_STATUS_LABELS[plan.status],
     },
     {
@@ -93,7 +93,7 @@ export function PlansTable({
           >
             Edit
           </Button>
-          <RowActionsMenu subject={plan.name}>
+          <RowActionsMenu subject={plan.name} context="Plans">
             <MenuItem
               destructive
               onSelect={() => {

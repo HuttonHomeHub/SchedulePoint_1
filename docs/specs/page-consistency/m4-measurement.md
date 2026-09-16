@@ -68,6 +68,29 @@ Final, against M0: **−34, −122, −65, −65** on the four tables with bound
 client-detail, both members tables and both audit tables unchanged. `w-full` on the trailing column
 was **not** re-proposed — ADR-0143 M5 withdrew it on measurement and M4-T2 says so.
 
+### The cap goes on the cell, and #335 is why
+
+The caps first went on `headClassName`, and the **ADR-0097 weight ratchet caught it**: 157 → 159.
+`DataTable`'s `headClassName` **replaces** its default rather than merging it (`docs/TECH_DEBT.md`
+#335, filed while writing these caps), so adding a width to a header means restating
+`py-2 pr-4 font-medium` beside it — which moves a `font-medium` out of the primitive and into a
+screen, which is precisely what that ratchet counts.
+
+**The fix for #335 was considered and declined here**, on measurement rather than on principle:
+`cn(DEFAULT, column.headClassName)` would merge, but **seven `cellClassName` sites in the estate
+deliberately omit `py-2`** and would silently regain it — seven table columns changing padding, in a
+milestone about consistency, with no measurement behind it. That is #335's own stated reason for
+being a row rather than a fix.
+
+So the width moved to `cellClassName`, whose default (`py-2 pr-4`) carries **no weight**, so
+restating it costs nothing. A width on a `<td>` constrains its column under `table-layout: auto`
+exactly as one on the `<th>` does — **re-measured to confirm rather than assumed, and the figures
+are identical to the pixel**: −34, −122, −65, −65 at 1646, same at 1280, ratchet back to 157.
+
+It is a small thing that says something about #335's shape: the replace semantics do not just risk a
+lost class, they **push weight out of the primitives every time a caller adds one utility** — and
+nothing but an unrelated ratchet would have reported it.
+
 ---
 
 ## 3. FC-3
@@ -125,3 +148,40 @@ that had not rendered yet, which reads exactly like the feature being broken.
 **The cost of the shape is stated rather than glossed:** deleting a client is two presses instead of
 one. The product owner accepted it on the grounds that the buried action is the destructive one and
 a moment's friction is cheapest there.
+
+---
+
+## 6. The journey found a collision the unit tests could not
+
+`Actions for Northgate` resolved to **two elements** on `/clients`. The Project Explorer is docked on
+every organisation-scoped route and names its own node menus `Actions for <name>`
+(`features/navigator/components/HierarchyTree.tsx:602`) — so the moment the clients table grew a
+`⋯`, a reader had two controls with the identical accessible name, offering different actions,
+indistinguishable to anyone hearing them rather than seeing where they sit. The same holds for
+projects on a client and plans on a project: **three of the five converted tables.**
+
+It is the **same class** as the `Clear filters` collision this milestone fixed an hour earlier, and
+it is worth noting that this one was **created by M4** rather than exposed by it.
+
+**No unit suite could have found it.** Each table's tests mount that table alone; the Explorer is
+shell chrome that exists only in a full render. It took a journey against the real product — which
+is why the plan put one on this milestone.
+
+**Fixed by the same rule: the new control names its context.** `RowActionsMenu` takes an optional
+`context`, and the three hierarchy tables pass their list name (`Actions for Northgate in Clients`).
+Calendars and resources pass nothing, because they are not in the Explorer and a qualifier there
+would be symmetry rather than information — ADR-0082's discriminator applied to a name.
+
+The name is built by one exported `rowActionsLabel`, which the test helper now calls rather than
+restating the format. That is not hypothetical tidiness: **the format changed once inside this
+milestone**, and every place that had spelled it out by hand would have needed finding.
+
+### Two reporting corrections
+
+- I twice recorded `web:members EXIT=1` as a journey failure. **There is no `members` suite** — the
+  output was `e2e-local.sh` listing its valid targets, and the exit code was for an unknown one.
+  Members is covered by the base journey.
+- The sweep's fifth failure, `staff`, **was a flake and is not this epic's.** No file in that
+  suite's path is in the epic's diff, and it passed on a re-run of the same commit. The mechanism is
+  visible in `probe-sittings.tsx:145`: the comparability caveat renders only once a second sitting
+  exists, and the suite creates its own sittings, so a timing-dependent read can see one.

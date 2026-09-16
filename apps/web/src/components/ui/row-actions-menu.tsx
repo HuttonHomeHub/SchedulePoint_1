@@ -4,6 +4,17 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu } from '@/components/ui/menu';
 
+/**
+ * The one place the trigger's accessible name is built.
+ *
+ * Exported so a test names a control the way the product does rather than restating the format —
+ * a second copy of a naming contract is what this component exists to remove, and a test is as
+ * good a place for one to drift as a screen.
+ */
+export function rowActionsLabel(subject: string, context?: string | undefined): string {
+  return context === undefined ? `Actions for ${subject}` : `Actions for ${subject} in ${context}`;
+}
+
 export interface RowActionsMenuProps {
   /**
    * The row's subject, as a reader would say it — a client's name, a plan's name.
@@ -13,6 +24,22 @@ export interface RowActionsMenuProps {
    * screen-reader user nothing about which row they are in.
    */
   subject: string;
+  /**
+   * The list this row belongs to, when naming the subject alone would be ambiguous **on screen**.
+   *
+   * **This exists because M4 created a collision and a journey caught it.** The Project Explorer is
+   * docked on every organisation-scoped route and names its own node menus `Actions for <name>`
+   * (`features/navigator/components/HierarchyTree.tsx:602`) — so the moment the clients table grew a
+   * `⋯`, a reader on `/clients` had two controls with the identical accessible name, offering
+   * different actions, indistinguishable to anyone hearing them rather than seeing where they sit.
+   * The same is true of projects on a client and plans on a project.
+   *
+   * It is **the new control that qualifies itself**, which is the rule this milestone had already
+   * applied one defect earlier to the two `Clear filters` buttons. And it is passed **only where a
+   * collision exists** — calendars and resources are not in the Explorer, so a qualifier there
+   * would be noise added for symmetry rather than for a reader.
+   */
+  context?: string | undefined;
   /** The row's secondary actions, as `MenuItem`s. The primary stays visible beside this trigger. */
   children: React.ReactNode;
 }
@@ -42,10 +69,14 @@ export interface RowActionsMenuProps {
  * `restoreFocusRef` is the trigger, which is what stops focus falling to `<body>` when a menu item
  * removes the row it acted on — the failure this register records four separate times.
  */
-export function RowActionsMenu({ subject, children }: RowActionsMenuProps): React.ReactElement {
+export function RowActionsMenu({
+  subject,
+  context,
+  children,
+}: RowActionsMenuProps): React.ReactElement {
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const label = `Actions for ${subject}`;
+  const label = rowActionsLabel(subject, context);
 
   return (
     <>
