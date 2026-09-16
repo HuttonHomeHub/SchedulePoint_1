@@ -920,6 +920,15 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   is unreachable through any role this product can currently mint — it is pinned in the service unit
   suite rather than the API e2e for that reason.
 
+  **It is ordered flagged-first**: any row whose `flags` object is non-empty is promoted to the
+  front, and everything behind it keeps the `recentlyChanged` order, stable within each group. The
+  rank is a **boolean** rather than a count or a severity — a plan with four visual conflicts is not
+  more urgent than one with a broken constraint, and the four flag kinds are not comparable. This
+  section used to borrow `recentlyChanged`'s order outright; that made recency, which is intrinsic
+  to _what happened and who_, the rule for a section answering _is the programme healthy_, so the
+  one place reporting programme health had no say in what a reader saw first
+  (`docs/DECISIONS.md`, 2026-09-16).
+
   It covers exactly the plans `recentlyChanged` covers, and reads **only columns the last
   recalculation persisted**: `MAX(early_finish)` for the finish, the flag counts, and the active
   baseline's frozen finish. **The CPM engine is not invoked** — `computeSchedule` is not imported by

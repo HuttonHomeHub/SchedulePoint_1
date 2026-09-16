@@ -19,7 +19,7 @@ import type {
   RecentlyChangedPlanDto,
 } from './dto/overview-response.dto';
 import { OverviewRepository, type PlanStandingRow } from './overview.repository';
-import { baselineMovementOf, flagsOf } from './plan-standing';
+import { baselineMovementOf, flagsOf, orderByFlaggedFirst } from './plan-standing';
 
 /**
  * How many plans "Recently changed" carries. Eight, because the section is a way back into
@@ -174,25 +174,39 @@ export class OverviewService {
     ]);
 
     /**
-     * **In "Recently changed"'s order, not the database's.**
+     * **Recency first, then flagged rows promoted to the front.**
      *
      * `findPlanStanding` filters on `id = ANY(...)` with no `ORDER BY`, so its order is whatever
      * the plan happens to produce — and Postgres makes no promise it is stable between two
      * executions of the same query. Left alone, this section would reshuffle on reload for no
      * visible reason, which is the defect `resolveRecentPlans` already carries a comment about one
-     * section down.
+     * section down. So the recently-changed list supplies the base order here, exactly as it did.
      *
-     * Ordering it by the recently-changed list rather than by anything of its own is the stronger
-     * choice: the reader has just read that order, the two sections are about the same plans, and a
-     * second ordering rule would be a second opinion about which work matters most.
+     * **What changed is that the base order is no longer the whole rule.** This block used to argue
+     * that borrowing "Recently changed"'s order was stronger than having one of its own, because
+     * "a second ordering rule would be a second opinion about which work matters most". That
+     * reasoning treated a borrowed rule as a neutral one, and it is not: recency is intrinsic to
+     * the section that answers *what happened and who*, and merely inherited by the section that
+     * answers *is the programme healthy* — so the only place on the landing reporting programme
+     * health had no say in what the reader saw first. Measured, that put the fixture's one plan
+     * with a broken constraint sixth, at y = 1,398 on the product owner's own screen, under five
+     * healthy ones (`m7-flagged-first.md`).
+     *
+     * The promotion is a STABLE sort on a boolean, so within each group the recency order is
+     * untouched — see {@link orderByFlaggedFirst} for why it is not a count or a severity, and for
+     * the cost it accepts now that the two sections sit side by side rather than stacked.
      */
     const standingById = new Map((standingRows ?? []).map((row) => [row.planId, row]));
     const orderedStanding = recentlyChanged
       .map((row) => standingById.get(row.planId))
       .filter((row): row is PlanStandingRow => row !== undefined);
 
+    // The promotion reads `flags`, which only exists once `toStanding` has run `flagsOf` — so it
+    // sorts the DTOs rather than the rows, which is also what keeps the flag predicate in one home.
     const planStanding =
-      standingRows === null ? null : await this.toStanding(organization.id, orderedStanding);
+      standingRows === null
+        ? null
+        : orderByFlaggedFirst(await this.toStanding(organization.id, orderedStanding));
 
     const attention: AttentionDto = {
       heldLocks: heldLocks

@@ -848,6 +848,13 @@ owner's width. Baseline: taken at M0 against the shipped screen (Q1–Q3 only; Q
 Bar: after, **every one of Q1–Q7 has `y < 1000`**. Failure: the layout is re-ordered, or a section
 is cut — not the condition softened.
 
+> **MET 2026-09-16 (M7): 7 of 7 at 1646 and at 1920.** The route to it was the first of the two
+> failure clauses — the layout was re-ordered, and not the page's but the standing section's own
+> rows: flagged plans are promoted to the front of `planStanding` (`m7-flagged-first.md`). M5 scored
+> 4 of 7, M6's two columns took it to 6, and Q7 was the last one, at y = 1398. It is now 831. The
+> condition was never softened and the cost was measured at zero: page height, both sections'
+> geometry, all four FC-4 widths and FC-5's single request are identical either side.
+
 **FC-2 — the landing does not get slower.** `GET …/overview` p95 under **200 ms**
 (`docs/PERFORMANCE.md:13`) at all four ADR-0098 org shapes, **before and after measured in one
 sitting** (ADR-0143 FC-2's lesson: this database grows monotonically, so a before taken yesterday is

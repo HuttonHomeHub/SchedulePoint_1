@@ -128,3 +128,52 @@ export function flagsOf(
   };
   return Object.fromEntries(Object.entries(all).filter(([, count]) => count > 0));
 }
+
+/**
+ * Whether a row has anything the engine flagged.
+ *
+ * It reads {@link flagsOf}'s OUTPUT rather than the raw counts, and that is the whole reason it is
+ * a function instead of an inline `length > 0` at the one call site. `flagsOf` is where "which
+ * counts are worth showing" is decided — it omits zeroes, and a future flag joins its table. A
+ * predicate written against `PlanStandingRow` would restate that decision, and the two would drift
+ * silently the first time the table gained a member: the row would render a flag and sort as
+ * healthy, or sort as flagged and render nothing. One rule, one home (ADR-0065, ADR-0121).
+ */
+export function isFlagged(row: { flags: Record<string, number> }): boolean {
+  return Object.keys(row.flags).length > 0;
+}
+
+/**
+ * Promote the flagged rows to the front, leaving everything else exactly where it was.
+ *
+ * **This is the section's first opinion about its own subject, not a second opinion about the
+ * plan's.** "Where the work stands" used to be ordered by the recently-changed list, with the
+ * argument that the reader had just read that order and a second ordering rule would be a second
+ * opinion about which work matters most. The first half was true and the second was not: recency is
+ * intrinsic to "Recently changed", which answers *what happened and who*, and it is BORROWED here,
+ * where the question is *is the programme healthy*. A borrowed rule is not a neutral one — it meant
+ * the only section on the landing about programme health had no say in what a reader sees first, so
+ * the one plan with a broken constraint sat sixth, 1,398 px down and below the fold, under five
+ * healthy ones (`m7-flagged-first.md`).
+ *
+ * **Stable, and that is what keeps the old argument's good half.** `Array.prototype.sort` has been
+ * required to be stable since ES2019, so within each group the recently-changed order survives
+ * untouched: a reader still gets recency, applied twice — once to the rows that need them, once to
+ * the rest. The rank is deliberately a BOOLEAN and not a count or a severity: a plan with four
+ * conflicts is not more urgent than one with a broken constraint, the flag kinds are not
+ * comparable, and ranking them would be exactly the invented opinion the original argument warned
+ * about.
+ *
+ * **What it costs, stated rather than buried.** Since the two-column landing, this section and
+ * "Recently changed" sit side by side rather than stacked, so their orders now disagree where a
+ * reader can see both at once. That is a real cost and it is accepted: the two lists answer
+ * different questions, and matching orders bought agreement by making one of them answer neither.
+ *
+ * Returns a new array; the input is not mutated, because `sort` in place would reorder the caller's
+ * array and this one belongs to `toStanding`'s result rather than to this function.
+ */
+export function orderByFlaggedFirst<T extends { flags: Record<string, number> }>(
+  rows: readonly T[],
+): T[] {
+  return [...rows].sort((a, b) => Number(isFlagged(b)) - Number(isFlagged(a)));
+}

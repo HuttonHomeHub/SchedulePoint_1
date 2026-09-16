@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { baselineMovementOf, flagsOf } from './plan-standing';
+import { baselineMovementOf, flagsOf, isFlagged, orderByFlaggedFirst } from './plan-standing';
 
 /** A calculated, baselined, unmoved plan. Each case overrides the one field it is about. */
 function row(over: Partial<Parameters<typeof baselineMovementOf>[0]> = {}) {
@@ -116,5 +116,83 @@ describe('flagsOf', () => {
         visualConflictCount: 0,
       }),
     ).toEqual({});
+  });
+});
+
+describe('orderByFlaggedFirst', () => {
+  const row = (planId: string, flags: Record<string, number> = {}) => ({ planId, flags });
+
+  it('promotes every flagged row ahead of every unflagged one', () => {
+    const ordered = orderByFlaggedFirst([
+      row('healthy-1'),
+      row('flagged-1', { constraintViolated: 1 }),
+      row('healthy-2'),
+      row('flagged-2', { visualConflict: 3 }),
+    ]);
+
+    expect(ordered.map((r) => r.planId)).toEqual([
+      'flagged-1',
+      'flagged-2',
+      'healthy-1',
+      'healthy-2',
+    ]);
+  });
+
+  it('keeps the incoming order within each group', () => {
+    // The base order is the recently-changed one, and the promotion must not disturb it —
+    // otherwise the reader loses recency twice over rather than getting it applied twice.
+    const ordered = orderByFlaggedFirst([
+      row('a'),
+      row('b'),
+      row('c', { loeNoSpan: 2 }),
+      row('d'),
+      row('e', { resourceDriverMissing: 1 }),
+    ]);
+
+    expect(ordered.map((r) => r.planId)).toEqual(['c', 'e', 'a', 'b', 'd']);
+  });
+
+  it('returns a new array and leaves the input untouched', () => {
+    const input = [row('healthy'), row('flagged', { constraintViolated: 1 })];
+
+    const ordered = orderByFlaggedFirst(input);
+
+    expect(ordered).not.toBe(input);
+    expect(input.map((r) => r.planId)).toEqual(['healthy', 'flagged']);
+  });
+
+  it('is a no-op when nothing is flagged, and when everything is', () => {
+    const none = [row('a'), row('b'), row('c')];
+    const all = [
+      row('a', { constraintViolated: 1 }),
+      row('b', { visualConflict: 1 }),
+      row('c', { loeNoSpan: 1 }),
+    ];
+
+    expect(orderByFlaggedFirst(none).map((r) => r.planId)).toEqual(['a', 'b', 'c']);
+    expect(orderByFlaggedFirst(all).map((r) => r.planId)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('isFlagged', () => {
+  it('reads flagsOf output, so a zeroed count is not a flag', () => {
+    // `flagsOf` omits zeroes, and this predicate consumes that decision rather than restating it.
+    // Composed here on purpose: a test that hand-wrote `{ constraintViolated: 0 }` would pass
+    // against a predicate that had drifted away from the producer.
+    const healthy = flagsOf({
+      constraintViolatedCount: 0,
+      loeNoSpanCount: 0,
+      resourceDriverMissingCount: 0,
+      visualConflictCount: 0,
+    });
+    const violating = flagsOf({
+      constraintViolatedCount: 2,
+      loeNoSpanCount: 0,
+      resourceDriverMissingCount: 0,
+      visualConflictCount: 0,
+    });
+
+    expect(isFlagged({ flags: healthy })).toBe(false);
+    expect(isFlagged({ flags: violating })).toBe(true);
   });
 });

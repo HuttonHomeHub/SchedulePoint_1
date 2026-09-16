@@ -450,6 +450,47 @@ describe('OverviewService — where the work stands', () => {
     expect(result.planStanding?.map((row) => row.planId)).toEqual(['a', 'b', 'c']);
   });
 
+  it('promotes a flagged plan to the front, however deep it sits in the recency order', async () => {
+    // The shape the fixture produces and the product owner's own screen showed: five healthy
+    // programmes changed more recently than the one that is actually in trouble. Ordering this
+    // section by recency alone put the flag sixth, at y = 1398 — below the fold on the screen the
+    // landing is judged on — so the only section about programme health reported it last.
+    repo.findRecentlyChanged.mockResolvedValue(
+      ['a', 'b', 'c', 'd', 'e', 'f'].map((planId) => changedRow({ planId })),
+    );
+    repo.findPlanStanding.mockResolvedValue([
+      standingRow({ planId: 'a' }),
+      standingRow({ planId: 'b' }),
+      standingRow({ planId: 'c' }),
+      standingRow({ planId: 'd' }),
+      standingRow({ planId: 'e' }),
+      standingRow({ planId: 'f', constraintViolatedCount: 1 }),
+    ]);
+
+    const result = await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    // The flagged row first, and every other row still in recency order behind it — the promotion
+    // is a stable sort, so it moves what it must and nothing else.
+    expect(result.planStanding?.map((row) => row.planId)).toEqual(['f', 'a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('does not rank flagged plans against each other by how many flags they carry', async () => {
+    // A boolean, deliberately. Four visual conflicts is not more urgent than one broken
+    // constraint, the kinds are not comparable, and ranking them would be the invented opinion
+    // the borrowed-order argument was right to warn about. Within the flagged group, recency.
+    repo.findRecentlyChanged.mockResolvedValue(
+      ['one-flag', 'many-flags'].map((planId) => changedRow({ planId })),
+    );
+    repo.findPlanStanding.mockResolvedValue([
+      standingRow({ planId: 'one-flag', constraintViolatedCount: 1 }),
+      standingRow({ planId: 'many-flags', visualConflictCount: 9, loeNoSpanCount: 4 }),
+    ]);
+
+    const result = await service.get(principalWith(['client:read', 'schedule:read']), 'acme');
+
+    expect(result.planStanding?.map((row) => row.planId)).toEqual(['one-flag', 'many-flags']);
+  });
+
   it('drops a plan the standing read did not return, rather than leaving a hole', async () => {
     repo.findRecentlyChanged.mockResolvedValue([
       changedRow({ planId: 'a' }),
