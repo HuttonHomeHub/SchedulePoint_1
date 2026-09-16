@@ -1,5 +1,90 @@
 # @repo/web
 
+## 0.136.0
+
+### Minor Changes
+
+- [#626](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/626) [`f3b13b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3b13b53ccf6ec031fb2741563d8aea660c81fe2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The clients list can be searched. It was the only one of the three organisation lists with no way
+  to narrow it — 123 clients is six and a half screens of scrolling with nothing to type into — and
+  the search now works the way the calendars and resources libraries already do: case-insensitive,
+  in the URL so a narrowed view survives a reload and can be pasted to a colleague, with the same
+  always-present `Clear filters` beside it.
+  
+  The API gains an optional `q` on the clients list. Sending nothing returns exactly the page it
+  returned before.
+
+- [#626](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/626) [`f3b13b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3b13b53ccf6ec031fb2741563d8aea660c81fe2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Every list offers a row's actions the same way: the primary action stays visible and the rest move
+  behind a `⋯`, which is what the calendars table has done since the shape was decided and what five
+  other tables each did differently. Deleting a client, project, plan or resource is now two presses
+  rather than one — the buried action is the destructive one, which is where a moment's friction is
+  cheapest.
+  
+  `Clear filters` now lives in the calendars and resources filter bars rather than only appearing once
+  a filter has matched nothing, so narrowing 81 calendars to three has a way back. It is always
+  present and shaded when there is nothing to clear, so pressing it never moves your place.
+  
+  Three empty-state `Clear filters` buttons now name what they clear. Two controls whose accessible
+  name was the bare string, both on screen at once, were indistinguishable to anyone hearing them
+  rather than seeing where they sit — including on the audit log, where that had been true since its
+  filter bar shipped.
+
+- [#626](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/626) [`f3b13b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3b13b53ccf6ec031fb2741563d8aea660c81fe2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Every non-canvas screen's title, description and primary action are one decision. Nine screens
+  hand-rolled the same header row between them and the result was four different heading rhythms —
+  75, 83, 85 and 105 px from the top of the page, identical at 1280 and 1646, so no width resolved
+  them. They are now two: one for screens with a breadcrumb trail and one for screens without, each
+  exact, with the 28 px between them being the trail's own height.
+  
+  It also gives a page description a measure for the first time. The archetype's heading column
+  shrink-wrapped to its content, so a 42-character description rendered 267 px wide and a
+  116-character one 736 px on screens sitting side by side. Every page description is now one width.
+
+- [#626](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/626) [`f3b13b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3b13b53ccf6ec031fb2741563d8aea660c81fe2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A named sub-section is one shape everywhere. The Projects section on a client and the Plans and
+  Calendars sections on a project are now drawn the way Members' Roster already was, each a named
+  region a screen-reader user can jump between.
+  
+  The Calendars section's focus target also gains a focus ring. It was a focus destination that
+  suppressed its own focus indicator, so a reader whose focus was restored there after closing a
+  dialog had no visible sign that it had moved.
+
+### Patch Changes
+
+- [#626](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/626) [`f3b13b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3b13b53ccf6ec031fb2741563d8aea660c81fe2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The audit log and My activity open with one sentence instead of three paragraphs. The coverage rule
+  — what these logs record and what they deliberately do not — moves behind a `What this records`
+  disclosure and stays announced with the list, so it is a fact you no longer have to scroll past
+  rather than a fact you have to find. The audit log shows a tenth row in the first screen.
+  
+  What a "Not signed in" row does and does not prove stays visible on My activity. It tells somebody
+  they may be under attack, and that is not something to put behind a press.
+
+- [#626](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/626) [`f3b13b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3b13b53ccf6ec031fb2741563d8aea660c81fe2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Ten dialogs no longer drop your place when you save. A submit button that blocks itself with the
+  native `disabled` attribute leaves the tab order the instant the request starts and rejoins it when
+  the request settles, so anyone working from the keyboard is thrown to the top of the page twice per
+  save. Those ten now shade and announce without leaving the tab order, and a gate keeps it that way.
+  
+  Row menus on the clients, projects and plans tables now say which list they belong to, because the
+  Project Explorer beside them names its own menus the same way and the two were indistinguishable to
+  anyone hearing them rather than seeing where they sit.
+
+- [#626](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/626) [`f3b13b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f3b13b53ccf6ec031fb2741563d8aea660c81fe2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Seventeen buttons visibly dim again while they are saving. Converting them away from the browser's
+  own disabled attribute — so that pressing Save with the keyboard no longer throws you to the top of
+  the page twice per save — silently took the greying-out with it, because the styling was attached to
+  that attribute and nothing else. Since then, pressing Save, Create or Sign in changed one word and
+  gave no other sign that anything was happening. All six sign-in and account forms were affected.
+  
+  The clients list now says how many clients your search found. Both other library screens have
+  announced that for months and this one never did, so anyone using a screen reader typed into the
+  search box and heard nothing at all.
+  
+  Clearing a search from the "no clients match this search" message no longer loses your place on the
+  page. The same fix applies on the calendars and resources libraries.
+  
+  Changing a colleague's role on the Members screen keeps your place while it saves, and a second
+  change made before the first finishes is ignored rather than queued.
+  
+  The audit log and My activity announce what they record to a screen reader while the "What this
+  records" section is still closed. They did not before: a collapsed disclosure is skipped when a
+  browser works out a description, so the rule was only ever announced once it was already on screen.
+
 ## 0.135.1
 
 ### Patch Changes
