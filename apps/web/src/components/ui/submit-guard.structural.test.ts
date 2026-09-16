@@ -110,11 +110,41 @@ function nativeDisabledSubmits(source: string): string[] {
  * gave no feedback at all beyond the word. The gate proving the native attribute is absent was
  * asserting the easy half of a two-part rule.
  */
-function unshadedSubmits(source: string): string[] {
-  return guardedSubmits(source).filter(
-    (tag) =>
-      !tag.includes('aria-disabled:opacity') || !tag.includes('aria-disabled:pointer-events-none'),
-  );
+/**
+ * **The one file where `pointer-events-none` is wrong, named with its reason.**
+ *
+ * The discriminator is not in the tag and cannot be: **is the `aria-disabled` expression transient
+ * — a mutation in flight — or can it be the control's resting state?** Sixteen of the seventeen
+ * bind it to `mutation.isPending`, about a second, where inertness to the pointer is exactly right.
+ * `ResendVerificationButton` binds `send.isPending || address.trim() === ''`, so on `/verify-email`
+ * reached without `?email=` it is `aria-disabled` from first paint — and `pointer-events: none`
+ * then makes `document.elementFromPoint` return the element **behind** it, so the only route back
+ * into an unverified account is pointer-unreachable at rest.
+ *
+ * That is not hypothetical and is why this exception exists rather than a looser regex:
+ * `e2e-public/public-screens.spec.ts` failed on it at all six viewports the first time this epic's
+ * rule was applied to all seventeen. A tag scan cannot tell the two bindings apart, so the honest
+ * instrument is a register somebody edits deliberately — the shape `dependency-claims.json` and
+ * `flag-retirement.json` already use, and ADR-0083's "a named exception with its cost stated".
+ *
+ * **The cost is stated**: this button loses the pointer-inert half, and keeps its inertness from
+ * `submit()`'s own `if (blocked) return;` one level up. Adding a second entry here should be hard,
+ * so each one carries the reason it is not the transient case.
+ */
+const POINTER_EVENTS_EXEMPT = new Map([
+  [
+    'features/auth/components/ResendVerificationButton.tsx',
+    '`aria-disabled` is a RESTING state (empty address), not a mutation in flight — ' +
+      '`pointer-events: none` makes the primary action of /verify-email unreachable.',
+  ],
+]);
+
+function unshadedSubmits(source: string, file = ''): string[] {
+  const exempt = [...POINTER_EVENTS_EXEMPT.keys()].some((k) => file.endsWith(k));
+  return guardedSubmits(source).filter((tag) => {
+    if (!tag.includes('aria-disabled:opacity')) return true;
+    return exempt ? false : !tag.includes('aria-disabled:pointer-events-none');
+  });
 }
 
 describe('a submit never blocks itself with the native attribute', () => {
@@ -171,11 +201,34 @@ describe('a submit never blocks itself with the native attribute', () => {
       unshadedSubmits('<Button type="submit" disabled={busy}>'),
       'the shading matcher reaches a submit this gate already refuses for a different reason',
     ).toHaveLength(0);
+
+    // The exemption discriminates in BOTH directions, or it is a hole rather than a decision.
+    const restingShape =
+      '<Button type="submit" aria-disabled={blocked} className="aria-disabled:opacity-60">';
+    expect(
+      unshadedSubmits(restingShape, '/x/features/auth/components/ResendVerificationButton.tsx'),
+      'the named exemption does not admit the shape it exists for',
+    ).toHaveLength(0);
+    expect(
+      unshadedSubmits(restingShape, '/x/features/clients/components/ClientFormDialog.tsx'),
+      'the exemption leaks to a file that never asked for it',
+    ).toHaveLength(1);
+  });
+
+  // Every exemption names a real file, so a rename cannot leave a silent hole in the rule.
+  it('every pointer-events exemption still exists', () => {
+    for (const [key, reason] of POINTER_EVENTS_EXEMPT) {
+      expect(
+        files.some((f) => f.endsWith(key)),
+        `${key} is exempt but no such file exists — delete the entry or fix the path`,
+      ).toBe(true);
+      expect(reason.length, `${key}'s exemption carries no reason`).toBeGreaterThan(40);
+    }
   });
 
   it('shades every guarded submit, because `disabled:` utilities do not fire on `aria-disabled`', () => {
     const offenders = files.flatMap((file) => {
-      const found = unshadedSubmits(readFileSync(file, 'utf8'));
+      const found = unshadedSubmits(readFileSync(file, 'utf8'), file);
       return found.map(() => relative(WEB_SRC, file).split(sep).join('/'));
     });
 
