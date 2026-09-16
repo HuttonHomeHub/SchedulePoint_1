@@ -1,6 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { PageContainer } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useClient } from '@/features/clients';
 import { CreateProjectButton, ProjectsTable } from '@/features/projects';
@@ -16,15 +17,15 @@ export function ClientDetailScreen(): React.ReactElement {
 
   if (client.isPending) {
     return (
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <PageContainer>
         <Spinner label="Loading client…" />
-      </div>
+      </PageContainer>
     );
   }
 
   if (client.isError) {
     return (
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <PageContainer>
         <Breadcrumbs
           items={[
             { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -51,12 +52,12 @@ export function ClientDetailScreen(): React.ReactElement {
             Back to clients
           </Link>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <PageContainer>
       <Breadcrumbs
         items={[
           { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -76,6 +77,6 @@ export function ClientDetailScreen(): React.ReactElement {
       <div className="mt-3">
         <ProjectsTable orgSlug={orgSlug} clientId={clientId} canWrite={canWrite} />
       </div>
-    </div>
+    </PageContainer>
   );
 }

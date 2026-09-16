@@ -1,6 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
+import { PageContainer } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { ProjectCalendarsSection } from '@/features/calendars';
@@ -39,15 +40,15 @@ export function ProjectDetailScreen(): React.ReactElement {
 
   if (project.isPending) {
     return (
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <PageContainer>
         <Spinner label="Loading project…" />
-      </div>
+      </PageContainer>
     );
   }
 
   if (project.isError) {
     return (
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <PageContainer>
         <Breadcrumbs
           items={[
             { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -74,7 +75,7 @@ export function ProjectDetailScreen(): React.ReactElement {
             Back to clients
           </Link>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -89,7 +90,7 @@ export function ProjectDetailScreen(): React.ReactElement {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <PageContainer>
       <Breadcrumbs items={crumbs} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -128,6 +129,6 @@ export function ProjectDetailScreen(): React.ReactElement {
           canManageOrg={canManageOrgCals}
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }

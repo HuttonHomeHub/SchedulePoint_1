@@ -3,6 +3,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { PlanWorkspace } from '@/components/layout/workspace/plan-workspace';
 import { usePlanWorkspaceModel } from '@/components/layout/workspace/use-plan-workspace-model';
+import { PageContainer } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useRememberPlan } from '@/features/overview/hooks/use-remember-plan';
 
@@ -50,7 +51,7 @@ export function PlanDetailScreen(): React.ReactElement {
 
   if (planQuery.isError) {
     return (
-      <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+      <PageContainer>
         <Breadcrumbs
           items={[
             { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug } },
@@ -77,7 +78,7 @@ export function PlanDetailScreen(): React.ReactElement {
             Back to clients
           </Link>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 

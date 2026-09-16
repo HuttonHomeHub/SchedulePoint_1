@@ -549,6 +549,23 @@ looks identical on screen and drifts the first time either changes, which is a
 defect nobody can see. A screen that needs something these do not offer wants a
 seventh archetype, not a bespoke layout in a feature folder.
 
+**For `PageContainer` that rule is computed, not remembered**
+(`page-container.structural.test.ts`, `docs/specs/page-frame-consolidation/`).
+The archetype shipped and **nine route files went on hand-writing the frame
+anyway** — thirteen sites — until 2026-09-16, because nothing stopped them: the
+paragraph above was true, agreed and unobserved. The gate refuses any class
+string co-occurring `mx-auto`, `flex-1` and a `max-w-*` cap outside the
+archetype, reading balanced string literals rather than lines, since the frame
+is a set of classes whose order is arbitrary and an exact-string scan is
+defeated by reordering them.
+
+Two screens are **declared exceptions carrying their reasons** — `account.tsx`
+(`max-w-2xl`) and `onboarding.tsx` (`max-w-lg`, vertically centred) are both
+narrower than any measure the archetype offers, so adopting `narrow` would
+_widen_ them. A third exception costs somebody a written reason, which is the
+point. If a screen needs a measure that is not on offer, that is the
+"raise the requirement" branch above, not an exception.
+
 Two things `EmptyState` is deliberately **not** for. An action it cannot offer is
 not a degenerate case: a Viewer who cannot act is told who can, and a required
 `action` prop would force that into a lie. And a settled one-liner like "Nothing

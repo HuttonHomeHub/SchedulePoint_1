@@ -1,3 +1,4 @@
+import { PageContainer } from '@/components/ui/page';
 import { AUDIT_FILTERS_ENABLED, AUDIT_SELF_SECURITY_ENABLED } from '@/config/env';
 import { useSelfAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
@@ -33,7 +34,7 @@ export function MyActivityScreen(): React.ReactElement {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <PageContainer>
       <h1 className="text-2xl font-semibold tracking-tight">My activity</h1>
       {/*
         This screen is the only place sign-ins are visible — they carry no organisation, so the
@@ -100,6 +101,6 @@ export function MyActivityScreen(): React.ReactElement {
           }
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }

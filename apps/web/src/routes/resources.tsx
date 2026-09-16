@@ -1,6 +1,7 @@
 import { ARCHIVED_FILTERS, RESOURCE_KINDS } from '@repo/types';
 import { useParams } from '@tanstack/react-router';
 
+import { PageContainer } from '@/components/ui/page';
 import { PICKER_CALENDAR_FILTERS, useCalendars } from '@/features/calendars';
 import {
   ANY_RESOURCE_KIND,
@@ -59,7 +60,7 @@ export function ResourcesScreen(): React.ReactElement {
   const calendars = useCalendars(orgSlug, 'org', PICKER_CALENDAR_FILTERS);
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <PageContainer>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Resources</h1>
         {canWrite ? (
@@ -82,6 +83,6 @@ export function ResourcesScreen(): React.ReactElement {
           onFiltersChange={setFilters}
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }
