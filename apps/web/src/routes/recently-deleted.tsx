@@ -1,5 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 
+import { PageContainer } from '@/components/ui/page';
 import { RecentlyDeletedTable } from '@/features/recently-deleted';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -14,7 +15,7 @@ export function RecentlyDeletedScreen(): React.ReactElement {
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <PageContainer>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Recently deleted</h1>
       </div>
@@ -25,6 +26,6 @@ export function RecentlyDeletedScreen(): React.ReactElement {
       <div className="mt-6">
         <RecentlyDeletedTable orgSlug={orgSlug} canWrite={canWrite} />
       </div>
-    </div>
+    </PageContainer>
   );
 }

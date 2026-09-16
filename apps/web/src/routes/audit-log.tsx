@@ -1,6 +1,7 @@
 import { useParams } from '@tanstack/react-router';
 
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { PageContainer } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
@@ -36,7 +37,7 @@ export function AuditLogScreen(): React.ReactElement {
   const allowed = canReadAuditLog(role);
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <PageContainer>
       <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
       {/*
         Say what is recorded, not what an audit log sounds like it records — and say it as a RULE
@@ -103,7 +104,7 @@ export function AuditLogScreen(): React.ReactElement {
           }
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

@@ -1,6 +1,7 @@
 import { ARCHIVED_FILTERS } from '@repo/types';
 import { useParams } from '@tanstack/react-router';
 
+import { PageContainer } from '@/components/ui/page';
 import {
   CALENDAR_SCOPE_FILTERS,
   CalendarsTable,
@@ -50,7 +51,7 @@ export function CalendarsScreen(): React.ReactElement {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 p-6">
+    <PageContainer>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Calendars</h1>
         {canWrite ? <CreateCalendarButton orgSlug={orgSlug} canManageOrg={canManageOrg} /> : null}
@@ -64,6 +65,6 @@ export function CalendarsScreen(): React.ReactElement {
           onFiltersChange={setFilters}
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }
