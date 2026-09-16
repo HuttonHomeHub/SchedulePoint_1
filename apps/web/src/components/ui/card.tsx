@@ -9,6 +9,16 @@ export interface CardProps extends DivProps {
    * jump to — a card on its own is not a landmark and must not become one by default.
    */
   as?: React.ElementType;
+  /**
+   * A ref to the rendered element.
+   *
+   * Declared rather than inherited: `DivProps` is `React.HTMLAttributes`, which carries no `ref`.
+   * React 19 passes `ref` to a function component like any other prop, and the rest spread below
+   * already forwards it — so this is a type declaration catching up with behaviour the component
+   * had, not a new capability. `SectionCard` needs it so a caller can hand its region to a
+   * dialog's `restoreFocusRef`.
+   */
+  ref?: React.Ref<HTMLElement> | undefined;
 }
 
 /** Surface container. Composes with the header/title/content/footer parts. */

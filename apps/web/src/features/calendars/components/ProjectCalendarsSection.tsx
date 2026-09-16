@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { SectionCard } from '@/components/ui/page';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import {
@@ -66,7 +67,8 @@ export function ProjectCalendarsSection({
   const archiveCalendar = useArchiveCalendar(orgSlug);
   const unarchiveCalendar = useUnarchiveCalendar(orgSlug);
   const announce = useAnnounce();
-  const regionRef = useRef<HTMLDivElement>(null);
+  const regionRef = useRef<HTMLElement>(null);
+  const regionId = useId();
   const archivedFilterId = useId();
   const explainerId = useId();
   const [archiveError, setArchiveError] = useState<string | null>(null);
@@ -183,10 +185,23 @@ export function ProjectCalendarsSection({
   ];
 
   return (
-    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-medium">Calendars</h2>
-        {canWrite ? (
+    /* **The focus target is the archetype's, not a hand-rolled one.** This was a `<div>` carrying
+       `tabIndex={-1}` and `outline-none` — a focus destination that suppressed its own focus
+       indicator, which is the WCAG 2.4.7 failure `SectionCard`'s own docblock records shipping once
+       and fixing. Passing `id` sets `tabIndex={-1}` **and a ring**, so a reader whose focus is
+       restored here after the scope-move dialog closes can now see that it was. */
+    <SectionCard
+      ref={regionRef}
+      id={regionId}
+      title="Calendars"
+      description={
+        <>
+          The working-day calendars this project’s plans and activities can be scheduled on — this
+          project’s own, plus every organisation calendar.
+        </>
+      }
+      action={
+        canWrite ? (
           <CreateCalendarButton
             orgSlug={orgSlug}
             canManageOrg={canManageOrg}
@@ -194,43 +209,47 @@ export function ProjectCalendarsSection({
             projectName={projectName}
             label="New calendar"
           />
-        ) : null}
-      </div>
-      <p className="text-muted-foreground text-sm">
-        The working-day calendars this project’s plans and activities can be scheduled on — this
-        project’s own, plus every organisation calendar.
-      </p>
-
-      {/* Archived rows are hidden by DEFAULT here, exactly as they are in the pickers this section
+        ) : null
+      }
+      /* **`flush`, like its two sibling sections — and the reason is a measurement, not symmetry.**
+         Without it `CardContent`'s `p-6` costs the table 48 px of width, which FC-3 caught and
+         refuses: a section that frames a table must not narrow it. The controls above the table
+         keep their inset by carrying it themselves, so what changes is the table's bleed and not
+         the form's alignment. */
+      flush
+    >
+      <div className="flex flex-col gap-3 px-6 pb-4">
+        {/* Archived rows are hidden by DEFAULT here, exactly as they are in the pickers this section
           mirrors — but they must be reachable FROM THIS SCREEN. Without the toggle a planner who
           archives a project calendar watches it vanish from the only screen that shows it and has
           to go hunting on the org library with two unrelated filters, which is precisely how
           "archive" comes to read as "delete". */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex max-w-xs flex-col gap-1.5">
-          <Label htmlFor={archivedFilterId}>Show archived</Label>
-          <Select
-            id={archivedFilterId}
-            value={archivedFilter}
-            aria-describedby={explainerId}
-            onChange={(event) => setArchivedFilter(event.target.value as ArchivedFilter)}
-          >
-            {ARCHIVED_FILTERS.map((value) => (
-              <option key={value} value={value}>
-                {ARCHIVED_FILTER_LABELS[value]}
-              </option>
-            ))}
-          </Select>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex max-w-xs flex-col gap-1.5">
+            <Label htmlFor={archivedFilterId}>Show archived</Label>
+            <Select
+              id={archivedFilterId}
+              value={archivedFilter}
+              aria-describedby={explainerId}
+              onChange={(event) => setArchivedFilter(event.target.value as ArchivedFilter)}
+            >
+              {ARCHIVED_FILTERS.map((value) => (
+                <option key={value} value={value}>
+                  {ARCHIVED_FILTER_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
-      </div>
-      <p id={explainerId} className="text-muted-foreground text-sm">
-        {ARCHIVE_EXPLAINER}
-      </p>
-      {archiveError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {archiveError}
+        <p id={explainerId} className="text-muted-foreground text-sm">
+          {ARCHIVE_EXPLAINER}
         </p>
-      ) : null}
+        {archiveError ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {archiveError}
+          </p>
+        ) : null}
+      </div>
 
       <DataTable
         caption={`Calendars usable in ${projectName}`}
@@ -276,6 +295,6 @@ export function ProjectCalendarsSection({
         {...(editing ? { calendar: editing } : {})}
       />
       {canWrite && canManageOrg ? <ConfirmDialog {...dialogProps} /> : null}
-    </div>
+    </SectionCard>
   );
 }

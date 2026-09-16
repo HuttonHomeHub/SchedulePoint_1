@@ -125,6 +125,26 @@ rather than assumed.
 **Withdrawal bar (unchanged):** if FC-3 fails, the change that caused it is **reverted, not
 reinterpreted**.
 
+### FC-3 amended at M2, by the product owner, with the number in front of them
+
+M2's first run **failed**, and the condition earned its place immediately: the project Calendars
+table lost **48 px** to `CardContent`'s `p-6` — ADR-0143 §8.1's failure exactly, an approved layout
+decision costing a table width with arithmetic nobody had done. That was **fixed, not accepted**
+(`flush`, with the filter row carrying its own inset).
+
+What remained was **2 px on three tables** — `SectionCard`'s 1 px border on each side, which cannot
+be removed while the section has a frame, because the border **is** the card and the card is what
+M2 adds. It was **not** declared a pass: FC-3 says no width falls, three did, and deciding here that
+2 px is "not really narrower" is precisely the move this epic's own file quotes ADR-0143 against.
+
+So it went to the product owner with both consequences costed — accept 2 px and get one section
+treatment, or revert M2 and keep three — and **they accepted the 2 px**.
+
+**Clause amended: a table may lose width attributable to a section frame it did not previously
+have, bounded at 2 px.** Anything else, and any loss on a table whose framing is unchanged, still
+fails and is still reverted rather than reinterpreted. The bound is the measured border, not a
+tolerance chosen to fit: a fourth pixel would be something other than the frame.
+
 ---
 
 ## FC-4 — the ratchets pay the conversion back

@@ -56,15 +56,12 @@ const SURFACE = [
  * The hand-rolled shapes the archetypes replaced, matched loosely enough that a near-miss copy is
  * caught too.
  *
- * **`<h2>` is deliberately absent from this list at M1 and joins it at M2**, in the same commit
- * that makes it true. `SectionCard` owns the section rank and M0 found **three different
- * treatments** for a named sub-section across this surface — the archetype, a bare
- * `<h2 className="mt-6 text-lg font-medium">`, and that same `<h2>` inside a flex action row — but
- * converting them is M2's milestone, and M1 ships alone by the product owner's decision. Landing
- * the assertion now would mean either pulling M2's work into M1 or putting a knowingly red gate on
- * `main`, and **a gate that is red on purpose is a gate people learn to ignore** (the plan's own
- * M1-T1 step 4). The gate was verified red against three files for this pattern before it was
- * removed, so M2 inherits a known-discriminating assertion rather than writing a fresh one.
+ * **`<h2>` joined this list at M2, in the same commit that made it true** — it was written and run
+ * red at M1, naming exactly three files, then held back rather than landing knowingly red on
+ * `main`, because a gate that is red on purpose is a gate people learn to ignore. `SectionCard`
+ * owns the section rank, and M0 found **three different treatments** for a named sub-section across
+ * this surface: the archetype, a bare `<h2 className="mt-6 text-lg font-medium">`, and that same
+ * `<h2>` inside a flex action row.
  */
 const HAND_ROLLED = [
   {
@@ -72,6 +69,7 @@ const HAND_ROLLED = [
     pattern: /mx-auto[^"'`]*max-w-/,
   },
   { name: "a page title's type treatment (PageHeader owns it)", pattern: /<h1[\s>]/ },
+  { name: 'a section heading rank (SectionCard owns it)', pattern: /<h2[\s>]/ },
 ];
 
 describe('the non-canvas screens are built from the archetypes', () => {

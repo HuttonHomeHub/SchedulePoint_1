@@ -1,7 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
-import { PageContainer, PageHeader } from '@/components/ui/page';
+import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { ProjectCalendarsSection } from '@/features/calendars';
@@ -115,10 +115,9 @@ export function ProjectDetailScreen(): React.ReactElement {
           ) : null
         }
       />
-      <h2 className="mt-6 text-lg font-medium">Plans</h2>
-      <div className="mt-3">
+      <SectionCard className="mt-6" title="Plans" flush>
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
-      </div>
+      </SectionCard>
       <div className="mt-10">
         <ProjectCalendarsSection
           orgSlug={orgSlug}

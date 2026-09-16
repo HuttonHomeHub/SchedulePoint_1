@@ -260,4 +260,31 @@ describe('ProjectCalendarsSection', () => {
       expect(screen.queryByRole('button', { name: /^Archive /i })).not.toBeInTheDocument();
     });
   });
+
+  /**
+   * **The section is a named landmark AND a focus destination, and the second used to cost the
+   * first's visibility.**
+   *
+   * Before M2 this was a `<div>` carrying `tabIndex={-1}` and `outline-none` — reachable as a focus
+   * target (`useCalendarScopeMove` restores focus here when its dialog closes) and, on arrival,
+   * showing nothing at all. That is WCAG 2.2 §2.4.7, and it is the same defect `SectionCard`'s own
+   * docblock records shipping once on that primitive and fixing there.
+   *
+   * The assertion is about the ring rather than only the `tabindex`, because the pre-M2 element
+   * would have passed a `tabindex`-only check perfectly — which is what it did for as long as it
+   * existed.
+   */
+  describe('the section as a focus destination', () => {
+    it('is a named region that can take focus and shows a ring when it does', () => {
+      renderSection();
+      const region = screen.getByRole('region', { name: 'Calendars' });
+      expect(region.tagName).toBe('SECTION');
+      expect(region).toHaveAttribute('tabindex', '-1');
+      expect(region.className).toContain('focus-visible:ring-2');
+      expect(region.className).not.toMatch(/(?:^| )outline-none(?: |$)/);
+
+      region.focus();
+      expect(document.activeElement).toBe(region);
+    });
+  });
 });

@@ -41,6 +41,20 @@ export interface SectionCardProps {
    * else. `-1` keeps it out of the tab sequence: it is a destination, not a stop.
    */
   id?: string;
+  /**
+   * A ref to the `<section>` itself, for a caller that has to send focus back here imperatively.
+   *
+   * **Added because `id` alone could not replace what it was written to replace.** `id` makes the
+   * section an anchor target and a focus destination, which covers "jump to the section that
+   * answers this"; `ProjectCalendarsSection` additionally hands its region to
+   * `useCalendarScopeMove` as a `restoreFocusRef`, so focus returns to the section a dialog was
+   * opened from. That is a `RefObject`, and the alternative — looking the element up by `id` in an
+   * effect — is an imperative copy of a reference React already has.
+   *
+   * It is a plain prop rather than `forwardRef`: React 19 passes `ref` to a function component like
+   * any other, and `Card` already spreads its rest props onto the element.
+   */
+  ref?: React.Ref<HTMLElement> | undefined;
 }
 
 /**
@@ -75,11 +89,13 @@ export function SectionCard({
   flush,
   fill,
   id,
+  ref,
 }: SectionCardProps): React.ReactElement {
   const titleId = useId();
   return (
     <Card
       as="section"
+      ref={ref}
       aria-labelledby={titleId}
       /**
        * **The focus treatment is conditional on `id`, and it is a RING rather than nothing.**

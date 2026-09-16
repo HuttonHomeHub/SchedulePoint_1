@@ -1,7 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
-import { PageContainer, PageHeader } from '@/components/ui/page';
+import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useClient } from '@/features/clients';
 import { CreateProjectButton, ProjectsTable } from '@/features/projects';
@@ -70,10 +70,11 @@ export function ClientDetailScreen(): React.ReactElement {
         description={client.data.description ?? undefined}
         actions={canWrite ? <CreateProjectButton orgSlug={orgSlug} clientId={clientId} /> : null}
       />
-      <h2 className="mt-6 text-lg font-medium">Projects</h2>
-      <div className="mt-3">
+      {/* `flush`: the body is a full-bleed table, so the card contributes a frame and a name and
+          not padding around a table that already has its own. */}
+      <SectionCard className="mt-6" title="Projects" flush>
         <ProjectsTable orgSlug={orgSlug} clientId={clientId} canWrite={canWrite} />
-      </div>
+      </SectionCard>
     </PageContainer>
   );
 }
