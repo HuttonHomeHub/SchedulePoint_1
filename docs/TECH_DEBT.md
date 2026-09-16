@@ -53,7 +53,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 16 | **Email verification is built but not switched on** | The verification-email loop now exists (Theme B2: `emailVerification` in `better-auth.ts` → the `MailService` port → the SMTP adapter), so `AUTH_REQUIRE_EMAIL_VERIFICATION=true` is a switch an operator can turn on rather than one that would strand every new account. It is still `false` on the running deployment. Until it is on, invitation acceptance grants org membership on an email-**match** that only proves mailbox ownership when verification is enforced (ADR-0016 §5). | An adversary who registers an account for a matching address **and** holds the one-time invite token could accept; account-squatting can also block the real invitee's sign-up. Alpha-only, deliberately accepted. **Mail is confirmed working on the deployed host (product owner, 2026-08-05)**, so the first half of this row is paid. What is left is one **ordering** condition, and it is a hard one: the switch must not be turned on until a **web bundle carrying ADR-0074 M2 is live**. M2's three fixes are unflagged runtime branches — a `VITE_` constant cannot gate a server switch (the ADR-0060 M0 rule) — so enforcing verification against an older bundle re-arms exactly the three dead ends M2 closed. **That condition is DISCHARGED as of the 2026-08-17 reconciliation pass, and nothing said so.** ADR-0074 M2 shipped in `web-v0.75.0`; the host runs the ADR-0047 Watchtower profile and auto-pulls every release, and `web-v0.90.1` is the current tag — sixteen releases past it. So this row's remaining content is **not engineering work at all**: it is one operator action, setting `AUTH_REQUIRE_EMAIL_VERIFICATION=true` on the host. Worth stating plainly because a row whose blocker has quietly been met reads exactly like a row that is still blocked, and stays one priority below whatever is being built (the ADR-0085 unconditioned-`M` failure, one register along). That bundle also needs the M5 fixes, without which a verification link that _works_ still lands the reader on the pending screen. Then set `AUTH_REQUIRE_EMAIL_VERIFICATION=true` (docs/DEPLOYMENT.md "Turning verification on"), after counting existing unverified accounts and backfilling the ones already holding a membership (ADR-0074 M5-T6/T7 — enforcement's value is prospective, and the membership predicate structurally excludes a squatted address holding a _pending_ invitation). No code change is needed. Consider a stricter per-route throttle on `POST /invitations/preview` \| `/accept` at the same time. |
 
-| 17 | **Members UI a11y polish (non-blocking)** — _corrected 2026-08-08: **(b) is done** — `components/ui/dialog.tsx:97` links its description via `aria-describedby`. (a) native `disabled` on `MembersTable.tsx:32`, (c) no initial-focus target, (d) no `useAnnounce`, (e) `h-9` = 36 px all stand. **(a) is now governed by the shaded-field ruling** (draft ADR), so take it with programme M6 rather than alone_ | From the C3 accessibility review, after the blocking contrast/focus/live-region fixes: (a) controls use the native `disabled` attribute while a mutation is pending, so keyboard focus drops to `<body>`; (b) the `Dialog` `description` isn't linked via `aria-describedby`; (c) modal initial focus lands on the ✕ close button rather than the first field; (d) no `aria-live` success confirmation for role change / removal / link-copy; (e) light `muted-foreground` (4.73:1) and the sm remove button (36px vs. preferred 44px touch target) are within-spec but tight. | Minor friction for keyboard/AT users; all currently meet AA. | Prefer `aria-disabled` + pointer-events guard over native `disabled` on pending controls; add `aria-describedby` to `Dialog`; set an explicit initial-focus target; add a shared polite toast for success; revisit the tight tokens/targets when the notifications component lands. |
+| 17 | **Members UI a11y polish (non-blocking)** — _corrected 2026-08-08: **(b) is done** — `components/ui/dialog.tsx:97` links its description via `aria-describedby`. (a) native `disabled` on `MembersTable.tsx:32`, (c) no initial-focus target, (d) no `useAnnounce`, (e) `h-9` = 36 px all stand. **(a) CLOSED 2026-09-16** — ADR-0145's gate pass answered CQ-3 through **accessibility-reviewer** and landed M5-T3: `MembersTable.tsx`'s role `<select>` takes `aria-disabled` + `aria-busy` + an `onChange` guard, with a regression test verified red (focus is retained, a second change while pending is discarded, the displayed value is the stored role). The discriminator is recorded with it: this is ADR-0083's **button** clause, not its field clause, because the control blocks itself during its own mutation rather than being gated by a permission — so the loss is operability and not readability. (c), (d) and (e) stand_ | From the C3 accessibility review, after the blocking contrast/focus/live-region fixes: (a) controls use the native `disabled` attribute while a mutation is pending, so keyboard focus drops to `<body>`; (b) the `Dialog` `description` isn't linked via `aria-describedby`; (c) modal initial focus lands on the ✕ close button rather than the first field; (d) no `aria-live` success confirmation for role change / removal / link-copy; (e) light `muted-foreground` (4.73:1) and the sm remove button (36px vs. preferred 44px touch target) are within-spec but tight. | Minor friction for keyboard/AT users; all currently meet AA. | Prefer `aria-disabled` + pointer-events guard over native `disabled` on pending controls; add `aria-describedby` to `Dialog`; set an explicit initial-focus target; add a shared polite toast for success; revisit the tight tokens/targets when the notifications component lands. |
 
 | 18 | **CI image job has no layer cache** | The `image` job (`.github/workflows/ci.yml`, ADR-0020) builds both container images from scratch on every run: the Dockerfiles' `--mount=type=cache,id=pnpm` BuildKit cache is local to an ephemeral runner and isn't persisted across CI runs, and the job invokes `docker compose … --build` directly without a GHA-backed buildx cache. | Slower CI (full `pnpm install` + `prisma generate` + `tsc` + `vite build` each run); more Action minutes. | Wire `docker/setup-buildx-action` + `cache-from`/`cache-to: type=gha` (or `docker buildx bake`) so image layers persist across runs. |
 
@@ -83,7 +83,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 | 51 | **TSLD visual-refresh fast-follows (ADR-0052 M4/M5, `VITE_CANVAS_DIRECT_MANIPULATION` reviews)** — _corrected 2026-08-08: **(a)'s premise is expired**. Eight `render/paint.*-budget.test.ts` counting-stub gates plus the `measure:draw` Chromium harness now exist; what is true is that they count **calls, not milliseconds**, and the millisecond question is **#75**. (b)/(c)/(d) stand_ | Non-blocking items deferred from the M4/M5 specialist reviews (perf/component/ux), all behind the default-off flag: (a) **perf** — there is still **no automated draw-budget/perf gate** for the TSLD canvas: ADR-0026's ≤ 4 ms p95 @ 2,000-activities budget is documented but unenforced in CI, and M5 briefly shipped a per-frame `computeEdgeFanOut` recompute (5–11 ms alone at 2,000 activities / 4,000 edges) that only review caught — a benchmark test (e.g. a vitest bench or a Playwright trace assertion over the synthetic 2,000-activity scene) would have failed it automatically. (b) **perf** — `classifyHit` iterates **all** activities per call (per pointer-move while the resize/lag zones are armed); cull the candidates to the visible set / a spatial bucket before default-on so hover cost is bounded by the viewport like the paint. (c) **ux** — the lag-run dash pattern (`[2,2]`) vs the non-driving link dash (`[4,3]`) may be too subtle a distinction at typical zoom; consider a visually distinct treatment (weight/colour-with-shape or a tick pattern) if planners misread lag runs as slack ties. (d) **component** — the M5 fan-out `elbowShift` derives from the **predecessor-side** offset only (`routeOrthogonal`'s last argument), so a bundle crowded ONLY on the successor side with identical anchor days gets no elbow separation — the lines still overlap on their vertical run. | All minor and flag-gated: (a) is a repo-wide testing gap the M5 near-miss made concrete; (b) only bites on very large plans with editing armed; (c)/(d) are legibility polish on rare topologies. | Add an automated canvas draw-budget check (bench or trace-based) before the flag flips default-on; cull `classifyHit` to visible candidates; revisit the lag-run treatment with planner feedback; fold the successor-side offset into `elbowShift` when the fan-out is next touched. |
 | 53 | **Library `q` search is an unindexed (bounded) ILIKE — `pg_trgm` GIN deferred (ADR-0053 §4 / M4)** | The M4 search on `calendars`/`resources` uses Prisma `contains` + `mode: 'insensitive'`, i.e. `name ILIKE '%q%'` (OR'd with `code` on resources). A **leading-wildcard, case-insensitive** match is not a btree range, so no existing or addable btree index can serve it — not the `(organization_id, created_at, id)` composites, not `text_pattern_ops` (left-anchored only), not an expression index on `lower(name)` (prefix only). The chosen plan is deliberate: the leading equality on `organization_id` bounds the candidate set to **one tenant** in cursor order and the ILIKE is a recheck over it — a bounded filter, not a table-wide seq scan, at the ADR-0053 sizing of ≲1,000 calendars / ≲5,000 resources per tenant. For the same measure-first reason the archive filter added **no** index: `archived_at` is tri-state (`exclude`/`include`/`only`), so a partial `WHERE archived_at IS NULL` twin would serve only the default and would today be a byte-for-byte duplicate of the existing composite (no row is archived yet). | Low today and bounded by tenant size; it degrades linearly if a tenant's library grows well past the assumed ceiling (import-heavy tenants are the likely first case), or if archived rows come to dominate a library so the default list scans mostly-filtered entries. Both show up as list/search p95 creep, never as incorrect results. **Measured at the ADR-0053 ceiling during the M6 backend-performance review** (Postgres 16, every migration applied, one org seeded with 1,000 calendars / 5,000 resources): worst-case resource search (no match, full candidate scan) **3.8 ms**; a match at the tail of cursor order **3.2 ms**; the 1,000-calendar case **0.56 ms** — all two orders of magnitude inside the 200 ms p95 budget, confirming the deferral is correct at the stated scale. A committed seeded-benchmark test (so the claim is pinned in CI rather than living in a migration comment and this row) is still outstanding. Escalate only on further measurement (`docs/PERFORMANCE.md`): (a) a `pg_trgm` GIN index on `lower(name)` (`gin_trgm_ops`) — note it needs `CREATE EXTENSION pg_trgm`, a privileged one-off DDL step the app's DB role may not hold, which is part of why it is deferred; (b) a partial `(organization_id, created_at, id) WHERE deleted_at IS NULL AND archived_at IS NULL` composite if archived rows dominate; (c) a partial ORG-tier calendar composite if PROJECT rows dominate the org list (ADR-0053 "Follow-ups"). |
 | 56 | **Pure gesture→overlay helpers live in `TsldCanvas.tsx` rather than a pure module** | Raised by the ADR-0054 M6 component review against `gestureSourceId` / `gestureGhostDetail`, but the finding is older and wider than this epic: `ghostRect`, `liveResize`, `lagChip` and their siblings — all pure `GestureState → overlay geometry` functions with no React, DOM or canvas dependency — already sit at the top of `apps/web/src/features/tsld/components/TsldCanvas.tsx` and are exported solely for unit tests. The ADR-0026 architecture puts pure render logic in `features/tsld/render/*`, so the whole cluster is on the wrong side of that seam. Moving only the two new ones was rejected as making the file _less_ consistent, not more. | Maintainability only — the functions are pure and fully unit-tested where they are. Cost is that a reviewer must read a 1,500-line component file to review pure geometry, and that the component file is the de-facto home for logic the architecture says lives elsewhere. | Move the whole cluster to a `render/gesture-overlay.ts` module in one pass (mechanical: re-export, update the two test files' imports), rather than migrating helpers piecemeal as each epic touches them. |
-| 57 | **The recycle-bin list's page walk, now indexed — what is left is the walk itself** — _measured and half-closed 2026-08-18 (ADR-0096 D6)_ | The missing indexes are **shipped**: `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` on all three tables (`20260818120000_recycle_bin_deleted_at_indexes`). One whole screen open on the largest seeded organisation (8,773 deleted rows, 88 pages) went **1,208 ms → 466 ms**. What remains is that `use-deleted-items.ts:24` still walks every page via `apiFetchAllPages`. | Low, and now **deliberate**. ADR-0096 groups the list by delete batch client-side, and a group shown partially would be **wrong** — "Client + 2 items" when a third sits on the next page is a false statement about what a Restore will bring back. So the exhaustion walk is the thing that makes grouping correct, not an oversight to remove. | **Standing rule, recorded so a future performance fix cannot quietly break restore-grouping: this route stays fetched-to-exhaustion for as long as the client groups by batch.** Windowing it requires either a server-side grouping or a per-group "may be incomplete" flag — a design change, not a tuning change. The measured next win is not paging at all: PostgreSQL 16 generates **no Merge Append** over this `UNION ALL` (verified by forcing `enable_sort = off`, which produced a Sort at disable-cost, so no ordered path exists), so pushing `ORDER BY … LIMIT` into each branch takes the same walk **466 → 239 ms**. That is a `recycle-bin.repository.ts` change and is not blocked on anything here. Separately: the parent join is unbounded by organisation, hashing whole `clients`/`projects` tables. |
+| 57 | **The recycle-bin list's page walk, now indexed — what is left is the walk itself** — _measured and half-closed 2026-08-18 (ADR-0096 D6)_ | The missing indexes are **shipped**: `(organization_id, deleted_at DESC, id) WHERE deleted_at IS NOT NULL` on all three tables (`20260818120000_recycle_bin_deleted_at_indexes`). One whole screen open on the largest seeded organisation (8,773 deleted rows, 88 pages) went **1,208 ms → 466 ms**. What remains is that `use-deleted-items.ts:24` still walks every page via `apiFetchAllPages`. | Low, and now **deliberate**. ADR-0096 groups the list by delete batch client-side, and a group shown partially would be **wrong** — "Client + 2 items" when a third sits on the next page is a false statement about what a Restore will bring back. So the exhaustion walk is the thing that makes grouping correct, not an oversight to remove. | **Standing rule, recorded so a future performance fix cannot quietly break restore-grouping: this route stays fetched-to-exhaustion for as long as the client groups by batch.** Windowing it requires either a server-side grouping or a per-group "may be incomplete" flag — a design change, not a tuning change. The measured next win is not paging at all: PostgreSQL 16 generates **no Merge Append** over this `UNION ALL` (verified by forcing `enable_sort = off`, which produced a Sort at disable-cost, so no ordered path exists), so pushing `ORDER BY … LIMIT` into each branch takes the same walk **466 → 239 ms**. That is a `recycle-bin.repository.ts` change and is not blocked on anything here. Separately: the parent join is unbounded by organisation, hashing whole `clients`/`projects` tables. **And the mechanism is not the recycle bin's alone** — re-measured at the ADR-0145 gate (2026-09-16) against `clientsQueryOptions`, Prisma's compound-cursor `WHERE` lands entirely in `Filter` rather than `Index Cond`, so every `apiFetchAllPages` consumer with a compound `orderBy` pays O(depth) filtered-out rows per page: **0.152 ms at depth 20, 0.932 ms at depth 4,900**, cumulative O(N²/pageSize) over a full walk. Immaterial at this product's scale (a 5,000-row organisation costs tens of ms of database time against ~50 sequential HTTP round trips) and unchanged by the clients search, so it is recorded here rather than given a number of its own — there is no new decision to preserve. |
 | 83 | **ADR-0068 §6 promises a count the calendar editor does not show** | §6 states the editor "names how many activities' displayed durations will change" when hours-per-day is edited, following the ADR-0053 §2 per-class-count pattern. What shipped is the consequence without the count ("an activity showing 10 days today will show a different number"), because no endpoint returns that count — it needs a per-calendar usage read across activities and plans. The ADR is corrected to record this as deferred rather than left describing a feature that does not exist (ADR-0058's rule). | Low: the warning is accurate, just less specific than promised. | A `GET …/calendars/:id/usage` returning the affected-activity count, or an amendment dropping the requirement if the count proves not worth the read. |
 
 ## Principles for managing debt
@@ -9170,6 +9170,21 @@ computes it — `check:adr-coverage` reads the ADR index and `docs/ROADMAP.md`, 
 says it does not read this file. A clean manual result is the weakest kind of assurance there is,
 and recording it as such is the honest version of "verified".
 
+> **Seventh instance, 2026-09-16 — ADR-0145, and this time it was a reviewer rather than a sweep.**
+> Filed, **Accepted**, present in `docs/adr/README.md` and cited by `docs/ROADMAP.md`, and absent
+> from `CLAUDE.md` §16 while the epic it records was being prepared for merge. The component review
+> of that epic found it; `pnpm prepush` was green throughout, because `check:adr-coverage` still
+> does not read this file. Two documents the epic's own spec promised were missing with it
+> (`docs/DESIGN_SYSTEM.md`, `docs/UX_STANDARDS.md`), which is the same omission one tier out.
+>
+> **What that instance adds is not another tally mark — it inverts the gate's own stated reason.**
+> `scripts/check-adr-coverage.mjs`'s docblock justified scoping to `ROADMAP.md` with "only the
+> second one rots silently", and §16 has now rotted seven times against the roadmap's zero since
+> the gate shipped. The comment is corrected in place (ADR-0145's gate pass) and the gate is
+> deliberately **not** widened in the same breath: a shared gate is an ADR-0105 trigger and wants
+> its own spec rather than a fold-in at an epic's last milestone. The remedy this row asks for is
+> unchanged and is now better evidenced than when it was written.
+
 ### 292. The web entry chunk is 372 kB gzip, and every authenticated route is in it
 
 **Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
@@ -10562,6 +10577,158 @@ to three sentences and a trailing fact, and at 464 px the trailing fact is takin
 **Neither of the product owner's two screens is affected** — both are ≥ 1646, both measured
 comfortable. Below `md` (768 px) the grid correctly collapses to one column, so this is a band
 roughly 768–1400 px wide.
+
+### 334. The activities panel renders every row of a plan, under a docblock claiming it does not
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M0, read) · **Size:** M · **Owner:** web
+
+`components/layout/workspace/activity-bottom-panel.tsx:19`'s docblock credits `ActivitiesTable` with
+**virtualization**. It has none — `grep virtual` in `features/activities/components/ActivitiesTable.tsx`
+returns nothing, and `DataTable` (`components/ui/data-table.tsx:247`) `rows.map`s every row it is
+given. So the panel renders a full `<tr>` per activity, inside the capped scroller at `:108`
+(`min-h-0 flex-1 overflow-y-auto`), with **no sticky `<thead>`** — the header scrolls away on the
+first wheel click and the columns are then unlabelled for the rest of the list.
+
+**The scale is the plan's, not a page's.** ADR-0026's own gate is written at 2,000 activities and the
+seed catalogue ships plans at that size (ADR-0066), so this is up to ~2,000 un-virtualized rows in a
+~400 px box on the product's primary surface.
+
+**It is filed rather than fixed because it is canvas-adjacent and was found sideways.** The
+page-consistency epic's M0 turned it up while establishing that the landing's capped-box model does
+not transfer to the table screens — this is that same model, already shipped, at the one scale where
+it hurts. The product owner scoped it out of that epic deliberately (2026-09-16) so it would not
+widen into the plan workspace.
+
+**What is NOT yet known**, and should be measured before anyone designs a fix: whether it is
+actually slow. Nobody has profiled it, and `docs/TECH_DEBT.md` #75's history here is that the
+alarming reading and the reassuring one were both half-truths. The cheap first step is the ADR-0128
+staff probe or a `measure-*` harness at 500 and 2,000 activities; the stale docblock should be
+corrected either way, because a false claim of virtualization is exactly what stops anyone looking.
+
+### 336. The documented `pg_trgm` escalation names an index the shipped query cannot use
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M7, `database-architect`) · **Size:** S · **Owner:** api
+
+`docs/adr/0053-calendar-scoping-and-resource-management.md:303` and `:425`, `docs/TECH_DEBT.md` #53,
+`docs/API.md:696` and two spec files all state the library-search escalation as **a `pg_trgm` GIN
+index on `lower(name)`**. Measured against a real database: **that index is not used by the query
+this repository emits.**
+
+`calendar.repository.ts:25-28` is `{ name: { contains: search, mode: 'insensitive' } }`, which Prisma
+compiles to `name ILIKE $1`. The left-hand side is `name`. PostgreSQL matches an expression index
+only when the predicate contains **that exact expression**, so an index on `lower(name)` cannot serve
+it whatever its operator class — the same rule ADR-0086 already records as "expression equality, not
+pattern containment", one level along. Confirmed both ways in `EXPLAIN`: with
+`gin (lower(name) gin_trgm_ops)` present the planner ignores it entirely and the ILIKE costs what it
+did with no trgm index at all (~3.7 ms at the ADR-0053 ceiling); with `gin (name gin_trgm_ops)` it is
+used, at **0.11 ms**.
+
+**The failure mode is worse than a slow query**, which is why this is filed rather than left: the
+remedy looks done. Somebody hitting the documented trigger follows the documented instruction, ships
+a 1.5–2.2 MB index, pays GIN maintenance on every library write, sees no improvement, and closes the
+register row.
+
+**#53's own wording is what makes the trap easy to walk into.** It correctly lists "not an expression
+index on `lower(name)` (prefix only)" among the things that _cannot_ serve the search — that clause
+is about a **btree** expression index — and then prescribes a **GIN** one on the same expression. The
+two are consistent as written and lead a reader straight past the real constraint, which is the
+left-hand side rather than the index type.
+
+**The correct form is `gin (name gin_trgm_ops)`** for calendars, resources and clients. Resources
+additionally OR on `code`, so it needs a second index on `code` or a
+`gin ((name || ' ' || code) gin_trgm_ops)` with a matching query rewrite — which is a decision, not a
+transcription.
+
+**Not fixed in the epic that found it.** It is a shared-doc change across an ADR, this register,
+`docs/API.md` and two specs, and rewriting an accepted ADR's escalation fires ADR-0105's trigger.
+Nothing is broken today: no installation is near the trigger (the deployed database holds 124 clients
+across 2 organisations), so this is wrong advice rather than a live defect — but it is wrong advice
+that will be followed exactly when somebody is under pressure.
+
+### 337. Prisma's `contains` does not escape `%` or `_`, so a searched literal is a wildcard
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M7, `database-architect`) · **Size:** S · **Owner:** api
+
+Measured: `contains: '50%'` is sent as the parameter `'%50%%'`, and `'Acme 5000 Ltd' ILIKE '%50%%'`
+is **true**. `a_b` likewise matches `aXb`. Live today on the calendars and resources library searches
+and inherited verbatim by the clients search M7 adds.
+
+**Not an injection risk** — the term is parameterised, and it is not a denial-of-service vector
+either: measured at the ADR-0053 ceiling, 100 underscores cost **6.81 ms** and an alternating `_%`
+term **6.93 ms** against a plain zero-match **3.66 ms**, so under 2×. It is a correctness and
+usability wart: a planner searching for a resource literally named `50%` gets rows that do not
+contain it, with nothing saying why.
+
+Escaping it is a shared change across every `contains` call site and changes what existing searches
+return, so it is its own decision rather than a fix to fold into a screen epic.
+
+### 338. Two hand-rolled `<details>` disclosures, two different `<summary>` treatments
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M8, component review) · **Size:** S · **Owner:** web
+
+`resource-strip-panel.tsx:331` styles its summary `text-muted-foreground cursor-pointer text-sm
+select-none`; `performance-probe-panel.tsx:586` drops the weight **and also** the colour and the
+select guard, giving a second treatment of one detail. Neither was created by the page-consistency
+epic — both pre-date it — and ADR-0145's alternatives bullet counted them wrongly twice before
+settling (three, then four, then two) which is why the number is written down here rather than left
+in prose.
+
+**Not a `Disclosure` primitive yet, and that is the point of the row.** ADR-0145 declines to build
+one on ADR-0105's trigger: a shared primitive is a stop-and-spec, and there are two consumers with
+no shared behaviour beyond a summary's class string. What the row exists to make legible is the
+**trigger** — a third `<details>`, or a second consumer of `CoverageDisclosure`'s
+button/`aria-controls`/`sr-only` shape, is when the primitive earns its spec. Until then the
+interim rule is to match `resource-strip-panel`'s treatment, which is the fuller of the two.
+
+**`CoverageDisclosure` is deliberately not in this count.** It is not a `<details>` at all —
+ADR-0145 D5 records why one cannot hold content that something else has to describe.
+
+### 339. `SectionCard`'s description has no measure, which is the defect `PageHeader` was just fixed for
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M8, component review) · **Size:** S · **Owner:** web
+
+`section-card.tsx:147`'s title/description column is `<div className="min-w-0">` with no `flex-1`,
+and `CardDescription` (`card.tsx:96-101`) carries no `max-w-prose`. That is **character-for-character
+the shape `PageHeader` had** before M1, where it produced three different description widths on
+three screens — 267 px, 546 px and 736 px — because a description with no measure is its own text's
+width wearing one. The fix landed on one of the pair and not its neighbour, inside one epic, which
+is this repository's most frequently recorded defect shape.
+
+**It is not visible today**, which is why it is a row and not a fix: exactly one live `SectionCard`
+renders both a `description` and an `action` (`ProjectCalendarsSection.tsx`, added by the same
+epic), so there is no second width to be inconsistent with and nothing to measure against. The
+exposure is the next consumer.
+
+**The fix is not simply copying `PageHeader`'s two classes**, which is what makes this a measured
+change rather than a one-liner: `CardDescription` is shared with every `Card` in the estate, so
+`max-w-prose` belongs on `SectionCard`'s own column or on a variant, and the blast radius is every
+`Card` that renders a description — which has to be read before the class moves.
+
+### 335. `DataTable`'s `headClassName` / `cellClassName` replace the default rather than merging it
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (page-consistency M4-T2, read) · **Size:** S · **Owner:** web
+
+`components/ui/data-table.tsx:151`, `:162`, `:233` and `:253` each read
+`column.headClassName ?? 'py-2 pr-4 font-medium'` — a **replacement**, not a merge. `cn()` is not
+called. So a caller adding one class to a column (a width preference, an alignment) silently drops
+the cell padding and, on a header, the weight — and the loss is invisible at the call site, because
+the caller wrote one class and got exactly the one class they wrote.
+
+**It is not currently causing a defect**, which is why this is a row rather than a fix: every caller
+in the estate restates the default alongside whatever it adds, including the four width preferences
+page-consistency M4-T2 added. The exposure is that nothing makes them, and the failure mode is a
+table row losing its padding in one column on one screen — which looks like a nudge rather than a
+bug.
+
+**The fix is `cn(DEFAULT, column.headClassName)`, and it is not free**, which is the reason to
+measure before doing it: `cn` merges through `tailwind-merge`, so a caller that today overrides the
+default by replacing it — `'hidden py-2 pr-4 font-medium lg:table-cell'` is the shape used for
+responsive columns — would keep working, but a caller who relies on the padding being **absent**
+would silently regain it. Every `headClassName` and `cellClassName` in the estate needs reading
+before the merge lands, and the conversion is what proves it safe rather than the change itself.
+
+Raised while adding width preferences to four tables, where restating `py-2 pr-4 font-medium` beside
+`md:w-32` felt like ceremony until the `??` was read.
 
 ### 331. The web coverage ratchet was not measured for the landing epic, and the API branch floor has 0.23pp of headroom
 

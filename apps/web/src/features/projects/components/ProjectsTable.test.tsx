@@ -1,12 +1,14 @@
 import type { ProjectSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { projectKeys } from '../api/use-projects';
 
 import { ProjectsTable } from './ProjectsTable';
+
+import { openRowActions } from '@/test/row-actions';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
@@ -53,7 +55,9 @@ describe('ProjectsTable', () => {
     renderTable(true);
     expect(screen.getByRole('link', { name: 'Riverside' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Riverside' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete Riverside' })).toBeInTheDocument();
+    expect(
+      within(openRowActions('Riverside', 'Projects')).getByRole('menuitem', { name: 'Delete' }),
+    ).toBeInTheDocument();
   });
 
   it('hides write actions for non-writers', () => {

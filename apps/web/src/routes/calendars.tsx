@@ -1,7 +1,7 @@
 import { ARCHIVED_FILTERS } from '@repo/types';
 import { useParams } from '@tanstack/react-router';
 
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import {
   CALENDAR_SCOPE_FILTERS,
   CalendarsTable,
@@ -52,10 +52,12 @@ export function CalendarsScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Calendars</h1>
-        {canWrite ? <CreateCalendarButton orgSlug={orgSlug} canManageOrg={canManageOrg} /> : null}
-      </div>
+      <PageHeader
+        title="Calendars"
+        actions={
+          canWrite ? <CreateCalendarButton orgSlug={orgSlug} canManageOrg={canManageOrg} /> : null
+        }
+      />
       <div className="mt-6">
         <CalendarsTable
           orgSlug={orgSlug}

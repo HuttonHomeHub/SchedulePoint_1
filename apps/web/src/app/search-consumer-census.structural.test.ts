@@ -92,6 +92,11 @@ const CLASSIFIED: Record<string, string> = {
     'Library filters `q`/`scope`/`archived`. `q` is the milestone’s own journey case; the two ' +
     'enums are pinned as a measured no-op in `search-string.test.ts`.',
   'routes/resources.tsx': 'Library filters `q`/`kind`/`archived`; same coverage as calendars.',
+  'routes/clients.tsx':
+    'The clients search `q` (page-consistency M7), read through `pickText` like every other ' +
+    '`q` on this surface, so it crosses the router’s real parser wherever the library screens ' +
+    'do and is covered by the same `search-string.test.ts` cases. It declares no validator of ' +
+    'its own, which is why it lands in this half of the census rather than Gate A’s.',
 
   // The seven params no validator declares — the half Gate A cannot see.
   'features/audit/model/audit-filter.ts':

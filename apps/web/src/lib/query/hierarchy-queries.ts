@@ -20,10 +20,21 @@ import { clientKeys, planKeys, projectKeys } from '@/lib/query/hierarchy-keys';
  * client → project → plan pickers all render a level in full, so a partial page silently hid the
  * 21st client/project/plan — unreachable, not merely unlisted.
  */
-export function clientsQueryOptions(orgSlug: string) {
+/**
+ * `search` narrows the list server-side (page-consistency M7) and is **keyed**, so a searched view
+ * and the full list are separate cache entries rather than one overwriting the other.
+ *
+ * **Absent ⇒ byte-identical to before**: no query string, the same key, the same cached list every
+ * other consumer already shares. That matters because this query is not the Clients screen's alone
+ * — the navigator rail, the breadcrumb resolvers and the pickers all read it, and none of them
+ * should inherit somebody's search term.
+ */
+export function clientsQueryOptions(orgSlug: string, search?: string) {
+  const q = search?.trim() ?? '';
+  const suffix = q === '' ? '' : `?q=${encodeURIComponent(q)}`;
   return queryOptions({
-    queryKey: clientKeys.list(orgSlug),
-    queryFn: () => apiFetchAllPages<ClientSummary>(`/organizations/${orgSlug}/clients`),
+    queryKey: q === '' ? clientKeys.list(orgSlug) : [...clientKeys.list(orgSlug), 'q', q],
+    queryFn: () => apiFetchAllPages<ClientSummary>(`/organizations/${orgSlug}/clients${suffix}`),
   });
 }
 

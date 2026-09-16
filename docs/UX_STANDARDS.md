@@ -138,6 +138,34 @@ entry stops being needed.
   - The reason names the next step in the app's existing words ("Start editing
     to change this activity"), never a bare "Read-only" and never an invented
     fourth variant of a sentence the toolbar already has.
+- **Table row actions — one shape, at a threshold of more than one.** A data
+  table has an actions column, so the rule above (written for dense list and
+  tree rows, which have nowhere to show an action at all) does **not** mean bury
+  everything. The shape is **the primary action visible, every other action
+  behind a `⋯`** — shared as `RowActionsMenu` so the trigger, its accessible
+  name and its focus return cannot drift between tables. A row with exactly one
+  action renders that action and no menu.
+  - **The threshold is the rule, not the count of what is behind it.** Before
+    ADR-0145 the estate answered one question three ways — two visible buttons,
+    three visible buttons, or Edit plus a menu — and each looked right in
+    isolation, which is why nobody had reported it.
+  - The trigger's accessible name is `Actions for <subject>`, or
+    `Actions for <subject> in <context>` where a second surface in the same
+    document names rows the same way. The Project Explorer does, so three tables
+    pass a context; it is built from one exported `rowActionsLabel()` rather than
+    templated per call site, because the format has already drifted once.
+  - **Delete goes behind the `⋯`.** Two presses for a destructive action is the
+    cheapest place to spend a moment's friction (ADR-0145 D3, product-owner
+    decision).
+- **A control that clears state is always rendered, and shaded when there is
+  nothing to clear** — `Clear filters` sits in the filter bar at rest as well as
+  when a filter is set. A control that appears only once it has something to do
+  is one a reader has to discover by accident; worse, one that removes itself by
+  succeeding drops focus to `<body>` at the moment it works. The empty state's
+  own way back (see the table above) is in **addition** to it, not instead — and
+  where both are on screen they carry distinct accessible names, because "Clear
+  filters" twice in one document is an ambiguous locator for a reader and for a
+  test alike (ADR-0145 D6).
 
 ## Content & tone
 

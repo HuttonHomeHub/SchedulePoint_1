@@ -27,10 +27,10 @@ import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { Paginated } from '../../common/dto/paginated';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ClientsService } from './clients.service';
+import { ClientListQueryDto } from './dto/client-list-query.dto';
 import { ClientResponseDto } from './dto/client-response.dto';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -52,12 +52,17 @@ export class ClientsController {
   constructor(private readonly service: ClientsService) {}
 
   @Get()
-  @ApiOperation({ summary: "List an organisation's clients (cursor-paginated)." })
+  @ApiOperation({
+    summary: "List an organisation's clients (cursor-paginated, optionally searched).",
+    description:
+      'Optionally narrowed by `q`, a case-insensitive substring of the client name. Sending no ' +
+      '`q` returns exactly the unfiltered page, which is what makes the filter additive.',
+  })
   @ApiOkResponse({ type: ClientResponseDto, isArray: true })
   async list(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ClientListQueryDto,
   ): Promise<Paginated<ClientResponseDto>> {
     const { items, meta } = await this.service.list(principal, orgSlug, query);
     return new Paginated(

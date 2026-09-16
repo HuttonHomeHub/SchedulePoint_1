@@ -1,6 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { RecentlyDeletedTable } from '@/features/recently-deleted';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -16,13 +16,10 @@ export function RecentlyDeletedScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Recently deleted</h1>
-      </div>
-      <p className="text-muted-foreground mt-2 max-w-2xl text-sm">
-        Deleted clients, projects and plans are kept here so you can restore them. Restoring a
-        client or project also restores everything deleted with it.
-      </p>
+      <PageHeader
+        title="Recently deleted"
+        description="Deleted clients, projects and plans are kept here so you can restore them. Restoring a client or project also restores everything deleted with it."
+      />
       <div className="mt-6">
         <RecentlyDeletedTable orgSlug={orgSlug} canWrite={canWrite} />
       </div>

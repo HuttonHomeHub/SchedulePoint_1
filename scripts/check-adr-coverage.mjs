@@ -14,9 +14,20 @@
  *
  * **What it checks, and why it is not "appears in CLAUDE.md".** The register in `CLAUDE.md` §16 was
  * complete on every one of those three occasions; the roadmap was not. The two documents answer
- * different questions — "what did we decide?" versus "where is the product going?" — and only the
- * second one rots silently, because nothing downstream breaks when a shipped capability is missing
- * from it. So the subject here is `ROADMAP.md`, deliberately.
+ * different questions — "what did we decide?" versus "where is the product going?" — so the
+ * subject here is `ROADMAP.md`, deliberately.
+ *
+ * **The INFERENCE that paragraph once drew from those three occasions is disproved and is not
+ * repeated here.** It read "only the second one rots silently", and §16 has since been found
+ * incomplete **seven times** (`docs/TECH_DEBT.md` #291): ADR-0132, ADR-0135, ADR-0049, ADR-0122,
+ * and ADR-0145, each filed and indexed and cited by `ROADMAP.md` while absent from the register a
+ * reader is briefed from. Every one was caught by a person or by a reviewer, never by this gate,
+ * because it does not read that file at all. The historical claim about those three specific
+ * occasions may still hold; the general rule it was used to justify does not.
+ *
+ * **That is a known gap, not an argument for widening this gate in passing.** #291 is the row;
+ * widening a shared gate is an ADR-0105 trigger and wants its own spec, which is precisely why
+ * ADR-0145's gate pass corrected this comment and stopped there.
  *
  * **Not every ADR belongs in a roadmap**, which is why this carries an exemption file rather than a
  * blanket rule. A decision about drift control or flag classification is not product direction, and

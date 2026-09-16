@@ -196,7 +196,7 @@ export function usePenLockView(
         onDismiss: act(dismissLost),
       },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `view` is rebuilt every render by
+
     // construction and `signatureWithAside` is the derived answer to whether it says anything
     // different; `act` is a local closure over a ref, which is stable by definition.
     [

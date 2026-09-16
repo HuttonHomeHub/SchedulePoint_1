@@ -90,7 +90,15 @@ export function CreateBaselineDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={capture.isPending} aria-busy={capture.isPending}>
+          <Button
+            type="submit"
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            aria-disabled={capture.isPending}
+            aria-busy={capture.isPending}
+            onClick={(event) => {
+              if (capture.isPending) event.preventDefault();
+            }}
+          >
             {capture.isPending ? 'Capturing…' : 'Capture baseline'}
           </Button>
         </div>

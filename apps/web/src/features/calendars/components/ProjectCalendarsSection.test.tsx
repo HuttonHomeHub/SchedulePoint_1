@@ -1,7 +1,7 @@
 import { WorkingWeekdays } from '@repo/types';
 import type { CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { calendarKeys } from '../api/use-calendars';
@@ -10,6 +10,7 @@ import { ProjectCalendarsSection } from './ProjectCalendarsSection';
 
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
+import { clickRowAction, openRowActions } from '@/test/row-actions';
 
 // The section only ever renders behind the flag (the project screen gates it), so it is on here.
 vi.mock('@/config/env', async (importOriginal) => ({
@@ -90,10 +91,12 @@ describe('ProjectCalendarsSection', () => {
     renderSection();
 
     expect(
-      screen.getByRole('button', { name: 'Move to this project: Standard' }),
+      within(openRowActions('Standard')).getByRole('menuitem', { name: 'Move to this project' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Move to organisation: Site shutdown' }),
+      within(openRowActions('Site shutdown')).getByRole('menuitem', {
+        name: 'Move to organisation',
+      }),
     ).toBeInTheDocument();
   });
 
@@ -108,7 +111,7 @@ describe('ProjectCalendarsSection', () => {
     vi.mocked(apiFetch).mockResolvedValue({ ...ORG_CALENDAR, scope: 'PROJECT' });
     renderSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move to this project: Standard' }));
+    await clickRowAction('Standard', 'Move to this project');
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -138,7 +141,7 @@ describe('ProjectCalendarsSection', () => {
     );
     renderSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move to this project: Standard' }));
+    await clickRowAction('Standard', 'Move to this project');
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
 
     expect(await screen.findByText(/still used outside/i)).toBeInTheDocument();
@@ -179,9 +182,13 @@ describe('ProjectCalendarsSection', () => {
 
     it('archives one of the project’s OWN calendars, never a shared organisation one', () => {
       renderSection();
-      expect(screen.getByRole('button', { name: 'Archive Site shutdown' })).toBeInTheDocument();
+      expect(
+        within(openRowActions('Site shutdown')).getByRole('menuitem', { name: 'Archive' }),
+      ).toBeInTheDocument();
       // "Standard" is an ORG calendar: retiring shared tenant state belongs on the org library.
-      expect(screen.queryByRole('button', { name: 'Archive Standard' })).not.toBeInTheDocument();
+      expect(
+        within(openRowActions('Standard')).queryByRole('menuitem', { name: 'Archive' }),
+      ).not.toBeInTheDocument();
     });
 
     it('badges an archived row and offers Unarchive', async () => {
@@ -212,7 +219,9 @@ describe('ProjectCalendarsSection', () => {
 
       expect(await screen.findByText('Winter shutdown')).toBeInTheDocument();
       expect(screen.getByText('Archived')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Unarchive Winter shutdown' })).toBeInTheDocument();
+      expect(
+        within(openRowActions('Winter shutdown')).getByRole('menuitem', { name: 'Unarchive' }),
+      ).toBeInTheDocument();
     });
 
     /**
@@ -257,7 +266,34 @@ describe('ProjectCalendarsSection', () => {
 
     it('hides the archive action from a reader', () => {
       renderSection({ canWrite: false });
-      expect(screen.queryByRole('button', { name: /^Archive /i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Actions for /i })).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * **The section is a named landmark AND a focus destination, and the second used to cost the
+   * first's visibility.**
+   *
+   * Before M2 this was a `<div>` carrying `tabIndex={-1}` and `outline-none` — reachable as a focus
+   * target (`useCalendarScopeMove` restores focus here when its dialog closes) and, on arrival,
+   * showing nothing at all. That is WCAG 2.2 §2.4.7, and it is the same defect `SectionCard`'s own
+   * docblock records shipping once on that primitive and fixing there.
+   *
+   * The assertion is about the ring rather than only the `tabindex`, because the pre-M2 element
+   * would have passed a `tabindex`-only check perfectly — which is what it did for as long as it
+   * existed.
+   */
+  describe('the section as a focus destination', () => {
+    it('is a named region that can take focus and shows a ring when it does', () => {
+      renderSection();
+      const region = screen.getByRole('region', { name: 'Calendars' });
+      expect(region.tagName).toBe('SECTION');
+      expect(region).toHaveAttribute('tabindex', '-1');
+      expect(region.className).toContain('focus-visible:ring-2');
+      expect(region.className).not.toMatch(/(?:^| )outline-none(?: |$)/);
+
+      region.focus();
+      expect(document.activeElement).toBe(region);
     });
   });
 });

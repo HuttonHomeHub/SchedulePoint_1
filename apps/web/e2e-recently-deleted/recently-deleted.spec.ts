@@ -75,7 +75,7 @@ test('a cascade is one deletion, and a cross-batch block is two presses', async 
 
   // ------------------------------------------------------------------ Delete the client
   await navLink(page, 'Clients').click();
-  await deleteFromTable(page, 'Northgate');
+  await deleteFromTable(page, 'Northgate', 'Clients');
 
   await navLink(page, 'Recently deleted').click();
 
@@ -123,9 +123,9 @@ test('a cascade is one deletion, and a cross-batch block is two presses', async 
   // ------------------------------------------------------------------ The cross-batch case
   // The plan goes on its own, so it holds its OWN batch id. Deleting the client afterwards does
   // not re-stamp an already-deleted row — which is precisely what makes this case exist.
-  await deleteFromTable(page, 'Programme A');
+  await deleteFromTable(page, 'Programme A', 'Plans');
   await navLink(page, 'Clients').click();
-  await deleteFromTable(page, 'Northgate');
+  await deleteFromTable(page, 'Northgate', 'Clients');
 
   await navLink(page, 'Recently deleted').click();
   await expect(binRow(page, 'Northgate')).toHaveCount(1);
@@ -164,12 +164,30 @@ test('a cascade is one deletion, and a cross-batch block is two presses', async 
  *
  * Located by the control's accessible name on purpose: this is the path a planner takes, and a
  * shortcut through the API would prove nothing about whether the screen still offers the action.
- * The tables render Edit/Delete buttons directly rather than a row menu — the Project Explorer's
- * "Actions for X" menu is a different surface, and the first draft of this helper assumed they
- * were the same.
+ *
+ * **Delete lives behind the row's `⋯` menu, and this docblock said the opposite until 2026-09-16.**
+ * It read "The tables render Edit/Delete buttons directly rather than a row menu", which was true
+ * when it was written and was made false by ADR-0145 M4 — one row-action shape everywhere, the
+ * primary action visible and the destructive one behind the menu. So the comment had become a
+ * statement asserting the opposite of the code, in the file a later reader would trust, which is
+ * the drift class ADR-0058 exists for; the sweep caught the locator and the comment had to be
+ * corrected rather than merely rerouted.
+ *
+ * **The `context` argument is not decoration.** The Project Explorer names its own node menus
+ * `Actions for <name>`, so three tables qualify theirs with the list they belong to
+ * (`rowActionsLabel`) — without it, `Actions for Northgate` resolves to two elements and the
+ * locator is ambiguous rather than wrong, which is the harder failure to read.
  */
-async function deleteFromTable(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name: `Delete ${name}`, exact: true }).click();
+async function deleteFromTable(
+  page: Page,
+  name: string,
+  /** The list the row belongs to — `Clients`, `Projects` or `Plans`. */
+  context: string,
+): Promise<void> {
+  await page
+    .getByRole('button', { name: `Actions for ${name} in ${context}`, exact: true })
+    .click();
+  await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
   const confirm = page.getByRole('alertdialog');
   await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(confirm).toBeHidden();

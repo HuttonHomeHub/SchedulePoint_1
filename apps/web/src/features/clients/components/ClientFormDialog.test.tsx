@@ -49,6 +49,52 @@ describe('ClientFormDialog', () => {
     expect(JSON.parse(init?.body as string)).toMatchObject({ name: 'Northgate Ltd', version: 3 });
   });
 
+  /**
+   * **What the structural gate cannot see.** `submit-guard.structural.test.ts` proves the native
+   * `disabled` attribute is absent and that the `aria-disabled:` class pair is present; neither
+   * says the guard *works*, and the guard is the whole reason the native attribute could be given
+   * up. react-hook-form's `handleSubmit` has no re-entrancy guard of its own, so without the
+   * `onClick` `preventDefault` a second press while the first request is in flight sends a second
+   * create — two clients from one form.
+   *
+   * It also asserts the property the swap was made FOR: focus does not move. A native `disabled`
+   * submit is removed from the tab order the instant the request starts, throwing a keyboard user
+   * to `<body>` and back twice per save (`docs/TECH_DEBT.md` #17a).
+   */
+  it('takes one press per save, and keeps focus while the request is in flight', async () => {
+    let settle: (value: ClientSummary) => void = () => {};
+    vi.mocked(apiFetch)
+      .mockReset()
+      .mockReturnValue(
+        new Promise<ClientSummary>((resolve) => {
+          settle = resolve;
+        }),
+      );
+    renderDialog();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Harbour' } });
+
+    const submit = screen.getByRole('button', { name: 'Create client' });
+    submit.focus();
+    fireEvent.click(submit);
+
+    // In flight: the label changes, the button announces itself as blocked, and it is STILL the
+    // focused element — which a natively disabled button could not be.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Saving…' })).toBeInTheDocument(),
+    );
+    const pending = screen.getByRole('button', { name: 'Saving…' });
+    expect(pending).toHaveAttribute('aria-disabled', 'true');
+    expect(pending).not.toBeDisabled();
+    expect(document.activeElement).toBe(pending);
+
+    // The second press is the one a real user makes when nothing appears to have happened.
+    fireEvent.click(pending);
+    fireEvent.click(pending);
+    settle(CLIENT);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+
   it('POSTs a new client in create mode', async () => {
     renderDialog();
     const name = screen.getByLabelText('Name');

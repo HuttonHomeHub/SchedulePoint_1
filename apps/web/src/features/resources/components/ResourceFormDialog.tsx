@@ -421,7 +421,15 @@ export function ResourceFormDialog({
               {readOnly ? 'Close' : 'Cancel'}
             </Button>
             {readOnly ? null : (
-              <Button type="submit" disabled={mutation.isPending} aria-busy={mutation.isPending}>
+              <Button
+                type="submit"
+                className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                aria-disabled={mutation.isPending}
+                aria-busy={mutation.isPending}
+                onClick={(event) => {
+                  if (mutation.isPending) event.preventDefault();
+                }}
+              >
                 {mutation.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create resource'}
               </Button>
             )}

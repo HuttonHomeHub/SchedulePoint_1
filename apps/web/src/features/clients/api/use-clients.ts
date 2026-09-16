@@ -24,8 +24,8 @@ function descriptionField(description?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-export function useClients(orgSlug: string): UseQueryResult<ClientSummary[]> {
-  return useQuery(clientsQueryOptions(orgSlug));
+export function useClients(orgSlug: string, search?: string): UseQueryResult<ClientSummary[]> {
+  return useQuery(clientsQueryOptions(orgSlug, search));
 }
 
 export function clientQueryOptions(orgSlug: string, clientId: string) {

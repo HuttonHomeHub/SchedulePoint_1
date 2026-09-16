@@ -70,6 +70,7 @@ export function SignUpForm({
           survives the pending state (TECH_DEBT #17a). */}
       <Button
         type="submit"
+        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
         aria-disabled={signUp.isPending}
         aria-busy={signUp.isPending}
         onClick={(event) => {

@@ -26,11 +26,34 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
     {
       header: 'Role',
       cell: (member) => (
+        /* **`aria-disabled` + `aria-busy` + a guard, not the native attribute** — the answer to
+           page-consistency CQ-3, given by **accessibility-reviewer** at the M8 gate (CLAUDE.md
+           §19.13: a shared control's keyboard model is reviewed before release, not after).
+
+           This is the ADR-0083 **button** clause, not its field clause, and the discriminator is
+           which kind of unavailability this is: the field clause governs a control **gated** by a
+           permission or a prerequisite, where the loss is readability. Here the control is
+           blocking **itself during its own mutation**, where the loss is operability — and a
+           native `disabled` leaves the tab order the instant the request starts and returns when
+           it settles, so a keyboard user changing a colleague's role is thrown to `<body>` and
+           back, twice, per change (`docs/TECH_DEBT.md` #17a). The eleventh site of the ten M5
+           converted.
+
+           `aria-busy` rides alongside rather than `aria-disabled` alone, which is the reviewer's
+           refinement and answers ADR-0083's own "false announcement" objection: a reader hears
+           that the control is working rather than a bare, briefly untrue "disabled" on something
+           a pointer could still reach.
+
+           **The guard needs no manual revert** because the select is **controlled**: ignoring the
+           change re-renders it at `member.role`, which is the stored value. */
         <Select
           aria-label={`Role for ${member.user.name}`}
           value={member.role}
-          disabled={changeRole.isPending}
+          aria-disabled={changeRole.isPending}
+          aria-busy={changeRole.isPending}
+          className="aria-disabled:opacity-60"
           onChange={(event) => {
+            if (changeRole.isPending) return;
             setError(null);
             changeRole.mutate(
               {

@@ -67,9 +67,8 @@ await page
 await page.waitForFunction(
   () => {
     const h = document.documentElement.scrollHeight;
-    // eslint-disable-next-line no-undef
+
     return new Promise((resolve) =>
-      // eslint-disable-next-line no-undef
       setTimeout(() => resolve(document.documentElement.scrollHeight === h), 400),
     );
   },
@@ -208,6 +207,5 @@ function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
-// eslint-disable-next-line no-console
 console.log(out.join('\n'));
 await browser.close();

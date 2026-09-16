@@ -1,4 +1,5 @@
 import { FormSection } from '@/components/ui/form-layout';
+import { PageHeader } from '@/components/ui/page';
 import { ChangePasswordForm, ResendVerificationButton, useSession } from '@/features/auth';
 
 /**
@@ -19,11 +20,19 @@ export function AccountScreen(): React.ReactElement {
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 p-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Your account</h1>
-      <p className="text-muted-foreground mt-1 text-sm">
-        Your sign-in details. Everything here applies to you personally, in every organisation you
-        belong to.
-      </p>
+      {/* **The frame stays hand-written and the header does not.** This screen is a declared
+          exception to `PageContainer` — 672 px, narrower than the archetype's narrowest measure, with
+          the reason recorded at `components/ui/page/page-container.structural.test.ts:45-54`. The
+          measure is the exception; the heading's rank, size and description wiring never were, so
+          they move to the archetype like every other screen's. The consequence is written down
+          rather than left implicit: this adoption is **ungated**, because `routes/archetypes
+          .structural.test.ts` scopes itself to the nine in-scope screens and would have to exempt
+          this one from its frame assertion to see this one line — an exception list inside a gate
+          whose whole value is having none. So it can regress silently, and that is accepted. */}
+      <PageHeader
+        title="Your account"
+        description="Your sign-in details. Everything here applies to you personally, in every organisation you belong to."
+      />
 
       <div className="mt-6 flex flex-col gap-8">
         {/* `headingLevel={2}`: this is a page, so its own `h1` is the level above. The default 3

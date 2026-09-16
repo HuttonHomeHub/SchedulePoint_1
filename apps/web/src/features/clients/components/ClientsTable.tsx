@@ -1,6 +1,7 @@
 import type { ClientSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { X } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useClients, useDeleteClient } from '../api/use-clients';
@@ -11,6 +12,11 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { MenuItem } from '@/components/ui/menu';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
+import { SearchField } from '@/components/ui/search-field';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
 
 /**
@@ -23,17 +29,56 @@ import { deleteCascadeWarning } from '@/lib/delete-copy';
 export function ClientsTable({
   orgSlug,
   canWrite,
+  filters,
+  onFiltersChange,
 }: {
   orgSlug: string;
   canWrite: boolean;
+  /** The screen's URL-backed filters. Absent ⇒ the table renders unsearched, as it always did. */
+  filters?: { q: string } | undefined;
+  onFiltersChange?: ((patch: { q: string }) => void) | undefined;
 }): React.ReactElement {
-  const clients = useClients(orgSlug);
+  const search = filters?.q ?? '';
+  const setSearch = (q: string): void => onFiltersChange?.({ q });
+  // The request is driven by the SETTLED term, so a typing burst costs one round trip; the input
+  // renders `search` and stays instant. The same split the two library screens use.
+  const debouncedSearch = useDebouncedValue(search);
+  const clients = useClients(orgSlug, debouncedSearch);
+  const searchId = useId();
+  const filtered = search.trim() !== '';
   const deleteClient = useDeleteClient(orgSlug);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ClientSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // A debounced search that silently reshapes the table is invisible to a screen-reader user
+  // (WCAG 4.1.3). Both sibling library tables have announced their settled count since ADR-0053 M6
+  // and this one did not — one correct pattern applied to a control and not its neighbour, inside
+  // the epic whose subject is exactly that, found by the M8 accessibility gate.
+  useResultCountAnnouncement({
+    pending: clients.isPending || clients.isFetching,
+    count: clients.data?.length ?? 0,
+    filterKey: debouncedSearch,
+    noun: 'client',
+    emptyMessage: 'No clients match this search.',
+  });
+
+  /**
+   * **Focus goes to the list, because the list is what the press produced.**
+   *
+   * The empty state's `Clear filters` removes itself by succeeding — rows return, the empty state
+   * unmounts, and focus falls to `<body>`, which on this screen silently ends keyboard navigation.
+   * That is the failure this table's own docblocks name four times about the *bar* button, and the
+   * reasoning had never been applied to the *empty-state* one, which is the copy that actually has
+   * it. The region is always mounted and `tabIndex={-1}`, so it is a destination rather than a
+   * guess.
+   */
+  const clearSearchAndFocusList = (): void => {
+    setSearch('');
+    regionRef.current?.focus();
+  };
 
   const editing = editingId ? clients.data?.find((client) => client.id === editingId) : undefined;
 
@@ -61,8 +106,16 @@ export function ClientsTable({
       srHeader: true,
       headClassName: 'py-2 font-medium',
       cellClassName: 'py-2 text-right whitespace-nowrap',
+      /* **One row-action shape** (page-consistency M4): the primary action stays visible and the
+         rest move behind a `⋯`, which is the shape ADR-0097 Landing F1 decided on the calendars
+         table. Landing F asked "which tables are crowded?" and correctly answered "one", leaving
+         this one alone; this epic asks a different question — "do these tables answer the same
+         question three ways?" — and the answer was yes. The cost is stated rather than glossed:
+         deleting a client is two presses instead of one, which the product owner accepted on the
+         grounds that the buried action is the destructive one and a moment's friction is cheapest
+         there. */
       cell: (client) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -71,17 +124,17 @@ export function ClientsTable({
           >
             Edit
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setDeleteError(null);
-              setDeleting(client);
-            }}
-            aria-label={`Delete ${client.name}`}
-          >
-            Delete
-          </Button>
+          <RowActionsMenu subject={client.name} context="Clients">
+            <MenuItem
+              destructive
+              onSelect={() => {
+                setDeleteError(null);
+                setDeleting(client);
+              }}
+            >
+              Delete
+            </MenuItem>
+          </RowActionsMenu>
         </div>
       ),
     });
@@ -108,6 +161,37 @@ export function ClientsTable({
 
   return (
     <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+      {onFiltersChange === undefined ? null : (
+        <div className="flex flex-wrap items-end gap-3">
+          <SearchField
+            id={searchId}
+            className="min-w-56 flex-1"
+            label="Search clients"
+            placeholder="Search by name"
+            clearLabel="Clear client search"
+            value={search}
+            onChange={setSearch}
+          />
+          {/* Always rendered and shaded when there is nothing to clear — the shape M4 gave the two
+              library bars, and the reason is the same: a control that removes itself by succeeding
+              drops focus to `<body>` at the moment it is pressed. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-disabled={!filtered}
+            onClick={() => {
+              if (!filtered) return;
+              setSearch('');
+            }}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          >
+            <X aria-hidden="true" className="size-4" />
+            Clear filters
+          </Button>
+        </div>
+      )}
+
       <DataTable
         caption="Clients"
         columns={columns}
@@ -115,7 +199,29 @@ export function ClientsTable({
         getRowKey={(client) => client.id}
         loadingLabel="Loading clients…"
         errorLabel="Couldn’t load clients. Please try again."
-        empty={<>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>}
+        empty={
+          filtered ? (
+            // **A filtered-to-nothing list is a different fact from an empty organisation**, and
+            // must never read as one — it says so, and offers the way back.
+            <>
+              <p className="text-muted-foreground text-sm">No clients match this search.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={clearSearchAndFocusList}
+                // Named for its context: its twin in the bar above is always present, and two
+                // buttons whose accessible name is the bare string are indistinguishable to a
+                // reader who hears them (M4's finding, applied here on the day it was made).
+                aria-label="Clear filters and show all clients"
+              >
+                Clear filters
+              </Button>
+            </>
+          ) : (
+            <>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>
+          )
+        }
       />
 
       {canWrite ? (

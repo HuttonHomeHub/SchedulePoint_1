@@ -1,12 +1,13 @@
 import { useParams } from '@tanstack/react-router';
 
 import { NoticeStrip } from '@/components/ui/notice-strip';
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
 import { AuditFilterBar } from '@/features/audit/components/AuditFilterBar';
+import { CoverageDisclosure } from '@/features/audit/components/CoverageDisclosure';
 import {
   EMPTY_AUDIT_FILTER,
   isAuditFilterEmpty,
@@ -25,6 +26,15 @@ import { canReadAuditLog } from '@/lib/rbac';
  * 403, and rendering that as "no events" would be the log's own failure mode — absence that a
  * reader cannot distinguish from nothing having happened.
  */
+/**
+ * Ties the relocated coverage rule to the table it describes (`aria-describedby`).
+ *
+ * A module constant rather than `useId()` because the producer and the consumer are two separate
+ * components in this file and the id has to survive the trip; there is exactly one audit log per
+ * document, so a fixed id cannot collide with itself.
+ */
+const COVERAGE_ID = 'audit-log-coverage';
+
 export function AuditLogScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
@@ -38,42 +48,49 @@ export function AuditLogScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
+      <PageHeader
+        title="Audit log"
+        description="Newest first: what has been removed from this organisation, and what has changed the rules other people’s work is judged by."
+      />
       {/*
-        Say what is recorded, not what an audit log sounds like it records — and say it as a RULE
-        rather than an inventory. This sentence has now been wrong twice, in opposite directions.
-        First it promised "permission changes, deletions and sign-ins for this organisation", and a
-        sign-in can NEVER appear here: authentication happens before an organisation is known, so
-        those rows carry no `organizationId` and this read filters on exactly that column. A planner
-        read that line, went looking, found silence, and reasonably concluded the feature was
-        broken. Then it listed what it DID cover — and by the time the coverage rung landed it named
-        family D and none of E, F or G, so a reader asking "where did the December baseline go?" had
-        no reason to believe this log knew.
+        **The coverage rule is RELOCATED, never cut** — and it is the one fact on this screen a
+        reader cannot infer. It went wrong twice in opposite directions before reaching this
+        wording: first it promised "permission changes, deletions and sign-ins for this
+        organisation", and a sign-in can NEVER appear here, because authentication happens before an
+        organisation is known and this read filters on exactly that column — a planner read that
+        line, went looking, found silence, and reasonably concluded the feature was broken. Then it
+        listed what it DID cover, and by the time the coverage rung landed it named family D and
+        none of E, F or G.
 
         An itemised list is a promise that goes stale every time the vocabulary grows, which on this
         feature is every milestone. The two tests that decide coverage (ADR-0073) fit in a sentence;
-        the list never will. See the empty state below, which had the first problem from the other
-        side.
-      */}
-      <p className="text-muted-foreground mt-1 text-sm">
-        Newest first: everything that{' '}
-        <strong className="text-foreground font-medium">removes</strong> something — deleted or
-        restored clients, projects, plans and activities, dissolved summaries, removed links,
-        deleted calendars and resources — and everything that{' '}
-        <strong className="text-foreground font-medium">
-          changes the rules other people&rsquo;s work is judged by
-        </strong>
-        : who has access, scheduling settings, a shared calendar&rsquo;s working time, baselines,
-        what the shared libraries offer, and where an imported programme came from.
-      </p>
-      <p className="text-muted-foreground mt-1 text-sm">
-        Editing an activity&rsquo;s own fields — its name, dates, duration, lane or progress — is{' '}
-        <strong className="text-foreground font-medium">deliberately not recorded</strong>: it
-        changes nothing outside that activity, and the row already carries who last changed it. Your
-        own sign-ins are on <strong className="text-foreground font-medium">My activity</strong>,
-        not here.
-      </p>
+        the list never will.
 
+        **Behind a disclosure because it was permanently occupying the top of the screen for every
+        reader including the ones who already know**, and because `AuditEventList`'s own empty state
+        says the same thing compressed — so the page-level copy was a restatement costing ~128px of
+        a list a reader came here to read. It stays `aria-describedby`-linked to the table, so it is
+        not a fact you have to find; it is a fact you no longer have to scroll past.
+      */}
+      <CoverageDisclosure contentId={COVERAGE_ID}>
+        <p>
+          Everything that <strong className="text-foreground font-medium">removes</strong> something
+          — deleted or restored clients, projects, plans and activities, dissolved summaries,
+          removed links, deleted calendars and resources — and everything that{' '}
+          <strong className="text-foreground font-medium">
+            changes the rules other people’s work is judged by
+          </strong>
+          : who has access, scheduling settings, a shared calendar’s working time, baselines, what
+          the shared libraries offer, and where an imported programme came from.
+        </p>
+        <p>
+          Editing an activity’s own fields — its name, dates, duration, lane or progress — is{' '}
+          <strong className="text-foreground font-medium">deliberately not recorded</strong>: it
+          changes nothing outside that activity, and the row already carries who last changed it.
+          Your own sign-ins are on{' '}
+          <strong className="text-foreground font-medium">My activity</strong>, not here.
+        </p>
+      </CoverageDisclosure>
       {isPending ? (
         <div className="mt-6 p-6">
           <Spinner label="Checking your access…" />
@@ -133,6 +150,7 @@ function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
       <AuditEventList
         query={query}
         caption="Organisation audit log"
+        describedById={COVERAGE_ID}
         showActor
         // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
         // log must never say when it means "this is outside what I record". Name the boundary.

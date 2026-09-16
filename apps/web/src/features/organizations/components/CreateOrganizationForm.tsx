@@ -42,7 +42,15 @@ export function CreateOrganizationForm({
         error={errors.name?.message}
         {...register('name')}
       />
-      <Button type="submit" disabled={create.isPending} aria-busy={create.isPending}>
+      <Button
+        type="submit"
+        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+        aria-disabled={create.isPending}
+        aria-busy={create.isPending}
+        onClick={(event) => {
+          if (create.isPending) event.preventDefault();
+        }}
+      >
         {create.isPending ? 'Creating…' : 'Create organisation'}
       </Button>
     </form>

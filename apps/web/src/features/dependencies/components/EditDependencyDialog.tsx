@@ -202,7 +202,15 @@ export function EditDependencyDialog({
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={update.isPending} aria-busy={update.isPending}>
+          <Button
+            type="submit"
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+            aria-disabled={update.isPending}
+            aria-busy={update.isPending}
+            onClick={(event) => {
+              if (update.isPending) event.preventDefault();
+            }}
+          >
             {update.isPending ? 'Saving…' : 'Save changes'}
           </Button>
         </div>

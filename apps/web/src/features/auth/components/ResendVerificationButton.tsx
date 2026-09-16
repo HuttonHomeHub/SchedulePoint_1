@@ -110,11 +110,22 @@ export function ResendVerificationButton({
           arrived (ADR-0077 M6-T1, the TECH_DEBT #98 defect class). Wrapping rather than shortening,
           because "another" is what tells a reader who is here for the second time that this is not
           the same link again. */}
+      {/* **`opacity-60` WITHOUT `pointer-events-none`, and this is the estate's one exception**
+          (`submit-guard.structural.test.ts` names it). Its sixteen siblings bind `aria-disabled` to
+          a mutation in flight — transient, about a second — where making the control inert to the
+          pointer is right. `blocked` here is `send.isPending || address.trim() === ''`, so on
+          `/verify-email` reached without `?email=` (a bookmark, a retyped URL) this button is
+          `aria-disabled` **at rest, from first paint**. `pointer-events: none` then makes
+          `document.elementFromPoint` return the element behind it, which is how `e2e-public` caught
+          it: the only route back into an unverified account was pointer-unreachable in its resting
+          state — the dead end ADR-0074/ADR-0077 exist to close, and the opposite of this
+          component's own rule that a button which silently does nothing is worse than a field.
+          Inertness is already handled one level up, by `submit()`'s `if (blocked) return;`. */}
       <Button
         type="submit"
         aria-disabled={blocked}
         aria-busy={send.isPending}
-        className="whitespace-normal"
+        className="whitespace-normal aria-disabled:opacity-60"
       >
         {send.isPending ? 'Sending…' : 'Send another verification email'}
       </Button>

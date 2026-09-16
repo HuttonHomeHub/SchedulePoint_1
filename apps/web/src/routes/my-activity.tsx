@@ -1,8 +1,9 @@
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { AUDIT_FILTERS_ENABLED, AUDIT_SELF_SECURITY_ENABLED } from '@/config/env';
 import { useSelfAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
 import { AuditFilterBar } from '@/features/audit/components/AuditFilterBar';
+import { CoverageDisclosure } from '@/features/audit/components/CoverageDisclosure';
 import {
   EMPTY_AUDIT_FILTER,
   isAuditFilterEmpty,
@@ -13,6 +14,9 @@ import { useUrlFilterState } from '@/hooks/use-url-filter-state';
 
 /** Ties the "what a Not signed in row means" note to the table it qualifies (`aria-describedby`). */
 const ATTEMPTS_NOTE_ID = 'my-activity-attempts-note';
+
+/** Ties the relocated coverage rule to the same table (`aria-describedby` takes a list). */
+const COVERAGE_ID = 'my-activity-coverage';
 
 /**
  * The caller's own audit events (`/me/activity`, ADR-0072).
@@ -35,22 +39,25 @@ export function MyActivityScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <h1 className="text-2xl font-semibold tracking-tight">My activity</h1>
       {/*
         This screen is the only place sign-ins are visible — they carry no organisation, so the
         organisation log structurally cannot show them. Say so here, because a reader who went
         looking there first needs to know they are not missing.
       */}
-      <p className="text-muted-foreground mt-1 text-sm">
-        What you did, across every organisation you belong to — including your sign-ins, which
-        appear here and nowhere else.
-      </p>
-      <p className="text-muted-foreground mt-1 text-sm">
-        Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
-        is on their organisation&rsquo;s audit log, not here. Inside a plan, deletions and
-        structural changes appear; editing an activity&rsquo;s own fields is{' '}
-        <strong className="text-foreground font-medium">deliberately not recorded</strong>.
-      </p>
+      <PageHeader
+        title="My activity"
+        description="What you did, across every organisation you belong to — including your sign-ins, which appear here and nowhere else."
+      />
+      {/* **Relocated, not cut** — and the split is deliberate: this is a coverage rule, while the
+          paragraph BELOW the disclosure is a security caveat. Only the coverage moves. */}
+      <CoverageDisclosure contentId={COVERAGE_ID}>
+        <p>
+          Scoped to you as the person who <em>acted</em>: something an Org Admin did to your account
+          is on their organisation&rsquo;s audit log, not here. Inside a plan, deletions and
+          structural changes appear; editing an activity&rsquo;s own fields is{' '}
+          <strong className="text-foreground font-medium">deliberately not recorded</strong>.
+        </p>
+      </CoverageDisclosure>
       {/*
         What a "Not signed in" row means, and — as importantly — what it does NOT mean. This screen
         is telling somebody they may be under attack, and the two things a reader will jump to are
@@ -85,7 +92,11 @@ export function MyActivityScreen(): React.ReactElement {
           // `role="region"`, so a reader navigating by landmark lands inside it having skipped
           // whatever precedes it — and what precedes it here is the sentence saying a row does not
           // mean anyone got in.
-          describedById={AUDIT_SELF_SECURITY_ENABLED ? ATTEMPTS_NOTE_ID : undefined}
+          /* Both, space-separated: `aria-describedby` takes a list, and the two notes answer
+             different questions — what this log covers, and what a "Not signed in" row proves. */
+          describedById={
+            AUDIT_SELF_SECURITY_ENABLED ? `${COVERAGE_ID} ${ATTEMPTS_NOTE_ID}` : COVERAGE_ID
+          }
           emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation and anything you deleted or restructured in a plan."
           emptyFilteredMessage={
             narrowed

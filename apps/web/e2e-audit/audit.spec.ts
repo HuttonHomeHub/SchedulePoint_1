@@ -172,7 +172,10 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await expect(admin.getByRole('button', { name: 'Actions for Excavate' })).toHaveCount(0);
 
   await navLink(admin, 'Clients').click();
-  await admin.getByRole('button', { name: 'Delete Northgate' }).click();
+  // The row's secondary actions live behind the `⋯` since page-consistency M4 — the primary
+  // stays visible and the rest move into a menu, on every list in the estate.
+  await admin.getByRole('button', { name: 'Actions for Northgate in Clients' }).click();
+  await admin.getByRole('menuitem', { name: 'Delete' }).click();
   await admin.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   await expect(admin.getByText(/No clients yet/)).toBeVisible();
 

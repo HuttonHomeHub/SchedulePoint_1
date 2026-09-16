@@ -1,11 +1,17 @@
 /**
  * The page archetypes (ADR-0097 Landing A).
  *
- * Six components that between them decide, once, what every screen's frame, heading, section,
- * empty state, loading shape and row look like — decisions that were previously made 14 and 16
- * times by hand. Landing B's condition is that the organisation landing page is built FROM these
- * rather than from a bespoke layout that happens to look right; a missing archetype discovered
- * while building it is the failure that condition exists to prevent.
+ * **Eight** components that between them decide, once, what every screen's frame, heading,
+ * section, empty state, loading shape, row, page grid and metric block look like — decisions that
+ * were previously made 14 and 16 times by hand. Landing B's condition is that the organisation
+ * landing page is built FROM these rather than from a bespoke layout that happens to look right; a
+ * missing archetype discovered while building it is the failure that condition exists to prevent.
+ *
+ * This sentence said "Six" until 2026-09-16, over a barrel exporting eight: ADR-0143 added
+ * `PageGrid` and `StatGrid` directly below it and did not update the line above them. A count in
+ * the file a reader opens to learn what the archetypes ARE is the worst place for one to go stale,
+ * and it is the drift class this repository builds gates for — so it is corrected here rather than
+ * filed. Adding a ninth means editing this line.
  */
 export { PageContainer, type PageContainerProps } from './page-container';
 export { PageHeader, type PageHeaderProps } from './page-header';

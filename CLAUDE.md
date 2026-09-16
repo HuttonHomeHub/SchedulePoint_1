@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1263 web
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1270 web
 > source files with 42 Playwright suites beside the base journey, and
-> 144 ADRs.
+> 145 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4981,6 +4981,72 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   design's own projected cost, so the honest framing is that FC-B and FC-C are bought at roughly
   **double a dropdown's footprint** (≈1,715 px against ≈900), on a page that still falls from 12.8
   screens to 6.1.
+
+- **ADR-0145** _(Accepted; M0–M8 landed 2026-09-16)_ — A screen is assembled from the archetypes,
+  and a table answers one question one way. ADR-0097 Landing B built eight page archetypes and made
+  assembling from them a **gate on one screen**; nine others kept their hand-rolled frames, and the
+  drift was measured rather than described — **four different header rhythms**, three description
+  widths (267 / 546 / 736 px) because `PageHeader` had **no measure at all**, and five tables
+  answering "how do I act on a row?" three ways. Each looked right in isolation, which is why nobody
+  had reported any of it.
+  **The instrument was repaired before anything was decided**, and twice it changed the work.
+  `measure-page-drift.mjs` was reporting a row's "fact spread" as `lastCellX − firstCellX`, which is
+  identically `tableWidth − lastColumnWidth` — so on every table whose last column is **Actions** it
+  measured where the buttons start, not where the facts end. The corrected metric made the width-cap
+  rule narrower than the plan's: cap the columns **before** the last fact, never the last fact
+  itself, and the first, wider version made two tables **worse** (a `Name` column growing by 76 px)
+  before it was measured. Final: **−34, −122, −65, −65 px** on the four tables with bounded columns.
+  **Two of the epic's five falsification conditions did not pass, and neither bar moved.** FC-2
+  (prose density) failed — spread 234 → 210 px against ≤ 80, worst screen −32 px against ≥ 100 — and
+  its **withdrawal clause fired as written**, so the density half is withdrawn rather than
+  re-argued. FC-3 failed by **2 px**, which is `SectionCard`'s own border; put to the product owner
+  with both consequences costed, they accepted it and FC-3 is amended in place bounded at the
+  **measured** border rather than at a round number.
+  **D5 is the decision the epic got wrong first and fixed by doing the thing.** The audit screens'
+  standing coverage rule moved behind a `<details>`, on a claim labelled _reasoned from
+  specification, not observed_ — the honest label ADR-0083 and ADR-0122 both carry. Probed in
+  Chromium at the gate pass it is **false**: `aria-describedby` resolves to `null` while a
+  `<details>` is closed and populates once it is open, so the rule was announced **only when it was
+  already visible**. Two further probes established the discriminator rather than assuming it — an
+  `sr-only` clip **does** resolve and so does `hidden`. `CoverageDisclosure` is a button with
+  `aria-expanded`/`aria-controls` over content that is always in the DOM. The security caveat on My
+  activity stays **visible**, which was named the riskiest single change in the epic and declined.
+  **The gate pass earned its place for the ninth epic running.** Six specialists; the API and
+  backend-performance reviews found nothing blocking in the decisions and **re-derived the numbers
+  from the shipped code**, which corrected two of my claims: the clients search is **40×** the
+  installation's size and not 190× (5,000 / 124 — an arithmetic slip in a checkable number), and
+  the cost is bounded by the **escalation trigger, not by a guaranteed plan shape** — Postgres
+  seq-scans the whole table while the tenant is a majority share, which is the deployed database's
+  state today, and the "bitmap scan bounded to one tenant" sentence was inherited from ADR-0053 M4
+  where its table composition made it true. The verdict survives in both regimes (2.3–7.0 ms).
+  The other four blocked, and **the largest is this epic's own subject landing on it**: all ten
+  submit conversions dropped `className="aria-disabled:pointer-events-none aria-disabled:opacity-60"`.
+  `Button`'s CVA base is `disabled:pointer-events-none disabled:opacity-50` — Tailwind's `disabled:`
+  variant fires on the **native attribute only** — so swapping to `aria-disabled` silently removed
+  every visual consequence of it: pressing Save changed the label and **nothing else**. Re-deriving
+  found **seven more that pre-dated the epic**, including all six public auth forms. The gate that
+  should have caught it was asserting the easy half of a two-part rule, and **its tag reader had a
+  hole of its own** — `/<Button\b[^>]*?>/` ends at the first `>`, which an `onClick={(e) => …}`
+  supplies, so a `disabled=` written after the guard was invisible; every site is written in exactly
+  that shape and the attribute happened to sit before the arrow at all ten. Both halves are now
+  asserted, with the arrow-function hole pinned as a fixture **verified red against the old reader**
+  and the comment-stripping one kept as a regression pin and labelled as **not** a second defect
+  found — because it already passed.
+  Three more: the Clients search **announced nothing** (WCAG 4.1.3) while both sibling library
+  tables have announced their settled count since ADR-0053 M6; the empty state's `Clear filters`
+  **drops focus to `<body>`** on all three library screens, which is the failure those files'
+  own docblocks name four times about the _bar_ button, the reasoning never having been applied to
+  the copy that has it; and CQ-3's answer unblocked the **eleventh** submit site, the members role
+  `<select>` M5 left behind — `aria-disabled` + `aria-busy` + an `onChange` guard, ADR-0083's
+  **button** clause rather than its field clause, because the control is blocking itself during its
+  own mutation rather than being gated. Every fix carries a regression test **verified red first**.
+  **And this entry was itself the finding.** ADR-0145 was filed, Accepted, indexed in
+  `docs/adr/README.md` and cited by `docs/ROADMAP.md` — and absent from this register, which is the
+  ADR-0071 failure `docs/TECH_DEBT.md` #291 records happening three times already. It was caught by
+  the component review rather than by anything automatic, because `check:adr-coverage`
+  structurally cannot read this file. Two documents the spec promised were missing with it
+  (`docs/DESIGN_SYSTEM.md`, `docs/UX_STANDARDS.md`), and `docs/API.md` had never been told the
+  clients list takes a `q`. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

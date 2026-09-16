@@ -107,6 +107,7 @@ export function ChangePasswordForm(): React.ReactElement {
           save and a native one would throw focus to `<body>` and back (docs/DESIGN_SYSTEM.md). */}
       <Button
         type="submit"
+        className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
         aria-disabled={changePassword.isPending}
         aria-busy={changePassword.isPending}
         onClick={(event) => {

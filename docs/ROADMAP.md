@@ -304,6 +304,19 @@ keep `main` releasable.
   dependencies — not `plans.updated_at`, which does not move when an activity is edited, so the
   naive ordering ranks a plan somebody worked in all morning below one whose name was corrected last
   week **and every row still looks correct**.
+- **A screen is assembled from the archetypes** (ADR-0145). The nine non-canvas screens — Clients,
+  Calendars, Resources, Members, Audit log, Recently deleted, My activity and the two detail screens
+  — drifted into **four** different heading rhythms, three treatments for a named sub-section and
+  five row-action shapes, because eight of the nine hand-rolled the header the archetypes exist to
+  decide once. They are built from the archetypes now, with a gate saying so, and every list offers
+  its row's actions the same way: the primary in the open, the rest behind a `⋯`. Deleting a client
+  costs a second press, which is where the uniformity is paid for. The audit log's standing prose
+  moves behind a disclosure and shows a tenth row, ten dialogs stop throwing a keyboard user to the
+  top of the page twice per save, and **the clients list gains the search it was the only one of the
+  three to lack** — 123 rows with nothing to type into. **The density half of the epic was withdrawn
+  on its own measurement** — the chrome spread fell 234 → 210 px against a bar of 80 — with the
+  reason recorded rather than the bar moved: the dominant term is the filter bar, not the prose, and
+  a disclosure's own affordance costs a third of what it hides.
 - **A landing question is costed before it is answered** (ADR-0144). The product owner asked for the
   landing to be "revitalised" — _"it contains very little info… all the information they will ever
   need"_ — and it answered **2 of the 7** questions a returning planner arrives with. It now answers

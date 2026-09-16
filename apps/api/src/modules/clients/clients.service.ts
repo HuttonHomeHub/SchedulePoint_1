@@ -10,6 +10,7 @@ import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { normaliseSearchTerm } from '../../common/query/library-filters';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
@@ -39,15 +40,20 @@ export class ClientsService {
   async list(
     principal: Principal,
     orgSlug: string,
-    query: { limit: number; cursor?: string },
+    query: { limit: number; cursor?: string; q?: string },
   ): Promise<{ items: Client[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'client:read', organization.id);
+
+    // Normalised through the shared helper the libraries use, so "a whitespace-only term is no
+    // search" means one thing across the product rather than three.
+    const search = normaliseSearchTerm(query.q);
 
     const rows = await this.clients.findManyActiveByOrg({
       organizationId: organization.id,
       take: query.limit + 1,
       ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(search === undefined ? {} : { search }),
     });
 
     const hasMore = rows.length > query.limit;

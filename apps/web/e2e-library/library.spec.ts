@@ -123,7 +123,8 @@ test('a project calendar is scoped to its project, and archiving retires a resou
 
   // Archive it from the library.
   await navLink(page, 'Resources').click();
-  await page.getByRole('button', { name: 'Archive Crew A' }).click();
+  await page.getByRole('button', { name: 'Actions for Crew A' }).click();
+  await page.getByRole('menuitem', { name: 'Archive' }).click();
   // Archived rows are hidden by default — the row leaves the ACTIVE list…
   await expect(page.getByRole('cell', { name: 'Crew A', exact: true })).toHaveCount(0);
   // …and is still there, badged, once the filter includes it (and the URL says so).

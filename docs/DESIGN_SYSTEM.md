@@ -605,6 +605,19 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   M2 (`TECH_DEBT` #17a) — it is a rule, not a judgement call. Native `disabled`
   remains correct for a control that is **statically** unavailable (no
   permission, nothing selected), where nothing flips underneath the user.
+
+  **And it carries `className="aria-disabled:pointer-events-none
+aria-disabled:opacity-60"`, which is not decoration — it is the other half of
+  the same swap.** `Button`'s CVA base is `disabled:pointer-events-none
+disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
+  attribute only**, so dropping that attribute silently drops every visual
+  consequence of it. A submit converted without the class pair looks and behaves
+  exactly as it does at rest while its request is in flight — nothing dims,
+  nothing becomes inert, and the only change is the label. Page-consistency M5
+  shipped ten such conversions and a review caught it; re-deriving found **seven
+  more that pre-dated the epic**, including all six public auth forms, so
+  pressing Sign in gave no feedback at all. `submit-guard.structural.test.ts`
+  now asserts both halves; before that it asserted the easy one.
   **This clause is narrowed for _fields_ — see "Forms & inputs" below, and read
   the two together.** ADR-0083 D2 corrects it twice: "no permission" is not
   static (the ADR-0028 pen can be taken by a peer mid-session, so the clause
@@ -612,6 +625,7 @@ link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`.
   flipping is the wrong axis for a field anyway. It is the right axis for a
   button, whose only loss on being disabled is operability. **The button ruling
   above is untouched and correct.**
+
 - **Forms & inputs** — label, optional description, error, and required
   indicator standardised via the `Form` primitive (ADR-0007). Consistent field
   heights (sizing scale); `aria-invalid` + linked error text.

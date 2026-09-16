@@ -1,4 +1,5 @@
 import { ARCHIVED_FILTERS, type ArchivedFilter, type CalendarSummary } from '@repo/types';
+import { X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -157,6 +158,27 @@ export function CalendarsTable({
 
   const clearFilters = (): void => setFilters(DEFAULT_CALENDAR_LIBRARY_FILTERS);
 
+  /**
+   * **The empty state's copy focuses the list; the filter bar's copy does not.**
+   *
+   * They run the same clear and have different focus obligations, which is the distinction this
+   * table had not drawn. The bar's button is always mounted and shaded when there is nothing to
+   * clear, so focus stays where the reader put it. The empty state's button **removes itself by
+   * succeeding** — rows return, the empty state unmounts, and focus falls to `<body>`. That is the
+   * failure this file's own docblocks name about the bar button; nobody had applied the reasoning
+   * to the copy that actually has it (M8 accessibility gate). The region is always mounted and
+   * `tabIndex={-1}`, so it is a destination rather than a guess.
+   */
+  const clearFiltersAndFocusList = (): void => {
+    clearFilters();
+    regionRef.current?.focus();
+  };
+  /** Any filter away from its default — what makes `Clear filters` mean something to press. */
+  const filtered =
+    search !== DEFAULT_CALENDAR_LIBRARY_FILTERS.q ||
+    scopeFilter !== DEFAULT_CALENDAR_LIBRARY_FILTERS.scope ||
+    archivedFilter !== DEFAULT_CALENDAR_LIBRARY_FILTERS.archived;
+
   const toggleArchived = (calendar: CalendarSummary): void => {
     setArchiveError(null);
     const archived = isArchivedRow(calendar);
@@ -193,6 +215,9 @@ export function CalendarsTable({
     },
     {
       header: 'Working days',
+      // A bounded column: a width preference stops `table-layout: auto` handing it slack it
+      // does not want, which pushed a row's last fact away from its first (M4-T2).
+      cellClassName: 'py-2 pr-4 md:w-44',
       // The mask alone made a two-shift calendar and a plain Mon–Fri one read identically in this
       // list — the exact loss ADR-0067 exists to stop, left in the one screen a planner uses to
       // tell their calendars apart. `maxWindowsPerDay` had been written for this and had no
@@ -337,6 +362,31 @@ export function CalendarsTable({
               ))}
             </Select>
           </div>
+          {/* **`Clear filters` lives in the BAR, not only in the empty state** (page-consistency
+              M4). It was offered only when a filter matched nothing, so a planner who narrowed 81
+              calendars to three had no route back but to reset each control by hand — and the
+              screen one tab over, the audit log, had carried the control in its bar all along.
+
+              Copied from `AuditFilterBar.tsx:158-179` rather than re-derived, including the part
+              that matters most: it is **always rendered and shaded when there is nothing to
+              clear**, never conditionally mounted. A control that removes itself by succeeding
+              drops focus to `<body>` at the moment it is pressed, which is a defect this register
+              records four separate times — and `aria-disabled` rather than the native attribute,
+              because the native one blurs as the filter changes underneath the reader. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-disabled={!filtered}
+            onClick={() => {
+              if (!filtered) return;
+              clearFilters();
+            }}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          >
+            <X aria-hidden="true" className="size-4" />
+            Clear filters
+          </Button>
         </div>
         {/* The screen is titled plainly "Calendars" but shows only the SHARED library by
               default, so say so — a planner who never learns the tier exists would otherwise
@@ -369,7 +419,22 @@ export function CalendarsTable({
             // never read as one — it says so, and offers the way back (docs/UX_STANDARDS.md).
             <>
               <p className="text-muted-foreground text-sm">No calendars match these filters.</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={clearFilters}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={clearFiltersAndFocusList}
+                /* **Named for its context, because its twin in the filter bar is now always
+                   present** (page-consistency M4). Two buttons whose accessible name is the bare
+                   string `Clear filters`, both visible at once, are indistinguishable to a reader
+                   who hears them rather than sees where they sit — and the collision is not new:
+                   the audit log has carried it since its filter bar shipped, and copying that bar
+                   to two more screens is what made it worth fixing rather than reproducing.
+
+                   The visible text is unchanged, and the accessible name CONTAINS it, so WCAG 2.5.3
+                   Label in Name still holds. */
+                aria-label="Clear filters and show all calendars"
+              >
                 Clear filters
               </Button>
             </>

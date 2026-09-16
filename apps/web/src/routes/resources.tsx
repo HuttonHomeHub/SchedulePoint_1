@@ -1,7 +1,7 @@
 import { ARCHIVED_FILTERS, RESOURCE_KINDS } from '@repo/types';
 import { useParams } from '@tanstack/react-router';
 
-import { PageContainer } from '@/components/ui/page';
+import { PageContainer, PageHeader } from '@/components/ui/page';
 import { PICKER_CALENDAR_FILTERS, useCalendars } from '@/features/calendars';
 import {
   ANY_RESOURCE_KIND,
@@ -61,17 +61,19 @@ export function ResourcesScreen(): React.ReactElement {
 
   return (
     <PageContainer>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Resources</h1>
-        {canWrite ? (
-          <CreateResourceButton
-            orgSlug={orgSlug}
-            calendars={calendars.data ?? []}
-            calendarsLoading={calendars.isPending}
-            calendarsError={calendars.isError}
-          />
-        ) : null}
-      </div>
+      <PageHeader
+        title="Resources"
+        actions={
+          canWrite ? (
+            <CreateResourceButton
+              orgSlug={orgSlug}
+              calendars={calendars.data ?? []}
+              calendarsLoading={calendars.isPending}
+              calendarsError={calendars.isError}
+            />
+          ) : null
+        }
+      />
       <div className="mt-6">
         <ResourcesTable
           orgSlug={orgSlug}

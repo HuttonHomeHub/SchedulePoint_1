@@ -6,6 +6,7 @@ import {
   type ResourceSummary,
 } from '@repo/types';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import { useId, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -35,6 +36,8 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Label } from '@/components/ui/label';
+import { MenuItem } from '@/components/ui/menu';
+import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -150,6 +153,22 @@ export function ResourcesTable({
 
   const clearFilters = (): void => setFilters(DEFAULT_RESOURCE_LIBRARY_FILTERS);
 
+  /**
+   * **The empty state's copy focuses the list; the filter bar's copy does not.**
+   *
+   * They run the same clear and have different focus obligations, which is the distinction this
+   * table had not drawn. The bar's button is always mounted and shaded when there is nothing to
+   * clear, so focus stays where the reader put it. The empty state's button **removes itself by
+   * succeeding** — rows return, the empty state unmounts, and focus falls to `<body>`. That is the
+   * failure this file's own docblocks name about the bar button; nobody had applied the reasoning
+   * to the copy that actually has it (M8 accessibility gate). The region is always mounted and
+   * `tabIndex={-1}`, so it is a destination rather than a guess.
+   */
+  const clearFiltersAndFocusList = (): void => {
+    clearFilters();
+    regionRef.current?.focus();
+  };
+
   // A debounced search that silently reshapes the table is invisible to a screen-reader user
   // (WCAG 4.1.3) — announce the settled count, exactly as the Combobox does for its listbox.
   useResultCountAnnouncement({
@@ -243,9 +262,34 @@ export function ResourcesTable({
         </span>
       ),
     },
-    { header: 'Kind', cell: ({ resource }) => RESOURCE_KIND_LABELS[resource.kind] },
+    /* **A width preference on a bounded column** (page-consistency M4-T2). `table-layout: auto`
+         gives surplus width to whichever columns want it most, and a column holding an enum label
+         or a short code wants none of it — measured, these carried 90–240 px of slack each while
+         pushing a row's last fact further from its first. `md:`-prefixed, so a narrow screen keeps
+         the automatic layout it needs.
+
+         **The rule is narrower than "cap the bounded columns", and applying the wider version made
+         two tables worse before it was measured.** The distance between a row's first fact and its
+         last is the summed width of every column BEFORE the last fact column — so a cap helps only
+         there. Capping the last fact column itself cannot shrink that distance, and its surplus has
+         to land somewhere: on the plans table it landed in `Name`, the FIRST column, and the
+         distance grew by 76 px. Cap what sits before the last fact; leave the last fact alone.
+
+         **It goes on `cellClassName`, not `headClassName`, and the reason is `DataTable`'s `??`.**
+         Both props REPLACE their default rather than merging it (`docs/TECH_DEBT.md` #335), so
+         adding a width to a header means restating `py-2 pr-4 font-medium` beside it — which moves
+         a `font-medium` out of the primitive and into a screen, and ADR-0097's weight ratchet
+         counts exactly that. The first version of these caps did it and pushed the count 157 → 159.
+         The cell default carries no weight, so restating it costs nothing, and a width on a `<td>`
+         constrains the column under `table-layout: auto` just as a width on its `<th>` does. */
+    {
+      header: 'Kind',
+      cellClassName: 'py-2 pr-4 md:w-32',
+      cell: ({ resource }) => RESOURCE_KIND_LABELS[resource.kind],
+    },
     {
       header: 'Code',
+      cellClassName: 'py-2 pr-4 md:w-24',
       cell: ({ resource }) =>
         resource.code ? (
           <span className="font-mono text-xs">{resource.code}</span>
@@ -256,7 +300,7 @@ export function ResourcesTable({
     {
       header: 'Group',
       headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell',
+      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell lg:w-36',
       cell: ({ resource }: ResourceTreeRow) => {
         const parentName = resource.parentId ? groupNameById.get(resource.parentId) : undefined;
         return parentName ? (
@@ -294,7 +338,7 @@ export function ResourcesTable({
     cellClassName: 'py-2 text-right whitespace-nowrap',
     cell: ({ resource }) =>
       canWrite ? (
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -303,27 +347,25 @@ export function ResourcesTable({
           >
             Edit
           </Button>
-          {/* Always-visible row actions (never hover-only, docs/UX_STANDARDS.md "Row / node
-              actions"), matching the Edit/Delete idiom this table already uses. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleArchived(resource)}
-            aria-label={`${isArchivedRow(resource) ? 'Unarchive' : 'Archive'} ${resource.name}`}
-          >
-            {isArchivedRow(resource) ? 'Unarchive' : 'Archive'}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setDeleteError(null);
-              setDeleting(resource);
-            }}
-            aria-label={`Delete ${resource.name}`}
-          >
-            Delete
-          </Button>
+          {/* **One row-action shape** (page-consistency M4). This row carried three text buttons
+              where the calendars table one screen over carried `Edit` and a `⋯` — the same
+              question answered two ways, which is the drift this epic exists to remove. Still never
+              hover-only (`docs/UX_STANDARDS.md` "Row / node actions"): the trigger is always
+              visible and always a tab stop. */}
+          <RowActionsMenu subject={resource.name}>
+            <MenuItem onSelect={() => toggleArchived(resource)}>
+              {isArchivedRow(resource) ? 'Unarchive' : 'Archive'}
+            </MenuItem>
+            <MenuItem
+              destructive
+              onSelect={() => {
+                setDeleteError(null);
+                setDeleting(resource);
+              }}
+            >
+              Delete
+            </MenuItem>
+          </RowActionsMenu>
         </div>
       ) : (
         <div className="flex justify-end">
@@ -399,6 +441,25 @@ export function ResourcesTable({
               ))}
             </Select>
           </div>
+          {/* **`Clear filters` lives in the BAR, not only in the empty state** (page-consistency
+              M4) — the same control, from the same source, as the calendars library and the audit
+              log. Always rendered and shaded when there is nothing to clear, never conditionally
+              mounted: a control that removes itself by succeeding drops focus to `<body>` at the
+              moment it is pressed. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-disabled={!filtersActive}
+            onClick={() => {
+              if (!filtersActive) return;
+              clearFilters();
+            }}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          >
+            <X aria-hidden="true" className="size-4" />
+            Clear filters
+          </Button>
         </div>
         <p id={explainerId} className="text-muted-foreground text-sm">
           {ARCHIVE_EXPLAINER}
@@ -424,7 +485,22 @@ export function ResourcesTable({
           filtersActive ? (
             <>
               <p className="text-muted-foreground text-sm">No resources match these filters.</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={clearFilters}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={clearFiltersAndFocusList}
+                /* **Named for its context, because its twin in the filter bar is now always
+                   present** (page-consistency M4). Two buttons whose accessible name is the bare
+                   string `Clear filters`, both visible at once, are indistinguishable to a reader
+                   who hears them rather than sees where they sit — and the collision is not new:
+                   the audit log has carried it since its filter bar shipped, and copying that bar
+                   to two more screens is what made it worth fixing rather than reproducing.
+
+                   The visible text is unchanged, and the accessible name CONTAINS it, so WCAG 2.5.3
+                   Label in Name still holds. */
+                aria-label="Clear filters and show all resources"
+              >
                 Clear filters
               </Button>
             </>
