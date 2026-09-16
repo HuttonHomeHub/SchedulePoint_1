@@ -10,6 +10,75 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-16 — Reconciliation pass: an ADR missing from the register, and a CI shape five days stale
+
+**What was decided.** The pass was run at the ADR-0145 epic boundary, on the product owner's
+instruction to ship the epic first and then reconcile. `check:reconcile-due` had been warning at
+**8 ADRs since 2026-09-11 against a threshold of exactly 8** (0138–0145) — the second consecutive
+pass triggered at its own threshold rather than by a person noticing.
+
+**What it found.** Five corrections, and for the third consecutive pass the highest-yield step was
+the one with no gate behind it.
+
+- **ADR-0144 was absent from `CLAUDE.md` §16** while being Accepted, filed, listed in
+  `docs/adr/README.md` and cited by number — the **eighth** instance of the class `#291` tracks and
+  the third found by a person doing the comparison by hand. Written and `#291` updated. That row's
+  own prediction ("it will not stay clean") has now held three times out of three.
+- **`.claude/agents/devops-reviewer.md` described the pre-ADR-0138 CI.** It said "one `e2e` job …
+  42 Playwright suites **sequentially** … about 46 minutes", five days after the job was split into
+  `e2e-api` plus four parallel `e2e-web` shards at 12.2–12.3 min. The dangerous half is not the
+  timing: a new flag-on journey now needs a **shard condition** as well as a step, and
+  `check:e2e-roster` fails without one — so the agent that reviews workflow changes would not have
+  said so. Rewritten from `ci.yml` and ADR-0138's measured figures, with the suite count deleted
+  rather than restated (`check:counts` owns it).
+- **Two stale invariants in `.claude/agents/accessibility-reviewer.md`.** It asked for contrast to
+  be checked "across light/dark", more than a month after ADR-0097 left `THEME_SELECTORS` a
+  one-element list — an instruction that sends a reviewer looking for a block that does not exist —
+  and named three surface scopes where `token-contrast.test.ts` has **seven**, the two most often
+  forgotten (`canvas`, `print`) being the two that are not DOM. Its `aria-disabled` rule was also
+  correct-but-incomplete in exactly the way that produced ADR-0145's largest gate-pass finding, so
+  it now names both halves: the `aria-disabled:opacity-60` that `Button`'s CVA does **not** supply,
+  and that `pointer-events-none` belongs on a transient state and makes a **resting** one
+  pointer-unreachable. The same "both themes" claim was live in `DESIGN_SYSTEM.md`'s colour rules
+  and is corrected there too.
+- **`ci.yml` claimed four themes and a picker.** The step name read "all four themes" and its
+  comment "once per picker option — light, dark, corporate". The **suite** had been rescoped
+  correctly by ADR-0097 and says so in its own docblock; only the description beside it had not,
+  which is the copy a reader of that file meets. Renamed and rewritten from the suite's own words.
+- **`#292`'s heading was the stale part of a careful row.** Its body says its numbers are "kept as
+  taken" and explains its units; its **heading** asserted "The web entry chunk **is** 372 kB gzip"
+  in the present tense. Measured today: 386,324 gzip bytes, with the entry graph at 426,581 against
+  404,744 on 2026-09-11. The heading now states the problem, which does not go stale. Its substance
+  was re-checked and holds exactly — still two `lazy()` boundaries, still no `manualChunks`.
+
+**A sixth was found by reading a day-one file (step 5a) and is filed rather than fixed.**
+`common/validation/uuid.ts` justified hand-rolling a UUID matcher on the grounds that
+`ParseUUIDPipe` rejects v7. Against the installed `@nestjs/common@11.2.3` that is false twice over:
+its options type is `'3' | '4' | '5' | '7'`, and `isUUID`'s default `'all'` pattern is the same
+canonical shape our regex matches. The docblock is corrected and the citation registered in
+`scripts/dependency-claims.json`; the **code** is not touched, because what still differs is the
+rejection message that the API e2e specs assert on — `#340`. Reading a comment is free; swapping a
+pipe on the strength of one is the failure step 2 exists to catch, inverted.
+
+**Negative results, which are part of the record.** Steps 1, 2 (manifests), 3 and 6 (exemplars)
+found nothing: the gated counts agree, both app READMEs have deleted their count copies and defer
+to the gate, all eleven `package.json` descriptions are accurate, and every library the docs have
+historically over-claimed (Radix, CASL, OpenTelemetry, BullMQ, Redis, S3, `lib/telemetry.ts`) is
+still absent. `RECONCILE.md`'s banner and its Passes table agreed on 2026-09-11 — checked, because
+this file records having drifted about its own drift control before. Step 7 found no unreviewed
+diff and none was manufactured: ADR-0145's gate pass had just run six specialists over the only
+candidate.
+
+**Consequences, and the uncomfortable one.** **Two of this pass's own instruments were wrong before
+any document was.** An ad-hoc row counter reported the register at **121 rows** where
+`check:debt-status` says **124** — it could not match the suffixed rows `118a`, `118b`, `119a` — and
+that undercount had already been reported to the product owner before the gate contradicted it. Then
+a hand-written sweep claimed **144 ADRs missing from `docs/adr/README.md`**, because that index links
+by filename rather than naming `ADR-00nn`; `check:adr-coverage` is green and the index is fine. Both
+are the same error in the same session: writing a private counter instead of asking the gate that
+owns the number, which is precisely what `RECONCILE.md` §1 records its own hand-written `ls`
+commands doing, three times. The rule already exists and was not followed by the person applying it.
+
 ## 2026-09-16 — A health section orders by health, and a borrowed order is not a neutral one
 
 **What was decided.** `planStanding` promotes rows carrying any engine flag to the front, then keeps

@@ -66,11 +66,20 @@ is the single source of truth for all of them.
 | `sidebar*`                   | Navigation shell surface + states                     |
 
 **Rules:** every solid-fill/foreground pair is validated to meet WCAG AA
-(≥ 4.5:1 for text) in **both** themes — re-verify when editing any colour token.
+(≥ 4.5:1 for text) in **every surface scope** — re-verify when editing any colour
+token. This said "in **both** themes" until the 2026-09-16 reconciliation pass, more
+than a month after ADR-0097 withdrew light, dark and system: `THEME_SELECTORS` is a
+one-element list, so there is no second theme to re-verify against and a reader
+following that instruction would go looking for a block that does not exist. **The
+axis that replaced it is the surface scope**, and there are seven —
+`page`, `chrome`, `panel`, `brand`, `auth`, `canvas`, `print`
+(`styles/token-contrast.test.ts`, which computes the matrix). `canvas` and `print`
+are the ones most often forgotten, because neither is DOM: the TSLD painter and the
+exported/printed document resolve these tokens too.
 A solid-surface token (e.g. `destructive`) is tuned for its light foreground and
 is **not** guaranteed legible as text on the page; use its paired `*-text` token
 (`destructive-text`) for coloured text and state borders on `background`/`card`,
-which is validated to ≥ 4.5:1 (text) / ≥ 3:1 (border) in both themes.
+which is validated to ≥ 4.5:1 (text) / ≥ 3:1 (border) in every scope that rebinds it.
 Status is never conveyed by colour alone — always pair with an icon and/or text.
 
 ### Typography

@@ -33,12 +33,31 @@ code. Be specific and cite the offending file/line.
 - **Announce settled results, not transitions.** The library tables announce their
   result count (WCAG 4.1.3); pickers render their `emptyOption` label ("None",
   "Inherit") rather than blanking, because that is the most common state.
-- **Prefer `aria-disabled` + a pointer-events guard** over the native `disabled`
-  attribute on pending controls — a natively-disabled button is blurred to `<body>`
-  the instant it flips, losing the user's place (SC 2.4.3).
-- **Both themes, both scopes.** Contrast is checked across light/dark **and** across
-  surface scopes (chrome/panel/page); a colour validated on the page background can
-  still fail on the navy chrome band.
+- **Prefer `aria-disabled` + a guard** over the native `disabled` attribute on pending
+  controls — a natively-disabled button is blurred to `<body>` the instant it flips,
+  losing the user's place (SC 2.4.3). **Two halves of that rule are easy to drop, and
+  ADR-0145's gate pass found both**, so check them explicitly:
+  - **The dimming does not come with it.** `Button`'s CVA base is
+    `disabled:pointer-events-none disabled:opacity-50`, and Tailwind's `disabled:`
+    variant fires on the **native attribute only** — so a converted control needs
+    `aria-disabled:opacity-60` written out or it looks identical to an active one.
+    All ten conversions shipped without it, plus seven pre-existing sites including
+    every public auth form. `submit-guard.structural.test.ts` now asserts both halves.
+  - **`pointer-events-none` belongs on a TRANSIENT state, never a resting one.** For a
+    mutation in flight (~1 s) it is right. For a control shaded by a standing condition
+    — an empty field, a missing selection — it makes the control **pointer-unreachable**,
+    because `document.elementFromPoint` then returns whatever is behind it. The estate's
+    one resting case is exempted by name in that gate, with its reason.
+- **One theme, seven scopes** — this bullet said "both themes … light/dark" until the
+  2026-09-16 reconciliation pass, more than a month after ADR-0097 withdrew light, dark
+  and system. `THEME_SELECTORS` is `[':root']`, a one-element list: there is no second
+  theme to check a colour against, and asking for one sends a reviewer looking for a
+  block that does not exist. What IS checked is the **surface scope**, and there are
+  seven of them — `page`, `chrome`, `panel`, `brand`, `auth`, `canvas`, `print`
+  (`styles/token-contrast.test.ts`) — so a colour validated on the page background can
+  still fail on the navy chrome band, on the fixed-navy sign-in panel, on the diagram
+  ground, or on paper. `canvas` and `print` are the two most often forgotten, because
+  neither is DOM: the painter and the exported/printed document resolve tokens too.
 
 ## Review checklist
 

@@ -9027,7 +9027,7 @@ before the next person tries to register one.
 
 ### 291. `check:adr-coverage` cannot see CLAUDE.md, which is the register a reader actually opens
 
-**Status:** open · **Verified:** 2026-09-13 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
 
 **ADR-0132 was Accepted on 2026-09-09, filed in `docs/adr/`, listed in `docs/adr/README.md`, and
 cited by `docs/ROADMAP.md`, `docs/TECH_DEBT.md`, `docs/DESIGN_SYSTEM.md` and five spec directories
@@ -9041,6 +9041,15 @@ in both directions — and the gate it wrote covers the index a reader rarely op
 section they are briefed from. §16 is the register in the operating manual: it is what every human
 and every agent reads to learn what has been decided, and an ADR absent from it is invisible to the
 one audience that matters most.
+
+**It recurred, on 2026-09-16, and the prediction below is why this row stays open.** The
+reconciliation pass ran the comparison this row says nothing automates and found **ADR-0144**
+(_A landing question is costed before it is answered_, Accepted 2026-09-15) absent from `CLAUDE.md`
+§16 while being filed, listed in `docs/adr/README.md` and cited by number. That is the **eighth**
+instance of the class and the **third** found by a person doing the comparison by hand — which is
+the whole argument for the gate: the estate has now been "clean today" three times and has drifted
+again within days on each occasion. Repaired in the same pass; `check:adr-coverage`'s own docblock
+still says it does not read this file, so the register remains checked by a person or not at all.
 
 **The repair is done; the gate is not.** ADR-0132 now has its entry, and a full comparison of all
 **133** ADR files against §16 found **exactly one** missing, so the estate is clean today. (That
@@ -9185,9 +9194,9 @@ and recording it as such is the honest version of "verified".
 > its own spec rather than a fold-in at an epic's last milestone. The remedy this row asks for is
 > unchanged and is now better evidenced than when it was written.
 
-### 292. The web entry chunk is 372 kB gzip, and every authenticated route is in it
+### 292. The web entry chunk carries every authenticated route
 
-**Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
 
 **The heading's 372 kB is Vite's build-reporter figure (kB = 1000 bytes) and is NOT comparable
 with the byte counts `bundle-report.json` now carries.** Re-measured 2026-09-11 from the report:
@@ -9196,6 +9205,27 @@ quantity, and what `check:bundle-size` gates — is **404,744** across three chu
 this row's substance changes; the numbers below are kept as taken. The units confusion was found
 at the ADR-0136 gate pass, in a sentence that compared the two instruments as if they were one
 measurement.
+
+**Re-verified 2026-09-16 (reconciliation pass), and the HEADING was the stale part.** It read
+_"The web entry chunk is 372 kB gzip"_ — a present-tense assertion of a figure taken on 2026-09-10,
+which is the one thing in this row nothing was watching. The body had already been careful (it says
+its numbers are "kept as taken" and explains the kB units), so the drift landed in the sentence a
+reader sees first and is least likely to date. The heading now states the **problem**, which does
+not go stale; the numbers stay below with their dates.
+
+Today, from `apps/web/bundle-report.json` after `pnpm --filter @repo/web build`: the entry chunk is
+**386,324 gzip bytes** (386.32 kB in Vite's units, against the heading's old 372) and the entry
+**graph** is **426,581** across the same three chunks (against 404,744 on 2026-09-11) — +21.8 kB in
+five days, which is the growth that made `check:bundle-size` fire on ADR-0145 and forced the budget
+re-floor to 437 kB. Ten JS chunks, still.
+
+**The substance is unchanged, and that was checked rather than assumed:** `app/router.tsx` still has
+exactly **two** `lazy()` boundaries (`/share` at :307, `/staff` at :315) and `vite.config.ts` still
+sets no `manualChunks`. The route count is deliberately NOT restated — this row said "26 routes" and
+the method behind it is unrecorded; `grep -c 'createRoute('` returns **23** today plus two
+`createRootRouteWithContext` calls, and two counting methods disagreeing is exactly what
+`docs/RECONCILE.md` §1 records its own hand-written `ls` commands doing. The ratio is what the
+sentence is for, and the ratio is unchanged.
 
 **Measured, not estimated.** `pnpm --filter @repo/web build`, 2026-09-10:
 
@@ -10703,6 +10733,32 @@ exposure is the next consumer.
 change rather than a one-liner: `CardDescription` is shared with every `Card` in the estate, so
 `max-w-prose` belongs on `SectionCard`'s own column or on a variant, and the blast radius is every
 `Card` that renders a description — which has to be read before the class moves.
+
+### 340. `ParseUuidPipe` is hand-rolled for a reason that stopped being true, and only the error message still differs
+
+**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-16 (reconciliation pass, step 2 — a day-one file's docblock re-read against the installed dependency) · **Size:** S · **Owner:** api
+
+`common/validation/uuid.ts` is day-one code (one commit, 2026-07-09) and its docblock justified
+hand-rolling a UUID matcher on the grounds that `ParseUUIDPipe` "only accept[s] v1–v5, so we
+validate the canonical UUID shape directly to avoid rejecting valid v7 ids". **Re-read against the
+installed `@nestjs/common@11.2.3`, that is false twice over** — its options type is
+`'3' | '4' | '5' | '7'`, and `isUUID`'s default is `version = 'all'`, whose pattern is
+`/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i` (`pipes/parse-uuid.pipe.js`,
+lines 37-52, registered in `scripts/dependency-claims.json`). That is the same canonical shape
+`UUID_REGEX` matches, so **a bare `ParseUUIDPipe` accepts and rejects exactly what ours does**.
+
+**The docblock is corrected; the code is not**, and the distinction is the point. Reading a comment
+is free and a documentation pass is the right place to fix one. Replacing the pipe is a behaviour
+change, because what still differs is the **rejection message** — ours throws
+`Parameter must be a valid UUID.` and Nest's throws its own — and the API e2e specs that assert on a
+malformed-id 400 are written against ours. A pass that swapped them because the comment was wrong
+would be doing untested work on the strength of a docblock, which is the failure this whole step
+exists to catch, inverted.
+
+**What is left** is a measurement, not a decision: enumerate the e2e assertions that depend on the
+message, decide whether Nest's is acceptable to a caller, and either swap and update them or keep
+ours and say in one line that it is kept for its message. It is `S` and it is not urgent — nothing
+is wrong with the behaviour today.
 
 ### 335. `DataTable`'s `headClassName` / `cellClassName` replace the default rather than merging it
 
