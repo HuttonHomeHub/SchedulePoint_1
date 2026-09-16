@@ -6,7 +6,7 @@ import { exactInstant, formatRelative } from '../model/relative-time';
 import { ActorName } from './ActorName';
 
 import { Badge } from '@/components/ui/badge';
-import { ListRow, rowLinkClass } from '@/components/ui/page';
+import { ListRow, RowSubject, rowLinkClass } from '@/components/ui/page';
 
 /**
  * One plan in "Recently changed".
@@ -77,23 +77,25 @@ export function RecentlyChangedRow({
     <ListRow
       primary={
         <>
-          <p className="flex items-center gap-2">
-            <Link
-              to="/orgs/$orgSlug/plans/$planId"
-              params={{ orgSlug, planId: plan.planId }}
-              className={rowLinkClass}
-            >
-              {plan.planName}
-            </Link>
-            {plan.status === 'DRAFT' ? (
-              <Badge size="sm" className="shrink-0">
-                Draft
-              </Badge>
-            ) : null}
-          </p>
-          <p className="text-muted-foreground truncate text-sm">
-            {plan.projectName} · {plan.clientName}
-          </p>
+          <RowSubject
+            name={
+              <Link
+                to="/orgs/$orgSlug/plans/$planId"
+                params={{ orgSlug, planId: plan.planId }}
+                className={rowLinkClass}
+              >
+                {plan.planName}
+              </Link>
+            }
+            badge={
+              plan.status === 'DRAFT' ? (
+                <Badge size="sm" className="shrink-0">
+                  Draft
+                </Badge>
+              ) : null
+            }
+            context={`${plan.projectName} · ${plan.clientName}`}
+          />
           <FreshnessLine plan={plan} now={now} />
         </>
       }

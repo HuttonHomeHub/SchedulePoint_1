@@ -11,7 +11,7 @@ import {
 } from '../model/standing-copy';
 
 import { Badge } from '@/components/ui/badge';
-import { ListRow, rowLinkClass } from '@/components/ui/page';
+import { ListRow, RowSubject, rowLinkClass } from '@/components/ui/page';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -63,23 +63,25 @@ export function PlanStandingRow({
     <ListRow
       primary={
         <>
-          <p className="flex items-center gap-2">
-            <Link
-              to="/orgs/$orgSlug/plans/$planId"
-              params={{ orgSlug, planId: standing.planId }}
-              className={rowLinkClass}
-            >
-              {standing.planName}
-            </Link>
-            {standing.status === 'DRAFT' ? (
-              <Badge size="sm" className="shrink-0">
-                Draft
-              </Badge>
-            ) : null}
-          </p>
-          <p className="text-muted-foreground truncate text-sm">
-            {standing.projectName} · {standing.clientName}
-          </p>
+          <RowSubject
+            name={
+              <Link
+                to="/orgs/$orgSlug/plans/$planId"
+                params={{ orgSlug, planId: standing.planId }}
+                className={rowLinkClass}
+              >
+                {standing.planName}
+              </Link>
+            }
+            badge={
+              standing.status === 'DRAFT' ? (
+                <Badge size="sm" className="shrink-0">
+                  Draft
+                </Badge>
+              ) : null
+            }
+            context={`${standing.projectName} · ${standing.clientName}`}
+          />
           <p
             data-overview-variance
             className={
@@ -87,19 +89,36 @@ export function PlanStandingRow({
             }
           >
             {movementSentence(standing.baselineMovement)}
+            {standing.editedSinceCalculated ? (
+              /*
+                **The caveat rides the sentence it qualifies rather than sitting under it** (M9 D2).
+                It has to be adjacent to that number — M5's reorder put this section above "Recently
+                changed", so the sentence that used to cover these figures is a section away
+                (see `STALE_FIGURES_SENTENCE`) — and a line of its own cost 20 px on a screen whose
+                whole problem was height. Same adjacency, one line instead of two.
+
+                The separator is a middot rather than a comma because the two are independent
+                statements about the row, not one sentence; the caveat keeps `--warning-text` even
+                where the movement beside it is neutral, since it is a caution about the figure
+                whatever the figure says.
+              */
+              <span className="text-warning-text"> · {STALE_FIGURES_SENTENCE}</span>
+            ) : null}
           </p>
-          {standing.editedSinceCalculated ? (
-            /*
-              The caveat sits directly under the number it qualifies, which is the whole point:
-              M5's reorder put this section above "Recently changed", so the sentence that used to
-              cover these figures is now a section away. See `STALE_FIGURES_SENTENCE`.
-            */
-            <p className="text-warning-text text-sm">{STALE_FIGURES_SENTENCE}</p>
-          ) : null}
           {flags.length > 0 ? (
             /*
-              Each flag is its own line rather than a joined sentence: they are independent
-              problems with independent remedies, and a comma-separated run reads as one.
+              **The flags run inline, and this reverses the reasoning that used to sit here.**
+              It read: "Each flag is its own line rather than a joined sentence: they are
+              independent problems with independent remedies, and a comma-separated run reads as
+              one." That is sound and was overturned on a cost it did not have (M9 D3): a plan
+              carrying all four flags was a SEVEN-line row, and in a box with a height budget that
+              is one plan filling the box.
+
+              What the old reasoning was protecting survives where it is load-bearing — this is
+              still a `role="list"` of `role="listitem"`s, so an assistive reader hears four
+              problems rather than one sentence. The visual separator is the concession; the
+              semantics are not. The row's height is now bounded: one line for one flag or for
+              four, rather than one line each.
 
               **That intent depends on the list being ANNOUNCED as a list, and by default it is
               not.** Tailwind v4's Preflight sets `list-style: none` on every `ul` and `ol`, which
@@ -115,10 +134,21 @@ export function PlanStandingRow({
               role suppression at all. So a green suite is not evidence here — the precedent is.
             */
             // eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122, see above.
-            <ul role="list" data-overview-flags className="text-warning-text text-sm">
-              {flags.map((sentence) => (
+            <ul
+              role="list"
+              data-overview-flags
+              className="text-warning-text flex flex-wrap gap-x-2 text-sm"
+            >
+              {flags.map((sentence, index) => (
                 // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the `ul` above.
                 <li role="listitem" key={sentence}>
+                  {/*
+                    The separator is a sibling rather than a `::before`, and rendered only between
+                    items, because a CSS-generated one is read aloud by some screen readers and
+                    would turn "1 constraint broken by logic" into "middot 1 constraint broken by
+                    logic" — the flags are already a list and do not need a spoken bullet.
+                  */}
+                  {index > 0 ? <span aria-hidden="true">· </span> : null}
                   {sentence}
                 </li>
               ))}

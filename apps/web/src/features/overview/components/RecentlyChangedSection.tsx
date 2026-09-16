@@ -3,6 +3,7 @@ import type { RecentlyChangedPlan } from '@repo/types';
 import { useSettledCountAnnouncement } from '../hooks/use-settled-count-announcement';
 
 import { RecentlyChangedRow } from './RecentlyChangedRow';
+import { SectionCount } from './SectionCount';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState, ListRowSkeleton, SectionCard } from '@/components/ui/page';
@@ -30,6 +31,7 @@ export function RecentlyChangedSection({
   pending,
   error,
   onRetry,
+  fill,
 }: {
   plans: RecentlyChangedPlan[];
   orgSlug: string;
@@ -37,6 +39,8 @@ export function RecentlyChangedSection({
   pending: boolean;
   error: boolean;
   onRetry: () => void;
+  /** Fill the height the grid gives and scroll the body — see `SectionCard`. */
+  fill?: boolean;
 }): React.ReactElement {
   useSettledCountAnnouncement({
     pending,
@@ -51,6 +55,14 @@ export function RecentlyChangedSection({
     <SectionCard
       title="Recently changed"
       description="Plans your organisation has worked on recently."
+      fill={fill}
+      // Withheld while pending and on failure: a count is a fact about the data, and there is no
+      // data in either state. "0 plans" over a skeleton is a claim the screen cannot make yet.
+      action={
+        pending || error || plans.length === 0 ? null : (
+          <SectionCount count={plans.length} noun="plan" />
+        )
+      }
     >
       {pending ? (
         <ListRowSkeleton rows={4} />
