@@ -10,6 +10,48 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-16 — A health section orders by health, and a borrowed order is not a neutral one
+
+**What was decided.** `planStanding` promotes rows carrying any engine flag to the front, then keeps
+the `recentlyChanged` order behind them, stable within each group. It overturns a written argument
+in `overview.service.ts` that the section should borrow "Recently changed"'s order outright.
+
+**Why the old argument does not survive.** It read: _"the reader has just read that order, the two
+sections are about the same plans, and a second ordering rule would be a second opinion about which
+work matters most."_ The first clause is true and the third is the error — it treats a borrowed rule
+as a neutral one. Recency is **intrinsic** to "Recently changed", which answers _what happened and
+who_; it is **inherited** by "Where the work stands", which answers _is the programme healthy_. So
+the only section on the landing reporting programme health had no say in what its reader saw first.
+That is not a second opinion being avoided; it is the section never having had a first one.
+
+**What was measured, before and after, in one sitting on one fixture.** Q7 ("is anything flagged in
+the schedule?") sat at **y = 1398** at 1646 and **1378** at 1920, against a 1,000 px fold — the
+fixture's one plan with a broken constraint was sixth, under five healthy ones. After: **831** and
+**811**. FC-1 goes **6 of 7 → 7 of 7 at both widths**, which is the condition met for the first time
+since it was written. Section geometry, page height (1,451 px), FC-4's four widths and FC-5's single
+request are **identical** either side — the change costs no layout at all
+(`docs/specs/organisation-landing-portfolio/m7-flagged-first.md`).
+
+**The rank is a boolean, deliberately.** Not a count and not a severity: a plan with four visual
+conflicts is not more urgent than one with a broken constraint, the flag kinds are not comparable,
+and ranking them would be exactly the invented opinion the old argument was right to warn about.
+Both mutations — no promotion, and promotion by flag count — were verified red against the tests
+before the green was trusted.
+
+**What it costs, recorded rather than buried.** Since the two-column landing (2026-09-16) these two
+sections sit side by side rather than stacked, so their orders now disagree where a reader can see
+both at once. Accepted: the lists answer different questions, and matching orders bought agreement
+by making one of them answer neither.
+
+**A correction this turned up.** `m6-two-column.md` said Q7 was below the fold "because that section
+is ordered by movement magnitude and a flagged plan can sit anywhere in it". It is ordered by
+**recency** and always has been — `orderedStanding` maps over `recentlyChanged`, which is
+`ORDER BY changed_at DESC`. A decision-bearing claim asserted from memory rather than read
+(ADR-0076 Class 3), and it mattered: it named the wrong rule as the one that would have to change,
+in the sentence explaining why the question was deferred. Corrected in place.
+
+---
+
 ## 2026-09-14 — §19.9 stops naming a number, because the number made a wrong shortcut look right
 
 **What was decided.** The check-roster paragraph in §19.9 no longer states how many checks a pull

@@ -735,11 +735,33 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
       planId: string,
       name: string,
       durationDays = 10,
-    ): Promise<void> {
-      await actor.agent
+    ): Promise<{ id: string; version: number }> {
+      const created = await actor.agent
         .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
         .send({ name, durationDays, laneIndex: 0 })
         .expect(201);
+      return created.body.data as { id: string; version: number };
+    }
+
+    /**
+     * Give a plan a real, engine-produced flag — a `MANDATORY_START` before the data date.
+     *
+     * The plan's `plannedStart` is `2026-01-01`, so a mandatory start in December cannot be
+     * honoured: the data-date floor wins and the engine produces the schedule anyway and flags it
+     * (ADR-0035 §7, produce-and-flag). Nothing here writes `constraintViolatedCount` — it is the
+     * recalculation's own output, which is the point of doing this against a real database.
+     */
+    async function withConstraintViolation(actor: Actor, planId: string): Promise<void> {
+      const activity = await addActivity(actor, planId, 'Piling');
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/activities/${activity.id}`)
+        .send({
+          constraintType: 'MANDATORY_START',
+          constraintDate: '2025-12-01',
+          version: activity.version,
+        })
+        .expect(200);
+      await recalculate(actor, planId);
     }
 
     const recalculate = (actor: Actor, planId: string) =>
@@ -833,14 +855,47 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
     it('omits a flag that is zero, and carries one that is not', async () => {
       const { actor } = await adminWithOrg();
-      const planId = await createPlan(actor, 'Tower E');
-      await addActivity(actor, planId, 'Piling');
-      await recalculate(actor, planId);
+      const healthy = await createPlan(actor, 'Tower E');
+      await addActivity(actor, healthy, 'Piling');
+      await recalculate(actor, healthy);
+      // A distinct client name: `createPlan` mints one per plan and the org-scoped uniqueness
+      // refuses a second 'Northgate' with a 409.
+      const violating = await createPlan(actor, 'Tower E2', 'Southgate');
+      await withConstraintViolation(actor, violating);
 
-      const row = standingFor(await fetchOverview(actor), planId);
+      const body = await fetchOverview(actor);
 
       // A healthy plan reports `{}` — not four zeroes, which is what buries the one that is not.
-      expect(row?.flags).toEqual({});
+      expect(standingFor(body, healthy)?.flags).toEqual({});
+      // **The second half of this case's own name, which it did not have until 2026-09-16.** It
+      // asserted the empty side only, so it passed identically against a `flagsOf` that returned
+      // `{}` for everything — and the ordering rule below is keyed on exactly this value, so an
+      // untested producer would have made that rule untestable too.
+      expect(standingFor(body, violating)?.flags).toEqual({ constraintViolated: 1 });
+    });
+
+    it('puts a flagged plan first, however far down the recency order it sits', async () => {
+      const { actor } = await adminWithOrg();
+      // The flagged plan is created FIRST and therefore changed LEAST recently — so recency alone
+      // would put it last. Without the promotion this is the shape the landing showed: a broken
+      // constraint below three programmes with nothing wrong with them.
+      const violating = await createPlan(actor, 'Berth 4 Deepening', 'Harbourside');
+      await withConstraintViolation(actor, violating);
+      for (const name of ['Ancillary works 1', 'Ancillary works 2', 'Ancillary works 3']) {
+        // One client each — `createPlan` mints a client per plan, and the org-scoped name
+        // uniqueness refuses a repeat with a 409.
+        await createPlan(actor, name, `Ancillary client ${name.slice(-1)}`);
+      }
+
+      const body = await fetchOverview(actor);
+
+      expect(body.planStanding?.[0]?.planId).toBe(violating);
+      // And the rest still in recency order behind it — the promotion is a stable sort, so it
+      // moves what it must and nothing else. `recentlyChanged` is the authority on that order
+      // rather than the creation sequence, which is what this section has always been ordered by.
+      expect(body.planStanding?.slice(1).map((row) => row.planId)).toEqual(
+        body.recentlyChanged.map((row) => row.planId).filter((id) => id !== violating),
+      );
     });
 
     it('stands on exactly the plans "recently changed" carries — one section, one list', async () => {

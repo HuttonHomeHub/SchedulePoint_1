@@ -91,10 +91,17 @@ sentences wrap one line more often. It is paid back many times over by the pairi
 
 Q7 ("is anything flagged in the schedule?") lands at **1,398 px** (1646) and **1,378 px** (1920),
 against a 1,000 px fold. It is the only one still below. The reason is not layout: the fixture's
-flagged plan is the _sixth_ row of "Where the work stands", because that section is ordered by
-movement magnitude and a flagged plan can sit anywhere in it. Reaching 7 of 7 means either shortening
+flagged plan is the _sixth_ row of "Where the work stands". Reaching 7 of 7 means either shortening
 that list above the fold or ordering flagged plans first — a **content** decision, not a width one,
 and deliberately out of scope here.
+
+> **CORRECTED 2026-09-16 (M7).** This paragraph said the section "is ordered by movement magnitude
+> and a flagged plan can sit anywhere in it". It is ordered by **recency** and always has been:
+> `overview.service.ts` builds `orderedStanding` by mapping over `recentlyChanged`, which is
+> `ORDER BY changed_at DESC`. Asserted from memory rather than read (ADR-0076 Class 3), and it was
+> not harmless — it named the wrong rule as the one that would have to change, in the very sentence
+> explaining why the question was being deferred. M7 ordered flagged plans first and FC-1 is now
+> **7 of 7** at both widths (`m7-flagged-first.md`).
 
 **This retires a claim I made to the product owner.** `m5-verdict.md` §3 concluded that 4 of 7 was
 "the proven ceiling across all 24 orderings", and that search was over a **single-column stack** of

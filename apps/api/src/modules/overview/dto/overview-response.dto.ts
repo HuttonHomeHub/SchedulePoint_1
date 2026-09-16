@@ -312,7 +312,10 @@ export class OverviewResponseDto {
       'Where each recently-changed programme stands. **Omitted entirely** — not an empty array — ' +
       'when the caller may not read schedules, because a zero is a fact about the organisation ' +
       'and an absence is a fact about the reader (ADR-0098). Present and empty when the caller ' +
-      'may read but there is nothing to stand on.',
+      'may read but there is nothing to stand on. **Ordered: rows carrying any `flags` first, ' +
+      'then the `recentlyChanged` order, stable within each group.** The promotion is a boolean ' +
+      'rather than a count or a severity — a plan with four conflicts is not more urgent than one ' +
+      'with a broken constraint, and the flag kinds are not comparable.',
   })
   planStanding?: PlanStandingDto[];
 }
