@@ -862,11 +862,39 @@ a different tenant grew_ — a timing on this database structurally cannot see i
 withdrawn pending a `database-architect` engagement (M4-T2), which is a schema change and has its
 own gate.
 
-**FC-4 — no row section is narrowed.** Each existing section's rendered **content** width at 1646 is
-`>=` its M0 baseline. ADR-0098 chose `PageContainer width="narrow"` on a measurement (a plan's name
-and its timestamp ~800 px apart at the default), and a two-column grid changes the arithmetic in a
-way this repository has been wrong about **seven consecutive times**. Failure: the grid is withdrawn
-and the sections stack, which costs FC-1 nothing if the ordering is right.
+**FC-4 — no row section is narrowed.** ~~Each existing section's rendered **content** width at 1646
+is `>=` its M0 baseline.~~ ADR-0098 chose `PageContainer width="narrow"` on a measurement (a plan's
+name and its timestamp ~800 px apart at the default), and a two-column grid changes the arithmetic in
+a way this repository has been wrong about **seven consecutive times**. Failure: the grid is
+withdrawn and the sections stack, which costs FC-1 nothing if the ordering is right.
+
+> **AMENDED 2026-09-16 (M6) — and the amendment is the finding, not a waiver.**
+>
+> M5 withdrew the grid on this condition, correctly by its own terms. M6 then measured the
+> condition itself and it could never have been met: the landing renders inside
+> `PageContainer width="narrow"` — `max-w-4xl` (896 px) less `p-6` = **846 px of content, measured
+> at 1280, 1440, 1646 AND 1920 alike**. Two columns of 846 plus a 24 px gap is 1,716 px. **FC-4 as
+> written forbade two columns at every width on every monitor**, so "the grid is withdrawn" was its
+> only reachable outcome, and `m5-verdict.md`'s framing of "needs 1,716, has 1,646" reads as a
+> near-miss when it was not close.
+>
+> The bar was measuring the wrong thing. It protected a width that was itself a choice, and
+> `routes/staff.tsx:139` had already made the opposite one (`width="wide"`, ADR-0143, tables
+> 798 → 1,438 px) one file away.
+>
+> **The replacement bar is an outcome, not a width:** the grid ships if it improves FC-1 and reduces
+> page height without making a section illegible, judged against photographs at 1920 / 1646 / 1280.
+> Measured (`m6-two-column.md`): FC-1 **4 → 6 of 7** at both 1646 and 1920, page height
+> **2,386 → 1,451 px (−39 %)**, sections 730 px at 1920 and 647 at 1646. Sections ARE narrower than
+> 846 and that is the point — a row's name and its trailing fact end up closer together than
+> `narrow` ever made them, which is the measure argument ADR-0098 was protecting, better served.
+>
+> Authorised by the product owner in advance ("scaling the boxes down to fit"). The 1280 cost is
+> stated in `m6-two-column.md` §4 and filed as `docs/TECH_DEBT.md` #333 rather than glossed.
+>
+> **General rule this leaves behind:** ADR-0142 D4 measures a remedy before building it; measure the
+> **constraint** too. A falsification condition is a claim that it discriminates, and approval does
+> not make it one.
 
 **FC-5 — still one request.** Exactly one `…/overview` request on the landing, counted with
 ADR-0098's own guard against the Vite dev server serving `/src/features/overview/…` (which once
@@ -942,6 +970,10 @@ default, stated in place, and is not blocking.
 >
 > **Why it matters.** ADR-0098 chose `narrow` on a measurement, and a grid reverses it. It changes
 > the layout milestone's shape and its risk.
+>
+> **RESOLVED 2026-09-16 (M6): two columns, built.** All four sections `span="narrow"`, a 2×2 inside
+> `PageContainer width="wide"`. The M5 withdrawal stood on FC-4, whose bar is amended in §5.1 above
+> because it could not have been met at any width. See `m6-two-column.md`.
 >
 > **Default:** two columns via `PageGrid` with span-by-demand (ADR-0143), **gated on FC-4** — and
 > withdrawn to a stacked single column if any row section measures narrower. This is a default with

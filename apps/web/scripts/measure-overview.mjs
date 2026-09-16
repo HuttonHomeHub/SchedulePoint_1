@@ -27,15 +27,22 @@
  *   PLAYWRIGHT_CHROMIUM_PATH=… node scripts/measure-overview.mjs > /tmp/m0.md
  */
 /* global document, window, getComputedStyle */
+import { mkdirSync } from 'node:fs';
+
 import { chromium } from '@playwright/test';
 
 import { assertLandingStates, expireInvitation, seedLandingStates } from './landing-fixture.mjs';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
-const WIDTHS = [1646, 1440, 1280];
+// 1920 is the width the product owner's own screenshot was taken at (2026-09-16) — the screen
+// they looked at when they asked why the landing is still one column. It was absent from this
+// list for the whole epic, so every FC-4 figure the grid was withdrawn on was taken at widths
+// narrower than the one being complained about. 1646 stays FIRST because it is FC-1's frame.
+const WIDTHS = [1646, 1920, 1440, 1280];
 // 1646 × 1000 is FC-1's stated frame — the product owner's Surface Pro, and the height `shoot.mjs`
 // photographs at. The fold is a property of the condition, not of this harness.
 const FOLD = 1000;
+const SHOT_DIR = process.env.SP_SHOT_DIR ?? '/tmp/landing-shots';
 const tag = String(Date.now());
 const out = [];
 const p = (s = '') => out.push(s);
@@ -128,6 +135,8 @@ async function onboard(page) {
   return { slug: new URL(page.url()).pathname.split('/')[2], orgName };
 }
 
+mkdirSync(SHOT_DIR, { recursive: true });
+
 const browser = await chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
 });
@@ -186,54 +195,68 @@ p(
 );
 p();
 
-p('## FC-1 — is each question answered above the fold at 1646 × 1000?');
-p();
-p('| Q | Question | Answering element | `y` | Above the fold? |');
-p('| - | -------- | ----------------- | --: | --------------- |');
+/**
+ * One FC-1 pass, so the two widths below cannot drift into measuring different things.
+ *
+ * FC-1's frame is **1646 × 1000 and that is a property of the condition**, not of this harness, so
+ * the 1646 pass is the verdict and the 1920 pass is an INPUT beside it. 1920 is here because the
+ * product owner's screenshot was taken there and the whole width question was raised about that
+ * screen; scoring only the narrower of the two would answer a question nobody asked.
+ */
+async function scanFold(width) {
+  p(`## FC-1 — is each question answered above the fold at ${String(width)} × ${String(FOLD)}?`);
+  p();
+  p('| Q | Question | Answering element | `y` | Above the fold? |');
+  p('| - | -------- | ----------------- | --: | --------------- |');
 
-await page.setViewportSize({ width: 1646, height: FOLD });
-await page.waitForTimeout(300);
+  await page.setViewportSize({ width, height: FOLD });
+  await page.waitForTimeout(300);
 
-let answered = 0;
-for (const q of QUESTIONS) {
-  const box = await page.evaluate(
-    ({ region, answer, sel }) => {
-      const regions = [...document.querySelectorAll(sel)];
-      const host = regions.find((el) => {
-        const labelled = el.getAttribute('aria-labelledby');
-        const named =
-          el.getAttribute('aria-label') ??
-          (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
-        return named.trim() === region;
-      });
-      if (!host) return { found: false, why: `no region named "${region}"` };
-      const el = host.querySelector(answer);
-      if (!el) return { found: false, why: `region present, no ${answer} inside it` };
-      const r = el.getBoundingClientRect();
-      return {
-        found: true,
-        y: Math.round(r.top + window.scrollY),
-        tag: el.tagName.toLowerCase(),
-        text: (el.textContent ?? '').trim().slice(0, 48),
-      };
-    },
-    { region: q.region, answer: q.answer, sel: REGION_SELECTOR },
-  );
-  if (!box.found) {
-    p(`| ${q.id} | ${q.asks} | **absent** — ${box.why} | — | **no** |`);
-    continue;
+  let answered = 0;
+  for (const q of QUESTIONS) {
+    const box = await page.evaluate(
+      ({ region, answer, sel }) => {
+        const regions = [...document.querySelectorAll(sel)];
+        const host = regions.find((el) => {
+          const labelled = el.getAttribute('aria-labelledby');
+          const named =
+            el.getAttribute('aria-label') ??
+            (labelled ? (document.getElementById(labelled)?.textContent ?? '') : '');
+          return named.trim() === region;
+        });
+        if (!host) return { found: false, why: `no region named "${region}"` };
+        const el = host.querySelector(answer);
+        if (!el) return { found: false, why: `region present, no ${answer} inside it` };
+        const r = el.getBoundingClientRect();
+        return {
+          found: true,
+          y: Math.round(r.top + window.scrollY),
+          tag: el.tagName.toLowerCase(),
+          text: (el.textContent ?? '').trim().slice(0, 48),
+        };
+      },
+      { region: q.region, answer: q.answer, sel: REGION_SELECTOR },
+    );
+    if (!box.found) {
+      p(`| ${q.id} | ${q.asks} | **absent** — ${box.why} | — | **no** |`);
+      continue;
+    }
+    const ok = box.y < FOLD;
+    if (ok) answered += 1;
+    p(
+      `| ${q.id} | ${q.asks} | \`${box.tag}\` — ${JSON.stringify(box.text)} | ${String(box.y)} | ${ok ? '**yes**' : '**no**'} |`,
+    );
   }
-  const ok = box.y < FOLD;
-  if (ok) answered += 1;
+  p();
   p(
-    `| ${q.id} | ${q.asks} | \`${box.tag}\` — ${JSON.stringify(box.text)} | ${String(box.y)} | ${ok ? '**yes**' : '**no**'} |`,
+    `**FC-1 at ${String(width)}: ${String(answered)} of ${String(QUESTIONS.length)} answered above the fold.** Bar: 7 of 7.`,
   );
+  p();
+  return answered;
 }
-p();
-p(
-  `**FC-1 baseline: ${String(answered)} of ${String(QUESTIONS.length)} answered above the fold.** Bar for the after run: 7 of 7.`,
-);
-p();
+
+await scanFold(1646);
+await scanFold(1920);
 
 p("## FC-4 — each section's rendered content width");
 p();
@@ -316,6 +339,26 @@ p();
 p(
   `Page content runs to **${String(Math.max(...geometry.map((g) => g.top + g.height)))} px**; the fold is ${String(FOLD)}.`,
 );
+p();
+
+/**
+ * **Photographs, because every figure above is a number about a screen nobody looked at.**
+ *
+ * ADR-0099 was opened after four consecutive epics measured this product's layout and each reported
+ * a plausible number; what settled it was a screenshot, and `shoot.mjs`'s list did not cover the
+ * screen in question. The same hole existed here: this harness scored the landing at four widths
+ * for a whole epic and never once produced an image of it. `fullPage` deliberately — the fold is
+ * FC-1's subject, so a viewport-cropped shot would hide exactly what the reader scrolls to.
+ */
+p('## Photographs');
+p();
+for (const w of [1920, 1646, 1280]) {
+  await page.setViewportSize({ width: w, height: FOLD });
+  await page.waitForTimeout(300);
+  const file = `${SHOT_DIR}/landing-${String(w)}.png`;
+  await page.screenshot({ path: file, fullPage: true });
+  p(`- \`${file}\` — full page at ${String(w)} × ${String(FOLD)}`);
+}
 p();
 
 p(`## FC-5 — requests to \`…/overview\` on one landing load`);

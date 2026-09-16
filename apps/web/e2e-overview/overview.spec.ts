@@ -85,6 +85,42 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   await expect(overviewPage.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(overviewPage.getByRole('main')).toHaveCount(1);
 
+  // -------------------------------------------------- 5b. The page uses the width it has
+  //
+  // **Two sections sharing a `top` is what "two columns" MEANS**, so it is asserted as a geometric
+  // fact rather than by reading a class name — a class assertion passes against a grid whose
+  // columns never resolve (ADR-0100 M4's token pair painted nothing in a real browser while its
+  // gate stayed green). It has to run here rather than in a unit test: the whole effect is CSS
+  // grid, which jsdom does not lay out, so all 152 unit cases for this feature pass identically
+  // whether the landing is one column or two.
+  //
+  // **It lives inside this test, and that is deliberate on two counts.** As its own test it needed
+  // its own `onboard()`, and a fourth sign-up in this shard pushed the file into Better Auth's
+  // 3-per-10s in-process rate limiter — `standing.spec.ts` then failed its retries at "create your
+  // organisation", a failure caused entirely by adding an assertion elsewhere. And the page here is
+  // provably SETTLED: several `toBeVisible` assertions above have already resolved against real
+  // content. Measured once immediately after `openOverview` it was flaky, sampling a layout that
+  // was still arriving — two sections at 155 and 337, stacked, before the stylesheet applied.
+  //
+  // No pixel width is asserted. The columns are 730 px at 1920 and 647 at 1646, both fluid and both
+  // meant to change when the drawer moves; pinning either would make a correct resize fail.
+  await overviewPage.setViewportSize({ width: 1600, height: 1000 });
+  await expect
+    .poll(
+      async () => {
+        const sections = await overviewPage.getByRole('region').all();
+        const tops = await Promise.all(
+          sections.map(async (r) => Math.round((await r.boundingBox())?.y ?? -1)),
+        );
+        // The pinned positive case, inside the poll: "no two sections share a top" is satisfied
+        // perfectly by a page with no sections on it, so a run that found none must not read as a
+        // pass. Returning the pair makes both halves visible in the failure message.
+        return { count: tops.length, distinct: new Set(tops).size };
+      },
+      { message: 'the landing never settled into two columns' },
+    )
+    .toEqual({ count: 4, distinct: 2 });
+
   // -------------------------------------------------- 6. The row is the way back into work
   await row.click();
   await expect(overviewPage).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
