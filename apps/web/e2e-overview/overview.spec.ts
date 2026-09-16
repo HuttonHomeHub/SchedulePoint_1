@@ -85,6 +85,42 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   await expect(overviewPage.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(overviewPage.getByRole('main')).toHaveCount(1);
 
+  // -------------------------------------------------- 5b. The page uses the width it has
+  //
+  // **Two sections sharing a `top` is what "two columns" MEANS**, so it is asserted as a geometric
+  // fact rather than by reading a class name — a class assertion passes against a grid whose
+  // columns never resolve (ADR-0100 M4's token pair painted nothing in a real browser while its
+  // gate stayed green). It has to run here rather than in a unit test: the whole effect is CSS
+  // grid, which jsdom does not lay out, so all 152 unit cases for this feature pass identically
+  // whether the landing is one column or two.
+  //
+  // **It lives inside this test, and that is deliberate on two counts.** As its own test it needed
+  // its own `onboard()`, and a fourth sign-up in this shard pushed the file into Better Auth's
+  // 3-per-10s in-process rate limiter — `standing.spec.ts` then failed its retries at "create your
+  // organisation", a failure caused entirely by adding an assertion elsewhere. And the page here is
+  // provably SETTLED: several `toBeVisible` assertions above have already resolved against real
+  // content. Measured once immediately after `openOverview` it was flaky, sampling a layout that
+  // was still arriving — two sections at 155 and 337, stacked, before the stylesheet applied.
+  //
+  // No pixel width is asserted. The columns are 730 px at 1920 and 647 at 1646, both fluid and both
+  // meant to change when the drawer moves; pinning either would make a correct resize fail.
+  await overviewPage.setViewportSize({ width: 1600, height: 1000 });
+  await expect
+    .poll(
+      async () => {
+        const sections = await overviewPage.getByRole('region').all();
+        const tops = await Promise.all(
+          sections.map(async (r) => Math.round((await r.boundingBox())?.y ?? -1)),
+        );
+        // The pinned positive case, inside the poll: "no two sections share a top" is satisfied
+        // perfectly by a page with no sections on it, so a run that found none must not read as a
+        // pass. Returning the pair makes both halves visible in the failure message.
+        return { count: tops.length, distinct: new Set(tops).size };
+      },
+      { message: 'the landing never settled into two columns' },
+    )
+    .toEqual({ count: 4, distinct: 2 });
+
   // -------------------------------------------------- 6. The row is the way back into work
   await row.click();
   await expect(overviewPage).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
@@ -113,57 +149,6 @@ test('the settled overview has no accessibility violations', async ({ page }) =>
  * fourth — that the store holds no name — is a unit assertion, and it is the reason the third
  * works.
  */
-/**
- * **The landing lays out in two columns, asserted where layout exists.**
- *
- * The epic that built this screen withdrew its two-column grid on FC-4 and shipped one column, and
- * the reason was a bar measured inside a container capped at 846 px **at every viewport** — so the
- * grid could never have passed, at any width, on any monitor. The product owner asked why the page
- * was still one column while ~650 px of their 1920 screen sat empty (`m6-two-column.md`).
- *
- * This is the assertion that would have caught the revert, and it has to run in a browser: the
- * whole effect is CSS grid, which jsdom does not lay out, so all 152 unit cases for this feature
- * pass identically either way. **Two sections sharing a `top` is what "two columns" means** —
- * checked as a geometric fact rather than by reading a class name, because a class assertion
- * passes against a grid whose columns never resolve (ADR-0100 M4's token pair, which painted
- * nothing in a real browser while its gate stayed green).
- *
- * It deliberately does NOT assert a pixel width. The columns are 730 px at 1920 and 647 at 1646,
- * both of which are fluid and both of which are meant to change when the drawer moves — pinning
- * either would make a correct resize fail.
- */
-test('the landing uses the width it has, in two columns', async ({ page }) => {
-  const stamp = Date.now();
-  const orgSlug = await onboard(page, stamp);
-  await createClient(page, 'Bellway');
-  await createProject(page, 'Northgate');
-  await createPlan(page, 'Northgate — Phase 1');
-
-  await page.setViewportSize({ width: 1600, height: 1000 });
-  await openOverview(page, orgSlug);
-
-  // `getByRole('region')`, not a CSS selector. A `SectionCard` names itself with `aria-labelledby`
-  // OR `aria-label` depending on the call site, so `section[aria-labelledby]` found two of the four
-  // here and this assertion failed against a CORRECT two-column page — the same trap
-  // `measure-overview.mjs` records hitting with `[role="region"]`, which matched nothing at all.
-  // Playwright computes the implicit role; a CSS attribute selector cannot.
-  const sections = await page.getByRole('region').all();
-  const tops = await Promise.all(
-    sections.map(async (s) => Math.round((await s.boundingBox())?.y ?? -1)),
-  );
-
-  // The pinned positive case first: "no two sections share a top" is satisfied perfectly by a page
-  // with no sections on it, which is how a green run could mean the locator found nothing.
-  expect(
-    tops.length,
-    'no named sections found — the assertion below would be vacuous',
-  ).toBeGreaterThan(1);
-  expect(
-    new Set(tops).size,
-    `sections at ${tops.join(', ')} — expected a pair to share a row`,
-  ).toBeLessThan(tops.length);
-});
-
 test('the landing offers the plans this browser was recently in', async ({ page }) => {
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
