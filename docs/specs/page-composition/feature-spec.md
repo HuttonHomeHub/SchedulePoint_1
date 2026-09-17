@@ -1217,12 +1217,41 @@ finding is the precedent to weigh it against, and the default is **not to build 
 
 ### 4.11 API changes
 
-**One additive change, decided (D3):**
+**One additive change, decided (D3) — and CORRECTED on 2026-09-17, before it was built:**
 
-- `GET /api/v1/organizations/:orgSlug/clients` — `ClientSummary` gains optional `projectCount` and
-  `planCount`.
-- `GET /api/v1/organizations/:orgSlug/clients/:clientId/projects` — `ProjectSummary` gains optional
-  `planCount`.
+- `GET /api/v1/organizations/:orgSlug/clients/:clientId` — the **detail** read gains optional
+  `projectCount` and `planCount`.
+- `GET /api/v1/organizations/:orgSlug/projects/:projectId` — the **detail** read gains optional
+  `planCount` and `activityCount`.
+
+**This section named the LIST routes until `database-architect` measured them, and that shape is a
+425x regression.** Prisma's `_count` on a page of clients emits a grouped subquery with no client
+restriction; with no single-id equality to push down, Postgres aggregates the **whole child table**
+— measured at 2,124 clients / 50,004 projects, `Seq Scan on projects` over 50,004 rows,
+**14.509 ms against 0.034 ms**. Worse than the number: the plan **abandons
+`clients_organization_id_created_at_id_idx` entirely**, so it is O(all projects in the installation)
+rather than O(page) and the pagination stops being pagination. `client.repository.ts:76-88` records
+an escalation trigger at _"the list's p95 passes ~20 ms"_; this shape trips it on the day it ships,
+and that trigger's prescribed remedy (a `pg_trgm` GIN on `name`) does nothing about it, because the
+cause is not the search.
+
+**The correction is structural, not a note.** `ClientResponseDto implements ClientSummary` and is
+returned by **both** `list()` and `get()` (`clients.controller.ts:62` and `:91`), so adding a field
+to that DTO gives the list route the field for free, without anyone choosing it — the bad outcome is
+the default. The counts therefore land on a **separate detail DTO** that the list cannot return, and
+a structural test says so.
+
+**`_count` is also not the mechanism**, which §4.10 asserted for all four counts and is true for two:
+`_count` takes **direct relation fields only** (verified — a nested selection is rejected with
+`SelectionSetOnScalar`), and `Client.planCount` and `Project.activityCount` are both **two-level**
+(a plan hangs off a project, an activity off a plan; `plans` has no `client_id`). All four use
+`count()` with a relation filter instead — one mechanism rather than two, and for the two direct
+cases it produces a _cheaper_ plan than `_count` does (0.032 ms against 0.067 ms, `_count` paying a
+`GroupAggregate` and a nested loop for a single row).
+
+If the list counts are ever wanted, they are a **separate decision with a different query shape**: a
+second grouped query scoped to the page's ids (`groupBy` over `clientId IN (…)`), which measured
+**0.061 ms** and O(page) on the same estate. Not built, because nothing has asked for it.
 
 Optional, additive, no version change, no new permission, served under the existing org-scoped guard.
 `docs/API.md` and the OpenAPI spec update in the same PR (CLAUDE.md §6). A changeset is required

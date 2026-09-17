@@ -161,6 +161,62 @@ earned its place (decision 4).
 
 ---
 
+## FC-9 — the detail counts cost a detail read little, and never scan a child table
+
+**Added 2026-09-17, before the harness was built** (ADR-0128's ordering: the bar is committed in its
+own commit, so it cannot be tuned to the answer). The epic's other eight conditions are all layout;
+D3's child counts are the only work here that touches the API, and the product owner's answer to
+that question was **"Yes — measure cost first"**, so the measurement is a requirement rather than a
+courtesy.
+
+`database-architect` returned **no schema change and no index** — every one of the four counts is
+already served index-only by an index that exists for a different reason (the soft-delete-scoped
+partial uniques on `(parent_id, name) WHERE deleted_at IS NULL`). This condition is what tests that
+claim against the shipped code rather than against a design note.
+
+**(a) Latency.** For `GET …/clients/:clientId` and `GET …/projects/:projectId`, **p95 < 50 ms** at
+every shape below, and **added p95 ≤ 25 ms** over the same route without the counts. Before and
+after in **one sitting**, 30 reps after 5 warm-up, with the **run-to-run spread reported beside each
+delta** — a delta smaller than the spread is `INDETERMINATE`, not a pass.
+
+**(b) Plan shape.** In `EXPLAIN (ANALYZE, BUFFERS)`, every count node is an `Index Only Scan`,
+`Index Scan` or `Bitmap Index Scan` on one of those four indexes. **A `Seq Scan` on `projects`,
+`plans` or `activities` fails FC-9 regardless of the timing** — and so does the disappearance of
+`clients_organization_id_created_at_id_idx` from the clients **list** plan, which is the regression
+the architect's finding 1 is about.
+
+**(c) Estimated cost < 100,000** (`jit_above_cost`) at every shape.
+
+(b) is the load-bearing limb and (c) is why: ADR-0144 records that a JIT cliff fires on a small
+tenant **because a different tenant grew**, which no timing on one database can see. A plan-shape
+condition survives that; a millisecond figure does not.
+
+**Shapes.** The harness must **dilute** — the architect's own first probe reported every count as a
+`Seq Scan`, an artefact of seeding one fat subject into a near-empty database, where a sequential
+scan is genuinely the right plan. A harness that measures the seq-scan regime confirms nothing about
+the index question.
+
+| Shape       | Composition                                                                          |
+| ----------- | ------------------------------------------------------------------------------------ |
+| deployed    | the real installation as found (124 clients / 4 projects / 17 plans / 29 activities) |
+| typical     | 16 plans x 180 activities under one project                                          |
+| fat client  | 500 projects x 12 plans under one client                                             |
+| fat project | 60 plans x 2,000 = 120,000 activities under one project                              |
+
+**Withdrawal clause:** if (a) or (b) fails, **the counts are withdrawn** and the detail screens are
+enriched from fields already on the wire. Softening the bar is not an option; re-arguing it in
+writing is.
+
+**What this condition deliberately does not cover.** The client to plans count has no stable plan:
+swept against a 76,817-plan table it switches from a nested loop on `uq_plans_project_name` to a
+hash join with a `Seq Scan on plans` somewhere between **75 and 100 projects under one client**. It
+is a ratio, so it moves with the estate. Past the crossover the count is bounded by the installation
+rather than by the client. The `fat client` shape exists to find where that sits today; the remedy,
+if it is ever needed, is a **query-shape** change (resolve the project ids first and pass them as an
+array — measured 0.232 ms against 2.85 ms for the join form), not an index.
+
+---
+
 ## Two claims that were measured and turned out NOT to be defects
 
 Recorded here because a condition written against a non-defect is worse than no condition, and
