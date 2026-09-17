@@ -1,0 +1,3 @@
+
+PINNED CASE FAILED: this probe did not report the known wraps calendars/Working days, resources/Code.
+A probe that cannot see today's defect cannot judge tomorrow's fix. Either the instrument is broken or the defect is already gone — establish which before trusting any number above. Set EXPECT_KNOWN_WRAPS=0 only when the column model has landed and their absence is the RESULT.

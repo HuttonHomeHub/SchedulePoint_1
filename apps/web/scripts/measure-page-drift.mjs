@@ -39,6 +39,17 @@ if (!SLUG) throw new Error('SLUG is required — pass the org slug the shoot har
  * are written down twice is how they stop agreeing (the rule this file already applies to EMAIL).
  */
 const PAGES = [
+  /**
+   * **The overview leads the list, and it is here because FC-1 says so.**
+   *
+   * It was absent for this harness's whole existence, and the omission was not an oversight so much
+   * as a premise: page-consistency measured the drift *between the screens it was fixing*, and the
+   * overview was the screen they were being aligned TO. That is exactly the shape that hides a
+   * divergence — a reference nobody measures cannot be shown to have moved, and this epic's D1
+   * brings it onto the same measure as the rest rather than exempting it, so from here it is a
+   * subject and not a yardstick.
+   */
+  ['org-home', (slug) => `/orgs/${slug}`],
   ['clients', (slug) => `/orgs/${slug}/clients`],
   ['client-detail', (slug, ids) => `/orgs/${slug}/clients/${ids.clientId}`],
   ['project-detail', (slug, ids) => `/orgs/${slug}/projects/${ids.projectId}`],
@@ -51,6 +62,25 @@ const PAGES = [
   // Out of scope, measured as the control: a declared exception to the frame gate.
   ['account (declared exception)', () => `/account`],
 ];
+
+/**
+ * **The staff console, measured in a second session because it cannot be reached from the first.**
+ *
+ * FC-1 names it, and a member account cannot open it: `StaffPrincipal` is structurally not a
+ * `Principal` (ADR-0086 D1), so there is no amount of role-granting that would let the tenant above
+ * navigate to `/staff`. That is a property worth stating rather than working around — it is the
+ * whole point of that decision — so this is a separate context with a separate sign-in rather than
+ * a tenth entry in `PAGES`.
+ *
+ * It matters to this epic because `staff.tsx` is one of only two screens already passing
+ * `width="wide"`, and D1 makes that value the product's default. Its nine column caps were measured
+ * against a 1438px table (ADR-0143) and must come through this work **pixel-unchanged**; a harness
+ * that cannot see the screen cannot show that they did.
+ *
+ * The credentials are the shoot harness's own, derived the same way and defaulted the same way, so
+ * the two cannot drift apart into measuring different accounts.
+ */
+const STAFF_EMAIL = process.env.SHOOT_STAFF_EMAIL ?? 'ops@schedulepoint.test';
 
 /*
  * **This function is serialised and runs INSIDE the browser**, so `document`, `window` and
@@ -191,6 +221,19 @@ const probe = () => {
     mainScrollHeight: main ? main.scrollHeight : null,
     mainClientHeight: main ? main.clientHeight : null,
     docScrolls: document.documentElement.scrollHeight > window.innerHeight + 1,
+    /**
+     * **FC-6's quantity, reported at every width rather than only at 320.**
+     *
+     * WCAG 2.2 §1.4.10 is judged at 320px CSS width, but the number is recorded at all three
+     * measured widths deliberately: a horizontal overflow that appears at 1280 is a defect too, and
+     * an instrument that only asks the question where the standard asks it will not notice one.
+     * `scrollWidth > clientWidth` is the whole test — a page that fits reports them equal.
+     */
+    reflow: {
+      docScrollWidth: document.documentElement.scrollWidth,
+      docClientWidth: document.documentElement.clientWidth,
+      overflowsBy: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    },
     h1: h1
       ? {
           text: h1.textContent.trim().slice(0, 30),
@@ -293,5 +336,40 @@ for (const [name, path] of PAGES) {
   await page.waitForTimeout(400);
   out[name] = await page.evaluate(probe);
 }
+
+/**
+ * The staff console, in its own context. **A failure to reach it is recorded, never swallowed** —
+ * the account has to have been created and verified by a prior `shoot` run, and a run that quietly
+ * omitted the screen would report a complete-looking FC-1 table with one subject missing, which is
+ * the ADR-0093 shape this repository keeps recording: a green result about nothing.
+ */
+{
+  const staffCtx = await browser.newContext({ viewport: { width: WIDTH, height: 1000 } });
+  const staffPage = await staffCtx.newPage();
+  try {
+    await staffPage.goto(`${BASE}/sign-in`);
+    await staffPage.getByLabel(/email/i).fill(STAFF_EMAIL);
+    await staffPage.getByLabel(/password/i).fill('correct-horse-battery');
+    await staffPage.getByRole('button', { name: /sign in/i }).click();
+    await staffPage.waitForLoadState('networkidle');
+    await staffPage.goto(`${BASE}/staff`);
+    await staffPage.waitForLoadState('networkidle');
+    await staffPage.waitForTimeout(400);
+    const heading = await staffPage
+      .getByRole('heading', { level: 1 })
+      .first()
+      .textContent()
+      .catch(() => null);
+    if (heading === null || !/staff console/i.test(heading)) {
+      throw new Error(`/staff did not render the console for ${STAFF_EMAIL} (h1 was ${heading})`);
+    }
+    out.staff = await staffPage.evaluate(probe);
+  } catch (err) {
+    out.staff = { unreachable: String(err && err.message ? err.message : err), email: STAFF_EMAIL };
+  } finally {
+    await staffCtx.close();
+  }
+}
+
 console.log(JSON.stringify(out, null, 1));
 await browser.close();
