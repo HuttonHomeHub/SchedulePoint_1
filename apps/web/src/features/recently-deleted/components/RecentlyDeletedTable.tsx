@@ -170,6 +170,25 @@ export function RecentlyDeletedTable({
         return (
           <div className="flex flex-col gap-0.5">
             <span className="font-medium">{group.root.name}</span>
+            {group.root.canRestore || group.root.blockedBy === null ? null : (
+              /*
+                **The blocker is named HERE, under the row it blocks, and not inside the button.**
+
+                It used to be the button's visible label: `Restore ddde first…`, with the variable
+                part in the MIDDLE of the sentence, so the trailing ellipsis — the conventional
+                "this opens a dialog" suffix — read as a sentence cut off instead. That was the
+                product owner's report, and M0 established the control is not clipped at any width:
+                the `…` is literal text in the source. So the remedy is copy, not CSS.
+
+                A blocker is a fact about this row, and a fact about a row belongs under it (D4).
+                Moving it here also bounds the button, which sits in a `whitespace-nowrap` cell: a
+                long client name used to widen the whole Actions column and take that width off the
+                names beside it.
+              */
+              <span className="text-muted-foreground text-xs">
+                Blocked by a deleted {group.root.blockedBy.kind}, “{group.root.blockedBy.name}”
+              </span>
+            )}
             {summary === null ? null : (
               <button
                 type="button"
@@ -228,6 +247,9 @@ export function RecentlyDeletedTable({
     columns.push({
       header: 'Actions',
       srHeader: true,
+      // Every label in this cell is now bounded (see the blocker sub-line in `Name`), so the column
+      // can take its minimum width and hand the surplus to the names — which is what `fit` is for.
+      width: 'fit',
       headClassName: 'py-2 font-medium',
       cellClassName: 'py-2 text-right whitespace-nowrap',
       cell: (group) =>
@@ -254,16 +276,17 @@ export function RecentlyDeletedTable({
               setAncestorFor(group.key);
             }}
             aria-haspopup="dialog"
+            aria-label={`Restore ${group.root.blockedBy?.kind ?? 'parent'} first…: ${group.root.blockedBy?.name ?? ''}`}
           >
-            Restore {group.root.blockedBy?.name} first…
+            {/* The visible label is contiguous at the START of the accessible name, which is what
+                WCAG 2.5.3 requires — the name may add to the label, never replace or reorder it. */}
+            Restore {group.root.blockedBy?.kind ?? 'parent'} first…
           </Button>
         ) : (
           // The blocker is not in the fetched set — possible mid-refetch. Say what is true rather
           // than offering a button that would open an empty confirmation.
           <span className="text-muted-foreground text-sm">
-            {group.root.blockedBy === null
-              ? 'Restore its parent first'
-              : `Restore ${group.root.blockedBy.name} first`}
+            {`Restore its ${group.root.blockedBy?.kind ?? 'parent'} first`}
           </span>
         ),
     });

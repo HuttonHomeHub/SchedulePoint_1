@@ -339,3 +339,64 @@ test('Members shows three named regions and when each member joined', async ({ p
   // A real date, not an em dash: the column exists because the fact was already there.
   await expect(roster.getByRole('cell', { name: /\d{4}/ }).first()).toBeVisible();
 });
+
+test('no column header stands over an empty column', async ({ page }) => {
+  await page.goto(`/orgs/${orgSlug}/audit-log`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+  const table = page.getByRole('table').first();
+
+  /**
+   * **Wait for a real row, not for a row.** `DataTable`'s LOADING `<thead>` prints no header text
+   * at all (`data-table.tsx:236-239` renders the header only for an `srHeader` column), and its
+   * skeleton rows are three visible `<tr>`s — so `row.nth(1)` is visible the instant the route
+   * mounts, and a scan taken there finds nothing to examine and passes. It did: this assertion
+   * went green against the very column it was written to catch, twice, before the debug dump that
+   * exposed it. The control below is what stops that recurring; this wait is what makes it rare.
+   */
+  await expect(table.getByRole('cell', { name: /Organisation created/ })).toBeVisible();
+
+  /**
+   * **A header with nothing under it, which is what the product owner reported.**
+   *
+   * The audit log carried an `Outcome` column whose every cell was empty on a healthy
+   * installation — SUCCESS renders `sr-only`, because saying "Succeeded" on every row would drown
+   * the two outcomes worth noticing — beside a filter offering to narrow by it. Folding it into
+   * the Event row removes the blank column and keeps every outcome legible.
+   *
+   * Asserted as the general rule rather than as "there is no column called Outcome", because the
+   * defect is the shape and not the name: the next always-empty column will be called something
+   * else. `sr-only` headers are deliberately exempt — `DataTable`'s `srHeader` exists for a column
+   * of actions, which has a name for a screen reader and nothing to print.
+   */
+  const scan = await table.evaluate((el) => {
+    const rows = [...el.querySelectorAll('tr')];
+    const head = rows[0];
+    if (!head) throw new Error('no header row');
+    const body = rows.slice(1);
+    const empties: string[] = [];
+    let examined = 0;
+    [...head.querySelectorAll('th')].forEach((th, i) => {
+      const label = (th.textContent ?? '').trim();
+      // A header that prints nothing is not standing over anything, so it is not this defect.
+      // Measured rather than read off a class name: `sr-only` clips to a 1px box, and the point is
+      // whether a reader SEES a heading — `offsetParent` is no use, because an absolutely
+      // positioned element has one.
+      if (label === '' || th.getBoundingClientRect().width <= 1) return;
+      examined += 1;
+      const printed = body.some((tr) => {
+        const cell = tr.children[i];
+        return cell instanceof HTMLElement && (cell.textContent ?? '').trim() !== '';
+      });
+      if (!printed) empties.push(label);
+    });
+    return { empties, examined, bodyRows: body.length };
+  });
+
+  // The pinned control (ADR-0093): "every column prints something" is satisfied perfectly by a
+  // table with no columns and no rows, and that is exactly the state this test kept measuring.
+  expect(scan.bodyRows, 'no rows — the scan below would be vacuous').toBeGreaterThan(0);
+  expect(scan.examined, 'no visible headers — the scan below would be vacuous').toBeGreaterThan(2);
+
+  expect(scan.empties, 'these column headers print nothing in any row').toEqual([]);
+});

@@ -88,7 +88,31 @@ export function AuditEventList({
         const { title, detail } = auditEventCopy(event);
         return (
           <div className="flex flex-col">
-            <span className="font-medium">{title}</span>
+            <span className="flex items-center gap-2">
+              <span className="font-medium">{title}</span>
+              {/*
+                **The outcome rides on the row it belongs to, and `Outcome` is no longer a column.**
+
+                It was a column whose every cell was empty on any healthy installation: SUCCESS is
+                the overwhelming majority and saying so on every row would drown the two outcomes
+                worth noticing, so success rendered `sr-only` and the column printed nothing. A
+                header with nothing under it, beside a filter offering to narrow by it — which is
+                how the product owner read it, and they were right.
+
+                **The `sr-only` success is preserved and must stay.** Deleting it would be a silent
+                WCAG regression: a screen-reader user would hear an event with no outcome at all and
+                could not tell a success from a row whose outcome nobody rendered. A test asserts it,
+                verified red against its removal. Non-success is text and not colour alone (1.4.1),
+                which is the rule this cell already carried.
+              */}
+              {event.outcome === 'SUCCESS' ? (
+                <span className="sr-only">Succeeded</span>
+              ) : (
+                <span className="text-destructive-text text-xs font-medium">
+                  {event.outcome === 'DENIED' ? 'Denied' : 'Failed'}
+                </span>
+              )}
+            </span>
             {detail === null ? null : (
               <span className="text-muted-foreground text-xs">{detail}</span>
             )}
@@ -115,23 +139,6 @@ export function AuditEventList({
     // `auto` by decision: a subject is a plan or activity name and those are unbounded in practice
     // (the fixture's longest is 62 characters). See `Event` above.
     { header: 'Subject', width: 'auto', cell: (event) => auditSubject(event) },
-    {
-      header: 'Outcome',
-      // `auto` by decision, like its three prose siblings above. It held no declaration at all
-      // until the component review counted them — and a rule whose point is that the exception is
-      // written down cannot have one member that is silent about it.
-      width: 'auto',
-      cell: (event) =>
-        // SUCCESS is the overwhelming majority and saying so on every row would drown the two
-        // outcomes worth noticing. Text, not colour alone (WCAG 1.4.1).
-        event.outcome === 'SUCCESS' ? (
-          <span className="sr-only">Succeeded</span>
-        ) : (
-          <span className="text-destructive-text text-xs font-medium">
-            {event.outcome === 'DENIED' ? 'Denied' : 'Failed'}
-          </span>
-        ),
-    },
   ];
 
   return (
