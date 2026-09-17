@@ -88,6 +88,36 @@ export function ProjectCalendarsSection({
   const isOwn = (calendar: CalendarSummary): boolean =>
     calendar.scope === 'PROJECT' && calendar.projectId === projectId;
 
+  /**
+   * **The section defaults to the project's OWN calendars, and says how many it inherits.**
+   *
+   * On a project with no calendars of its own — which is most projects — this section rendered the
+   * entire organisation library, so the project screen was largely a copy of the Calendars screen.
+   * Correct about what is USABLE and wrong about what the reader came for (ADR-0146 D2).
+   *
+   * **The filtering is local to this view and nothing about the tier rule moves**, and the proof is
+   * structural rather than careful. ADR-0053 M2's guarantee is that a PICKER can never offer a
+   * calendar the write seam would 422 — and **the pickers do not use this hook at all**. They use
+   * `usePlanScopedCalendars`, which composes `projectCalendarsQueryOptions` with its own
+   * `PICKER_CALENDAR_FILTERS` (`use-calendars.ts:217-237`), and nothing in this epic touches it.
+   * So the guarantee is not preserved by care here; it is out of reach of this file.
+   *
+   * That is worth stating precisely because the plan's acceptance condition asked for the weaker
+   * thing — "assert the picker's source is untouched, by identity" — which assumes the two share a
+   * source. They do not, and a reader who thought they did would be guarding the wrong seam. What
+   * changes here is which rows this table shows FIRST; every row remains one press away.
+   */
+  const [showInherited, setShowInherited] = useState(false);
+  const ownCalendars = calendars.data?.filter(isOwn);
+  const inheritedCount = (calendars.data?.length ?? 0) - (ownCalendars?.length ?? 0);
+  const visibleCalendars = showInherited ? calendars.data : ownCalendars;
+  /**
+   * The same query result with a narrowed `data`. Not a second query: one request, one cache entry,
+   * one loading state — a separate fetch for "the project's own" would give this section a second
+   * source that could disagree with the count beside it.
+   */
+  const visibleQuery = { ...calendars, data: visibleCalendars };
+
   const toggleArchived = (calendar: CalendarSummary): void => {
     setArchiveError(null);
     const archived = isArchivedRow(calendar);
@@ -203,8 +233,8 @@ export function ProjectCalendarsSection({
       title="Calendars"
       description={
         <>
-          The working-day calendars this project’s plans and activities can be scheduled on — this
-          project’s own, plus every organisation calendar.
+          The working-day calendars belonging to this project. Its plans and activities can also be
+          scheduled on every organisation calendar.
         </>
       }
       action={
@@ -258,10 +288,42 @@ export function ProjectCalendarsSection({
         ) : null}
       </div>
 
+      {/*
+        **The inherited count is stated, and the list is one press away.** ADR-0098's rule: a
+        section the reader may not see is omitted, and a fact they cannot act on is still a fact —
+        so "12 organisation calendars are also usable here" is said whether or not they open it.
+        Withheld entirely when there are none, because "0 organisation calendars" is a sentence
+        nobody needs and the empty state below already says what there is.
+      */}
+      {inheritedCount > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 px-6 pb-3 text-sm">
+          <span className="text-muted-foreground">
+            {inheritedCount === 1
+              ? '1 organisation calendar is also usable here.'
+              : `${String(inheritedCount)} organisation calendars are also usable here.`}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-expanded={showInherited}
+            onClick={() => {
+              setShowInherited((previous) => !previous);
+            }}
+          >
+            {showInherited ? 'Show only this project’s' : 'Show them'}
+          </Button>
+        </div>
+      ) : null}
+
       <DataTable
-        caption={`Calendars usable in ${projectName}`}
+        caption={
+          showInherited
+            ? `Calendars usable in ${projectName}`
+            : `Calendars belonging to ${projectName}`
+        }
         columns={columns}
-        query={calendars}
+        query={visibleQuery}
         getRowKey={(calendar) => calendar.id}
         loadingLabel="Loading calendars…"
         errorLabel="Couldn’t load this project’s calendars. Please try again."

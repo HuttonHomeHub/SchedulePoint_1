@@ -10,6 +10,22 @@ export interface PageHeaderProps {
    * description, so it is announced with the title rather than as a stray paragraph after it.
    */
   description?: React.ReactNode;
+  /**
+   * Facts about the subject, beside the title. **Facts, never actions** — `actions` is the slot for
+   * anything pressable, and the two are separated because they behave differently under pressure:
+   * actions stay put and facts may stack.
+   *
+   * It exists because the detail screens described nothing. Client detail was a breadcrumb, a name,
+   * one card and one row; a reader could not tell how much work sat under the client without
+   * counting the table. The aside is where "4 projects · 11 plans" goes.
+   *
+   * **It is a sibling of the title column, not inside it**, and that is load-bearing:
+   * `page-header.tsx`'s whole reason for `flex-1 max-w-prose` on that column is that an
+   * `auto`-width flex item shrink-wraps to its content, so a 42-character description rendered
+   * 267px wide and a 116-character one 736px — the same description, two measures. Putting the
+   * aside inside would reintroduce exactly that, one element along.
+   */
+  aside?: React.ReactNode;
   /** The screen's primary action, and at most one or two more. Aligned opposite the title. */
   actions?: React.ReactNode;
   className?: string;
@@ -37,13 +53,14 @@ export interface PageHeaderProps {
 export function PageHeader({
   title,
   description,
+  aside,
   actions,
   className,
 }: PageHeaderProps): React.ReactElement {
   const descriptionId = useId();
   const describedBy = description ? descriptionId : undefined;
   return (
-    <div className={cn('flex items-start justify-between gap-4', className)}>
+    <div className={cn('flex flex-wrap items-start justify-between gap-4', className)}>
       {/* **`flex-1` and `max-w-prose` together are what make the description ONE measure.**
           With `min-w-0` alone this column is an `auto`-width flex item, so it shrink-wraps to its
           content: a 42-character description rendered 267 px wide and a 116-character one 736 px,
@@ -65,6 +82,16 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
+      {/* **Facts STACK below `md`; they are never hidden.** The first version of this reached for
+          `hidden md:block`, which is the wrong instinct twice over: a count is a fact about the
+          subject, and a screen that withholds facts from a narrow reader has answered the layout
+          question by deleting the content. `basis-full md:basis-auto` puts the aside on its own
+          line when the row cannot hold it and beside the title when it can. */}
+      {aside ? (
+        <div className="text-muted-foreground shrink-0 basis-full text-sm md:basis-auto">
+          {aside}
+        </div>
+      ) : null}
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </div>
   );
