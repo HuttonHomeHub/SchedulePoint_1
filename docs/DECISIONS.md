@@ -10,6 +10,48 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-17 — Reconciliation pass: the register's one `unverified` row is now measured
+
+**What was decided.** A second pass, one day after the 2026-09-16 one and at the product owner's
+request. `check:reconcile-due` was **not** firing (0 ADRs since, threshold 8) and nothing had landed
+on `main`, so this is recorded for what it was: not a fresh full sweep but the completion of the one
+step the previous pass did by sample. That pass said so in its own record — step 4 verified the rows
+this week's ADRs could have moved, not all 125 — and this is the rest of that.
+
+**The substantive output is one row, and it is the one the register itself said to check first.**
+`#324` was the only `unverified` row in the register, filed that way deliberately: the mechanism
+(`forced-colors: active` suppresses `box-shadow`, not `outline`) was documented behaviour, and the
+claim nobody had tested was whether **this product** loses its focus ring there. Nothing in this
+repository has ever run under forced colours — no `@media (forced-colors: active)` block, no
+`forced-color-adjust`, and `forcedColors` set in none of the 43 Playwright configs.
+
+Measured in Chromium against the production build, focusing by keyboard so `:focus-visible` applies:
+under `forced-colors: active` the control computes `box-shadow: none` and `outline: none/0px`, and a
+screenshot of its box is **byte-identical before and after `Tab`**. Without forced colours the
+`0 0 0 2px` ring is present and the pixels differ. So the product does lose its only focus indicator
+— WCAG 2.2 §2.4.7, level A. The row moves `unverified` → `open` with the run attached, and **no
+remedy is designed**, because the fix touches a shared primitive across 61 occurrences in 49 files
+and the row's own instruction was one run before any remedy.
+
+The probe is **not committed**. A Playwright config is an ADR-0105 trigger, and building a gate
+before the decision it would guard is the wrong order.
+
+**Everything else checked came back correct, which is most of this record.** The three
+readings-dependent deferred rows were re-examined against their own triggers and none has fired:
+`#283` wants a _further_ probe disagreement and none has been taken since 2026-09-10; `#261` wants a
+§9 proposal or a display materially larger than 1920×1080; `#282` wants somebody to want a graded
+verdict at Fit. `#257` had already been narrowed correctly on 2026-09-10 — ADR-0128 shipped a staff
+`@Post`, so its old "no write anywhere" sentence is stale while its actual subject (D6's unbuilt
+"send a test message" route) survives. `#299` was re-run rather than read: `pnpm prepush` prints no
+`format` line, so `format:check` is still absent from the local gate. Every computed gate is green
+and unchanged, which is expected rather than reassuring — the tree has not moved since the previous
+pass, so they were re-derived over identical inputs.
+
+**Consequence.** The register now holds **no `unverified` rows**: 125 rows, 90 open, 30 deferred,
+5 standing. That is a state worth noting precisely because ADR-0120 introduced `unverified` as an
+honest admission rather than a parking space, and a register that accumulates them stops meaning
+anything.
+
 ## 2026-09-16 — Reconciliation pass: an ADR missing from the register, and a CI shape five days stale
 
 **What was decided.** The pass was run at the ADR-0145 epic boundary, on the product owner's
