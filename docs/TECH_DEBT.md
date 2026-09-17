@@ -10476,7 +10476,7 @@ wrong one.
 
 ### 324. Every focus ring in the product is a `box-shadow`, and `forced-colors` suppresses box-shadow
 
-**Status:** unverified · **Raised:** 2026-09-14 (the minimap M8 accessibility review, out of scope for that diff) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-17 (measured under `forced-colors: active`) · **Raised:** 2026-09-14 (the minimap M8 accessibility review, out of scope for that diff) · **Size:** M · **Owner:** web
 
 The house convention is `focus-visible:outline-none` plus a `focus-visible:ring-*` box-shadow —
 **61 occurrences across 49 files** in `apps/web/src`. Windows High Contrast (`forced-colors: active`)
@@ -10491,6 +10491,43 @@ behaviour rather than something observed here: nothing in this repository has ev
 Playwright's `forcedColors` option has never been set in any of the 43 configs. So the claim to
 check first is not "is box-shadow suppressed" (it is) but **"does this product actually lose its
 focus ring there"**, which wants one run before any remedy is designed.
+
+**VERIFIED 2026-09-17 (reconciliation pass). The product does lose its focus indicator, and the
+run is the point of this update rather than the conclusion.** This row was filed `unverified`
+precisely because the mechanism was documented and the _consequence here_ was not observed, and it
+names the check owed: not "is box-shadow suppressed" but "does this product actually lose its ring".
+It does.
+
+Measured with Chromium (`playwright-core@1.63.0`, `forcedColors` context option) against the
+**production build** served statically, focusing the first focusable control by **keyboard** so
+`:focus-visible` applies:
+
+|                                   | `forced-colors: none`                    | `forced-colors: active` |
+| --------------------------------- | ---------------------------------------- | ----------------------- |
+| `box-shadow`                      | `… oklch(0.914 0.014 258.3) 0 0 0 2px …` | **`none`**              |
+| `outline-style` / `outline-width` | `none` / `0px`                           | `none` / `0px`          |
+| **pixels changed by focusing**    | **yes**                                  | **NO**                  |
+
+The pixel comparison is the assertion that matters and the computed styles are corroboration: a
+screenshot of the control's box before and after `Tab` is **byte-identical** under forced colours
+and differs without it. So the control is focused, the browser knows it is focused, and nothing on
+screen says so — WCAG 2.2 §2.4.7 Focus Visible (level A). `box-shadow` computes to `none` outright
+rather than merely going unpainted, which is why no amount of colour work reaches it.
+
+**What this run does NOT establish, stated rather than implied.** It is one control, one browser and
+one page. Chromium's `forcedColors` is an **emulation** of Windows High Contrast, not the real mode
+on real Windows; the remaining AT-observation debt is `#154`'s subject and this does not discharge
+it. The control probed was the shared `Button` primitive (the app rendered its error screen with no
+API running, so the first focusable control was its `Try again`) — which is the right subject, since
+the convention lives in that primitive's CVA base and in 60 other places, not on one screen. The
+probe is a scratch measurement and is **deliberately not committed**: a Playwright config is an
+ADR-0105 trigger, and this row's own instruction is one run _before_ a remedy is designed, not a
+gate built ahead of the decision.
+
+**Still no remedy here, and that is unchanged by the verdict.** The fix touches a shared primitive's
+public contract across 61 occurrences in 49 files, which is ADR-0105's trigger in three separate
+clauses. What the verification buys is that the next person designing it is working from a measured
+fact rather than a documented mechanism.
 
 **It is not the minimap's and it is not M8's.** The convention predates both; M8 changed a border
 colour and inherited the pattern. It is recorded here rather than in that milestone precisely so it
