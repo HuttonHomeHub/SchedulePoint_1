@@ -1,7 +1,18 @@
 import { useParams } from '@tanstack/react-router';
 
-import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
-import { InvitationsSection, InviteMemberDialog, MembersTable } from '@/features/members';
+import {
+  PageContainer,
+  PageGrid,
+  PageGridItem,
+  PageHeader,
+  SectionCard,
+} from '@/components/ui/page';
+import {
+  InvitationsSection,
+  InviteMemberDialog,
+  MembersTable,
+  RolesPanel,
+} from '@/features/members';
 import { canAdministerInvitations, useOrgRole } from '@/hooks/use-org-role';
 
 /**
@@ -26,12 +37,36 @@ export function MembersScreen(): React.ReactElement {
   return (
     <PageContainer>
       <PageHeader title="Members" actions={<InviteMemberDialog orgSlug={orgSlug} />} />
-      <div className="mt-6 flex flex-col gap-6">
-        <SectionCard title="Roster" description="Everyone who has joined this organisation.">
-          <MembersTable orgSlug={orgSlug} />
-        </SectionCard>
-        {canAdministerInvitations(role) ? <InvitationsSection orgSlug={orgSlug} /> : null}
-      </div>
+      {/*
+        **Two columns, spans by content demand** (product-owner decision 3: both the landing's
+        layout AND richer sections). The roster is a five-column table and takes the full width;
+        invitations and the roles panel are narrow and pair with each other.
+
+        The roles panel is not filler. Without it the second column holds one short section beside a
+        table four times its height — which is the ragged column the organisation landing already
+        has and which this epic is meant to be fixing, not spreading. It earns its place by
+        answering the question this screen asks and never answered: the roster's `Role` select and
+        the invite dialog both offer four words and nothing said what they mean.
+      */}
+      <PageGrid className="mt-6">
+        <PageGridItem span="wide">
+          <SectionCard
+            title="Roster"
+            description="Everyone who has joined this organisation."
+            flush
+          >
+            <MembersTable orgSlug={orgSlug} />
+          </SectionCard>
+        </PageGridItem>
+        {canAdministerInvitations(role) ? (
+          <PageGridItem span="narrow">
+            <InvitationsSection orgSlug={orgSlug} />
+          </PageGridItem>
+        ) : null}
+        <PageGridItem span="narrow">
+          <RolesPanel />
+        </PageGridItem>
+      </PageGrid>
     </PageContainer>
   );
 }

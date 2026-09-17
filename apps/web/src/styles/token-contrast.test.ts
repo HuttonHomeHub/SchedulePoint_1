@@ -137,6 +137,29 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
 /** Non-text pairs — WCAG 1.4.11 Non-text Contrast, 3:1. */
 const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
   ['--background', '--ring', 'the focus indicator against the surface it sits on'],
+  /**
+   * **A `SegmentedControl` option's boundary, and the selected state inside it.**
+   *
+   * Added at ADR-0146 M3 by the accessibility review, and the number it produced is the reason the
+   * design changed rather than the reason a comment was written. The first version of that control's
+   * resting treatment distinguished selected from unselected by FILL alone — `--background` raised
+   * out of a `--muted` track — and that pair measures **1.01–1.26:1 in every one of the seven
+   * scopes**, with `panel` and `canvas` at 1.01 and 1.02. Nowhere near 3:1, and the only other
+   * channel was a `shadow-sm` whose theoretical ceiling (an opaque, unblurred 10% black over the
+   * fill) is 1.08–1.25:1.
+   *
+   * It was invisible to everything: this matrix had no pair for it, the control's own 13 unit tests
+   * are about the keyboard model, and the journey assertion written for it checked only that the
+   * group's background was not `transparent` — which passes at 1.01:1 exactly as happily as at
+   * 21:1. **A gate that cannot fail for the defect it was written for is not a gate** (ADR-0110 D5),
+   * and that one could not.
+   *
+   * So the boundary is `--input` and not a fill difference. `--input` is the token this design
+   * system reserves for a control's own outline and gates at 3:1 precisely because it identifies a
+   * control (ADR-0055 §1) — the same reason `ToggleChip` unpressed reaches for it rather than
+   * `--border`, which is a decorative divider and 1.4.11-exempt.
+   */
+  ['--muted', '--input', "a SegmentedControl option's boundary against its track"],
   ['--background', '--primary', 'a primary button against the surface'],
   // **The focus indicator against a FILLED control, which is a different question from the line
   // above** (console epic M7). The shared toolbar focus treatment is `ring-inset`, so on a control

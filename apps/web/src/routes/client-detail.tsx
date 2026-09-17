@@ -70,8 +70,12 @@ export function ClientDetailScreen(): React.ReactElement {
         description={client.data.description ?? undefined}
         actions={canWrite ? <CreateProjectButton orgSlug={orgSlug} clientId={clientId} /> : null}
       />
-      {/* `flush`: the body is a full-bleed table, so the card contributes a frame and a name and
-          not padding around a table that already has its own. */}
+      {/* `flush`: the body is a table, so the card contributes a frame and a name and no VERTICAL
+          padding — the rows start directly under the heading. It still supplies the horizontal
+          gutter, because `DataTable`'s cells carry none and without it the first cell sat hard
+          against the card's own border while the heading sat 24px in. That is the "wording in the
+          boxes is hard against margins" report, and this comment used to assert the opposite —
+          that the table "already has its own" padding, which it does not (ADR-0146 D3). */}
       <SectionCard className="mt-6" title="Projects" flush>
         <ProjectsTable orgSlug={orgSlug} clientId={clientId} canWrite={canWrite} />
       </SectionCard>

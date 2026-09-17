@@ -115,6 +115,9 @@ export function ProjectDetailScreen(): React.ReactElement {
           ) : null
         }
       />
+      {/* `flush`: no vertical padding, so the rows start under the heading, and the card's own
+          horizontal gutter so the first cell lines up with it — see `client-detail.tsx` for the
+          defect that rule was written against (ADR-0146 D3). */}
       <SectionCard className="mt-6" title="Plans" flush>
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
       </SectionCard>

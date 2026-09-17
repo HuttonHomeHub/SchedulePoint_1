@@ -1,6 +1,8 @@
+import { ChevronDown } from 'lucide-react';
 import { useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 /**
  * **The coverage rule: folded away for a sighted reader, always announced to a screen reader.**
@@ -57,6 +59,22 @@ export function CoverageDisclosure({
         onClick={() => setOpen((previous) => !previous)}
         className="text-muted-foreground -ml-3"
       >
+        {/*
+          **A chevron, because a bold phrase on its own line reads as a heading with missing
+          content.** The product owner's screenshot shows "What this records" sitting above the
+          filter block with nothing beneath it, and nothing about it says it is pressable.
+
+          **Only the visual layer changes here.** `aria-expanded`, `aria-controls` and the
+          `sr-only`-not-`hidden` rule below are untouched — those mechanics are correct and were
+          established by a CDP measurement recorded in this file's own docblock, so the existing
+          test passing unchanged is what proves this did not disturb them. The icon is
+          `aria-hidden`: the state is already on the button, and announcing it twice is how a
+          reader hears "expanded" and then "chevron".
+        */}
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('size-4 transition-transform', open && 'rotate-180')}
+        />
         What this records
       </Button>
       {/* `sr-only` when collapsed, NOT `hidden` and NOT unmounted: this element is the

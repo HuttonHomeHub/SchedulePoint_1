@@ -10846,3 +10846,29 @@ it merely revealed.
 Neither is a defect in the shipped code. The action is to re-take the web number somewhere it can
 finish, and to decide whether a floor with a quarter of a point of headroom is still a ratchet or
 has become a tripwire.
+
+### 341. A loading skeleton's column widths do not match the settled table's
+
+**Status:** open
+**Raised:** 2026-09-17 (ADR-0146 M3, by `component-reviewer`)
+
+`DataTable`'s loading state reuses a column's `cellClassName` but cannot reuse its `width`: `fit`
+works by making a cell's min-content width equal to its text's single-line width, and the skeleton
+has no text — its `<th>` renders placeholder material and its `<td>` holds a contentless block. So a
+`fit` column applied to the skeleton collapsed to its 1px floor, **measured at 16px while loading
+against 190px settled** on Calendars at 1646, with `Actions` at 0px. The width classes are now
+withheld from the skeleton and it distributes evenly instead of collapsing.
+
+**What remains is a reflow, and it predates the column model.** `Name` — an ordinary `auto` column —
+moved 628 → 738px before this epic and still does. The skeleton has never matched the settled table
+for any column without a fixed width. ADR-0145's fixed caps gave two columns parity by making both
+wrong: the cap that stabilised the skeleton is the same cap that wrapped the content.
+
+**The remedy is a content-shaped skeleton** — a placeholder whose intrinsic width resembles the
+value it stands in for, rather than a percentage-width block — which is a change to the primitive's
+loading state and not to the column model. Not attempted here because it is a separate design
+question (what does a plausible placeholder for a date look like?) and because the collapse, which
+looked broken, is fixed.
+
+**Trigger:** the next change to `DataTable`'s loading state, or a report that a table "jumps" when
+it loads.

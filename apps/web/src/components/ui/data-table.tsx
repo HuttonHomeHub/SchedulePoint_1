@@ -95,6 +95,31 @@ function cellClassesOf<T>(column: Column<T>): string {
 }
 
 /**
+ * **The skeleton gets the caller's classes and NOT the declared width, and that is the opposite of
+ * the obvious thing.**
+ *
+ * `fit` works by making a cell's min-content width equal to its text's single-line width. The
+ * skeleton has no text: its `<th>` renders nothing at all (the header material is `aria-hidden`
+ * placeholder, deliberately) and its `<td>` holds a contentless block with a percentage width,
+ * which contributes nothing to intrinsic sizing. So a `fit` column applied to the skeleton has
+ * nothing to fit and collapses to its 1px floor.
+ *
+ * **Measured in Chromium before this was split out**, on the Calendars table at 1646: `Working
+ * days` rendered **16px while loading and 190px settled**, and `Actions` rendered **0px** — the
+ * table visibly reflowing the instant the rows arrived, which is the exact defect a skeleton exists
+ * to prevent. Raised by the component review as a mechanism; the numbers are why it was fixed
+ * rather than noted.
+ *
+ * The caller's own `cellClassName` is still honoured, so a hidden-below-`lg` column stays hidden in
+ * the skeleton too and the row keeps its column count.
+ */
+function skeletonClassesOf<T>(column: Column<T>, kind: 'head' | 'cell'): string {
+  return kind === 'head'
+    ? (column.headClassName ?? 'py-2 pr-4 font-medium')
+    : (column.cellClassName ?? 'py-2 pr-4');
+}
+
+/**
  * How many skeleton rows a loading table shows.
  *
  * Three, matching `ListRowSkeleton`'s default — enough to read as a list rather than a single
@@ -209,7 +234,7 @@ export function DataTable<T>({
             <thead>
               <tr className="border-border text-muted-foreground border-b text-left">
                 {columns.map((column) => (
-                  <th key={column.header} scope="col" className={headClassesOf(column)}>
+                  <th key={column.header} scope="col" className={skeletonClassesOf(column, 'head')}>
                     {column.srHeader ? <span className="sr-only">{column.header}</span> : null}
                   </th>
                 ))}
@@ -219,7 +244,7 @@ export function DataTable<T>({
               {Array.from({ length: SKELETON_ROWS }, (_, rowIndex) => (
                 <tr key={rowIndex} className="border-border border-b">
                   {columns.map((column) => (
-                    <td key={column.header} className={cellClassesOf(column)}>
+                    <td key={column.header} className={skeletonClassesOf(column, 'cell')}>
                       <Skeleton className="h-3.5 w-full max-w-40" />
                     </td>
                   ))}

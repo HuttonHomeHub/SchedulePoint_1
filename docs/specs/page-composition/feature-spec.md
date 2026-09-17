@@ -932,11 +932,24 @@ This is the remedy for §1.2.4, and it replaces ADR-0145 M4-T2's fixed caps rath
 `Column<T>` gains a **`width`** discriminator. Three values, chosen because they are the three things
 a table column can be, not because three is a nice number:
 
-| `width`            | Renders                                              | For                                                                                         |
-| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `'fit'`            | `w-px whitespace-nowrap`                             | Content that is short and bounded: an enum label, a code, a date, a badge, an actions cell. |
-| `'bounded'`        | `max-w-*` + truncation with the full value available | Free text that is usually short and occasionally not: a description.                        |
-| `'auto'` (default) | today's behaviour                                    | The subject of the row, and genuinely unbounded text.                                       |
+| `width`     | Renders                                            | For                                                                                         |
+| ----------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `'fit'`     | `w-px whitespace-nowrap`                           | Content that is short and bounded: an enum label, a code, a date, a badge, an actions cell. |
+| `'bounded'` | `max-w-*`, and it still WRAPS — see the note below | Free text that is usually short and occasionally not: a description.                        |
+
+> **Corrected at M3 by the component review: `bounded` WRAPS, it does not truncate.** This table said
+> "truncation with the full value available", and truncation hides content — which is the defect this
+> epic spent M0 establishing does _not_ exist on Recently deleted, where an ellipsis turned out to be
+> a deliberate label suffix that a reader nonetheless read as a cut-off sentence. A table cell that
+> silently drops the end of a value is worse than one that is two lines tall, and "the full value
+> available" needs a disclosure mechanism this epic does not build. So `bounded` caps the measure and
+> lets the text wrap, and the difference from `fit` is precisely that it _may_.
+>
+> It currently has **no consumer**: every column in §4.4's assignment table is `fit` or `auto`. It is
+> kept rather than deleted because a closed vocabulary with a missing member forces the next caller
+> to reach for the nearest wrong one (ADR-0133), and it is covered by the primitive's own unit tests
+> rather than by a screen.
+> | `'auto'` (default) | today's behaviour | The subject of the row, and genuinely unbounded text. |
 
 **Why `w-px whitespace-nowrap` and not a `rem` cap.** Under `table-layout: auto`, a width declaration
 is a _preference_ and the used width is never below the column's min-content. `whitespace-nowrap`

@@ -71,6 +71,40 @@ test.beforeAll(async ({ browser }) => {
   await page.getByRole('dialog').getByLabel('Name').fill('Harbourside Estates');
   await page.getByRole('dialog').getByRole('button', { name: 'Create client' }).click();
   await expect(page.getByRole('link', { name: 'Harbourside Estates' })).toBeVisible();
+
+  /**
+   * **A library with the shapes that make a column hard.**
+   *
+   * Without this the Resources screen has no rows at all and the Calendars screen has the one
+   * `Standard` row the API creates with the tenant — and an EMPTY table cannot wrap, so the
+   * no-wrapping assertion below would have passed by having nothing to judge. That is the shape
+   * this repository keeps recording (ADR-0093): a green result about nothing.
+   *
+   * The rows are chosen for shape rather than for number, and they are the two the epic was opened
+   * on: a six-weekday working week, which is the longest list that column can render, and a
+   * hyphenated code that breaks mid-token when its column is too narrow.
+   */
+  await page.evaluate(async (org) => {
+    const post = async (path: string, body: unknown) => {
+      const r = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`POST ${path}: ${r.status} ${await r.text()}`);
+    };
+    await post('/calendars', {
+      name: '6-Day Construction (10h, Mon-Sat)',
+      workingWeekdays: 0b0111111,
+    });
+    await post('/resources', {
+      name: 'Hydrotest Pump Unit',
+      kind: 'EQUIPMENT',
+      code: 'NL-HYDROPUMP',
+    });
+  }, orgSlug);
+
   await page.close();
 });
 
@@ -217,4 +251,91 @@ test('no table cell wraps while its table has room', async ({ page }) => {
 
     expect(wrapped, `${path} has a cell wrapping inside a table with room`).toEqual([]);
   }
+});
+
+test('the outcome filter reads as a control at rest', async ({ page }) => {
+  /**
+   * M3. The product owner reported the audit filters as "out of place and not designed to be part
+   * of the page", and reading the two controls side by side showed something sharper than framing:
+   * `ToggleChip` unpressed is a bordered pill and `SegmentedControl` unselected was
+   * `text-muted-foreground` with no border and no fill. Same row, same job, 20px apart. With
+   * nothing chosen — the default — all three options were bare text beside four pills.
+   *
+   * **The spec asked for a boundary on each option and this asserts one on the GROUP instead**,
+   * which is a deliberate departure: three borders inside a bordered group is the comb ADR-0065 M3
+   * describes one surface along. The group's edge identifies the control; the selected option's
+   * ring identifies the state.
+   *
+   * **This assertion's first version was vacuous and the accessibility review said so.** It checked
+   * `backgroundColor !== 'transparent'` — which passes at 1.01:1 exactly as happily as at 21:1, and
+   * the fill it was checking measured 1.01–1.26:1 across the seven scopes. A gate that cannot fail
+   * for the defect it was written for is not a gate (ADR-0110 D5).
+   *
+   * The division of labour is now explicit: **the RATIO is `token-contrast.test.ts`'s job**, where
+   * the `--muted`/`--input` pair is asserted at 3:1 across every scope, and **the PRESENCE is this
+   * browser's job**, because a token pair can be perfect while the utility that carries it never
+   * compiles — which is ADR-0100 M4's recorded defect, where a pair missing from `@theme inline`
+   * painted nothing in a real browser while the contrast gate stayed green.
+   */
+  await page.goto(`/orgs/${orgSlug}/audit-log`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+  const group = page.getByRole('radiogroup').first();
+  await expect(group).toBeVisible();
+
+  /**
+   * **At rest, with NOTHING selected — which is the state the whole finding was about**, and which
+   * this assertion's own first version could not reach: it read the selected option's ring, and on
+   * arrival there is no selected option, so it failed against a correct control. The default
+   * outcome filter is unset; that is exactly why the unselected treatment mattered enough to be a
+   * blocking review finding.
+   */
+  const atRest = await group.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return {
+      borderWidth: parseFloat(cs.borderTopWidth),
+      borderColor: cs.borderTopColor,
+      background: cs.backgroundColor,
+      selectedCount: el.querySelectorAll('[aria-checked="true"]').length,
+    };
+  });
+
+  expect(atRest.selectedCount, 'the filter should arrive with nothing chosen').toBe(0);
+  // The group is bounded by something real — a zero-width or fully transparent border is the state
+  // this milestone exists to leave behind.
+  expect(atRest.borderWidth).toBeGreaterThan(0);
+  expect(atRest.borderColor).not.toBe('rgba(0, 0, 0, 0)');
+  expect(atRest.background).not.toBe('rgba(0, 0, 0, 0)');
+
+  // And once something IS chosen, the state is marked by more than its fill.
+  await group.getByRole('radio').first().click();
+  const marker = await group.evaluate((el) => {
+    const selected = el.querySelector('[aria-checked="true"]');
+    // Tailwind paints a ring as a box-shadow, so `none` means the marker is not painted at all.
+    return selected ? getComputedStyle(selected).boxShadow : 'none';
+  });
+  expect(marker).not.toBe('none');
+});
+
+test('Members shows three named regions and when each member joined', async ({ page }) => {
+  /**
+   * M4 — the product owner asked for BOTH the landing's two-column layout and richer sections.
+   *
+   * `Joined` is the richer half and it cost nothing: `OrgMemberSummary.joinedAt` has been on the
+   * wire the whole time and was never rendered. The roles panel is the other half, and it is here
+   * rather than in a unit test because its reason for existing is compositional — without it the
+   * second column holds one short section beside a table four times its height, which is the ragged
+   * column this epic is supposed to be removing rather than spreading.
+   */
+  await page.goto(`/orgs/${orgSlug}/members`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible();
+
+  await expect(page.getByRole('region', { name: 'Roster' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Pending invitations' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'What each role can do' })).toBeVisible();
+
+  const roster = page.getByRole('region', { name: 'Roster' });
+  await expect(roster.getByRole('columnheader', { name: 'Joined' })).toBeVisible();
+  // A real date, not an em dash: the column exists because the fact was already there.
+  await expect(roster.getByRole('cell', { name: /\d{4}/ }).first()).toBeVisible();
 });

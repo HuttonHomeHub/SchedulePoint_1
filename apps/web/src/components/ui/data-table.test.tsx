@@ -208,3 +208,79 @@ describe('DataTable', () => {
     });
   });
 });
+
+/**
+ * **`Column.width`, which shipped with no coverage of its own.**
+ *
+ * Found by the component review at ADR-0146 M3: the discriminator's only exercise was incidental,
+ * through consumer files that happen to use `fit` and `auto`, and `bounded` had none at all. A
+ * three-value vocabulary whose third value is never asserted is a value nobody can rely on.
+ *
+ * These are class assertions rather than layout assertions, and that division is deliberate: jsdom
+ * has no table layout algorithm, so whether `fit` actually shrinks to content is a question only a
+ * browser can answer — `e2e-page-composition` asks it, by checking that no cell wraps while its
+ * table has room. What CAN be settled here is the contract between the prop and the class list:
+ * that each value contributes what it says, that `auto` contributes nothing, and that a caller's
+ * own classes survive alongside it. That last one is the whole point of composing rather than
+ * replacing (`docs/TECH_DEBT.md` #335).
+ */
+describe('DataTable — Column.width', () => {
+  const rows = [{ id: '1', name: 'Northgate' }];
+
+  const classesFor = (width?: Column<Row>['width'], cellClassName?: string) => {
+    const view = render(
+      <DataTable
+        {...common}
+        columns={[
+          {
+            header: 'Name',
+            cell: (row: Row) => row.name,
+            ...(width === undefined ? {} : { width }),
+            ...(cellClassName === undefined ? {} : { cellClassName }),
+          },
+        ]}
+        query={query({ data: rows })}
+      />,
+    );
+    const cell = screen.getAllByRole('cell')[0]!;
+    const head = screen.getAllByRole('columnheader')[0]!;
+    const out = { cell: cell.className, head: head.className };
+    view.unmount();
+    return out;
+  };
+
+  it('gives a `fit` column the shrink-to-content classes, on the cell and its header alike', () => {
+    const { cell, head } = classesFor('fit');
+    expect(cell).toContain('md:w-px');
+    expect(cell).toContain('md:whitespace-nowrap');
+    // The header matters as much as the cell: under `table-layout: auto` the column resolves from
+    // both, and a width on only one of them is a column that disagrees with its own heading.
+    expect(head).toContain('md:w-px');
+  });
+
+  it('gives a `bounded` column a reading measure, and does NOT truncate', () => {
+    const { cell } = classesFor('bounded');
+    expect(cell).toContain('md:max-w-prose');
+    // The spec said "truncation with the full value available" and this deliberately does not:
+    // a cell that silently drops the end of a value is worse than one that is two lines tall.
+    expect(cell).not.toContain('truncate');
+    expect(cell).not.toContain('text-ellipsis');
+  });
+
+  it('is a true no-op for `auto`, and for a column that declares nothing', () => {
+    const declared = classesFor('auto');
+    const silent = classesFor(undefined);
+    expect(declared).toEqual(silent);
+    expect(declared.cell).not.toContain('md:w-px');
+    expect(declared.cell).not.toContain('max-w-prose');
+  });
+
+  it("composes with a caller's own classes rather than replacing them", () => {
+    // The reason the width is a separate prop at all: a caller can declare one WITHOUT restating
+    // the padding default, which is what `docs/TECH_DEBT.md` #335 asks for.
+    const { cell } = classesFor('fit', 'py-2 pr-4 text-right');
+    expect(cell).toContain('text-right');
+    expect(cell).toContain('py-2');
+    expect(cell).toContain('md:w-px');
+  });
+});

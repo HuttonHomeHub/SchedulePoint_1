@@ -18,6 +18,12 @@ region, so something must wrap — and the three that do are prose (`Event`, `Su
 address (`By`), which are the right things to break. `When` was the fourth and is now `fit`: a
 timestamp is bounded, and a date broken over two lines reads as two dates.
 
+**Three columns carry the declaration, not four** — corrected by the component review, which counted
+them. `Event`, `By` and `Subject` declare `auto`; `Outcome` carries no `width` at all and is
+therefore `auto` by omission, which is the very thing the declaration exists to avoid. It is
+declared too, for one line, rather than left as the one silent member of a rule about not being
+silent.
+
 **Those three carry `width: 'auto'` explicitly, which changes no CSS and is not decoration.** FC-2's
 bar is "no cell wraps except in a column declared `auto`", and `auto` is also the default — so the
 rule is vacuous unless the exception is written down. Now it is a decision somebody made.

@@ -47,7 +47,19 @@ export function SearchField({
   const hasValue = value !== '';
 
   return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
+    /**
+     * **A default maximum measure, because a search field is not a text editor.**
+     *
+     * Measured on the deployed Clients screen, this field rendered **970px wide** for a
+     * single-term name search — it was the widest thing on the page, and it was wide because every
+     * caller passed `flex-1` and the row had nothing else in it to take the slack. A control that
+     * grows to fill whatever is beside it tells a reader nothing about what it expects.
+     *
+     * `max-w-*` and never `w-*`: a fixed width would break the wrap at narrow widths, which is
+     * FC-6. The cap is a ceiling, so `flex-1` still does its job below it, and a caller that
+     * genuinely needs more can pass its own `max-w-*` — `cn` lets the later class win.
+     */
+    <div className={cn('flex max-w-md flex-col gap-1.5', className)}>
       <Label htmlFor={inputId}>{label}</Label>
       <div className="relative">
         <Search

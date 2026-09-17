@@ -195,8 +195,10 @@ export function SectionCard({
          * touches a border, i.e. it would have delivered the complaint rather than its fix.
          *
          * **So `flush` means no VERTICAL padding, and horizontal padding that matches the header.**
-         * The table still butts against the heading with no gap above it — which is what this prop
-         * was for — and its first cell now starts where the heading starts. The row separators inset
+         * The rows sit close under the heading — `CardHeader`'s `pb-4` leaves 16px rather than the
+         * 24px an unflushed body would add, which is what this prop was for; **not zero**, and this
+         * docblock claimed zero until the component review did the arithmetic. Its first cell now
+         * starts where the heading starts. The row separators inset
          * by the same 24px, which inside a card reads as tidier than a rule running edge to edge.
          *
          * **A first attempt expressed this as arbitrary variants on the edge cells**

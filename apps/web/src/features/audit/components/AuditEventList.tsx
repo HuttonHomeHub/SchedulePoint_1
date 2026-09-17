@@ -117,6 +117,10 @@ export function AuditEventList({
     { header: 'Subject', width: 'auto', cell: (event) => auditSubject(event) },
     {
       header: 'Outcome',
+      // `auto` by decision, like its three prose siblings above. It held no declaration at all
+      // until the component review counted them — and a rule whose point is that the exception is
+      // written down cannot have one member that is silent about it.
+      width: 'auto',
       cell: (event) =>
         // SUCCESS is the overwhelming majority and saying so on every row would drown the two
         // outcomes worth noticing. Text, not colour alone (WCAG 1.4.1).
