@@ -1,6 +1,6 @@
 # Page composition — M0 measurement
 
-**Status:** In progress
+**Status:** Complete
 **Taken:** 2026-09-17
 **Tree:** `8fcb79d1` plus the M0 instrument changes recorded in §2 (no product code changed)
 **Widths:** 1280 / 1646 / 1920, the product owner's Surface Pro (1646) leading
@@ -207,3 +207,162 @@ no withdrawal clause, so the narrow branch is not negotiable and the wide branch
 value is.
 
 Finding it here cost one probe. Finding it at M8 would have cost the column model.
+
+---
+
+## 7. M0-T1 — the measured drift, at 1646
+
+Explorer width **277px** at its default, recorded because every `x` below is conditional on it.
+
+| Screen                         | Frame width | `max-width` | Content  | What binds it                         |
+| ------------------------------ | ----------- | ----------- | -------- | ------------------------------------- |
+| `org-home`                     | 1369        | 1536px      | **1321** | the available region, not the measure |
+| the nine in-scope screens      | 1152        | 1152px      | **1104** | `max-w-6xl`                           |
+| `staff`                        | 1536        | 1536px      | **1488** | `max-w-screen-2xl`                    |
+| `account` (declared exception) | 672         | 672px       | 624      | its own hand-written `max-w-2xl`      |
+
+**There are three content widths in the product, not two.** The spec and the screenshots both
+described a 1104/1488 split; at 1646 the overview is at neither, because `max-w-screen-2xl` does not
+bind at that width and the frame simply takes the region. So the reference screen the other nine are
+being aligned to is **1321px wide on the product owner's own display** — 217px wider than the screens
+they were comparing it against, and 167px narrower than the value the spec attributes to it.
+
+This does not change D1 (reusing `max-w-screen-2xl`) and it does change what D1 is worth: at 1646 the
+nine screens go 1104 → 1321, which is the region, not 1488. **+217px at 1646, not +204**, and the
++384 figure is a 1920 number.
+
+## 8. M0-T4 — the wrap findings, and the two causes they separate
+
+Run at 1646, pinned case passing. **Eleven columns wrap at least one cell, from two different
+causes, and they need different remedies.**
+
+### Cause 1 — the cap is the problem, and there is room to spare
+
+| Screen         | Column         | Used | Needs | Short by | Cap       | Table slack |
+| -------------- | -------------- | ---- | ----- | -------- | --------- | ----------- |
+| Calendars      | `Working days` | 176  | 191   | **15px** | `md:w-44` | 271px       |
+| Project detail | `Working days` | 176  | 191   | **15px** | `md:w-44` | 359px       |
+| Resources      | `Code`         | 96   | 103   | **7px**  | `md:w-24` | 518px       |
+
+Each is a few pixels short inside a table with hundreds of pixels spare — the defect this epic was
+opened on, quantified. `fit` (§6a) fixes all three and does not need a number chosen.
+
+### Cause 2 — the measure is the problem, and no cap is involved
+
+| Screen      | Table | Needs    | Slack     |
+| ----------- | ----- | -------- | --------- |
+| Audit log   | 1104  | **1136** | **−32px** |
+| My activity | 1104  | **1136** | **−32px** |
+
+`When`, `Event`, `By` and `Subject` all wrap, none carries a cap, and the table genuinely cannot fit
+its content in the measure. **These are the only two screens in the product where that is true**, and
+they are the two the product owner singled out as looking worst. Widening is the whole remedy: D1
+hands them +217px at 1646 and +384 at 1920 against a 32px shortfall.
+
+Every other screen has between 271px and 796px of slack — Clients 755, Client detail 796.
+
+## 9. M0-T2 step 4 — the reflow baseline at 320px
+
+`documentElement.scrollWidth − clientWidth`, today, so a pre-existing failure is not later mistaken
+for a regression:
+
+| Screen                                   | Overflow at 320px |
+| ---------------------------------------- | ----------------- |
+| all nine in-scope screens, and `account` | **0px**           |
+| `staff`                                  | **251px**         |
+
+**The staff console fails WCAG 2.2 §1.4.10 today**, and this epic did not cause it. Recorded rather
+than folded in: M2-T2a requires the staff console to come through the column model
+**pixel-unchanged**, so this work can neither fix nor worsen it at desktop widths — but §6b measured
+that `fit` OVERFLOWS when a table's columns over-commit, which is exactly the 320px case. So the
+narrow branch of the column model is not a nicety for that screen; without it, converting staff's
+nine caps could take 251px to something worse.
+
+**One instrument limitation, stated rather than left to be discovered.** At 320px the drift harness
+reports `frameWidth: null` for every screen, because its frame detector requires a `max-width` above
+400px and a rendered width above 400px. That is a sensible filter at desktop widths and it cannot
+see a frame at 320. The reflow number above does not depend on it — it is read off
+`document.documentElement` — but no _width_ figure from the 320px run should be quoted.
+
+---
+
+## 10. M0-T2 steps 1 and 5 — two expected findings that are not defects
+
+Both were expected to confirm something the spec asserted. Neither did, and both are recorded rather
+than quietly dropped, because a milestone built against a non-defect is worse than one that skips it.
+
+### Step 1 — the clipped restore control is not clipped
+
+Measured on a seeded deletion: `clientWidth 74`, `scrollWidth 74`, `clipped: false`,
+`overflow: visible`, `text-overflow: clip`, `max-width: none`. There is no CSS truncation anywhere
+in the control or its cell.
+
+The `…` is **literal text in the source** — `RecentlyDeletedTable.tsx:257` renders
+`Restore {group.root.blockedBy?.name} first…` — and it is the ordinary convention for a control that
+opens a further step, which here is `RestoreAncestorDialog`. So no CSS remedy is owed.
+
+What _is_ owed is the observation, because the product owner read it as truncation and that reading
+is reasonable: the variable part sits **in the middle** of the sentence, so `Restore ddde first…`
+looks like a sentence cut off rather than a label with a conventional suffix. That is a copy
+problem, not an overflow one, and it belongs to M6.
+
+### Step 5 — the audit filter bar does not overflow; it grows downwards
+
+The spec quoted `AuditFilterBar.tsx`'s "~246px over at every width" forward. Re-derived against the
+current tree:
+
+| Width | Bar width | Children need | Over by | Lines | Bar height | `overflowsBy` |
+| ----- | --------- | ------------- | ------- | ----- | ---------- | ------------- |
+| 1280  | 955       | 1194          | 239     | 3     | 122px      | **0**         |
+| 1646  | 1104      | 1194          | 90      | 3     | 122px      | **0**         |
+| 1920  | 1104      | 1194          | 90      | 3     | 122px      | **0**         |
+
+The figure is wrong in two ways: it is **not constant across widths** (239 at 1280, 90 at the other
+two), and the bar **does not overflow at all** — it wraps onto three lines. The real defect is
+**122px of vertical chrome** standing between the heading and the first row, which is a different
+problem needing a different remedy from the one the number implies.
+
+**And the first attempt at this measurement was wrong too.** Its locator took the first `main div`
+preceding the table that contained a chip or a date input, and matched the page's content wrapper —
+reporting a filter bar **2,100px tall**. Any container that holds the bar satisfies that predicate,
+and the outermost one matches first. The fix is to anchor on a chip and climb while the ancestor
+still excludes the table, which finds the bar by construction rather than by description. That is
+the fourth instrument fault in this milestone.
+
+---
+
+## 11. The full drift table, all three widths
+
+Frame widths; content is frame − 48px. Explorer 277px throughout.
+
+| Screen                | 1280     | 1646     | 1920     | Bound by                                      |
+| --------------------- | -------- | -------- | -------- | --------------------------------------------- |
+| `org-home`            | 1003     | 1369     | **1536** | region / region / `max-w-screen-2xl`          |
+| the nine in-scope     | 1003     | 1152     | 1152     | region / `max-w-6xl` / `max-w-6xl`            |
+| `my-activity`         | **1152** | 1152     | 1152     | `max-w-6xl` — no Explorer, so no region limit |
+| `staff`               | 1280     | **1536** | **1536** | region / `max-w-screen-2xl`                   |
+| `account` (exception) | 672      | 672      | 672      | its own `max-w-2xl`                           |
+
+**A fourth inconsistency nobody had reported:** at 1280, `my-activity` is **149px wider** than the
+org-scoped screens — the widest in-scope screen at the narrowest measured width — because it renders
+outside the organisation shell and pays no Explorer.
+
+That is also what made FC-1 unsatisfiable as drafted, and the restatement is in
+`falsification.md`: the condition that can hold is **one declared measure**, not one rendered width,
+because two in-scope screens structurally have 277px more region than the other nine.
+
+---
+
+## 12. M0 verdict
+
+All four tasks complete. **Five instrument faults were found and fixed before a single number about
+the product was trusted** — the fixture could not exhibit the subject on three screens (library,
+bin), the wrap probe counted the wrong thing and then mis-accounted padding by one column's worth,
+the drift harness did not measure the reference screen, and the filter-bar locator measured a page
+wrapper. Every one of them would have produced a plausible, quotable, wrong number.
+
+Two of the spec's own claims did not survive measurement (§10), one of its conditions was
+unsatisfiable as written (§11), and one of its figures (`+204px at 1646`) was 13px out for a reason
+that matters — the overview is region-limited at that width, not measure-limited (§7).
+
+**M1 may open.**

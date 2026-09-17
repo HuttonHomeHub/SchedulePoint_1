@@ -96,7 +96,18 @@ const probe = () => {
       letterSpacing: cs.letterSpacing,
     });
     const clone = el.cloneNode(true);
-    clone.style.padding = '0';
+    /**
+     * **The padding is KEPT, and this is the fix for a one-pixel lie.**
+     *
+     * The first version zeroed the clone's padding while sizing the host to the cell's full
+     * border-box width, so the content was offered 176px in the probe where the real cell offers
+     * 160 (`pr-4` is 16px). `Working days` needs 175px: it wraps in the product and fitted in the
+     * probe, by one pixel, and the run reported zero findings on the very column the epic was
+     * opened on. Keeping the padding and making the clone `border-box` measures the space the
+     * content actually gets.
+     */
+    clone.style.boxSizing = 'border-box';
+    clone.style.width = '100%';
     host.appendChild(clone);
     document.body.appendChild(host);
     const wrapped = host.getBoundingClientRect().height;
@@ -127,7 +138,11 @@ const probe = () => {
       fontFamily: cs.fontFamily,
       fontWeight: cs.fontWeight,
       letterSpacing: cs.letterSpacing,
-      padding: '0',
+      // Padding is KEPT so `natural` is a border-box number directly comparable with `used`, which
+      // is a `getBoundingClientRect().width`. Zeroing it made every `slack` overstate by the
+      // cell's horizontal padding — 16px on every column here, which is the difference between
+      // "this column has 1px to spare" and "this column is 15px short and wraps".
+      boxSizing: 'border-box',
     });
     document.body.appendChild(probeEl);
     const w = Math.ceil(probeEl.getBoundingClientRect().width);

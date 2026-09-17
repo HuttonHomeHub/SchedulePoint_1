@@ -113,6 +113,29 @@ export async function seedLandingStates(page, slug) {
       calendars.push(await post('/calendars', { name, workingWeekdays }));
     }
 
+    /**
+     * **Something in the bin, because Recently deleted was measured with nothing in it.**
+     *
+     * Found at page-composition M0 alongside the library gap (§2.1): the probe reported `rowCount:
+     * 0` for that screen, so its row geometry — including the restore control the product owner's
+     * screenshot shows clipped mid-sentence — could not be measured at all. A screen whose only
+     * state the harness can reach is its empty one is a screen the harness cannot judge.
+     *
+     * A whole CLIENT is deleted rather than a bare plan, deliberately: the cascade is what produces
+     * the child-count line under the name (`and 1 project, 1 plan`) and the *blocked* restore on the
+     * descendants, which is the row that carries the long explanatory control. Deleting a plan alone
+     * gives a one-line row and misses both.
+     */
+    const binned = await post('/clients', { name: 'Kingsway Interchange (decommissioned)' });
+    const binnedProject = await post(`/clients/${binned.id}/projects`, {
+      name: 'Phase 4 Enabling',
+    });
+    await post(`/projects/${binnedProject.id}/plans`, {
+      name: 'Phase 4 Enabling — Substructure & Drainage',
+      plannedStart: '2026-03-02',
+    });
+    await call('DELETE', `/clients/${binned.id}`);
+
     const resources = [];
     for (const [name, kind, code] of [
       ['Coded Welder', 'LABOUR', 'LAB-WELD'],
