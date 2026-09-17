@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1276 web
-> source files with 43 Playwright suites beside the base journey, and
-> 145 ADRs.
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1277 web
+> source files with 44 Playwright suites beside the base journey, and
+> 146 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate

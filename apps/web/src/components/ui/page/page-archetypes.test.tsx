@@ -14,7 +14,12 @@ import {
 } from './index';
 
 /**
- * The six page archetypes (ADR-0097 Landing A).
+ * The page archetypes (ADR-0097 Landing A).
+ *
+ * **Deliberately not a count.** This said "six" over a barrel exporting nine — stale before the
+ * change that noticed it, and the third such drift in this directory. A number here is a claim
+ * about a file one import away and nothing checks it, so `index.ts` holds the one count that is
+ * maintained and this docblock names the set instead.
  *
  * Each assertion here corresponds to a decision the archetype makes ON BEHALF of every screen —
  * which is what an archetype is for, and what makes getting one wrong expensive rather than

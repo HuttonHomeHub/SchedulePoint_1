@@ -16,9 +16,16 @@
 export interface ChildCount {
   /** The number, or `undefined` when the API omitted it. Zero is a value, not an absence. */
   value: number | undefined;
-  /** The singular phrase, e.g. `project` or `plan across its projects`. */
+  /**
+   * The singular phrase, e.g. `project` or `activity across its plans`.
+   *
+   * A whole phrase rather than a noun this component pluralises, for three reasons: English plurals
+   * are irregular (`activity` → `activities` is not a suffix append), the two-level distinction is
+   * semantic and cannot be derived from a noun, and a future locale swap replaces the phrase anyway
+   * — so a pluraliser here would be work that does not survive i18n (CLAUDE.md §17).
+   */
   one: string;
-  /** The plural phrase, e.g. `projects` or `plans across its projects`. */
+  /** The plural phrase, e.g. `projects` or `activities across its plans`. */
   many: string;
 }
 
@@ -31,6 +38,10 @@ export function ChildCounts({ counts }: ChildCountsProps): React.ReactElement | 
   if (present.length === 0) return null;
 
   return (
+    /* `text-muted-foreground` is deliberate self-containment, not dead weight: `PageHeader`'s
+       `aside` wrapper sets the same tone and colour inherits, so this is redundant TODAY — and a
+       shared primitive that depends on an ambient parent class for its correctness loses it
+       silently the day that wrapper is refactored. */
     <span className="text-muted-foreground">
       {present
         .map((count) => `${String(count.value)} ${count.value === 1 ? count.one : count.many}`)

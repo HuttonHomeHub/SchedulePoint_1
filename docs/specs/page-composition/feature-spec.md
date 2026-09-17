@@ -1,6 +1,6 @@
 # Feature Spec: Page composition — measure, frame, density and information
 
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0146)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-17
 - **Tracking issue / epic:** _(to be assigned)_

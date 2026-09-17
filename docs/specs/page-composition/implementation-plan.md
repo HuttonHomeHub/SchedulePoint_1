@@ -1,7 +1,7 @@
 # Implementation Plan: Page composition — measure, frame, density and information
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted — shipped (ADR-0146)**
+- **Status:** Accepted
 - **Owner:** web
 
 ---

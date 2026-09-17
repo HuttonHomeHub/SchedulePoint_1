@@ -40,6 +40,14 @@ describe('ChildCounts', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('renders nothing for an empty list', () => {
+    // Distinct from the case above, which reaches the same branch through a populated list that
+    // filters to nothing. A caller with no counts at all is the likelier shape once a third screen
+    // adopts this.
+    const { container } = render(<ChildCounts counts={[]} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('uses the singular phrase for exactly one', () => {
     render(<ChildCounts counts={[{ value: 1, one: 'project', many: 'projects' }]} />);
     expect(screen.getByText('1 project')).toBeInTheDocument();

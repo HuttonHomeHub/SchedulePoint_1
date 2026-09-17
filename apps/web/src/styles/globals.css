@@ -1566,3 +1566,61 @@
     }
   }
 }
+
+/**
+ * **Windows High Contrast gets a real focus ring, and this block is deliberately UNLAYERED.**
+ *
+ * `docs/TECH_DEBT.md` #324. The house convention is `focus-visible:outline-none` plus a
+ * `focus-visible:ring-*` — **61 occurrences across 49 files** — and `forced-colors: active`
+ * suppresses `box-shadow` outright while leaving a native `outline` alone. Measured in Chromium
+ * against the production build, focusing by keyboard: `box-shadow` computes to `none`,
+ * `outline-style` is `none`, and a screenshot of the control before and after `Tab` is
+ * **byte-identical**. The control is focused, the browser knows it, and nothing on screen says so —
+ * WCAG 2.2 §2.4.7 Focus Visible, level A, on every focusable control in the product.
+ *
+ * **Why it sits outside `@layer base`, which is where every other global rule here lives.** Tailwind
+ * v4 emits its utilities inside `@layer utilities`, so `.focus-visible\:outline-none:focus-visible`
+ * is a layered (0,2,0) and this rule is an unlayered (0,1,0). **An unlayered declaration beats every
+ * layered one regardless of specificity**, which is why a single bare `:focus-visible` can override
+ * 61 utility occurrences without touching any of them. Moved into `@layer base` **as written**, it
+ * loses to `outline-none` on every control, silently, in a mode nothing else here exercises — so
+ * `focus-ring.structural.test.ts` asserts the block compiles unlayered rather than trusting that a
+ * later reader will not tidy it into the block above.
+ *
+ * **It is not the only mechanism, and this comment claimed it was until the M7 component review.**
+ * An `!important` declaration inside `@layer base` also wins: `!important` is resolved before layer
+ * order is consulted, so it beats a non-important declaration in a later layer. The proof is eight
+ * lines above — the `prefers-reduced-motion` block is exactly that, `!important` inside `@layer base`
+ * deliberately overriding whatever utility a component applied. Asserting "only unlayered works" one
+ * paragraph from a working counter-example is ADR-0076 Class 3, and it is corrected here rather than
+ * quietly dropped.
+ *
+ * **Unlayered is still the choice, for a reason the overclaim was standing in for: it leaves the
+ * door open.** The `#324` record names a trigger to revisit — a control whose ring must differ in
+ * shape or position rather than merely in colour. Overriding a non-important unlayered rule needs
+ * only `!important` in any layer, or more specificity unlayered. Overriding an `!important` in the
+ * FIRST-declared layer needs an earlier layer, which does not exist, or an edit to this rule itself.
+ * A rule that has to be edited to be extended is the worse of two rules that behave identically
+ * today. (A new named layer declared last is worse than both: its precedence depends on staying the
+ * last layer mentioned anywhere in the bundle, which is a weaker guarantee than "unlayered beats
+ * every layer, unconditionally".)
+ *
+ * `Highlight` is the forced-colors system colour for a selection or focus indicator, so the ring
+ * matches whatever high-contrast theme the reader chose rather than a colour we picked for them —
+ * and a colour we picked would be overridden by the mode anyway.
+ *
+ * The 2px offset keeps the ring clear of the control's own forced border, which the mode also
+ * paints. It is the same geometry as the `ring-offset-2` the ordinary path uses, so a keyboard user
+ * who switches the mode on does not meet a different shape.
+ *
+ * **What this does not do.** It does not remove the `box-shadow` convention or touch any of the 61
+ * call sites; the ordinary path is unchanged, and `forced-colors: none` renders byte-for-byte what
+ * it did before. And it is Chromium's **emulation** of Windows High Contrast that is gated here, not
+ * the real mode on real Windows — `docs/TECH_DEBT.md` #154's AT-observation debt is untouched.
+ */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
