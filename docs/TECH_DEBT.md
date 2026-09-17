@@ -10872,3 +10872,40 @@ looked broken, is fixed.
 
 **Trigger:** the next change to `DataTable`'s loading state, or a report that a table "jumps" when
 it loads.
+
+### 342. A client's plan count was built, measured, and withdrawn — two remedies, neither applied
+
+**Status:** open
+**Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9)
+
+`ClientDetail` carries `projectCount` and deliberately **no** plan count, because a count of plans
+across a client's projects has no stable query plan. Measured on a diluted local estate (500
+projects under the subject, 2,000 in the table, 24,020 plans): `Seq Scan on projects` feeding an
+`Index Only Scan (uq_plans_project_name)` — **4.12 ms**, and **O(projects in the installation)**
+rather than O(this client). FC-9(b) refuses that shape whatever the timing says, because the shape
+is what predicts the cost as the estate grows.
+
+`database-architect` predicted the crossover at **75–100 projects under one client** and measured it
+from the other side (a `Seq Scan on plans` at a 76,817-plan estate). Here the plan side stays
+index-only and the project side gives way instead — milder, same defect.
+
+The other three counts (`client.projectCount`, `project.planCount`, `project.activityCount`) are
+`Index Only Scan` at every shape measured, 0.10–0.29 ms, and are shipped.
+
+**Two remedies exist and neither was applied.**
+
+1. **A query-shape change** — resolve the client's project ids first and pass them as an array,
+   forcing the bitmap path. `database-architect` measured **0.232 ms against 2.85 ms**. Its own cost
+   is an unbounded `IN` list, bounded only by how many projects one client holds.
+2. **A candidate `projects (client_id) INCLUDE (id) WHERE deleted_at IS NULL` index**, making the
+   project side index-only. Unlike ADR-0144's rejected index this would **not** spend the HOT-update
+   exemption, because `projects` is not rewritten by recalculation — `updated_at` moves on a rename.
+   It is still an index, and every index here goes through `database-architect` (CLAUDE.md §19.3),
+   which is a round M5-T2 did not have.
+
+**Trigger:** a request for a plan count on the client screen, or any other read that needs to count
+a two-level descendant under a client. Re-run `apps/web/scripts/measure-detail-counts.mjs` first —
+it is the harness that found this, it dilutes, and it vacuums.
+
+**What is pinned so this cannot come back silently:** `clients.e2e-spec.ts` asserts the detail body
+has **no** `planCount`, over a fixture holding exactly the plans that would make one look right.

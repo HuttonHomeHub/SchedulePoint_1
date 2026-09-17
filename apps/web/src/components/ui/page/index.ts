@@ -11,7 +11,7 @@
  * `PageGrid` and `StatGrid` directly below it and did not update the line above them. A count in
  * the file a reader opens to learn what the archetypes ARE is the worst place for one to go stale,
  * and it is the drift class this repository builds gates for — so it is corrected here rather than
- * filed. Adding a ninth means editing this line.
+ * filed. It is **nine** since 2026-09-17 (`ChildCounts`); adding a tenth means editing this line.
  */
 export { PageContainer, type PageContainerProps } from './page-container';
 export { PageHeader, type PageHeaderProps } from './page-header';
@@ -28,3 +28,4 @@ export {
 } from './list-row';
 export { PageGrid, PageGridItem, type PageGridProps, type PageGridItemProps } from './page-grid';
 export { StatGrid, type StatGridProps, type StatItem, type StatTone } from './stat-grid';
+export { ChildCounts, type ChildCount, type ChildCountsProps } from './child-counts';

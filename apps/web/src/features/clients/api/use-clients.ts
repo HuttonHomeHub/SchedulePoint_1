@@ -1,4 +1,4 @@
-import type { ClientSummary } from '@repo/types';
+import type { ClientDetail, ClientSummary } from '@repo/types';
 import {
   queryOptions,
   useMutation,
@@ -31,7 +31,7 @@ export function useClients(orgSlug: string, search?: string): UseQueryResult<Cli
 export function clientQueryOptions(orgSlug: string, clientId: string) {
   return queryOptions({
     queryKey: clientKeys.detail(orgSlug, clientId),
-    queryFn: () => apiFetch<ClientSummary>(`/organizations/${orgSlug}/clients/${clientId}`),
+    queryFn: () => apiFetch<ClientDetail>(`/organizations/${orgSlug}/clients/${clientId}`),
     retry: false,
   });
 }
@@ -43,7 +43,7 @@ export function clientQueryOptions(orgSlug: string, clientId: string) {
  * `useClient(orgSlug, project.data?.clientId ?? '')` behind a project that is itself behind a plan,
  * so the second link in that chain requested `…/clients/` and took a 404 on every load.
  */
-export function useClient(orgSlug: string, clientId: string): UseQueryResult<ClientSummary> {
+export function useClient(orgSlug: string, clientId: string): UseQueryResult<ClientDetail> {
   return useQuery({ ...clientQueryOptions(orgSlug, clientId), enabled: Boolean(clientId) });
 }
 

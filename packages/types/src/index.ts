@@ -205,6 +205,53 @@ export interface ProjectSummary {
   updatedAt: string;
 }
 
+/**
+ * A client's detail read, which carries child counts the LIST deliberately does not.
+ *
+ * **The separation is structural, not stylistic.** `ClientResponseDto implements ClientSummary` and
+ * is returned by both `list()` and `get()`, so a count added to `ClientSummary` would appear on the
+ * list route without anyone choosing it — and Prisma's `_count` there emits a grouped subquery with
+ * no client restriction, measured at **14.5 ms against 0.034 ms** on 50,004 projects and, worse,
+ * abandoning the keyset index entirely, so the page stops being a page. This interface is what the
+ * list cannot return.
+ *
+ * Every count is **optional and omitted rather than zeroed** when it could not be taken: a `0` is a
+ * claim that there are none (ADR-0126), and a reader cannot tell a fabricated zero from a real one.
+ */
+export interface ClientDetail extends ClientSummary {
+  /** Active projects directly under this client. */
+  projectCount?: number;
+}
+
+/*
+ * **There is no `planCount` here, and its absence is a measurement rather than an oversight.**
+ *
+ * It was built, and FC-9 withdrew it. A two-level count under a client plans as a `Seq Scan on
+ * projects` once the client holds a substantial share of the table — measured at 500 projects of
+ * 2,000, 4.12 ms and **O(projects in the installation)** rather than O(this client), which is the
+ * property FC-9(b) exists to refuse. The other three counts are index-only at every shape measured,
+ * at 0.10–0.29 ms.
+ *
+ * Two remedies exist (a query-shape change with an unbounded `IN` list, and a candidate
+ * `projects (client_id) INCLUDE (id)` index) and both are filed with their trigger rather than
+ * guessed at. See `docs/specs/page-composition/m5/README.md`.
+ */
+
+/** A project's detail read. See {@link ClientDetail} for why this is not `ProjectSummary`. */
+export interface ProjectDetail extends ProjectSummary {
+  /** Active plans directly under this project. */
+  planCount?: number;
+  /**
+   * Active activities **across this project's plans** — a two-level count, and it counts every
+   * activity row: WBS summaries, levels of effort and milestones as well as tasks.
+   *
+   * Said aloud wherever it is rendered. `docs/TEST_PLAYBOOK.md` records a shipped incident (health
+   * metric 10) where a denominator silently included summaries and a reader accepted a wrong
+   * verdict from it.
+   */
+  activityCount?: number;
+}
+
 /** A plan, scoped to a project — the future host of activities and the TSLD. */
 export interface PlanSummary {
   id: string;

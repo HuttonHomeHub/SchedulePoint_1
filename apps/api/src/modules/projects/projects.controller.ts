@@ -26,6 +26,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
+import { ProjectDetailResponseDto } from './dto/project-detail-response.dto';
 import { ProjectResponseDto } from './dto/project-response.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectsService } from './projects.service';
@@ -47,14 +48,22 @@ export class ProjectsController {
   constructor(private readonly service: ProjectsService) {}
 
   @Get(':projectId')
-  @ApiOperation({ summary: 'Get a project by id.' })
-  @ApiOkResponse({ type: ProjectResponseDto })
+  @ApiOperation({
+    summary: 'Get a project by id, with its child counts.',
+    description:
+      'Carries `planCount` and `activityCount`, which the LIST route deliberately does not — see ' +
+      '`ProjectDetailResponseDto`. Either is ABSENT rather than zero when it could not be taken. ' +
+      '`activityCount` counts EVERY activity row, including WBS summaries, levels of effort and ' +
+      'milestones.',
+  })
+  @ApiOkResponse({ type: ProjectDetailResponseDto })
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('projectId', ParseUuidPipe) projectId: string,
-  ): Promise<ProjectResponseDto> {
-    return ProjectResponseDto.from(await this.service.get(principal, orgSlug, projectId));
+  ): Promise<ProjectDetailResponseDto> {
+    const { project, ...counts } = await this.service.getDetail(principal, orgSlug, projectId);
+    return ProjectDetailResponseDto.fromDetail(project, counts);
   }
 
   @Patch(':projectId')

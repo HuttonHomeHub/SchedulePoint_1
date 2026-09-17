@@ -5,6 +5,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
+import { ClientRepository } from '../src/modules/clients/client.repository';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
@@ -214,6 +215,103 @@ describe.skipIf(!hasDatabase)('Clients API (e2e)', () => {
     expect(restoredProject.deletedAt).toBeNull();
     expect(restoredPlan.deletedAt).toBeNull();
     expect(restoredPlan.deleteBatchId).toBeNull();
+  });
+
+  it('carries child counts on the DETAIL read and NOT on the list', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const clientId = await createClient(actor, 'Counted');
+
+    /**
+     * **Two projects, one of them soft-deleted, and three plans of which one is deleted.** A count
+     * over live rows only is indistinguishable from a count over all rows unless the fixture holds
+     * a deleted one — and `deletedAt: null` dropping out of the predicate does not error, it
+     * silently falls back to a wider index and counts everything
+     * (`20260818220000_overview_recently_changed_indexes`, note 1). So the numbers below are 1
+     * and 2, not 2 and 3, and the difference is the assertion.
+     */
+    const live = await prisma.project.create({
+      data: { organizationId: orgId, clientId, name: 'Live', createdBy: actor.userId },
+    });
+    const gone = await prisma.project.create({
+      data: {
+        organizationId: orgId,
+        clientId,
+        name: 'Gone',
+        createdBy: actor.userId,
+        deletedAt: new Date(),
+      },
+    });
+    const plan = (name: string, projectId: string, deleted = false) =>
+      prisma.plan.create({
+        data: {
+          organizationId: orgId,
+          projectId,
+          name,
+          plannedStart: new Date('2026-01-01T00:00:00.000Z'),
+          createdBy: actor.userId,
+          ...(deleted ? { deletedAt: new Date() } : {}),
+        },
+      });
+    await plan('P1', live.id);
+    await plan('P2', live.id);
+    await plan('P3', live.id, true);
+    // A plan under the DELETED project. It is live in its own right, so only the nested
+    // `project: { deletedAt: null }` clause excludes it — which is the clause a later reader is
+    // most likely to call redundant and remove.
+    await plan('Orphan', gone.id);
+
+    const detail = await actor.agent
+      .get(`/api/v1/organizations/acme/clients/${clientId}`)
+      .expect(200);
+    expect(detail.body.data.projectCount).toBe(1);
+    /**
+     * **No plan count, and asserted rather than merely omitted.** One was built and FC-9 withdrew
+     * it: a two-level count under a client plans as a `Seq Scan on projects` once the client holds
+     * a substantial share of that table (500 of 2,000 measured at 4.12 ms, O(installation) rather
+     * than O(client)). Without this line, re-adding it would be silent — the fixture holds exactly
+     * the plans that would make it look right.
+     */
+    expect(detail.body.data).not.toHaveProperty('planCount');
+
+    /**
+     * **The list does not carry them, and that is the regression this asserts against.** A count on
+     * the list is measured at 14.509 ms against 0.034 ms on 50,004 projects, and abandons the
+     * keyset index entirely — O(all projects in the installation) rather than O(page). The two
+     * routes share `ClientsController`, and until this epic they shared a DTO, so the field would
+     * have arrived here without anyone choosing it.
+     */
+    const list = await actor.agent.get('/api/v1/organizations/acme/clients').expect(200);
+    expect(list.body.data).toHaveLength(1);
+    expect(list.body.data[0]).not.toHaveProperty('projectCount');
+  });
+
+  it('omits a count rather than reporting zero when it cannot be taken', async () => {
+    /**
+     * **Absent, never `0`.** ADR-0126's rule: a zero is a claim that there are none, and nothing
+     * downstream can tell a fabricated zero from a real one. Forced by making the count throw,
+     * because the realistic cause — a statement timeout on an unbounded activity count — cannot be
+     * provoked at this fixture's size.
+     *
+     * The subject still resolves and the read still returns 200: a count that fails must not take
+     * the detail read down with it.
+     */
+    const { actor } = await adminWithOrg();
+    const clientId = await createClient(actor, 'Unstable');
+
+    const repository = app.get(ClientRepository);
+    const original = repository.countActiveProjects.bind(repository);
+    repository.countActiveProjects = () => Promise.reject(new Error('statement timeout'));
+    try {
+      const detail = await actor.agent
+        .get(`/api/v1/organizations/acme/clients/${clientId}`)
+        .expect(200);
+      expect(detail.body.data).not.toHaveProperty('projectCount');
+      // The read itself still succeeds and still carries the client: a count that fails must not
+      // take the detail read down with it.
+      expect(detail.body.data.name).toBe('Unstable');
+    } finally {
+      repository.countActiveProjects = original;
+    }
   });
 
   it('404s a foreign/unknown client id and hides clients from non-members', async () => {

@@ -1,4 +1,4 @@
-import type { ClientSummary, PlanSummary, ProjectSummary } from '@repo/types';
+import type { ClientSummary, PlanSummary, ProjectDetail, ProjectSummary } from '@repo/types';
 import { queryOptions } from '@tanstack/react-query';
 
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
@@ -46,11 +46,17 @@ export function projectsQueryOptions(orgSlug: string, clientId: string) {
   });
 }
 
-/** A single project — also used to resolve a deep-linked node's ancestor client. */
+/**
+ * A single project — also used to resolve a deep-linked node's ancestor client.
+ *
+ * Typed `ProjectDetail`, which the LIST read is deliberately not: the detail route carries child
+ * counts and the list route does not, for a measured reason (`ProjectDetailResponseDto`). The
+ * ancestor-resolving callers never read them, and an optional field costs them nothing.
+ */
 export function projectQueryOptions(orgSlug: string, projectId: string) {
   return queryOptions({
     queryKey: projectKeys.detail(orgSlug, projectId),
-    queryFn: () => apiFetch<ProjectSummary>(`/organizations/${orgSlug}/projects/${projectId}`),
+    queryFn: () => apiFetch<ProjectDetail>(`/organizations/${orgSlug}/projects/${projectId}`),
     retry: false,
   });
 }

@@ -207,6 +207,29 @@ the index question.
 enriched from fields already on the wire. Softening the bar is not an option; re-arguing it in
 writing is.
 
+> **JUDGED 2026-09-17 — three limbs PASS, one count WITHDRAWN.** `docs/specs/page-composition/m5/`
+> holds the run. (a) worst route p95 **29.0 ms** against 50; (a) worst added **22.39 ms** against 25;
+> (c) worst estimate **1,851** against 100,000; the clients LIST keeps
+> `clients_organization_id_created_at_id_idx`. (b) fails on **one count of four**:
+> `client.planCount` at the `fat client` shape plans as a `Seq Scan on projects` — 4.12 ms, and
+> O(projects in the installation) rather than O(this client), which is the property this limb exists
+> to refuse.
+>
+> **The clause is applied to the count that failed, which is an amendment made in writing rather
+> than a softening.** As committed it reads "the counts are withdrawn", all four; three are
+> index-only at every shape at 0.10–0.29 ms, with nothing to withdraw them for. So `client.planCount`
+> goes and the other three stay. Two remedies exist — a query-shape change whose own cost is an
+> unbounded `IN` list, and a candidate `projects (client_id) INCLUDE (id)` index which, unlike
+> ADR-0144's rejected one, would **not** spend the HOT exemption — and both are filed with a trigger
+> rather than guessed at.
+>
+> **Run 1 is not the verdict, and its third finding was the harness.** It reported the clients LIST
+> plan as a `Seq Scan on clients` over a table holding **six rows**, where a sequential scan is
+> obviously right — the dilution guard covered `projects`, `plans` and `activities` and not
+> `clients`, so the regression limb was grading the instrument. Fixed, along with a missing `VACUUM`
+> that had every index-only scan paying a heap fetch; both are measurement corrections, and the
+> un-vacuumed figures are printed beside the judged ones so neither end of the range is hidden.
+
 **What this condition deliberately does not cover.** The client to plans count has no stable plan:
 swept against a 76,817-plan table it switches from a nested loop on `uq_plans_project_name` to a
 hash join with a `Seq Scan on plans` somewhere between **75 and 100 projects under one client**. It

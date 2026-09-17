@@ -1,7 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
-import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
+import { ChildCounts, PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { useClient } from '@/features/clients';
 import { CreateProjectButton, ProjectsTable } from '@/features/projects';
@@ -69,6 +69,16 @@ export function ClientDetailScreen(): React.ReactElement {
         title={client.data.name}
         description={client.data.description ?? undefined}
         actions={canWrite ? <CreateProjectButton orgSlug={orgSlug} clientId={clientId} /> : null}
+        /* **One count, not two.** A plan count across this client's projects was built and
+           WITHDRAWN by FC-9: it plans as a `Seq Scan on projects` once the client holds a
+           substantial share of that table, so its cost is O(the installation) rather than O(this
+           client). The count is ABSENT rather than zero when the API could not take it; a real zero
+           still renders, because "No projects" is a fact the reader came for. */
+        aside={
+          <ChildCounts
+            counts={[{ value: client.data.projectCount, one: 'project', many: 'projects' }]}
+          />
+        }
       />
       {/* `flush`: the body is a table, so the card contributes a frame and a name and no VERTICAL
           padding — the rows start directly under the heading. It still supplies the horizontal
