@@ -124,9 +124,14 @@ export function ProjectCalendarsSection({
     },
     {
       header: 'Working days',
-      // A bounded column: a width preference stops `table-layout: auto` handing it slack it
-      // does not want, which pushed a row's last fact away from its first (M4-T2).
-      cellClassName: 'py-2 pr-4 md:w-44',
+      // **`width: 'fit'` — the correction to M4-T2, not its removal.** That milestone capped this
+      // column at a fixed width because `table-layout: auto` was handing it slack it did not want,
+      // pushing a row's last fact away from its first. The measurement was real. What nothing asked
+      // was whether the content still fitted on ONE LINE inside the cap, and it does not — measured,
+      // this cell needs 191px in a 176px column and wraps, while the table around it has 271px
+      // spare. `fit` keeps the intent (take no slack) and drops the number (which was chosen against
+      // a measure this epic has since widened).
+      width: 'fit',
       cell: (calendar) => formatWorkingWeekdays(calendar.workingWeekdays),
     },
     {

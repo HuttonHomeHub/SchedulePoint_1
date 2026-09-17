@@ -61,6 +61,12 @@ export function AuditEventList({
   const columns: Column<AuditEvent>[] = [
     {
       header: 'When',
+      // A timestamp is bounded, so it is never the thing that should break. Measured at 1280, where
+      // this table genuinely needs more width than the region gives it: `When` was 49px short and
+      // wrapped, which is the worst column to lose — a date broken over two lines reads as two
+      // dates. `fit` takes it out of the contest and the prose columns below absorb the shortfall,
+      // which is what they are for.
+      width: 'fit',
       cell: (event) => (
         <time dateTime={event.occurredAt} className="text-muted-foreground tabular-nums">
           {formatWhen(event.occurredAt)}
@@ -69,6 +75,15 @@ export function AuditEventList({
     },
     {
       header: 'Event',
+      /**
+       * **Declared `auto`, which is the default — so this line changes no CSS and is not
+       * decoration.** FC-2 says no cell wraps except in a column declared `auto`, and a rule whose
+       * exception is also its default is vacuous unless somebody writes the exception down. At 1280
+       * this table needs ~1136px in a ~955px region, so something must wrap; an event's title and
+       * its detail sentence are genuinely unbounded prose and are the right thing to break. Stated
+       * here so the next reader knows it was chosen rather than defaulted.
+       */
+      width: 'auto',
       cell: (event) => {
         const { title, detail } = auditEventCopy(event);
         return (
@@ -85,13 +100,21 @@ export function AuditEventList({
       ? [
           {
             header: 'By',
+            // `auto` by decision, not by omission: an email address has no bound, so a `fit` column
+            // here would push the table wider than its region at any width. See `Event` above.
+            //
+            // `as const` because this literal sits inside a spread-in array that is not
+            // contextually typed as `Column<AuditEvent>[]`, so `'auto'` widens to `string`.
+            width: 'auto' as const,
             cell: (event: AuditEvent) => (
               <span className="text-muted-foreground">{auditActorName(event)}</span>
             ),
           },
         ]
       : []),
-    { header: 'Subject', cell: (event) => auditSubject(event) },
+    // `auto` by decision: a subject is a plan or activity name and those are unbounded in practice
+    // (the fixture's longest is 62 characters). See `Event` above.
+    { header: 'Subject', width: 'auto', cell: (event) => auditSubject(event) },
     {
       header: 'Outcome',
       cell: (event) =>

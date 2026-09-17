@@ -160,3 +160,61 @@ test('every list screen is as wide as the organisation landing', async ({ page }
     expect(await contentWidth(page), `${path} is not as wide as the landing`).toBe(landing);
   }
 });
+
+test('no table cell wraps while its table has room', async ({ page }) => {
+  /**
+   * FC-2, in the one place it can be judged. Measured at M0, eleven columns across five screens
+   * wrapped — three of them a few pixels short inside a table with 271–518px of slack, which is the
+   * defect this epic was opened on. The cause was the previous epic's own remedy: it capped those
+   * columns at fixed widths, correctly measuring that they were taking slack they did not want, and
+   * never asked whether the content still fitted on one line inside the cap.
+   *
+   * **The question is asked directly rather than by counting line boxes.** A cell holding two
+   * stacked elements — a name above a description, which this epic now renders deliberately — has
+   * two line boxes and wraps nothing. So each cell is cloned at its own width, measured, forced to
+   * `nowrap` through its whole subtree and measured again: if it gets SHORTER when nothing may
+   * wrap, it was wrapping. The M0 probe's first version counted rects and reported the single word
+   * `Edit` as two lines.
+   */
+  for (const path of ['calendars', 'resources', 'clients']) {
+    await page.goto(`/orgs/${orgSlug}/${path}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('table')).toBeVisible();
+
+    const wrapped = await page.evaluate(() => {
+      const out: string[] = [];
+      for (const table of document.querySelectorAll('table')) {
+        const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent ?? '');
+        for (const row of table.querySelectorAll('tbody tr')) {
+          [...row.querySelectorAll('td')].forEach((td, i) => {
+            if ((td.getAttribute('colspan') ?? '1') !== '1') return;
+            const host = document.createElement('div');
+            Object.assign(host.style, {
+              position: 'absolute',
+              left: '-99999px',
+              width: `${td.getBoundingClientRect().width}px`,
+              font: getComputedStyle(td).font,
+            });
+            const clone = td.cloneNode(true) as HTMLElement;
+            clone.style.boxSizing = 'border-box';
+            clone.style.width = '100%';
+            host.appendChild(clone);
+            document.body.appendChild(host);
+            const height = host.getBoundingClientRect().height;
+            for (const node of [clone, ...clone.querySelectorAll('*')]) {
+              (node as HTMLElement).style.whiteSpace = 'nowrap';
+            }
+            const nowrap = host.getBoundingClientRect().height;
+            host.remove();
+            // 1px of tolerance: sub-pixel line-height rounding is not a wrap.
+            if (height > nowrap + 1)
+              out.push(`${heads[i] ?? '?'}: ${td.textContent?.trim() ?? ''}`);
+          });
+        }
+      }
+      return out;
+    });
+
+    expect(wrapped, `${path} has a cell wrapping inside a table with room`).toEqual([]);
+  }
+});

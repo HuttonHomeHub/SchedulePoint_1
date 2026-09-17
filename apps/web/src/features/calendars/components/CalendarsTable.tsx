@@ -206,19 +206,36 @@ export function CalendarsTable({
   const columns: Column<CalendarSummary>[] = [
     {
       header: 'Name',
+      /**
+       * **`Description` is a secondary line here, not a column** (ADR-0146 D4). Every cell in that
+       * column read "—" on the deployed installation, so it spent width on every row to say nothing
+       * while `Working days` beside it wrapped. A column is a static property of a screen and an
+       * absence is a property of a row. Rendered only when present — a secondary line reading "—"
+       * would be the same defect one row lower.
+       */
       cell: (calendar) => (
-        <span className="flex items-center gap-2">
-          <span className="font-medium">{calendar.name}</span>
-          {/* The state is carried by a word, never by dimming alone (WCAG 1.4.1). */}
-          {isArchivedRow(calendar) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex items-center gap-2">
+            <span className="font-medium">{calendar.name}</span>
+            {/* The state is carried by a word, never by dimming alone (WCAG 1.4.1). */}
+            {isArchivedRow(calendar) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
+          </span>
+          {calendar.description ? (
+            <span className="text-muted-foreground text-xs">{calendar.description}</span>
+          ) : null}
         </span>
       ),
     },
     {
       header: 'Working days',
-      // A bounded column: a width preference stops `table-layout: auto` handing it slack it
-      // does not want, which pushed a row's last fact away from its first (M4-T2).
-      cellClassName: 'py-2 pr-4 md:w-44',
+      // **`width: 'fit'` — the correction to M4-T2, not its removal.** That milestone capped this
+      // column at a fixed width because `table-layout: auto` was handing it slack it did not want,
+      // pushing a row's last fact away from its first. The measurement was real. What nothing asked
+      // was whether the content still fitted on ONE LINE inside the cap, and it does not — measured,
+      // this cell needs 191px in a 176px column and wraps, while the table around it has 271px
+      // spare. `fit` keeps the intent (take no slack) and drops the number (which was chosen against
+      // a measure this epic has since widened).
+      width: 'fit',
       // The mask alone made a two-shift calendar and a plain Mon–Fri one read identically in this
       // list — the exact loss ADR-0067 exists to stop, left in the one screen a planner uses to
       // tell their calendars apart. `maxWindowsPerDay` had been written for this and had no
@@ -230,12 +247,6 @@ export function CalendarsTable({
             <span className="text-muted-foreground"> · {shiftCountLabel(calendar.shifts)}</span>
           ) : null}
         </span>
-      ),
-    },
-    {
-      header: 'Description',
-      cell: (calendar) => (
-        <span className="text-muted-foreground">{calendar.description ?? '—'}</span>
       ),
     },
   ];

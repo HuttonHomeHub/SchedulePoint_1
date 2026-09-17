@@ -59,7 +59,7 @@ export function PlansTable({
     // does not want, which pushed a row's last fact away from its first (M4-T2).
     {
       header: 'Status',
-      cellClassName: 'py-2 pr-4 md:w-28',
+      width: 'fit',
       cell: (plan) => PLAN_STATUS_LABELS[plan.status],
     },
     {

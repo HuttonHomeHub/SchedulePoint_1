@@ -177,3 +177,46 @@ describe('ClientsTable', () => {
     ).toBeInTheDocument();
   });
 });
+
+/**
+ * **The column set is a property of the SCREEN, never of the page of data in front of you.**
+ *
+ * ADR-0146 D4 moved `Description` off this table and under the row's name, because on a real
+ * installation every cell in it read "—" while the columns beside it wrapped. The obvious next
+ * thought — show the column only when some row has a description — is the trap: a table whose
+ * shape changes between page one and page two makes a reader re-learn it each time, and a column
+ * that appears when you search and vanishes when you clear looks like a bug.
+ *
+ * So the assertion is a comparison rather than a list: the same headers with descriptions and
+ * without. A test that merely named today's headers would pass just as well against a
+ * data-dependent implementation that happened to agree on one fixture.
+ */
+describe('ClientsTable — the column set does not depend on the data', () => {
+  const headersFor = (data: ClientSummary[]): string[] => {
+    const view = renderTable(true, data);
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent ?? '');
+    view.unmount();
+    return headers;
+  };
+
+  it('is the same whether or not any row carries a description', () => {
+    const withDescriptions = CLIENTS.map((c) => ({ ...c, description: 'Retail fit-out' }));
+    const withNone = CLIENTS.map((c) => ({ ...c, description: null }));
+
+    expect(headersFor(withNone)).toEqual(headersFor(withDescriptions));
+  });
+
+  it('shows a description under the name when there is one, and nothing when there is not', () => {
+    renderTable(true, [
+      { ...CLIENTS[0]!, name: 'Northgate', description: 'Retail fit-out' },
+      { ...CLIENTS[1]!, name: 'Harbour', description: null },
+    ]);
+    const rows = screen.getAllByRole('row');
+    const northgate = rows.find((r) => r.textContent?.includes('Northgate'))!;
+    const harbour = rows.find((r) => r.textContent?.includes('Harbour'))!;
+
+    expect(within(northgate).getByText('Retail fit-out')).toBeInTheDocument();
+    // Not "—": an em dash on a secondary line is the same defect one row lower down.
+    expect(harbour.textContent).not.toContain('—');
+  });
+});

@@ -86,19 +86,32 @@ export function ClientsTable({
   const columns: Column<ClientSummary>[] = [
     {
       header: 'Name',
+      /**
+       * **`Description` is a secondary line under the name, not a column** (ADR-0146 D4).
+       *
+       * It was a column, and on the deployed installation every cell in it read "—". A column is a
+       * static property of a screen and an absence is a property of a row, so a field most rows do
+       * not carry spends width on every row to say nothing — while the columns beside it wrapped.
+       * Moving it under the subject keeps it exactly where a reader looks for it and costs nothing
+       * when it is absent.
+       *
+       * **Rendered only when present.** A secondary line reading "—" would be the same defect one
+       * row lower, which is the trap in this whole rule.
+       */
       cell: (client) => (
-        <Link
-          to="/orgs/$orgSlug/clients/$clientId"
-          params={{ orgSlug, clientId: client.id }}
-          className="font-medium underline-offset-4 hover:underline"
-        >
-          {client.name}
-        </Link>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <Link
+            to="/orgs/$orgSlug/clients/$clientId"
+            params={{ orgSlug, clientId: client.id }}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            {client.name}
+          </Link>
+          {client.description ? (
+            <span className="text-muted-foreground text-xs">{client.description}</span>
+          ) : null}
+        </span>
       ),
-    },
-    {
-      header: 'Description',
-      cell: (client) => <span className="text-muted-foreground">{client.description ?? '—'}</span>,
     },
   ];
   if (canWrite) {

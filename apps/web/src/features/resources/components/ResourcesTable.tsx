@@ -248,49 +248,73 @@ export function ResourcesTable({
   const columns: Column<ResourceTreeRow>[] = [
     {
       header: 'Name',
-      cell: ({ resource, depth }) => (
-        <span className="flex items-center gap-2">
-          {/* Indentation is decorative — the Group column below carries the same relationship in
-              text, so nesting is never conveyed by layout alone (WCAG 2.2). */}
-          {depth > 0 ? (
-            <span aria-hidden="true" style={{ width: `${depth * 1.25}rem` }} className="shrink-0" />
-          ) : null}
-          <span className="font-medium">{resource.name}</span>
-          {/* The Kind column already says "Group"; this badge carries the CONSEQUENCE, which is
-              what a planner scanning the library actually needs to know (ADR-0053 §3). */}
-          {isResourceGroup(resource) ? <Badge size="sm">Not assignable</Badge> : null}
-          {isArchivedRow(resource) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
-        </span>
-      ),
+      cell: ({ resource, depth }) => {
+        const parentName = resource.parentId ? groupNameById.get(resource.parentId) : undefined;
+        return (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex items-center gap-2">
+              {/* Indentation is decorative — the secondary line below carries the same relationship
+                  in text, so nesting is never conveyed by layout alone (WCAG 2.2). It used to be the
+                  `Group` COLUMN that carried it; that column was removed because it printed "—" on
+                  every row of this organisation's library, and **the carrier moved with it rather
+                  than being dropped**. The test asserting nesting is conveyed in text passes
+                  unchanged, which is the check that the move was real. */}
+              {depth > 0 ? (
+                <span
+                  aria-hidden="true"
+                  style={{ width: `${depth * 1.25}rem` }}
+                  className="shrink-0"
+                />
+              ) : null}
+              <span className="font-medium">{resource.name}</span>
+              {/* The Kind column already says "Group"; this badge carries the CONSEQUENCE, which is
+                  what a planner scanning the library actually needs to know (ADR-0053 §3). */}
+              {isResourceGroup(resource) ? <Badge size="sm">Not assignable</Badge> : null}
+              {isArchivedRow(resource) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
+            </span>
+            {/* **Present only when there is something to say.** A secondary line reading "—" is the
+                defect this replaced, one row lower down. */}
+            {parentName ? (
+              <span className="text-muted-foreground text-xs">In {parentName}</span>
+            ) : null}
+          </span>
+        );
+      },
     },
-    /* **A width preference on a bounded column** (page-consistency M4-T2). `table-layout: auto`
-         gives surplus width to whichever columns want it most, and a column holding an enum label
-         or a short code wants none of it — measured, these carried 90–240 px of slack each while
-         pushing a row's last fact further from its first. `md:`-prefixed, so a narrow screen keeps
-         the automatic layout it needs.
+    /* **These columns declare `width: 'fit'`; they used to carry fixed `md:w-*` caps.**
+       page-consistency M4-T2 added those caps for a real reason — `table-layout: auto` gives surplus
+       width to whichever columns want it most, and a column holding an enum label or a short code
+       wants none of it, so each was carrying 90-240px of slack and pushing a row's last fact further
+       from its first. That diagnosis still stands and `fit` serves it better: it takes exactly the
+       content's width and surrenders everything else, without a number that has to be re-derived
+       whenever the page measure changes — which it just did.
 
-         **The rule is narrower than "cap the bounded columns", and applying the wider version made
-         two tables worse before it was measured.** The distance between a row's first fact and its
-         last is the summed width of every column BEFORE the last fact column — so a cap helps only
-         there. Capping the last fact column itself cannot shrink that distance, and its surplus has
-         to land somewhere: on the plans table it landed in `Name`, the FIRST column, and the
-         distance grew by 76 px. Cap what sits before the last fact; leave the last fact alone.
+       **The narrower half of M4-T2's rule is kept and is easy to lose.** The distance between a
+       row's first fact and its last is the summed width of every column BEFORE the last fact
+       column, so constraining the last fact column cannot shrink it and its surplus has to land
+       somewhere. On the plans table it landed in `Name`, the FIRST column, and the distance GREW by
+       76px. Constrain what sits before the last fact; leave the last fact alone.
 
-         **It goes on `cellClassName`, not `headClassName`, and the reason is `DataTable`'s `??`.**
-         Both props REPLACE their default rather than merging it (`docs/TECH_DEBT.md` #335), so
-         adding a width to a header means restating `py-2 pr-4 font-medium` beside it — which moves
-         a `font-medium` out of the primitive and into a screen, and ADR-0097's weight ratchet
-         counts exactly that. The first version of these caps did it and pushed the count 157 → 159.
-         The cell default carries no weight, so restating it costs nothing, and a width on a `<td>`
-         constrains the column under `table-layout: auto` just as a width on its `<th>` does. */
+       **What is no longer true:** M4-T2's note that a width must go on `cellClassName` rather than
+       `headClassName`, because `DataTable`'s `??` replaces the default and restating
+       `py-2 pr-4 font-medium` would move a `font-medium` into a screen and push ADR-0097's weight
+       ratchet. `width` composes with both defaults instead of replacing either, so it needs no
+       restatement anywhere and the ratchet is untouched. That is `docs/TECH_DEBT.md` #335's actual
+       ask, reached without the blunt `??` → `cn` conversion that row proposes — which ADR-0145 M4
+       declined because seven overrides omit `py-2` deliberately, and which this epic re-took rather
+       than inherited. */
     {
       header: 'Kind',
-      cellClassName: 'py-2 pr-4 md:w-32',
+      width: 'fit',
       cell: ({ resource }) => RESOURCE_KIND_LABELS[resource.kind],
     },
     {
       header: 'Code',
-      cellClassName: 'py-2 pr-4 md:w-24',
+      // **`fit`, replacing `md:w-24`.** 96px could not hold `NL-HYDROPUMP` (103px), so it broke
+      // at the hyphen — a legitimate soft-wrap opportunity the browser takes — producing `NL-` over
+      // `HYDROPUMP` in a table with 518px of slack. A code is exactly the shape `fit` is for: short,
+      // bounded, and meaningless when broken.
+      width: 'fit',
       cell: ({ resource }) =>
         resource.code ? (
           <span className="font-mono text-xs">{resource.code}</span>
@@ -298,19 +322,6 @@ export function ResourcesTable({
           <span className="text-muted-foreground">—</span>
         ),
     },
-    {
-      header: 'Group',
-      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell lg:w-36',
-      cell: ({ resource }: ResourceTreeRow) => {
-        const parentName = resource.parentId ? groupNameById.get(resource.parentId) : undefined;
-        return parentName ? (
-          <span className="text-muted-foreground">{parentName}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        );
-      },
-    } satisfies Column<ResourceTreeRow>,
     {
       header: 'Calendar',
       headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
