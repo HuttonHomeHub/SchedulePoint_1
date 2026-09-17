@@ -1,9 +1,9 @@
 {
-  "_": "Per-suite end-to-end durations, harvested from ONE real CI run. WHAT THIS IS: the input to the shard assignment in .github/workflows/ci.yml, so that assignment is derived from data rather than from an impression. Consumed only by check:e2e-roster's PRINTED summary. WHAT THIS IS NOT: a budget, a bar, or anything any gate asserts against. No test compares a wall-clock time to a number in this file, and none may: docs/specs/ci-sharding/feature-spec.md 1.4 forbids a wall-clock assertion anywhere in this epic, because five samples of the same job span 40-47 minutes and the slowest measured altered no test at all. These are ratios that happen to carry units. STALENESS: the run id and date below are printed beside every projection, so a reader sees the projection's age at the same time as the projection. They will drift as suites are added and that is expected; re-harvest rather than trusting them.",
+  "_": "Per-suite end-to-end durations, harvested from ONE real CI run. WHAT THIS IS: the input to the shard assignment in .github/workflows/ci.yml, so that assignment is derived from data rather than from an impression. Consumed only by check:e2e-roster's PRINTED summary. WHAT THIS IS NOT: a budget, a bar, or anything any gate asserts against. No test compares a wall-clock time to a number in this file, and none may: docs/specs/ci-sharding/feature-spec.md 1.4 forbids a wall-clock assertion anywhere in this epic, because five samples of the same job span 40-47 minutes and the slowest measured altered no test at all. These are ratios that happen to carry units. STALENESS: the run id and date below are printed beside every projection, so a reader sees the projection's age at the same time as the projection. They will drift as suites are added and that is expected; re-harvest rather than trusting them. ADDENDUM 2026-09-17: test:e2e:page-composition (ADR-0146) carries 32, and it is the ONE figure here not harvested from the run named below \u2014 it is a local measurement of the suite's own first green run, recorded because the alternative is what check:e2e-roster does with an unknown suite: charge it the largest measured duration, which projected its shard at 822 s against a 593 s budget for a suite that takes half a minute. A pessimistic default is the right rule for a gate and the wrong number for a reader. Re-harvest with the rest.",
   "run": "34613280766",
   "job": "103309069671",
   "measured": "2026-09-11",
-  "residualCheck": "The 44 web durations sum to 2049 s, matching docs/TECH_DEBT.md #301's independently-recorded 2,049 s exactly - residual 0 s. That is the sanity check implementation-plan.md Task 0.1 requires: a non-zero residual would mean steps were missed and the table does not add up.",
+  "residualCheck": "The 45 web durations sum to 2081 s. It was 2049 s across 44 suites, matching the independently-recorded 2,049 s of the CI-sharding measurement exactly - residual 0 s. The difference is one entry: test:e2e:page-composition at 32 s, added 2026-09-17 and measured locally rather than harvested (see the ADDENDUM above). The check still does what it exists for - a hand-edit cannot pass unnoticed - and this edit is recorded rather than hidden by rounding it into a neighbour.",
   "keyedBy": "The package.json SCRIPT NAME, not the CI step's title and not a prose suite label. A title is prose; the script is the key check:e2e-roster derives its own roster from, so the two cannot drift apart. Verified as an exact set equality in both directions against apps/web/package.json (44) and apps/api/package.json (2) on 2026-09-11.",
   "seconds": {
     "web": {
@@ -29,6 +29,7 @@
       "test:e2e:health-check": 23,
       "test:e2e:interchange": 26,
       "test:e2e:library": 31,
+      "test:e2e:page-composition": 32,
       "test:e2e:loe": 21,
       "test:e2e:minimap": 25,
       "test:e2e:multi-select": 28,

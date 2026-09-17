@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Label } from '@/components/ui/label';
+import { SectionCard } from '@/components/ui/page';
 import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -320,155 +321,168 @@ export function CalendarsTable({
   };
 
   return (
-    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-end gap-3">
-          <SearchField
-            id={searchId}
-            className="min-w-56 flex-1"
-            label="Search calendars"
-            placeholder="Search by name"
-            clearLabel="Clear calendar search"
-            value={search}
-            onChange={(next) => setFilters({ q: next })}
-          />
-          <div className="flex max-w-xs flex-col gap-1.5">
-            <Label htmlFor={filterId}>Scope</Label>
-            <Select
-              id={filterId}
-              value={scopeFilter}
-              aria-describedby={scopeHintId}
-              onChange={(event) => setFilters({ scope: event.target.value as CalendarScopeFilter })}
-            >
-              {CALENDAR_SCOPE_FILTERS.map((value) => (
-                <option key={value} value={value}>
-                  {CALENDAR_SCOPE_FILTER_LABELS[value]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex max-w-xs flex-col gap-1.5">
-            <Label htmlFor={archivedFilterId}>Show archived</Label>
-            <Select
-              id={archivedFilterId}
-              value={archivedFilter}
-              aria-describedby={explainerId}
-              onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
-            >
-              {ARCHIVED_FILTERS.map((value) => (
-                <option key={value} value={value}>
-                  {ARCHIVED_FILTER_LABELS[value]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {/* **`Clear filters` lives in the BAR, not only in the empty state** (page-consistency
-              M4). It was offered only when a filter matched nothing, so a planner who narrowed 81
-              calendars to three had no route back but to reset each control by hand — and the
-              screen one tab over, the audit log, had carried the control in its bar all along.
-
-              Copied from `AuditFilterBar.tsx:158-179` rather than re-derived, including the part
-              that matters most: it is **always rendered and shaded when there is nothing to
-              clear**, never conditionally mounted. A control that removes itself by succeeding
-              drops focus to `<body>` at the moment it is pressed, which is a defect this register
-              records four separate times — and `aria-disabled` rather than the native attribute,
-              because the native one blurs as the filter changes underneath the reader. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-disabled={!filtered}
-            onClick={() => {
-              if (!filtered) return;
-              clearFilters();
-            }}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-          >
-            <X aria-hidden="true" className="size-4" />
-            Clear filters
-          </Button>
-        </div>
-        {/* The screen is titled plainly "Calendars" but shows only the SHARED library by
-              default, so say so — a planner who never learns the tier exists would otherwise
-              conclude a project calendar had been lost. */}
-        <p id={scopeHintId} className="text-muted-foreground text-sm">
-          {scopeFilter === 'org'
-            ? 'Showing the shared organisation library. Switch Scope to see calendars that belong to a single project.'
-            : 'A project calendar can only be used by that project’s plans and activities.'}
-        </p>
-        <p id={explainerId} className="text-muted-foreground text-sm">
-          {ARCHIVE_EXPLAINER}
-        </p>
-        {archiveError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {archiveError}
-          </p>
-        ) : null}
-      </div>
-
-      <DataTable
-        caption="Calendars"
-        columns={columns}
-        query={calendars}
-        getRowKey={(calendar) => calendar.id}
-        loadingLabel="Loading calendars…"
-        errorLabel="Couldn’t load calendars. Please try again."
-        empty={
-          filtersActive ? (
-            // A filtered-to-nothing list is a different situation from an empty library, and must
-            // never read as one — it says so, and offers the way back (docs/UX_STANDARDS.md).
-            <>
-              <p className="text-muted-foreground text-sm">No calendars match these filters.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={clearFiltersAndFocusList}
-                /* **Named for its context, because its twin in the filter bar is now always
-                   present** (page-consistency M4). Two buttons whose accessible name is the bare
-                   string `Clear filters`, both visible at once, are indistinguishable to a reader
-                   who hears them rather than sees where they sit — and the collision is not new:
-                   the audit log has carried it since its filter bar shipped, and copying that bar
-                   to two more screens is what made it worth fixing rather than reproducing.
-
-                   The visible text is unchanged, and the accessible name CONTAINS it, so WCAG 2.5.3
-                   Label in Name still holds. */
-                aria-label="Clear filters and show all calendars"
+    /**
+     * **The rows sit in a named section that states how many there are** (ADR-0146 D2). The name is
+     * what the section HOLDS rather than a repeat of the page's own `<h1>`: two headings saying one
+     * word is the defect ADR-0143 records on the plan workspace's foot.
+     *
+     * `count` is honest here because this query loads every page (`apiFetchAllPages`), so the
+     * length IS the total. The audit screens deliberately pass none — behind a "Load more" the same
+     * expression means "how many are loaded", which would read as a total and be wrong.
+     */
+    <SectionCard title="Calendar library" count={calendars.data?.length} flush>
+      <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <SearchField
+              id={searchId}
+              className="min-w-56 flex-1"
+              label="Search calendars"
+              placeholder="Search by name"
+              clearLabel="Clear calendar search"
+              value={search}
+              onChange={(next) => setFilters({ q: next })}
+            />
+            <div className="flex max-w-xs flex-col gap-1.5">
+              <Label htmlFor={filterId}>Scope</Label>
+              <Select
+                id={filterId}
+                value={scopeFilter}
+                aria-describedby={scopeHintId}
+                onChange={(event) =>
+                  setFilters({ scope: event.target.value as CalendarScopeFilter })
+                }
               >
-                Clear filters
-              </Button>
-            </>
-          ) : (
-            <>No calendars yet.{canWrite ? ' Create your first working-day calendar.' : ''}</>
-          )
-        }
-      />
+                {CALENDAR_SCOPE_FILTERS.map((value) => (
+                  <option key={value} value={value}>
+                    {CALENDAR_SCOPE_FILTER_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex max-w-xs flex-col gap-1.5">
+              <Label htmlFor={archivedFilterId}>Show archived</Label>
+              <Select
+                id={archivedFilterId}
+                value={archivedFilter}
+                aria-describedby={explainerId}
+                onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
+              >
+                {ARCHIVED_FILTERS.map((value) => (
+                  <option key={value} value={value}>
+                    {ARCHIVED_FILTER_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {/* **`Clear filters` lives in the BAR, not only in the empty state** (page-consistency
+                M4). It was offered only when a filter matched nothing, so a planner who narrowed 81
+                calendars to three had no route back but to reset each control by hand — and the
+                screen one tab over, the audit log, had carried the control in its bar all along.
 
-      <CalendarFormDialog
-        orgSlug={orgSlug}
-        open={editing !== undefined}
-        onClose={() => setEditingId(null)}
-        readOnly={!canWrite}
-        canManageOrg={canManageOrg}
-        {...(editing ? { calendar: editing } : {})}
-      />
-      {canWrite ? (
-        <ConfirmDialog
-          open={deleting !== null}
-          onClose={() => {
-            setDeleting(null);
-            setDeleteError(null);
-          }}
-          onConfirm={confirmDelete}
-          title="Delete calendar"
-          description={deleting ? `Delete “${deleting.name}”?` : ''}
-          pending={deleteCalendar.isPending}
-          pendingLabel="Deleting…"
-          error={deleteError}
+                Copied from `AuditFilterBar.tsx:158-179` rather than re-derived, including the part
+                that matters most: it is **always rendered and shaded when there is nothing to
+                clear**, never conditionally mounted. A control that removes itself by succeeding
+                drops focus to `<body>` at the moment it is pressed, which is a defect this register
+                records four separate times — and `aria-disabled` rather than the native attribute,
+                because the native one blurs as the filter changes underneath the reader. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-disabled={!filtered}
+              onClick={() => {
+                if (!filtered) return;
+                clearFilters();
+              }}
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            >
+              <X aria-hidden="true" className="size-4" />
+              Clear filters
+            </Button>
+          </div>
+          {/* The screen is titled plainly "Calendars" but shows only the SHARED library by
+                default, so say so — a planner who never learns the tier exists would otherwise
+                conclude a project calendar had been lost. */}
+          <p id={scopeHintId} className="text-muted-foreground text-sm">
+            {scopeFilter === 'org'
+              ? 'Showing the shared organisation library. Switch Scope to see calendars that belong to a single project.'
+              : 'A project calendar can only be used by that project’s plans and activities.'}
+          </p>
+          <p id={explainerId} className="text-muted-foreground text-sm">
+            {ARCHIVE_EXPLAINER}
+          </p>
+          {archiveError ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              {archiveError}
+            </p>
+          ) : null}
+        </div>
+
+        <DataTable
+          caption="Calendars"
+          columns={columns}
+          query={calendars}
+          getRowKey={(calendar) => calendar.id}
+          loadingLabel="Loading calendars…"
+          errorLabel="Couldn’t load calendars. Please try again."
+          empty={
+            filtersActive ? (
+              // A filtered-to-nothing list is a different situation from an empty library, and must
+              // never read as one — it says so, and offers the way back (docs/UX_STANDARDS.md).
+              <>
+                <p className="text-muted-foreground text-sm">No calendars match these filters.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={clearFiltersAndFocusList}
+                  /* **Named for its context, because its twin in the filter bar is now always
+                     present** (page-consistency M4). Two buttons whose accessible name is the bare
+                     string `Clear filters`, both visible at once, are indistinguishable to a reader
+                     who hears them rather than sees where they sit — and the collision is not new:
+                     the audit log has carried it since its filter bar shipped, and copying that bar
+                     to two more screens is what made it worth fixing rather than reproducing.
+
+                     The visible text is unchanged, and the accessible name CONTAINS it, so WCAG 2.5.3
+                     Label in Name still holds. */
+                  aria-label="Clear filters and show all calendars"
+                >
+                  Clear filters
+                </Button>
+              </>
+            ) : (
+              <>No calendars yet.{canWrite ? ' Create your first working-day calendar.' : ''}</>
+            )
+          }
         />
-      ) : null}
-      {canWrite && canManageOrg ? <ConfirmDialog {...scopeMove.dialogProps} /> : null}
-    </div>
+
+        <CalendarFormDialog
+          orgSlug={orgSlug}
+          open={editing !== undefined}
+          onClose={() => setEditingId(null)}
+          readOnly={!canWrite}
+          canManageOrg={canManageOrg}
+          {...(editing ? { calendar: editing } : {})}
+        />
+        {canWrite ? (
+          <ConfirmDialog
+            open={deleting !== null}
+            onClose={() => {
+              setDeleting(null);
+              setDeleteError(null);
+            }}
+            onConfirm={confirmDelete}
+            title="Delete calendar"
+            description={deleting ? `Delete “${deleting.name}”?` : ''}
+            pending={deleteCalendar.isPending}
+            pendingLabel="Deleting…"
+            error={deleteError}
+          />
+        ) : null}
+        {canWrite && canManageOrg ? <ConfirmDialog {...scopeMove.dialogProps} /> : null}
+      </div>
+    </SectionCard>
   );
 }
 

@@ -38,7 +38,7 @@ describe('PageContainer', () => {
     // The frame was hand-written fourteen times. The point of the archetype is that the measure
     // is now one decision, so the class that carries it is worth pinning.
     const { container } = render(<PageContainer>content</PageContainer>);
-    expect(container.firstElementChild?.className).toContain('max-w-6xl');
+    expect(container.firstElementChild?.className).toContain('max-w-screen-2xl');
   });
 });
 
@@ -332,7 +332,11 @@ describe('SectionCard fill', () => {
     );
 
     const heading = screen.getByRole('heading', { name: 'Recently changed' });
-    const header = heading.closest('div')?.parentElement;
+    // The card's header row is the section's first element child. **Not
+    // `heading.closest('div')?.parentElement`**, which this was: that walked h2 → the title
+    // wrapper → the header, and broke the moment the header gained a legitimate extra
+    // element (the `count` slot). It was asserting on a DOM depth rather than on the header.
+    const header = heading.closest('section')?.firstElementChild;
     expect(header?.className).toMatch(/shrink-0/);
     expect(container.querySelector('[tabindex="0"]')?.contains(heading)).toBe(false);
   });
@@ -352,7 +356,11 @@ describe('SectionCard fill', () => {
     );
 
     const heading = screen.getByRole('heading', { name: 'Recently changed' });
-    const header = heading.closest('div')?.parentElement;
+    // The card's header row is the section's first element child. **Not
+    // `heading.closest('div')?.parentElement`**, which this was: that walked h2 → the title
+    // wrapper → the header, and broke the moment the header gained a legitimate extra
+    // element (the `count` slot). It was asserting on a DOM depth rather than on the header.
+    const header = heading.closest('section')?.firstElementChild;
     expect(header?.className).toMatch(/\bflex-row\b/);
   });
 });

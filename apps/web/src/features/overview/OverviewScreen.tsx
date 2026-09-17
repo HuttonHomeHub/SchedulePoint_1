@@ -177,7 +177,7 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
       the product wants today's behaviour and a shared primitive should not acquire a layout mode
       for one caller.
     */
-    <PageContainer width="wide" className="flex min-h-0 flex-col">
+    <PageContainer className="flex min-h-0 flex-col">
       <PageHeader
         title={title}
         // **Role-aware, because the fixed version was false for two of the four roles.** The

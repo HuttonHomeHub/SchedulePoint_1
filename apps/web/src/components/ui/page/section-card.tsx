@@ -10,6 +10,24 @@ export interface SectionCardProps {
   description?: React.ReactNode;
   /** A section-level action, aligned opposite the title. */
   action?: React.ReactNode;
+  /**
+   * How many things this section holds, rendered beside the title.
+   *
+   * **It is a fact about the data, which is why it belongs to the heading and not to the body.** A
+   * list whose length a reader can only learn by scrolling to the end of it is a list they cannot
+   * plan around — and `fill`'s docblock already says a caller that scrolls its body owes its reader
+   * a count, while offering nowhere to put one.
+   *
+   * It renders `aria-hidden`, and that is deliberate rather than an oversight: the screens that
+   * pass it already announce their settled result count through a live region (ADR-0053 M6), and a
+   * second announcement of the same number is how a screen-reader user hears "12" twice and has to
+   * work out whether those are two different facts. The visible number is a convenience for the
+   * sighted reader; the spoken one has an owner already.
+   *
+   * Pass the number, not a sentence. The archetype formats it, so two sections cannot disagree
+   * about whether it is "12", "12 items" or "(12)".
+   */
+  count?: number | undefined;
   children: React.ReactNode;
   className?: string;
   /** Omits the card's own padding, for a section whose content is a full-bleed table. */
@@ -86,6 +104,7 @@ export function SectionCard({
   action,
   children,
   className,
+  count,
   flush,
   fill,
   id,
@@ -145,15 +164,50 @@ export function SectionCard({
         )}
       >
         <div className="min-w-0">
-          <CardTitle id={titleId} level={2} className="text-base">
-            {title}
-          </CardTitle>
+          <div className="flex items-baseline gap-2">
+            <CardTitle id={titleId} level={2} className="text-base">
+              {title}
+            </CardTitle>
+            {count === undefined ? null : (
+              <span aria-hidden className="text-muted-foreground text-sm tabular-nums">
+                {count}
+              </span>
+            )}
+          </div>
           {description ? <CardDescription className="mt-1">{description}</CardDescription> : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </CardHeader>
       <CardContent
-        className={cn(flush && 'p-0', fill === true && 'min-h-0 flex-1 overflow-y-auto')}
+        /**
+         * **`flush` is full-bleed for the ROW and inset for the TEXT, and that split is the fix.**
+         *
+         * `flush` sets `p-0` so a table's row backgrounds — hover, zebra, selection — reach the
+         * card's own edges. That is what it is for and it is right. What nobody noticed is that it
+         * also takes the text with them: `CardHeader` keeps `p-6`, `DataTable`'s cells are
+         * `py-2 pr-4` with **no left padding at all**, so a card's heading sat 24px in and the first
+         * cell of its table sat hard against the border. Measured on the deployed product: card
+         * edge 551, heading 575, `Name` header 551.
+         *
+         * That is the "wording in the boxes is hard against margins" report, and it is the TABLE
+         * that is hard against them, not the prose. The plan's remedy was to make the heading
+         * full-bleed too so the two agree — which aligns them at the one x-position where text
+         * touches a border, i.e. it would have delivered the complaint rather than its fix.
+         *
+         * **So `flush` means no VERTICAL padding, and horizontal padding that matches the header.**
+         * The table still butts against the heading with no gap above it — which is what this prop
+         * was for — and its first cell now starts where the heading starts. The row separators inset
+         * by the same 24px, which inside a card reads as tidier than a rule running edge to edge.
+         *
+         * **A first attempt expressed this as arbitrary variants on the edge cells**
+         * (`[&_td:first-child]:pl-6` and siblings), keeping the body at `p-0` so row backgrounds
+         * stayed full-bleed. It did not take effect, and the journey caught it on its first run with
+         * the heading and the cell still exactly 24px apart. `cn`/`tailwind-merge` was ruled out by
+         * running it directly — the class survives into the DOM — so the cause is somewhere between
+         * that and the generated stylesheet, and it is **not established**: this form removes the
+         * question rather than answering it, and inventing a cause would be a claim nobody checked.
+         */
+        className={cn(flush && 'px-6 py-0', fill === true && 'min-h-0 flex-1 overflow-y-auto')}
         /**
          * **`tabIndex={0}` is what makes a scrollable body operable from the keyboard** (WCAG 2.2
          * §2.1.1, level A). A scroll container that cannot take focus cannot be scrolled by

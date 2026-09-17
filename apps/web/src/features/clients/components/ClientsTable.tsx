@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { MenuItem } from '@/components/ui/menu';
+import { SectionCard } from '@/components/ui/page';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { SearchField } from '@/components/ui/search-field';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -160,93 +161,112 @@ export function ClientsTable({
   };
 
   return (
-    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-      {onFiltersChange === undefined ? null : (
-        <div className="flex flex-wrap items-end gap-3">
-          <SearchField
-            id={searchId}
-            className="min-w-56 flex-1"
-            label="Search clients"
-            placeholder="Search by name"
-            clearLabel="Clear client search"
-            value={search}
-            onChange={setSearch}
-          />
-          {/* Always rendered and shaded when there is nothing to clear — the shape M4 gave the two
+    /**
+     * **The rows sit in a named section, and the section states how many there are.**
+     *
+     * Three of this product's list screens had no frame at all — the table sat directly on the page
+     * background while the organisation landing put everything in a card, which is most of why they
+     * "felt different" (ADR-0146 D2). The section is named for what it holds rather than repeating
+     * the page's own `<h1>`: two headings saying the same word is the defect ADR-0143 records on
+     * the plan workspace's foot, and a landmark called "All clients" tells a reader something the
+     * page title has already told them once.
+     *
+     * **`count` is passed here and withheld on the audit screens**, and the difference is not
+     * stylistic: this query is `apiFetchAllPages`, so `data.length` IS the total. The audit log and
+     * My activity are `useInfiniteQuery` behind a "Load more", where the same expression means
+     * "how many are loaded" — a number that would read as a total and be wrong by however much
+     * history the reader has not asked for yet. ADR-0098's rule, one noun along: omitted, never
+     * approximated.
+     */
+    <SectionCard title="All clients" count={clients.data?.length} flush>
+      <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+        {onFiltersChange === undefined ? null : (
+          <div className="flex flex-wrap items-end gap-3">
+            <SearchField
+              id={searchId}
+              className="min-w-56 flex-1"
+              label="Search clients"
+              placeholder="Search by name"
+              clearLabel="Clear client search"
+              value={search}
+              onChange={setSearch}
+            />
+            {/* Always rendered and shaded when there is nothing to clear — the shape M4 gave the two
               library bars, and the reason is the same: a control that removes itself by succeeding
               drops focus to `<body>` at the moment it is pressed. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-disabled={!filtered}
-            onClick={() => {
-              if (!filtered) return;
-              setSearch('');
-            }}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-          >
-            <X aria-hidden="true" className="size-4" />
-            Clear filters
-          </Button>
-        </div>
-      )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-disabled={!filtered}
+              onClick={() => {
+                if (!filtered) return;
+                setSearch('');
+              }}
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            >
+              <X aria-hidden="true" className="size-4" />
+              Clear filters
+            </Button>
+          </div>
+        )}
 
-      <DataTable
-        caption="Clients"
-        columns={columns}
-        query={clients}
-        getRowKey={(client) => client.id}
-        loadingLabel="Loading clients…"
-        errorLabel="Couldn’t load clients. Please try again."
-        empty={
-          filtered ? (
-            // **A filtered-to-nothing list is a different fact from an empty organisation**, and
-            // must never read as one — it says so, and offers the way back.
-            <>
-              <p className="text-muted-foreground text-sm">No clients match this search.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={clearSearchAndFocusList}
-                // Named for its context: its twin in the bar above is always present, and two
-                // buttons whose accessible name is the bare string are indistinguishable to a
-                // reader who hears them (M4's finding, applied here on the day it was made).
-                aria-label="Clear filters and show all clients"
-              >
-                Clear filters
-              </Button>
-            </>
-          ) : (
-            <>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>
-          )
-        }
-      />
+        <DataTable
+          caption="Clients"
+          columns={columns}
+          query={clients}
+          getRowKey={(client) => client.id}
+          loadingLabel="Loading clients…"
+          errorLabel="Couldn’t load clients. Please try again."
+          empty={
+            filtered ? (
+              // **A filtered-to-nothing list is a different fact from an empty organisation**, and
+              // must never read as one — it says so, and offers the way back.
+              <>
+                <p className="text-muted-foreground text-sm">No clients match this search.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={clearSearchAndFocusList}
+                  // Named for its context: its twin in the bar above is always present, and two
+                  // buttons whose accessible name is the bare string are indistinguishable to a
+                  // reader who hears them (M4's finding, applied here on the day it was made).
+                  aria-label="Clear filters and show all clients"
+                >
+                  Clear filters
+                </Button>
+              </>
+            ) : (
+              <>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>
+            )
+          }
+        />
 
-      {canWrite ? (
-        <>
-          <ClientFormDialog
-            orgSlug={orgSlug}
-            open={editing !== undefined}
-            onClose={() => setEditingId(null)}
-            {...(editing ? { client: editing } : {})}
-          />
-          <ConfirmDialog
-            open={deleting !== null}
-            onClose={() => {
-              setDeleting(null);
-              setDeleteError(null);
-            }}
-            onConfirm={confirmDelete}
-            title="Delete client"
-            description={deleting ? deleteCascadeWarning('client', deleting.name) : ''}
-            pending={deleteClient.isPending}
-            pendingLabel="Deleting…"
-            error={deleteError}
-          />
-        </>
-      ) : null}
-    </div>
+        {canWrite ? (
+          <>
+            <ClientFormDialog
+              orgSlug={orgSlug}
+              open={editing !== undefined}
+              onClose={() => setEditingId(null)}
+              {...(editing ? { client: editing } : {})}
+            />
+            <ConfirmDialog
+              open={deleting !== null}
+              onClose={() => {
+                setDeleting(null);
+                setDeleteError(null);
+              }}
+              onConfirm={confirmDelete}
+              title="Delete client"
+              description={deleting ? deleteCascadeWarning('client', deleting.name) : ''}
+              pending={deleteClient.isPending}
+              pendingLabel="Deleting…"
+              error={deleteError}
+            />
+          </>
+        ) : null}
+      </div>
+    </SectionCard>
   );
 }

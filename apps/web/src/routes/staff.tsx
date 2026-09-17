@@ -136,7 +136,7 @@ export function StaffConsoleScreen(): React.ReactElement {
      */
     <AnnouncerProvider>
       <main>
-        <PageContainer width="wide" className="space-y-6">
+        <PageContainer className="space-y-6">
           {/* `actions` carries the way back, and until now there was none. The authenticated branch
             rendered a header with no link home while the NOT-FOUND branch above has one — so the
             branch for people who cannot use this page had a way out and the branch for people who
@@ -207,7 +207,7 @@ export function StaffConsoleScreen(): React.ReactElement {
             SPAN answers "how wide does this body need to be?" — never "how important is it". A
             section whose body is a `DataTable` is `wide`, because the console's tables carry up to
             five columns including `break-all` URI and address fields, and "the tables look cramped"
-            is the diagnosis this epic was opened on. At `width="wide"` a spanning section gets
+            is the diagnosis this epic was opened on. At the product measure a spanning section gets
             1,438 px of table against today's 798 (+80 %); the pair below gets 732 px each, which is
             ample for four facts or three buttons.
 

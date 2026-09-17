@@ -616,6 +616,19 @@ jobs:
       # calendar is offered to its own project's plan picker and absent from a sibling project's, and
       # archiving a resource retires it from the picker while its existing assignment survives
       # untouched. Runs last, after the prior runs tear down their servers, reusing the ports.
+      # The page-composition journey (playwright.page-composition.config.ts, ADR-0146). Every
+      # assertion in it is a question about two boxes in a real layout, which is exactly what the
+      # unit tier cannot answer: jsdom has no layout, so a test asking whether a heading and the
+      # first cell beneath it line up passes against any markup at all. It asserts that a list's
+      # rows are INSIDE the named region (the structural gate can only see that both tags exist —
+      # two siblings satisfy that and look wrong), that a section states its count, that a heading
+      # and its table share a left edge, and that every list screen is as wide as the organisation
+      # landing. Runs at 1646, the width the result is judged on, because at 1920 the page measure
+      # binds and at 1646 the region does — a different layout, and the one the report came from.
+      - name: Web end-to-end tests (page composition)
+        if: ${{ matrix.shard == 1 }}
+        run: pnpm --filter @repo/web test:e2e:page-composition
+
       - name: Web end-to-end tests (library scoping)
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:library
