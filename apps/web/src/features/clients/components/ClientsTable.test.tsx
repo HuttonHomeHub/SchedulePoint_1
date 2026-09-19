@@ -5,13 +5,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { formatTimestamp } from '@/lib/format-date';
-
 import { clientKeys } from '../api/use-clients';
 
 import { ClientsTable } from './ClientsTable';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import { formatTimestamp } from '@/lib/format-date';
 import { clickRowAction, openRowActions } from '@/test/row-actions';
 
 // Stub the router Link so the table renders without a full router context.

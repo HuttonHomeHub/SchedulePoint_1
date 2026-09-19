@@ -1,6 +1,6 @@
 # Feature Spec: Two screens carry facts they already hold and do not render
 
-- **Status:** Draft
+- **Status:** Approved — shipped 2026-09-19; see `m3/README.md` for the verdicts
 - **Author(s):** feature-analyst
 - **Date:** 2026-09-19
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #343

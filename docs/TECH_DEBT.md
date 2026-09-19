@@ -9215,11 +9215,12 @@ ADR-0130's epic exists to remove, narrowed rather than closed.
 **Measured, on the reading #287 asked for** (`apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts`),
 with an activity selected and a peer's request outstanding:
 
-| width   | foot row, no request | foot row, request outstanding | cost to the diagram |
-| ------- | -------------------- | ----------------------------- | ------------------- |
-| 1440 px | 87 px                | **167 px**                    | **80 px**           |
-| 1646 px | 51 px                | **127 px**                    | **76 px**           |
-| 1920 px | 51 px                | 87 px                         | 36 px               |
+| width   | foot row, no request                                           | foot row, request outstanding | cost to the diagram                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------- | -------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 343     | Two screens carried facts they already held and did not render | 2026-09-19                    | **Closed by `docs/specs/unrendered-row-facts/`**, measure-first. (a) Clients gains a `Created` column (`width: 'fit'`, `Name` declared `auto`); (b) both Members sections state their count, which `page-composition/feature-spec.md` §4.6 specified and neither built, with no decision recorded either way. Four falsification conditions committed before the harness ran and **all four PASS** — the sharpest being FC-D clause 2, where the table's slack falls by **147px, exactly the new column's rendered width**, so it is paid for entirely out of emptiness and nothing was squeezed out of another column (`m3/README.md`). CQ-2 answered from numbers and deliberately NOT taken: `Actions` really is 401px for 82px of content, and shrink-wrapping a trailing column moves the buttons further from the facts while confounding the clause above. Clients is still 68% empty at 1646 and the row never claimed otherwise. Found on the way: #344. |
+| 1440 px | 87 px                                                          | **167 px**                    | **80 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 1646 px | 51 px                                                          | **127 px**                    | **76 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 1920 px | 51 px                                                          | 87 px                         | 36 px                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 1646 is the product owner's own screen. The diagram goes 702 → 626 px there, and 666 → 586 px at 1440.
 
@@ -10719,37 +10720,3 @@ column at all.
 
 **Trigger:** the next epic that touches Members, or a re-run of `measure-column-fit.mjs` at 1646 as
 part of any layout change.
-
-### 343. Two screens carry facts they already hold and do not render
-
-**Status:** open
-**Raised:** 2026-09-17 (ADR-0146 M8, by `ux-reviewer` and `accessibility-reviewer`)
-
-Both are scope the gate pass was the wrong place to add (ADR-0105: a new column on a list screen is
-a new surface, and the epic's own spec had already declined to scope one of them), so they are
-recorded rather than built.
-
-**(a) Clients is the sparsest table in the epic.** After D4 moved its description under the name,
-`ClientsTable` renders exactly two columns — `Name` with an optional sub-line, and `Actions` — which
-at the 1488px measure this epic gave it is a name at one end, an `Edit ⋯` at the other, and roughly
-900–1000px of nothing between them on every row. That is the most literal instance in the product of
-the complaint the epic was opened on.
-
-The spec diagnosed the identical shape for Members (`feature-spec.md` §1.2.9, "Members is sparse")
-and fixed it in M4 by rendering `joinedAt`, which had been on the wire and unrendered the whole time.
-**The same section notes that `ClientSummary` already carries `createdAt`/`updatedAt` unrendered**,
-and nothing in M1–M8 went back to it. A `Created` column is cheap and `width: 'fit'`.
-
-The reason it is not folded in here: adding a column changes what the column-fit measurement is
-about, so it wants FC-2 re-run rather than a reviewer's eye — which is a milestone, not a fix.
-
-**(b) Members' Roster renders with no `count`.** `feature-spec.md` §4.6's composition is
-`SectionCard( "Roster", count, table + Joined )` and `members.tsx` passes no `count` prop. Not an
-accessibility defect — parity is equal for every reader when a fact is simply not shown — and not a
-withdrawal either, because unlike M2-T2a and M4-T2 nothing recorded a decision. It is the silent gap
-between a spec and its code that ADR-0081's standing rule is about, and one line either way settles
-it: render it, or write down why not.
-
-**Trigger:** the next epic that touches either screen, or a product-owner report that Clients reads
-empty. Both are one-line changes; what they need is the measurement pass that makes them safe to
-call done.
