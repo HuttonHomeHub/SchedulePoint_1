@@ -10697,9 +10697,25 @@ has **no** `planCount`, over a fixture holding exactly the plans that would make
 **Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found re-running
 `measure-column-fit.mjs` for #343's M1) · **Size:** S · **Owner:** web
 
-At **1646** the _Pending invitations_ table renders at **599px** and its content needs **748px**, so
-two columns wrap: `Sent` (86 used / 147 natural) and `Status` (109 / 197). Measured, one sitting,
-`docs/specs/unrendered-row-facts/m1/column-fit-1646.json`.
+**It wraps at every width measured, not just at 1646** — the row understated this when it was
+filed, and the M3 readings settle it:
+
+| Width  | `Sent` used / natural | `Status` used / natural |
+| ------ | --------------------- | ----------------------- |
+| 1280px | 54 / 147              | 62 / 197                |
+| 1646px | 86 / 147              | 109 / 197               |
+| 1920px | 120 / 147             | 159 / 197               |
+
+So it is not a narrow-viewport problem that a wider screen relieves. At 1646 the table renders at
+**599px** against content needing **748px**; at 1920 it is still 27px and 38px short. Measured in
+one sitting, `docs/specs/unrendered-row-facts/m3/cf-1280|1646|1920.json`.
+
+**And no gate will ever catch it, for a reason that is not the one first assumed.** The standing
+FC-2 journey gate — `no table cell wraps while its table has room` — sweeps exactly three screens
+(`calendars`, `resources`, `clients`, `composition.spec.ts:247`). **Members is not one of them.**
+The first reading of this was that the gate's condition excluded the case because the table has no
+slack; that is wrong, and checking the gate's source rather than reasoning about its name is what
+corrected it. The gate never visits the screen.
 
 **It is a regression, not a fixture artefact.** `docs/specs/page-composition/m2/column-fit-1646.json`
 records the same table at **full width** with `Sent: 250/147` and `Status: 335/197`, comfortably
@@ -10718,5 +10734,15 @@ second screen's layout mid-epic would confound FC-D clause 2's measurement. It i
 a column-width problem — the honest first question is whether that section belongs in a narrow grid
 column at all.
 
-**Trigger:** the next epic that touches Members, or a re-run of `measure-column-fit.mjs` at 1646 as
-part of any layout change.
+**Two pieces of work, and the second is the durable one:**
+
+1. Decide whether _Pending invitations_ belongs in a narrow grid column at all. `members.tsx`
+   gives it `span="narrow"` by a product-owner decision about the page's shape, and the table it
+   holds is five columns wide. Widening the column, narrowing the table, or moving the section are
+   all live options; none has been costed.
+2. **Widen the FC-2 gate's screen list.** Three of the ten screens the probe measures are swept.
+   That is a gate whose subject is "does any table wrap beside unused width" reading 30% of the
+   estate, which is how this survived a gate pass.
+
+**Trigger:** the next epic that touches Members — or sooner, since (2) is cheap and is what makes
+(1) findable next time.
