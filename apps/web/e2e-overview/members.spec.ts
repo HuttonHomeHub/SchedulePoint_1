@@ -47,7 +47,17 @@ test.describe('invitations, from the landing to Members and back', () => {
     }
 
     // ---- Members can now SHOW them. This is the half that did not exist. --------------------
-    const invitations = page.getByRole('table', { name: 'Pending invitations' });
+    /**
+     * **The TABLE is `Invited people`; the SECTION is `Pending invitations`.**
+     *
+     * They were both `Pending invitations` until `docs/TECH_DEBT.md` #344, which is a real defect
+     * — `DataTable` renders a focusable scroll region labelled by its caption, so an AT user heard
+     * one name twice and could not tell which box they were in. Renaming the caption fixed it and
+     * broke these four locators, in a suite this branch never touched: the exact class ADR-0091 M7
+     * and ADR-0114 record as "run every journey after a label or layout change", found by a
+     * specialist review rather than by CI.
+     */
+    const invitations = page.getByRole('table', { name: 'Invited people' });
     await expect(invitations).toBeVisible();
     await expect(invitations.getByText(`first-${stamp}@example.com`)).toBeVisible();
     await expect(invitations.getByText(`second-${stamp}@example.com`)).toBeVisible();
@@ -64,7 +74,7 @@ test.describe('invitations, from the landing to Members and back', () => {
     // every unit test (`e2e-public`'s `signOut()` helper shipped matching nothing, ADR-0077 M8).
     await landingCount.click();
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}/members$`));
-    await expect(page.getByRole('table', { name: 'Pending invitations' })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Invited people' })).toBeVisible();
 
     // ---- Revoke one, and the landing must notice. --------------------------------------------
     await page
@@ -81,9 +91,7 @@ test.describe('invitations, from the landing to Members and back', () => {
     await confirm.getByRole('button', { name: 'Revoke', exact: true }).click();
 
     await expect(
-      page
-        .getByRole('table', { name: 'Pending invitations' })
-        .getByText(`first-${stamp}@example.com`),
+      page.getByRole('table', { name: 'Invited people' }).getByText(`first-${stamp}@example.com`),
     ).toBeHidden();
 
     // Focus is not on `<body>` — the revoked row unmounted with the button that was focused
@@ -137,8 +145,15 @@ test.describe('invitations, from the landing to Members and back', () => {
     await expect(plannerPage).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
 
     await plannerPage.goto(`/orgs/${orgSlug}/members`);
+    /**
+     * **The roster line is the positive control and is asserted FIRST**, because the two below it
+     * are absence assertions and a locator matching nothing is "hidden". When #344 renamed the
+     * table's caption `Pending invitations` → `Invited people`, this file's three POSITIVE
+     * assertions failed loudly and this one would have kept passing for the wrong reason — which
+     * is the more dangerous half of the same change and the reason the control is named here.
+     */
     await expect(plannerPage.getByRole('table', { name: 'Organisation members' })).toBeVisible();
-    await expect(plannerPage.getByRole('table', { name: 'Pending invitations' })).toBeHidden();
+    await expect(plannerPage.getByRole('table', { name: 'Invited people' })).toBeHidden();
     await expect(plannerPage.getByText('Pending invitations')).toBeHidden();
   });
 });

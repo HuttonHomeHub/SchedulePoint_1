@@ -201,9 +201,12 @@ describe('InvitationsSection', () => {
     // through `apiFetchAllPages`, so this length is the total rather than "rows loaded so far".
     renderSection();
 
-    // Two regions carry this name — the `SectionCard`'s `<section>` and the scrollable table
-    // region inside it — so the card is named by its element rather than by taking the first
-    // match, which would silently start asserting about the wrong box if the order ever changed.
+    // **This guards against a REGRESSION, and no longer describes the present.** Two regions did
+    // carry this name — the `SectionCard`'s `<section>` and `DataTable`'s scrollable table region
+    // inside it — until `docs/TECH_DEBT.md` #344 renamed the caption to `Invited people`. Only the
+    // `<section>` answers to it now, so `getAllByRole` returns one element and the `find` is a
+    // no-op; both are kept because the day somebody re-introduces the clash this picks the card
+    // rather than silently starting to assert about the scroll region.
     const card = screen
       .getAllByRole('region', { name: /Pending invitations/ })
       .find((el) => el.tagName === 'SECTION');
