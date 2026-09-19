@@ -118,7 +118,24 @@ test('the narrow shell: sheet navigation, header reachability, breakpoint crossi
 
   // ── FR-4: below `md` the plan's facts render in the shell fallback, not a hidden pane
   // (the ADR-0114 M7 regression, asserted in a real layout for the first time).
-  await expect(page.getByText('Data date', { exact: true })).toBeVisible();
+  /**
+   * **Named by its label, not matched by its text** (`docs/TECH_DEBT.md` #347).
+   *
+   * This read `getByText('Data date', { exact: true })`, which is ambiguous by construction: since
+   * ADR-0106 moved the persistent date labels out of the canvas and into the ruler band as DOM,
+   * `Data date` is ALSO the text of the axis-marker pill
+   * (`TsldCanvas.tsx:2240`, `data-axis-marker="dataDate"`). Both are on this page whenever the
+   * diagram has painted, so the assertion was a **race** — green when it ran before the canvas
+   * painted its markers, a strict-mode violation when it did not. It lost that race exactly once,
+   * inside a full `scripts/e2e-sweep.sh` on a loaded machine, and passed three times standing
+   * alone, which is what made it look flaky rather than under-specified.
+   *
+   * Reproduced deterministically before it was changed: inserting a 2.5 s settle ahead of the old
+   * locator fails every run, naming both elements. `Stat` gives the pair one `aria-label`
+   * (`plan-facts.tsx:257`, `${label}: ${value}`), so the label names the FACT and cannot match the
+   * pill, which carries no such label. No wait is needed once the locator is unambiguous.
+   */
+  await expect(page.getByLabel(/^Data date: /)).toBeVisible();
 
   // ── FR-3: the breakpoint-crossing effect. Open the sheet, widen across `lg`: the effect must
   // close it (a modal drawer lingering behind the pinned rail is a stuck focus trap), and the
