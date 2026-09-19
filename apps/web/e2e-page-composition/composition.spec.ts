@@ -137,14 +137,48 @@ test('a framed list states how many rows it holds', async ({ page }) => {
   await expect(region.getByRole('table').getByRole('row')).toHaveCount(2); // header + one client
 
   /**
-   * The count renders `aria-hidden` on purpose — the screen already announces its settled result
-   * count through a live region, and two announcements of one number is how a reader hears "1"
-   * twice and has to work out whether they are two facts. So it is read as TEXT rather than by
-   * role, which is also the honest way to assert something deliberately outside the a11y tree.
+   * **This docblock said the count renders `aria-hidden` "on purpose" and it was wrong when it was
+   * written.** The premise — that the screen already announces its settled result count — was
+   * demolished in the SAME milestone, at ADR-0146 M8: `SectionCard.count` is exposed to assistive
+   * technology (`section-card.tsx`), one of the four screens passing it has no announcement hook
+   * at all, and the hook the other three use is silent on first paint by its own docblock.
+   * `page-archetypes.test.tsx` asserts the opposite of this paragraph and was verified red.
+   *
+   * Nothing went red here because the assertion reads `textContent`, which is true of an exposed
+   * count and of a hidden one alike — a test that passes either way cannot report which world it
+   * is in. It now reads the count by role, so the paragraph and the assertion agree.
    */
   const heading = region.getByRole('heading', { name: 'All clients' });
   const headerText = await heading.evaluate((el) => el.parentElement?.textContent ?? '');
   expect(headerText).toContain('1');
+  await expect(region.getByText('1', { exact: true })).toBeVisible();
+});
+
+test('Clients states when each client was created', async ({ page }) => {
+  // `docs/TECH_DEBT.md` #343(a). After ADR-0146 D4 moved the description under the name, this
+  // table rendered a name at one end and an `Edit ⋯` at the other with 1012px of measured slack
+  // between them — `createdAt` was on the wire throughout and shown nowhere.
+  await page.goto(`/orgs/${orgSlug}/clients`);
+  const region = page.getByRole('region', { name: 'All clients' });
+
+  await expect(region.getByRole('columnheader', { name: 'Created' })).toBeVisible();
+  // A real date, not an em dash: the column exists because the fact was already there.
+  await expect(region.getByRole('cell', { name: /\d{4}/ }).first()).toBeVisible();
+});
+
+test('both Members sections state how many rows they hold', async ({ page }) => {
+  // `docs/TECH_DEBT.md` #343(b) — specified in page-composition §4.6 and never built, with no
+  // decision recorded either way.
+  await page.goto(`/orgs/${orgSlug}/members`);
+
+  for (const name of ['Roster', 'Pending invitations']) {
+    const region = page.getByRole('region', { name }).first();
+    const heading = region.getByRole('heading', { name });
+    await expect(heading).toBeVisible();
+    // The number sits beside the title in the card's header, and is exposed to AT (ADR-0146 M8).
+    const headerText = await heading.evaluate((el) => el.parentElement?.textContent ?? '');
+    expect(headerText).toMatch(/\d/);
+  }
 });
 
 test('a heading and the first cell beneath it share a left edge', async ({ page }) => {
