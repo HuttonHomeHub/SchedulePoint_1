@@ -199,14 +199,17 @@ jobs:
       - name: Check every end-to-end suite runs in CI
         run: pnpm check:e2e-roster
 
-      # Every ADR is reachable from the document a reader navigates product direction by.
+      # Every ADR is reachable from the three documents a reader navigates by: `docs/ROADMAP.md`
+      # (product direction), `docs/adr/README.md` (the index) and `CLAUDE.md` §16 (the register
+      # every human and every agent is briefed from).
       # Written because THREE consecutive reconciliation passes found `docs/ROADMAP.md` silent on
       # the newest ADRs — 0067–0073, then 0074–0085, then 0087–0092 — each time found by hand, and
       # the second of those recorded that it was "a numbered step and not a habit". It was a
       # numbered step, and it happened again. `docs/RECONCILE.md` §1 says to write a gate instead
-      # of a reminder; this is that gate. Deliberately aimed at ROADMAP rather than CLAUDE.md's
-      # register, which was complete on all three occasions: only the roadmap rots silently,
-      # because nothing downstream breaks when a shipped capability is missing from it.
+      # of a reminder; this is that gate.
+      # It was aimed at ROADMAP alone until 2026-09-19, on the inference that "only the roadmap
+      # rots silently" — disproved TEN times (`docs/TECH_DEBT.md` #291). §16 joined it at
+      # ADR-0147, which amends ADR-0110 D6.
       - name: Check ADR coverage
         run: pnpm check:adr-coverage
 

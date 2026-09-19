@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1277 web
 > source files with 44 Playwright suites beside the base journey, and
-> 146 ADRs.
+> 147 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5185,6 +5185,57 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   because what FC-8 protects against is the **next** heading or strip added above a list. FC-6's
   evidence became a gate for the same reason. **The CPM engine is not imported and no migration
   runs.**
+
+- **ADR-0147** _(Accepted; M0–M3 landed 2026-09-19)_ — The register a reader is briefed from is
+  gated too. `docs/TECH_DEBT.md` #291 recorded **ten** instances of one thing: an ADR Accepted,
+  filed, listed in `docs/adr/README.md` (gated) and cited by `docs/ROADMAP.md` (gated), and
+  **absent from this section**, with `pnpm prepush` green throughout. Every repair was by hand;
+  three were found by a person doing the comparison manually; **not one was found by a gate**,
+  because `check-adr-coverage.mjs` did not read this file. The mechanism is not a coincidence —
+  an ADR filed at the end of an epic reaches the two documents that **fail loudly** and misses the
+  one that does not, and §16 is the one every human and every agent is briefed from. ADR-0110 D6
+  met this shape one document along, wrote the rule down (_a rule repaired by hand and left ungated
+  recurs at the next opportunity_), gated the index a reader rarely opens, and correctly deferred
+  this as an ADR-0105 trigger. **Amends ADR-0110 D6 rather than superseding it.**
+  **The load-bearing decision is that A1 is an entry parser and never a substring search**:
+  `ADR-\d{4}` occurs **750 times** in this file against 146 entries, because entries cite one
+  another constantly — so `includes('ADR-0122')` is satisfied by prose inside a **different** ADR's
+  entry, which is the recorded mechanism by which ADR-0049 and ADR-0122 were "present" while being
+  absent. An entry is defined testably (a list item at column 0 whose first content is a bolded id;
+  146 of 146 take that form) and the status parenthetical is deliberately **not** required, because
+  ADR-0001–0005 carry none and a rule that fails on day one gets deleted rather than fixed.
+  ADR-0124 D1's _find generously, refuse strictly_ is applied literally, and buys **nothing today**
+  — both passes find 146 — but the alternative on the day somebody reformats this section is 146
+  findings claiming every ADR is missing from a file where every ADR is present. **A5 is the
+  control and is the assertion most likely to be got wrong**: ADR-0120's A9 compared heading counts
+  against heading counts, shared one blind spot with itself, and passed through a red run, a repair
+  and an arming while reading 88 of 119 rows — so A5 scans the **whole document without calling
+  `sections()`** and states in its own docblock what it cannot catch. **§16 has no exemptions at
+  all** (A7): 17 of the 43 roadmap exemptions justify themselves by pointing **here**, so an
+  exemption suppressing a §16 finding would let the only coverage claim this repository makes about
+  those ADRs be verified by citing itself. **Checked, not generated** (D7) — this section is
+  deliberately not in numerical order, several entries are the best account of a decision anywhere,
+  and the measured defect is **absence**, not inaccuracy; the gate closes absence and says so.
+  **Three defects closed on the way, none of them reported by anybody.** A blank exemption reason
+  silently admitted an ADR (`"0147": ""` would have exempted this one), found by a **pinned positive
+  case** rather than by a failure — ADR-0136 records the licence gate's identical rule having no
+  test, and here the rule did not exist. An empty roster printed `ADR coverage OK (0 of 0 …)` and
+  exited 0, inside the one register gate whose five siblings all use `report()`'s population
+  refusal. And it was the **only** register gate with no `.test.mjs` sibling, so none of its three
+  shipped assertions had ever been verified red. **The plan's before/after oracle could not be used
+  and the departure is recorded**: the suite was to pass unedited through the restructure, and the
+  gate could not be pointed at a fixture at all — the same fact that had kept it untested — so a
+  named mutation per case replaces it, 17 across two sweeps. Two of those taught something: the
+  first A7 mutation broke R1-negative, R2 and the real-estate control and said **nothing** about
+  A7, and a mutation that breaks its neighbours has not tested its subject; and the fixture helper
+  withheld both the roadmap mention and the index row, so R1's case reported `['R1', 'R3a']` and
+  would have been satisfied by a gate that had lost R1 entirely. **The arming was adapted, not
+  skipped**: ADR-0120 D5 assumes a dirty estate and this one is clean in both directions, so the
+  red run is produced by deliberate **mutation**, labelled as such, with the clean baseline beside
+  it — and deleting ADR-0146's bullet reads **FAIL** under `prepush.sh`, not `WARN`, with
+  `ADVISORY_GATES` untouched. **The gate's first real exercise was this ADR**: it refused the
+  commit that filed ADR-0147 until this entry existed. Cost 62–66 ms. **The CPM engine is not
+  imported and no migration runs**; `apps/` contributes zero files to the diff.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

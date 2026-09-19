@@ -1,6 +1,6 @@
 # Feature Spec: The ADR register in `CLAUDE.md` §16 is gated, not remembered
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Accepted — shipped (ADR-0147)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-19
 - **Tracking issue / epic:** _(to be assigned)_
