@@ -100,8 +100,8 @@ baseline (`m0/drift-*.json`, sha `2f256848`):
 
 Every screen's `mainWidth` is byte-identical to its baseline (1003 / 1369 / 1643 for the nine
 org-scoped screens; 1280 / 1646 / 1920 for the two full-bleed ones). That is expected rather than
-lucky: **`WIDTH_CLASSES.auto` is `''`** (`data-table.tsx:89`, stated in that constant's own
-docblock), so declaring a column `auto` changes the `data-col-width` attribute and **no pixels at
+lucky: **`WIDTH_CLASSES.auto` is `''`** (`data-table.tsx:106` — read from the declaration, not from the docblock
+40 lines above it that asserts the same thing), so declaring a column `auto` changes the `data-col-width` attribute and **no pixels at
 all**. The reading is taken anyway, because "it cannot have changed anything" is an argument and
 FC-5 asks for a number.
 
@@ -131,7 +131,7 @@ screens at 1280, 1646 and 1920.
 
 ## 5. The photographs, including the branch nothing had ever shown
 
-`m2/README.md:213-214` recorded the `Expired` branch as unphotographed and covered only by a unit
+`m2/README.md:214-215` recorded the `Expired` branch as unphotographed and covered only by a unit
 case. It is photographed now, on the shoot tenant with one row expired and one live so the contrast
 is visible in one frame:
 
