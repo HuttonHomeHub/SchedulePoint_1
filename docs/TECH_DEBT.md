@@ -10758,3 +10758,47 @@ remedies: only a candidate that reduces the table's **min-content** removes it.
 
 **Trigger:** the next epic that touches Members — or sooner, since (2) is cheap and is what makes
 (1) findable next time.
+
+### 345. One wrap rule, two implementations — and one of them measured at the wrong font size for its whole life
+
+**Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found arming #344's widened
+sweep) · **Size:** S · **Owner:** web
+
+**The same rule is written twice**: `apps/web/scripts/measure-column-fit.mjs` (`wrapHeight`) and the
+inline `page.evaluate` inside `composition.spec.ts`'s wrap sweep. Both clone a cell at its rendered
+width, measure its height, force `white-space: nowrap` through the subtree, and measure again. That
+is the ADR-0065 shape exactly — two implementations of one rule, drifting invisibly, because each
+looks right alone and only somebody asking both the same question ever sees the difference.
+
+**Arming the gate is what asked them.** The journey's copy set the clone's font from
+`getComputedStyle(td).font` — the **shorthand** — and Chromium serialises that as the **empty
+string** whenever a longhand it cannot express is non-initial. Tailwind's `text-sm` sets
+`line-height`, so it is empty for every cell in this product. The clone therefore rendered at the
+document default **16px** while the product renders at **14px**: every string ~14% too wide, and a
+`text-xs` sub-line measured at 16px rather than 12px is ~33% too wide. Measured, not inferred —
+`REAL size=14px | CLONE size=16px`, same family, printed from the running sweep.
+
+It went unreported because the wraps it did catch are real ones with margin to spare. #344's folded
+invitations cell is the first to land in the gap: the sweep reported its address wrapping to three
+lines in a 261px clone, while the same address on the same page measures **264×20 — one line** in
+the live DOM. `measure-column-fit.mjs` never had the defect, because it copies `fontSize`,
+`fontFamily`, `fontWeight` and `letterSpacing` as longhands beside the useless shorthand.
+
+**The fix applied was to copy that hardening into the journey**, which restores agreement and is
+verified both ways: the members false positive disappears, the audit log's six declared-`auto` wraps
+still report, and the FC-2 mutation (deleting `width: 'auto'` from `AuditEventList:86`) still turns
+the armed gate red.
+
+**What is left is the duplication itself.** Two copies of one rule, now agreeing, is the state that
+produced this. A shared module — the measurement exported once and imported by both the script and
+the journey's `page.evaluate` — is the durable fix, and it is not free: a `page.evaluate` body cannot
+close over an import, so it needs the function serialised into the page or the probe rewritten as an
+`addInitScript`. Worth doing deliberately rather than inside an epic's last milestone (ADR-0105).
+
+**This also cost #344 a wrong turn worth recording.** The first response to the finding was to change
+the **product** — stacking the two folded facts instead of letting them reflow — on the theory that
+making both detectors agree was a layout problem. It did not work, and it was the failure that sent
+the diagnosis one level down to the instrument. The layout it would have changed is the one the
+measurement had already chosen (`m2/README.md` §6).
+
+**Trigger:** the next change to either detector, or the next epic that widens the sweep's roster.

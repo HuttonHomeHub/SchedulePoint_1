@@ -19,18 +19,6 @@ test.describe.configure({ mode: 'serial' });
 
 import { SWEPT, partitionWraps, type WrapObservation } from './screen-roster';
 
-/**
- * **Report-only, and this constant is how it stops being so.** `docs/TECH_DEBT.md` #344's defect is
- * live: the widened sweep goes red against the product as it stands, which is why it cannot be
- * armed in the milestone that adds it without making `main` red until the remedy lands. M4 deletes
- * this constant and the superseded three-screen assertion together.
- *
- * The existing assertion stays armed throughout, so coverage is never lost in the gap. Putting
- * `members` on an exemption list instead was rejected: that is the `PENDING_COVERAGE` queue
- * ADR-0073 C3.4 deleted, and a queue is how a known defect becomes a permanent one.
- */
-const WRAP_SWEEP_REPORT_ONLY = true;
-
 const stamp = Date.now();
 const orgSlug = `composition-co-${stamp}`;
 
@@ -300,8 +288,28 @@ test('Pending invitations carries both facts under the address, not in columns',
   expect(headers.map((h) => h.trim())).toEqual(['Email', 'Role', 'Actions']);
 });
 
-test('no column wraps unless its column declared that it may', async ({ page }) => {
+test('no table cell wraps unless its column is declared auto', async ({ page }) => {
   /**
+   * **This replaces `no table cell wraps while its table has room`, and the rename is the point.**
+   *
+   * That test swept three screens by a hand-written list, and both its title and its failure
+   * message (`${path} has a cell wrapping inside a table with room`) stated a **slack** rule its
+   * body never implemented — it asserted no wrap at all, on those three screens, and said nothing
+   * about slack. The sentence is what misled the first reading of `docs/TECH_DEBT.md` #344: the
+   * conclusion drawn from it was that Members escaped because its table has no slack, and the real
+   * reason is that the gate never visited the screen.
+   *
+   * **A slack rule would also have been a gate incapable of failing.** Measured at M0, **zero of
+   * the nine wraps in the estate sat in a table with positive slack** (`m0/README.md` §2), so a
+   * slack-gated rule fires on nothing — it would excuse this epic's defect and the audit log's
+   * deliberate wrap alike. The canonical FC-2 (`page-composition/feature-spec.md:375`) has no
+   * slack clause either; the clause existed only in a title and an error string.
+   *
+   * So the discriminator is the column's **own declaration** (ADR-0146 D3): a wrap in a column
+   * declared `auto` is a decision somebody made and is tolerated; a wrap in a column that is
+   * `auto` by omission is the defect. The roster is declared once in `screen-roster.ts` rather
+   * than written inline, so a screen cannot be missing from it silently.
+   *
    * **The widened FC-2 sweep** (`docs/TECH_DEBT.md` #344). The assertion above sweeps three screens
    * by a hand-written list; this sweeps every screen the roster declares, at all three widths, and
    * judges each wrap by the column's OWN declaration rather than by which list somebody remembered
@@ -380,12 +388,39 @@ test('no column wraps unless its column declared that it may', async ({ page }) 
               // Cloned at its own width, measured, forced to `nowrap`, measured again: if it gets
               // SHORTER when nothing may wrap, it was wrapping. Counting line boxes reports a cell
               // holding two stacked elements as a wrap, which this product now renders on purpose.
+              /**
+               * **The font is copied longhand, and `font` alone is not enough — measured.**
+               *
+               * Chromium refuses to serialise the `font` SHORTHAND whenever a longhand it cannot
+               * express is non-initial, and Tailwind's `text-sm` sets `line-height`, so
+               * `getComputedStyle(td).font` returns the **empty string** here. Assigning it sets
+               * nothing, and the clone then renders at the document default **16px** while the
+               * product renders at **14px** — every measured string ~14% too wide, and a `text-xs`
+               * sub-line measured at 16px instead of 12px is ~33% too wide.
+               *
+               * That is a systematic false-positive bias against every cell in the product, since
+               * no table cell here is 16px. It went unnoticed because the wraps this gate did
+               * report were real ones with margin to spare. `docs/TECH_DEBT.md` #344's folded
+               * invitations cell is the first to land in the gap: the sweep reported its address
+               * wrapping to three lines in a 261px clone, while the same address on the same page
+               * measures 264×20 — one line — in the live DOM.
+               *
+               * `measure-column-fit.mjs` never had the bug, because it copies the longhands. Two
+               * implementations of one rule, drifting invisibly (ADR-0065) until arming this limb
+               * forced them to answer the same question out loud. The rule now lives the same way
+               * in both; a shared module is the durable fix and is `docs/TECH_DEBT.md`'s to carry.
+               */
+              const cs = getComputedStyle(td);
               const host = document.createElement('div');
               Object.assign(host.style, {
                 position: 'absolute',
                 left: '-99999px',
                 width: `${String(td.getBoundingClientRect().width)}px`,
-                font: getComputedStyle(td).font,
+                font: cs.font,
+                fontSize: cs.fontSize,
+                fontFamily: cs.fontFamily,
+                fontWeight: cs.fontWeight,
+                letterSpacing: cs.letterSpacing,
               });
               const clone = td.cloneNode(true) as HTMLElement;
               clone.style.boxSizing = 'border-box';
@@ -439,12 +474,11 @@ test('no column wraps unless its column declared that it may', async ({ page }) 
   for (const w of tolerated) console.log(`  tolerated: ${describe(w)}`);
   for (const w of findings) console.log(`  FINDING:   ${describe(w)}`);
 
-  if (WRAP_SWEEP_REPORT_ONLY) {
-    // Report-only until the remedy lands (M4 deletes this branch). The sweep still fails if it
-    // examined nothing — an instrument that cannot see is a failure whatever it is asked to judge.
-    expect(examined.length).toBeGreaterThan(0);
-    return;
-  }
+  // **The instrument must have seen something before its verdict means anything** (ADR-0093). An
+  // empty `findings` is produced by a clean estate and by a sweep that visited nothing, and only
+  // one of those is a pass. This limb is asserted FIRST for that reason, and it survives the
+  // report-only switch M1 shipped and M4 deleted.
+  expect(examined.length).toBeGreaterThan(0);
   expect(findings.map(describe)).toEqual([]);
 });
 
@@ -493,64 +527,6 @@ test('every list screen is as wide as the organisation landing', async ({ page }
   for (const path of ['clients', 'calendars', 'resources', 'members', 'audit-log']) {
     await page.goto(`/orgs/${orgSlug}/${path}`);
     expect(await contentWidth(page), `${path} is not as wide as the landing`).toBe(landing);
-  }
-});
-
-test('no table cell wraps while its table has room', async ({ page }) => {
-  /**
-   * FC-2, in the one place it can be judged. Measured at M0, eleven columns across five screens
-   * wrapped — three of them a few pixels short inside a table with 271–518px of slack, which is the
-   * defect this epic was opened on. The cause was the previous epic's own remedy: it capped those
-   * columns at fixed widths, correctly measuring that they were taking slack they did not want, and
-   * never asked whether the content still fitted on one line inside the cap.
-   *
-   * **The question is asked directly rather than by counting line boxes.** A cell holding two
-   * stacked elements — a name above a description, which this epic now renders deliberately — has
-   * two line boxes and wraps nothing. So each cell is cloned at its own width, measured, forced to
-   * `nowrap` through its whole subtree and measured again: if it gets SHORTER when nothing may
-   * wrap, it was wrapping. The M0 probe's first version counted rects and reported the single word
-   * `Edit` as two lines.
-   */
-  for (const path of ['calendars', 'resources', 'clients']) {
-    await page.goto(`/orgs/${orgSlug}/${path}`);
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
-
-    const wrapped = await page.evaluate(() => {
-      const out: string[] = [];
-      for (const table of document.querySelectorAll('table')) {
-        const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent ?? '');
-        for (const row of table.querySelectorAll('tbody tr')) {
-          [...row.querySelectorAll('td')].forEach((td, i) => {
-            if ((td.getAttribute('colspan') ?? '1') !== '1') return;
-            const host = document.createElement('div');
-            Object.assign(host.style, {
-              position: 'absolute',
-              left: '-99999px',
-              width: `${td.getBoundingClientRect().width}px`,
-              font: getComputedStyle(td).font,
-            });
-            const clone = td.cloneNode(true) as HTMLElement;
-            clone.style.boxSizing = 'border-box';
-            clone.style.width = '100%';
-            host.appendChild(clone);
-            document.body.appendChild(host);
-            const height = host.getBoundingClientRect().height;
-            for (const node of [clone, ...clone.querySelectorAll('*')]) {
-              (node as HTMLElement).style.whiteSpace = 'nowrap';
-            }
-            const nowrap = host.getBoundingClientRect().height;
-            host.remove();
-            // 1px of tolerance: sub-pixel line-height rounding is not a wrap.
-            if (height > nowrap + 1)
-              out.push(`${heads[i] ?? '?'}: ${td.textContent?.trim() ?? ''}`);
-          });
-        }
-      }
-      return out;
-    });
-
-    expect(wrapped, `${path} has a cell wrapping inside a table with room`).toEqual([]);
   }
 });
 

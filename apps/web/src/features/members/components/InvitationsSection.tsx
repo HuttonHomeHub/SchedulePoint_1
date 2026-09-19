@@ -103,12 +103,22 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
        * governs an optional sub-line does not apply: every pending invitation has both a sent
        * instant and an expiry, so there is no absence to print an em dash for.
        *
-       * **`flex-wrap` is the point at 1280**, where the line is 38px wider than the cell. The two
-       * facts then stack, each whole — the break falls *between* facts and never inside a date,
-       * which is the distinction between a legitimate wrap and a broken value. Measured, the probe
-       * reports no wrap there because the cell's height comes from stacked siblings; the row is
-       * three lines tall and the photograph, not the number, is what shows it
-       * (`m2/members-1280-C2c.png`).
+       * **`flex-wrap` is the point at 1280**, where the two facts measure 294px inside a 264px
+       * cell. The line then reflows and they stack, each whole — the break falls *between* facts
+       * and never inside a date, which is the distinction between a legitimate wrap and a broken
+       * value (`m2/members-1280-C2c.png` is what shows it; the probe reports no wrap, because the
+       * cell's height comes from stacked siblings). At 1646 and 1920 they sit on one line.
+       *
+       * **This was briefly changed to `flex-col` and changed back, and the reason is worth
+       * keeping.** Arming the journey's sweep reported this cell as a wrap while
+       * `measure-column-fit.mjs` called it clean — two implementations of one rule disagreeing
+       * (ADR-0065). Stacking was a plausible way to make both agree, and it did not work, which is
+       * what sent the diagnosis one level down: the journey's clone set `font` from the
+       * `getComputedStyle` **shorthand**, which Chromium serialises as the empty string whenever a
+       * longhand it cannot express is non-initial — so the clone measured at 16px while the
+       * product renders at 14px, and this cell's `text-xs` sub-line at 16px instead of 12px. The
+       * defect was in the instrument, not in the layout, and the layout it would have changed is
+       * the one the measurement chose. Fixing the instrument restored the original design.
        */
       cell: (invitation) => (
         <span className="flex min-w-0 flex-col gap-0.5">
