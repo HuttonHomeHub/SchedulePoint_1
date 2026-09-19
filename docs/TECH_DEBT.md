@@ -10723,6 +10723,21 @@ the failure screenshot had already been cleaned, and three subsequent runs were 
 that area has changed in three weeks (`TsldLegend.tsx` last touched 2026-08-28, `plan-facts.tsx`
 2026-08-28, the spec 2026-08-28), so if it is real it is long-standing.
 
+**What reading the code DID establish, and it narrows the search rather than settling it.** The
+legend is rendered **unconditionally** alongside the diagram — `TsldPanel.tsx:2655`,
+`{!chromeless && showDiagram ? (<Surface …><TsldLegend /></Surface>) : null}` — with no
+open/closed gate of its own, and `showDiagram` is
+`dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED)` (`:1508`), which **does not
+depend on viewport width**. So the second `Data date` is structurally available at 390px, and the
+only thing that suppresses it is **`chromeless`**. That makes `chromeless` the thing to instrument,
+not the breakpoint — and it also means the naive reading ("the legend only shows on wide screens")
+is false and would have sent the next reader the wrong way.
+
+It does **not** explain why the suite normally passes, and that gap is the point: if both elements
+were always present the assertion would always fail, so something makes `chromeless` true on the
+ordinary path and did not on that run. Whoever picks this up should log `chromeless` and
+`showDiagram` at the moment of the assertion before changing anything.
+
 **Why this is worth a row rather than a shrug.** A suite that passes alone and fails in a sweep is
 the shape the sweep exists to find, and the sweep is not a per-change step — so a failure seen once
 there is seen rarely, and forgetting it costs the next person the same forty minutes. The `staff`
