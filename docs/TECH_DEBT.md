@@ -10693,6 +10693,56 @@ not send. Fixed, and pinned in both directions.
 **What is pinned so this cannot come back silently:** `clients.e2e-spec.ts` asserts the detail body
 has **no** `planCount`, over a fixture holding exactly the plans that would make one look right.
 
+### 347. Two journeys pass alone and fail inside the sweep, and one of them says why
+
+**Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found running
+`scripts/e2e-sweep.sh` in full for #344) · **Size:** S · **Owner:** web
+
+**The sweep reported 44 of 46 suites passing and two failing — `narrow-shell` and `staff` — and
+neither is a regression.** That was established rather than assumed, three ways each:
+`e2e-narrow-shell` passes on `main` (`52965042`) standalone, passes on the #344 branch
+(`aed7496a`) standalone, and passed in CI run 1824 on that same head; `e2e-staff` passes on the
+branch standalone and in the same CI run. The #344 diff touches `InvitationsSection.tsx`, one
+journey fixture and docs, and cannot reach either screen.
+
+**`staff` has a mechanism, and it is a real brittleness rather than a flake.** The comparability
+caveat renders only when there is more than one sitting to compare —
+`apps/web/src/features/perf-probe/ui/probe-sittings.tsx:146`, `{sittings.length > 1 && (`, which is
+a deliberate decision with its reasoning written above it ("before that it is advice about an act
+the reader cannot perform"). `e2e-staff/staff.spec.ts:554` asserts that caveat's text is present
+**unconditionally**. So the assertion depends on a database state the spec does not create and does
+not check: the run that failed received a single sitting's facts, and the run that passed minutes
+later did so against an `app_test` holding **17 rows across 5 sittings**. The spec is correct about
+what it wants and silent about what it needs.
+
+**`narrow-shell` is recorded WITHOUT a mechanism, which is the honest half.**
+`getByText('Data date', { exact: true })` resolved to 2 elements at 390px
+(`narrow-shell.spec.ts:121`). The plausible second element is the TSLD legend's own `Data date`
+entry (`TsldLegend.tsx:83`), but that is a **hypothesis, not a finding** — it was not reproduced,
+the failure screenshot had already been cleaned, and three subsequent runs were green. Nothing in
+that area has changed in three weeks (`TsldLegend.tsx` last touched 2026-08-28, `plan-facts.tsx`
+2026-08-28, the spec 2026-08-28), so if it is real it is long-standing.
+
+**Why this is worth a row rather than a shrug.** A suite that passes alone and fails in a sweep is
+the shape the sweep exists to find, and the sweep is not a per-change step — so a failure seen once
+there is seen rarely, and forgetting it costs the next person the same forty minutes. The `staff`
+half is also the sharper instance of a class this register already carries: an assertion whose
+precondition lives in accumulated state, which is green on the machine that wrote the state and red
+on the one that did not.
+
+**Two pieces of work:**
+
+1. **`staff`:** make the precondition the spec's own. Either seed a second sitting before asserting
+   the caveat, or assert the caveat **conditionally on the sitting count the page reports** — the
+   second is better, because it keeps the spec honest about the two states the panel really has and
+   would have failed loudly rather than intermittently.
+2. **`narrow-shell`:** reproduce before fixing. Capture the strict-mode violation's full element
+   list (Playwright prints both matches) rather than acting on the legend hypothesis, since a fix
+   aimed at the wrong element is the defect this register keeps recording.
+
+**Trigger:** the next full sweep, which is when either will next be observable — or sooner for (1),
+which is a two-line change to a spec and does not need a reproduction.
+
 ### 345. One wrap rule, two implementations — and one of them measured at the wrong font size for its whole life
 
 **Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found arming #344's widened
