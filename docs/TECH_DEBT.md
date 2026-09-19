@@ -6602,6 +6602,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                           | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --- | ----------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 291 | `check:adr-coverage` could not see CLAUDE.md §16, the register a reader is briefed from               | 2026-09-19 | **Closed by ADR-0147**, which makes §16 a third register the gate reads — seven assertions (A1–A7), each verified red against a named mutation, and the standing hand comparison this row records being got wrong twice is deleted rather than reassigned. Ten instances of an ADR reaching the two gated documents and missing the ungated one; **the gate's first real exercise was ADR-0147 itself**, refusing the commit that filed it until the entry existed. It closed three unreported defects on the way — a blank exemption reason that silently admitted an ADR (found by a pinned positive case, not a failure), an empty roster reporting `OK (0 of 0 …)`, and the gate having no test suite at all. It checks **presence, not quality**: `- **ADR-0147** — TODO` passes. Spec and measurements at [`docs/specs/adr-register-coverage/`](specs/adr-register-coverage/).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 314 | The app's query default called every 4xx permanent, including 429                                     | 2026-09-13 | **Closed by fixing both halves together, because neither alone is enough.** The status rule moved out of `features/perf-probe/model/store-failure.ts` — where ledgered `#269` had written it correctly — into `apps/web/src/lib/api/retryable-status.ts`, and `lib/query/query-client.ts` now imports it rather than restating `status >= 400 && status < 500 → false` under a docblock claiming client errors are never transient. `store-failure.ts` derives `retryable` once from the shared rule instead of writing a literal in each of its six branches, so its copy and its behaviour cannot drift. The second half: `defaultErrorComponent` told the reader to try again above nothing pressable, while its twin `components/error-boundary.tsx` has carried a Reload button since the same day — the router was already handing us `reset` (`@tanstack/router-core@1.171.28`, `dist/esm/route.d.ts:438-444`) and the component took no props at all. It is now `app/route-error-screen.tsx`, offering **Try again** as `reset()` then `router.invalidate()`: no page load, so work sitting in a dialog behind the boundary survives and ADR-0108's guard is never tripped. **The retry does NOT clear a sustained 429** — the throttle is a fixed 60-second window and the default backoff is ~1 s then ~2 s — which is stated in the rule's own docblock rather than left for a reader to discover; that case is what the button is for. 32 assertions across three files, every one verified red against the code as shipped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 315 | Two documented throttle limits were 3× and 8× looser than stated                                      | 2026-09-13 | **Closed as a decision, not a code change — the product owner chose to keep per-handler keying (2026-09-13).** `@nestjs/throttler@6.5.0` keys on `sha256(ClassName-handlerName-throttlerName-tracker)`, so a controller-level `@Throttle` bounds each handler and never the surface: `/api/v1/share/*` declared 30/60 s and really allowed 90, `/api/v1/staff/*` declared 30 and really allowed 240. Neither is exploitable — guest tokens are 256-bit and the staff flood needs a compromised session — and a shared surface counter has a real cost the declared number hides: one noisy panel read would lock an operator out of the other seven, which is ledgered `#268`'s cross-handler interference one layer out. So the bound stands and the **documentation** was wrong: four false OpenAPI descriptions asserting routes share a budget, two controller comments and three `docs/API.md` passages, all corrected in PR #576, with the generalisation added to `docs/SECURITY_STANDARDS.md` — _a controller-level decorator is a per-route limit expressed once; state the handler count beside the figure_. One comment was deliberately NOT changed: `app-setup.ts`'s "per-IP buckets on `req.ip`" is true, and a sweep replacing every "per-IP" would have rewritten it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 328 | The measurement harnesses will bulk-write to whatever `DATABASE_URL` points at                        | 2026-09-15 | **Filed and closed in one pass, because CodeQL raised the same weakness from the other end while the release PR was in flight.** The row asked for a host check; #614's CodeQL run reported one new HIGH alert on code this PR adds, and `process.env.DATABASE_URL` reaching an `execFileSync('psql', ...)` argument is the only dataflow of that shape in the diff — confirmed to be new rather than inherited, since **no harness on `main` reads `DATABASE_URL` or shells out to `psql` at all**. So the remedy is a fix rather than a dismissal, which is the only honest option: waving a security gate through to go green is what CLAUDE.md §19.7 forbids. One `scripts/local-psql.mjs` now owns the seam for both consumers (the ADR-0065 argument — two copies of one guard drift and the drift is invisible). **The first version guarded the dataflow and the shipped one removes it**, because reading the line closely enough to guard it surfaced a second fault nobody had noticed: a connection URL passed as an argument puts the password in `argv`, which is world-readable on the box (`ps -ef`, `/proc/<pid>/cmdline`), where a child's environment is not. The parts now travel as `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` on the child's own environment and `psql` is invoked with no connection argument at all, so nothing derived from `DATABASE_URL` reaches a command line. The allow-list stays, on the **hostname `new URL` resolves**, not on a substring: `postgresql://u:p@evil.example/app?host=localhost` contains the word and is refused, which was verified rather than assumed, alongside the local default resolving and `SP_ALLOW_REMOTE_PSQL=1` opting out. Stripping Prisma's `?schema=` moved from a regex to `searchParams.delete`, so the string handed to a command line is one this module composed rather than one it was handed. `expireInvitation` additionally asserts its id is a UUID before interpolating it into `psql -c`, which takes no bind parameters — not because the harness's own REST call would return anything else, but because "the caller would never" is the assumption every injection is built on. **This was NOT the alert, and the sentence that stood here was wrong twice over.** It read "the annotation naming the exact file and line is not reachable from the tools here, so the fix was made on its own merits and the re-run is what answers it" — and the annotation **is** reachable: `GITHUB_TOKEN` is present in this environment and `GET /repos/:owner/:repo/check-runs/:id/annotations` returns it under `checks:read` (the code-scanning **alerts** endpoint answers 403 for want of `security_events`, which is what that claim was generalised from without checking — ADR-0076 Class 3, asserted in the row whose own subject is not assuming). Read, the alert names `apps/web/src/features/overview/fc1-hooks.structural.test.ts:47` and `js/file-system-race`, which is #332 and has nothing to do with `psql` or `argv`. The re-run did answer it, in the direction the sentence left open: this work stands on its own merits and the candidate is eliminated.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -9026,184 +9027,6 @@ and this row describes them in prose. **The gate is built for citations into cod
 a citation into a version evaluated and rejected is outside what it can police — worth knowing
 before the next person tries to register one.
 
-### 291. `check:adr-coverage` cannot see CLAUDE.md, which is the register a reader actually opens
-
-**Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-10 (found writing the delivery-gates spec) · **Size:** S · **Owner:** repo
-
-**ADR-0132 was Accepted on 2026-09-09, filed in `docs/adr/`, listed in `docs/adr/README.md`, and
-cited by `docs/ROADMAP.md`, `docs/TECH_DEBT.md`, `docs/DESIGN_SYSTEM.md` and five spec directories
-— and appeared ZERO times in `CLAUDE.md` §16.** Nothing failed, because
-`scripts/check-adr-coverage.mjs` gates the ADR index and `ROADMAP.md` and never reads `CLAUDE.md`.
-
-This is the **ADR-0071 failure one document along**, and the third recorded instance of the class:
-ADR-0071 itself was cited by shipped code while absent from the register; ADR-0078 S1 found **seven**
-ADRs missing from `docs/adr/README.md` and repaired them by hand; ADR-0110 D6 then gated that index
-in both directions — and the gate it wrote covers the index a reader rarely opens and not the
-section they are briefed from. §16 is the register in the operating manual: it is what every human
-and every agent reads to learn what has been decided, and an ADR absent from it is invisible to the
-one audience that matters most.
-
-**It recurred, on 2026-09-16, and the prediction below is why this row stays open.** The
-reconciliation pass ran the comparison this row says nothing automates and found **ADR-0144**
-(_A landing question is costed before it is answered_, Accepted 2026-09-15) absent from `CLAUDE.md`
-§16 while being filed, listed in `docs/adr/README.md` and cited by number. That is the **eighth**
-instance of the class and the **third** found by a person doing the comparison by hand — which is
-the whole argument for the gate: the estate has now been "clean today" three times and has drifted
-again within days on each occasion. Repaired in the same pass; `check:adr-coverage`'s own docblock
-still says it does not read this file, so the register remains checked by a person or not at all.
-
-**It recurred again on 2026-09-17, twice, and the second instance is worth the sentence.** ADR-0145
-was Accepted, filed, indexed and cited by `docs/ROADMAP.md` while absent from §16 — caught by that
-epic's own component review rather than by anything automatic — and then **ADR-0146 went the same
-way one day later**, caught only because its author happened to open `CLAUDE.md` to edit it for
-another reason. That is the **ninth and tenth** instances. Both were repaired in the commit that
-found them, and neither was found by a gate. The pattern is now stable enough to state plainly: an
-ADR filed at the end of an epic reaches `docs/adr/README.md` (gated) and `docs/ROADMAP.md` (gated)
-and misses §16 (not gated), because the two that are checked are the two that fail loudly.
-
-**The repair is done; the gate is not.** ADR-0132 now has its entry, and a full comparison of all
-**133** ADR files against §16 found **exactly one** missing, so the estate is clean today. (That
-figure is the count **before this row's own commit added ADR-0134/0135/0136** — 136 immediately
-after, 138 on 2026-09-13. It is annotated rather than rewritten; see below.) It will
-not stay clean: the previous two instances of this class were also repaired by hand, and both
-recurred.
-
-**It did not stay clean for one day.** ADR-0135 was filed, Accepted, added to `docs/adr/README.md`
-and cited by `docs/ROADMAP.md` on 2026-09-11 — and was **absent from §16**, found the next time
-somebody opened that section for an unrelated reason (writing ADR-0136's entry). `pnpm prepush` was
-green throughout, because `check:adr-coverage` still cannot see this file. **Fourth recorded
-instance, and the first where the row predicting the recurrence was one day old.** Repaired by hand
-again, which is exactly the remedy this row says does not hold. The estate is clean as of
-2026-09-11 (all 136 ADR files compared against §16; the two missing were 0135, now repaired, and
-0136, being written at the time).
-
-> **Fifth and sixth instances, and this time the recurrence is not the finding — the HAND
-> COMPARISON is** (2026-09-13). §16 was missing **ADR-0049** (Proposed, but
-> `VITE_CANVAS_RESOURCE_VIEW` default-on since 2026-07-20, and the strip ADR-0121 later built on) and
-> **ADR-0122** (Accepted, cited by ADR-0127's own entry). Both are in `docs/adr/README.md`, so
-> `check:adr-coverage` was green. Each appeared in `CLAUDE.md` only in passing inside **another**
-> ADR's entry, which is the ADR-0071 shape exactly.
->
-> **Both were already missing on 2026-09-10 and on 2026-09-11** — they long predate either date — so
-> this row's two "the estate is clean" assertions were **both wrong when written**, and neither was
-> wrong because something recurred. A reader comparing 133 files by hand reported one missing when
-> three were; a reader comparing 136 reported two when four were. That is a stronger argument for the
-> gate than anything above it: the row's case was that hand repair does not **hold**, and the measured
-> case is that hand comparison does not **work** — it is ~138 numbers checked against a 4,000-line
-> section, which is a machine's job and has now been got wrong twice by people who were being careful.
-> Found this time by a script (`git ls-files` against a regex over `^- \*\*ADR-(\d{4})\*\*`), which
-> took one command and is most of the gate.
->
-> The repair is done and **the estate is clean as of 2026-09-13 — 138 of 138, asserted by that
-> script rather than by reading**. Two consequential claims elsewhere were corrected with it:
-> `CLAUDE.md`'s "exactly one missing" sentence, and ADR-0131's live-and-Proposed count, which is
-> **five** today rather than four.
-
-**Why it was repaired rather than gated, again.** ADR-0136's epic was in its last milestone when
-this surfaced, and widening a shared gate mid-epic is the thing CLAUDE.md §19.1 says stops the work
-until a spec exists. Folding it in would have been the ADR-0105 failure committed inside the epic
-that cites ADR-0105. The argument below is unchanged and now has a fourth data point behind it.
-
-**Found incidentally, which is the part worth keeping.** Nobody was auditing the register — an agent
-writing an unrelated spec (`docs/specs/delivery-gates/`) noticed the citation while reading
-`DESIGN_SYSTEM.md`. That is luck, and luck is what ADR-0058 replaces with a computed gate. The
-previous instance was found the same way (ADR-0078 S1, while filing a different ADR).
-
-**Why it is filed rather than fixed.** Widening `check:adr-coverage` to a third document is a
-**shared-gate change**, which CLAUDE.md §19.1 makes an ADR-0105 trigger: the spec and plan are
-mandatory whatever the size. Two things want settling in it rather than being decided by whoever
-edits the script:
-
-1. **What counts as covered.** `docs/adr/README.md` is an index — one line per ADR — and §16 is a
-   prose register whose entries run to paragraphs. A presence check on `ADR-NNNN` is trivially
-   satisfiable by a citation inside a _different_ ADR's entry, which several entries contain
-   (ADR-0132's own text cites ADR-0117, ADR-0088 and ADR-0034). So the assertion has to anchor on
-   the entry's own bullet form, and a naive `includes` would have passed over exactly the gap it was
-   written to catch — the scan-matching-prose trap this register has recorded four times.
-2. **Whether §16 should be generated rather than checked.** A derived section cannot drift at all,
-   but it would lose the thing that makes §16 useful: the entries are written, not templated, and
-   several are the best account of a decision that exists anywhere.
-
-Until then the check is one command, and it belongs in the reconciliation pass
-(`docs/RECONCILE.md`) rather than in anybody's memory:
-
-```
-python3 -c "import os,re; nums=sorted({m.group(1) for f in os.listdir('docs/adr') if (m:=re.match(r'(\d{4})-',f))}); c=open('CLAUDE.md').read(); print([n for n in nums if f'ADR-{n}' not in c])"
-```
-
-**Re-derived 2026-09-13. The estate is still clean, the gate is still unbuilt, and this row's own
-count has drifted in exactly the way it warns about.**
-
-**Clean, and measured rather than assumed.** There are **138** ADR files in `docs/adr/` today, and
-**all 138 carry a bulleted `ADR-NNNN` entry in `CLAUDE.md` §16** — zero missing, checked by
-comparing the two sets rather than by spot-reading. The row's concern that the estate "will not stay
-clean" has not yet materialised, four days on, which is worth recording because a clean check that
-leaves no trace invites the next reader to repeat it.
-
-**The gate is still unbuilt, confirmed at the source.** `scripts/check-adr-coverage.mjs` reads
-`docs/ROADMAP.md`, `docs/adr/README.md` and the `docs/adr` directory; its **only** mention of
-`CLAUDE.md` is a docblock explaining why it does not check it. Nothing has changed there.
-
-**And the row says 133 — which was wrong on the day it was written, by exactly three.** `69207b1d`
-wrote the sentence _"a full comparison of all 133 ADR files"_ **and added ADR-0134, ADR-0135 and
-ADR-0136 in the same commit**: `git ls-tree` counts **133** at `69207b1d^` and **136** at
-`69207b1d`. The author counted, wrote the figure down, and then the commit filed three more ADRs —
-so the number was stale the moment it landed, by precisely the files that commit existed to add.
-That is `#246`'s born-stale mechanism in its **count** form, with the cleanest proof it has: the
-delta is not approximately the commit's own additions, it **is** them.
-
-The figure is therefore **not** rewritten to 138 — overwriting it would falsify a historical
-statement to make a present one true, and the comparison really did examine 133. It is annotated
-above with what it was: the count **before** that commit's own three ADRs, 136 after, 138 today.
-
-The sharp part is _why_ it went stale while the banner did not. **`CLAUDE.md`'s "138 ADRs" is
-gated** — `pnpm check:counts` re-derives it and fails the build if it disagrees (ADR-0076 Class 1) —
-**and this row is not.** The same quantity is computed in one document and hand-written in another,
-and the hand-written one drifted by five. This row exists because a gate covered the index a reader
-rarely opens and not the section they are briefed from; the same shape has now reached the row
-itself, where the gate covers the banner and not the register entry quoting it.
-
-Left as a caution rather than a new proposal: gating a prose count inside a debt row is not
-obviously worth a gate. **And note that dating it would NOT have been enough here** — a date of
-2026-09-11 beside "133" would have been just as wrong, because the figure was already stale within
-its own commit. What this one needed is `#246`'s remedy exactly: **derive the count after the edit,
-not before.**
-
-**One more thing follows, and it upgrades a note made earlier tonight.** `#302`'s annotation records
-`69207b1d` producing two register-accuracy defects and says, carefully, that "one commit is not a
-population". With this it is **three** — `#298` born carrying a status contradiction, `#249`'s
-"nothing in that pass touched `plan-workspace-toolbar.tsx`" written by a commit that touched it, and
-now a count stale by its own additions. Three distinct defects, one commit, one mechanism. Still not
-a population, and no longer a coincidence.
-
-**Re-derived 2026-09-13, and the estate is clean in BOTH directions for the first time recorded.**
-138 ADR files in `docs/adr/` against 138 bolded `- **ADR-NNNN**` entries in
-[CLAUDE.md](../CLAUDE.md) §16: **no file missing an entry, and no entry naming a file that does not
-exist.** One command — a set comparison both ways — which is worth stating because the two earlier
-checks compared only one direction and the second of them undercounted.
-
-**The row stays `open`, and the reason is the row's own point.** That comparison was run by a
-person, which is exactly the mechanism this row says is insufficient: a person has missed it twice,
-and a third pass coming back clean is evidence about today, not a guarantee about tomorrow. Nothing
-computes it — `check:adr-coverage` reads the ADR index and `docs/ROADMAP.md`, and its own docblock
-says it does not read this file. A clean manual result is the weakest kind of assurance there is,
-and recording it as such is the honest version of "verified".
-
-> **Seventh instance, 2026-09-16 — ADR-0145, and this time it was a reviewer rather than a sweep.**
-> Filed, **Accepted**, present in `docs/adr/README.md` and cited by `docs/ROADMAP.md`, and absent
-> from `CLAUDE.md` §16 while the epic it records was being prepared for merge. The component review
-> of that epic found it; `pnpm prepush` was green throughout, because `check:adr-coverage` still
-> does not read this file. Two documents the epic's own spec promised were missing with it
-> (`docs/DESIGN_SYSTEM.md`, `docs/UX_STANDARDS.md`), which is the same omission one tier out.
->
-> **What that instance adds is not another tally mark — it inverts the gate's own stated reason.**
-> `scripts/check-adr-coverage.mjs`'s docblock justified scoping to `ROADMAP.md` with "only the
-> second one rots silently", and §16 has now rotted seven times against the roadmap's zero since
-> the gate shipped. The comment is corrected in place (ADR-0145's gate pass) and the gate is
-> deliberately **not** widened in the same breath: a shared gate is an ADR-0105 trigger and wants
-> its own spec rather than a fold-in at an epic's last milestone. The remedy this row asks for is
-> unchanged and is now better evidenced than when it was written.
-
 ### 292. The web entry chunk carries every authenticated route
 
 **Status:** open · **Verified:** 2026-09-16 · **Raised:** 2026-09-10 (measured while checking a claim in `docs/FRONTEND_QUALITY.md`) · **Size:** M · **Owner:** web
@@ -9392,11 +9215,12 @@ ADR-0130's epic exists to remove, narrowed rather than closed.
 **Measured, on the reading #287 asked for** (`apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts`),
 with an activity selected and a peer's request outstanding:
 
-| width   | foot row, no request | foot row, request outstanding | cost to the diagram |
-| ------- | -------------------- | ----------------------------- | ------------------- |
-| 1440 px | 87 px                | **167 px**                    | **80 px**           |
-| 1646 px | 51 px                | **127 px**                    | **76 px**           |
-| 1920 px | 51 px                | 87 px                         | 36 px               |
+| width   | foot row, no request                                           | foot row, request outstanding | cost to the diagram                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------- | -------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 343     | Two screens carried facts they already held and did not render | 2026-09-19                    | **Closed by `docs/specs/unrendered-row-facts/`**, measure-first. (a) Clients gains a `Created` column (`width: 'fit'`, `Name` declared `auto`); (b) both Members sections state their count, which `page-composition/feature-spec.md` §4.6 specified and neither built, with no decision recorded either way. Four falsification conditions committed before the harness ran and **all four PASS** — the sharpest being FC-D clause 2, where the table's slack falls by **147px, exactly the new column's rendered width**, so it is paid for entirely out of emptiness and nothing was squeezed out of another column (`m3/README.md`). CQ-2 answered from numbers and deliberately NOT taken: `Actions` really is 401px for 82px of content, and shrink-wrapping a trailing column moves the buttons further from the facts while confounding the clause above. Clients is still 68% empty at 1646 and the row never claimed otherwise. Found on the way: #344. |
+| 1440 px | 87 px                                                          | **167 px**                    | **80 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 1646 px | 51 px                                                          | **127 px**                    | **76 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 1920 px | 51 px                                                          | 87 px                         | 36 px                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 1646 is the product owner's own screen. The diagram goes 702 → 626 px there, and 666 → 586 px at 1440.
 
@@ -10868,36 +10692,31 @@ not send. Fixed, and pinned in both directions.
 **What is pinned so this cannot come back silently:** `clients.e2e-spec.ts` asserts the detail body
 has **no** `planCount`, over a fixture holding exactly the plans that would make one look right.
 
-### 343. Two screens carry facts they already hold and do not render
+### 344. Members' Pending invitations wraps two columns in a 599px grid column
 
-**Status:** open
-**Raised:** 2026-09-17 (ADR-0146 M8, by `ux-reviewer` and `accessibility-reviewer`)
+**Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found re-running
+`measure-column-fit.mjs` for #343's M1) · **Size:** S · **Owner:** web
 
-Both are scope the gate pass was the wrong place to add (ADR-0105: a new column on a list screen is
-a new surface, and the epic's own spec had already declined to scope one of them), so they are
-recorded rather than built.
+At **1646** the _Pending invitations_ table renders at **599px** and its content needs **748px**, so
+two columns wrap: `Sent` (86 used / 147 natural) and `Status` (109 / 197). Measured, one sitting,
+`docs/specs/unrendered-row-facts/m1/column-fit-1646.json`.
 
-**(a) Clients is the sparsest table in the epic.** After D4 moved its description under the name,
-`ClientsTable` renders exactly two columns — `Name` with an optional sub-line, and `Actions` — which
-at the 1488px measure this epic gave it is a name at one end, an `Edit ⋯` at the other, and roughly
-900–1000px of nothing between them on every row. That is the most literal instance in the product of
-the complaint the epic was opened on.
+**It is a regression, not a fixture artefact.** `docs/specs/page-composition/m2/column-fit-1646.json`
+records the same table at **full width** with `Sent: 250/147` and `Status: 335/197`, comfortably
+fitting. Something between that reading and today moved the section into a narrow grid column; the
+sibling _Organisation members_ table still renders at 1271px on the same screen.
 
-The spec diagnosed the identical shape for Members (`feature-spec.md` §1.2.9, "Members is sparse")
-and fixed it in M4 by rendering `joinedAt`, which had been on the wire and unrendered the whole time.
-**The same section notes that `ClientSummary` already carries `createdAt`/`updatedAt` unrendered**,
-and nothing in M1–M8 went back to it. A `Created` column is cheap and `width: 'fit'`.
+**The transferable part is how it survived a gate pass.** ADR-0146's **FC-2** — _nothing wraps
+beside unused width_ — is recorded **PASS** in `m8-verdict.md:16`, and its evidence column points at
+`m2-measurement.md`. The verdict was carried forward from the M2 reading rather than re-taken at M8
+over the estate as M8 had left it. A condition judged once and quoted afterwards is a claim like any
+other (ADR-0058), and this is the first recorded instance of that shape inside a falsification
+table.
 
-The reason it is not folded in here: adding a column changes what the column-fit measurement is
-about, so it wants FC-2 re-run rather than a reviewer's eye — which is a milestone, not a fix.
+**Not folded into #343**, which found it: that epic's FC-A bar is the Clients table, and changing a
+second screen's layout mid-epic would confound FC-D clause 2's measurement. It is also not obviously
+a column-width problem — the honest first question is whether that section belongs in a narrow grid
+column at all.
 
-**(b) Members' Roster renders with no `count`.** `feature-spec.md` §4.6's composition is
-`SectionCard( "Roster", count, table + Joined )` and `members.tsx` passes no `count` prop. Not an
-accessibility defect — parity is equal for every reader when a fact is simply not shown — and not a
-withdrawal either, because unlike M2-T2a and M4-T2 nothing recorded a decision. It is the silent gap
-between a spec and its code that ADR-0081's standing rule is about, and one line either way settles
-it: render it, or write down why not.
-
-**Trigger:** the next epic that touches either screen, or a product-owner report that Clients reads
-empty. Both are one-line changes; what they need is the measurement pass that makes them safe to
-call done.
+**Trigger:** the next epic that touches Members, or a re-run of `measure-column-fit.mjs` at 1646 as
+part of any layout change.

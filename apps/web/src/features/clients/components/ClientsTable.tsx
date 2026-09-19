@@ -19,6 +19,7 @@ import { SearchField } from '@/components/ui/search-field';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useResultCountAnnouncement } from '@/hooks/use-result-count-announcement';
 import { deleteCascadeWarning } from '@/lib/delete-copy';
+import { formatTimestamp } from '@/lib/format-date';
 
 /**
  * The organisation's clients as a table. Each name links to the client's
@@ -87,6 +88,14 @@ export function ClientsTable({
     {
       header: 'Name',
       /**
+       * **`auto` is declared, not inherited** (ADR-0146 D3). It is also the default, which is why
+       * the rule exists: a rule whose exception is its default is vacuous unless somebody writes
+       * the exception down. It only starts to bite the moment a `fit` column sits beside it —
+       * `Created`, below — because `fit` takes exactly what its content needs and the surplus it
+       * surrenders has to come from a column that will absorb it.
+       */
+      width: 'auto',
+      /**
        * **`Description` is a secondary line under the name, not a column** (ADR-0146 D4).
        *
        * It was a column, and on the deployed installation every cell in it read "—". A column is a
@@ -111,6 +120,32 @@ export function ClientsTable({
             <span className="text-muted-foreground text-xs">{client.description}</span>
           ) : null}
         </span>
+      ),
+    },
+    {
+      header: 'Created',
+      /**
+       * **Already on the wire and never rendered.** `ClientSummary.createdAt` has been in the
+       * payload throughout; `docs/specs/page-composition/feature-spec.md` §1.2.9 noted it while
+       * diagnosing Members' identical sparseness, and M1–M8 fixed Members and never came back.
+       *
+       * Measured before it was added (`m1/README.md` §2): after ADR-0146 D4 moved the description
+       * under the name, this table rendered `Name` at 870px for 177px of content and `Actions` at
+       * 401px for 82px, inside 1271px — **1012px of slack, 80% of the row empty**, with a
+       * `factSpread` of literally `0`. A name at one end and an `Edit ⋯` at the other is the most
+       * literal instance in the product of the complaint the page-composition epic was opened on.
+       *
+       * `fit`, on the `Joined` precedent one screen over: a date is bounded and must never be the
+       * column that breaks. And through the shared `formatTimestamp` rather than a per-render
+       * `Intl.DateTimeFormat`, which ADR-0144's gate pass records as a real defect — a date beside
+       * a date, one in the browser's locale and one in en-GB.
+       *
+       * **Withdrawn rather than declared `auto` if it cannot fit** (`falsification.md`, FC-A): a
+       * date wrapping over two lines reads as two dates, which is worse than not showing it.
+       */
+      width: 'fit',
+      cell: (client) => (
+        <span className="text-muted-foreground">{formatTimestamp(client.createdAt)}</span>
       ),
     },
   ];

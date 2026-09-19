@@ -41,19 +41,20 @@ day of the change.
 These run in CI on every push. If one is red, fix it there — the manual pass
 below assumes they are green.
 
-| Gate                                       | Catches                                                                                                                             |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm format:check` / `lint` / `typecheck` | The ordinary things.                                                                                                                |
-| `pnpm check:doc-links`                     | A relative link to a file that no longer exists.                                                                                    |
-| `prisma:check-drift`                       | `schema.prisma` disagreeing with the migrations.                                                                                    |
-| `pnpm test` (coverage thresholds)          | Coverage sliding below the recorded floor.                                                                                          |
-| `surface-seams.structural.test.ts`         | Application code reaching past a design-system seam.                                                                                |
-| `styles/token-contrast.test.ts`            | A colour pair below its WCAG ratio, across themes × surfaces.                                                                       |
-| Flag-off parity suites                     | A flagged change altering the rollback path.                                                                                        |
-| `pnpm check:counts`                        | The stage-banner figures going stale — in `CLAUDE.md`, `README.md` **and** `docs/ARCHITECTURE.md`, at **every** occurrence in each. |
-| `pnpm check:claims`                        | A citation into a dependency's internals that has moved.                                                                            |
-| `pnpm check:flags`                         | A feature flag with no enablement date, or a retirement batch past its date.                                                        |
-| `pnpm check:spec-status`                   | A spec headed `Draft` whose directory an ADR cites — a shipped epic still claiming it was never approved.                           |
+| Gate                                       | Catches                                                                                                                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm format:check` / `lint` / `typecheck` | The ordinary things.                                                                                                                                                                     |
+| `pnpm check:doc-links`                     | A relative link to a file that no longer exists.                                                                                                                                         |
+| `prisma:check-drift`                       | `schema.prisma` disagreeing with the migrations.                                                                                                                                         |
+| `pnpm test` (coverage thresholds)          | Coverage sliding below the recorded floor.                                                                                                                                               |
+| `surface-seams.structural.test.ts`         | Application code reaching past a design-system seam.                                                                                                                                     |
+| `styles/token-contrast.test.ts`            | A colour pair below its WCAG ratio, across themes × surfaces.                                                                                                                            |
+| Flag-off parity suites                     | A flagged change altering the rollback path.                                                                                                                                             |
+| `pnpm check:counts`                        | The stage-banner figures going stale — in `CLAUDE.md`, `README.md` **and** `docs/ARCHITECTURE.md`, at **every** occurrence in each.                                                      |
+| `pnpm check:claims`                        | A citation into a dependency's internals that has moved.                                                                                                                                 |
+| `pnpm check:flags`                         | A feature flag with no enablement date, or a retirement batch past its date.                                                                                                             |
+| `pnpm check:spec-status`                   | A spec headed `Draft` whose directory an ADR cites — a shipped epic still claiming it was never approved.                                                                                |
+| `pnpm check:adr-coverage`                  | An ADR missing from `docs/ROADMAP.md`, from `docs/adr/README.md`, **or from `CLAUDE.md` §16** — the register every reader is briefed from, unchecked until ADR-0147 and wrong ten times. |
 
 **Prefer adding a gate to adding a checklist item.** A gate that computes runs
 every push; a checklist item runs when someone remembers. Every row above

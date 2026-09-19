@@ -10,6 +10,7 @@ import { clientKeys } from '../api/use-clients';
 import { ClientsTable } from './ClientsTable';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import { formatTimestamp } from '@/lib/format-date';
 import { clickRowAction, openRowActions } from '@/test/row-actions';
 
 // Stub the router Link so the table renders without a full router context.
@@ -218,5 +219,46 @@ describe('ClientsTable — the column set does not depend on the data', () => {
     expect(within(northgate).getByText('Retail fit-out')).toBeInTheDocument();
     // Not "—": an em dash on a secondary line is the same defect one row lower down.
     expect(harbour.textContent).not.toContain('—');
+  });
+});
+
+describe('ClientsTable — Created', () => {
+  /**
+   * **`createdAt` was on the wire and unrendered**, on the sparsest table in the product: after
+   * ADR-0146 D4 moved the description under the name this table rendered `Name` at 870px for 177px
+   * of content and `Actions` at 401px for 82px, inside 1271px — 1012px of slack and a `factSpread`
+   * of literally `0` (`docs/specs/unrendered-row-facts/m1/README.md` §2).
+   */
+  it('renders a Created column carrying the date, between Name and Actions', () => {
+    renderTable(true, [
+      { ...CLIENTS[0]!, name: 'Northgate', createdAt: '2026-03-04T09:00:00.000Z' },
+    ]);
+
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent ?? '');
+    expect(headers).toEqual(['Name', 'Created', 'Actions']);
+
+    const row = screen.getAllByRole('row').find((r) => r.textContent?.includes('Northgate'))!;
+    expect(within(row).getByText(formatTimestamp('2026-03-04T09:00:00.000Z'))).toBeInTheDocument();
+  });
+
+  it('renders it for a Viewer too, who otherwise sees a table of ONE column', () => {
+    // `Actions` is inside `if (canWrite)`, so before this column a Viewer's Clients table had a
+    // single column — the state the spec's "exactly two columns" reading missed, and the reader
+    // with the least on screen.
+    renderTable(false, [{ ...CLIENTS[0]!, name: 'Northgate' }]);
+
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent ?? '');
+    expect(headers).toEqual(['Name', 'Created']);
+  });
+
+  it('uses the shared formatter rather than the browser locale', () => {
+    // ADR-0144's gate pass records the real defect this prevents: a date beside a date, one
+    // formatted by a per-render `Intl.DateTimeFormat` in the browser's locale and one in en-GB.
+    // Asserting the shared helper's own output is what makes that checkable rather than asserted.
+    const iso = '2026-12-25T13:45:00.000Z';
+    renderTable(true, [{ ...CLIENTS[0]!, name: 'Northgate', createdAt: iso }]);
+
+    const row = screen.getAllByRole('row').find((r) => r.textContent?.includes('Northgate'))!;
+    expect(row.textContent).toContain(formatTimestamp(iso));
   });
 });

@@ -1,12 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 
-import {
-  PageContainer,
-  PageGrid,
-  PageGridItem,
-  PageHeader,
-  SectionCard,
-} from '@/components/ui/page';
+import { PageContainer, PageGrid, PageGridItem, PageHeader } from '@/components/ui/page';
 import {
   InvitationsSection,
   InviteMemberDialog,
@@ -50,13 +44,11 @@ export function MembersScreen(): React.ReactElement {
       */}
       <PageGrid className="mt-6">
         <PageGridItem span="wide">
-          <SectionCard
-            title="Roster"
-            description="Everyone who has joined this organisation."
-            flush
-          >
-            <MembersTable orgSlug={orgSlug} />
-          </SectionCard>
+          {/* `MembersTable` owns its own `SectionCard`, so the section can state its size: the
+              count has to come from the query, and only the component holds it. See that file's
+              docblock for why calling `useMembers` here instead would have been the wrong three
+              lines. */}
+          <MembersTable orgSlug={orgSlug} />
         </PageGridItem>
         {canAdministerInvitations(role) ? (
           <PageGridItem span="narrow">
