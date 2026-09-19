@@ -1,6 +1,6 @@
 import type { OrgMemberSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { memberKeys } from '../api/use-members';
@@ -91,5 +91,24 @@ describe('MembersTable', () => {
     // The role control reflects the member's current role and is labelled.
     expect(screen.getByLabelText('Role for Val Viewer')).toHaveValue('VIEWER');
     expect(screen.getByRole('button', { name: 'Remove Ada Admin' })).toBeInTheDocument();
+  });
+
+  it('frames itself as the Roster section and states how many people are in it', () => {
+    // **Specified and never built** — `docs/specs/page-composition/feature-spec.md` §4.6's
+    // composition is `SectionCard( "Roster", count, … )` and `members.tsx` passed no count, with
+    // nothing recording a decision either way (`docs/TECH_DEBT.md` #343(b)).
+    //
+    // The count lives here rather than at the route because `useMembers` pages through
+    // `apiFetchAllPages`, so `data.length` IS the total rather than "rows loaded so far" — the
+    // precondition that makes stating it honest at all.
+    renderTable();
+
+    // Named by element rather than by taking the first match: a `SectionCard` and the scrollable
+    // table region inside it can both carry the section's name.
+    const card = screen
+      .getAllByRole('region', { name: /Roster/ })
+      .find((el) => el.tagName === 'SECTION');
+    expect(card).toBeDefined();
+    expect(within(card!).getByText('2')).toBeInTheDocument();
   });
 });

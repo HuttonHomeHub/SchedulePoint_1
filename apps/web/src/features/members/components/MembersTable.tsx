@@ -7,10 +7,27 @@ import { ROLE_LABELS, ROLE_OPTIONS } from '../schemas/invite-schemas';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { SectionCard } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
 import { formatTimestamp } from '@/lib/format-date';
 
-/** Roster with inline role changes and remove-with-confirm. */
+/**
+ * Roster with inline role changes and remove-with-confirm.
+ *
+ * **This component owns its `SectionCard`, and that is where the count comes from.** The card used
+ * to live at the route, which had no access to the query — so the section could not state how many
+ * people were in it, and `docs/specs/page-composition/feature-spec.md` §4.6's composition
+ * (`SectionCard( "Roster", count, … )`) was specified and never built. Nothing recorded a decision
+ * either way, which is the silent gap between a spec and its code that ADR-0081's standing rule is
+ * about.
+ *
+ * Calling `useMembers` at the route instead would have been three lines rather than fifteen, and is
+ * the wrong three: it separates the number from the query shape that makes it honest. `useMembers`
+ * pages through `apiFetchAllPages`, so `data.length` IS the total rather than "rows loaded so far"
+ * — and the day the roster paginates, a count derived at the route would quietly start meaning the
+ * second thing while still reading as the first. Here that assumption sits beside the call it
+ * depends on.
+ */
 export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
   const members = useMembers(orgSlug);
   const changeRole = useChangeMemberRole(orgSlug);
@@ -121,33 +138,40 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      {error ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {error}
-        </p>
-      ) : null}
+    <SectionCard
+      title="Roster"
+      description="Everyone who has joined this organisation."
+      count={members.data?.length}
+      flush
+    >
+      <div className="flex flex-col gap-3">
+        {error ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {error}
+          </p>
+        ) : null}
 
-      <DataTable
-        caption="Organisation members"
-        columns={columns}
-        query={members}
-        getRowKey={(member) => member.id}
-        loadingLabel="Loading members…"
-        errorLabel="Couldn’t load members. Please try again."
-        empty={<>No members yet.</>}
-      />
+        <DataTable
+          caption="Organisation members"
+          columns={columns}
+          query={members}
+          getRowKey={(member) => member.id}
+          loadingLabel="Loading members…"
+          errorLabel="Couldn’t load members. Please try again."
+          empty={<>No members yet.</>}
+        />
 
-      <ConfirmDialog
-        open={removing !== null}
-        onClose={() => setRemoving(null)}
-        onConfirm={confirmRemove}
-        title="Remove member"
-        description={removing ? `Remove ${removing.user.name} from this organisation?` : ''}
-        confirmLabel="Remove"
-        pendingLabel="Removing…"
-        pending={removeMember.isPending}
-      />
-    </div>
+        <ConfirmDialog
+          open={removing !== null}
+          onClose={() => setRemoving(null)}
+          onConfirm={confirmRemove}
+          title="Remove member"
+          description={removing ? `Remove ${removing.user.name} from this organisation?` : ''}
+          confirmLabel="Remove"
+          pendingLabel="Removing…"
+          pending={removeMember.isPending}
+        />
+      </div>
+    </SectionCard>
   );
 }

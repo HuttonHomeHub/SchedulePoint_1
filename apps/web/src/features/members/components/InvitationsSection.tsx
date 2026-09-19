@@ -144,6 +144,12 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
       <SectionCard
         title="Pending invitations"
         description="People invited to this organisation who have not joined yet."
+        /* `useInvitations` pages through `apiFetchAllPages`, so this length IS the total rather
+           than "rows loaded so far" — which is the precondition that lets a count be stated at
+           all, and the reason the audit screens withhold theirs. Specified in
+           `docs/specs/page-composition/feature-spec.md` §4.6 and never built; nothing recorded a
+           decision either way. */
+        count={invitations.data?.length}
       >
         <div className="flex flex-col gap-3">
           {error ? (

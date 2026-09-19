@@ -142,4 +142,20 @@ describe('InvitationsSection', () => {
     vi.unstubAllGlobals();
     error.mockRestore();
   });
+
+  it('states how many invitations are outstanding', () => {
+    // `docs/specs/page-composition/feature-spec.md` §4.6 specified a count on BOTH Members
+    // sections and neither was built (`docs/TECH_DEBT.md` #343(b)). `useInvitations` pages
+    // through `apiFetchAllPages`, so this length is the total rather than "rows loaded so far".
+    renderSection();
+
+    // Two regions carry this name — the `SectionCard`'s `<section>` and the scrollable table
+    // region inside it — so the card is named by its element rather than by taking the first
+    // match, which would silently start asserting about the wrong box if the order ever changed.
+    const card = screen
+      .getAllByRole('region', { name: /Pending invitations/ })
+      .find((el) => el.tagName === 'SECTION');
+    expect(card).toBeDefined();
+    expect(within(card!).getByText(String(INVITATIONS.length))).toBeInTheDocument();
+  });
 });
