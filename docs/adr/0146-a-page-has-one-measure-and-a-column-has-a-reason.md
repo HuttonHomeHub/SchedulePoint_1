@@ -163,6 +163,47 @@ obviously right: the dilution guard it deliberately carries covered `projects`, 
 vacuumed, so every index-only scan paid a heap fetch and it measured the worst state a table is ever
 in. Both ends of that range are now printed.
 
+**The M8 gate pass blocked on four of six reviews, and its two largest findings are one shape.** Six
+specialists over the combined diff; the API and backend-performance reviews passed having re-derived
+the epic's own numbers from the shipped code rather than its prose — instantiating the pinned
+`@nestjs/swagger` machinery to check DTO inheritance, forcing a real count failure through a real
+HTTP call to check that an absent count is absent on the wire, and rebuilding every load-bearing
+plan shape in a separate database with different seed data. Five defects folded, each with a
+regression test verified red first (`m8-record.md`).
+
+Both of the largest are **a claim the diff itself makes, which does not hold for the call sites that
+exist**. `PageHeader`'s `actions` docblock said "aligned opposite the title", and a `basis-full`
+aside consumes its flex line, so on **both** of that slot's consumers the screen's primary action was
+stranded on a third row at flex-start below `md` — reproduced in Chromium at 375px. And
+`SectionCard`'s `count` was `aria-hidden` on the premise that "the screens that pass it already
+announce their settled result count through a live region": one of the four has no such hook at all,
+and the hook the other three use is **silent on first paint by its own docblock**, so on arrival none
+of them announced anything. A claim true of a pattern's original consumers, restated as a blanket
+premise and false for the one added later — ADR-0076's shape, twice, in a diff whose own register
+entry quotes it.
+
+**A third is ADR-0081's shape in the epic's own spec.** `feature-spec.md` §1.2.8 names the em-dash
+`Description` column on "Clients, Calendars, **Client detail** and Project detail"; M2-T3's scope
+line says "Clients and Calendars" and stops, and nothing recorded the difference — so Client detail
+kept the defect the milestone that fixed it was named for, while M2-T2a's withdrawal is recorded
+three files over in exactly the style this would have needed.
+
+**And a fourth is an instrument broken by the change it was meant to police.**
+`measure-detail-counts.mjs` still demanded `planCount` on the client route — the count FC-9 withdrew
+in the same commit that shipped the harness — so the script that both `client.repository.ts` and
+`docs/TECH_DEBT.md` #342 name as the **first** step to reopening that decision threw on its first
+request. Fixed, and now pinned in both directions.
+
+**All nine falsification conditions are judged in `m8-verdict.md`, and four of them had no recorded
+verdict until that pass.** FC-4, FC-5 and FC-7 each had an instrument named at M0 and nobody had
+written down what it said; **FC-8 had no instrument at all**, only a named quantity, so it could
+only ever have been judged by argument. `firstRowTop` was added to the drift harness, the reading
+taken — every in-scope screen's first row between 261 and 473 px against a 949 px region — and the
+property turned into a journey gate, because what FC-8 protects against is the **next** heading or
+strip added above a list rather than this epic's. FC-6's evidence became a gate for the same reason:
+it had a one-off artefact behind it, so dropping `fit`'s `md:` prefix would have broken reflow on
+the two screens that motivate it with nothing in CI to say so.
+
 **The CPM engine is not imported and no migration runs.** `computeSchedule` is not called, not
 imported and not reachable from anything this epic touches, so the ADR-0034 recalculation parity gate
 is untouched by construction.

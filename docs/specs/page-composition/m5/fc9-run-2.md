@@ -73,7 +73,28 @@ Execution Time: 0.168 ms
 **What this does NOT establish.** One machine, one local PostgreSQL, one sitting pair. The
 `added` column is the SUM of the two counts' `EXPLAIN (ANALYZE)` execution times, which is the
 conservative end of a range — they are issued concurrently, so the true added wall-clock is
-between the max and the sum. And `project.activityCount`'s cost is partly a function of how
+between the max and the sum. **It is also the sum of ALL FOUR counts measured for that shape, not
+of one route's own** — arithmetic the M8 backend-performance review did rather than took on trust:
+`fatProject`'s 22.39 = 0.12 + 0.17 + 0.14 + 21.96, which includes the two client-route counts that
+`/projects/:id` never issues. That makes the figure more conservative still (the real per-route
+added is ≈ 22.10 ms) so it cannot produce a false pass, but **no shipped HTTP route adds the number
+in this column**, and it must not be quoted as though one did.
+
+**One row does not fit the pattern the rest of the table demonstrates**, and it is recorded rather
+than smoothed: `fatProject`/`project.activityCount` reads 21.86 ms cold against 21.96 ms vacuumed,
+flat-to-inverted where every other row is visibly worse cold. The likeliest reading is that at this
+scale the dominant cost is per-plan index traversal across ~60 plans rather than heap-fetch count,
+so the two sittings' noise swamps the effect — likeliest, not established, which is why it is a
+footnote and not an explanation.
+
+**And "cold" here means one specific thing**: immediately after bulk insert, with the visibility map
+unset. It does **not** mean a restarted Postgres with the OS page cache dropped, which is what the
+neighbouring `20260818220000_overview_recently_changed_indexes` migration means by the word — and
+that is the state this product actually boots into, because the host recreates containers on every
+release (ADR-0047). FC-9 does not measure it. With the worst warm figures at 29.0 ms against a
+50 ms bar and 22.39 ms against 25, the remaining headroom is not large enough for that gap to be
+dismissed by inspection; it is unmeasured, and detail-page traffic being low-volume is a reason it
+has not mattered rather than a reason it cannot. And `project.activityCount`'s cost is partly a function of how
 recently the project was recalculated: the plan is an index-only scan, so it depends on the
 visibility map, and every recalculation rewrites every activity row in a plan (ADR-0144 §8
 measured 300 dirtied plans costing 130,380 heap fetches). This harness never recalculates.

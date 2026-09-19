@@ -283,4 +283,14 @@ describe('DataTable — Column.width', () => {
     expect(cell).toContain('py-2');
     expect(cell).toContain('md:w-px');
   });
+
+  it('wins a same-modifier collision with the caller, rather than losing one silently', () => {
+    // Pinned because the precedence is the OPPOSITE of `SearchField`'s `cn(defaults, className)`
+    // one file over, and of this repository's usual "className extends, never clobbers" habit —
+    // so the next author to hit it should find an assertion rather than a surprise (M8 component
+    // review). No consumer collides today; the point is that the answer is decided, not accidental.
+    const { cell } = classesFor('bounded', 'py-2 pr-4 md:max-w-40');
+    expect(cell).toContain('md:max-w-prose');
+    expect(cell).not.toContain('md:max-w-40');
+  });
 });

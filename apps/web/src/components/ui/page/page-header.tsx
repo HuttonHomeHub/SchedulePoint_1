@@ -26,7 +26,15 @@ export interface PageHeaderProps {
    * aside inside would reintroduce exactly that, one element along.
    */
   aside?: React.ReactNode;
-  /** The screen's primary action, and at most one or two more. Aligned opposite the title. */
+  /**
+   * The screen's primary action, and at most one or two more.
+   *
+   * **Aligned to the header row's trailing edge** — which is opposite the title while the row holds
+   * one line, and opposite the {@link aside} on the second line below `md` when both are passed.
+   * This said "aligned opposite the title" unconditionally and that was false in the only shape
+   * both props are used in today (see the wrapper below); corrected rather than deleted, because
+   * the sentence is what a reader checks the layout against.
+   */
   actions?: React.ReactNode;
   className?: string;
 }
@@ -86,13 +94,39 @@ export function PageHeader({
           `hidden md:block`, which is the wrong instinct twice over: a count is a fact about the
           subject, and a screen that withholds facts from a narrow reader has answered the layout
           question by deleting the content. `basis-full md:basis-auto` puts the aside on its own
-          line when the row cannot hold it and beside the title when it can. */}
-      {aside ? (
-        <div className="text-muted-foreground shrink-0 basis-full text-sm md:basis-auto">
-          {aside}
+          line when the row cannot hold it and beside the title when it can.
+
+          **The aside and the actions share ONE wrapper, and that is the M8 fix rather than tidying.**
+          They were siblings, and `basis-full` on a wrapping flex item does not merely take a line
+          for itself — it consumes the line, so **everything after it is pushed onto another one**.
+          Both real consumers pass the two together, so below `md` the screen's primary action was
+          stranded on a third line at `justify-between`'s flex-start, i.e. left-aligned and
+          disconnected from the title this file's own `actions` docblock said it sits opposite.
+          Reproduced in Chromium at 375px by the M8 component review: title y=1..28, aside y=44..60,
+          actions y=76..111 at x=1. One wrapper makes that line two items instead of one, so the
+          aside leads it and the actions close it.
+
+          **DOM order is unchanged — aside then actions — at every width**, which is the reason this
+          is not solved with `order-*`: visual order and reading order stay the same sequence, so
+          there is no WCAG 1.3.2 divergence to argue about (`PageGrid` refuses `order` for exactly
+          this reason and would be hard to defend one file over).
+
+          **`basis-full` is conditional on the aside, and `justify-between` on both**, so the two
+          shapes that existed before this prop are byte-identical: actions alone still shrink-wrap
+          beside the title and wrap naturally, an aside alone still takes its own line. Above `md`
+          the wrapper is `basis-auto shrink-0` and paints exactly what two siblings painted. */}
+      {aside || actions ? (
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-4',
+            aside ? 'basis-full md:basis-auto' : null,
+            aside && actions ? 'justify-between md:justify-end' : null,
+          )}
+        >
+          {aside ? <div className="text-muted-foreground text-sm">{aside}</div> : null}
+          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
         </div>
       ) : null}
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

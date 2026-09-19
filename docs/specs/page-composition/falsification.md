@@ -10,6 +10,12 @@ been made to fail.
 Baselines: `m0/drift-{1280,1646,1920}.json`, `m0/drift-320.json`, `m0/column-fit-{1280,1646}.json`.
 Method and the instruments' own faults: `m0-measurement.md`.
 
+> **All nine are judged in [`m8-verdict.md`](m8-verdict.md).** Four of them — FC-4, FC-5, FC-7 and
+> FC-8 — had no recorded verdict anywhere until that pass, each with an instrument named here and
+> nobody having written down what it said. FC-8 turned out to have no instrument at all, only a
+> named quantity, and now has both a reading and a gate. No bar was moved and no withdrawal clause
+> fired except FC-9's, below.
+
 ---
 
 ## FC-1 — one measure

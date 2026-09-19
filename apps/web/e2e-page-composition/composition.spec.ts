@@ -400,3 +400,135 @@ test('no column header stands over an empty column', async ({ page }) => {
 
   expect(scan.empties, 'these column headers print nothing in any row').toEqual([]);
 });
+
+/**
+ * M8 — the two questions the unit tier structurally cannot answer about `PageHeader`'s `aside`.
+ *
+ * The slot shipped with `basis-full md:basis-auto` on the aside itself. A `basis-full` item on a
+ * wrapping flex line does not merely take a line — it consumes the line, so **everything after it
+ * is pushed onto another one**: below `md` the screen's primary action landed on a third row at
+ * `justify-between`'s flex-start, left-aligned and disconnected from the title. Both of the slot's
+ * real consumers pass `aside` and `actions` together, so that was not an edge case; it was the only
+ * shape in use. Found by the M8 component review, reproduced in Chromium at 375px.
+ *
+ * Nothing could have caught it here: `page-archetypes.test.tsx` had no `aside` case at all (the
+ * plan's M5-T1 promised "unit at two widths" and none was written), and jsdom would not have
+ * answered it if it had. The unit cases added at M8 pin the composition; these pin the layout.
+ */
+test('the subject facts and the primary action share one line below md', async ({ page }) => {
+  await page.goto(`/orgs/${orgSlug}/clients`);
+  await page.getByRole('link', { name: 'Harbourside Estates' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Harbourside Estates' })).toBeVisible();
+
+  const action = page.getByRole('button', { name: /new project/i });
+  const facts = page.getByText(/\d+ projects?$/);
+  await expect(action).toBeVisible();
+  await expect(facts).toBeVisible();
+
+  await page.setViewportSize({ width: 375, height: 900 });
+  const narrow = { action: await action.boundingBox(), facts: await facts.boundingBox() };
+  if (!narrow.action || !narrow.facts)
+    throw new Error('nothing measured — the assertion below would be vacuous');
+
+  // Same line: the two boxes overlap vertically. Verified red against the two-sibling version,
+  // where the action sat 32px below the facts on a line of its own.
+  const sameLine =
+    narrow.action.y < narrow.facts.y + narrow.facts.height &&
+    narrow.facts.y < narrow.action.y + narrow.action.height;
+  expect(sameLine, 'the action shares the aside’s line rather than taking a third one').toBe(true);
+
+  // And it closes that line rather than opening it. `x` alone would pass against both layouts when
+  // the line holds one item, which is why this asserts the ORDER of two measured boxes.
+  expect(
+    narrow.action.x,
+    'the action sits at the trailing end, the facts at the leading one',
+  ).toBeGreaterThan(narrow.facts.x);
+
+  // Above `md` nothing about the pair changes — the wrapper shrink-wraps and the row is one line.
+  await page.setViewportSize({ width: 1646, height: 1000 });
+  const wide = { action: await action.boundingBox(), facts: await facts.boundingBox() };
+  if (!wide.action || !wide.facts) throw new Error('nothing measured at 1646');
+  const h1 = await page.getByRole('heading', { level: 1 }).boundingBox();
+  if (!h1) throw new Error('no h1 measured');
+  expect(wide.action.y, 'the action is on the title’s own line at 1646').toBeLessThan(
+    h1.y + h1.height,
+  );
+});
+
+/**
+ * M8 — the `fit` column's whole justification, asserted rather than measured once by hand.
+ *
+ * `fit` is `md:w-px md:whitespace-nowrap`, and the `md:` prefix is not stylistic: M0 measured a
+ * table whose columns are all `fit` rendering **793px inside a 320px container**, because
+ * `white-space: nowrap` has no fallback. That is FC-6, WCAG 2.2 §1.4.10, and until now its only
+ * evidence was a one-off artefact (`m0/drift-320.json`) rather than a gate — so a future author
+ * dropping the prefix would break reflow on the two screens whose content motivates `fit`, and
+ * nothing in CI would say so. Raised by the M8 component review.
+ */
+test('no list screen overflows a 320px viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  for (const path of ['calendars', 'resources', 'clients', 'recently-deleted']) {
+    await page.goto(`/orgs/${orgSlug}/${path}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // The `fit` columns live in the table, so wait for one before measuring — a skeleton has no
+    // `whitespace-nowrap` cell in it and would report a comfortable zero (the M6 lesson).
+    await expect(page.getByRole('table')).toBeVisible();
+    const over = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(over, `${path} overflows 320px by ${String(over)}px`).toBeLessThanOrEqual(0);
+  }
+});
+
+/**
+ * M8 — FC-8, made a gate rather than a one-off reading.
+ *
+ * The condition is "nothing this epic adds pushes the first content row below the fold at 1646".
+ * Eight of the ten in-scope screens do not scroll at all at that width (`m0/drift-1646.json`,
+ * `mainScrollHeight === mainClientHeight === 949`), so for those it cannot be violated without the
+ * page growing past the viewport; the two that do scroll — the audit log and My activity — both got
+ * **shorter** across M1 (2100 → 1935 and 2372 → 2275). That is the measurement.
+ *
+ * This is the part of it worth keeping. A measurement answers the question once, for the commit it
+ * was taken on; the thing FC-8 is really protecting against is the NEXT section heading, summary
+ * strip or filter bar added above a list — which is exactly what this epic added several of and
+ * what decision 4 withdrew one of. So the property becomes an assertion that runs forever
+ * (ADR-0058), and the fold is the viewport this project measures everything else at.
+ */
+test('every list screen shows its first row above the fold at 1646', async ({ page }) => {
+  /**
+   * Each screen is named with a row this fixture is known to hold. That is not decoration: the
+   * skeleton renders three visible `<tr>`s, so `tbody tr` resolves instantly, and a handle taken
+   * then goes stale the moment the data settles and the rows are replaced — which is how the first
+   * version of this failed, with `toBeVisible()` passing and `boundingBox()` returning `null`. The
+   * M6 assertion learnt the same lesson about the same primitive one test above. Waiting for
+   * settled content first is what makes the measurement a measurement.
+   *
+   * `recently-deleted` is deliberately absent: nothing is deleted in this fixture, so it has no
+   * rows to measure and including it would mean asserting against an empty state.
+   */
+  const SETTLED: [string, string][] = [
+    ['clients', 'Harbourside Estates'],
+    ['calendars', '6-Day Construction (10h, Mon-Sat)'],
+    ['resources', 'Hydrotest Pump Unit'],
+    ['members', 'Composition Tester'],
+    ['audit-log', 'Organisation created'],
+  ];
+
+  await page.setViewportSize({ width: 1646, height: 1000 });
+  for (const [path, settled] of SETTLED) {
+    await page.goto(`/orgs/${orgSlug}/${path}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByText(settled).first()).toBeVisible();
+
+    const row = page.locator('tbody tr').first();
+    const box = await row.boundingBox();
+    if (!box) {
+      throw new Error(`${path}: no first row measured — the assertion below would be vacuous`);
+    }
+    expect(
+      box.y,
+      `${path}'s first row starts at y=${String(Math.round(box.y))}, below the fold`,
+    ).toBeLessThan(1000);
+  }
+});

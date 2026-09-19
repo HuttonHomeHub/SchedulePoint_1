@@ -85,6 +85,21 @@ const WIDTH_CLASSES: Record<NonNullable<Column<unknown>['width']>, string> = {
 };
 
 /** A column's head classes, its declared width composed with whatever the caller passed. */
+/**
+ * **The width preset is composed LAST, so it wins a same-modifier collision.**
+ *
+ * `cn` is `tailwind-merge`, so on a conflict the later class survives: a caller writing
+ * `cellClassName="md:max-w-40"` beside `width: 'bounded'` gets `md:max-w-prose`, not its own cap.
+ * That is the opposite precedence from `SearchField`'s `cn(defaults, className)`, where the caller
+ * wins, and from this repository's usual "className extends, never clobbers" habit — so it is
+ * stated rather than left for the next author to discover. No consumer collides today (checked
+ * across every `cellClassName`/`headClassName` in the tree at M8), which is why this is a docblock
+ * and a test rather than a change.
+ *
+ * It is the right way round for what `width` is: a declaration about the COLUMN's role in the
+ * table's arithmetic (FC-2), which a per-cell class has no business silently overriding. A caller
+ * who genuinely wants their own cap says `width: 'auto'` and owns it.
+ */
 function headClassesOf<T>(column: Column<T>): string {
   return cn(column.headClassName ?? 'py-2 pr-4 font-medium', WIDTH_CLASSES[column.width ?? 'auto']);
 }

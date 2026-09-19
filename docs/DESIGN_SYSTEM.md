@@ -746,6 +746,45 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   > consumer needs it, and writing them down as though they exist is how a reader plans around a
   > capability that isn't there. Loading is a **spinner**, not skeleton rows.
 
+  **Column width is a property of the COLUMN, declared on it** (ADR-0146 D3). `Column.width` takes
+  `'fit' | 'bounded' | 'auto'` and the three names are a vocabulary, not three sizes:
+
+  | Value       | Renders                        | For                                                       |
+  | ----------- | ------------------------------ | --------------------------------------------------------- |
+  | `'fit'`     | `md:w-px md:whitespace-nowrap` | A bounded value — a date, a code, a status, a `⋯` column  |
+  | `'bounded'` | `md:max-w-prose`               | Prose, capped at a readable measure. **Never truncates.** |
+  | `'auto'`    | nothing                        | The contested middle: genuinely unbounded, may wrap       |
+
+  Three rules go with it.
+
+  **`'auto'` must be written down.** It is also the default, so a rule reading "no cell wraps except
+  in a column declared `auto`" is vacuous unless the exception is a decision somebody made. Declaring
+  it changes no CSS and is not decoration.
+
+  **`fit` is `md:` upwards and that is not stylistic.** `white-space: nowrap` has no fallback: an
+  all-`fit` table was measured rendering **793px inside a 320px container**, a 433px overflow and a
+  WCAG 2.2 §1.4.10 failure, where the same content without it stays inside and wraps.
+
+  **The width preset composes LAST, so it wins a same-modifier collision** with a caller's
+  `cellClassName`. That is the opposite precedence from the `cn(defaults, className)` habit elsewhere
+  and is deliberate — `width` is a declaration about the column's role in the table's arithmetic,
+  which a per-cell class has no business silently overriding. A caller who wants their own cap says
+  `width: 'auto'` and owns it. Pinned by a test, because nothing collides today.
+
+  **A fact about a row goes under that row, never in a column of its own** (ADR-0146 D4). A field
+  most rows do not carry spends width on every row to say nothing, and prints an em dash where the
+  absence is — while the columns beside it wrap. The remedy is a secondary line under the subject,
+  **rendered only when present**: a sub-line reading "—" is the same defect one row lower, which is
+  the trap in the whole rule. The same applies to a column whose every cell is empty on a healthy
+  installation (the audit log's `Outcome`): fold it into the row it belongs to, and **keep any
+  `sr-only` text it carried** — dropping that is a silent accessibility regression nothing on screen
+  can show.
+
+  **A `count` on the section's heading is exposed to assistive technology, not `aria-hidden`.** It
+  was hidden on the premise that every screen passing one announces its settled count through a live
+  region; that was false for one consumer and, because the shared hook is silent on first paint,
+  incomplete for the rest. The visible number and the spoken one are the same fact, said once.
+
 - **Cards** — `card` surface, `radius-lg`, `shadow-sm`, standard padding;
   slots for header/title, content, footer/actions.
 - **Navigation** — top-level via the Project Explorer rail (a hand-rolled ARIA

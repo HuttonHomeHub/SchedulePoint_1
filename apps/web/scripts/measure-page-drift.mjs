@@ -174,6 +174,20 @@ const probe = () => {
       rows: rows.length,
       headers: heads,
       rowHeights: heights,
+      /**
+       * **Where the first row of content sits, in the viewport — FC-8's whole subject.**
+       *
+       * Added at M8 because FC-8 ("nothing this epic adds pushes the first row below the fold")
+       * had no instrument. Every other condition here was judged by something that already
+       * existed; this one was left to be reasoned about, and reasoning is exactly what this
+       * epic's own record says not to accept for a claim that decides something (ADR-0076).
+       *
+       * Viewport-relative, so it is directly comparable with `state.viewport.h`: a row whose top
+       * is at or beyond that is below the fold. Recorded per table rather than per page, because
+       * a screen with two lists (Project detail, since M4) has two first rows and the second one
+       * is the one a section heading pushes down.
+       */
+      firstRowTop: first ? Math.round(first.getBoundingClientRect().top) : null,
       firstCellX: cells[0] ?? null,
       lastCellX: cells.length ? cells[cells.length - 1] : null,
       lastFactX: lastFact,

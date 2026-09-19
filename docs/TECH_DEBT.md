@@ -9052,6 +9052,15 @@ the whole argument for the gate: the estate has now been "clean today" three tim
 again within days on each occasion. Repaired in the same pass; `check:adr-coverage`'s own docblock
 still says it does not read this file, so the register remains checked by a person or not at all.
 
+**It recurred again on 2026-09-17, twice, and the second instance is worth the sentence.** ADR-0145
+was Accepted, filed, indexed and cited by `docs/ROADMAP.md` while absent from §16 — caught by that
+epic's own component review rather than by anything automatic — and then **ADR-0146 went the same
+way one day later**, caught only because its author happened to open `CLAUDE.md` to edit it for
+another reason. That is the **ninth and tenth** instances. Both were repaired in the commit that
+found them, and neither was found by a gate. The pattern is now stable enough to state plainly: an
+ADR filed at the end of an epic reaches `docs/adr/README.md` (gated) and `docs/ROADMAP.md` (gated)
+and misses §16 (not gated), because the two that are checked are the two that fail loudly.
+
 **The repair is done; the gate is not.** ADR-0132 now has its entry, and a full comparison of all
 **133** ADR files against §16 found **exactly one** missing, so the estate is clean today. (That
 figure is the count **before this row's own commit added ADR-0134/0135/0136** — 136 immediately
@@ -10838,9 +10847,57 @@ The other three counts (`client.projectCount`, `project.planCount`, `project.act
    It is still an index, and every index here goes through `database-architect` (CLAUDE.md §19.3),
    which is a round M5-T2 did not have.
 
+**Remedy 2 is not sufficient on its own, and that was established by building it.** The M8
+backend-performance review created the candidate index against a ratio-matched database and
+confirmed it flips the project side to an `Index Only Scan` with zero heap fetches at 25%
+selectivity (cost 25.03 against 56.05) — and the join-shaped query **still** planned a `Seq Scan on
+plans`, because with the projects side cheap the planner reasonably decided scanning the smaller
+`plans` table outright beat probing it. So the index alone does not satisfy FC-9(b)'s "no `Seq Scan`
+on a child table"; it needs pairing with remedy 1, or a `plans` table large enough for its own
+sequential scan to dominate — which is the crossover `database-architect` measured at 76,817 plans
+from the other direction. The two remedies are not alternatives at today's shape. Neither document
+said so before this was run.
+
 **Trigger:** a request for a plan count on the client screen, or any other read that needs to count
 a two-level descendant under a client. Re-run `apps/web/scripts/measure-detail-counts.mjs` first —
-it is the harness that found this, it dilutes, and it vacuums.
+it is the harness that found this, it dilutes, and it vacuums. **It could not have been run until
+M8**: its own expectation list still demanded `planCount` on the client route, so the instrument
+this row names as step one threw on its first request, about a field the product deliberately does
+not send. Fixed, and pinned in both directions.
 
 **What is pinned so this cannot come back silently:** `clients.e2e-spec.ts` asserts the detail body
 has **no** `planCount`, over a fixture holding exactly the plans that would make one look right.
+
+### 343. Two screens carry facts they already hold and do not render
+
+**Status:** open
+**Raised:** 2026-09-17 (ADR-0146 M8, by `ux-reviewer` and `accessibility-reviewer`)
+
+Both are scope the gate pass was the wrong place to add (ADR-0105: a new column on a list screen is
+a new surface, and the epic's own spec had already declined to scope one of them), so they are
+recorded rather than built.
+
+**(a) Clients is the sparsest table in the epic.** After D4 moved its description under the name,
+`ClientsTable` renders exactly two columns — `Name` with an optional sub-line, and `Actions` — which
+at the 1488px measure this epic gave it is a name at one end, an `Edit ⋯` at the other, and roughly
+900–1000px of nothing between them on every row. That is the most literal instance in the product of
+the complaint the epic was opened on.
+
+The spec diagnosed the identical shape for Members (`feature-spec.md` §1.2.9, "Members is sparse")
+and fixed it in M4 by rendering `joinedAt`, which had been on the wire and unrendered the whole time.
+**The same section notes that `ClientSummary` already carries `createdAt`/`updatedAt` unrendered**,
+and nothing in M1–M8 went back to it. A `Created` column is cheap and `width: 'fit'`.
+
+The reason it is not folded in here: adding a column changes what the column-fit measurement is
+about, so it wants FC-2 re-run rather than a reviewer's eye — which is a milestone, not a fix.
+
+**(b) Members' Roster renders with no `count`.** `feature-spec.md` §4.6's composition is
+`SectionCard( "Roster", count, table + Joined )` and `members.tsx` passes no `count` prop. Not an
+accessibility defect — parity is equal for every reader when a fact is simply not shown — and not a
+withdrawal either, because unlike M2-T2a and M4-T2 nothing recorded a decision. It is the silent gap
+between a spec and its code that ADR-0081's standing rule is about, and one line either way settles
+it: render it, or write down why not.
+
+**Trigger:** the next epic that touches either screen, or a product-owner report that Clients reads
+empty. Both are one-line changes; what they need is the measurement pass that makes them safe to
+call done.

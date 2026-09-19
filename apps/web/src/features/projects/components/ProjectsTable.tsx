@@ -45,20 +45,33 @@ export function ProjectsTable({
   const columns: Column<ProjectSummary>[] = [
     {
       header: 'Name',
+      /**
+       * **`Description` is a secondary line under the name, not a column** (ADR-0146 D4).
+       *
+       * **This table was named by the epic's own problem statement and left out of the milestone
+       * that fixed it.** `feature-spec.md` §1.2.8 lists the em-dash column on "Clients, Calendars,
+       * **Client detail** and Project detail"; M2-T3's scope line says "`Description` leaves
+       * Clients and Calendars" and stops there, and nothing recorded the difference — so this
+       * screen kept a column whose every cell read "—" while the two beside it were fixed, for the
+       * reason a reader of either file would have said it was fixed. Found by the M8 UX review;
+       * ADR-0081's shape, which this epic's register quotes and did not apply to itself.
+       *
+       * **Rendered only when present**, because a secondary line reading "—" is the same defect one
+       * row lower — the trap in this whole rule.
+       */
       cell: (project) => (
-        <Link
-          to="/orgs/$orgSlug/projects/$projectId"
-          params={{ orgSlug, projectId: project.id }}
-          className="font-medium underline-offset-4 hover:underline"
-        >
-          {project.name}
-        </Link>
-      ),
-    },
-    {
-      header: 'Description',
-      cell: (project) => (
-        <span className="text-muted-foreground">{project.description ?? '—'}</span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <Link
+            to="/orgs/$orgSlug/projects/$projectId"
+            params={{ orgSlug, projectId: project.id }}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            {project.name}
+          </Link>
+          {project.description ? (
+            <span className="text-muted-foreground text-xs">{project.description}</span>
+          ) : null}
+        </span>
       ),
     },
   ];

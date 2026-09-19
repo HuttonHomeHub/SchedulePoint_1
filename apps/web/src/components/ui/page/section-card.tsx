@@ -18,11 +18,25 @@ export interface SectionCardProps {
    * plan around — and `fill`'s docblock already says a caller that scrolls its body owes its reader
    * a count, while offering nowhere to put one.
    *
-   * It renders `aria-hidden`, and that is deliberate rather than an oversight: the screens that
-   * pass it already announce their settled result count through a live region (ADR-0053 M6), and a
-   * second announcement of the same number is how a screen-reader user hears "12" twice and has to
-   * work out whether those are two different facts. The visible number is a convenience for the
-   * sighted reader; the spoken one has an owner already.
+   * **It is exposed to assistive technology, and it used to be `aria-hidden` on a premise that was
+   * false.** That premise was "the screens that pass it already announce their settled result count
+   * through a live region (ADR-0053 M6)", so a visible-only number avoided a reader hearing "12"
+   * twice. The M8 accessibility and component reviews checked it against the four consumers and it
+   * does not hold for any of them at the moment it matters:
+   *
+   * - `RecentlyDeletedTable` calls `useResultCountAnnouncement` **nowhere**, and its only
+   *   `role="status"` states a different number (how many items expire soon). Its total was
+   *   reachable by no route at all.
+   * - The other three do call that hook — and it is **silent on first paint by its own docblock**,
+   *   speaking only after a subsequent filter-driven change. So on arrival, which is the common
+   *   case for a reader who never touches the search field, none of the four announced anything.
+   *
+   * A claim that was true of a pattern's original consumers, restated as a blanket premise and
+   * false for the one added later: ADR-0076's shape. The remedy is parity rather than a second
+   * announcement — the number is plain text beside the heading, so an AT user reading the section
+   * gets exactly what the sighted reader gets, once. The live region keeps its own job, which is
+   * saying that the number **changed**; nothing here is a live region, so there is no second
+   * utterance to collide with.
    *
    * Pass the number, not a sentence. The archetype formats it, so two sections cannot disagree
    * about whether it is "12", "12 items" or "(12)".
@@ -169,9 +183,7 @@ export function SectionCard({
               {title}
             </CardTitle>
             {count === undefined ? null : (
-              <span aria-hidden className="text-muted-foreground text-sm tabular-nums">
-                {count}
-              </span>
+              <span className="text-muted-foreground text-sm tabular-nums">{count}</span>
             )}
           </div>
           {description ? <CardDescription className="mt-1">{description}</CardDescription> : null}

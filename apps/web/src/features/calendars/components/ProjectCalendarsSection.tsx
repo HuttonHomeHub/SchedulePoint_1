@@ -73,6 +73,7 @@ export function ProjectCalendarsSection({
   const regionId = useId();
   const archivedFilterId = useId();
   const explainerId = useId();
+  const tableId = useId();
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   // Both directions are offered here — this is the one screen where the target project is
@@ -307,6 +308,12 @@ export function ProjectCalendarsSection({
             variant="ghost"
             size="sm"
             aria-expanded={showInherited}
+            // **Named as well as flagged.** `CoverageDisclosure` in this same epic wires
+            // `aria-controls` at the audit screens' caveat and this did not — one correct pattern
+            // applied to a control and not its neighbour, found by the M8 accessibility review.
+            // It points at the table, because the table IS what opening this changes: the caption
+            // renames from "belonging to" to "usable in".
+            aria-controls={tableId}
             onClick={() => {
               setShowInherited((previous) => !previous);
             }}
@@ -316,42 +323,48 @@ export function ProjectCalendarsSection({
         </div>
       ) : null}
 
-      <DataTable
-        caption={
-          showInherited
-            ? `Calendars usable in ${projectName}`
-            : `Calendars belonging to ${projectName}`
-        }
-        columns={columns}
-        query={visibleQuery}
-        getRowKey={(calendar) => calendar.id}
-        loadingLabel="Loading calendars…"
-        errorLabel="Couldn’t load this project’s calendars. Please try again."
-        empty={
-          archivedFilter === 'only' ? (
-            // **A filtered-empty says so, and offers the way back**
-            // (`docs/specs/empty-state-consolidation/` §1.6, M4-T2). This rendered the bare
-            // sentence while its three siblings — `CalendarsTable`, `ResourcesTable` and
-            // `AuditEventList` — all offered a control, so a reader who filtered to archived and
-            // found none had to work out that the select above was the cause. One correct pattern
-            // applied to a control and not its neighbour. The only filter here IS the archived
-            // select, so "clear" is a return to its default rather than a reset of a filter object.
-            <>
-              <p className="text-muted-foreground text-sm">No archived calendars.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setArchivedFilter('exclude')}
-              >
-                Show all calendars
-              </Button>
-            </>
-          ) : (
-            <>No calendars available.{canWrite ? ' Create one for this project.' : ''}</>
-          )
-        }
-      />
+      {/* The disclosure's `aria-controls` target. A wrapper rather than an `id` on `DataTable`,
+          because what opening the disclosure changes is the LIST — its caption, its rows, and on
+          the empty path the sentence that replaces them — and a prop on the primitive would name
+          only the `<table>`, which is absent in exactly those states. */}
+      <div id={tableId}>
+        <DataTable
+          caption={
+            showInherited
+              ? `Calendars usable in ${projectName}`
+              : `Calendars belonging to ${projectName}`
+          }
+          columns={columns}
+          query={visibleQuery}
+          getRowKey={(calendar) => calendar.id}
+          loadingLabel="Loading calendars…"
+          errorLabel="Couldn’t load this project’s calendars. Please try again."
+          empty={
+            archivedFilter === 'only' ? (
+              // **A filtered-empty says so, and offers the way back**
+              // (`docs/specs/empty-state-consolidation/` §1.6, M4-T2). This rendered the bare
+              // sentence while its three siblings — `CalendarsTable`, `ResourcesTable` and
+              // `AuditEventList` — all offered a control, so a reader who filtered to archived and
+              // found none had to work out that the select above was the cause. One correct pattern
+              // applied to a control and not its neighbour. The only filter here IS the archived
+              // select, so "clear" is a return to its default rather than a reset of a filter object.
+              <>
+                <p className="text-muted-foreground text-sm">No archived calendars.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setArchivedFilter('exclude')}
+                >
+                  Show all calendars
+                </Button>
+              </>
+            ) : (
+              <>No calendars available.{canWrite ? ' Create one for this project.' : ''}</>
+            )
+          }
+        />
+      </div>
 
       <CalendarFormDialog
         orgSlug={orgSlug}

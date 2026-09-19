@@ -62,6 +62,17 @@ export class ClientRepository {
    * from the heap, so `uq_projects_client_name` and `uq_plans_project_name` already serve both of
    * these. The uniqueness rule bought the index; nothing here has to.
    *
+   * **That holds at the selectivity a real subject has, and not unconditionally** — a caveat the
+   * M8 backend-performance review added by measuring rather than reading. A single-level count is
+   * an ordinary index-vs-seq-scan choice, so a client holding a large enough share of the WHOLE
+   * `projects` table (reproduced at 500 of 2,004, 25%) makes a `Seq Scan` the planner's answer
+   * here too — the same class of risk that withdrew this method's sibling, needing a much bigger
+   * trigger because one level does not compound two selectivities. Two things bound it: the
+   * absolute cost stays sub-millisecond while the table is small, and `organizationId` is
+   * deliberately absent from the predicate (see 1 below), so the relevant table is the whole
+   * installation's rather than one organisation's. Measured index-only at 500 of 50,786 (~1%),
+   * which is the shape an estate of more than one tenant has.
+   *
    * ADR-0144's refusal does not transfer, and it is worth saying why rather than citing it: that
    * decision declined an index **faster at every shape**, because any index making its aggregate
    * index-only had to contain `early_finish`, which `writeResults` rewrites on every recalculation
@@ -72,8 +83,15 @@ export class ClientRepository {
    * **Three things here must not be tidied away.**
    *
    * 1. **No `organizationId` in either predicate.** It is a natural defence-in-depth reflex and it
-   *    is measured in this repository at **62%** (`20260818220000_overview_recently_changed_indexes`,
-   *    note 1) — the column is not in the index, so the predicate forces a heap fetch per row. The
+   *    costs, because the column is not in the index and the predicate forces a heap fetch per row:
+   *    measured here, adding it flips this count from an `Index Only Scan` to a `Bitmap Heap Scan`
+   *    with a `Filter`. **The "62%" this cited is another query's number** — it belongs to
+   *    `20260818220000_overview_recently_changed_indexes` note 1, a lateral join over an
+   *    `INCLUDE`-shaped covering index, and was quoted forward rather than re-derived for this pair
+   *    of indexes; re-measured at a comparable size it is nearer +28%. Same direction, different
+   *    magnitude, and a borrowed figure reads as evidence for this decision when it is evidence for
+   *    a different one (ADR-0076 Class 2). The mechanism is the claim; the number is whichever the
+   *    shape gives you. The
    *    scope is already enforced twice over: the caller has resolved this client in the caller's
    *    organisation (404 otherwise) before either count is issued, and `plans.project_id` is an
    *    enforced foreign key. A count keyed on this client's own id cannot reach another

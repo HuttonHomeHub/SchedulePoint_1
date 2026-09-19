@@ -579,16 +579,35 @@ for (const shape of SHAPES) {
         samples.push(r.ms);
         data = r.data;
       }
-      // The counts must actually be in the body, or the route timings grade a response that does
-      // not carry the feature (ADR-0081's shape, in an instrument).
-      const expected =
-        key === 'client' ? ['projectCount', 'planCount'] : ['planCount', 'activityCount'];
+      /*
+        The counts must actually be in the body, or the route timings grade a response that does
+        not carry the feature (ADR-0081's shape, in an instrument).
+
+        **`client` expects ONE count, and this list said two until the M8 backend-performance
+        review ran it.** `client.planCount` was withdrawn by FC-9 in the same commit that shipped
+        this harness, and the expectation was not swept with it — so the first thing the harness
+        did on a client route was throw, saying the response "carries no planCount" about a field
+        the product deliberately does not send. Both `client.repository.ts`'s comment and
+        `docs/TECH_DEBT.md` #342 name re-running this script as the FIRST step to reopening that
+        decision, so the instrument prescribed for the re-verification could not start. An
+        expectation left behind by the change it was meant to police, which is the register's own
+        recurring shape one level out from the product.
+      */
+      const expected = key === 'client' ? ['projectCount'] : ['planCount', 'activityCount'];
       for (const field of expected) {
         if (typeof data[field] !== 'number') {
           throw new Error(
             `${shape.key}/${key}: the response carries no ${field} — these timings would grade the route WITHOUT the feature.`,
           );
         }
+      }
+      // The withdrawn count is pinned in the OTHER direction, so a reinstatement cannot be graded
+      // by a run that quietly kept the old bar: if `planCount` comes back on a client, the harness
+      // says so rather than measuring it under an expectation written for its absence.
+      if (key === 'client' && data.planCount !== undefined) {
+        throw new Error(
+          `${shape.key}/client: the response carries planCount, which FC-9 withdrew (docs/TECH_DEBT.md #342). Re-arm the expectation above before grading it.`,
+        );
       }
       samples.sort((a, b) => a - b);
       routeP95[key].push(quantile(samples, 0.95));
