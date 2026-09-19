@@ -136,8 +136,26 @@ test.beforeAll(async ({ browser }) => {
       return r.status === 204 ? null : ((await r.json()) as { data?: { id?: string } });
     };
 
-    // A LIVE invitation — the one shape that makes `Status` render its long form.
+    // A LIVE invitation — the one shape that makes the expiry render its long form.
     await send('/invitations', { email: `invited-${Date.now()}@example.com`, role: 'PLANNER' });
+
+    // **The worst case, seeded because a gate measures what it is given.** The M5 UX review found
+    // that none of the seven candidates in `m2/README.md` §3 had been measured against a long
+    // address or a long role: every reading came from `invited-<13 digits>@example.com` (33
+    // characters) and `Planner` (7). A remedy chosen on the easy shape is a remedy nobody has
+    // tested. So the fixture carries the hard one too — a real-length address, and `Org Admin`,
+    // which is the longest of the four labels `ROLE_LABELS` can produce and therefore the widest
+    // the `fit` Role column can ever be asked to hold.
+    //
+    // **No timestamp in it, unlike its neighbour.** `uq_invitations_org_email_pending` is scoped to
+    // `organization_id` and `orgSlug` carries one (`:23`), so the tenant is new every run and the
+    // address needs no stamp to be unique. The first draft stamped it anyway, out of habit, and the
+    // 14 extra characters took it to 72 — which wraps at 1646 as well and would have made the
+    // reading a statement about an address shape nobody has.
+    await send('/invitations', {
+      email: 'c.fitzwilliam-hargreaves@construction-partners.example.com',
+      role: 'ORG_ADMIN',
+    });
 
     // A project and a plan, so `client-detail` and `project-detail` have rows to judge.
     const clients = await fetch(`/api/v1/organizations/${org}/clients`, {

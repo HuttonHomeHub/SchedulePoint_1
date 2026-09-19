@@ -115,6 +115,13 @@ only genuine exemption (no tables — ADR-0098), matching `measure-column-fit.mj
 **Bar:** at **1280, 1646 and 1920**, **zero** wrapped cells in the Pending invitations table —
 **without** declaring any of its columns `auto` to achieve it.
 
+> **VERDICT: FAIL** (`m5/verdict.md` §2). Met at 1646 and 1920; **not met at 1280**, where a
+> realistic role mix takes 17px from the `fit` Role column (`Planner` 65px → `Org Admin` 82px) and
+> Email falls 280px → 263px — the boundary at which even the 33-character fixture address wraps.
+> M3 recorded a PASS because every invitation it seeded was a `Planner`; the bar was never met, it
+> was never tested. `Email` now declares `width: 'auto'` with the measurement in its docblock, so
+> the second clause of the bar is failed deliberately and on the record. **The bar is not amended.**
+
 **Baseline:** 2 wrapping columns at every width, table `naturalTotal` **748** against **519 / 599 /
 682** rendered (`m3/cf-1280|1646|1920.json`).
 
@@ -159,8 +166,14 @@ screen reader, or the candidate has not met US-1 whatever the probe says.
    sections do not narrow at any of the three widths, and the Members `RolesPanel` remains legible
    at 1280 — measured, not eyeballed.
 
-**Baseline:** `m3/drift-1646.json`; clause 2's baseline is taken at M2-T1 because **no instrument
-has ever measured the narrow track's occupants**, which is itself part of why C1 is uncosted.
+**Baseline:** ~~`m3/drift-1646.json`~~ — **that file does not exist and never did**, and the error
+is left visible rather than quietly replaced. M3 produced `cf-{1280,1646,1920}.json` and
+`tracks-1280.json` only; this line was written when the plan expected M3 to take a drift reading,
+and nothing noticed it had not, because nobody reads a baseline citation until they try to judge
+against it. The real baseline is **`m0/drift-{1280,1646,1920}.json`** (the pre-remedy estate), with
+`m2/drift-1646-{baseline,C2c,C3}.json` as the candidate sitting. Judged at M5 against the former —
+`m5/verdict.md` §3. Clause 2's baseline is taken at M2-T1 because **no instrument has ever measured
+the narrow track's occupants**, which is itself part of why C1 is uncosted.
 
 **Judged by:** `measure-page-drift.mjs`, plus a reading of the three `PageGrid` consumers' section
 widths.

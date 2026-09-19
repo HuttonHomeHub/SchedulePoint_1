@@ -80,6 +80,38 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
     {
       header: 'Email',
       /**
+       * **`auto`, because an address is unbounded by the data model** — the one column here whose
+       * content has no shape a width can be chosen for, so no width can promise it one line and
+       * the honest thing is to write that down (ADR-0146 D3: `auto` means somebody decided, and
+       * said why).
+       *
+       * **It is declared because FC-4 failed, and the failure is measured rather than argued**
+       * (`docs/specs/table-wrap-coverage/m5/verdict.md`). That condition asked for zero wrapped
+       * cells at 1280/1646/1920 *without* declaring a column `auto`, and M3 recorded it met. M5's
+       * UX review then found that every reading behind it came from one easy shape —
+       * `invited-<13 digits>@example.com` and `Planner` — so the fixture was widened to a real
+       * address and `Org Admin`, the longest of the four `ROLE_LABELS`, and re-measured in one
+       * sitting on the shoot tenant:
+       *
+       * - `Planner` alone → Role **65px**, Email **280px** at 1280 → no wrap.
+       * - `Org Admin` present → Role **82px**, Email **263px** at 1280 → **both rows wrap**,
+       *   including the 33-character address M3 judged clean.
+       *
+       * So the 17px a longer role label takes from a `fit` column is the whole difference, and
+       * M3's result held only because every seeded invitation was a Planner. At 1646 and 1920 a
+       * 58-character address still sits on one line (`m5/invitations-live-1646.png`); at 1280 the
+       * card sits in the grid's narrow track and nothing realistic fits.
+       *
+       * **Moving this table to the wide span at 1280 was considered and not taken.** ADR-0146's
+       * rule is spans by content demand, and 454 natural against a 416px track would justify it —
+       * but it re-opens the whole Members composition for one column at one width, and it would
+       * not remove the declaration, because a long enough address wraps in the wide track too.
+       *
+       * The break is at punctuation, never mid-token (`m5/invitations-live-1280.png`), which is
+       * the distinction between a legitimate wrap and a broken value.
+       */
+      width: 'auto',
+      /**
        * **`Sent` and `Status` are a secondary line under the address, not columns of their own**
        * (ADR-0146 D4, and the same shape `ClientsTable` applies to `Description`).
        *

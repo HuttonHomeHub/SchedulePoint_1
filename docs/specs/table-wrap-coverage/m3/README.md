@@ -7,6 +7,14 @@ of re-running it (plan M3-T1 step 3).
 **FC-4: PASS.** Zero wrapped cells in the Pending invitations table at 1280, 1646 and 1920, with no
 column declared `auto` to achieve it.
 
+> **This verdict was overturned at M5 and is left standing here rather than edited**
+> (`m5/verdict.md` §2). It is true of what was measured and the fixture was too easy: every
+> invitation behind it was a `Planner`, and `Org Admin` takes 17px from the `fit` Role column, which
+> is exactly the margin by which the 33-character address above fits at 1280. Re-measured with a
+> realistic role mix, **both** addresses wrap at 1280 — including this one. `Email` is now declared
+> `auto`, so FC-4's bar ("without declaring any of its columns `auto`") is **not met**.
+> 1646 and 1920 are unaffected.
+
 ---
 
 ## 1. The reading, on a full roster
