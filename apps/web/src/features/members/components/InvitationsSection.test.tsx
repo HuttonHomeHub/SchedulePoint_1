@@ -67,6 +67,53 @@ describe('InvitationsSection', () => {
     expect(screen.getAllByText(/^Expires /)).toHaveLength(1);
   });
 
+  /**
+   * **The fold, asserted at CELL granularity rather than at row granularity.**
+   *
+   * `docs/TECH_DEBT.md` #344 moved `Sent` and `Status` out of columns of their own and under the
+   * address (ADR-0146 D4), because in a 466/649/732px grid track all three text columns wrapped at
+   * every width measured. A row-scoped assertion cannot see that change — before the fold both
+   * facts were already in the same `<tr>`, in cells of their own — so this scopes to the cell the
+   * address is in, which is the only thing that distinguishes the two layouts.
+   *
+   * It also pins the labels. Folding a column removes the header that named it, so the line has to
+   * spell `Sent` and `Expires` itself or it degrades into two bare timestamps. `/^Sent /` is red
+   * against the pre-fold component, whose `Sent` column rendered the instant with no word.
+   *
+   * **And it pins that neither fact was DROPPED**, which is the failure mode a wrap gate invites:
+   * deleting a column is the cheapest way to stop it wrapping and it fails the reader silently.
+   */
+  it('folds when it was sent and when it expires under the address, with their words', () => {
+    renderSection();
+
+    const addressCell = screen.getByText('priya@example.com').closest('td');
+    expect(addressCell).not.toBeNull();
+
+    expect(within(addressCell as HTMLElement).getByText(/^Sent /)).toBeVisible();
+    expect(within(addressCell as HTMLElement).getByText(/^Expires /)).toBeVisible();
+
+    // The expired row's badge is in ITS address cell, not the live one's — the same fold, the
+    // other branch, and the reason both rows are rendered in one pass.
+    const expiredCell = screen.getByText('tom@example.com').closest('td');
+    expect(within(expiredCell as HTMLElement).getByText('Expired')).toBeVisible();
+    expect(within(expiredCell as HTMLElement).getByText(/^Sent /)).toBeVisible();
+  });
+
+  /**
+   * The other half of the same change, and the one a reader would notice first: the table now has
+   * three columns, not five. Asserted by NAME rather than by count, so a future column added for a
+   * good reason fails this with a sentence rather than with an off-by-one.
+   */
+  it('no longer carries Sent or Status as columns of their own', () => {
+    renderSection();
+
+    const headers = screen
+      .getAllByRole('columnheader')
+      .map((el) => el.textContent?.trim())
+      .filter(Boolean);
+    expect(headers).toEqual(['Email', 'Role', 'Actions']);
+  });
+
   it('offers a distinctly-named revoke action per row', () => {
     renderSection();
 

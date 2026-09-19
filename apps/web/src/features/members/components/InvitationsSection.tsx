@@ -77,27 +77,56 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
   };
 
   const columns: Column<InvitationSummary>[] = [
-    { header: 'Email', cell: (invitation) => invitation.email },
-    { header: 'Role', cell: (invitation) => ROLE_LABELS[invitation.role] },
     {
-      header: 'Sent',
+      header: 'Email',
+      /**
+       * **`Sent` and `Status` are a secondary line under the address, not columns of their own**
+       * (ADR-0146 D4, and the same shape `ClientsTable` applies to `Description`).
+       *
+       * They were columns, and in a 466/649/732px grid track all three of this table's text
+       * columns wrapped at **every** width measured — the address broken mid-token, and
+       * `Expires 26 Sept 2026, 16:57` over four lines inside 62px
+       * (`docs/specs/table-wrap-coverage/m0/README.md`). Seven remedies were measured in one
+       * sitting (`m2/README.md` §3) and this is the only one that fits: `naturalTotal` **750 →
+       * 454**, zero wrapped cells at 1280, 1646 and 1920, **without declaring any column `auto`**
+       * to excuse a wrap. It is also the only one that removes the second failure mode nobody had
+       * predicted — the table's min-content exceeding its own card at 1280 — because that needs
+       * min-content reduced and only a fold reduces it.
+       *
+       * **Both facts stay in the row; neither is dropped.** A fold that deletes a fact would
+       * satisfy the wrap gate and fail the reader, so the journey asserts both are present.
+       *
+       * **The line spells its own labels**, because folding a column removes the header that
+       * labelled it. Without `Sent`/`Expires` in the text this would be two bare timestamps.
+       *
+       * **Unlike `Description`, it is not conditional.** The "render only when present" rule that
+       * governs an optional sub-line does not apply: every pending invitation has both a sent
+       * instant and an expiry, so there is no absence to print an em dash for.
+       *
+       * **`flex-wrap` is the point at 1280**, where the line is 38px wider than the cell. The two
+       * facts then stack, each whole — the break falls *between* facts and never inside a date,
+       * which is the distinction between a legitimate wrap and a broken value. Measured, the probe
+       * reports no wrap there because the cell's height comes from stacked siblings; the row is
+       * three lines tall and the photograph, not the number, is what shows it
+       * (`m2/members-1280-C2c.png`).
+       */
       cell: (invitation) => (
-        <span className="text-muted-foreground">{formatTimestamp(invitation.createdAt)}</span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span>{invitation.email}</span>
+          <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+            <span>Sent {formatTimestamp(invitation.createdAt)}</span>
+            {hasExpired(invitation, now) ? (
+              // The word carries the fact; the tint only reinforces it. Colour is never the sole
+              // signal (WCAG 2.2 §1.4.1), which is also `Badge`'s own documented rule.
+              <Badge variant="warning">Expired</Badge>
+            ) : (
+              <span>Expires {formatTimestamp(invitation.expiresAt)}</span>
+            )}
+          </span>
+        </span>
       ),
     },
-    {
-      header: 'Status',
-      cell: (invitation) =>
-        hasExpired(invitation, now) ? (
-          // The word carries the fact; the tint only reinforces it. Colour is never the sole
-          // signal (WCAG 2.2 §1.4.1), which is also `Badge`'s own documented rule.
-          <Badge variant="warning">Expired</Badge>
-        ) : (
-          <span className="text-muted-foreground">
-            Expires {formatTimestamp(invitation.expiresAt)}
-          </span>
-        ),
-    },
+    { header: 'Role', cell: (invitation) => ROLE_LABELS[invitation.role] },
     {
       header: 'Actions',
       srHeader: true,

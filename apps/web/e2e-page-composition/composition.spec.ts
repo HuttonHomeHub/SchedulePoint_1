@@ -179,14 +179,18 @@ test.beforeAll(async ({ browser }) => {
 
   /**
    * **The control, and it is checked here rather than trusted.** If the invitation seeded above is
-   * not live, `Status` renders a badge instead of a date and the sweep loses the wider of the two
-   * findings it exists to report — silently, as a partial pass.
+   * not live, the row renders an `Expired` badge instead of the date and the sweep loses the wider
+   * of the two facts it exists to measure — silently, as a partial pass.
+   *
+   * This read `Status renders a badge` until `docs/TECH_DEBT.md` #344 M3 folded that column under
+   * the address; the control is unchanged in substance, because the fold moved the fact and did
+   * not drop it, which is the property the test below asserts.
    */
   await page.goto(`/orgs/${orgSlug}/members`);
   await expect(
     page.getByText(/^Expires /).first(),
-    'the seeded invitation is not live — Status renders a badge, and the wrap sweep would report ' +
-      'one finding where there are two',
+    'the seeded invitation is not live — the row renders an Expired badge, and the wrap sweep ' +
+      'would measure one fact where there are two',
   ).toBeVisible();
 
   await page.close();
@@ -263,6 +267,37 @@ test('both Members sections state how many rows they hold', async ({ page }) => 
     const headerText = await heading.evaluate((el) => el.parentElement?.textContent ?? '');
     expect(headerText).toMatch(/\d/);
   }
+});
+
+test('Pending invitations carries both facts under the address, not in columns', async ({
+  page,
+}) => {
+  /**
+   * **`docs/TECH_DEBT.md` #344 M3, and it lands with the milestone rather than at enablement**
+   * (ADR-0081 §2). Seven remedies were measured in one sitting
+   * (`docs/specs/table-wrap-coverage/m2/README.md` §3) and the fold is the only one that fits at
+   * all three widths without declaring a column `auto` to excuse a wrap.
+   *
+   * **What this asserts that the wrap sweep below cannot: the facts were MOVED, not DROPPED.**
+   * Deleting a column is the cheapest way to stop it wrapping and it fails the reader in silence —
+   * the sweep would go green either way. So both facts are asserted present, inside the row, with
+   * the words the fold has to supply now that no column header names them.
+   *
+   * It runs against a real API with a real live invitation, which is what makes the `Expires`
+   * branch reachable at all: the `beforeAll` control above pins the fixture to a live one.
+   */
+  await page.goto(`/orgs/${orgSlug}/members`);
+  const region = page.getByRole('region', { name: 'Pending invitations' }).first();
+  await expect(region).toBeVisible();
+
+  const row = region.getByRole('row').nth(1);
+  await expect(row.getByText(/^Sent /)).toBeVisible();
+  await expect(row.getByText(/^Expires /)).toBeVisible();
+
+  // And the columns they came from are gone, which is the other half of the same change. By name,
+  // not by count: a column added later for a good reason should fail this with a sentence.
+  const headers = await region.getByRole('columnheader').allTextContents();
+  expect(headers.map((h) => h.trim())).toEqual(['Email', 'Role', 'Actions']);
 });
 
 test('no column wraps unless its column declared that it may', async ({ page }) => {
