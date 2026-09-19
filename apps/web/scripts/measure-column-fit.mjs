@@ -67,6 +67,24 @@ if (!SLUG) throw new Error('SLUG is required — pass the org slug the shoot har
 const EXPECT_KNOWN_WRAPS = process.env.EXPECT_KNOWN_WRAPS !== '0';
 
 /**
+ * `ONLY=members,audit-log` restricts the sweep to those screens.
+ *
+ * **It exists for candidate exploration and it weakens the control, which is why it says so.** A
+ * `docs/TECH_DEBT.md` #344 M2 run applies seven layout candidates in turn and measures one table
+ * after each; sweeping ten screens per candidate is twenty-one full runs for one table's numbers.
+ *
+ * What it costs: assertion 1 is still asserted, but only over the screens named — so a restricted
+ * run says nothing about the others; and the width-keyed wrap control cannot fire unless its screen
+ * is in the set, so at 1280 without `audit-log` there is **no positive wrap case at all**. A
+ * restricted run is therefore evidence about the screens it names and about nothing else, and the
+ * epic's conditions are judged by a full run.
+ */
+const ONLY = (process.env.ONLY ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/**
  * The width-keyed wrap control, as `width → screen`. Written here rather than derived: a control
  * derived from the same code it is controlling agrees with itself (ADR-0120's A9, whose two sides
  * shared one blind spot and therefore could not disagree).
@@ -252,6 +270,11 @@ const probe = () => {
 };
 /* eslint-enable no-undef */
 
+const SELECTED = ONLY.length === 0 ? PAGES : PAGES.filter(([name]) => ONLY.includes(name));
+if (SELECTED.length === 0) {
+  throw new Error(`ONLY=${ONLY.join(',')} matched no screen — check the names against PAGES.`);
+}
+
 const executablePath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??
   globSync('/opt/pw-browsers/chromium-*/chrome-linux/chrome')[0];
@@ -286,7 +309,7 @@ const ids = { clientId, projectId: projectHref.split('/').pop() };
 
 const sha = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
 const out = { run: { sha, width: WIDTH, slug: SLUG, takenAt: new Date().toISOString(), ids } };
-for (const [name, path] of PAGES) {
+for (const [name, path] of SELECTED) {
   await page.goto(`${BASE}${path(SLUG, ids)}`);
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(400);
@@ -298,7 +321,7 @@ await browser.close();
  * The findings, flattened: every column with at least one wrapped cell.
  */
 const findings = [];
-for (const [name] of PAGES) {
+for (const [name] of SELECTED) {
   for (const table of out[name] ?? []) {
     for (const col of table.columns) {
       if (col.wrappedCells > 0) {
@@ -315,7 +338,7 @@ out.findings = findings;
  * second one is this epic's subject.
  */
 out.slackByScreen = Object.fromEntries(
-  PAGES.map(([name]) => [
+  SELECTED.map(([name]) => [
     name,
     (out[name] ?? []).map((t) => ({
       tableWidth: t.tableWidth,
@@ -336,7 +359,7 @@ if (EXPECT_KNOWN_WRAPS) {
   // the probe navigated somewhere unexpected, or read a loading skeleton — `DataTable`'s loading
   // `<thead>` prints no header text and its skeleton is three visible `<tr>`s, so a scan taken
   // while the query is in flight examines nothing and reports it as nothing wrong.
-  for (const [name] of PAGES) {
+  for (const [name] of SELECTED) {
     const tables = out[name] ?? [];
     const measured = tables.some((t) => t.columns.some((c) => c.natural > 0));
     const reason = TABLE_FREE_SCREENS.get(name);
@@ -351,7 +374,14 @@ if (EXPECT_KNOWN_WRAPS) {
   // ── Assertion 2: the width-keyed wrap ────────────────────────────────────────────────────────
   // Presence only, never a pixel count: the audit fixture's row count varies per run.
   const expected = KNOWN_WRAP_SCREEN_BY_WIDTH.get(WIDTH);
-  if (expected !== undefined && !findings.some((f) => f.screen === expected)) {
+  const reachable = expected !== undefined && SELECTED.some(([name]) => name === expected);
+  if (expected !== undefined && !reachable) {
+    console.error(
+      `\nNOTE: the ${String(WIDTH)}px wrap control needs "${expected}", which ONLY excluded. ` +
+        `This run has no positive wrap case and is evidence about ${ONLY.join(', ')} alone.`,
+    );
+  }
+  if (reachable && !findings.some((f) => f.screen === expected)) {
     failures.push(
       `${expected}: expected at least one wrapped column at ${String(WIDTH)}px and found none`,
     );

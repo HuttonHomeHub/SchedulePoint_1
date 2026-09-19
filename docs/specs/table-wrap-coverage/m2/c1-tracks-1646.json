@@ -1,0 +1,283 @@
+{
+  "run": {
+    "sha": "2cc37fdf0ad5d26c10c284b6ffd6dc9359a93ce5",
+    "width": 1646,
+    "slug": "composition-co-1789837073773",
+    "takenAt": "2026-09-19T17:25:42.444Z"
+  },
+  "members": [
+    {
+      "grid": {
+        "x": 0,
+        "w": 1646
+      },
+      "tracks": [277, 1369],
+      "gap": 0,
+      "items": [
+        {
+          "name": null,
+          "item": {
+            "x": 7,
+            "w": 24
+          },
+          "section": {
+            "x": 7,
+            "w": 24
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": null,
+          "item": {
+            "x": 0,
+            "w": 277
+          },
+          "section": {
+            "x": 0,
+            "w": 277
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": null,
+          "item": {
+            "x": 0,
+            "w": 1646
+          },
+          "section": {
+            "x": 0,
+            "w": 1646
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": "Roster",
+          "item": {
+            "x": 277,
+            "w": 1369
+          },
+          "section": {
+            "x": 301,
+            "w": 1321
+          },
+          "inset": 25,
+          "table": {
+            "x": 326,
+            "w": 1271
+          }
+        },
+        {
+          "name": null,
+          "item": {
+            "x": 0,
+            "w": 0
+          },
+          "section": {
+            "x": 0,
+            "w": 0
+          },
+          "inset": null,
+          "table": null
+        }
+      ]
+    },
+    {
+      "grid": {
+        "x": 301,
+        "w": 1321
+      },
+      "tracks": [778, 519],
+      "gap": 24,
+      "items": [
+        {
+          "name": "Roster",
+          "item": {
+            "x": 301,
+            "w": 1321
+          },
+          "section": {
+            "x": 301,
+            "w": 1321
+          },
+          "inset": 25,
+          "table": {
+            "x": 326,
+            "w": 1271
+          }
+        },
+        {
+          "name": "Pending invitations",
+          "item": {
+            "x": 301,
+            "w": 778
+          },
+          "section": {
+            "x": 301,
+            "w": 778
+          },
+          "inset": 25,
+          "table": {
+            "x": 326,
+            "w": 728
+          }
+        },
+        {
+          "name": "What each role can do",
+          "item": {
+            "x": 1103,
+            "w": 519
+          },
+          "section": {
+            "x": 1103,
+            "w": 519
+          },
+          "inset": null,
+          "table": null
+        }
+      ]
+    }
+  ],
+  "org-home": [
+    {
+      "grid": {
+        "x": 0,
+        "w": 1646
+      },
+      "tracks": [277, 1369],
+      "gap": 0,
+      "items": [
+        {
+          "name": null,
+          "item": {
+            "x": 7,
+            "w": 24
+          },
+          "section": {
+            "x": 7,
+            "w": 24
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": null,
+          "item": {
+            "x": 0,
+            "w": 277
+          },
+          "section": {
+            "x": 0,
+            "w": 277
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": null,
+          "item": {
+            "x": 0,
+            "w": 1646
+          },
+          "section": {
+            "x": 0,
+            "w": 1646
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": "Needs your attention",
+          "item": {
+            "x": 277,
+            "w": 1369
+          },
+          "section": {
+            "x": 1103,
+            "w": 519
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": null,
+          "item": {
+            "x": 0,
+            "w": 0
+          },
+          "section": {
+            "x": 0,
+            "w": 0
+          },
+          "inset": null,
+          "table": null
+        }
+      ]
+    },
+    {
+      "grid": {
+        "x": 301,
+        "w": 1321
+      },
+      "tracks": [778, 519],
+      "gap": 24,
+      "items": [
+        {
+          "name": null,
+          "item": {
+            "x": 301,
+            "w": 778
+          },
+          "section": {
+            "x": 301,
+            "w": 778
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": "Needs your attention",
+          "item": {
+            "x": 1103,
+            "w": 519
+          },
+          "section": {
+            "x": 1103,
+            "w": 519
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": "Where the work stands",
+          "item": {
+            "x": 301,
+            "w": 778
+          },
+          "section": {
+            "x": 301,
+            "w": 778
+          },
+          "inset": null,
+          "table": null
+        },
+        {
+          "name": "Recently changed",
+          "item": {
+            "x": 1103,
+            "w": 519
+          },
+          "section": {
+            "x": 1103,
+            "w": 519
+          },
+          "inset": null,
+          "table": null
+        }
+      ]
+    }
+  ],
+  "staff": []
+}

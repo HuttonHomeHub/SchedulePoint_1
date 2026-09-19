@@ -189,8 +189,17 @@ scored on FC-4.
 
 This is not ceremony either. M0 measured an all-`fit` table rendering **793px inside a 320px
 container**, because `white-space: nowrap` has no fallback — a 433px overflow and a WCAG 2.2
-§1.4.10 failure. Candidate C0 is that failure by construction, and candidate C2's stacked cell
-changes a cell's min-content width on the one axis this condition watches.
+§1.4.10 failure. Candidate C2's stacked cell changes a cell's min-content width on the one axis
+this condition watches.
+
+> **The sentence that stood here — "Candidate C0 is that failure by construction" — was wrong, and
+> M2 measured it so** (`m2/README.md` §5): C0 renders **473px at 320, identical to baseline**, with
+> zero document overflow. `WIDTH_CLASSES.fit` is `md:w-px md:whitespace-nowrap`, and
+> `data-table.tsx:40-56` records that the `md:` prefix was added **because of** the 793px reading
+> quoted above. The number is real and historical; this condition cited it as if the fix had not
+> happened, four days after ADR-0146 landed it. Corrected in place rather than deleted, because the
+> shape is the one `docs/RECONCILE.md` exists for — **a falsification condition is a claim like any
+> other**, and this one was written from a document rather than from the code it describes.
 
 **Withdrawal clause:** none. This is a merge requirement (CLAUDE.md §13).
 
