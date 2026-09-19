@@ -159,7 +159,15 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
           ) : null}
 
           <DataTable
-            caption="Pending invitations"
+            /* **The table's name is not the section's name.** `DataTable` renders a focusable,
+               scrollable region labelled by its caption, so a caption identical to the enclosing
+               `SectionCard`'s title puts TWO regions with one accessible name on the screen — and
+               an AT user hearing "Pending invitations" twice cannot tell which one they are in.
+               The roster beside this one already does it right: section "Roster", table
+               "Organisation members". Found by #344's widened wrap sweep, whose fixture seeds an
+               invitation for the first time — with no rows there is no scroll region and the clash
+               could not occur. */
+            caption="Invited people"
             columns={columns}
             query={invitations}
             getRowKey={(invitation) => invitation.id}

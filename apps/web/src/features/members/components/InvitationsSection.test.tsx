@@ -45,7 +45,9 @@ describe('InvitationsSection', () => {
   it('lists every outstanding invitation with its address, role and when it was sent', () => {
     renderSection();
 
-    expect(screen.getByRole('table', { name: 'Pending invitations' })).toBeVisible();
+    // The TABLE's name, deliberately distinct from the SECTION's ("Pending invitations"): two
+    // regions sharing one accessible name is what the roster beside this one already avoids.
+    expect(screen.getByRole('table', { name: 'Invited people' })).toBeVisible();
     expect(screen.getByText('priya@example.com')).toBeVisible();
     expect(screen.getByText('tom@example.com')).toBeVisible();
     expect(screen.getByText('Planner')).toBeVisible();
@@ -115,6 +117,9 @@ describe('InvitationsSection', () => {
     await waitFor(() => {
       expect(document.activeElement).not.toBe(document.body);
     });
+    // The SECTION, not the table — focus returns to the section wrapper, whose heading still reads
+    // "Pending invitations". Renaming the table's caption does not touch this, and changing this
+    // line with it was wrong: the suite caught it.
     expect(document.activeElement?.textContent).toContain('Pending invitations');
   });
 

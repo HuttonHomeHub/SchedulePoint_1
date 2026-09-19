@@ -10697,6 +10697,11 @@ has **no** `planCount`, over a fixture holding exactly the plans that would make
 **Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found re-running
 `measure-column-fit.mjs` for #343's M1) · **Size:** S · **Owner:** web
 
+**Three columns wrap, not two, and the widened gate is what found the third** (2026-09-19,
+`docs/specs/table-wrap-coverage/m1/red-run.md`). `Email` wraps at every width alongside `Sent` and
+`Status`. That is this row's **third** correction and the first to come from an instrument rather
+than from a person re-reading a measurement — which is the argument for the gate in one line.
+
 **It wraps at every width measured, not just at 1646** — the row understated this when it was
 filed, and the M3 readings settle it:
 
@@ -10733,6 +10738,13 @@ table.
 second screen's layout mid-epic would confound FC-D clause 2's measurement. It is also not obviously
 a column-width problem — the honest first question is whether that section belongs in a narrow grid
 column at all.
+
+**A second, distinct failure mode at 1280, which nothing predicted**
+(`docs/specs/table-wrap-coverage/m0/README.md` §4): the table does not merely wrap there, it
+**overflows its own card by 103px** — squeezed to its wrapped minimum of 519px against 416px of
+available width — and the surplus goes into `DataTable`'s horizontal scroll region. The page itself
+does not overflow, so this is contained rather than a WCAG 1.4.10 failure. It re-prices the
+remedies: only a candidate that reduces the table's **min-content** removes it.
 
 **Two pieces of work, and the second is the durable one:**
 

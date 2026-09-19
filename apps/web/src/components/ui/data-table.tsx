@@ -81,6 +81,28 @@ const WIDTH_CLASSES: Record<NonNullable<Column<unknown>['width']>, string> = {
    * scale already has one. It still WRAPS, which is the difference from `fit`.
    */
   bounded: 'md:max-w-prose',
+  /**
+   * **`auto` contributes no class, and since `docs/TECH_DEBT.md` #344 it is still not nothing.**
+   *
+   * ADR-0146 D3's rule is that `auto` must be *written down* even though it is also the default,
+   * because a rule whose exception is its default is vacuous unless somebody declares the
+   * exception. That was prose: `WIDTH_CLASSES.auto` is `''`, so a column declared `auto` and a
+   * column that never mentioned `width` rendered **identical DOM** and no instrument could tell
+   * them apart.
+   *
+   * It has to be able to. The wrap gate's whole discriminator is *declared* `auto` (a deliberate,
+   * reasoned wrap — the audit log's three columns) versus `auto` **by omission** (a wrap nobody
+   * decided — Members' five). The tempting alternative, gating on whether the table has spare
+   * width, was measured and is worthless: **zero of the nine wraps in the measured estate sit in a
+   * table with positive slack** (`docs/specs/table-wrap-coverage/m0/README.md` §2), so a
+   * slack-gated rule fires on nothing at all and excuses the defect and the legitimate case alike.
+   *
+   * So the declaration is emitted as `data-col-width` on every `<th>` and `<td>`. The cost is
+   * stated plainly: **it makes `width: 'auto'` load-bearing**, and deleting one of the audit log's
+   * three declarations now turns a gate red instead of being invisible. That is the point — but it
+   * means "this line changes no CSS" is no longer the whole truth about `auto`, and this comment is
+   * where a reader finds that out.
+   */
   auto: '',
 };
 
@@ -327,7 +349,12 @@ export function DataTable<T>({
         <thead>
           <tr className="border-border text-muted-foreground border-b text-left">
             {columns.map((column) => (
-              <th key={column.header} scope="col" className={headClassesOf(column)}>
+              <th
+                key={column.header}
+                scope="col"
+                className={headClassesOf(column)}
+                data-col-width={column.width ?? 'undeclared'}
+              >
                 {column.headerCell ? (
                   column.headerCell()
                 ) : column.srHeader ? (
@@ -346,7 +373,11 @@ export function DataTable<T>({
               <Fragment key={getRowKey(row)}>
                 <tr className="border-border border-b">
                   {columns.map((column) => (
-                    <td key={column.header} className={cellClassesOf(column)}>
+                    <td
+                      key={column.header}
+                      className={cellClassesOf(column)}
+                      data-col-width={column.width ?? 'undeclared'}
+                    >
                       {column.cell(row)}
                     </td>
                   ))}

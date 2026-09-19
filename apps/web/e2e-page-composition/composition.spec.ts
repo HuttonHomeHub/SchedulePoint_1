@@ -17,8 +17,25 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
 
+import { SWEPT, partitionWraps, type WrapObservation } from './screen-roster';
+
+/**
+ * **Report-only, and this constant is how it stops being so.** `docs/TECH_DEBT.md` #344's defect is
+ * live: the widened sweep goes red against the product as it stands, which is why it cannot be
+ * armed in the milestone that adds it without making `main` red until the remedy lands. M4 deletes
+ * this constant and the superseded three-screen assertion together.
+ *
+ * The existing assertion stays armed throughout, so coverage is never lost in the gap. Putting
+ * `members` on an exemption list instead was rejected: that is the `PENDING_COVERAGE` queue
+ * ADR-0073 C3.4 deleted, and a queue is how a known defect becomes a permanent one.
+ */
+const WRAP_SWEEP_REPORT_ONLY = true;
+
 const stamp = Date.now();
 const orgSlug = `composition-co-${stamp}`;
+
+/** Ids the detail screens need, captured by `beforeAll` so the roster's paths can be resolved. */
+let seededIds: { clientId: string; projectId: string } = { clientId: '', projectId: '' };
 
 /** Sign up and create the organisation this file's screens belong to. */
 async function onboard(page: Page): Promise<void> {
@@ -105,6 +122,73 @@ test.beforeAll(async ({ browser }) => {
     });
   }, orgSlug);
 
+  /**
+   * **What the widened sweep needs, and the trap in seeding it** (`docs/TECH_DEBT.md` #344).
+   *
+   * Before this, `beforeAll` created **no invitation**, so the Pending invitations table rendered
+   * its empty state. Adding `members` to a wrap sweep without seeding one is ADR-0093's
+   * green-about-nothing: an empty table cannot wrap, so the sweep would have reported the screen
+   * clean and the defect would have survived a second gate pass.
+   *
+   * **The obvious half-seed fails too, and less visibly.** `Status` renders a short `Expired`
+   * badge for a lapsed invitation and the full `Expires 26 Sept 2026, 08:33` — 197px of content —
+   * for a live one. **Only a live invitation makes `Status` wrap.** An expired-only fixture
+   * reports one finding where there are two and reads as partial success, which is worse than
+   * reporting none.
+   */
+  const ids = await page.evaluate(async (org) => {
+    const send = async (path: string, body: unknown, method = 'POST') => {
+      const r = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method,
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      if (!r.ok) throw new Error(`${method} ${path}: ${r.status} ${await r.text()}`);
+      return r.status === 204 ? null : ((await r.json()) as { data?: { id?: string } });
+    };
+
+    // A LIVE invitation — the one shape that makes `Status` render its long form.
+    await send('/invitations', { email: `invited-${Date.now()}@example.com`, role: 'PLANNER' });
+
+    // A project and a plan, so `client-detail` and `project-detail` have rows to judge.
+    const clients = await fetch(`/api/v1/organizations/${org}/clients`, {
+      credentials: 'include',
+    }).then((r) => r.json() as Promise<{ data: { id: string; name: string }[] }>);
+    const clientId = clients.data.find((c) => c.name === 'Harbourside Estates')?.id;
+    if (clientId === undefined) throw new Error('seed: Harbourside Estates not found');
+    // **Nested, because that is where the create lives.** `organizations/:slug/projects` exists
+    // but carries only GET/PATCH/DELETE/restore for a known id; creation is under the client, and
+    // plans likewise under the project. Guessed flat first and got a 404 — read the controllers.
+    const project = await send(`/clients/${clientId}/projects`, { name: 'Composition Project' });
+    const projectId = project?.data?.id;
+    if (projectId === undefined) throw new Error('seed: project id missing');
+    // `plannedStart` is mandatory — ADR-0033's project data date, which a plan cannot be without.
+    await send(`/projects/${projectId}/plans`, {
+      name: 'Composition Plan',
+      plannedStart: '2026-01-05',
+    });
+
+    // A soft-deleted client, so `recently-deleted` has a row rather than an empty state.
+    const throwaway = await send('/clients', { name: 'Throwaway Client' });
+    await send(`/clients/${String(throwaway?.data?.id)}`, undefined, 'DELETE');
+
+    return { clientId, projectId };
+  }, orgSlug);
+  seededIds = ids;
+
+  /**
+   * **The control, and it is checked here rather than trusted.** If the invitation seeded above is
+   * not live, `Status` renders a badge instead of a date and the sweep loses the wider of the two
+   * findings it exists to report — silently, as a partial pass.
+   */
+  await page.goto(`/orgs/${orgSlug}/members`);
+  await expect(
+    page.getByText(/^Expires /).first(),
+    'the seeded invitation is not live — Status renders a badge, and the wrap sweep would report ' +
+      'one finding where there are two',
+  ).toBeVisible();
+
   await page.close();
 });
 
@@ -179,6 +263,154 @@ test('both Members sections state how many rows they hold', async ({ page }) => 
     const headerText = await heading.evaluate((el) => el.parentElement?.textContent ?? '');
     expect(headerText).toMatch(/\d/);
   }
+});
+
+test('no column wraps unless its column declared that it may', async ({ page }) => {
+  /**
+   * **The widened FC-2 sweep** (`docs/TECH_DEBT.md` #344). The assertion above sweeps three screens
+   * by a hand-written list; this sweeps every screen the roster declares, at all three widths, and
+   * judges each wrap by the column's OWN declaration rather than by which list somebody remembered
+   * to add a screen to.
+   *
+   * **It is verified red against the live product rather than against a mutation** — ADR-0110 D5 in
+   * the strongest form available, and the reason this milestone exists before the remedy.
+   */
+  const observed: WrapObservation[] = [];
+  const examined: string[] = [];
+  const crashes: string[] = [];
+  page.on('pageerror', (e) => crashes.push(`pageerror: ${e.message.slice(0, 200)}`));
+  page.on('crash', () => crashes.push('the page CRASHED'));
+  page.on('console', (m) => {
+    if (m.type() === 'error') crashes.push(`console.error: ${m.text().slice(0, 200)}`);
+  });
+
+  /**
+   * **Navigate once per screen and RESIZE, rather than navigating once per screen-width.**
+   *
+   * The first version looped widths outermost and did 24 full `goto`s. It died deterministically
+   * at the twentieth with `net::ERR_INSUFFICIENT_RESOURCES` and a blank body — the dev server
+   * ships hundreds of unbundled ES modules per navigation, and the browser ran out of resource
+   * budget. That is an instrument failure wearing a product failure's clothes: the symptom was
+   * "the Members screen has no `<h1>` at 1920", and Members at 1920 visited on its own is perfect.
+   *
+   * Eight navigations instead of 24, and resizing is what the layout responds to anyway — it is
+   * closer to what a reader does than reloading the page at a new size.
+   */
+  for (const screen of SWEPT) {
+    const path = screen.path
+      .replace(':clientId', seededIds.clientId)
+      .replace(':projectId', seededIds.projectId);
+    await page.goto(`/orgs/${orgSlug}${path}`);
+    for (const width of [1280, 1646, 1920]) {
+      await page.setViewportSize({ width, height: 1000 });
+      // A resize is synchronous for CSS but the layout settles a frame later; without this the
+      // measurement can read the previous width's geometry.
+      await page.waitForTimeout(250);
+      // The screen and width are in every message: a sweep over 21 screen-widths that fails
+      // without saying which one it was on costs a re-run to learn the one fact that matters.
+      const where = `${screen.key}@${String(width)} (${path})`;
+      // **On failure, say what the page showed.** A sweep over 24 screen-widths that reports only
+      // "no h1" costs a re-run to learn whether the screen errored, redirected, or was merely slow
+      // — and the first diagnosis attempt here was wrong twice for want of exactly that text.
+      try {
+        await page.waitForSelector('h1', { state: 'visible', timeout: 10_000 });
+      } catch {
+        const body = (
+          await page
+            .locator('body')
+            .innerText()
+            .catch(() => '(unreadable)')
+        ).slice(0, 300);
+        throw new Error(
+          `${where}: no h1 after 10s. URL=${page.url()} body=${JSON.stringify(body)} ` +
+            `events=${JSON.stringify(crashes.slice(-8))}`,
+        );
+      }
+      if (screen.settled !== null) {
+        await expect(
+          page.getByText(screen.settled).first(),
+          `${where}: settled marker "${screen.settled}" never appeared`,
+        ).toBeVisible();
+      }
+
+      const seen = await page.evaluate(() => {
+        const out: { header: string; colWidth: string; text: string }[] = [];
+        let cells = 0;
+        for (const table of document.querySelectorAll('table')) {
+          const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent ?? '');
+          for (const row of table.querySelectorAll('tbody tr')) {
+            [...row.querySelectorAll('td')].forEach((td, i) => {
+              if ((td.getAttribute('colspan') ?? '1') !== '1') return;
+              cells += 1;
+              // Cloned at its own width, measured, forced to `nowrap`, measured again: if it gets
+              // SHORTER when nothing may wrap, it was wrapping. Counting line boxes reports a cell
+              // holding two stacked elements as a wrap, which this product now renders on purpose.
+              const host = document.createElement('div');
+              Object.assign(host.style, {
+                position: 'absolute',
+                left: '-99999px',
+                width: `${String(td.getBoundingClientRect().width)}px`,
+                font: getComputedStyle(td).font,
+              });
+              const clone = td.cloneNode(true) as HTMLElement;
+              clone.style.boxSizing = 'border-box';
+              clone.style.width = '100%';
+              host.appendChild(clone);
+              document.body.appendChild(host);
+              const wrapped = host.getBoundingClientRect().height;
+              for (const node of [clone, ...clone.querySelectorAll('*')]) {
+                (node as HTMLElement).style.whiteSpace = 'nowrap';
+              }
+              const nowrap = host.getBoundingClientRect().height;
+              host.remove();
+              if (wrapped > nowrap + 1) {
+                out.push({
+                  header: (heads[i] ?? '(unnamed)').trim().slice(0, 28),
+                  colWidth: td.getAttribute('data-col-width') ?? '(absent)',
+                  text: (td.textContent ?? '').trim().slice(0, 40),
+                });
+              }
+            });
+          }
+        }
+        return { out, cells };
+      });
+
+      /**
+       * **The positive case, per screen and before any verdict** (ADR-0093). A screen that renders
+       * no cells reports no wraps, which is indistinguishable from a screen with none — and
+       * `DataTable`'s loading skeleton is three visible `<tr>`s printing no header text, so a sweep
+       * that arrives early examines nothing and calls it clean.
+       */
+      expect(
+        seen.cells,
+        `${where}: no body cells examined — the verdict would be vacuous`,
+      ).toBeGreaterThan(0);
+      examined.push(`${screen.key}@${String(width)}`);
+      observed.push(...seen.out.map((w) => ({ ...w, screen: `${screen.key}@${String(width)}` })));
+    }
+  }
+
+  const { findings, tolerated } = partitionWraps(observed);
+  const describe = (w: WrapObservation) => `${w.screen} ${w.header} (${w.colWidth}) "${w.text}"`;
+
+  // Printed either way: a run that tolerates five wraps and a run that saw none are different
+  // facts, and only one of them means the exemption is doing anything.
+  console.log(
+    `wrap sweep: ${String(examined.length)} screen-widths examined, ` +
+      `${String(tolerated.length)} declared-auto wrap(s) tolerated, ` +
+      `${String(findings.length)} finding(s).`,
+  );
+  for (const w of tolerated) console.log(`  tolerated: ${describe(w)}`);
+  for (const w of findings) console.log(`  FINDING:   ${describe(w)}`);
+
+  if (WRAP_SWEEP_REPORT_ONLY) {
+    // Report-only until the remedy lands (M4 deletes this branch). The sweep still fails if it
+    // examined nothing — an instrument that cannot see is a failure whatever it is asked to judge.
+    expect(examined.length).toBeGreaterThan(0);
+    return;
+  }
+  expect(findings.map(describe)).toEqual([]);
 });
 
 test('a heading and the first cell beneath it share a left edge', async ({ page }) => {
