@@ -379,12 +379,28 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
       const seen = await page.evaluate(() => {
         const out: { header: string; colWidth: string; text: string }[] = [];
         let cells = 0;
+        /**
+         * **Cells the loading skeleton would produce**, counted so the guard below is a real one.
+         *
+         * `DataTable`'s skeleton renders real `<td>`s holding a placeholder bar, so a sweep that
+         * arrives early examines cells, finds nothing wrapping inside a grey rectangle, and calls
+         * the screen clean — and `cells > 0` does NOT catch it, because skeleton cells count.
+         * `docs/TECH_DEBT.md` #344's own spec claimed the settled-row wait was red-verified against
+         * exactly this and the M5 test review could not reproduce it: removing that wait passes,
+         * twice, because a warm local Postgres resolves before the scan.
+         *
+         * The discriminator is the attribute this epic added: the skeleton deliberately emits **no**
+         * `data-col-width` (pinned in `data-table.test.tsx`), and a settled table always emits one
+         * on every cell. So an unlabelled cell IS a skeleton cell, and there is no timing in it.
+         */
+        let unlabelled = 0;
         for (const table of document.querySelectorAll('table')) {
           const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent ?? '');
           for (const row of table.querySelectorAll('tbody tr')) {
             [...row.querySelectorAll('td')].forEach((td, i) => {
               if ((td.getAttribute('colspan') ?? '1') !== '1') return;
               cells += 1;
+              if (!td.hasAttribute('data-col-width')) unlabelled += 1;
               // Cloned at its own width, measured, forced to `nowrap`, measured again: if it gets
               // SHORTER when nothing may wrap, it was wrapping. Counting line boxes reports a cell
               // holding two stacked elements as a wrap, which this product now renders on purpose.
@@ -443,7 +459,7 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
             });
           }
         }
-        return { out, cells };
+        return { out, cells, unlabelled };
       });
 
       /**
@@ -456,6 +472,14 @@ test('no table cell wraps unless its column is declared auto', async ({ page }) 
         seen.cells,
         `${where}: no body cells examined — the verdict would be vacuous`,
       ).toBeGreaterThan(0);
+      // A skeleton cell carries no `data-col-width`; a settled one always does. This is the guard
+      // the settled-row wait above was documented as providing and, measured, did not.
+      expect(
+        seen.unlabelled,
+        `${where}: ${String(seen.unlabelled)} of ${String(seen.cells)} cells carry no ` +
+          `data-col-width, which is what DataTable's loading skeleton renders — the scan ran ` +
+          `before the query settled and its verdict describes placeholder bars`,
+      ).toBe(0);
       examined.push(`${screen.key}@${String(width)}`);
       observed.push(...seen.out.map((w) => ({ ...w, screen: `${screen.key}@${String(width)}` })));
     }

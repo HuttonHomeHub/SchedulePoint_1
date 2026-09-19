@@ -566,15 +566,54 @@ do. Three options were considered:
 
 ### 4.7 Red-verification, per assertion
 
+> **Three rows of this table went stale and the M5 test review found them by trying to perform
+> them.** They are corrected here rather than quietly dropped, because a spec table asserting a
+> mutation nobody can carry out is worth less than no table — it reads as evidence.
+>
+> **"…and is not over-broad" is withdrawn.** It said to declare `width: 'auto'` on
+> `InvitationsSection`'s `Sent` column and watch the finding disappear. That was performable when
+> this was written; **M3 deleted the `Sent` column**, folding it under the address as text, so there
+> is no column left to declare anything on and the table now declares no `auto` at all. The
+> underlying property — that `auto` does not excuse everything — is still exercised, but only
+> generically, by `partitionWraps`'s unit cases keeping `fit` and `undeclared` as findings. M4's own
+> `red-run.md` re-verified the `AuditEventList` row and never this one, so the staleness survived
+> two gate passes inside the epic whose subject is exactly this.
+>
+> **"…and at a skeleton" did not reproduce, and the mechanism was wrong rather than the wording.**
+> Removing the settled-row wait passes — twice, 14/14, 0 findings — because a warm local Postgres
+> resolves before the scan, and, more importantly, because **`cells > 0` cannot catch a skeleton at
+> all**: `DataTable`'s skeleton renders real `<td>`s holding a placeholder bar, so they count. The
+> sweep now asserts that every examined cell carries a `data-col-width`, which a settled table
+> always emits and the skeleton deliberately never does — turning this epic's own attribute into
+> the discriminator, with no timing in it.
+>
+> **Its red-verification is in two parts, and that is stated rather than rounded up to one.** The
+> obvious single mutation — force `DataTable` to render its skeleton unconditionally
+> (`if (query.isPending)` → `if (true)`) — **was tried and is too broad**: the suite fails earlier,
+> on `a list screen frames its rows in a named region`, so the sweep never runs and the new limb is
+> never reached. A mutation that reddens the suite without reaching your assertion has not tested
+> it. So instead: **(a)** the limb fires when a cell lacks the attribute — deleting
+> `data-col-width` from `DataTable`'s `<td>` produces
+> `clients@1280 (/clients): 3 of 3 cells carry no data-col-width …`, before the findings assertion;
+> and **(b)** a skeleton produces exactly that state — `data-table.test.tsx`'s
+> `emits NOTHING on the loading skeleton` asserts it, itself verified red by emitting the attribute
+> there. (a) and (b) compose to the claim, and each half was executed. What is **not** claimed is a
+> reproduction of the live race: a warm local Postgres settles before the scan, which is why the
+> original row could not be performed in the first place.
+>
+> **The `bounded` row is reversed**, deliberately and documented in `partitionWraps` and
+> `docs/DECISIONS.md`; it is listed here so the table and the code agree.
+
 ADR-0110 D5: a gate is finished when it has been **made to fail by the defect it was written for**.
 
 | Assertion                    | Named mutation that must turn it red                                                             |
 | ---------------------------- | ------------------------------------------------------------------------------------------------ |
 | Wrap sweep sees Members      | none needed — **the live product at M1**, committed as the red run                               |
 | `auto` exemption is real     | delete `width: 'auto'` from `AuditEventList`'s `Event` (`:86`) ⇒ exactly one new finding at 1280 |
-| …and is not over-broad       | set `width: 'auto'` on `InvitationsSection`'s `Sent` ⇒ that finding disappears                   |
+| …and is not over-broad       | **WITHDRAWN — unperformable on the shipped code.** See below.                                    |
 | Positive case                | point a swept screen at `/orgs/:slug` (no tables) ⇒ fails rather than reporting zero             |
-| …and at a skeleton           | remove the settled-row wait ⇒ fails                                                              |
+| …and at a skeleton           | **REPLACED.** `if (query.isPending)` → `if (true)` in `DataTable` ⇒ fails, naming the cells      |
+| `bounded` is a finding       | **REVERSED at M5.** `bounded` is now tolerated; see `partitionWraps`'s docblock                  |
 | Census, direction 1          | delete `members` from `SCREENS` ⇒ fails ("classified nowhere")                                   |
 | Census, direction 2          | add `members` to `EXEMPT` as well ⇒ fails ("classified twice")                                   |
 | Census, both-ways exemption  | delete `org-home` from `EXEMPT` ⇒ fails                                                          |
