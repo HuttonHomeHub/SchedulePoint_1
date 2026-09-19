@@ -16,17 +16,44 @@
  *
  * **It carries a pinned positive case and refuses a verdict without one** (ADR-0093, ADR-0108): a
  * probe that selects nothing reports zero wraps, which is indistinguishable from a product with no
- * wraps. On today's tree it MUST find the two known wraps — Calendars `Working days` and Resources
- * `Code` — and it exits non-zero if it does not. A probe that cannot see today's defect cannot
- * judge tomorrow's fix, so its own red run is committed beside it as its proof.
+ * wraps.
+ *
+ * **The original control was retired by SUCCESS, not by neglect, and that is the interesting part.**
+ * It demanded Calendars `Working days` and Resources `Code` — and page-composition M2 fixed both
+ * (`m2-measurement.md:13-19`). So from the moment the epic this probe was written for landed, the
+ * control failed at every width and the only way to obtain a number was `EXPECT_KNOWN_WRAPS=0`,
+ * which removes the guarantee entirely and leaves exactly the ADR-0093 state the control exists to
+ * prevent. A control that names a defect is only as durable as the defect.
+ *
+ * So the control is now two assertions, and only one of them names a wrap:
+ *
+ * 1. **Something was measured, at every width — and it is asserted in BOTH directions.** Every
+ *    screen that should carry a table must yield one with at least one column reporting a positive
+ *    `natural`, and every screen declared table-free must yield none. This distinguishes "nothing
+ *    wraps" from "nothing was measured", which is the whole purpose of the original control, is
+ *    true at 1646 and 1920 where there is legitimately nothing left to wrap, and is the property
+ *    `measure-page-drift.mjs` got wrong once by reporting a plausible number for the wrong subject.
+ *
+ *    **The second direction exists because the first version of this repair was red against a
+ *    correct product.** Written as "every named screen must yield a table", it failed on
+ *    `org-home` — which has carried **zero** tables since ADR-0098 built the landing out of
+ *    sections, and reports zero in the committed `m2/column-fit-1646.json`. A control that fails
+ *    on day one gets deleted rather than fixed (ADR-0058), and this one would have done it inside
+ *    the milestone whose whole subject is a control that had gone false. So the exemption is
+ *    **declared with its reason** rather than derived, and asserting it both ways means the day
+ *    `org-home` grows a table, or a table-bearing screen loses one, the probe says so.
+ * 2. **A width-keyed wrap.** At **1280** the audit log genuinely needs ~1136px in a ~955px region
+ *    and wraps three declared-`auto` columns (`m2-measurement.md:14`). That is a real, deliberate,
+ *    still-live wrap, so it is pinned at that width and at no other. Its **presence** is asserted,
+ *    never a pixel count, because the audit fixture's row count varies per run.
  *
  * Usage (after `pnpm --filter @repo/web shoot` has created a tenant):
  *
  *   SLUG=shoot-co-<stamp>-<width> WIDTH=1646 node scripts/measure-column-fit.mjs
  *
- * `EXPECT_KNOWN_WRAPS=0` turns the pinned case off. It exists for exactly one caller — the run
- * AFTER the column model lands, where the two known wraps are supposed to be gone and their absence
- * is the result rather than a broken instrument.
+ * `EXPECT_KNOWN_WRAPS=0` removes **both** assertions — including "something was measured", which is
+ * not about wraps at all — so a run made with it is not evidence of anything. The old docblock did
+ * not say what the flag removed; this one does, because the flag outlived the reason it was added.
  */
 import { chromium } from '@playwright/test';
 import { execSync } from 'node:child_process';
@@ -40,14 +67,25 @@ if (!SLUG) throw new Error('SLUG is required — pass the org slug the shoot har
 const EXPECT_KNOWN_WRAPS = process.env.EXPECT_KNOWN_WRAPS !== '0';
 
 /**
- * The known wraps, as `[screen, column]`. This is the instrument's own control, so it is written
- * here rather than derived: a control derived from the same code it is controlling agrees with
- * itself (ADR-0120's A9, whose two sides shared one blind spot and therefore could not disagree).
+ * The width-keyed wrap control, as `width → screen`. Written here rather than derived: a control
+ * derived from the same code it is controlling agrees with itself (ADR-0120's A9, whose two sides
+ * shared one blind spot and therefore could not disagree).
+ *
+ * Only 1280 has an entry, and the absence of 1646/1920 is the finding rather than an omission —
+ * there is legitimately nothing left to wrap at those widths, which is what assertion 1 covers.
  */
-const KNOWN_WRAPS = [
-  ['calendars', 'Working days'],
-  ['resources', 'Code'],
-];
+const KNOWN_WRAP_SCREEN_BY_WIDTH = new Map([[1280, 'audit-log']]);
+
+/**
+ * Screens that legitimately carry no `<table>`, with the reason. Declared, never derived — a set
+ * computed from the same run it is controlling agrees with itself.
+ *
+ * `org-home` is the organisation landing (ADR-0098), built from `SectionCard` sections and lists
+ * rather than tables. `m2/column-fit-1646.json` records it at zero tables, and that is correct.
+ */
+const TABLE_FREE_SCREENS = new Map([
+  ['org-home', 'the organisation landing is sections and lists, not tables (ADR-0098)'],
+]);
 
 const PAGES = [
   ['org-home', (slug) => `/orgs/${slug}`],
@@ -290,20 +328,51 @@ out.slackByScreen = Object.fromEntries(
 console.log(JSON.stringify(out, null, 1));
 
 if (EXPECT_KNOWN_WRAPS) {
-  const missing = KNOWN_WRAPS.filter(
-    ([screen, header]) => !findings.some((f) => f.screen === screen && f.header === header),
-  );
-  if (missing.length > 0) {
+  const failures = [];
+
+  // ── Assertion 1: something was measured, on every named screen, at every width ───────────────
+  // This is the assertion that survives the defect being fixed, which the previous control did
+  // not. A screen that yields no table, or a table whose every column reports `natural: 0`, means
+  // the probe navigated somewhere unexpected, or read a loading skeleton — `DataTable`'s loading
+  // `<thead>` prints no header text and its skeleton is three visible `<tr>`s, so a scan taken
+  // while the query is in flight examines nothing and reports it as nothing wrong.
+  for (const [name] of PAGES) {
+    const tables = out[name] ?? [];
+    const measured = tables.some((t) => t.columns.some((c) => c.natural > 0));
+    const reason = TABLE_FREE_SCREENS.get(name);
+    if (reason === undefined && !measured) {
+      failures.push(`${name}: no table with a measurable column — did the probe read a skeleton?`);
+    }
+    if (reason !== undefined && measured) {
+      failures.push(`${name}: declared table-free (${reason}) but a table was measured`);
+    }
+  }
+
+  // ── Assertion 2: the width-keyed wrap ────────────────────────────────────────────────────────
+  // Presence only, never a pixel count: the audit fixture's row count varies per run.
+  const expected = KNOWN_WRAP_SCREEN_BY_WIDTH.get(WIDTH);
+  if (expected !== undefined && !findings.some((f) => f.screen === expected)) {
+    failures.push(
+      `${expected}: expected at least one wrapped column at ${String(WIDTH)}px and found none`,
+    );
+  }
+
+  if (failures.length > 0) {
     console.error(
-      `\nPINNED CASE FAILED: this probe did not report the known wraps ` +
-        `${missing.map(([s, h]) => `${s}/${h}`).join(', ')}.\n` +
-        `A probe that cannot see today's defect cannot judge tomorrow's fix. Either the ` +
-        `instrument is broken or the defect is already gone — establish which before trusting ` +
-        `any number above. Set EXPECT_KNOWN_WRAPS=0 only when the column model has landed and ` +
-        `their absence is the RESULT.`,
+      `\nPINNED CASE FAILED at ${String(WIDTH)}px:\n` +
+        failures.map((f) => `  - ${f}`).join('\n') +
+        `\n\nA probe that cannot see what it is pointed at cannot judge a fix. Establish which of ` +
+        `"the instrument is broken" and "the product changed" is true before trusting any number ` +
+        `above. EXPECT_KNOWN_WRAPS=0 removes BOTH assertions, including the one that is not about ` +
+        `wraps at all, so a run made with it is not evidence.`,
     );
     process.exitCode = 1;
   } else {
-    console.error(`\nPinned case OK: both known wraps reported (${findings.length} findings).`);
+    const pinned =
+      expected === undefined ? 'no width-keyed wrap at this width' : `${expected} wraps`;
+    console.error(
+      `\nPinned case OK at ${String(WIDTH)}px: every screen measured; ${pinned}. ` +
+        `${String(findings.length)} findings.`,
+    );
   }
 }

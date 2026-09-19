@@ -10691,6 +10691,35 @@ not send. Fixed, and pinned in both directions.
 **What is pinned so this cannot come back silently:** `clients.e2e-spec.ts` asserts the detail body
 has **no** `planCount`, over a fixture holding exactly the plans that would make one look right.
 
+### 344. Members' Pending invitations wraps two columns in a 599px grid column
+
+**Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found re-running
+`measure-column-fit.mjs` for #343's M1) · **Size:** S · **Owner:** web
+
+At **1646** the _Pending invitations_ table renders at **599px** and its content needs **748px**, so
+two columns wrap: `Sent` (86 used / 147 natural) and `Status` (109 / 197). Measured, one sitting,
+`docs/specs/unrendered-row-facts/m1/column-fit-1646.json`.
+
+**It is a regression, not a fixture artefact.** `docs/specs/page-composition/m2/column-fit-1646.json`
+records the same table at **full width** with `Sent: 250/147` and `Status: 335/197`, comfortably
+fitting. Something between that reading and today moved the section into a narrow grid column; the
+sibling _Organisation members_ table still renders at 1271px on the same screen.
+
+**The transferable part is how it survived a gate pass.** ADR-0146's **FC-2** — _nothing wraps
+beside unused width_ — is recorded **PASS** in `m8-verdict.md:16`, and its evidence column points at
+`m2-measurement.md`. The verdict was carried forward from the M2 reading rather than re-taken at M8
+over the estate as M8 had left it. A condition judged once and quoted afterwards is a claim like any
+other (ADR-0058), and this is the first recorded instance of that shape inside a falsification
+table.
+
+**Not folded into #343**, which found it: that epic's FC-A bar is the Clients table, and changing a
+second screen's layout mid-epic would confound FC-D clause 2's measurement. It is also not obviously
+a column-width problem — the honest first question is whether that section belongs in a narrow grid
+column at all.
+
+**Trigger:** the next epic that touches Members, or a re-run of `measure-column-fit.mjs` at 1646 as
+part of any layout change.
+
 ### 343. Two screens carry facts they already hold and do not render
 
 **Status:** open
