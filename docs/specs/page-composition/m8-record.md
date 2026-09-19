@@ -4,16 +4,27 @@
 **Taken:** 2026-09-17
 **Scope reviewed:** `git diff origin/main..HEAD` — 11 commits, the whole epic.
 
-Six specialists over the combined diff. **Two passed having re-derived the epic's own numbers from
-the shipped code rather than from its prose**, which is the part worth saying first: the API review
-instantiated the pinned `@nestjs/swagger@11.4.7` machinery directly to check that DTO inheritance
-flat-merges (it does), forced a real count failure through a real HTTP call against a real database
-to check that an absent count is absent on the wire (it is), and ran both new e2e specs against a
-migrated Postgres — 20/20. The backend-performance review rebuilt every load-bearing plan shape in a
-separate database with different seed data, at 2,000/50,786 projects and up to 144,000 activities,
-and reproduced the `client.planCount` failure independently.
+**Five reviews ran, and three blocked** — ux, accessibility and component. The other two passed
+having re-derived the epic's own numbers from the shipped code rather than from its prose, which is
+the part worth saying first: the api+security review instantiated the pinned
+`@nestjs/swagger@11.4.7` machinery directly to check that DTO inheritance flat-merges (it does),
+forced a real count failure through a real HTTP call against a real database to check that an absent
+count is absent on the wire (it is), and ran both new e2e specs against a migrated Postgres — 20/20.
+The backend-performance review rebuilt every load-bearing plan shape in a separate database with
+different seed data, at 2,000/50,786 projects and up to 144,000 activities, and reproduced the
+`client.planCount` failure independently.
 
-Four blocked. **Five defects folded, every fix carrying a regression test verified red first.**
+**Five defects folded, every fix carrying a regression test verified red first** — and **two of the
+five came from the review that reported nothing blocking**, which is why "three blocked" is the
+wrong summary to act on and the finding count is the right one.
+
+> **This paragraph said "Six specialists … Four blocked" in its first version, and neither figure
+> was counted.** Five agents ran; one of them covered two reviewer roles (api **and** security),
+> which is where the sixth came from, and "four blocked" counted the backend-performance review's
+> harness defect as a block when that review's own verdict line reads _"nothing blocking"_. ADR-0136
+> records its own ADR drafting "five specialists" and "nine findings" with neither counted; this is
+> that, one epic later, in the record of a gate pass whose largest findings are all unchecked
+> claims. Corrected in place here, in ADR-0146 and in `CLAUDE.md` §16.
 
 ---
 

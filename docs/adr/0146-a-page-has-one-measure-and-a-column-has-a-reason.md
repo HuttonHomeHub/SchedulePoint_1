@@ -163,8 +163,13 @@ obviously right: the dilution guard it deliberately carries covered `projects`, 
 vacuumed, so every index-only scan paid a heap fetch and it measured the worst state a table is ever
 in. Both ends of that range are now printed.
 
-**The M8 gate pass blocked on four of six reviews, and its two largest findings are one shape.** Six
-specialists over the combined diff; the API and backend-performance reviews passed having re-derived
+**The M8 gate pass ran five reviews, three of them blocking, and its two largest findings are one
+shape.** (This said "four of six" and was corrected by counting: five agents ran, one covering two
+reviewer roles, and the fourth "block" was a review whose own verdict reads _nothing blocking_ —
+ADR-0136's Class 1 failure, one epic later, in the Consequences of a gate pass whose largest findings
+are all unchecked claims. **Two of the five folded defects came from that non-blocking review**, so
+the finding count is the figure worth carrying and the block count is not.) The api+security and
+backend-performance reviews passed having re-derived
 the epic's own numbers from the shipped code rather than its prose — instantiating the pinned
 `@nestjs/swagger` machinery to check DTO inheritance, forcing a real count failure through a real
 HTTP call to check that an absent count is absent on the wire, and rebuilding every load-bearing

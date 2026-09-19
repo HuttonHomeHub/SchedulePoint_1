@@ -5159,7 +5159,7 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   unlayered (a fact about the build, which the remedy depends on), and a journey asserting on
   **pixels** whose `forced-colors: none` control had to be read **while focused**, its first version
   having passed against the defect by reading an unfocused control.
-  **The M8 gate pass blocked on four of six reviews**, and its two largest findings are one shape:
+  **The M8 gate pass ran five reviews and three blocked**, and its two largest findings are one shape:
   **a claim the diff itself makes, which does not hold for the call sites that exist.**
   `PageHeader`'s docblock said its actions sit "opposite the title", and a `basis-full` aside consumes
   its flex line - so on **both** of that slot's consumers the screen's primary action was stranded on
@@ -5170,7 +5170,11 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   column on Client detail and the milestone that fixed it stopped at Clients and Calendars, recording
   nothing. A fourth is an **instrument broken by the change it was meant to police** - the FC-9
   harness still demanded the count FC-9 withdrew, so the script the register names as step one to
-  reopening that decision threw on its first request.
+  reopening that decision threw on its first request. **Two of the five folded defects came from the
+  review that reported nothing blocking**, which is why the finding count is the figure worth
+  carrying. This entry said "four of six reviews" until the count was taken - five agents ran, one
+  covering two reviewer roles - which is ADR-0136's Class 1 failure one epic later, in the register
+  entry for a gate pass whose largest findings are all unchecked claims.
   **All nine conditions are judged in `docs/specs/page-composition/m8-verdict.md`, and four had no
   recorded verdict until that pass.** FC-8 had **no instrument at all**, only a named quantity, so it
   could only ever have been judged by argument; `firstRowTop` was added, the reading taken (every
