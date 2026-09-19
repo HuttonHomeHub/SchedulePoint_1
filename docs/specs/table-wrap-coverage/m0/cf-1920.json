@@ -1,0 +1,660 @@
+{
+  "run": {
+    "sha": "2f256848b348ff230c1f92dd60fa9b267ddf933f",
+    "width": 1920,
+    "slug": "shoot-co-1789834496636-1920",
+    "takenAt": "2026-09-19T16:23:22.810Z",
+    "ids": {
+      "clientId": "01a0ba75-50ec-7ae3-be21-65953b2e270e",
+      "projectId": "01a0ba75-50fc-7e80-a163-a443ec7788be"
+    }
+  },
+  "org-home": [],
+  "clients": [
+    {
+      "tableIndex": 0,
+      "caption": "Clients",
+      "tableWidth": 1438,
+      "rows": 3,
+      "naturalTotal": 406,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 884,
+          "natural": 177,
+          "slack": 707,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Created",
+          "used": 147,
+          "natural": 147,
+          "slack": 0,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Actions",
+          "used": 408,
+          "natural": 82,
+          "slack": 326,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "client-detail": [
+    {
+      "tableIndex": 0,
+      "caption": "Projects",
+      "tableWidth": 1438,
+      "rows": 1,
+      "naturalTotal": 216,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 893,
+          "natural": 134,
+          "slack": 759,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 545,
+          "natural": 82,
+          "slack": 463,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "project-detail": [
+    {
+      "tableIndex": 0,
+      "caption": "Plans",
+      "tableWidth": 1438,
+      "rows": 3,
+      "naturalTotal": 375,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 577,
+          "natural": 132,
+          "slack": 445,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Status",
+          "used": 57,
+          "natural": 58,
+          "slack": -1,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Planned start",
+          "used": 448,
+          "natural": 103,
+          "slack": 345,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 356,
+          "natural": 82,
+          "slack": 274,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "calendars": [
+    {
+      "tableIndex": 0,
+      "caption": "Calendars",
+      "tableWidth": 1438,
+      "rows": 5,
+      "naturalTotal": 743,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 851,
+          "natural": 376,
+          "slack": 475,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Working days",
+          "used": 190,
+          "natural": 191,
+          "slack": -1,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Scope",
+          "used": 212,
+          "natural": 94,
+          "slack": 118,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 185,
+          "natural": 82,
+          "slack": 103,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "tableIndex": 0,
+      "caption": "Resources",
+      "tableWidth": 1438,
+      "rows": 4,
+      "naturalTotal": 530,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 682,
+          "natural": 186,
+          "slack": 496,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Kind",
+          "used": 85,
+          "natural": 85,
+          "slack": 0,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Code",
+          "used": 102,
+          "natural": 103,
+          "slack": -1,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Calendar",
+          "used": 271,
+          "natural": 74,
+          "slack": 197,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 298,
+          "natural": 82,
+          "slack": 216,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "members": [
+    {
+      "tableIndex": 0,
+      "caption": "Organisation members",
+      "tableWidth": 1438,
+      "rows": 1,
+      "naturalTotal": 758,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 209,
+          "natural": 99,
+          "slack": 110,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Email",
+          "used": 639,
+          "natural": 302,
+          "slack": 337,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Joined",
+          "used": 147,
+          "natural": 147,
+          "slack": 0,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Role",
+          "used": 283,
+          "natural": 134,
+          "slack": 149,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 160,
+          "natural": 76,
+          "slack": 84,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    },
+    {
+      "tableIndex": 1,
+      "caption": "Pending invitations",
+      "tableWidth": 682,
+      "rows": 2,
+      "naturalTotal": 748,
+      "columns": [
+        {
+          "header": "Email",
+          "used": 244,
+          "natural": 245,
+          "slack": -1,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Role",
+          "used": 88,
+          "natural": 88,
+          "slack": 0,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Sent",
+          "used": 120,
+          "natural": 147,
+          "slack": -27,
+          "cells": 2,
+          "wrappedCells": 2,
+          "worstExtraPx": 21,
+          "worstText": "19 Sept 2026, 16:17",
+          "widthClass": null
+        },
+        {
+          "header": "Status",
+          "used": 159,
+          "natural": 197,
+          "slack": -38,
+          "cells": 2,
+          "wrappedCells": 2,
+          "worstExtraPx": 21,
+          "worstText": "Expires 26 Sept 2026, 16:17",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 71,
+          "natural": 71,
+          "slack": 0,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "audit-log": [
+    {
+      "tableIndex": 0,
+      "caption": "Organisation audit log",
+      "tableWidth": 1438,
+      "rows": 30,
+      "naturalTotal": 1061,
+      "columns": [
+        {
+          "header": "When",
+          "used": 160,
+          "natural": 161,
+          "slack": -1,
+          "cells": 30,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Event",
+          "used": 413,
+          "natural": 291,
+          "slack": 122,
+          "cells": 30,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "By",
+          "used": 429,
+          "natural": 302,
+          "slack": 127,
+          "cells": 30,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Subject",
+          "used": 436,
+          "natural": 307,
+          "slack": 129,
+          "cells": 30,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "recently-deleted": [
+    {
+      "tableIndex": 0,
+      "caption": "Recently deleted items",
+      "tableWidth": 1438,
+      "rows": 1,
+      "naturalTotal": 555,
+      "columns": [
+        {
+          "header": "Type",
+          "used": 150,
+          "natural": 53,
+          "slack": 97,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Name",
+          "used": 798,
+          "natural": 281,
+          "slack": 517,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Deleted",
+          "used": 417,
+          "natural": 147,
+          "slack": 270,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 74,
+          "natural": 74,
+          "slack": 0,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        }
+      ]
+    }
+  ],
+  "my-activity": [
+    {
+      "tableIndex": 0,
+      "caption": "My audit events",
+      "tableWidth": 1438,
+      "rows": 32,
+      "naturalTotal": 1061,
+      "columns": [
+        {
+          "header": "When",
+          "used": 160,
+          "natural": 161,
+          "slack": -1,
+          "cells": 32,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Event",
+          "used": 413,
+          "natural": 291,
+          "slack": 122,
+          "cells": 32,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "By",
+          "used": 429,
+          "natural": 302,
+          "slack": 127,
+          "cells": 32,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Subject",
+          "used": 436,
+          "natural": 307,
+          "slack": 129,
+          "cells": 32,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "screen": "members",
+      "header": "Sent",
+      "used": 120,
+      "natural": 147,
+      "slack": -27,
+      "cells": 2,
+      "wrappedCells": 2,
+      "worstExtraPx": 21,
+      "worstText": "19 Sept 2026, 16:17",
+      "widthClass": null,
+      "tableIndex": 1
+    },
+    {
+      "screen": "members",
+      "header": "Status",
+      "used": 159,
+      "natural": 197,
+      "slack": -38,
+      "cells": 2,
+      "wrappedCells": 2,
+      "worstExtraPx": 21,
+      "worstText": "Expires 26 Sept 2026, 16:17",
+      "widthClass": null,
+      "tableIndex": 1
+    }
+  ],
+  "slackByScreen": {
+    "org-home": [],
+    "clients": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 406,
+        "slack": 1032
+      }
+    ],
+    "client-detail": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 216,
+        "slack": 1222
+      }
+    ],
+    "project-detail": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 375,
+        "slack": 1063
+      }
+    ],
+    "calendars": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 743,
+        "slack": 695
+      }
+    ],
+    "resources": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 530,
+        "slack": 908
+      }
+    ],
+    "members": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 758,
+        "slack": 680
+      },
+      {
+        "tableWidth": 682,
+        "naturalTotal": 748,
+        "slack": -66
+      }
+    ],
+    "audit-log": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 1061,
+        "slack": 377
+      }
+    ],
+    "recently-deleted": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 555,
+        "slack": 883
+      }
+    ],
+    "my-activity": [
+      {
+        "tableWidth": 1438,
+        "naturalTotal": 1061,
+        "slack": 377
+      }
+    ]
+  }
+}
