@@ -168,6 +168,23 @@ run three times over, the sharpest being a delete that never invalidated the rec
 query — the screen said "Nothing has been deleted" underneath a toast saying a client had just
 been. No unit suite could reach it: each mounts one screen and seeds its cache directly.
 
+`apps/web/e2e-page-composition/` keeps its screen list in **one place**, and that is the fix for a
+recorded defect rather than tidiness. Its four sweeps — wrap, reflow, frame and first-row — each had
+their own inline array of paths, so a screen could be in three of them and not the fourth, silently.
+`docs/TECH_DEBT.md` #344 was exactly that: the wrap gate visited three of the ten screens the
+measurement harness knows about, Members was not among them, and the register row's first reading
+blamed the gate's _condition_ rather than its roster. The list now lives in
+`apps/web/e2e-page-composition/screen-roster.ts`, every sweep reads it, and
+`apps/web/src/test/screen-roster.census.test.ts` asserts every screen is either swept or exempt
+**with a written reason** — the `PENDING_COVERAGE` queue ADR-0073 C3.4 deleted, not repeated.
+
+**The rule that gate enforces is the column's own declaration, never the table's slack.** A wrap in
+a column declared `width: 'auto'` is a decision somebody made and is tolerated; a wrap in a column
+that is `auto` by omission is the defect. The tempting alternative — "wraps while the table has
+room" — was the previous gate's title and error string and was never what its body checked, and it
+would have been a gate incapable of failing: measured, **zero of the nine wraps in the estate sat in
+a table with positive slack**.
+
 `apps/web/e2e-authoring-flow/` is **both** — a flag-on journey for
 `VITE_CANVAS_AUTHORING_FLOW`, and a diagnostic whose `link-direction.spec.ts`
 half deliberately does not depend on that flag, because the defects it measures

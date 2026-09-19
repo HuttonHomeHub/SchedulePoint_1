@@ -1,0 +1,953 @@
+{
+  "note": "measure-column-fit.mjs, ONLY=members, tenant composition-co-1789837073773, 2026-09-19, one sitting. The invocation lost its label env vars, so candidate and viewport are reconstructed from the sweep order (8 candidates x 1280/1646/1920) and then VERIFIED against a column shape only that candidate can produce -- see the shape map in this milestone README section 8. Table index 1 on /orgs/:slug/members is the Pending invitations table.",
+  "rows": [
+    {
+      "candidate": "baseline",
+      "viewport": 1280,
+      "tableWidth": 473,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 222,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 54,
+          "nat": 147,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 62,
+          "nat": 197,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "baseline",
+      "viewport": 1646,
+      "tableWidth": 599,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 244,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 96,
+          "nat": 147,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 123,
+          "nat": 197,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "baseline",
+      "viewport": 1920,
+      "tableWidth": 682,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 258,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 124,
+          "nat": 147,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 164,
+          "nat": 197,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C0",
+      "viewport": 1280,
+      "tableWidth": 748,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 270,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Sent",
+          "used": 147,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Status",
+          "used": 196,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C0",
+      "viewport": 1646,
+      "tableWidth": 748,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 270,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Sent",
+          "used": 147,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Status",
+          "used": 196,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C0",
+      "viewport": 1920,
+      "tableWidth": 748,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 270,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Sent",
+          "used": 147,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Status",
+          "used": 196,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": "md:w-px md:w-px"
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C1",
+      "viewport": 1280,
+      "tableWidth": 509,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 228,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 66,
+          "nat": 147,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 80,
+          "nat": 197,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C1",
+      "viewport": 1646,
+      "tableWidth": 728,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 267,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 140,
+          "nat": 147,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 187,
+          "nat": 197,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C1",
+      "viewport": 1920,
+      "tableWidth": 828,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 299,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 71,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 162,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 217,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 78,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2a",
+      "viewport": 1280,
+      "tableWidth": 420,
+      "natural": 603,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 222,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 62,
+          "nat": 197,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2a",
+      "viewport": 1646,
+      "tableWidth": 599,
+      "natural": 603,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 269,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 194,
+          "nat": 197,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2a",
+      "viewport": 1920,
+      "tableWidth": 682,
+      "natural": 603,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 306,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 73,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 223,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 80,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2b",
+      "viewport": 1280,
+      "tableWidth": 416,
+      "natural": 553,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 224,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 57,
+          "nat": 147,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2b",
+      "viewport": 1646,
+      "tableWidth": 599,
+      "natural": 553,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 293,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 70,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 159,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 77,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2b",
+      "viewport": 1920,
+      "tableWidth": 682,
+      "natural": 553,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 334,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 80,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 181,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 87,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2c",
+      "viewport": 1280,
+      "tableWidth": 416,
+      "natural": 454,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 280,
+          "nat": 318,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2c",
+      "viewport": 1646,
+      "tableWidth": 599,
+      "natural": 454,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 420,
+          "nat": 318,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 85,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 93,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C2c",
+      "viewport": 1920,
+      "tableWidth": 682,
+      "natural": 454,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 479,
+          "nat": 318,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 97,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 106,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C3",
+      "viewport": 1280,
+      "tableWidth": 905,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 327,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 78,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 177,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 238,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 86,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C3",
+      "viewport": 1646,
+      "tableWidth": 1271,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 459,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 110,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 249,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 334,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 120,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C3",
+      "viewport": 1920,
+      "tableWidth": 1438,
+      "natural": 750,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 519,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 124,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 282,
+          "nat": 147,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 377,
+          "nat": 197,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 136,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C4",
+      "viewport": 1280,
+      "tableWidth": 465,
+      "natural": 586,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 222,
+          "nat": 270,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 65,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 45,
+          "nat": 65,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 62,
+          "nat": 115,
+          "wrapped": 1,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 71,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C4",
+      "viewport": 1646,
+      "tableWidth": 599,
+      "natural": 586,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 276,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 66,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 66,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 117,
+          "nat": 115,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 72,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    },
+    {
+      "candidate": "C4",
+      "viewport": 1920,
+      "tableWidth": 682,
+      "natural": 586,
+      "cols": [
+        {
+          "h": "Email",
+          "used": 315,
+          "nat": 270,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Role",
+          "used": 75,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Sent",
+          "used": 76,
+          "nat": 65,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Status",
+          "used": 134,
+          "nat": 115,
+          "wrapped": 0,
+          "cls": null
+        },
+        {
+          "h": "Actions",
+          "used": 83,
+          "nat": 71,
+          "wrapped": 0,
+          "cls": null
+        }
+      ]
+    }
+  ]
+}

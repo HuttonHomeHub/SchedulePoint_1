@@ -757,9 +757,15 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
 
   Three rules go with it.
 
-  **`'auto'` must be written down.** It is also the default, so a rule reading "no cell wraps except
-  in a column declared `auto`" is vacuous unless the exception is a decision somebody made. Declaring
-  it changes no CSS and is not decoration.
+  **`'auto'` must be written down, and since `docs/TECH_DEBT.md` #344 it is OBSERVABLE.** It is also
+  the default, so a rule reading "no cell wraps except in a column declared `auto`" is vacuous unless
+  the exception is a decision somebody made. It still changes no CSS — and it is no longer invisible:
+  every `<th>` and `<td>` carries `data-col-width`, which reads `undeclared` for a column that never
+  said anything and `auto` for one that did. The journey's wrap gate reads that attribute and nothing
+  else, so the difference between a deliberate wrap and an accidental one is a fact in the DOM rather
+  than a convention in a file. **Deleting `width: 'auto'` from a column that needs it now turns a
+  gate red** — verified against `AuditEventList`, which is the one place in the product that
+  deliberately wraps.
 
   **`fit` is `md:` upwards and that is not stylistic.** `white-space: nowrap` has no fallback: an
   all-`fit` table was measured rendering **793px inside a 320px container**, a 433px overflow and a
@@ -771,7 +777,15 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   which a per-cell class has no business silently overriding. A caller who wants their own cap says
   `width: 'auto'` and owns it. Pinned by a test, because nothing collides today.
 
-  **A fact about a row goes under that row, never in a column of its own** (ADR-0146 D4). A field
+  **A fact about a row goes under that row, never in a column of its own** (ADR-0146 D4) — and the
+  rule has a second half, added by `docs/TECH_DEBT.md` #344: **a fact whose column cannot fit on one
+  line is folded too, even where every row carries it.** Members' Pending invitations sits in a
+  narrow grid track and its `Sent` and `Status` columns wrapped at every width measured, breaking
+  `Expires 26 Sept 2026, 16:57` over four lines inside 62px. Seven remedies were measured and folding
+  both is the only one that fits. Two things go with it: the folded line **spells its own labels**,
+  because folding removes the header that named the fact, and the fold is **not conditional** here —
+  the "render only when present" rule below governs an optional sub-line, and both of these facts
+  exist on every row. A field
   most rows do not carry spends width on every row to say nothing, and prints an em dash where the
   absence is — while the columns beside it wrap. The remedy is a secondary line under the subject,
   **rendered only when present**: a sub-line reading "—" is the same defect one row lower, which is

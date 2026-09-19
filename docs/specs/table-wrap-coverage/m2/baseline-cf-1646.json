@@ -1,0 +1,197 @@
+{
+  "run": {
+    "sha": "2cc37fdf0ad5d26c10c284b6ffd6dc9359a93ce5",
+    "width": 1646,
+    "slug": "composition-co-1789837073773",
+    "takenAt": "2026-09-19T17:11:26.172Z",
+    "ids": {
+      "clientId": "01a0ba9a-6987-7ce1-a860-2bdb5a6bfeb8",
+      "projectId": "01a0ba9a-6a14-7530-99f5-f5a20d367703"
+    }
+  },
+  "members": [
+    {
+      "tableIndex": 0,
+      "caption": "Organisation members",
+      "tableWidth": 1271,
+      "rows": 1,
+      "naturalTotal": 801,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 237,
+          "natural": 138,
+          "slack": 99,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Email",
+          "used": 526,
+          "natural": 306,
+          "slack": 220,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Joined",
+          "used": 147,
+          "natural": 147,
+          "slack": 0,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-px md:w-px"
+        },
+        {
+          "header": "Role",
+          "used": 231,
+          "natural": 134,
+          "slack": 97,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 130,
+          "natural": 76,
+          "slack": 54,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    },
+    {
+      "tableIndex": 1,
+      "caption": "Invited people",
+      "tableWidth": 599,
+      "rows": 1,
+      "naturalTotal": 750,
+      "columns": [
+        {
+          "header": "Email",
+          "used": 244,
+          "natural": 270,
+          "slack": -26,
+          "cells": 1,
+          "wrappedCells": 1,
+          "worstExtraPx": 21,
+          "worstText": "invited-1789837076965@example.com",
+          "widthClass": null
+        },
+        {
+          "header": "Role",
+          "used": 65,
+          "natural": 65,
+          "slack": 0,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Sent",
+          "used": 96,
+          "natural": 147,
+          "slack": -51,
+          "cells": 1,
+          "wrappedCells": 1,
+          "worstExtraPx": 21,
+          "worstText": "19 Sept 2026, 16:57",
+          "widthClass": null
+        },
+        {
+          "header": "Status",
+          "used": 123,
+          "natural": 197,
+          "slack": -74,
+          "cells": 1,
+          "wrappedCells": 1,
+          "worstExtraPx": 21,
+          "worstText": "Expires 26 Sept 2026, 16:57",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 71,
+          "natural": 71,
+          "slack": 0,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "screen": "members",
+      "header": "Email",
+      "used": 244,
+      "natural": 270,
+      "slack": -26,
+      "cells": 1,
+      "wrappedCells": 1,
+      "worstExtraPx": 21,
+      "worstText": "invited-1789837076965@example.com",
+      "widthClass": null,
+      "tableIndex": 1
+    },
+    {
+      "screen": "members",
+      "header": "Sent",
+      "used": 96,
+      "natural": 147,
+      "slack": -51,
+      "cells": 1,
+      "wrappedCells": 1,
+      "worstExtraPx": 21,
+      "worstText": "19 Sept 2026, 16:57",
+      "widthClass": null,
+      "tableIndex": 1
+    },
+    {
+      "screen": "members",
+      "header": "Status",
+      "used": 123,
+      "natural": 197,
+      "slack": -74,
+      "cells": 1,
+      "wrappedCells": 1,
+      "worstExtraPx": 21,
+      "worstText": "Expires 26 Sept 2026, 16:57",
+      "widthClass": null,
+      "tableIndex": 1
+    }
+  ],
+  "slackByScreen": {
+    "members": [
+      {
+        "tableWidth": 1271,
+        "naturalTotal": 801,
+        "slack": 470
+      },
+      {
+        "tableWidth": 599,
+        "naturalTotal": 750,
+        "slack": -151
+      }
+    ]
+  }
+}
