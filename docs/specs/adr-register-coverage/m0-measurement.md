@@ -64,3 +64,67 @@ See §5, appended after M2-T2. There is no natural red state to commit (spec §4
 "arm it and watch it fail" has to be adapted: the red run is produced by deliberate mutation and is
 labelled as such, and this clean baseline is committed beside it — because two hand comparisons have
 reported clean and been wrong.
+
+---
+
+## 5. The mutation-produced red runs (M0-T3, appended after M2-T3)
+
+**These are mutations, not findings. The estate was clean before and after each one.** Every edit
+below was applied to a real `CLAUDE.md`, the gate run, and the file restored from a backup.
+
+### Mutation 1 — ADR-0146's bullet deleted from §16
+
+This is `docs/TECH_DEBT.md` #291's defect exactly, reproduced.
+
+```text
+  ✗ A1: ADR-0146 has no entry in CLAUDE.md §16.
+    §16 is the register every human and every agent is briefed from — an ADR absent from
+    it is invisible to the audience that matters most. Add a bullet in the form
+    `- **ADR-0146** _(status)_ — …`.
+check:adr-coverage: FAIL — 1 finding(s). … 145 of 146 in CLAUDE.md §16.
+```
+
+Run under `scripts/prepush.sh` the line reads **`FAIL  check:adr-coverage`**, not `WARN` — which is
+the difference between registered and enforced, and the reason `ADVISORY_GATES` is untouched. The
+suite's own real-estate control went red alongside it, so both halves noticed.
+
+### Mutation 2 — an entry for an ADR with no file
+
+```text
+  ✗ A2: CLAUDE.md:5114 carries an entry for ADR-0999, which has no file in docs/adr/.
+check:adr-coverage: FAIL — 1 finding(s). … 147 of 146 in CLAUDE.md §16.
+```
+
+The summary's `147 of 146` is worth noticing: the counts are derived from two different populations
+and are not constrained to agree, so a reader sees the contradiction as well as the finding.
+
+### Mutation 3 — ADR-0146 entered twice
+
+```text
+  ✗ A3: ADR-0146 has 2 entries in CLAUDE.md §16 (lines 5114, 5115). One decision, one entry.
+```
+
+A set comparison is structurally blind to this, and the register's ten hand repairs are exactly
+where duplicates come from.
+
+## 6. Cost
+
+`node scripts/check-adr-coverage.mjs`: **66 / 62 / 65 ms** over three consecutive runs, reading
+~5,900 more lines than before. `pnpm prepush` is dominated by `lint`, `typecheck` and `test`; this
+gate is not a measurable part of it.
+
+## 7. What the assertions cost to verify
+
+Every assertion was verified **red against a named mutation** (ADR-0110 D5) — 17 mutations across
+two sweeps, each naming the case it broke and each restored afterwards. Two are worth recording:
+
+- **The first A7 mutation did not test A7.** It filtered `adrs` at the call site, which broke
+  R1-negative, R2 and the real-estate control and said nothing about the assertion it was aimed at.
+  A mutation that breaks its neighbours has not tested its subject. The faithful one takes two
+  edits — thread `exempt` into `registerFindings`, then skip exempt ids in the A1 loop — and only
+  A7's case goes red under it. The guarantee is structural first: the function is not given the
+  exemption map at all.
+- **The fixture helper hid a case that could not discriminate.** `bare` originally withheld both
+  the roadmap mention and the index row, so R1's fixture reported `['R1', 'R3a']` and would have
+  been satisfied by a gate that had lost R1 entirely, as long as it still had R3a. A helper that
+  fires two assertions at once cannot tell you which one works.

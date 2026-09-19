@@ -12,22 +12,20 @@
  * words — *if you find yourself writing "remember to re-check X", write a gate for X instead* — so
  * this is that gate, and the fourth occurrence is what it exists to prevent.
  *
- * **What it checks, and why it is not "appears in CLAUDE.md".** The register in `CLAUDE.md` §16 was
- * complete on every one of those three occasions; the roadmap was not. The two documents answer
- * different questions — "what did we decide?" versus "where is the product going?" — so the
- * subject here is `ROADMAP.md`, deliberately.
+ * **It now checks THREE registers, and the third is why `docs/TECH_DEBT.md` #291 existed.** The
+ * register in `CLAUDE.md` §16 was complete on each of those three occasions and the roadmap was
+ * not, which is where this gate's original subject came from — and the inference drawn from that
+ * ("only the roadmap rots silently") was disproved **ten times**. ADR-0132, ADR-0135, ADR-0049,
+ * ADR-0122, ADR-0144, ADR-0145 and ADR-0146 were each Accepted, filed, listed in the index
+ * (gated) and cited by `ROADMAP.md` (gated) while absent from the register a reader is briefed
+ * from. Every one was repaired by hand; three were found by a person doing this comparison
+ * manually; not one was found by a gate, because until 2026-09-19 this script did not read that
+ * file. The two documents that are checked are the two that fail loudly, which is exactly why the
+ * third rots.
  *
- * **The INFERENCE that paragraph once drew from those three occasions is disproved and is not
- * repeated here.** It read "only the second one rots silently", and §16 has since been found
- * incomplete **seven times** (`docs/TECH_DEBT.md` #291): ADR-0132, ADR-0135, ADR-0049, ADR-0122,
- * and ADR-0145, each filed and indexed and cited by `ROADMAP.md` while absent from the register a
- * reader is briefed from. Every one was caught by a person or by a reviewer, never by this gate,
- * because it does not read that file at all. The historical claim about those three specific
- * occasions may still hold; the general rule it was used to justify does not.
- *
- * **That is a known gap, not an argument for widening this gate in passing.** #291 is the row;
- * widening a shared gate is an ADR-0105 trigger and wants its own spec, which is precisely why
- * ADR-0145's gate pass corrected this comment and stopped there.
+ * Widening it was an ADR-0105 trigger and was correctly deferred twice on that ground — see
+ * `docs/specs/adr-register-coverage/` for the spec that discharged it, and ADR-0147, which amends
+ * ADR-0110 D6 rather than superseding it.
  *
  * **Not every ADR belongs in a roadmap**, which is why this carries an exemption file rather than a
  * blanket rule. A decision about drift control or flag classification is not product direction, and
@@ -42,7 +40,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { report } from './lib/doc-register.mjs';
+import { report, sections, stripFences } from './lib/doc-register.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -133,14 +131,182 @@ export function collectFindings(root) {
     }
   }
 
+  const claudeRegister = registerFindings(read('CLAUDE.md'), adrs);
+  problems.push(...claudeRegister.problems);
+
   const covered = adrs.length - exempt.size;
   return {
     problems,
     population: adrs.length,
+    // **Both counts, so a green run is distinguishable from a run that found nothing to check.**
     summary:
       `${String(covered)} of ${String(adrs.length)} ADRs cited in docs/ROADMAP.md, ` +
-      `${String(exempt.size)} exempt by written reason.`,
+      `${String(exempt.size)} exempt by written reason; ` +
+      `${String(claudeRegister.entries)} of ${String(adrs.length)} in CLAUDE.md §16.`,
   };
+}
+
+/**
+ * The canonical form of a §16 entry: a list item at column 0 whose first content is a bolded id.
+ *
+ * Measured 2026-09-19: **146 of 146** entries take exactly this form, and **zero** lines anywhere
+ * in `CLAUDE.md` take an indented or `*`-marker variant. The status parenthetical that most entries
+ * carry is deliberately NOT required — ADR-0001 through ADR-0005 carry none, and a rule that fails
+ * on day one against correct entries gets deleted rather than fixed (ADR-0058).
+ */
+const CANONICAL_ENTRY = /^- \*\*ADR-(\d{4})\*\*/;
+
+/**
+ * The generous form (ADR-0124 D1: *find generously, refuse strictly*).
+ *
+ * On today's estate the two passes agree exactly — both find 146 — so this buys nothing now. It is
+ * built anyway because the day somebody reformats an entry the alternative is 146 findings reading
+ * "this ADR is not in the register" against a file where every ADR is present, which is how a gate
+ * gets deleted rather than fixed.
+ */
+const GENEROUS_ENTRY = /^\s*[-*]\s+\*{0,2}ADR-(\d{4})/;
+
+/**
+ * Assert `CLAUDE.md` §16 — the register a reader is actually briefed from.
+ *
+ * **`docs/TECH_DEBT.md` #291 records TEN instances** of an ADR being Accepted, filed, listed in
+ * `docs/adr/README.md` (gated) and cited by `docs/ROADMAP.md` (gated) while absent from §16 (not
+ * gated). Every one was repaired by hand; three were found by a person doing this comparison
+ * manually; the row predicted its own recurrence and was proved right four times. The two gated
+ * documents are the two that fail loudly, which is exactly why the third rots.
+ *
+ * **Why this is not `body.includes('ADR-0122')`.** `ADR-\d{4}` occurs **750** times in `CLAUDE.md`
+ * against 146 entries, because entries cite each other constantly — so a substring check is
+ * satisfied by prose inside a *different* ADR's entry. That is not hypothetical: it is precisely
+ * how ADR-0049 and ADR-0122 were "present" while being absent from the register, and correctly
+ * counted as missing.
+ *
+ * **What this does NOT check, stated so nobody reads more into a green run than it says:**
+ * - **Presence, not quality.** `- **ADR-0147** — TODO` passes. A placeholder entry is a human's
+ *   problem and this gate has no opinion about prose.
+ * - **No opinion on order.** §16 is deliberately not numerically sorted (ADR-0057 sits after
+ *   ADR-0146; 0085–0087 sit between 0103 and 0106), and imposing one would be a different decision.
+ * - **Blind to non-list forms.** An entry written as a heading or a table row is invisible here and
+ *   reports as A1. That is the intended failure: the canonical form is the contract.
+ * - **`CLAUDE.md` only.** `docs/DECISIONS.md` is by its own description a log of *smaller*
+ *   decisions with no per-ADR obligation, so it is out of scope by decision rather than oversight.
+ */
+function registerFindings(claudeMd, adrs) {
+  const problems = [];
+  /** @type {(n: number) => { problems: string[], entries: number }} */
+  const done = (entries) => ({ problems, entries });
+  const section = sections(claudeMd, 2).find((s) => s.heading.startsWith('16.'));
+
+  // **A4 returns early rather than emitting 146 A1 findings for one cause.** If the section cannot
+  // be located the register has been restructured or renumbered, and telling the reader that every
+  // ADR is missing buries the one fact that matters.
+  if (section === undefined) {
+    problems.push(
+      'A4: CLAUDE.md has no `## 16. …` section, so the ADR register could not be read at all.\n' +
+        '    This gate anchors on the NUMBER, not the title, so a retitle is safe and a renumber\n' +
+        '    is not. Update the anchor in scripts/check-adr-coverage.mjs deliberately.',
+    );
+    return done(0);
+  }
+
+  const bodyLines = section.body.split('\n');
+  const at = (i) => section.line + 1 + i;
+
+  /** @type {Map<string, number[]>} generous id → 1-based CLAUDE.md lines. */
+  const found = new Map();
+  /** @type {Set<string>} ids whose bullet is in the canonical form. */
+  const canonical = new Set();
+  /** @type {{ id: string, line: number }[]} generous matches that are not canonical. */
+  const malformed = [];
+
+  bodyLines.forEach((line, i) => {
+    const g = GENEROUS_ENTRY.exec(line);
+    if (g === null) return;
+    const id = g[1];
+    found.set(id, [...(found.get(id) ?? []), at(i)]);
+    if (CANONICAL_ENTRY.test(line)) canonical.add(id);
+    else malformed.push({ id, line: at(i) });
+  });
+
+  if (found.size === 0) {
+    problems.push(
+      'A4: CLAUDE.md §16 holds no ADR entries at all. Either the register was emptied or the\n' +
+        '    entry form changed; a list item at column 0 beginning `- **ADR-NNNN**` is the contract.',
+    );
+    return done(0);
+  }
+
+  // **A1 — an ADR with no entry.** This is #291's defect, and it consults the roadmap exemption
+  // map NOWHERE (A7). 43 ADRs are exempt from roadmap coverage and **17 of those exemptions
+  // justify themselves by pointing at §16** ("CLAUDE.md §16 is the register for these"), so an
+  // exemption suppressing a §16 finding would let the one coverage claim the repository makes
+  // about those ADRs go unchecked by citing itself.
+  for (const id of adrs) {
+    if (found.has(id)) continue;
+    problems.push(
+      `A1: ADR-${id} has no entry in CLAUDE.md §16.\n` +
+        `    §16 is the register every human and every agent is briefed from — an ADR absent from\n` +
+        `    it is invisible to the audience that matters most. Add a bullet in the form\n` +
+        `    \`- **ADR-${id}** _(status)_ — …\`.`,
+    );
+  }
+
+  // **A2 — an entry naming no file.** A link to nothing, and the mirror of R3b one document along.
+  for (const [id, lines] of found) {
+    if (adrs.includes(id)) continue;
+    problems.push(
+      `A2: CLAUDE.md:${String(lines[0])} carries an entry for ADR-${id}, which has no file in ` +
+        `docs/adr/.`,
+    );
+  }
+
+  // **A3 — a duplicate.** A set comparison is structurally blind to these, and a hand repair is
+  // exactly where they come from: #291 records ten repairs made by hand, each by somebody adding a
+  // bullet without reading 4,900 lines to see whether one was already there.
+  for (const [id, lines] of found) {
+    if (lines.length < 2) continue;
+    problems.push(
+      `A3: ADR-${id} has ${String(lines.length)} entries in CLAUDE.md §16 ` +
+        `(lines ${lines.join(', ')}). One decision, one entry.`,
+    );
+  }
+
+  // **A6 — the strict refusal half of ADR-0124 D1.** Found generously above, refused here, so a
+  // reformatted entry produces one actionable finding rather than a false "this ADR is missing".
+  for (const { id, line } of malformed) {
+    problems.push(
+      `A6: CLAUDE.md:${String(line)} names ADR-${id} in a list item that is not the canonical ` +
+        `form.\n    Write it at column 0 as \`- **ADR-${id}** …\` — the form 146 of 146 entries use.`,
+    );
+  }
+
+  // **A5 — the control, and it measures a different quantity by a different method** (ADR-0124 D2).
+  // ADR-0120's A9 compared heading counts against heading counts and could only agree with itself;
+  // this scans the WHOLE document for the canonical form, never calling `sections()`, and requires
+  // the two sets to be equal.
+  //
+  // **What A5 is and is not.** It detects an entry that has escaped §16 (moved into §17 by a bad
+  // edit) and a section boundary that has stopped being where it should be — `docs/TECH_DEBT.md`
+  // #231 is the recorded case, where a section ran 1,115 lines past its end and read its
+  // neighbour's fields. It does NOT detect the section being parsed too generously; that is the
+  // suite's job, via the fixture reproducing the ADR-0049/0122 shape.
+  const everywhere = new Set();
+  for (const line of stripFences(claudeMd).split('\n')) {
+    const m = CANONICAL_ENTRY.exec(line);
+    if (m) everywhere.add(m[1]);
+  }
+  const escaped = [...everywhere].filter((id) => !canonical.has(id)).sort();
+  if (escaped.length > 0) {
+    problems.push(
+      `A5: ${String(escaped.length)} canonical ADR entr${escaped.length === 1 ? 'y is' : 'ies are'} ` +
+        `in CLAUDE.md but OUTSIDE §16 (${escaped.join(', ')}).\n` +
+        `    §16 reads ${String(canonical.size)}; the whole document reads ` +
+        `${String(everywhere.size)}. Either an entry has escaped the section or the section's\n` +
+        `    bounds have moved — the second is docs/TECH_DEBT.md #231's defect.`,
+    );
+  }
+
+  return done(found.size);
 }
 
 /** Run the whole gate against `root` and return `report()`'s verdict. */
