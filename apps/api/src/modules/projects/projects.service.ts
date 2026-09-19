@@ -10,6 +10,7 @@ import {
   HIERARCHY_CONFLICT,
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
+import { optionalCount } from '../../common/query/optional-count';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
@@ -71,6 +72,41 @@ export class ProjectsService {
     const project = await this.projects.findActiveByIdInOrg(projectId, organization.id);
     if (!project) throw new NotFoundError('Project not found.');
     return project;
+  }
+
+  /**
+   * A project plus its child counts — the DETAIL read. See `ClientsService.getDetail` for why the
+   * counts are issued after the subject resolves and settled independently.
+   *
+   * `activityCount` is the only unbounded count of the four, which is why independent settling is
+   * not ceremony here: a project can hold 120,000 activities and a statement timeout is a real
+   * state. Its failure must not withhold `planCount`, which cannot reach it.
+   */
+  async getDetail(
+    principal: Principal,
+    orgSlug: string,
+    projectId: string,
+  ): Promise<{ project: Project; planCount?: number; activityCount?: number }> {
+    const project = await this.get(principal, orgSlug, projectId);
+
+    const [planCount, activityCount] = await Promise.all([
+      optionalCount(() => this.projects.countActivePlans(project.id), {
+        logger: this.logger,
+        count: 'project.planCount',
+        subjectId: project.id,
+      }),
+      optionalCount(() => this.projects.countActiveActivities(project.id), {
+        logger: this.logger,
+        count: 'project.activityCount',
+        subjectId: project.id,
+      }),
+    ]);
+
+    return {
+      project,
+      ...(planCount === undefined ? {} : { planCount }),
+      ...(activityCount === undefined ? {} : { activityCount }),
+    };
   }
 
   async create(

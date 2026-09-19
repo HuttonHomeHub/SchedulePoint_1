@@ -72,13 +72,43 @@ function renderSection({
   );
 }
 
+/**
+ * **Reveal the inherited organisation calendars.**
+ *
+ * The section defaults to the project's OWN calendars (ADR-0146 D2) — on a project with none of its
+ * own it used to render the whole organisation library, so the project screen was largely a copy of
+ * the Calendars screen. Seven assertions below are about organisation rows and their tier-move
+ * actions, and they now need one press first.
+ *
+ * **That press is the accepted cost of the decision, and it is worth naming rather than hiding in a
+ * helper**: moving a shared calendar into a project is one of the things this section is for, and
+ * it is now one step further away. The product owner chose "default to the project's own, state the
+ * rest, keep the full list reachable" knowing the section lists both.
+ */
+function revealInherited(): void {
+  fireEvent.click(screen.getByRole('button', { name: /show them/i }));
+}
+
 describe('ProjectCalendarsSection', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
   });
 
+  it('defaults to the project’s own calendars and states how many it inherits', () => {
+    renderSection();
+    // The project's own row is there from the start…
+    expect(screen.getByText(OWN_CALENDAR.name)).toBeInTheDocument();
+    // …and the organisation's is not, but its existence is stated rather than concealed.
+    expect(screen.queryByText(ORG_CALENDAR.name)).not.toBeInTheDocument();
+    expect(screen.getByText(/1 organisation calendar is also usable here/i)).toBeInTheDocument();
+
+    revealInherited();
+    expect(screen.getByText(ORG_CALENDAR.name)).toBeInTheDocument();
+  });
+
   it('lists the calendars usable in the project, badged by tier', () => {
     renderSection();
+    revealInherited();
 
     expect(screen.getByRole('heading', { name: 'Calendars' })).toBeInTheDocument();
     expect(screen.getByText('Standard')).toBeInTheDocument();
@@ -89,6 +119,7 @@ describe('ProjectCalendarsSection', () => {
 
   it('offers the direction-appropriate move per row', () => {
     renderSection();
+    revealInherited();
 
     expect(
       within(openRowActions('Standard')).getByRole('menuitem', { name: 'Move to this project' }),
@@ -102,6 +133,7 @@ describe('ProjectCalendarsSection', () => {
 
   it('hides both moves from a writer without calendar:manage_org', () => {
     renderSection({ canManageOrg: false });
+    revealInherited();
 
     expect(screen.queryByRole('button', { name: /^Move /i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Standard' })).toBeInTheDocument();
@@ -110,6 +142,7 @@ describe('ProjectCalendarsSection', () => {
   it('narrows an organisation calendar to THIS project (scope + projectId + version only)', async () => {
     vi.mocked(apiFetch).mockResolvedValue({ ...ORG_CALENDAR, scope: 'PROJECT' });
     renderSection();
+    revealInherited();
 
     await clickRowAction('Standard', 'Move to this project');
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
@@ -140,6 +173,7 @@ describe('ProjectCalendarsSection', () => {
       }),
     );
     renderSection();
+    revealInherited();
 
     await clickRowAction('Standard', 'Move to this project');
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
@@ -150,6 +184,7 @@ describe('ProjectCalendarsSection', () => {
 
   it('gives a reader a read-only View and no create affordance', () => {
     renderSection({ canWrite: false });
+    revealInherited();
 
     expect(screen.getByRole('button', { name: 'View Standard' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New calendar' })).not.toBeInTheDocument();
@@ -182,6 +217,7 @@ describe('ProjectCalendarsSection', () => {
 
     it('archives one of the project’s OWN calendars, never a shared organisation one', () => {
       renderSection();
+      revealInherited();
       expect(
         within(openRowActions('Site shutdown')).getByRole('menuitem', { name: 'Archive' }),
       ).toBeInTheDocument();

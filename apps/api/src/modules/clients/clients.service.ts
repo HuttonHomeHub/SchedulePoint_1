@@ -11,6 +11,7 @@ import {
   HierarchyLifecycleService,
 } from '../../common/hierarchy/hierarchy-lifecycle.service';
 import { normaliseSearchTerm } from '../../common/query/library-filters';
+import { optionalCount } from '../../common/query/optional-count';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { hierarchyAuditEvent } from '../audit/hierarchy-audit';
@@ -69,6 +70,38 @@ export class ClientsService {
     const client = await this.clients.findActiveByIdInOrg(clientId, organization.id);
     if (!client) throw new NotFoundError('Client not found.');
     return client;
+  }
+
+  /**
+   * A client plus its child counts — the DETAIL read, and the only route that takes them.
+   *
+   * **The counts are issued AFTER the subject has resolved, not selected with it.** That ordering is
+   * what makes the anti-IDOR argument hold without an `organizationId` in either count's predicate:
+   * by the time a count runs, this client has already been resolved inside the caller's own
+   * organisation, or a 404 was thrown. Adding the column back is a natural reflex and costs a
+   * measured 62% (`client.repository.ts`), because it is not in the index.
+   *
+   * The count is **settled**, so one that fails is absent from the body rather than zero and never
+   * takes the read down with it. See `optionalCount`.
+   *
+   * There is ONE count here and `ProjectsService.getDetail` has two, which is FC-9's doing rather
+   * than an asymmetry somebody chose: a plan count across a client's projects was built, measured
+   * as `Seq Scan on projects` at 500 of 2,000, and withdrawn.
+   */
+  async getDetail(
+    principal: Principal,
+    orgSlug: string,
+    clientId: string,
+  ): Promise<{ client: Client; projectCount?: number }> {
+    const client = await this.get(principal, orgSlug, clientId);
+
+    const projectCount = await optionalCount(() => this.clients.countActiveProjects(client.id), {
+      logger: this.logger,
+      count: 'client.projectCount',
+      subjectId: client.id,
+    });
+
+    return { client, ...(projectCount === undefined ? {} : { projectCount }) };
   }
 
   async create(principal: Principal, orgSlug: string, dto: CreateClientDto): Promise<Client> {

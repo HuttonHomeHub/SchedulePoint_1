@@ -3,6 +3,7 @@ import { Children, Fragment, isValidElement } from 'react';
 
 import { Skeleton } from '@/components/ui/page/skeleton';
 import { QueryErrorState } from '@/components/ui/query-error-state';
+import { cn } from '@/lib/utils';
 
 /** A column definition for {@link DataTable}. */
 export interface Column<T> {
@@ -28,6 +29,109 @@ export interface Column<T> {
   srHeader?: boolean;
   headClassName?: string;
   cellClassName?: string;
+  /**
+   * How wide this column may grow, declared as a PROPERTY OF THE CONTENT rather than as a number.
+   *
+   * - **`fit`** — take exactly what the content needs and surrender the rest. For a column whose
+   *   values have a known, bounded shape: a weekday list, a code, a status, a date.
+   * - **`bounded`** — may grow, up to a reading measure, then wrap. For prose that can be long.
+   * - **`auto`** (the default) — no opinion; the browser distributes as it always has.
+   *
+   * **Why `fit` is `w-px whitespace-nowrap` and not a `rem` cap.** ADR-0145 M4-T2 capped four
+   * columns with fixed widths — `md:w-44` for `Working days`, `md:w-24` for `Code` — and the
+   * measurement behind them was real: they shortened the distance between a row's first and last
+   * fact by 34-122px. What nothing asked was whether the content still rendered on ONE LINE inside
+   * the cap. It does not. `"Mon, Tue, Wed, Thu, Fri, Sat"` needs 191px in a 176px column and
+   * `NL-HYDROPUMP` needs 103px in a 96px one, so both wrap — while the table around them has
+   * 271-518px of slack. **The remedy became the defect**, which is why this value is expressed as a
+   * function of content: measured, a `fit` column takes 210px at a 1104px table and 210px at a
+   * 1488px one, handing every pixel of the surplus to the free column beside it. A number chosen
+   * against one measure has to be re-derived the next time the measure changes, and nobody does.
+   *
+   * **It is applied from `md:` upwards, and that is FC-6 rather than a preference.** Measured in
+   * Chromium: a table whose columns are all `fit` renders **793px wide inside a 320px container**,
+   * because `white-space: nowrap` has no fallback — a column that may not wrap and may not fit can
+   * only push the table wider. The same content without `fit` stays inside the viewport and wraps.
+   * So the columns shrink to fit on a desktop and are free to wrap below the breakpoint. "This is a
+   * desktop app" is a design stance; WCAG 2.2 §1.4.10 Reflow is a merge requirement (CLAUDE.md §13).
+   *
+   * **It composes with `cellClassName` rather than replacing it**, which is what lets a caller
+   * declare a width without restating `py-2 pr-4` — `docs/TECH_DEBT.md` #335's actual ask. The
+   * blunter fix that row proposes (merge the override into the default with `cn` instead of
+   * replacing it with `??`) is **deliberately not taken here**: ADR-0145 M4 declined it because
+   * seven overrides omit `py-2` on purpose, and this epic re-took that decision rather than
+   * inheriting it. Composing the width alone reaches #335's goal at no blast radius, so the risky
+   * merge buys nothing this needs.
+   */
+  width?: 'fit' | 'bounded' | 'auto';
+}
+
+/**
+ * The classes each `Column.width` contributes. Expressed once so a table cannot disagree with its
+ * own skeleton — the loading state reuses a column's classes for exactly that reason.
+ */
+const WIDTH_CLASSES: Record<NonNullable<Column<unknown>['width']>, string> = {
+  fit: 'md:w-px md:whitespace-nowrap',
+  /**
+   * `max-w-prose` — Tailwind's own 65ch reading measure, and **not an arbitrary `[48ch]`**, which is
+   * what this was until the ADR-0097 sizing ratchet refused it (FC-7: the ratchets do not rise).
+   * The ratchet was right for the reason it exists: a one-off measure invented inside a primitive is
+   * how a design system acquires a second scale. `ch` is still the unit that matters here — a
+   * reading measure is a count of characters, so it stays right when the typeface changes — and the
+   * scale already has one. It still WRAPS, which is the difference from `fit`.
+   */
+  bounded: 'md:max-w-prose',
+  auto: '',
+};
+
+/** A column's head classes, its declared width composed with whatever the caller passed. */
+/**
+ * **The width preset is composed LAST, so it wins a same-modifier collision.**
+ *
+ * `cn` is `tailwind-merge`, so on a conflict the later class survives: a caller writing
+ * `cellClassName="md:max-w-40"` beside `width: 'bounded'` gets `md:max-w-prose`, not its own cap.
+ * That is the opposite precedence from `SearchField`'s `cn(defaults, className)`, where the caller
+ * wins, and from this repository's usual "className extends, never clobbers" habit — so it is
+ * stated rather than left for the next author to discover. No consumer collides today (checked
+ * across every `cellClassName`/`headClassName` in the tree at M8), which is why this is a docblock
+ * and a test rather than a change.
+ *
+ * It is the right way round for what `width` is: a declaration about the COLUMN's role in the
+ * table's arithmetic (FC-2), which a per-cell class has no business silently overriding. A caller
+ * who genuinely wants their own cap says `width: 'auto'` and owns it.
+ */
+function headClassesOf<T>(column: Column<T>): string {
+  return cn(column.headClassName ?? 'py-2 pr-4 font-medium', WIDTH_CLASSES[column.width ?? 'auto']);
+}
+
+/** A column's cell classes, its declared width composed with whatever the caller passed. */
+function cellClassesOf<T>(column: Column<T>): string {
+  return cn(column.cellClassName ?? 'py-2 pr-4', WIDTH_CLASSES[column.width ?? 'auto']);
+}
+
+/**
+ * **The skeleton gets the caller's classes and NOT the declared width, and that is the opposite of
+ * the obvious thing.**
+ *
+ * `fit` works by making a cell's min-content width equal to its text's single-line width. The
+ * skeleton has no text: its `<th>` renders nothing at all (the header material is `aria-hidden`
+ * placeholder, deliberately) and its `<td>` holds a contentless block with a percentage width,
+ * which contributes nothing to intrinsic sizing. So a `fit` column applied to the skeleton has
+ * nothing to fit and collapses to its 1px floor.
+ *
+ * **Measured in Chromium before this was split out**, on the Calendars table at 1646: `Working
+ * days` rendered **16px while loading and 190px settled**, and `Actions` rendered **0px** — the
+ * table visibly reflowing the instant the rows arrived, which is the exact defect a skeleton exists
+ * to prevent. Raised by the component review as a mechanism; the numbers are why it was fixed
+ * rather than noted.
+ *
+ * The caller's own `cellClassName` is still honoured, so a hidden-below-`lg` column stays hidden in
+ * the skeleton too and the row keeps its column count.
+ */
+function skeletonClassesOf<T>(column: Column<T>, kind: 'head' | 'cell'): string {
+  return kind === 'head'
+    ? (column.headClassName ?? 'py-2 pr-4 font-medium')
+    : (column.cellClassName ?? 'py-2 pr-4');
 }
 
 /**
@@ -145,11 +249,7 @@ export function DataTable<T>({
             <thead>
               <tr className="border-border text-muted-foreground border-b text-left">
                 {columns.map((column) => (
-                  <th
-                    key={column.header}
-                    scope="col"
-                    className={column.headClassName ?? 'py-2 pr-4 font-medium'}
-                  >
+                  <th key={column.header} scope="col" className={skeletonClassesOf(column, 'head')}>
                     {column.srHeader ? <span className="sr-only">{column.header}</span> : null}
                   </th>
                 ))}
@@ -159,7 +259,7 @@ export function DataTable<T>({
               {Array.from({ length: SKELETON_ROWS }, (_, rowIndex) => (
                 <tr key={rowIndex} className="border-border border-b">
                   {columns.map((column) => (
-                    <td key={column.header} className={column.cellClassName ?? 'py-2 pr-4'}>
+                    <td key={column.header} className={skeletonClassesOf(column, 'cell')}>
                       <Skeleton className="h-3.5 w-full max-w-40" />
                     </td>
                   ))}
@@ -227,11 +327,7 @@ export function DataTable<T>({
         <thead>
           <tr className="border-border text-muted-foreground border-b text-left">
             {columns.map((column) => (
-              <th
-                key={column.header}
-                scope="col"
-                className={column.headClassName ?? 'py-2 pr-4 font-medium'}
-              >
+              <th key={column.header} scope="col" className={headClassesOf(column)}>
                 {column.headerCell ? (
                   column.headerCell()
                 ) : column.srHeader ? (
@@ -250,7 +346,7 @@ export function DataTable<T>({
               <Fragment key={getRowKey(row)}>
                 <tr className="border-border border-b">
                   {columns.map((column) => (
-                    <td key={column.header} className={column.cellClassName ?? 'py-2 pr-4'}>
+                    <td key={column.header} className={cellClassesOf(column)}>
                       {column.cell(row)}
                     </td>
                   ))}

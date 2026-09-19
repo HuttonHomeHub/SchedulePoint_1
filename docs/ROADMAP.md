@@ -304,6 +304,22 @@ keep `main` releasable.
   dependencies — not `plans.updated_at`, which does not move when an activity is edited, so the
   naive ordering ranks a plan somebody worked in all morning below one whose name was corrected last
   week **and every row still looks correct**.
+- **A page has one measure, a column has a reason, and a fact belongs under its row** (ADR-0146).
+  The product owner looked at the ADR-0145 result and said the pages were too narrow, too empty and
+  too thin on information — _"this isn't a mobile app its a desktop app"_. Eleven screens shared a
+  1152 px measure on a 1646 px screen, **eleven columns wrapped while their tables had room** (a date
+  broken over two lines reads as two dates), and the audit log carried an `Outcome` column whose
+  every cell is empty on a healthy installation, beside a filter offering to narrow by it. One
+  measure now (**+217 px at 1646**), a column model that declares width by **what a column holds**
+  rather than as a number (**11 wrapping columns → 0**), and Client and Project detail state how much
+  they hold. Those counts were **measured before they were built**, on the product owner's own
+  instruction, and one of the four was **withdrawn on its measurement** — a plan count under a client
+  plans as a sequential scan once the client holds a substantial share of the projects table. The
+  epic also closes a level-A accessibility defect that spanned the whole product: **every focus ring
+  is a `box-shadow`, and Windows High Contrast computes `box-shadow` to `none`**, so a keyboard user
+  in that mode saw no focus indicator anywhere. One unlayered rule fixes all 61 occurrences without
+  touching a call site, and two gates — one reading the source, one comparing pixels in a real
+  browser — keep it that way.
 - **A screen is assembled from the archetypes** (ADR-0145). The nine non-canvas screens — Clients,
   Calendars, Resources, Members, Audit log, Recently deleted, My activity and the two detail screens
   — drifted into **four** different heading rhythms, three treatments for a named sub-section and

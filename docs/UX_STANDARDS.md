@@ -182,6 +182,37 @@ entry stops being needed.
 - Empty states are encouraging and actionable, not dead ends.
 - Numbers, currency, and dates are locale-formatted (`Intl`); money is exact.
 
+## Lists and rows
+
+- **A fact about a row belongs under that row, never in a column of its own**
+  (ADR-0146 D4). A column is a static property of a screen; an absence is a
+  property of a row. A field most rows do not carry therefore spends width on
+  every row to say nothing and prints an em dash where the absence is — while
+  the columns beside it wrap for want of that width. Measured on the deployed
+  installation: **every** cell of the `Description` column read "—".
+  - The remedy is a secondary line under the subject, **rendered only when
+    present**. A sub-line reading "—" is the same defect one row lower, and that
+    is the trap in this rule.
+  - The same applies to a column whose every cell is empty on a healthy
+    installation — the audit log's `Outcome`, where SUCCESS is the overwhelming
+    majority and saying so on every row would drown the two outcomes worth
+    noticing. A header with nothing under it, beside a filter offering to narrow
+    by it, is what the product owner reported and they were reading it right.
+  - **Keep any `sr-only` text the column carried.** Dropping it is a silent
+    accessibility regression: a screen-reader user would hear a row with no
+    outcome at all and could not tell a success from one nobody rendered.
+- **A blocked action names its blocker under the row and keeps its own label
+  bounded.** "Restore Riverside first…" puts the variable part in the middle of
+  the sentence, so the trailing `…` — the convention for "this opens a further
+  step" — reads as a sentence cut off. The blocker is a fact about the row; the
+  button says what it does. The accessible name still contains the visible label
+  (WCAG 2.5.3) and adds the subject after it.
+- **Every list sits in a framed section with an accessible name** stating what it
+  holds, not repeating the page's `<h1>`. The count beside that name is read by
+  assistive technology, not hidden.
+- **A section the caller may not read is omitted, never zeroed** (ADR-0098): a
+  zero is a fact about the data, an absence is a fact about the reader.
+
 ## Navigation & information architecture
 
 - Primary navigation in the **docked Project Explorer** on the leading edge

@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1270 web
-> source files with 42 Playwright suites beside the base journey, and
-> 145 ADRs.
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1277 web
+> source files with 44 Playwright suites beside the base journey, and
+> 146 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5110,6 +5110,78 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   structurally cannot read this file. Two documents the spec promised were missing with it
   (`docs/DESIGN_SYSTEM.md`, `docs/UX_STANDARDS.md`), and `docs/API.md` had never been told the
   clients list takes a `q`. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0146** _(Accepted; M0-M8 landed 2026-09-17)_ - A page has one measure, and a column has a
+  reason. The product owner's words were _"this isn't a mobile app its a desktop app. the pages need
+  to be best in class. contain all relevant information, look fantastic."_ Measured at M0 rather than
+  described: eleven in-scope screens declared **two** page measures (`1152px` on nine, `1536px` on
+  the overview and the staff console), so the screen every sign-in lands on was 384px wider than
+  every screen it links to; **eleven columns wrapped** at 1646 while their tables held 271-518px of
+  unused width; and six screens framed their rows in nothing at all. Every one of those numbers is an
+  instrument's, and the instruments were wrong more often than the code was - six times, each
+  recorded where it happened.
+  **The load-bearing decision is that `width` is a property of a COLUMN and not of a cell.**
+  `Column.width: 'fit' | 'bounded' | 'auto'` replaces per-cell `max-w-*` classes, and the three names
+  are a vocabulary rather than three sizes: `fit` shrink-wraps a bounded value (a date, a code),
+  `bounded` caps prose **and never truncates**, `auto` is the contested middle - and **`auto` must be
+  declared**, because it is also the default, so a rule whose exception is its default is vacuous
+  unless somebody writes the exception down. `fit` is applied from `md:` upwards only, which is not
+  stylistic: M0 measured an all-`fit` table rendering **793px inside a 320px container**, because
+  `white-space: nowrap` has no fallback.
+  **A fact about a row belongs under that row, never in a column of its own** - the em-dash
+  `Description` column and the audit log's `Outcome`, whose every cell was empty on any healthy
+  installation while a filter above it offered to narrow by it. **The `sr-only` success is kept**,
+  because deleting it would be a silent WCAG regression that nothing on screen could show.
+  **Two of the epic's own conditions failed and neither bar moved**: FC-2's prose-density half
+  withdrew by its own clause, and FC-3 failed by **2px** - `SectionCard`'s own border - which was put
+  to the product owner with both consequences costed and amended in place at the measured value
+  rather than at a round number. **Three claims in its own spec were disproved before anything was
+  built**, including a filter-bar overflow quoted forward as "~246px over at every width" and
+  measured at **0** (it wraps to three lines and stands 122px tall instead, which is a different
+  defect with a different remedy).
+  **FC-9 is the measure-first half, and it withdrew a shipped feature.** The child counts on the two
+  detail screens were gated on a cost bar **committed in its own commit before the harness existed**
+  (ADR-0128's ordering), and its load-bearing limb is a **plan shape** rather than a millisecond,
+  because ADR-0144 records that a JIT cliff fires on a small tenant because a **different** tenant
+  grew. Three limbs pass; `client.planCount` plans as a `Seq Scan on projects` once a client holds a
+  substantial share of that table, so the clause is applied to **the count that failed** and the
+  amendment argued in writing (`docs/TECH_DEBT.md` #342). The harness had to dilute, and its own
+  first judged run reported the clients LIST plan as a `Seq Scan` over a **six-row table** - its
+  dilution guard covered three tables and not that one, so the regression limb was grading the
+  instrument.
+  **The M7 slice closes `docs/TECH_DEBT.md` #324 with one unlayered rule**: under
+  `forced-colors: active` the product's focus treatment computed to nothing at all, because that mode
+  forces `box-shadow` to `none` and Tailwind v4's `outline-none` emits `outline-style: none`. An
+  `@media (forced-colors: active)` block **outside every `@layer`** beats the layered utility despite
+  losing on specificity, since layers are consulted before specificity - and the claim that this is
+  the _only_ thing that works was corrected by the component review, because `!important` inside
+  `@layer base` wins too. Two gates, both verified red: a structural one proving the rule compiles
+  unlayered (a fact about the build, which the remedy depends on), and a journey asserting on
+  **pixels** whose `forced-colors: none` control had to be read **while focused**, its first version
+  having passed against the defect by reading an unfocused control.
+  **The M8 gate pass ran five reviews and three blocked**, and its two largest findings are one shape:
+  **a claim the diff itself makes, which does not hold for the call sites that exist.**
+  `PageHeader`'s docblock said its actions sit "opposite the title", and a `basis-full` aside consumes
+  its flex line - so on **both** of that slot's consumers the screen's primary action was stranded on
+  a third row at flex-start below `md`. And `SectionCard`'s count was `aria-hidden` because "the
+  screens that pass it already announce their settled result count through a live region": one of the
+  four has no such hook at all, and the hook the other three use is **silent on first paint by its own
+  docblock**. ADR-0076's shape, twice. A third is ADR-0081's: the epic's own spec names the em-dash
+  column on Client detail and the milestone that fixed it stopped at Clients and Calendars, recording
+  nothing. A fourth is an **instrument broken by the change it was meant to police** - the FC-9
+  harness still demanded the count FC-9 withdrew, so the script the register names as step one to
+  reopening that decision threw on its first request. **Two of the five folded defects came from the
+  review that reported nothing blocking**, which is why the finding count is the figure worth
+  carrying. This entry said "four of six reviews" until the count was taken - five agents ran, one
+  covering two reviewer roles - which is ADR-0136's Class 1 failure one epic later, in the register
+  entry for a gate pass whose largest findings are all unchecked claims.
+  **All nine conditions are judged in `docs/specs/page-composition/m8-verdict.md`, and four had no
+  recorded verdict until that pass.** FC-8 had **no instrument at all**, only a named quantity, so it
+  could only ever have been judged by argument; `firstRowTop` was added, the reading taken (every
+  in-scope screen's first row 261-473px against a 949px region), and the property turned into a gate -
+  because what FC-8 protects against is the **next** heading or strip added above a list. FC-6's
+  evidence became a gate for the same reason. **The CPM engine is not imported and no migration
+  runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -186,6 +186,76 @@ describe.skipIf(!hasDatabase)('Projects API (e2e)', () => {
     expect(restoredPlan.deleteBatchId).toBeNull();
   });
 
+  it('carries child counts on the DETAIL read and NOT on the list', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const clientId = await createClient(actor, 'Counted');
+    const projectId = await createProject(actor, clientId, 'Counted');
+
+    /**
+     * **Two live plans, one deleted, and activities of both kinds under each.** A count over live
+     * rows only is indistinguishable from a count over all rows unless the fixture holds a deleted
+     * one, and `deletedAt: null` dropping out of a predicate does not error — it silently falls
+     * back to a wider index and counts everything.
+     *
+     * The activity set deliberately includes a `WBS_SUMMARY` and a milestone, because
+     * `activityCount` counts EVERY activity row and the DTO says so. A fixture of nothing but tasks
+     * would pass equally against a count that quietly excluded them, which is the shape
+     * `docs/TEST_PLAYBOOK.md` records shipping wrong once (health metric 10).
+     */
+    const seedPlan = (name: string, deleted = false) =>
+      prisma.plan.create({
+        data: {
+          organizationId: orgId,
+          projectId,
+          name,
+          plannedStart: new Date('2026-01-01T00:00:00.000Z'),
+          createdBy: actor.userId,
+          ...(deleted ? { deletedAt: new Date() } : {}),
+        },
+      });
+    const live = await seedPlan('Live');
+    await seedPlan('Second');
+    const gone = await seedPlan('Gone', true);
+
+    const seedActivity = (
+      planId: string,
+      code: string,
+      type: 'TASK' | 'WBS_SUMMARY' | 'FINISH_MILESTONE',
+    ) =>
+      prisma.activity.create({
+        data: {
+          organizationId: orgId,
+          planId,
+          code,
+          name: code,
+          type,
+          durationMinutes: type === 'FINISH_MILESTONE' ? 0 : 480,
+          createdBy: actor.userId,
+        },
+      });
+    await seedActivity(live.id, 'A1', 'TASK');
+    await seedActivity(live.id, 'A2', 'WBS_SUMMARY');
+    await seedActivity(live.id, 'A3', 'FINISH_MILESTONE');
+    // Live in its own right, under a DELETED plan — excluded only by the nested
+    // `plan: { deletedAt: null }` clause, which is the one a later reader would call redundant.
+    await seedActivity(gone.id, 'A4', 'TASK');
+
+    const detail = await actor.agent
+      .get(`/api/v1/organizations/acme/projects/${projectId}`)
+      .expect(200);
+    expect(detail.body.data.planCount).toBe(2);
+    expect(detail.body.data.activityCount).toBe(3);
+
+    // The list route does not carry them. See `ProjectDetailResponseDto`: the two routes shared a
+    // DTO until this epic, so the field would have arrived here uninvited.
+    const list = await actor.agent
+      .get(`/api/v1/organizations/acme/clients/${clientId}/projects`)
+      .expect(200);
+    expect(list.body.data).toHaveLength(1);
+    expect(list.body.data[0]).not.toHaveProperty('planCount');
+    expect(list.body.data[0]).not.toHaveProperty('activityCount');
+  });
+
   it('refuses to restore a project whose parent client is still deleted (409)', async () => {
     const { actor } = await adminWithOrg();
     const clientId = await createClient(actor, 'Parent');

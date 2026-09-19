@@ -30,6 +30,7 @@ import { Paginated } from '../../common/dto/paginated';
 import { ParseUuidPipe } from '../../common/validation/uuid';
 
 import { ClientsService } from './clients.service';
+import { ClientDetailResponseDto } from './dto/client-detail-response.dto';
 import { ClientListQueryDto } from './dto/client-list-query.dto';
 import { ClientResponseDto } from './dto/client-response.dto';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -86,14 +87,22 @@ export class ClientsController {
   }
 
   @Get(':clientId')
-  @ApiOperation({ summary: 'Get a client by id.' })
-  @ApiOkResponse({ type: ClientResponseDto })
+  @ApiOperation({
+    summary: 'Get a client by id, with its child counts.',
+    description:
+      'Carries `projectCount`, which the LIST route deliberately does not — see ' +
+      '`ClientDetailResponseDto`. It is ABSENT rather than zero when it could not be taken. There ' +
+      'is deliberately no plan count: a two-level count under a client plans as a sequential scan ' +
+      'once the client holds a substantial share of `projects`, and FC-9 withdrew it.',
+  })
+  @ApiOkResponse({ type: ClientDetailResponseDto })
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('clientId', ParseUuidPipe) clientId: string,
-  ): Promise<ClientResponseDto> {
-    return ClientResponseDto.from(await this.service.get(principal, orgSlug, clientId));
+  ): Promise<ClientDetailResponseDto> {
+    const { client, ...counts } = await this.service.getDetail(principal, orgSlug, clientId);
+    return ClientDetailResponseDto.fromDetail(client, counts);
   }
 
   @Patch(':clientId')

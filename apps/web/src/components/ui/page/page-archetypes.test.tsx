@@ -14,7 +14,12 @@ import {
 } from './index';
 
 /**
- * The six page archetypes (ADR-0097 Landing A).
+ * The page archetypes (ADR-0097 Landing A).
+ *
+ * **Deliberately not a count.** This said "six" over a barrel exporting nine — stale before the
+ * change that noticed it, and the third such drift in this directory. A number here is a claim
+ * about a file one import away and nothing checks it, so `index.ts` holds the one count that is
+ * maintained and this docblock names the set instead.
  *
  * Each assertion here corresponds to a decision the archetype makes ON BEHALF of every screen —
  * which is what an archetype is for, and what makes getting one wrong expensive rather than
@@ -38,7 +43,7 @@ describe('PageContainer', () => {
     // The frame was hand-written fourteen times. The point of the archetype is that the measure
     // is now one decision, so the class that carries it is worth pinning.
     const { container } = render(<PageContainer>content</PageContainer>);
-    expect(container.firstElementChild?.className).toContain('max-w-6xl');
+    expect(container.firstElementChild?.className).toContain('max-w-screen-2xl');
   });
 });
 
@@ -60,6 +65,57 @@ describe('PageHeader', () => {
     // Not an empty `aria-describedby` pointing at nothing, which is worse than no attribute.
     render(<PageHeader title="Clients" />);
     expect(screen.getByRole('heading', { level: 1 })).not.toHaveAttribute('aria-describedby');
+  });
+
+  /**
+   * **The `aside`/`actions` composition, which the plan promised coverage for and nobody wrote.**
+   *
+   * M5-T1's own testing line reads "unit at two widths", and no test touched `aside` at all — so
+   * the slot shipped pushing the screen's primary action onto a third line below `md`, left-aligned,
+   * on both of its consumers. jsdom has no layout, so these assert the **composition** that decides
+   * it and the browser assertion lives in `apps/web/e2e-page-composition/composition.spec.ts`. That
+   * split is the honest one: a class string is checkable here, a rendered line is not.
+   *
+   * Verified red against the two-sibling version: `basis-full` sat on the aside itself, so there
+   * was no shared wrapper to find and the actions carried no `justify-*` at any width.
+   */
+  describe('the aside and the actions share one wrapping line', () => {
+    const wrapperOf = (label: string) =>
+      screen.getByText(label).parentElement?.parentElement?.className ?? '';
+
+    it('gives the pair a full line below md and puts the actions at its far end', () => {
+      render(
+        <PageHeader
+          title="Riverside"
+          aside={<span>4 projects</span>}
+          actions={<button>New</button>}
+        />,
+      );
+      const wrapper = wrapperOf('4 projects');
+      expect(wrapper).toMatch(/\bbasis-full\b/);
+      expect(wrapper).toMatch(/\bmd:basis-auto\b/);
+      expect(wrapper).toMatch(/\bjustify-between\b/);
+      expect(wrapper).toMatch(/\bmd:justify-end\b/);
+      // Reading order is the visual order at every width, so no `order-*` is in play (WCAG 1.3.2).
+      expect(wrapper).not.toMatch(/\border-\d/);
+    });
+
+    it('leaves actions ALONE shrink-wrapped beside the title, taking no line of their own', () => {
+      // The shape every other screen in the product uses. `basis-full` here would push the primary
+      // action onto its own line on sixteen screens to fix two.
+      render(<PageHeader title="Clients" actions={<button>New client</button>} />);
+      const wrapper = screen.getByRole('button', { name: 'New client' }).parentElement
+        ?.parentElement;
+      expect(wrapper?.className).not.toMatch(/\bbasis-full\b/);
+      expect(wrapper?.className).not.toMatch(/\bjustify-between\b/);
+    });
+
+    it('still gives an aside ALONE its own line below md', () => {
+      render(<PageHeader title="Riverside" aside={<span>4 projects</span>} />);
+      const wrapper = wrapperOf('4 projects');
+      expect(wrapper).toMatch(/\bbasis-full\b/);
+      expect(wrapper).toMatch(/\bmd:basis-auto\b/);
+    });
   });
 });
 
@@ -332,7 +388,11 @@ describe('SectionCard fill', () => {
     );
 
     const heading = screen.getByRole('heading', { name: 'Recently changed' });
-    const header = heading.closest('div')?.parentElement;
+    // The card's header row is the section's first element child. **Not
+    // `heading.closest('div')?.parentElement`**, which this was: that walked h2 → the title
+    // wrapper → the header, and broke the moment the header gained a legitimate extra
+    // element (the `count` slot). It was asserting on a DOM depth rather than on the header.
+    const header = heading.closest('section')?.firstElementChild;
     expect(header?.className).toMatch(/shrink-0/);
     expect(container.querySelector('[tabindex="0"]')?.contains(heading)).toBe(false);
   });
@@ -352,7 +412,65 @@ describe('SectionCard fill', () => {
     );
 
     const heading = screen.getByRole('heading', { name: 'Recently changed' });
-    const header = heading.closest('div')?.parentElement;
+    // The card's header row is the section's first element child. **Not
+    // `heading.closest('div')?.parentElement`**, which this was: that walked h2 → the title
+    // wrapper → the header, and broke the moment the header gained a legitimate extra
+    // element (the `count` slot). It was asserting on a DOM depth rather than on the header.
+    const header = heading.closest('section')?.firstElementChild;
     expect(header?.className).toMatch(/\bflex-row\b/);
+  });
+});
+
+/**
+ * **`SectionCard`'s `count`, which shipped with no unit coverage at all.**
+ *
+ * The only thing exercising it was one text-content check in a journey — and that gap is exactly
+ * what let it ship `aria-hidden` on a premise none of its four consumers met. `Column.width` got a
+ * dedicated test file in this same epic after a reviewer noticed it had none; `count` did not, and
+ * the M8 component review said so.
+ */
+describe('SectionCard count', () => {
+  it('exposes the number to assistive technology, not to sighted readers alone', () => {
+    // Verified red against `aria-hidden` on the span: `getByText` still finds an `aria-hidden`
+    // node, so the assertion is on the accessible name of the region's own header row — which is
+    // what an AT user actually reaches. Parity, not a second announcement: nothing here is a live
+    // region, so the number is read once, when the reader arrives at the heading.
+    render(
+      <SectionCard title="Clients" count={124}>
+        <p>row</p>
+      </SectionCard>,
+    );
+    const number = screen.getByText('124');
+    expect(number).not.toHaveAttribute('aria-hidden');
+    expect(number.closest('[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('omits the slot entirely when the count is undefined, rather than printing a zero', () => {
+    // `undefined` is "the caller could not take this count", which is not the same fact as 0 and
+    // must not render as one (ADR-0126's rule, one primitive along).
+    render(
+      <SectionCard title="Clients">
+        <p>row</p>
+      </SectionCard>,
+    );
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+  });
+
+  it('renders a real zero, because "none" is a fact the reader came for', () => {
+    render(
+      <SectionCard title="Clients" count={0}>
+        <p>row</p>
+      </SectionCard>,
+    );
+    expect(screen.getByText('0')).toBeInTheDocument();
+  });
+
+  it('keeps the section named by its title alone, so a count cannot creep into the name', () => {
+    render(
+      <SectionCard title="Clients" count={124}>
+        <p>row</p>
+      </SectionCard>,
+    );
+    expect(screen.getByRole('region', { name: 'Clients' })).toBeInTheDocument();
   });
 });

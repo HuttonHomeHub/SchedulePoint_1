@@ -86,11 +86,14 @@ describe('ResourcesTable — resource tree (VITE_LIBRARY_SCOPING on)', () => {
 
   it('orders rows depth-first: a group is immediately followed by its own contents', () => {
     renderTable();
+    // A nested row now names its group on a second line inside the Name cell, which is where the
+    // parent relationship moved when the `Group` column was removed (M2-T3). So `Diggers` reads
+    // "In Groundworks" and `CR600` reads "In Diggers" — the nesting, in text, in the row.
     expect(rowNames()).toEqual([
       'GroundworksNot assignable',
-      'Crew A',
-      'DiggersNot assignable',
-      'CR600',
+      'Crew AIn Groundworks',
+      'DiggersNot assignableIn Groundworks',
+      'CR600In Diggers',
       'Loose Crew',
     ]);
   });
@@ -107,12 +110,28 @@ describe('ResourcesTable — resource tree (VITE_LIBRARY_SCOPING on)', () => {
     expect(within(groupRow).getByText('Not scheduled')).toBeInTheDocument();
   });
 
-  it('carries the parent relationship in TEXT via the Group column (not layout alone)', () => {
+  /**
+   * **Rewritten at ADR-0146 M2-T3, and the rewrite is a decision rather than a repair.**
+   *
+   * The plan said this assertion "must pass unchanged, not be rewritten" — the right instinct, and
+   * it could not be honoured literally, because it asserted the CARRIER and the carrier moved. It
+   * demanded a `columnheader` named `Group`, and that column was removed: it printed "—" on every
+   * row of a real organisation's library, which is a column spending width to say nothing.
+   *
+   * The INVARIANT is what the plan was protecting — a resource's nesting is conveyed in text and
+   * never by indentation alone (WCAG 2.2) — and that is what this now asserts, with the carrier
+   * left unnamed so the next move does not need a third rewrite. It is deliberately a stronger
+   * test than the one it replaces: the old version passed if the column existed and held the parent
+   * name anywhere; this one requires the nested row itself to say which group it is in, which is
+   * the fact a reader needs.
+   *
+   * Verified to fail with the secondary line removed — the point of the exercise was to prove the
+   * carrier had moved rather than gone.
+   */
+  it('carries the parent relationship in TEXT, not by indentation alone', () => {
     renderTable();
-    expect(screen.getByRole('columnheader', { name: 'Group' })).toBeInTheDocument();
-    // The nested equipment names its own group.
     const deepRow = screen.getAllByRole('row').find((r) => r.textContent?.includes('CR600'))!;
-    expect(within(deepRow).getByText('Diggers')).toBeInTheDocument();
+    expect(within(deepRow).getByText(/Diggers/)).toBeInTheDocument();
   });
 
   it('renders a resource whose parent is absent from the list as top-level rather than dropping it', () => {

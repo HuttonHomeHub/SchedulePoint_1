@@ -1,4 +1,4 @@
-import type { ProjectSummary } from '@repo/types';
+import type { ProjectDetail, ProjectSummary } from '@repo/types';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import type { ProjectFormValues } from '../schemas/project-schemas';
@@ -32,7 +32,7 @@ function descriptionField(description?: string): string | undefined {
  * — `use-hierarchy-tree.ts:151-154` remembers, `use-plan-workspace-model.ts:268` did not. A route
  * param is never empty, so the detail screens are unaffected.
  */
-export function useProject(orgSlug: string, projectId: string): UseQueryResult<ProjectSummary> {
+export function useProject(orgSlug: string, projectId: string): UseQueryResult<ProjectDetail> {
   return useQuery({ ...projectQueryOptions(orgSlug, projectId), enabled: Boolean(projectId) });
 }
 

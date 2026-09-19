@@ -3,6 +3,7 @@ export { MembersTable } from './components/MembersTable';
 export { InvitationsSection } from './components/InvitationsSection';
 export { InviteMemberDialog } from './components/InviteMemberDialog';
 export { AcceptInvitationCard } from './components/AcceptInvitationCard';
+export { RolesPanel } from './components/RolesPanel';
 export { InviteExitLinks } from './components/InviteExitLinks';
 export { InviteShell } from './components/InviteShell';
 export { membersQueryOptions, memberKeys } from './api/use-members';

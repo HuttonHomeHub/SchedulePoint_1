@@ -1,0 +1,819 @@
+{
+  "run": {
+    "sha": "6466aa079c813394e517e59e5fa583193c7f385b",
+    "width": 1646,
+    "slug": "shoot-co-1789633658067-1646",
+    "takenAt": "2026-09-17T08:31:29.070Z",
+    "ids": {
+      "clientId": "01a0ae7a-c0c3-7fd1-b1b4-fd5c8a67fedb",
+      "projectId": "01a0ae7a-c0d1-7df1-b4ed-e2dfe1b7548b"
+    }
+  },
+  "org-home": [],
+  "clients": [
+    {
+      "tableIndex": 0,
+      "caption": "Clients",
+      "tableWidth": 1104,
+      "rows": 3,
+      "naturalTotal": 349,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 561,
+          "natural": 177,
+          "slack": 384,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Description",
+          "used": 285,
+          "natural": 90,
+          "slack": 195,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 259,
+          "natural": 82,
+          "slack": 177,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "client-detail": [
+    {
+      "tableIndex": 0,
+      "caption": "Projects",
+      "tableWidth": 1102,
+      "rows": 1,
+      "naturalTotal": 306,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 483,
+          "natural": 134,
+          "slack": 349,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Description",
+          "used": 324,
+          "natural": 90,
+          "slack": 234,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 295,
+          "natural": 82,
+          "slack": 213,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "project-detail": [
+    {
+      "tableIndex": 0,
+      "caption": "Plans",
+      "tableWidth": 1102,
+      "rows": 3,
+      "naturalTotal": 375,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 414,
+          "natural": 132,
+          "slack": 282,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Status",
+          "used": 112,
+          "natural": 58,
+          "slack": 54,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-28"
+        },
+        {
+          "header": "Planned start",
+          "used": 321,
+          "natural": 103,
+          "slack": 218,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 255,
+          "natural": 82,
+          "slack": 173,
+          "cells": 3,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    },
+    {
+      "tableIndex": 1,
+      "caption": "Calendars usable in Northgate Quarter",
+      "tableWidth": 1102,
+      "rows": 5,
+      "naturalTotal": 743,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 632,
+          "natural": 376,
+          "slack": 256,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Working days",
+          "used": 176,
+          "natural": 191,
+          "slack": -15,
+          "cells": 5,
+          "wrappedCells": 1,
+          "worstExtraPx": 21,
+          "worstText": "Mon, Tue, Wed, Thu, Fri, Sat",
+          "widthClass": "md:w-44"
+        },
+        {
+          "header": "Scope",
+          "used": 157,
+          "natural": 94,
+          "slack": 63,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 137,
+          "natural": 82,
+          "slack": 55,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "calendars": [
+    {
+      "tableIndex": 0,
+      "caption": "Calendars",
+      "tableWidth": 1104,
+      "rows": 5,
+      "naturalTotal": 833,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 545,
+          "natural": 376,
+          "slack": 169,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Working days",
+          "used": 176,
+          "natural": 191,
+          "slack": -15,
+          "cells": 5,
+          "wrappedCells": 1,
+          "worstExtraPx": 21,
+          "worstText": "Mon, Tue, Wed, Thu, Fri, Sat",
+          "widthClass": "md:w-44"
+        },
+        {
+          "header": "Description",
+          "used": 130,
+          "natural": 90,
+          "slack": 40,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Scope",
+          "used": 136,
+          "natural": 94,
+          "slack": 42,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 118,
+          "natural": 82,
+          "slack": 36,
+          "cells": 5,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "tableIndex": 0,
+      "caption": "Resources",
+      "tableWidth": 1104,
+      "rows": 4,
+      "naturalTotal": 586,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 401,
+          "natural": 186,
+          "slack": 215,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Kind",
+          "used": 128,
+          "natural": 85,
+          "slack": 43,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "md:w-32"
+        },
+        {
+          "header": "Code",
+          "used": 96,
+          "natural": 103,
+          "slack": -7,
+          "cells": 4,
+          "wrappedCells": 1,
+          "worstExtraPx": 21,
+          "worstText": "NL-HYDROPUMP",
+          "widthClass": "md:w-24"
+        },
+        {
+          "header": "Group",
+          "used": 144,
+          "natural": 56,
+          "slack": 88,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": "lg:w-36"
+        },
+        {
+          "header": "Calendar",
+          "used": 159,
+          "natural": 74,
+          "slack": 85,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 175,
+          "natural": 82,
+          "slack": 93,
+          "cells": 4,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "members": [
+    {
+      "tableIndex": 0,
+      "caption": "Organisation members",
+      "tableWidth": 1054,
+      "rows": 1,
+      "naturalTotal": 611,
+      "columns": [
+        {
+          "header": "Name",
+          "used": 171,
+          "natural": 99,
+          "slack": 72,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Email",
+          "used": 521,
+          "natural": 302,
+          "slack": 219,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Role",
+          "used": 231,
+          "natural": 134,
+          "slack": 97,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 131,
+          "natural": 76,
+          "slack": 55,
+          "cells": 1,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    },
+    {
+      "tableIndex": 1,
+      "caption": "Pending invitations",
+      "tableWidth": 1054,
+      "rows": 2,
+      "naturalTotal": 748,
+      "columns": [
+        {
+          "header": "Email",
+          "used": 345,
+          "natural": 245,
+          "slack": 100,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Role",
+          "used": 124,
+          "natural": 88,
+          "slack": 36,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Sent",
+          "used": 207,
+          "natural": 147,
+          "slack": 60,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Status",
+          "used": 277,
+          "natural": 197,
+          "slack": 80,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        },
+        {
+          "header": "Actions",
+          "used": 100,
+          "natural": 71,
+          "slack": 29,
+          "cells": 2,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "audit-log": [
+    {
+      "tableIndex": 0,
+      "caption": "Organisation audit log",
+      "tableWidth": 1104,
+      "rows": 29,
+      "naturalTotal": 1136,
+      "columns": [
+        {
+          "header": "When",
+          "used": 154,
+          "natural": 161,
+          "slack": -7,
+          "cells": 29,
+          "wrappedCells": 29,
+          "worstExtraPx": 21,
+          "worstText": "Sep 17, 2026, 8:29 AM",
+          "widthClass": null
+        },
+        {
+          "header": "Event",
+          "used": 280,
+          "natural": 291,
+          "slack": -11,
+          "cells": 29,
+          "wrappedCells": 3,
+          "worstExtraPx": 16,
+          "worstText": "Link addedAttenuation crate install to Erect fra",
+          "widthClass": null
+        },
+        {
+          "header": "By",
+          "used": 293,
+          "natural": 302,
+          "slack": -9,
+          "cells": 29,
+          "wrappedCells": 29,
+          "worstExtraPx": 21,
+          "worstText": "shoot-1789633658067-1646@example.com",
+          "widthClass": null
+        },
+        {
+          "header": "Subject",
+          "used": 303,
+          "natural": 307,
+          "slack": -4,
+          "cells": 29,
+          "wrappedCells": 3,
+          "worstExtraPx": 21,
+          "worstText": "Attenuation crate install → Erect frame — core",
+          "widthClass": null
+        },
+        {
+          "header": "Outcome",
+          "used": 74,
+          "natural": 75,
+          "slack": -1,
+          "cells": 29,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "recently-deleted": [],
+  "my-activity": [
+    {
+      "tableIndex": 0,
+      "caption": "My audit events",
+      "tableWidth": 1104,
+      "rows": 32,
+      "naturalTotal": 1136,
+      "columns": [
+        {
+          "header": "When",
+          "used": 154,
+          "natural": 161,
+          "slack": -7,
+          "cells": 32,
+          "wrappedCells": 32,
+          "worstExtraPx": 21,
+          "worstText": "Sep 17, 2026, 8:31 AM",
+          "widthClass": null
+        },
+        {
+          "header": "Event",
+          "used": 280,
+          "natural": 291,
+          "slack": -11,
+          "cells": 32,
+          "wrappedCells": 3,
+          "worstExtraPx": 16,
+          "worstText": "Link addedAttenuation crate install to Erect fra",
+          "widthClass": null
+        },
+        {
+          "header": "By",
+          "used": 293,
+          "natural": 302,
+          "slack": -9,
+          "cells": 32,
+          "wrappedCells": 32,
+          "worstExtraPx": 21,
+          "worstText": "shoot-1789633658067-1646@example.com",
+          "widthClass": null
+        },
+        {
+          "header": "Subject",
+          "used": 303,
+          "natural": 307,
+          "slack": -4,
+          "cells": 32,
+          "wrappedCells": 3,
+          "worstExtraPx": 21,
+          "worstText": "Attenuation crate install → Erect frame — core",
+          "widthClass": null
+        },
+        {
+          "header": "Outcome",
+          "used": 74,
+          "natural": 75,
+          "slack": -1,
+          "cells": 32,
+          "wrappedCells": 0,
+          "worstExtraPx": 0,
+          "worstText": "",
+          "widthClass": null
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "screen": "project-detail",
+      "header": "Working days",
+      "used": 176,
+      "natural": 191,
+      "slack": -15,
+      "cells": 5,
+      "wrappedCells": 1,
+      "worstExtraPx": 21,
+      "worstText": "Mon, Tue, Wed, Thu, Fri, Sat",
+      "widthClass": "md:w-44",
+      "tableIndex": 1
+    },
+    {
+      "screen": "calendars",
+      "header": "Working days",
+      "used": 176,
+      "natural": 191,
+      "slack": -15,
+      "cells": 5,
+      "wrappedCells": 1,
+      "worstExtraPx": 21,
+      "worstText": "Mon, Tue, Wed, Thu, Fri, Sat",
+      "widthClass": "md:w-44",
+      "tableIndex": 0
+    },
+    {
+      "screen": "resources",
+      "header": "Code",
+      "used": 96,
+      "natural": 103,
+      "slack": -7,
+      "cells": 4,
+      "wrappedCells": 1,
+      "worstExtraPx": 21,
+      "worstText": "NL-HYDROPUMP",
+      "widthClass": "md:w-24",
+      "tableIndex": 0
+    },
+    {
+      "screen": "audit-log",
+      "header": "When",
+      "used": 154,
+      "natural": 161,
+      "slack": -7,
+      "cells": 29,
+      "wrappedCells": 29,
+      "worstExtraPx": 21,
+      "worstText": "Sep 17, 2026, 8:29 AM",
+      "widthClass": null,
+      "tableIndex": 0
+    },
+    {
+      "screen": "audit-log",
+      "header": "Event",
+      "used": 280,
+      "natural": 291,
+      "slack": -11,
+      "cells": 29,
+      "wrappedCells": 3,
+      "worstExtraPx": 16,
+      "worstText": "Link addedAttenuation crate install to Erect fra",
+      "widthClass": null,
+      "tableIndex": 0
+    },
+    {
+      "screen": "audit-log",
+      "header": "By",
+      "used": 293,
+      "natural": 302,
+      "slack": -9,
+      "cells": 29,
+      "wrappedCells": 29,
+      "worstExtraPx": 21,
+      "worstText": "shoot-1789633658067-1646@example.com",
+      "widthClass": null,
+      "tableIndex": 0
+    },
+    {
+      "screen": "audit-log",
+      "header": "Subject",
+      "used": 303,
+      "natural": 307,
+      "slack": -4,
+      "cells": 29,
+      "wrappedCells": 3,
+      "worstExtraPx": 21,
+      "worstText": "Attenuation crate install → Erect frame — core",
+      "widthClass": null,
+      "tableIndex": 0
+    },
+    {
+      "screen": "my-activity",
+      "header": "When",
+      "used": 154,
+      "natural": 161,
+      "slack": -7,
+      "cells": 32,
+      "wrappedCells": 32,
+      "worstExtraPx": 21,
+      "worstText": "Sep 17, 2026, 8:31 AM",
+      "widthClass": null,
+      "tableIndex": 0
+    },
+    {
+      "screen": "my-activity",
+      "header": "Event",
+      "used": 280,
+      "natural": 291,
+      "slack": -11,
+      "cells": 32,
+      "wrappedCells": 3,
+      "worstExtraPx": 16,
+      "worstText": "Link addedAttenuation crate install to Erect fra",
+      "widthClass": null,
+      "tableIndex": 0
+    },
+    {
+      "screen": "my-activity",
+      "header": "By",
+      "used": 293,
+      "natural": 302,
+      "slack": -9,
+      "cells": 32,
+      "wrappedCells": 32,
+      "worstExtraPx": 21,
+      "worstText": "shoot-1789633658067-1646@example.com",
+      "widthClass": null,
+      "tableIndex": 0
+    },
+    {
+      "screen": "my-activity",
+      "header": "Subject",
+      "used": 303,
+      "natural": 307,
+      "slack": -4,
+      "cells": 32,
+      "wrappedCells": 3,
+      "worstExtraPx": 21,
+      "worstText": "Attenuation crate install → Erect frame — core",
+      "widthClass": null,
+      "tableIndex": 0
+    }
+  ],
+  "slackByScreen": {
+    "org-home": [],
+    "clients": [
+      {
+        "tableWidth": 1104,
+        "naturalTotal": 349,
+        "slack": 755
+      }
+    ],
+    "client-detail": [
+      {
+        "tableWidth": 1102,
+        "naturalTotal": 306,
+        "slack": 796
+      }
+    ],
+    "project-detail": [
+      {
+        "tableWidth": 1102,
+        "naturalTotal": 375,
+        "slack": 727
+      },
+      {
+        "tableWidth": 1102,
+        "naturalTotal": 743,
+        "slack": 359
+      }
+    ],
+    "calendars": [
+      {
+        "tableWidth": 1104,
+        "naturalTotal": 833,
+        "slack": 271
+      }
+    ],
+    "resources": [
+      {
+        "tableWidth": 1104,
+        "naturalTotal": 586,
+        "slack": 518
+      }
+    ],
+    "members": [
+      {
+        "tableWidth": 1054,
+        "naturalTotal": 611,
+        "slack": 443
+      },
+      {
+        "tableWidth": 1054,
+        "naturalTotal": 748,
+        "slack": 306
+      }
+    ],
+    "audit-log": [
+      {
+        "tableWidth": 1104,
+        "naturalTotal": 1136,
+        "slack": -32
+      }
+    ],
+    "recently-deleted": [],
+    "my-activity": [
+      {
+        "tableWidth": 1104,
+        "naturalTotal": 1136,
+        "slack": -32
+      }
+    ]
+  }
+}

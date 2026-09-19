@@ -514,7 +514,53 @@ which would slip past the regex while changing nothing.
 - **Keyboard:** everything interactive is reachable and operable by keyboard,
   logical tab order, no traps (except intentional modal focus traps).
 - **Visible focus:** a clear `ring` focus indicator on every focusable element;
-  never remove outlines without an equivalent.
+  never remove outlines without an equivalent. **Under `forced-colors: active` the `ring` is not an
+  equivalent and one unlayered rule supplies the outline for the whole product** — see below.
+
+#### Windows High Contrast gets a native outline, from one unlayered rule (`#324`)
+
+The house convention is `focus-visible:outline-none` plus a `focus-visible:ring-*`, and a `ring` is a
+`box-shadow`, which `forced-colors: active` **computes to `none`**. Measured in Chromium against the
+production build with the control focused by keyboard, a screenshot of its box before and after `Tab`
+was byte-identical: every focusable control in the product had **no focus indicator at all** in that
+mode — WCAG 2.2 §2.4.7, level A.
+
+`globals.css` ends with one block, and **it is deliberately outside every `@layer`**:
+
+```css
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+```
+
+**The layer is the whole mechanism.** Tailwind v4 emits its utilities inside `@layer utilities`, so
+`.focus-visible\:outline-none:focus-visible` is a layered (0,2,0) and this is an unlayered (0,1,0) —
+and an unlayered declaration beats every layered one regardless of specificity. That is why one rule
+overrides 61 occurrences across 49 files without touching a call site, and why tidying it into
+`@layer base` **as written**, where every other global rule in that file lives, silently turns the
+ring off again. `apps/web/src/styles/focus-ring.structural.test.ts` refuses that edit;
+`apps/web/e2e-forced-colors/` asserts on pixels in a real browser against the production bundle.
+
+**The considered alternative was `!important` inside `@layer base`, and it works** — `!important` is
+resolved before layer order, so it beats a non-important declaration in a later layer, and the
+`prefers-reduced-motion` block eight lines above the forced-colours rule is exactly that mechanism.
+Unlayered was preferred because it stays **extensible**: overriding a non-important unlayered rule
+needs only `!important` in any layer or more specificity unlayered, where overriding an `!important`
+in the first-declared layer needs an earlier layer, which does not exist. Recorded because the
+original comment claimed unlayered was the only mechanism, one paragraph from a working
+counter-example in its own file.
+
+**So authoring is unchanged.** Keep writing `focus-visible:outline-none focus-visible:ring-2
+focus-visible:ring-ring focus-visible:ring-offset-2`; the forced-colours case is handled for you.
+What you must NOT do is paint a focus indicator with `box-shadow` **instead of** the `ring` utilities
+and assume it is covered — it is the `:focus-visible` selector that this rule keys on, not the
+utility. And a control whose indicator must differ in **shape or position** (not merely colour) is
+the one case the universal rule cannot serve, and is the trigger to revisit the per-primitive
+migration that was withdrawn with it.
+
 - **Focus management:** move focus on route change, dialog open/close; return
   focus to the trigger on close.
 - **Contrast:** ≥ 4.5:1 body text, ≥ 3:1 large text and UI component boundaries.
@@ -699,6 +745,45 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   > themselves today. That is not a to-do list: a shared primitive earns each of those when a second
   > consumer needs it, and writing them down as though they exist is how a reader plans around a
   > capability that isn't there. Loading is a **spinner**, not skeleton rows.
+
+  **Column width is a property of the COLUMN, declared on it** (ADR-0146 D3). `Column.width` takes
+  `'fit' | 'bounded' | 'auto'` and the three names are a vocabulary, not three sizes:
+
+  | Value       | Renders                        | For                                                       |
+  | ----------- | ------------------------------ | --------------------------------------------------------- |
+  | `'fit'`     | `md:w-px md:whitespace-nowrap` | A bounded value — a date, a code, a status, a `⋯` column  |
+  | `'bounded'` | `md:max-w-prose`               | Prose, capped at a readable measure. **Never truncates.** |
+  | `'auto'`    | nothing                        | The contested middle: genuinely unbounded, may wrap       |
+
+  Three rules go with it.
+
+  **`'auto'` must be written down.** It is also the default, so a rule reading "no cell wraps except
+  in a column declared `auto`" is vacuous unless the exception is a decision somebody made. Declaring
+  it changes no CSS and is not decoration.
+
+  **`fit` is `md:` upwards and that is not stylistic.** `white-space: nowrap` has no fallback: an
+  all-`fit` table was measured rendering **793px inside a 320px container**, a 433px overflow and a
+  WCAG 2.2 §1.4.10 failure, where the same content without it stays inside and wraps.
+
+  **The width preset composes LAST, so it wins a same-modifier collision** with a caller's
+  `cellClassName`. That is the opposite precedence from the `cn(defaults, className)` habit elsewhere
+  and is deliberate — `width` is a declaration about the column's role in the table's arithmetic,
+  which a per-cell class has no business silently overriding. A caller who wants their own cap says
+  `width: 'auto'` and owns it. Pinned by a test, because nothing collides today.
+
+  **A fact about a row goes under that row, never in a column of its own** (ADR-0146 D4). A field
+  most rows do not carry spends width on every row to say nothing, and prints an em dash where the
+  absence is — while the columns beside it wrap. The remedy is a secondary line under the subject,
+  **rendered only when present**: a sub-line reading "—" is the same defect one row lower, which is
+  the trap in the whole rule. The same applies to a column whose every cell is empty on a healthy
+  installation (the audit log's `Outcome`): fold it into the row it belongs to, and **keep any
+  `sr-only` text it carried** — dropping that is a silent accessibility regression nothing on screen
+  can show.
+
+  **A `count` on the section's heading is exposed to assistive technology, not `aria-hidden`.** It
+  was hidden on the premise that every screen passing one announces its settled count through a live
+  region; that was false for one consumer and, because the shared hook is silent on first paint,
+  incomplete for the rest. The visible number and the spoken one are the same fact, said once.
 
 - **Cards** — `card` surface, `radius-lg`, `shadow-sm`, standard padding;
   slots for header/title, content, footer/actions.

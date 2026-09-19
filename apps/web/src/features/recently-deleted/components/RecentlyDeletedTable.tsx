@@ -11,6 +11,7 @@ import { RestoreAncestorDialog } from './RestoreAncestorDialog';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { SectionCard } from '@/components/ui/page';
 import { formatTimestamp } from '@/lib/format-date';
 
 /** The retention caveat's id, so the table can point at it rather than merely sit under it. */
@@ -169,6 +170,25 @@ export function RecentlyDeletedTable({
         return (
           <div className="flex flex-col gap-0.5">
             <span className="font-medium">{group.root.name}</span>
+            {group.root.canRestore || group.root.blockedBy === null ? null : (
+              /*
+                **The blocker is named HERE, under the row it blocks, and not inside the button.**
+
+                It used to be the button's visible label: `Restore ddde first…`, with the variable
+                part in the MIDDLE of the sentence, so the trailing ellipsis — the conventional
+                "this opens a dialog" suffix — read as a sentence cut off instead. That was the
+                product owner's report, and M0 established the control is not clipped at any width:
+                the `…` is literal text in the source. So the remedy is copy, not CSS.
+
+                A blocker is a fact about this row, and a fact about a row belongs under it (D4).
+                Moving it here also bounds the button, which sits in a `whitespace-nowrap` cell: a
+                long client name used to widen the whole Actions column and take that width off the
+                names beside it.
+              */
+              <span className="text-muted-foreground text-xs">
+                Blocked by a deleted {group.root.blockedBy.kind}, “{group.root.blockedBy.name}”
+              </span>
+            )}
             {summary === null ? null : (
               <button
                 type="button"
@@ -227,6 +247,9 @@ export function RecentlyDeletedTable({
     columns.push({
       header: 'Actions',
       srHeader: true,
+      // Every label in this cell is now bounded (see the blocker sub-line in `Name`), so the column
+      // can take its minimum width and hand the surplus to the names — which is what `fit` is for.
+      width: 'fit',
       headClassName: 'py-2 font-medium',
       cellClassName: 'py-2 text-right whitespace-nowrap',
       cell: (group) =>
@@ -253,106 +276,122 @@ export function RecentlyDeletedTable({
               setAncestorFor(group.key);
             }}
             aria-haspopup="dialog"
+            aria-label={`Restore ${group.root.blockedBy?.kind ?? 'parent'} first…: ${group.root.blockedBy?.name ?? ''}`}
           >
-            Restore {group.root.blockedBy?.name} first…
+            {/* The visible label is contiguous at the START of the accessible name, which is what
+                WCAG 2.5.3 requires — the name may add to the label, never replace or reorder it. */}
+            Restore {group.root.blockedBy?.kind ?? 'parent'} first…
           </Button>
         ) : (
           // The blocker is not in the fetched set — possible mid-refetch. Say what is true rather
           // than offering a button that would open an empty confirmation.
           <span className="text-muted-foreground text-sm">
-            {group.root.blockedBy === null
-              ? 'Restore its parent first'
-              : `Restore ${group.root.blockedBy.name} first`}
+            {`Restore its ${group.root.blockedBy?.kind ?? 'parent'} first`}
           </span>
         ),
     });
   }
 
   return (
-    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-      {restoreError ? (
-        <p role="alert" className="text-destructive-text text-sm">
-          {restoreError}
-        </p>
-      ) : null}
-      {/* **The rule, stated — not left to be inferred from a countdown.** Without this the first
-          time a member learns deletions expire is a "expires tomorrow" on something they came here
-          to check on. The number is the server's, so this sentence is true on every host. */}
-      {retentionDays === null || !retentionActive ? null : (
-        // Linked to the table by `describedById` below, not merely placed above it: a reader
-        // navigating by landmark lands INSIDE the table's region and never passes this sentence.
-        // The precedent is ADR-0073 C2.5, where the same caveat was reachable only by reading
-        // serially — and this one is the safety caveat for a screen about permanent deletion.
-        <p id={RETENTION_RULE_ID} className="text-muted-foreground text-sm">
-          Deleted items are kept for {retentionDays} days, then permanently removed.
-        </p>
-      )}
-      {(() => {
-        const summary =
-          retentionDays === null ? null : expirySummary(groups, retentionDays, retentionActive);
-        // A subset, said as a subset: "1 of 3" rather than a bare count that reads as though the
-        // whole list is imminent and sends a reader restoring things with months left.
-        return summary === null ? null : (
-          <p role="status" className="text-muted-foreground text-sm">
-            {summary}
+    /**
+     * **The rows sit in a named section that states how many there are** (ADR-0146 D2). The name is
+     * what the section HOLDS rather than a repeat of the page's own `<h1>`: two headings saying one
+     * word is the defect ADR-0143 records on the plan workspace's foot.
+     *
+     * `count` is honest here because this query loads every page (`apiFetchAllPages`), so the
+     * length IS the total. The audit screens deliberately pass none — behind a "Load more" the same
+     * expression means "how many are loaded", which would read as a total and be wrong.
+     */
+    <SectionCard
+      title="Deleted items"
+      count={deleted.data === undefined ? undefined : groups.length}
+      flush
+    >
+      <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+        {restoreError ? (
+          <p role="alert" className="text-destructive-text text-sm">
+            {restoreError}
           </p>
-        );
-      })()}
-      <DataTable
-        caption="Recently deleted items"
-        {...(retentionDays === null || !retentionActive
-          ? {}
-          : { describedById: RETENTION_RULE_ID })}
-        columns={columns}
-        query={groupQuery}
-        getRowKey={(group) => group.key}
-        renderDetail={(group) =>
-          !expanded.has(group.key) || group.members.length === 0 ? null : (
-            <div id={`deletion-${group.key}`} className="bg-muted/40 px-4 py-2">
-              <ul className="text-muted-foreground flex flex-col gap-1 text-sm">
-                {group.members.map((member) => (
-                  <li key={`${member.kind}:${member.id}`}>
-                    <span className="text-muted-foreground">{KIND_LABEL[member.kind]}</span>{' '}
-                    <span className="text-foreground">{member.name}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )
-        }
-        loadingLabel="Loading recently deleted…"
-        errorLabel="Couldn’t load recently deleted items. Please try again."
-        empty={
-          <>
-            Nothing has been deleted. Deleted clients, projects and plans appear here so you can
-            restore them.
-          </>
-        }
-      />
-      {(() => {
-        if (ancestorFor === null) return null;
-        const blocked = groups.find((g) => g.key === ancestorFor);
-        const ancestor = blocked ? ancestorGroupFor(blocked) : null;
-        // Both can vanish under a refetch between opening and rendering; closing is the honest
-        // response, not rendering a dialog about rows that are no longer there.
-        if (!blocked || !ancestor) return null;
-        return (
-          <RestoreAncestorDialog
-            open
-            onClose={closeAncestor}
-            blocked={blocked}
-            ancestor={ancestor}
-            onConfirm={() => {
-              // Close FIRST, then restore. Closing re-homes focus onto the invoker, which is
-              // where it must end up if the restore FAILS — the row is still there and the reader
-              // can try again. On success `onRestore` moves it on to the region, because that
-              // invoker unmounts with the row it belongs to.
-              closeAncestor();
-              onRestore(ancestor);
-            }}
-          />
-        );
-      })()}
-    </div>
+        ) : null}
+        {/* **The rule, stated — not left to be inferred from a countdown.** Without this the first
+            time a member learns deletions expire is a "expires tomorrow" on something they came here
+            to check on. The number is the server's, so this sentence is true on every host. */}
+        {retentionDays === null || !retentionActive ? null : (
+          // Linked to the table by `describedById` below, not merely placed above it: a reader
+          // navigating by landmark lands INSIDE the table's region and never passes this sentence.
+          // The precedent is ADR-0073 C2.5, where the same caveat was reachable only by reading
+          // serially — and this one is the safety caveat for a screen about permanent deletion.
+          <p id={RETENTION_RULE_ID} className="text-muted-foreground text-sm">
+            Deleted items are kept for {retentionDays} days, then permanently removed.
+          </p>
+        )}
+        {(() => {
+          const summary =
+            retentionDays === null ? null : expirySummary(groups, retentionDays, retentionActive);
+          // A subset, said as a subset: "1 of 3" rather than a bare count that reads as though the
+          // whole list is imminent and sends a reader restoring things with months left.
+          return summary === null ? null : (
+            <p role="status" className="text-muted-foreground text-sm">
+              {summary}
+            </p>
+          );
+        })()}
+        <DataTable
+          caption="Recently deleted items"
+          {...(retentionDays === null || !retentionActive
+            ? {}
+            : { describedById: RETENTION_RULE_ID })}
+          columns={columns}
+          query={groupQuery}
+          getRowKey={(group) => group.key}
+          renderDetail={(group) =>
+            !expanded.has(group.key) || group.members.length === 0 ? null : (
+              <div id={`deletion-${group.key}`} className="bg-muted/40 px-4 py-2">
+                <ul className="text-muted-foreground flex flex-col gap-1 text-sm">
+                  {group.members.map((member) => (
+                    <li key={`${member.kind}:${member.id}`}>
+                      <span className="text-muted-foreground">{KIND_LABEL[member.kind]}</span>{' '}
+                      <span className="text-foreground">{member.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          }
+          loadingLabel="Loading recently deleted…"
+          errorLabel="Couldn’t load recently deleted items. Please try again."
+          empty={
+            <>
+              Nothing has been deleted. Deleted clients, projects and plans appear here so you can
+              restore them.
+            </>
+          }
+        />
+        {(() => {
+          if (ancestorFor === null) return null;
+          const blocked = groups.find((g) => g.key === ancestorFor);
+          const ancestor = blocked ? ancestorGroupFor(blocked) : null;
+          // Both can vanish under a refetch between opening and rendering; closing is the honest
+          // response, not rendering a dialog about rows that are no longer there.
+          if (!blocked || !ancestor) return null;
+          return (
+            <RestoreAncestorDialog
+              open
+              onClose={closeAncestor}
+              blocked={blocked}
+              ancestor={ancestor}
+              onConfirm={() => {
+                // Close FIRST, then restore. Closing re-homes focus onto the invoker, which is
+                // where it must end up if the restore FAILS — the row is still there and the reader
+                // can try again. On success `onRestore` moves it on to the region, because that
+                // invoker unmounts with the row it belongs to.
+                closeAncestor();
+                onRestore(ancestor);
+              }}
+            />
+          );
+        })()}
+      </div>
+    </SectionCard>
   );
 }

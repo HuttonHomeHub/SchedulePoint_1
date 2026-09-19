@@ -1,7 +1,7 @@
 import { useParams } from '@tanstack/react-router';
 
 import { NoticeStrip } from '@/components/ui/notice-strip';
-import { PageContainer, PageHeader } from '@/components/ui/page';
+import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
@@ -143,33 +143,50 @@ function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      {AUDIT_FILTERS_ENABLED ? (
-        <AuditFilterBar surface="organization" value={filter} onChange={setFilter} />
-      ) : null}
-      <AuditEventList
-        query={query}
-        caption="Organisation audit log"
-        describedById={COVERAGE_ID}
-        showActor
-        // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
-        // log must never say when it means "this is outside what I record". Name the boundary.
-        emptyMessage="Nothing here yet. Editing an activity's own fields does not appear in this log — anything that removes something, or that changes the rules other people's work is judged by, does."
-        // A narrowed view that finds nothing is a different fact from a log with nothing in it, and
-        // saying the second when the first is true is the defect this screen already shipped once.
-        emptyFilteredMessage={
-          narrowed
-            ? 'No events match this filter. Clear it to see everything this log records.'
-            : undefined
-        }
-        onClearFilter={
-          narrowed
-            ? () => {
-                setFilter({ categories: '', outcome: '', from: '', to: '' });
-              }
-            : undefined
-        }
-      />
-    </div>
+    /**
+     * **The filter bar is inside the section it filters, not in a box of its own** (ADR-0146 D2).
+     *
+     * `AuditFilterBar` explicitly rejected being boxed separately, and that judgement is kept: two
+     * frames stacked above a table is more chrome, not more structure. What it needed was the
+     * frame the TABLE never had — so one section now holds the controls and the rows they act on,
+     * and the bar keeps its own layout untouched inside it.
+     *
+     * **No `count`, deliberately.** This list is a `useInfiniteQuery` behind a "Load more", so the
+     * number of loaded rows is not the number of events and a count here would read as a total and
+     * be wrong by however much history the reader has not asked for. The sibling list screens pass
+     * one because they load every page. Omitted, never approximated (ADR-0098).
+     */
+    <SectionCard title="Events" flush>
+      <div className="flex flex-col gap-4">
+        {AUDIT_FILTERS_ENABLED ? (
+          <div>
+            <AuditFilterBar surface="organization" value={filter} onChange={setFilter} />
+          </div>
+        ) : null}
+        <AuditEventList
+          query={query}
+          caption="Organisation audit log"
+          describedById={COVERAGE_ID}
+          showActor
+          // "No events recorded yet" reads as "nothing has happened", which is the one thing an audit
+          // log must never say when it means "this is outside what I record". Name the boundary.
+          emptyMessage="Nothing here yet. Editing an activity's own fields does not appear in this log — anything that removes something, or that changes the rules other people's work is judged by, does."
+          // A narrowed view that finds nothing is a different fact from a log with nothing in it, and
+          // saying the second when the first is true is the defect this screen already shipped once.
+          emptyFilteredMessage={
+            narrowed
+              ? 'No events match this filter. Clear it to see everything this log records.'
+              : undefined
+          }
+          onClearFilter={
+            narrowed
+              ? () => {
+                  setFilter({ categories: '', outcome: '', from: '', to: '' });
+                }
+              : undefined
+          }
+        />
+      </div>
+    </SectionCard>
   );
 }

@@ -1,4 +1,4 @@
-import { PageContainer, PageHeader } from '@/components/ui/page';
+import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { AUDIT_FILTERS_ENABLED, AUDIT_SELF_SECURITY_ENABLED } from '@/config/env';
 import { useSelfAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
@@ -76,42 +76,55 @@ export function MyActivityScreen(): React.ReactElement {
           worth looking at.
         </p>
       ) : null}
-      <div className="mt-6 flex flex-col gap-4">
-        {AUDIT_FILTERS_ENABLED ? (
-          <AuditFilterBar surface="self" value={filter} onChange={setFilter} />
-        ) : null}
-        <AuditEventList
-          query={query}
-          caption="My audit events"
-          // Normally every row on this screen is the reader, so an actor column would repeat their
-          // own email fifty times. Once attempts are included that stops being true: a row with no
-          // actor sits beside rows that are theirs, and without the column it reads as something
-          // THEY did. The column earns its place exactly when the feed stops being homogeneous.
-          showActor={AUDIT_SELF_SECURITY_ENABLED}
-          // Associated with the table rather than merely sitting above it: the table is a focusable
-          // `role="region"`, so a reader navigating by landmark lands inside it having skipped
-          // whatever precedes it — and what precedes it here is the sentence saying a row does not
-          // mean anyone got in.
-          /* Both, space-separated: `aria-describedby` takes a list, and the two notes answer
+      {/*
+        The rows sit in a named section (ADR-0146 D2). **My activity was not named in the report and
+        has the same defect as the five screens that were** — its table sat straight on the page
+        background — which is the shape ADR-0081 records: the complaint names what somebody looked
+        at, and the estate is what the fix has to cover.
+
+        No `count`: this is a `useInfiniteQuery` behind a "Load more", so the loaded length is not
+        the total and a number here would be read as one.
+      */}
+      <SectionCard title="Your events" flush className="mt-6">
+        <div className="flex flex-col gap-4">
+          {AUDIT_FILTERS_ENABLED ? (
+            <div>
+              <AuditFilterBar surface="self" value={filter} onChange={setFilter} />
+            </div>
+          ) : null}
+          <AuditEventList
+            query={query}
+            caption="My audit events"
+            // Normally every row on this screen is the reader, so an actor column would repeat their
+            // own email fifty times. Once attempts are included that stops being true: a row with no
+            // actor sits beside rows that are theirs, and without the column it reads as something
+            // THEY did. The column earns its place exactly when the feed stops being homogeneous.
+            showActor={AUDIT_SELF_SECURITY_ENABLED}
+            // Associated with the table rather than merely sitting above it: the table is a focusable
+            // `role="region"`, so a reader navigating by landmark lands inside it having skipped
+            // whatever precedes it — and what precedes it here is the sentence saying a row does not
+            // mean anyone got in.
+            /* Both, space-separated: `aria-describedby` takes a list, and the two notes answer
              different questions — what this log covers, and what a "Not signed in" row proves. */
-          describedById={
-            AUDIT_SELF_SECURITY_ENABLED ? `${COVERAGE_ID} ${ATTEMPTS_NOTE_ID}` : COVERAGE_ID
-          }
-          emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation and anything you deleted or restructured in a plan."
-          emptyFilteredMessage={
-            narrowed
-              ? 'No events match this filter. Clear it to see everything recorded about you.'
-              : undefined
-          }
-          onClearFilter={
-            narrowed
-              ? () => {
-                  setFilter({ categories: '', outcome: '', from: '', to: '' });
-                }
-              : undefined
-          }
-        />
-      </div>
+            describedById={
+              AUDIT_SELF_SECURITY_ENABLED ? `${COVERAGE_ID} ${ATTEMPTS_NOTE_ID}` : COVERAGE_ID
+            }
+            emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation and anything you deleted or restructured in a plan."
+            emptyFilteredMessage={
+              narrowed
+                ? 'No events match this filter. Clear it to see everything recorded about you.'
+                : undefined
+            }
+            onClearFilter={
+              narrowed
+                ? () => {
+                    setFilter({ categories: '', outcome: '', from: '', to: '' });
+                  }
+                : undefined
+            }
+          />
+        </div>
+      </SectionCard>
     </PageContainer>
   );
 }

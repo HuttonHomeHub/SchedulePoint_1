@@ -1,0 +1,1329 @@
+{
+  "run": {
+    "sha": "6466aa079c813394e517e59e5fa583193c7f385b",
+    "width": 1280,
+    "slug": "shoot-co-1789633658067-1280",
+    "takenAt": "2026-09-17T08:36:48.183Z",
+    "ids": {
+      "clientId": "01a0ae7f-73ac-7cb3-b58d-422eadc8ba54",
+      "projectId": "01a0ae7f-73bf-7a83-8f1f-3ce80e1d2444"
+    }
+  },
+  "org-home": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1536px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Shoot Co 1789633658067-1280",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1536px",
+    "pageDescription": {
+      "chars": 52,
+      "width": 546,
+      "maxWidth": "545.998px",
+      "top": 111
+    },
+    "frameWidth": 1003,
+    "descriptions": [
+      {
+        "chars": 52,
+        "width": 546,
+        "top": 111
+      },
+      {
+        "chars": 23,
+        "width": 267,
+        "top": 260
+      },
+      {
+        "chars": 57,
+        "width": 365,
+        "top": 321
+      },
+      {
+        "chars": 69,
+        "width": 308,
+        "top": 452
+      }
+    ],
+    "sectionCount": 3,
+    "sections": [
+      {
+        "name": "Needs your attention",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Where the work stands",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Recently changed",
+        "boxed": "oklch(1 0 0)"
+      }
+    ],
+    "tables": []
+  },
+  "clients": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Clients",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": null,
+    "frameWidth": 1003,
+    "descriptions": [],
+    "sectionCount": 0,
+    "sections": [],
+    "tables": [
+      {
+        "rows": 3,
+        "headers": [
+          {
+            "text": "Name",
+            "x": 301,
+            "w": 485,
+            "natural": 161
+          },
+          {
+            "text": "Description",
+            "x": 786,
+            "w": 246,
+            "natural": 74
+          },
+          {
+            "text": "Actions",
+            "x": 1032,
+            "w": 224,
+            "natural": 224
+          }
+        ],
+        "rowHeights": [49, 49, 49],
+        "firstCellX": 301,
+        "lastCellX": 1032,
+        "lastFactX": 786,
+        "factSpread": 485,
+        "actions": ["Bellway Homes", "Edit", "Actions for Bellwa"]
+      }
+    ]
+  },
+  "client-detail": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Bellway Homes",
+      "top": 103,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": null,
+    "frameWidth": 1003,
+    "descriptions": [],
+    "sectionCount": 1,
+    "sections": [
+      {
+        "name": "Projects",
+        "boxed": "oklch(1 0 0)"
+      }
+    ],
+    "tables": [
+      {
+        "rows": 1,
+        "headers": [
+          {
+            "text": "Name",
+            "x": 302,
+            "w": 418,
+            "natural": 118
+          },
+          {
+            "text": "Description",
+            "x": 720,
+            "w": 281,
+            "natural": 74
+          },
+          {
+            "text": "Actions",
+            "x": 1000,
+            "w": 255,
+            "natural": 255
+          }
+        ],
+        "rowHeights": [49],
+        "firstCellX": 302,
+        "lastCellX": 1000,
+        "lastFactX": 720,
+        "factSpread": 418,
+        "actions": ["Northgate Quarter", "Edit", "Actions for Northg"]
+      }
+    ]
+  },
+  "project-detail": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Northgate Quarter",
+      "top": 103,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": null,
+    "frameWidth": 1003,
+    "descriptions": [],
+    "sectionCount": 2,
+    "sections": [
+      {
+        "name": "Plans",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Calendars",
+        "boxed": "oklch(1 0 0)"
+      }
+    ],
+    "tables": [
+      {
+        "rows": 3,
+        "headers": [
+          {
+            "text": "Name",
+            "x": 302,
+            "w": 351,
+            "natural": 116
+          },
+          {
+            "text": "Status",
+            "x": 653,
+            "w": 112,
+            "natural": 42
+          },
+          {
+            "text": "Planned start",
+            "x": 765,
+            "w": 273,
+            "natural": 87
+          },
+          {
+            "text": "Actions",
+            "x": 1038,
+            "w": 217,
+            "natural": 217
+          }
+        ],
+        "rowHeights": [49, 49, 49],
+        "firstCellX": 302,
+        "lastCellX": 1038,
+        "lastFactX": 765,
+        "factSpread": 463,
+        "actions": ["Enabling works", "Edit", "Actions for Enabli"]
+      },
+      {
+        "rows": 5,
+        "headers": [
+          {
+            "text": "Name",
+            "x": 302,
+            "w": 530,
+            "natural": 515
+          },
+          {
+            "text": "Working days",
+            "x": 832,
+            "w": 176,
+            "natural": 151
+          },
+          {
+            "text": "Scope",
+            "x": 1008,
+            "w": 132,
+            "natural": 78
+          },
+          {
+            "text": "Actions",
+            "x": 1140,
+            "w": 115,
+            "natural": 115
+          }
+        ],
+        "rowHeights": [49, 49, 57, 49, 49],
+        "firstCellX": 302,
+        "lastCellX": 1140,
+        "lastFactX": 1008,
+        "factSpread": 706,
+        "actions": ["Edit", "Actions for Standa"]
+      }
+    ]
+  },
+  "calendars": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Calendars",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": null,
+    "frameWidth": 1003,
+    "descriptions": [
+      {
+        "chars": 103,
+        "width": 955,
+        "top": 199
+      },
+      {
+        "chars": 120,
+        "width": 955,
+        "top": 227
+      }
+    ],
+    "sectionCount": 0,
+    "sections": [],
+    "tables": [
+      {
+        "rows": 5,
+        "headers": [
+          {
+            "text": "Name",
+            "x": 301,
+            "w": 457,
+            "natural": 442
+          },
+          {
+            "text": "Working days",
+            "x": 758,
+            "w": 176,
+            "natural": 151
+          },
+          {
+            "text": "Description",
+            "x": 934,
+            "w": 109,
+            "natural": 74
+          },
+          {
+            "text": "Scope",
+            "x": 1043,
+            "w": 114,
+            "natural": 78
+          },
+          {
+            "text": "Actions",
+            "x": 1157,
+            "w": 99,
+            "natural": 100
+          }
+        ],
+        "rowHeights": [49, 49, 57, 49, 49],
+        "firstCellX": 301,
+        "lastCellX": 1157,
+        "lastFactX": 1043,
+        "factSpread": 742,
+        "actions": ["Edit", "Actions for Standa"]
+      }
+    ]
+  },
+  "resources": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Resources",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": null,
+    "frameWidth": 1003,
+    "descriptions": [
+      {
+        "chars": 120,
+        "width": 955,
+        "top": 199
+      }
+    ],
+    "sectionCount": 0,
+    "sections": [],
+    "tables": [
+      {
+        "rows": 4,
+        "headers": [
+          {
+            "text": "Name",
+            "x": 301,
+            "w": 320,
+            "natural": 305
+          },
+          {
+            "text": "Kind",
+            "x": 621,
+            "w": 128,
+            "natural": 69
+          },
+          {
+            "text": "Code",
+            "x": 749,
+            "w": 96,
+            "natural": 65
+          },
+          {
+            "text": "Group",
+            "x": 845,
+            "w": 144,
+            "natural": 40
+          },
+          {
+            "text": "Calendar",
+            "x": 989,
+            "w": 127,
+            "natural": 58
+          },
+          {
+            "text": "Actions",
+            "x": 1116,
+            "w": 140,
+            "natural": 140
+          }
+        ],
+        "rowHeights": [49, 57, 49, 49],
+        "firstCellX": 301,
+        "lastCellX": 1116,
+        "lastFactX": 989,
+        "factSpread": 688,
+        "actions": ["Edit", "Actions for Coded "]
+      }
+    ]
+  },
+  "members": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Members",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": null,
+    "frameWidth": 1003,
+    "descriptions": [
+      {
+        "chars": 42,
+        "width": 267,
+        "top": 188
+      }
+    ],
+    "sectionCount": 2,
+    "sections": [
+      {
+        "name": "Roster",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Pending invitations",
+        "boxed": "oklch(1 0 0)"
+      }
+    ],
+    "tables": [
+      {
+        "rows": 1,
+        "headers": [
+          {
+            "text": "Name",
+            "x": 326,
+            "w": 147,
+            "natural": 83
+          },
+          {
+            "text": "Email",
+            "x": 473,
+            "w": 448,
+            "natural": 286
+          },
+          {
+            "text": "Role",
+            "x": 920,
+            "w": 199,
+            "natural": 118
+          },
+          {
+            "text": "Actions",
+            "x": 1119,
+            "w": 112,
+            "natural": 76
+          }
+        ],
+        "rowHeights": [53],
+        "firstCellX": 326,
+        "lastCellX": 1119,
+        "lastFactX": 920,
+        "factSpread": 594,
+        "actions": ["Remove"]
+      },
+      {
+        "rows": 2,
+        "headers": [
+          {
+            "text": "Email",
+            "x": 326,
+            "w": 296,
+            "natural": 229
+          },
+          {
+            "text": "Role",
+            "x": 622,
+            "w": 107,
+            "natural": 72
+          },
+          {
+            "text": "Sent",
+            "x": 729,
+            "w": 178,
+            "natural": 131
+          },
+          {
+            "text": "Status",
+            "x": 907,
+            "w": 238,
+            "natural": 181
+          },
+          {
+            "text": "Actions",
+            "x": 1145,
+            "w": 86,
+            "natural": 71
+          }
+        ],
+        "rowHeights": [49, 49],
+        "firstCellX": 326,
+        "lastCellX": 1145,
+        "lastFactX": 907,
+        "factSpread": 581,
+        "actions": ["Revoke"]
+      }
+    ]
+  },
+  "audit-log": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": true,
+    "mainScrollHeight": 2328,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Audit log",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": {
+      "chars": 124,
+      "width": 546,
+      "maxWidth": "545.998px",
+      "top": 111
+    },
+    "frameWidth": 1003,
+    "descriptions": [
+      {
+        "chars": 124,
+        "width": 546,
+        "top": 111
+      },
+      {
+        "chars": 396,
+        "width": 1,
+        "top": 194
+      },
+      {
+        "chars": 249,
+        "width": 1,
+        "top": 218
+      }
+    ],
+    "sectionCount": 0,
+    "sections": [],
+    "tables": [
+      {
+        "rows": 29,
+        "headers": [
+          {
+            "text": "When",
+            "x": 301,
+            "w": 122,
+            "natural": 89
+          },
+          {
+            "text": "Event",
+            "x": 423,
+            "w": 228,
+            "natural": 212
+          },
+          {
+            "text": "By",
+            "x": 651,
+            "w": 246,
+            "natural": 156
+          },
+          {
+            "text": "Subject",
+            "x": 897,
+            "w": 284,
+            "natural": 263
+          },
+          {
+            "text": "Outcome",
+            "x": 1182,
+            "w": 74,
+            "natural": 70
+          }
+        ],
+        "rowHeights": [57, 57, 69, 69, 69, 69],
+        "firstCellX": 301,
+        "lastCellX": 1182,
+        "lastFactX": 1182,
+        "factSpread": 881,
+        "actions": []
+      }
+    ]
+  },
+  "recently-deleted": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 277,
+      "explorerPresent": true,
+      "mainWidth": 1003,
+      "mainLeft": 277,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Recently deleted",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": {
+      "chars": 146,
+      "width": 546,
+      "maxWidth": "545.998px",
+      "top": 111
+    },
+    "frameWidth": 1003,
+    "descriptions": [
+      {
+        "chars": 146,
+        "width": 546,
+        "top": 111
+      }
+    ],
+    "sectionCount": 0,
+    "sections": [],
+    "tables": []
+  },
+  "my-activity": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 0,
+      "explorerPresent": false,
+      "mainWidth": 1280,
+      "mainLeft": 0,
+      "frameMaxWidthComputed": "1152px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": true,
+    "mainScrollHeight": 2315,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "My activity",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1152px",
+    "pageDescription": {
+      "chars": 116,
+      "width": 546,
+      "maxWidth": "545.998px",
+      "top": 111
+    },
+    "frameWidth": 1152,
+    "descriptions": [
+      {
+        "chars": 116,
+        "width": 546,
+        "top": 111
+      },
+      {
+        "chars": 248,
+        "width": 1,
+        "top": 194
+      },
+      {
+        "chars": 290,
+        "width": 1104,
+        "top": 199
+      }
+    ],
+    "sectionCount": 0,
+    "sections": [],
+    "tables": [
+      {
+        "rows": 32,
+        "headers": [
+          {
+            "text": "When",
+            "x": 88,
+            "w": 154,
+            "natural": 122
+          },
+          {
+            "text": "Event",
+            "x": 242,
+            "w": 280,
+            "natural": 264
+          },
+          {
+            "text": "By",
+            "x": 522,
+            "w": 293,
+            "natural": 156
+          },
+          {
+            "text": "Subject",
+            "x": 815,
+            "w": 303,
+            "natural": 286
+          },
+          {
+            "text": "Outcome",
+            "x": 1118,
+            "w": 74,
+            "natural": 70
+          }
+        ],
+        "rowHeights": [57, 57, 57, 57, 69, 69],
+        "firstCellX": 88,
+        "lastCellX": 1118,
+        "lastFactX": 1118,
+        "factSpread": 1030,
+        "actions": []
+      }
+    ]
+  },
+  "account (declared exception)": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 0,
+      "explorerPresent": false,
+      "mainWidth": 1280,
+      "mainLeft": 0,
+      "frameMaxWidthComputed": "672px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 949,
+    "mainClientHeight": 949,
+    "docScrolls": false,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Your account",
+      "top": 75,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "672px",
+    "pageDescription": {
+      "chars": 101,
+      "width": 546,
+      "maxWidth": "545.998px",
+      "top": 111
+    },
+    "frameWidth": 672,
+    "descriptions": [
+      {
+        "chars": 101,
+        "width": 546,
+        "top": 111
+      },
+      {
+        "chars": 46,
+        "width": 624,
+        "top": 199
+      },
+      {
+        "chars": 55,
+        "width": 624,
+        "top": 231
+      },
+      {
+        "chars": 98,
+        "width": 624,
+        "top": 263
+      }
+    ],
+    "sectionCount": 0,
+    "sections": [],
+    "tables": []
+  },
+  "staff": {
+    "state": {
+      "viewport": {
+        "w": 1280,
+        "h": 1000
+      },
+      "explorerWidth": 0,
+      "explorerPresent": false,
+      "mainWidth": 1280,
+      "mainLeft": 0,
+      "frameMaxWidthComputed": "1536px",
+      "framePadding": "24px 24px"
+    },
+    "mainScrolls": false,
+    "mainScrollHeight": 6204,
+    "mainClientHeight": 6204,
+    "docScrolls": true,
+    "reflow": {
+      "docScrollWidth": 1280,
+      "docClientWidth": 1280,
+      "overflowsBy": 0
+    },
+    "h1": {
+      "text": "Staff console",
+      "top": 24,
+      "size": "24px",
+      "weight": "600"
+    },
+    "frameMaxWidth": "1536px",
+    "pageDescription": {
+      "chars": 136,
+      "width": 546,
+      "maxWidth": "545.998px",
+      "top": 60
+    },
+    "frameWidth": 1280,
+    "descriptions": [
+      {
+        "chars": 136,
+        "width": 546,
+        "top": 60
+      },
+      {
+        "chars": 110,
+        "width": 657,
+        "top": 177
+      },
+      {
+        "chars": 38,
+        "width": 225,
+        "top": 255
+      },
+      {
+        "chars": 48,
+        "width": 285,
+        "top": 318
+      }
+    ],
+    "sectionCount": 12,
+    "sections": [
+      {
+        "name": "Status",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Mail and retention",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Mail",
+        "boxed": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "name": "Retention",
+        "boxed": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "name": "Content-Security-Policy",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Unverified accounts",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Installation",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Diagnostics",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Performance",
+        "boxed": "oklch(1 0 0)"
+      },
+      {
+        "name": "Sweep of 6 readings — 9/16/202",
+        "boxed": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "name": "All sittings",
+        "boxed": "rgba(0, 0, 0, 0)"
+      },
+      {
+        "name": "Staff activity",
+        "boxed": "oklch(1 0 0)"
+      }
+    ],
+    "tables": [
+      {
+        "rows": 20,
+        "headers": [
+          {
+            "text": "When",
+            "x": 49,
+            "w": 176,
+            "natural": 151
+          },
+          {
+            "text": "Message",
+            "x": 225,
+            "w": 144,
+            "natural": 108
+          },
+          {
+            "text": "Recipient",
+            "x": 369,
+            "w": 320,
+            "natural": 304
+          },
+          {
+            "text": "Error",
+            "x": 689,
+            "w": 542,
+            "natural": 60
+          }
+        ],
+        "rowHeights": [57, 37, 37, 37, 57, 37],
+        "firstCellX": 49,
+        "lastCellX": 689,
+        "lastFactX": 689,
+        "factSpread": 640,
+        "actions": []
+      },
+      {
+        "rows": 3,
+        "headers": [
+          {
+            "text": "Table",
+            "x": 49,
+            "w": 224,
+            "natural": 144
+          },
+          {
+            "text": "Keeps for",
+            "x": 273,
+            "w": 112,
+            "natural": 61
+          },
+          {
+            "text": "Oldest row",
+            "x": 385,
+            "w": 160,
+            "natural": 94
+          },
+          {
+            "text": "Last run",
+            "x": 545,
+            "w": 686,
+            "natural": 60
+          }
+        ],
+        "rowHeights": [37, 37, 37],
+        "firstCellX": 49,
+        "lastCellX": 545,
+        "lastFactX": 545,
+        "factSpread": 496,
+        "actions": []
+      },
+      {
+        "rows": 1,
+        "headers": [
+          {
+            "text": "Directive",
+            "x": 49,
+            "w": 219,
+            "natural": 60
+          },
+          {
+            "text": "Blocked",
+            "x": 268,
+            "w": 196,
+            "natural": 52
+          },
+          {
+            "text": "Mode",
+            "x": 464,
+            "w": 148,
+            "natural": 36
+          },
+          {
+            "text": "Seen",
+            "x": 612,
+            "w": 139,
+            "natural": 33
+          },
+          {
+            "text": "Last",
+            "x": 751,
+            "w": 480,
+            "natural": 150
+          }
+        ],
+        "rowHeights": [37],
+        "firstCellX": 49,
+        "lastCellX": 751,
+        "lastFactX": 751,
+        "factSpread": 702,
+        "actions": []
+      },
+      {
+        "rows": 25,
+        "headers": [
+          {
+            "text": "Address",
+            "x": 49,
+            "w": 384,
+            "natural": 268
+          },
+          {
+            "text": "Registered",
+            "x": 433,
+            "w": 798,
+            "natural": 70
+          }
+        ],
+        "rowHeights": [37, 37, 37, 37, 37, 37],
+        "firstCellX": 49,
+        "lastCellX": 433,
+        "lastFactX": 433,
+        "factSpread": 384,
+        "actions": []
+      },
+      {
+        "rows": 6,
+        "headers": [
+          {
+            "text": "Measurement",
+            "x": 49,
+            "w": 123,
+            "natural": 105
+          },
+          {
+            "text": "Scale",
+            "x": 172,
+            "w": 82,
+            "natural": 57
+          },
+          {
+            "text": "Framing",
+            "x": 253,
+            "w": 73,
+            "natural": 53
+          },
+          {
+            "text": "Protocol",
+            "x": 326,
+            "w": 187,
+            "natural": 172
+          },
+          {
+            "text": "Verdict",
+            "x": 514,
+            "w": 565,
+            "natural": 549
+          },
+          {
+            "text": "On screen",
+            "x": 1078,
+            "w": 81,
+            "natural": 65
+          },
+          {
+            "text": "Taken",
+            "x": 1159,
+            "w": 72,
+            "natural": 51
+          }
+        ],
+        "rowHeights": [82, 82, 82, 82, 106, 82],
+        "firstCellX": 49,
+        "lastCellX": 1159,
+        "lastFactX": 1159,
+        "factSpread": 1110,
+        "actions": []
+      },
+      {
+        "rows": 8,
+        "headers": [
+          {
+            "text": "Taken",
+            "x": 49,
+            "w": 160,
+            "natural": 145
+          },
+          {
+            "text": "Sitting",
+            "x": 209,
+            "w": 165,
+            "natural": 102
+          },
+          {
+            "text": "Machine",
+            "x": 375,
+            "w": 573,
+            "natural": 481
+          },
+          {
+            "text": "Canvas",
+            "x": 947,
+            "w": 120,
+            "natural": 76
+          },
+          {
+            "text": "Verdicts",
+            "x": 1067,
+            "w": 86,
+            "natural": 60
+          },
+          {
+            "text": "Show this sitting",
+            "x": 1153,
+            "w": 78,
+            "natural": 282
+          }
+        ],
+        "rowHeights": [82, 57, 57, 57, 57, 57],
+        "firstCellX": 49,
+        "lastCellX": 1153,
+        "lastFactX": 1153,
+        "factSpread": 1104,
+        "actions": ["Show"]
+      },
+      {
+        "rows": 15,
+        "headers": [
+          {
+            "text": "When",
+            "x": 49,
+            "w": 208,
+            "natural": 151
+          },
+          {
+            "text": "Who",
+            "x": 257,
+            "w": 288,
+            "natural": 153
+          },
+          {
+            "text": "What",
+            "x": 545,
+            "w": 686,
+            "natural": 474
+          }
+        ],
+        "rowHeights": [37, 37, 37, 37, 37, 37],
+        "firstCellX": 49,
+        "lastCellX": 545,
+        "lastFactX": 545,
+        "factSpread": 496,
+        "actions": []
+      }
+    ]
+  }
+}

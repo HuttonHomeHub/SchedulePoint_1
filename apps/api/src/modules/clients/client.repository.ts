@@ -48,6 +48,77 @@ export class ClientRepository {
     return db.client.findFirst({ where: this.active({ id, organizationId }) });
   }
 
+  /**
+   * Active projects directly under one client.
+   *
+   * **Settled independently by the caller**, so a count that fails is ABSENT rather than zero
+   * (ADR-0126 — `0` is a claim) and never takes the detail read down with it.
+   *
+   * **No new index, and that is a measured decision rather than an omission.** `docs/DATABASE.md`'s
+   * soft-delete convention gives every level of the hierarchy a partial unique on
+   * `(parent_id, name) WHERE deleted_at IS NULL`, so that a name is reusable after deletion — and a
+   * soft-delete-aware child count wants exactly `(parent_id) WHERE deleted_at IS NULL` with **no
+   * payload column**. The leading key matches, the predicate matches, and `COUNT(*)` needs nothing
+   * from the heap, so `uq_projects_client_name` and `uq_plans_project_name` already serve both of
+   * these. The uniqueness rule bought the index; nothing here has to.
+   *
+   * **That holds at the selectivity a real subject has, and not unconditionally** — a caveat the
+   * M8 backend-performance review added by measuring rather than reading. A single-level count is
+   * an ordinary index-vs-seq-scan choice, so a client holding a large enough share of the WHOLE
+   * `projects` table (reproduced at 500 of 2,004, 25%) makes a `Seq Scan` the planner's answer
+   * here too — the same class of risk that withdrew this method's sibling, needing a much bigger
+   * trigger because one level does not compound two selectivities. Two things bound it: the
+   * absolute cost stays sub-millisecond while the table is small, and `organizationId` is
+   * deliberately absent from the predicate (see 1 below), so the relevant table is the whole
+   * installation's rather than one organisation's. Measured index-only at 500 of 50,786 (~1%),
+   * which is the shape an estate of more than one tenant has.
+   *
+   * ADR-0144's refusal does not transfer, and it is worth saying why rather than citing it: that
+   * decision declined an index **faster at every shape**, because any index making its aggregate
+   * index-only had to contain `early_finish`, which `writeResults` rewrites on every recalculation
+   * — HOT 28.4% to 0.0%, index growth +92% to +447%. The mechanism is specifically about a
+   * **payload column**. A `COUNT(*)` has none, and the columns it does touch (the parent FK, the
+   * `deleted_at` predicate) are not written by any recalculation. There is nothing to trade.
+   *
+   * **Three things here must not be tidied away.**
+   *
+   * 1. **No `organizationId` in either predicate.** It is a natural defence-in-depth reflex and it
+   *    costs, because the column is not in the index and the predicate forces a heap fetch per row:
+   *    measured here, adding it flips this count from an `Index Only Scan` to a `Bitmap Heap Scan`
+   *    with a `Filter`. **The "62%" this cited is another query's number** — it belongs to
+   *    `20260818220000_overview_recently_changed_indexes` note 1, a lateral join over an
+   *    `INCLUDE`-shaped covering index, and was quoted forward rather than re-derived for this pair
+   *    of indexes; re-measured at a comparable size it is nearer +28%. Same direction, different
+   *    magnitude, and a borrowed figure reads as evidence for this decision when it is evidence for
+   *    a different one (ADR-0076 Class 2). The mechanism is the claim; the number is whichever the
+   *    shape gives you. The
+   *    scope is already enforced twice over: the caller has resolved this client in the caller's
+   *    organisation (404 otherwise) before either count is issued, and `plans.project_id` is an
+   *    enforced foreign key. A count keyed on this client's own id cannot reach another
+   *    organisation's rows.
+   * 2. **`deletedAt: null` appears verbatim on both sides.** Same note: dropping it does not error,
+   *    it silently falls back to a wider index and scans the whole set.
+   * 3. This one is bounded by its subject, which is the property its withdrawn sibling lost — see
+   *    the note below `findActiveByIdInOrg`.
+   */
+  countActiveProjects(clientId: string): Promise<number> {
+    return this.prisma.project.count({ where: { clientId, deletedAt: null } });
+  }
+
+  /*
+   * **A `countActivePlans` was built here and WITHDRAWN by measurement.** A count of plans across a
+   * client's projects plans as a `Seq Scan on projects` once the client holds a substantial share
+   * of that table — 500 of 2,000 measured at 4.12 ms, and O(projects in the installation) rather
+   * than O(this client). FC-9(b) refuses that shape whatever the timing says, and the shape is what
+   * predicts the cost as the estate grows.
+   *
+   * Do not add it back without re-running `apps/web/scripts/measure-detail-counts.mjs`: the two
+   * remedies (resolve the project ids first and pass them as an array; or a candidate
+   * `projects (client_id) INCLUDE (id) WHERE deleted_at IS NULL` index, which unlike ADR-0144's
+   * rejected one would NOT spend the HOT exemption) both have costs of their own, and an index goes
+   * through `database-architect` (CLAUDE.md §19.3).
+   */
+
   /** A client in an organisation in ANY state (active or soft-deleted) — used to
    * scope a restore to the caller's org before reactivating it. */
   findByIdInOrg(

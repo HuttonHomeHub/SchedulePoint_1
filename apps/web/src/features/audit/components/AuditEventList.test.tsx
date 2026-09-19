@@ -126,3 +126,72 @@ describe('AuditEventList announcements (ADR-0073 C1)', () => {
     expect(liveRegionText()).toBe('Showing 1 event');
   });
 });
+
+/**
+ * The outcome rides on the event row, and success is still announced.
+ *
+ * `Outcome` was a column whose every cell was empty on a healthy installation — SUCCESS renders
+ * `sr-only`, and saying "Succeeded" on every row would drown the two outcomes worth noticing — so
+ * the header printed nothing while a filter beside it offered to narrow by it. Folding it into the
+ * Event cell removes the blank column and keeps every outcome legible.
+ *
+ * **The first assertion is the one that matters, and it was verified red against deleting the
+ * `sr-only` span.** Without it a screen-reader user hears an event with no outcome at all and
+ * cannot tell a success from a row whose outcome nobody rendered — a silent WCAG regression, since
+ * the two read identically and only the visual channel distinguishes them.
+ */
+describe('AuditEventList outcome (page-composition M6)', () => {
+  it('announces a successful event as succeeded without printing it', () => {
+    render(
+      <AuditEventList
+        query={settled([event({ outcome: 'SUCCESS' })])}
+        caption="Log"
+        showActor
+        emptyMessage={EMPTY}
+      />,
+    );
+    const succeeded = screen.getByText('Succeeded');
+    expect(succeeded).toBeInTheDocument();
+    // `sr-only` is how it stays out of the picture; a visible "Succeeded" on every row is the
+    // reason the column was empty in the first place.
+    expect(succeeded).toHaveClass('sr-only');
+  });
+
+  it('prints a denial as text, not as colour alone', () => {
+    render(
+      <AuditEventList
+        query={settled([event({ outcome: 'DENIED' })])}
+        caption="Log"
+        showActor
+        emptyMessage={EMPTY}
+      />,
+    );
+    const denied = screen.getByText('Denied');
+    expect(denied).toBeInTheDocument();
+    expect(denied).not.toHaveClass('sr-only');
+  });
+
+  it('prints a failure as text', () => {
+    render(
+      <AuditEventList
+        query={settled([event({ outcome: 'FAILURE' })])}
+        caption="Log"
+        showActor
+        emptyMessage={EMPTY}
+      />,
+    );
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+  });
+
+  it('renders no Outcome column header', () => {
+    // The defect in one line: a column header with nothing under it. Asserted on the header row
+    // rather than the document, because "Outcome" also appears in the filter bar on the real
+    // screen — a document-scoped assertion would pass for the wrong reason there.
+    render(
+      <AuditEventList query={settled([event()])} caption="Log" showActor emptyMessage={EMPTY} />,
+    );
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent);
+    expect(headers).not.toContain('Outcome');
+    expect(headers).toContain('Event');
+  });
+});

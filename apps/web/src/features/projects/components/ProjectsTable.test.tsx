@@ -69,4 +69,29 @@ describe('ProjectsTable', () => {
     renderTable(true, []);
     expect(screen.getByText(/No projects yet/)).toBeInTheDocument();
   });
+
+  /**
+   * **ADR-0146 D4 on the screen the milestone that decided it skipped.**
+   *
+   * Verified red against the shipped code: a `Description` column rendering `project.description
+   * ?? '—'` passes the first case (the text is present) and fails the second and third — the
+   * header exists, and a project with no description prints an em dash.
+   */
+  describe('a description is a line under the name, never a column', () => {
+    it('renders the description under the name when there is one', () => {
+      renderTable(true);
+      expect(screen.getByText('Phase 1')).toBeInTheDocument();
+    });
+
+    it('offers no Description column header', () => {
+      renderTable(true);
+      expect(screen.queryByRole('columnheader', { name: 'Description' })).not.toBeInTheDocument();
+    });
+
+    it('renders NOTHING rather than an em dash when a project has no description', () => {
+      renderTable(true, [{ ...PROJECTS[0]!, id: 'p2', name: 'Bare', description: null }]);
+      expect(screen.getByRole('link', { name: 'Bare' })).toBeInTheDocument();
+      expect(screen.queryByText('—')).not.toBeInTheDocument();
+    });
+  });
 });

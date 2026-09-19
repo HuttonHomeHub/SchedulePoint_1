@@ -719,6 +719,44 @@ active clients or a p95 past ~20 ms, and the remedy is a `pg_trgm` GIN index on 
 verbatim: `%` and `_` in a term are wildcards, parameterised and therefore not an injection risk, and
 a correctness wart shared with the two library searches.
 
+#### A detail read carries child counts; a list read does not (ADR-0146 D3)
+
+| Method | Path                                           | Notes                                                                                   |
+| ------ | ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| GET    | `…/organizations/:orgSlug/clients/:clientId`   | **+ `projectCount?`** — active projects directly under this client.                     |
+| GET    | `…/organizations/:orgSlug/projects/:projectId` | **+ `planCount?`, `activityCount?`** — plans directly under it; activities across them. |
+
+Three things about this are decisions rather than shape, and each has a measurement behind it.
+
+**The counts are on the DETAIL reads and are structurally barred from the LIST reads.** Until this
+epic `ClientResponseDto` was returned by both `list()` and `get()`, so a field added to it would
+have appeared on the list route **without anyone choosing it**. Measured at 2,124 clients / 50,004
+projects, Prisma's `_count` on a page emits a grouped subquery with no client restriction:
+**14.509 ms against 0.034 ms**, a `Seq Scan on projects` over the whole child table, and
+`clients_organization_id_created_at_id_idx` gone from the plan — so a page of clients costs
+O(all projects in the installation) and the pagination stops being pagination. The detail reads
+therefore return their own DTO classes, pinned by a structural test and by an API e2e case that
+asserts the list body has no count on it.
+
+**A count is ABSENT, never zero, when it could not be taken.** `0` is a claim that there are none
+(ADR-0126, ADR-0098's "omitted, never zeroed") and no reader can tell a fabricated zero from a real
+one. Each is settled independently of the subject read and of its sibling, so a count that fails
+never takes the read — or the other count — down with it.
+
+**`activityCount` counts EVERY activity row** — WBS summaries, levels of effort and milestones as
+well as tasks. Said in the OpenAPI description and on the screen, because `docs/TEST_PLAYBOOK.md`
+records a shipped incident (health metric 10) where a denominator silently included summaries and a
+reader accepted a wrong verdict from it. It is also a **two-level** count, as is nothing else here:
+an activity hangs off a plan, not off a project.
+
+**There is deliberately no plan count on a client**, and that is a withdrawal rather than an
+omission. A count of plans across a client's projects has no stable query plan: measured at 500
+projects of 2,000, `Seq Scan on projects` at 4.12 ms, **O(projects in the installation)** rather than
+O(this client). The other three counts are `Index Only Scan` at every shape measured, 0.10–0.29 ms,
+and need no new index — the soft-delete-scoped partial uniques on `(parent_id, name) WHERE
+deleted_at IS NULL` already serve them. `docs/TECH_DEBT.md` #342 carries the two remedies and the
+trigger; `docs/specs/page-composition/m5/` carries the run.
+
 ### The audit log (ADR-0072)
 
 Two read endpoints over the append-only `audit_events` table. There is no write endpoint and there

@@ -109,7 +109,54 @@ export function SegmentedControl<T extends string>({
       {...(labelledById === undefined
         ? { 'aria-label': label }
         : { 'aria-labelledby': labelledById })}
-      className={cn('flex gap-1', className)}
+      /**
+       * **A track, so the group reads as one control rather than as a row of words.**
+       *
+       * The product owner reported the audit log's filters as looking "out of place and not
+       * designed to be part of the page", and reading the two controls side by side showed why:
+       * `ToggleChip` unpressed is a bordered pill and this control unselected was
+       * `text-muted-foreground` with no border and no fill. On the same row, 20px apart, doing the
+       * same job. With nothing chosen — the default state — all three options were bare text beside
+       * four pills.
+       *
+       * **The boundary is `--input`, and the first version of this got it wrong in a way nothing
+       * could see.** That version distinguished the states by FILL alone — a `bg-background` option
+       * raised out of a `bg-muted` track — and the accessibility review measured that pair at
+       * **1.01–1.26:1 across all seven scopes**, with `panel` and `canvas` at 1.01. WCAG 1.4.11
+       * wants 3:1 for the visual information that identifies a control and its state. The component
+       * review reached the same place from the other end: `--muted` (L 0.965) is LIGHTER than
+       * `--background` (L 0.914) on this theme, so the "raised" option was in fact the darker one,
+       * and `tabs.tsx:140,169` already expresses this exact motif with `bg-card` over `bg-muted`.
+       *
+       * So the track carries a real `border-input` edge and the selected option carries a matching
+       * ring. `--input` is the token this system reserves for a control's own outline and gates at
+       * 3:1 for that reason (ADR-0055 §1) — the same token `ToggleChip` unpressed reaches for, and
+       * deliberately not `--border`, which is a decorative divider and 1.4.11-exempt. The pair is
+       * now in `token-contrast.test.ts`; it was in nothing before.
+       *
+       * **`bg-card` was tried for the selected fill and refused by `reset-fills.structural.test.ts`,
+       * correctly.** `--card` is an ADR-0097 reset pinned at maximum lightness in EVERY scope, which
+       * is exactly why it looked attractive here — and exactly why it is wrong: this control can be
+       * mounted inside any `<Surface>`, so on the navy chrome band a selected option would paint
+       * white. The reset is not built (`docs/TECH_DEBT.md` #279), so it would ignore the scope
+       * rather than adapt to it.
+       *
+       * So the fill stays `bg-background`, which is rebound per scope. **It is not the accessible
+       * channel and is not asked to be** — the component review is right that on this theme
+       * `--muted` is lighter than `--background`, so the fill alone would read as sunken. The ring
+       * is what identifies the state at 3:1; the fill and the shadow are reinforcement. That is the
+       * honest reading of what these tokens can carry: no scope-safe fill pair in this system
+       * clears 3:1 against `--muted`, which is why the first version failed and why a border was
+       * always going to be the answer.
+       *
+       * **Nothing about the keyboard model changes** — roving `tabindex`, Arrow/Home/End,
+       * focus-follows-selection, `aria-checked` and the unselected-group tab-stop rule are
+       * untouched, and the existing suite passing unchanged is the proof rather than a paragraph.
+       */
+      className={cn(
+        'bg-muted border-input inline-flex w-fit gap-1 rounded-md border p-1',
+        className,
+      )}
     >
       {options.map((option, index) => (
         <button
@@ -133,8 +180,16 @@ export function SegmentedControl<T extends string>({
             // because the failure mode is a focus ring you cannot see, which looks exactly like a
             // focus ring you have not triggered.
             'focus-visible:ring-ring focus-visible:ring-offset-background rounded-md px-3 py-1.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+            /**
+             * **The selected option is raised off the track; the unselected ones sit in it.**
+             * Unselected options carry no border of their own — three borders inside a bordered
+             * group is the "comb" ADR-0065 M3 describes one surface along — so the group's edge
+             * identifies the control and the selected option's ring identifies the state. Both are
+             * `--input` and both are measured (see the group's docblock above); the fill and the
+             * shadow are the second and third channels, not the only ones (WCAG 1.4.1).
+             */
             value === option.value
-              ? 'bg-accent text-accent-foreground'
+              ? 'bg-background text-foreground ring-input shadow-sm ring-1'
               : 'text-muted-foreground hover:text-foreground',
             optionClassName,
           )}

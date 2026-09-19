@@ -1,7 +1,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 
 import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
-import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
+import { ChildCounts, PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { ProjectCalendarsSection } from '@/features/calendars';
@@ -114,7 +114,28 @@ export function ProjectDetailScreen(): React.ReactElement {
             <CreatePlanButton orgSlug={orgSlug} projectId={projectId} />
           ) : null
         }
+        /* **"activities across its plans", and "activities" means EVERY row.** A project owns no
+           activities directly — an activity hangs off a plan — and the figure includes WBS
+           summaries, levels of effort and milestones as well as tasks, which is what the API
+           counts and what `docs/TEST_PLAYBOOK.md` records a reader being misled by once when a
+           denominator quietly included summaries. Either count is ABSENT rather than zero when the
+           API could not take it. */
+        aside={
+          <ChildCounts
+            counts={[
+              { value: project.data.planCount, one: 'plan', many: 'plans' },
+              {
+                value: project.data.activityCount,
+                one: 'activity across its plans',
+                many: 'activities across its plans',
+              },
+            ]}
+          />
+        }
       />
+      {/* `flush`: no vertical padding, so the rows start under the heading, and the card's own
+          horizontal gutter so the first cell lines up with it — see `client-detail.tsx` for the
+          defect that rule was written against (ADR-0146 D3). */}
       <SectionCard className="mt-6" title="Plans" flush>
         <PlansTable orgSlug={orgSlug} projectId={projectId} canWrite={canWrite} />
       </SectionCard>

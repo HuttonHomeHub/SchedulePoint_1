@@ -39,9 +39,27 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   // ---------------------------------------------------------------- 1. Project-scoped calendar
   await createProject(page, 'Riverside');
 
-  // The project's own Calendars section (ADR-0053 §1) — its calendars, plus every org one.
-  const calendarsSection = page.getByRole('table', { name: /Calendars usable in Riverside/ });
-  await expect(calendarsSection).toBeVisible();
+  /*
+    The project's own Calendars section (ADR-0053 §1).
+
+    **It lists the project's OWN by default and states the rest**, which is ADR-0146's answer to
+    the product owner's question about this section — so the table's name is "belonging to" and not
+    "usable in", and the inherited ones are one press away. This assertion named the old caption and
+    the sweep caught it: a journey asserting copy that no longer exists is the shape ADR-0091
+    records three times, and it is the reason the whole sweep runs after a label change rather than
+    the one suite CI happens to name.
+  */
+  const calendarsSection = page.getByRole('table', { name: /Calendars belonging to Riverside/ });
+
+  /*
+    **A brand-new project has no calendars of its own, so there is no table yet** — the section
+    renders its empty state. That is the shipped behaviour of the "own by default" rule and not a
+    defect, and asserting the table here would have been asserting that the empty state is broken.
+    The section is what exists at this point; the table is bound above and used from the creation
+    below.
+  */
+  await expect(page.getByRole('region', { name: 'Calendars' })).toBeVisible();
+  await expect(calendarsSection).toHaveCount(0);
 
   await page.getByRole('button', { name: 'New calendar' }).click();
   const calendarDialog = page.getByRole('dialog');
@@ -54,6 +72,18 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   // It lands in the project's section, badged with the owning project (never bare "Project").
   await expect(calendarsSection.getByText('Site shutdown')).toBeVisible();
   await expect(calendarsSection.getByText('Project: Riverside')).toBeVisible();
+
+  /*
+    **The inherited ones are stated and then reachable**, which is the half a "belonging to" default
+    would otherwise lose. The sentence is said whether or not the reader opens the list (ADR-0098:
+    a fact they cannot act on is still a fact), and pressing the disclosure renames the table —
+    which is how a reader, and this assertion, can tell which set is on screen.
+  */
+  await expect(page.getByText(/organisation calendars? (is|are) also usable here/)).toBeVisible();
+  await page.getByRole('button', { name: 'Show them' }).click();
+  await expect(page.getByRole('table', { name: /Calendars usable in Riverside/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Show only this project’s' }).click();
+  await expect(calendarsSection).toBeVisible();
 
   // The library screen is accessible with the new tier column, filters and search in place.
   await navLink(page, 'Calendars').click();

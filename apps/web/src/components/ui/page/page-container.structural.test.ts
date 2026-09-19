@@ -131,3 +131,80 @@ describe('the page frame is written once', () => {
     }
   });
 });
+
+/**
+ * **The second list: screens that use the archetype but not its measure.**
+ *
+ * `DECLARED_EXCEPTIONS` above covers screens that opt out of `PageContainer` altogether. This one
+ * covers the other shape — a screen that uses it and passes an explicit `width` — and it exists
+ * because of what page-composition M0 measured: ten screens rendered 1104px of content while the
+ * organisation landing rendered 1321–1488, and **not one of the ten had chosen that.** They said
+ * nothing and got the narrow measure, which is why ADR-0146 D1 moved the value onto `default`
+ * rather than converting call sites: a conversion leaves the failure mode armed for screen
+ * fourteen.
+ *
+ * So an explicit `width` is now a **declaration**, and a declaration owes a reason. Today there is
+ * exactly one, and it is the pinned positive case: without a real entry here, every assertion below
+ * passes against a scan that matched nothing (ADR-0093, ADR-0108).
+ */
+const WIDTH_EXCEPTIONS = new Map([
+  [
+    join('routes', 'staff.tsx'),
+    'narrow: the not-found branch is a sentence and a paragraph, and the product measure would set ' +
+      'a refusal across an empty screen. It is read rather than scanned.',
+  ],
+]);
+
+/** Every explicit `width="…"` passed to `PageContainer`, by file. */
+function widthPropsIn(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  return [...code.matchAll(/<PageContainer\b[^>]*?\bwidth=\{?["']([a-z]+)["']/g)].map(
+    (m) => m[1] ?? '',
+  );
+}
+
+describe('the measure is the default unless a screen declares otherwise', () => {
+  const files = sourceFiles(WEB_SRC);
+  const self = join(PAGE_DIR, 'page-container.structural.test.ts');
+
+  // The pinned positive case, twice over: the walk must find call sites at all, and the matcher
+  // must still recognise the prop it is written to find. A census whose scan matched nothing
+  // reports a clean estate, which is the failure this repository keeps recording.
+  it('reads the tree and can still recognise an explicit width', () => {
+    const callSites = files.filter(
+      (file) => file !== self && /<PageContainer\b/.test(readFileSync(file, 'utf8')),
+    );
+    expect(callSites.length, 'the walk found no PageContainer call sites').toBeGreaterThanOrEqual(
+      10,
+    );
+    expect(widthPropsIn('<PageContainer width="narrow">')).toEqual(['narrow']);
+    expect(widthPropsIn('<PageContainer className="x">')).toEqual([]);
+  });
+
+  it('passes an explicit width only where one is declared', () => {
+    const offenders = files.flatMap((file) => {
+      if (file === self) return [];
+      const key = relative(WEB_SRC, file);
+      const widths = widthPropsIn(readFileSync(file, 'utf8'));
+      if (widths.length === 0) return [];
+      if (WIDTH_EXCEPTIONS.has(key)) return [];
+      return [`${key.split(sep).join('/')}: width="${widths.join('", "')}"`];
+    });
+
+    expect(
+      offenders,
+      'the product has one measure; an explicit width is a declared exception with a written reason',
+    ).toEqual([]);
+  });
+
+  it('declares every width exception with a reason, and none that has lapsed', () => {
+    expect(WIDTH_EXCEPTIONS.size, 'the exception list is empty, so nothing above can fail').toBe(1);
+    for (const [key, reason] of WIDTH_EXCEPTIONS) {
+      const widths = widthPropsIn(readFileSync(join(WEB_SRC, key), 'utf8'));
+      expect(widths.length, `${key} no longer passes an explicit width — drop it`).toBeGreaterThan(
+        0,
+      );
+      expect(reason.length, `${key} is exempt with no reason`).toBeGreaterThan(20);
+    }
+  });
+});

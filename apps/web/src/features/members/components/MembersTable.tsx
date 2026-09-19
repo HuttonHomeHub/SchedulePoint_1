@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Select } from '@/components/ui/select';
+import { formatTimestamp } from '@/lib/format-date';
 
 /** Roster with inline role changes and remove-with-confirm. */
 export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
@@ -22,6 +23,23 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
     {
       header: 'Email',
       cell: (member) => <span className="text-muted-foreground">{member.user.email}</span>,
+    },
+    {
+      header: 'Joined',
+      /**
+       * **Already on the wire and never rendered** — `OrgMemberSummary.joinedAt` has been in the
+       * payload the whole time. "Who is in this organisation" and "since when" are one question for
+       * anybody auditing a roster, and the screen could answer only half of it.
+       *
+       * `fit`, because a date is bounded and should never be the column that breaks; and through
+       * the shared `formatTimestamp` rather than a per-render `Intl.DateTimeFormat`, which
+       * ADR-0144's gate pass records as a real defect — a date beside a date, formatted in the
+       * browser's locale next to one formatted in en-GB.
+       */
+      width: 'fit',
+      cell: (member) => (
+        <span className="text-muted-foreground">{formatTimestamp(member.joinedAt)}</span>
+      ),
     },
     {
       header: 'Role',

@@ -73,6 +73,7 @@ export function ProjectCalendarsSection({
   const regionId = useId();
   const archivedFilterId = useId();
   const explainerId = useId();
+  const tableId = useId();
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   // Both directions are offered here — this is the one screen where the target project is
@@ -87,6 +88,36 @@ export function ProjectCalendarsSection({
     : undefined;
   const isOwn = (calendar: CalendarSummary): boolean =>
     calendar.scope === 'PROJECT' && calendar.projectId === projectId;
+
+  /**
+   * **The section defaults to the project's OWN calendars, and says how many it inherits.**
+   *
+   * On a project with no calendars of its own — which is most projects — this section rendered the
+   * entire organisation library, so the project screen was largely a copy of the Calendars screen.
+   * Correct about what is USABLE and wrong about what the reader came for (ADR-0146 D2).
+   *
+   * **The filtering is local to this view and nothing about the tier rule moves**, and the proof is
+   * structural rather than careful. ADR-0053 M2's guarantee is that a PICKER can never offer a
+   * calendar the write seam would 422 — and **the pickers do not use this hook at all**. They use
+   * `usePlanScopedCalendars`, which composes `projectCalendarsQueryOptions` with its own
+   * `PICKER_CALENDAR_FILTERS` (`use-calendars.ts:217-237`), and nothing in this epic touches it.
+   * So the guarantee is not preserved by care here; it is out of reach of this file.
+   *
+   * That is worth stating precisely because the plan's acceptance condition asked for the weaker
+   * thing — "assert the picker's source is untouched, by identity" — which assumes the two share a
+   * source. They do not, and a reader who thought they did would be guarding the wrong seam. What
+   * changes here is which rows this table shows FIRST; every row remains one press away.
+   */
+  const [showInherited, setShowInherited] = useState(false);
+  const ownCalendars = calendars.data?.filter(isOwn);
+  const inheritedCount = (calendars.data?.length ?? 0) - (ownCalendars?.length ?? 0);
+  const visibleCalendars = showInherited ? calendars.data : ownCalendars;
+  /**
+   * The same query result with a narrowed `data`. Not a second query: one request, one cache entry,
+   * one loading state — a separate fetch for "the project's own" would give this section a second
+   * source that could disagree with the count beside it.
+   */
+  const visibleQuery = { ...calendars, data: visibleCalendars };
 
   const toggleArchived = (calendar: CalendarSummary): void => {
     setArchiveError(null);
@@ -124,9 +155,14 @@ export function ProjectCalendarsSection({
     },
     {
       header: 'Working days',
-      // A bounded column: a width preference stops `table-layout: auto` handing it slack it
-      // does not want, which pushed a row's last fact away from its first (M4-T2).
-      cellClassName: 'py-2 pr-4 md:w-44',
+      // **`width: 'fit'` — the correction to M4-T2, not its removal.** That milestone capped this
+      // column at a fixed width because `table-layout: auto` was handing it slack it did not want,
+      // pushing a row's last fact away from its first. The measurement was real. What nothing asked
+      // was whether the content still fitted on ONE LINE inside the cap, and it does not — measured,
+      // this cell needs 191px in a 176px column and wraps, while the table around it has 271px
+      // spare. `fit` keeps the intent (take no slack) and drops the number (which was chosen against
+      // a measure this epic has since widened).
+      width: 'fit',
       cell: (calendar) => formatWorkingWeekdays(calendar.workingWeekdays),
     },
     {
@@ -198,8 +234,8 @@ export function ProjectCalendarsSection({
       title="Calendars"
       description={
         <>
-          The working-day calendars this project’s plans and activities can be scheduled on — this
-          project’s own, plus every organisation calendar.
+          The working-day calendars belonging to this project. Its plans and activities can also be
+          scheduled on every organisation calendar.
         </>
       }
       action={
@@ -253,38 +289,82 @@ export function ProjectCalendarsSection({
         ) : null}
       </div>
 
-      <DataTable
-        caption={`Calendars usable in ${projectName}`}
-        columns={columns}
-        query={calendars}
-        getRowKey={(calendar) => calendar.id}
-        loadingLabel="Loading calendars…"
-        errorLabel="Couldn’t load this project’s calendars. Please try again."
-        empty={
-          archivedFilter === 'only' ? (
-            // **A filtered-empty says so, and offers the way back**
-            // (`docs/specs/empty-state-consolidation/` §1.6, M4-T2). This rendered the bare
-            // sentence while its three siblings — `CalendarsTable`, `ResourcesTable` and
-            // `AuditEventList` — all offered a control, so a reader who filtered to archived and
-            // found none had to work out that the select above was the cause. One correct pattern
-            // applied to a control and not its neighbour. The only filter here IS the archived
-            // select, so "clear" is a return to its default rather than a reset of a filter object.
-            <>
-              <p className="text-muted-foreground text-sm">No archived calendars.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setArchivedFilter('exclude')}
-              >
-                Show all calendars
-              </Button>
-            </>
-          ) : (
-            <>No calendars available.{canWrite ? ' Create one for this project.' : ''}</>
-          )
-        }
-      />
+      {/*
+        **The inherited count is stated, and the list is one press away.** ADR-0098's rule: a
+        section the reader may not see is omitted, and a fact they cannot act on is still a fact —
+        so "12 organisation calendars are also usable here" is said whether or not they open it.
+        Withheld entirely when there are none, because "0 organisation calendars" is a sentence
+        nobody needs and the empty state below already says what there is.
+      */}
+      {inheritedCount > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 px-6 pb-3 text-sm">
+          <span className="text-muted-foreground">
+            {inheritedCount === 1
+              ? '1 organisation calendar is also usable here.'
+              : `${String(inheritedCount)} organisation calendars are also usable here.`}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-expanded={showInherited}
+            // **Named as well as flagged.** `CoverageDisclosure` in this same epic wires
+            // `aria-controls` at the audit screens' caveat and this did not — one correct pattern
+            // applied to a control and not its neighbour, found by the M8 accessibility review.
+            // It points at the table, because the table IS what opening this changes: the caption
+            // renames from "belonging to" to "usable in".
+            aria-controls={tableId}
+            onClick={() => {
+              setShowInherited((previous) => !previous);
+            }}
+          >
+            {showInherited ? 'Show only this project’s' : 'Show them'}
+          </Button>
+        </div>
+      ) : null}
+
+      {/* The disclosure's `aria-controls` target. A wrapper rather than an `id` on `DataTable`,
+          because what opening the disclosure changes is the LIST — its caption, its rows, and on
+          the empty path the sentence that replaces them — and a prop on the primitive would name
+          only the `<table>`, which is absent in exactly those states. */}
+      <div id={tableId}>
+        <DataTable
+          caption={
+            showInherited
+              ? `Calendars usable in ${projectName}`
+              : `Calendars belonging to ${projectName}`
+          }
+          columns={columns}
+          query={visibleQuery}
+          getRowKey={(calendar) => calendar.id}
+          loadingLabel="Loading calendars…"
+          errorLabel="Couldn’t load this project’s calendars. Please try again."
+          empty={
+            archivedFilter === 'only' ? (
+              // **A filtered-empty says so, and offers the way back**
+              // (`docs/specs/empty-state-consolidation/` §1.6, M4-T2). This rendered the bare
+              // sentence while its three siblings — `CalendarsTable`, `ResourcesTable` and
+              // `AuditEventList` — all offered a control, so a reader who filtered to archived and
+              // found none had to work out that the select above was the cause. One correct pattern
+              // applied to a control and not its neighbour. The only filter here IS the archived
+              // select, so "clear" is a return to its default rather than a reset of a filter object.
+              <>
+                <p className="text-muted-foreground text-sm">No archived calendars.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setArchivedFilter('exclude')}
+                >
+                  Show all calendars
+                </Button>
+              </>
+            ) : (
+              <>No calendars available.{canWrite ? ' Create one for this project.' : ''}</>
+            )
+          }
+        />
+      </div>
 
       <CalendarFormDialog
         orgSlug={orgSlug}

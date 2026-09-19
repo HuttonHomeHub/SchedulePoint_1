@@ -103,9 +103,16 @@ describe('RecentlyDeletedTable', () => {
     // and useless: it states a rule the reader already inferred from the disabled control, and
     // withholds the one fact they need. The blocker rides the same join the list already makes, so
     // naming it costs nothing.
+    //
+    // **Page-composition M6 moved WHERE it is named, not whether.** It was the action's own label
+    // — `Restore Riverside first…`, with the variable part mid-sentence, so the trailing ellipsis
+    // read as a truncation. A fact about a row now sits under that row, and the action beside it is
+    // bounded. The assertion is deliberately on the blocker's NAME, because that is the invariant;
+    // the sentence around it is copy.
     renderTable(true);
     expect(screen.queryByRole('button', { name: 'Restore plan Baseline' })).not.toBeInTheDocument();
-    expect(screen.getByText('Restore Riverside first')).toBeInTheDocument();
+    expect(screen.getByText(/Blocked by a deleted project, .Riverside./)).toBeInTheDocument();
+    expect(screen.getByText('Restore its project first')).toBeInTheDocument();
   });
 
   it('falls back to the generic sentence when no blocker is named', () => {
@@ -265,7 +272,11 @@ describe('RecentlyDeletedTable', () => {
 
     it('offers the blocker as an ACTION, not as a sentence to go and act on elsewhere', () => {
       renderTable(true, CROSS);
-      const trigger = screen.getByRole('button', { name: 'Restore Riverside first…' });
+      const trigger = screen.getByRole('button', { name: 'Restore project first…: Riverside' });
+      // The blocker is named under the row it blocks, and in the action's accessible name — the
+      // visible label is contiguous at the start of that name (WCAG 2.5.3).
+      expect(trigger).toHaveTextContent('Restore project first…');
+      expect(screen.getByText(/Blocked by a deleted project, .Riverside./)).toBeInTheDocument();
       expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
     });
 
@@ -290,7 +301,7 @@ describe('RecentlyDeletedTable', () => {
         },
       ];
       renderTable(true, withSibling);
-      fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside first…' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Restore project first…: Riverside' }));
 
       const dialog = screen.getByRole('dialog');
       expect(dialog).toBeInTheDocument();
@@ -323,7 +334,7 @@ describe('RecentlyDeletedTable', () => {
         })),
       ];
       renderTable(true, many);
-      fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside first…' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Restore project first…: Riverside' }));
       const dialog = screen.getByRole('dialog');
 
       expect(within(dialog).getByText('This will restore 21 items:')).toBeInTheDocument();
@@ -349,7 +360,7 @@ describe('RecentlyDeletedTable', () => {
           }),
       );
       renderTable(true, CROSS);
-      fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside first…' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Restore project first…: Riverside' }));
       fireEvent.click(screen.getByRole('button', { name: 'Restore Riverside' }));
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -491,7 +502,7 @@ describe('RecentlyDeletedTable', () => {
       },
     ]);
 
-    const invoker = screen.getByRole('button', { name: /Restore Northgate first/ });
+    const invoker = screen.getByRole('button', { name: /Restore client first….*Northgate/ });
     fireEvent.click(invoker);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 

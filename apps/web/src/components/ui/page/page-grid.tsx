@@ -29,7 +29,7 @@ export interface PageGridItemProps extends React.HTMLAttributes<HTMLDivElement> 
  * URI and address fields, and "the tables look cramped" was the diagnosis the whole epic was opened
  * on. See `docs/specs/staff-console-design/feature-spec.md` §8.1.
  *
- * With span-by-demand and `PageContainer width="wide"`, a table-bodied section gets **1,438 px** —
+ * With span-by-demand at the product measure, a table-bodied section gets **1,438 px** —
  * **+80 % against today** — while a stat grid or a row of tool buttons pairs at 732 px, which is
  * ample for four facts or three controls. Both wins instead of one win and one regression.
  *

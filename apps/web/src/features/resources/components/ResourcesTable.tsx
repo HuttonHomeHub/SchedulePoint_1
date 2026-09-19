@@ -37,6 +37,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Label } from '@/components/ui/label';
 import { MenuItem } from '@/components/ui/menu';
+import { SectionCard } from '@/components/ui/page';
 import { RowActionsMenu } from '@/components/ui/row-actions-menu';
 import { SearchField } from '@/components/ui/search-field';
 import { Select } from '@/components/ui/select';
@@ -247,49 +248,73 @@ export function ResourcesTable({
   const columns: Column<ResourceTreeRow>[] = [
     {
       header: 'Name',
-      cell: ({ resource, depth }) => (
-        <span className="flex items-center gap-2">
-          {/* Indentation is decorative — the Group column below carries the same relationship in
-              text, so nesting is never conveyed by layout alone (WCAG 2.2). */}
-          {depth > 0 ? (
-            <span aria-hidden="true" style={{ width: `${depth * 1.25}rem` }} className="shrink-0" />
-          ) : null}
-          <span className="font-medium">{resource.name}</span>
-          {/* The Kind column already says "Group"; this badge carries the CONSEQUENCE, which is
-              what a planner scanning the library actually needs to know (ADR-0053 §3). */}
-          {isResourceGroup(resource) ? <Badge size="sm">Not assignable</Badge> : null}
-          {isArchivedRow(resource) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
-        </span>
-      ),
+      cell: ({ resource, depth }) => {
+        const parentName = resource.parentId ? groupNameById.get(resource.parentId) : undefined;
+        return (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex items-center gap-2">
+              {/* Indentation is decorative — the secondary line below carries the same relationship
+                  in text, so nesting is never conveyed by layout alone (WCAG 2.2). It used to be the
+                  `Group` COLUMN that carried it; that column was removed because it printed "—" on
+                  every row of this organisation's library, and **the carrier moved with it rather
+                  than being dropped**. The test asserting nesting is conveyed in text passes
+                  unchanged, which is the check that the move was real. */}
+              {depth > 0 ? (
+                <span
+                  aria-hidden="true"
+                  style={{ width: `${depth * 1.25}rem` }}
+                  className="shrink-0"
+                />
+              ) : null}
+              <span className="font-medium">{resource.name}</span>
+              {/* The Kind column already says "Group"; this badge carries the CONSEQUENCE, which is
+                  what a planner scanning the library actually needs to know (ADR-0053 §3). */}
+              {isResourceGroup(resource) ? <Badge size="sm">Not assignable</Badge> : null}
+              {isArchivedRow(resource) ? <Badge size="sm">{ARCHIVED_BADGE}</Badge> : null}
+            </span>
+            {/* **Present only when there is something to say.** A secondary line reading "—" is the
+                defect this replaced, one row lower down. */}
+            {parentName ? (
+              <span className="text-muted-foreground text-xs">In {parentName}</span>
+            ) : null}
+          </span>
+        );
+      },
     },
-    /* **A width preference on a bounded column** (page-consistency M4-T2). `table-layout: auto`
-         gives surplus width to whichever columns want it most, and a column holding an enum label
-         or a short code wants none of it — measured, these carried 90–240 px of slack each while
-         pushing a row's last fact further from its first. `md:`-prefixed, so a narrow screen keeps
-         the automatic layout it needs.
+    /* **These columns declare `width: 'fit'`; they used to carry fixed `md:w-*` caps.**
+       page-consistency M4-T2 added those caps for a real reason — `table-layout: auto` gives surplus
+       width to whichever columns want it most, and a column holding an enum label or a short code
+       wants none of it, so each was carrying 90-240px of slack and pushing a row's last fact further
+       from its first. That diagnosis still stands and `fit` serves it better: it takes exactly the
+       content's width and surrenders everything else, without a number that has to be re-derived
+       whenever the page measure changes — which it just did.
 
-         **The rule is narrower than "cap the bounded columns", and applying the wider version made
-         two tables worse before it was measured.** The distance between a row's first fact and its
-         last is the summed width of every column BEFORE the last fact column — so a cap helps only
-         there. Capping the last fact column itself cannot shrink that distance, and its surplus has
-         to land somewhere: on the plans table it landed in `Name`, the FIRST column, and the
-         distance grew by 76 px. Cap what sits before the last fact; leave the last fact alone.
+       **The narrower half of M4-T2's rule is kept and is easy to lose.** The distance between a
+       row's first fact and its last is the summed width of every column BEFORE the last fact
+       column, so constraining the last fact column cannot shrink it and its surplus has to land
+       somewhere. On the plans table it landed in `Name`, the FIRST column, and the distance GREW by
+       76px. Constrain what sits before the last fact; leave the last fact alone.
 
-         **It goes on `cellClassName`, not `headClassName`, and the reason is `DataTable`'s `??`.**
-         Both props REPLACE their default rather than merging it (`docs/TECH_DEBT.md` #335), so
-         adding a width to a header means restating `py-2 pr-4 font-medium` beside it — which moves
-         a `font-medium` out of the primitive and into a screen, and ADR-0097's weight ratchet
-         counts exactly that. The first version of these caps did it and pushed the count 157 → 159.
-         The cell default carries no weight, so restating it costs nothing, and a width on a `<td>`
-         constrains the column under `table-layout: auto` just as a width on its `<th>` does. */
+       **What is no longer true:** M4-T2's note that a width must go on `cellClassName` rather than
+       `headClassName`, because `DataTable`'s `??` replaces the default and restating
+       `py-2 pr-4 font-medium` would move a `font-medium` into a screen and push ADR-0097's weight
+       ratchet. `width` composes with both defaults instead of replacing either, so it needs no
+       restatement anywhere and the ratchet is untouched. That is `docs/TECH_DEBT.md` #335's actual
+       ask, reached without the blunt `??` → `cn` conversion that row proposes — which ADR-0145 M4
+       declined because seven overrides omit `py-2` deliberately, and which this epic re-took rather
+       than inherited. */
     {
       header: 'Kind',
-      cellClassName: 'py-2 pr-4 md:w-32',
+      width: 'fit',
       cell: ({ resource }) => RESOURCE_KIND_LABELS[resource.kind],
     },
     {
       header: 'Code',
-      cellClassName: 'py-2 pr-4 md:w-24',
+      // **`fit`, replacing `md:w-24`.** 96px could not hold `NL-HYDROPUMP` (103px), so it broke
+      // at the hyphen — a legitimate soft-wrap opportunity the browser takes — producing `NL-` over
+      // `HYDROPUMP` in a table with 518px of slack. A code is exactly the shape `fit` is for: short,
+      // bounded, and meaningless when broken.
+      width: 'fit',
       cell: ({ resource }) =>
         resource.code ? (
           <span className="font-mono text-xs">{resource.code}</span>
@@ -297,19 +322,6 @@ export function ResourcesTable({
           <span className="text-muted-foreground">—</span>
         ),
     },
-    {
-      header: 'Group',
-      headClassName: 'hidden py-2 pr-4 font-medium lg:table-cell',
-      cellClassName: 'hidden py-2 pr-4 whitespace-nowrap lg:table-cell lg:w-36',
-      cell: ({ resource }: ResourceTreeRow) => {
-        const parentName = resource.parentId ? groupNameById.get(resource.parentId) : undefined;
-        return parentName ? (
-          <span className="text-muted-foreground">{parentName}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        );
-      },
-    } satisfies Column<ResourceTreeRow>,
     {
       header: 'Calendar',
       headClassName: 'hidden py-2 pr-4 font-medium md:table-cell',
@@ -399,144 +411,155 @@ export function ResourcesTable({
   };
 
   return (
-    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-end gap-3">
-          <SearchField
-            id={searchId}
-            className="min-w-56 flex-1"
-            label="Search resources"
-            placeholder="Search by name or code"
-            clearLabel="Clear resource search"
-            value={search}
-            onChange={(next) => setFilters({ q: next })}
-          />
-          <div className="flex max-w-xs flex-col gap-1.5">
-            <Label htmlFor={kindFilterId}>Kind</Label>
-            <Select
-              id={kindFilterId}
-              value={kindFilter}
-              onChange={(event) => setFilters({ kind: event.target.value as ResourceKindFilter })}
+    /**
+     * **The rows sit in a named section that states how many there are** (ADR-0146 D2). The name is
+     * what the section HOLDS rather than a repeat of the page's own `<h1>`: two headings saying one
+     * word is the defect ADR-0143 records on the plan workspace's foot.
+     *
+     * `count` is honest here because this query loads every page (`apiFetchAllPages`), so the
+     * length IS the total. The audit screens deliberately pass none — behind a "Load more" the same
+     * expression means "how many are loaded", which would read as a total and be wrong.
+     */
+    <SectionCard title="Resource library" count={resources.data?.length} flush>
+      <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <SearchField
+              id={searchId}
+              className="min-w-56 flex-1"
+              label="Search resources"
+              placeholder="Search by name or code"
+              clearLabel="Clear resource search"
+              value={search}
+              onChange={(next) => setFilters({ q: next })}
+            />
+            <div className="flex max-w-xs flex-col gap-1.5">
+              <Label htmlFor={kindFilterId}>Kind</Label>
+              <Select
+                id={kindFilterId}
+                value={kindFilter}
+                onChange={(event) => setFilters({ kind: event.target.value as ResourceKindFilter })}
+              >
+                <option value={ANY_RESOURCE_KIND}>All kinds</option>
+                {RESOURCE_KINDS.map((value) => (
+                  <option key={value} value={value}>
+                    {RESOURCE_KIND_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex max-w-xs flex-col gap-1.5">
+              <Label htmlFor={archivedFilterId}>Show archived</Label>
+              <Select
+                id={archivedFilterId}
+                value={archivedFilter}
+                aria-describedby={explainerId}
+                onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
+              >
+                {ARCHIVED_FILTERS.map((value) => (
+                  <option key={value} value={value}>
+                    {ARCHIVED_FILTER_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {/* **`Clear filters` lives in the BAR, not only in the empty state** (page-consistency
+                M4) — the same control, from the same source, as the calendars library and the audit
+                log. Always rendered and shaded when there is nothing to clear, never conditionally
+                mounted: a control that removes itself by succeeding drops focus to `<body>` at the
+                moment it is pressed. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-disabled={!filtersActive}
+              onClick={() => {
+                if (!filtersActive) return;
+                clearFilters();
+              }}
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
             >
-              <option value={ANY_RESOURCE_KIND}>All kinds</option>
-              {RESOURCE_KINDS.map((value) => (
-                <option key={value} value={value}>
-                  {RESOURCE_KIND_LABELS[value]}
-                </option>
-              ))}
-            </Select>
+              <X aria-hidden="true" className="size-4" />
+              Clear filters
+            </Button>
           </div>
-          <div className="flex max-w-xs flex-col gap-1.5">
-            <Label htmlFor={archivedFilterId}>Show archived</Label>
-            <Select
-              id={archivedFilterId}
-              value={archivedFilter}
-              aria-describedby={explainerId}
-              onChange={(event) => setFilters({ archived: event.target.value as ArchivedFilter })}
-            >
-              {ARCHIVED_FILTERS.map((value) => (
-                <option key={value} value={value}>
-                  {ARCHIVED_FILTER_LABELS[value]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {/* **`Clear filters` lives in the BAR, not only in the empty state** (page-consistency
-              M4) — the same control, from the same source, as the calendars library and the audit
-              log. Always rendered and shaded when there is nothing to clear, never conditionally
-              mounted: a control that removes itself by succeeding drops focus to `<body>` at the
-              moment it is pressed. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-disabled={!filtersActive}
-            onClick={() => {
-              if (!filtersActive) return;
-              clearFilters();
-            }}
-            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-          >
-            <X aria-hidden="true" className="size-4" />
-            Clear filters
-          </Button>
-        </div>
-        <p id={explainerId} className="text-muted-foreground text-sm">
-          {ARCHIVE_EXPLAINER}
-          {filtersActive
-            ? ' While a filter is active the list is flat — the Group column still names each match’s group.'
-            : ''}
-        </p>
-        {archiveError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {archiveError}
+          <p id={explainerId} className="text-muted-foreground text-sm">
+            {ARCHIVE_EXPLAINER}
+            {filtersActive
+              ? ' While a filter is active the list is flat — the Group column still names each match’s group.'
+              : ''}
           </p>
+          {archiveError ? (
+            <p role="alert" className="text-destructive-text text-sm">
+              {archiveError}
+            </p>
+          ) : null}
+        </div>
+
+        <DataTable
+          caption="Resources"
+          columns={columns}
+          query={treeQuery}
+          getRowKey={({ resource }) => resource.id}
+          loadingLabel="Loading resources…"
+          errorLabel="Couldn’t load resources. Please try again."
+          empty={
+            filtersActive ? (
+              <>
+                <p className="text-muted-foreground text-sm">No resources match these filters.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={clearFiltersAndFocusList}
+                  /* **Named for its context, because its twin in the filter bar is now always
+                     present** (page-consistency M4). Two buttons whose accessible name is the bare
+                     string `Clear filters`, both visible at once, are indistinguishable to a reader
+                     who hears them rather than sees where they sit — and the collision is not new:
+                     the audit log has carried it since its filter bar shipped, and copying that bar
+                     to two more screens is what made it worth fixing rather than reproducing.
+
+                     The visible text is unchanged, and the accessible name CONTAINS it, so WCAG 2.5.3
+                     Label in Name still holds. */
+                  aria-label="Clear filters and show all resources"
+                >
+                  Clear filters
+                </Button>
+              </>
+            ) : (
+              <>No resources yet.{canWrite ? ' Add your first resource to the library.' : ''}</>
+            )
+          }
+        />
+
+        <ResourceFormDialog
+          orgSlug={orgSlug}
+          open={editing !== undefined}
+          onClose={() => setEditingId(null)}
+          readOnly={!canWrite}
+          calendars={calendars}
+          calendarsLoading={calendarsLoading}
+          calendarsError={calendarsError}
+          // The library itself feeds the parent-group picker (ADR-0053 §3) — already loaded here.
+          resources={resources.data ?? []}
+          {...(editing ? { resource: editing } : {})}
+        />
+        {canWrite ? (
+          <ConfirmDialog
+            open={deleting !== null}
+            onClose={() => {
+              setDeleting(null);
+              setDeleteError(null);
+            }}
+            onConfirm={confirmDelete}
+            title="Delete resource"
+            description={deleting ? `Delete “${deleting.name}”?` : ''}
+            pending={deleteResource.isPending}
+            pendingLabel="Deleting…"
+            error={deleteError}
+          />
         ) : null}
       </div>
-
-      <DataTable
-        caption="Resources"
-        columns={columns}
-        query={treeQuery}
-        getRowKey={({ resource }) => resource.id}
-        loadingLabel="Loading resources…"
-        errorLabel="Couldn’t load resources. Please try again."
-        empty={
-          filtersActive ? (
-            <>
-              <p className="text-muted-foreground text-sm">No resources match these filters.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={clearFiltersAndFocusList}
-                /* **Named for its context, because its twin in the filter bar is now always
-                   present** (page-consistency M4). Two buttons whose accessible name is the bare
-                   string `Clear filters`, both visible at once, are indistinguishable to a reader
-                   who hears them rather than sees where they sit — and the collision is not new:
-                   the audit log has carried it since its filter bar shipped, and copying that bar
-                   to two more screens is what made it worth fixing rather than reproducing.
-
-                   The visible text is unchanged, and the accessible name CONTAINS it, so WCAG 2.5.3
-                   Label in Name still holds. */
-                aria-label="Clear filters and show all resources"
-              >
-                Clear filters
-              </Button>
-            </>
-          ) : (
-            <>No resources yet.{canWrite ? ' Add your first resource to the library.' : ''}</>
-          )
-        }
-      />
-
-      <ResourceFormDialog
-        orgSlug={orgSlug}
-        open={editing !== undefined}
-        onClose={() => setEditingId(null)}
-        readOnly={!canWrite}
-        calendars={calendars}
-        calendarsLoading={calendarsLoading}
-        calendarsError={calendarsError}
-        // The library itself feeds the parent-group picker (ADR-0053 §3) — already loaded here.
-        resources={resources.data ?? []}
-        {...(editing ? { resource: editing } : {})}
-      />
-      {canWrite ? (
-        <ConfirmDialog
-          open={deleting !== null}
-          onClose={() => {
-            setDeleting(null);
-            setDeleteError(null);
-          }}
-          onConfirm={confirmDelete}
-          title="Delete resource"
-          description={deleting ? `Delete “${deleting.name}”?` : ''}
-          pending={deleteResource.isPending}
-          pendingLabel="Deleting…"
-          error={deleteError}
-        />
-      ) : null}
-    </div>
+    </SectionCard>
   );
 }

@@ -169,3 +169,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0143](0143-a-console-answers-before-it-reports.md)                                             | A console answers before it reports, and a page is what it is made of           | Accepted           |
 | [0144](0144-a-landing-question-is-costed-before-it-is-answered.md)                              | A landing question is costed before it is answered                              | Accepted           |
 | [0145](0145-a-screen-is-assembled-from-the-archetypes.md)                                       | A screen is assembled from the archetypes, and a metric names what it measures  | Accepted           |
+| [0146](0146-a-page-has-one-measure-and-a-column-has-a-reason.md)                                | A page has one measure, a column has a reason, and a fact belongs under its row | Accepted           |

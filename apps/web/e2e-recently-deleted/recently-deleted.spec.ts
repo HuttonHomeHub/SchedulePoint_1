@@ -140,7 +140,15 @@ test('a cascade is one deletion, and a cross-batch block is two presses', async 
   // assertion had it wrong: the button names the row that must exist, the dialog then names the
   // whole deletion that restoring it brings back, which is more than the reader asked for and is
   // exactly why it is a confirmation rather than a one-press action.
-  const ancestorButton = blocked.getByRole('button', { name: /Restore Riverside first/ });
+  //
+  // **The blocker's NAME left the visible label and the accessible name kept it** (ADR-0146 D4):
+  // the button reads "Restore project first…" and is named "Restore project first…: Riverside", so
+  // the variable part is no longer in the middle of the sentence — which is what made the
+  // conventional trailing ellipsis read as truncation. This query named the old label and the
+  // sweep caught it.
+  const ancestorButton = blocked.getByRole('button', {
+    name: /^Restore project first…: Riverside$/,
+  });
   await expect(ancestorButton).toHaveAttribute('aria-haspopup', 'dialog');
   await ancestorButton.click();
 

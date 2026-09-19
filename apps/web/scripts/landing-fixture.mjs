@@ -83,6 +83,71 @@ export async function seedLandingStates(page, slug) {
     const client = await post('/clients', { name: 'Harbourside Estates' });
     const project = await post(`/clients/${client.id}/projects`, { name: 'Dockside Regeneration' });
 
+    /**
+     * **The library, seeded because the harness could not previously exhibit its own subject.**
+     *
+     * Found at page-composition M0: before this, an organisation created by the harness held ONE
+     * calendar — the `Standard` Mon–Fri row the API creates with the tenant — and **zero**
+     * resources. So every picture ever taken of the Calendars screen showed a single row, every
+     * picture of Resources showed an empty state, and the column-fit probe reported no wrapping on
+     * either. All three were true of the fixture and false of the product: the deployed
+     * installation's Calendars screen carries fourteen rows including `6-Day Construction (10h,
+     * Mon-Sat)`, whose working-day cell is the two-line wrap this epic was opened on.
+     *
+     * That is the ADR-0093 shape — a green result about nothing — with the fixture as the cause
+     * rather than the selector. The rows below are chosen to carry the shapes that make a column
+     * hard, not to be numerous: a six-day working week (the longest weekday list the product can
+     * render), a long parenthesised name, a hyphenated monospace code that can break mid-token, and
+     * one of each resource kind. Anything that renders identically to an existing row is not here.
+     */
+    const WORKING_WEEK = { MON_FRI: 0b0111110, MON_SAT: 0b0111111, EVERY_DAY: 0b1111111 };
+    const calendars = [];
+    for (const [name, workingWeekdays] of [
+      ['5-Day Day Shift (8h)', WORKING_WEEK.MON_FRI],
+      // The row the product owner's screenshot wraps on. Six weekdays is the longest list
+      // `Working days` can render, so it is the column's worst case and therefore the one to hold.
+      ['6-Day Construction (10h, Mon-Sat)', WORKING_WEEK.MON_SAT],
+      ['7-Day 24-Hour Continuous', WORKING_WEEK.EVERY_DAY],
+      ['600t Crawler Crane Availability (27-Jul to 21-Aug-2026)', WORKING_WEEK.EVERY_DAY],
+    ]) {
+      calendars.push(await post('/calendars', { name, workingWeekdays }));
+    }
+
+    /**
+     * **Something in the bin, because Recently deleted was measured with nothing in it.**
+     *
+     * Found at page-composition M0 alongside the library gap (§2.1): the probe reported `rowCount:
+     * 0` for that screen, so its row geometry — including the restore control the product owner's
+     * screenshot shows clipped mid-sentence — could not be measured at all. A screen whose only
+     * state the harness can reach is its empty one is a screen the harness cannot judge.
+     *
+     * A whole CLIENT is deleted rather than a bare plan, deliberately: the cascade is what produces
+     * the child-count line under the name (`and 1 project, 1 plan`) and the *blocked* restore on the
+     * descendants, which is the row that carries the long explanatory control. Deleting a plan alone
+     * gives a one-line row and misses both.
+     */
+    const binned = await post('/clients', { name: 'Kingsway Interchange (decommissioned)' });
+    const binnedProject = await post(`/clients/${binned.id}/projects`, {
+      name: 'Phase 4 Enabling',
+    });
+    await post(`/projects/${binnedProject.id}/plans`, {
+      name: 'Phase 4 Enabling — Substructure & Drainage',
+      plannedStart: '2026-03-02',
+    });
+    await call('DELETE', `/clients/${binned.id}`);
+
+    const resources = [];
+    for (const [name, kind, code] of [
+      ['Coded Welder', 'LABOUR', 'LAB-WELD'],
+      // Breaks mid-token in a 96px `md:w-24` cap — the second known wrap, and the reason the
+      // hyphen matters: it is a legitimate soft-wrap opportunity, so the browser takes it.
+      ['Hydrotest Pump Unit', 'EQUIPMENT', 'NL-HYDROPUMP'],
+      ['Ready-mix Concrete', 'MATERIAL', 'MAT-CONC'],
+      ['Commissioning Technician', 'LABOUR', 'LAB-COMM'],
+    ]) {
+      resources.push(await post('/resources', { name, kind, code }));
+    }
+
     /** A plan with `count` chained activities, recalculated unless `calculate` is false. */
     const makePlan = async (
       name,
@@ -194,6 +259,8 @@ export async function seedLandingStates(page, slug) {
       filler: filler.map((p) => p.id),
       liveInvite: liveInvite.id,
       expiredInvite: expiringInvite.id,
+      calendars: calendars.map((c) => c.id),
+      resources: resources.map((r) => r.id),
     };
   }, slug);
 }

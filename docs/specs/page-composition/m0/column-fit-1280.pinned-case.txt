@@ -1,0 +1,1 @@
+Pinned case OK: both known wraps reported (11 findings).
