@@ -136,10 +136,16 @@ four; three are index-only at every shape at 0.10–0.29 ms. So it is applied to
 and **the re-argument is in writing**, which is what the clause explicitly permits in place of
 quietly relaxing the bar.
 
-**Two of the epic's conditions failed and neither bar moved.** FC-2's prose-density half was withdrawn
-by its own withdrawal clause; FC-3 failed by **2 px** — `SectionCard`'s own border — and was put to
-the product owner with both consequences costed and amended in place at the measured value rather
-than at a round number.
+**This paragraph claimed until 2026-09-19 that two of this epic's conditions failed, and named
+ADR-0145's.** The prose-density FC-2 and the 2 px FC-3 belong to the **page-consistency** epic. _This_
+epic's FC-2 is _nothing wraps beside unused width_ and its FC-3 is _the widening costs no screen
+width_, and `m8-verdict.md:13-22` records both as **PASS**; **FC-9's is the only withdrawal clause
+this epic invoked**, which the paragraph above already says — so the account of a neighbouring epic's
+failures sat three paragraphs from the correct account of this one's. Corrected in place rather than
+deleted, because how it was found is the useful part: specifying `docs/TECH_DEBT.md` #343, whose
+first task is to re-run FC-2, and which could not establish what FC-2 still asserts because this
+sentence describes a different condition. ADR-0076 Class 2, in the ADR whose own two largest findings
+are claims that do not hold for the call sites that exist.
 
 **Three of the spec's claims were disproved before anything was built**: the restore ellipsis, the
 filter-bar overflow (quoted forward as "~246 px over at every width"; measured `overflowsBy: 0`, the

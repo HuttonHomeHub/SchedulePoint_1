@@ -5132,10 +5132,13 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   `Description` column and the audit log's `Outcome`, whose every cell was empty on any healthy
   installation while a filter above it offered to narrow by it. **The `sr-only` success is kept**,
   because deleting it would be a silent WCAG regression that nothing on screen could show.
-  **Two of the epic's own conditions failed and neither bar moved**: FC-2's prose-density half
-  withdrew by its own clause, and FC-3 failed by **2px** - `SectionCard`'s own border - which was put
-  to the product owner with both consequences costed and amended in place at the measured value
-  rather than at a round number. **Three claims in its own spec were disproved before anything was
+  **This entry carried ADR-0145's falsification sentence until 2026-09-19**, reporting a
+  neighbouring epic's two failed conditions as this one's: the prose-density FC-2 and the 2px FC-3
+  belong to **page-consistency**. This epic's FC-2 is _nothing wraps beside unused width_ and its
+  FC-3 is _the widening costs no screen width_, and both **PASSED** — **FC-9's is the only
+  withdrawal clause invoked here**, which this entry says correctly two paragraphs down. Found while
+  specifying `docs/TECH_DEBT.md` #343, whose first task is to re-run FC-2 and which could not
+  establish what FC-2 still asserts, because the sentence described a different condition. **Three claims in its own spec were disproved before anything was
   built**, including a filter-bar overflow quoted forward as "~246px over at every width" and
   measured at **0** (it wraps to three lines and stands 122px tall instead, which is a different
   defect with a different remedy).
