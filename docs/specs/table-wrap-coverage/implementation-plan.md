@@ -1,7 +1,7 @@
 # Implementation Plan: Table wrap coverage — the FC-2 gate's screen list, and the Members invitations fit
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft — awaiting approval before
-  implementation** (the same state its own header holds; `check:spec-status` compares the two).
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved — shipped** (the same
+  state its own header holds; `check:spec-status` compares the two).
 - **Falsification conditions:** [`./falsification.md`](./falsification.md) — committed **first, in
   their own commit, before any harness runs** (ADR-0128).
 - **Status:** Draft — awaiting approval before implementation

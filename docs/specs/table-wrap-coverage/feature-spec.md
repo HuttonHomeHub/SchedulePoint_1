@@ -1,6 +1,6 @@
 # Feature Spec: Table wrap coverage — the FC-2 gate's screen list, and the Members invitations fit
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — shipped
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-19
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` **#344**
