@@ -10,6 +10,51 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-19 — A gate measures what it is given
+
+**What was decided.** The page-composition journey's fixture seeds a **second** invitation carrying
+a 58-character address and `ORG_ADMIN`, the longest of the four `ROLE_LABELS`; and the Members
+`Email` column is declared `width: 'auto'` with its measurement in its docblock.
+`docs/TECH_DEBT.md` #344's FC-4 is recorded **FAILED** rather than amended.
+
+**Why.** The M5 UX review asked whether any of the seven candidates measured at M2 had been tried
+against a longer real address or a longer role. None had. Every reading behind FC-4 came from one
+shape — `invited-<13 digits>@example.com` and `Planner` — so the gate had never been asked the
+question the product is asked on its first real day. Widening the fixture falsified the condition on
+the first run.
+
+**The number is small and decides everything.** `fit` shrink-wraps a column to its widest cell, so
+`Org Admin` takes Role from **65px to 82px**, Email falls **280px → 263px**, and 263px is below the
+width a **33-character** address needs. Both rows then wrap at 1280 — including the short one M3
+judged clean. So M3's PASS was not a wrong measurement; it was a correct measurement of a fixture
+that could not exhibit the case.
+
+**Why `auto` is not an excuse here.** ADR-0146 D3 reserves `auto` for a column somebody decided may
+wrap, with the reason written down. An email address is unbounded by the data model: no width can
+promise it one line, and the only alternative — truncation — hides the reader's own data. The
+sweep now prints it as a _tolerated_ wrap rather than passing silently, so the declaration is
+visible in every run. Two other remedies were costed and declined: moving the table to the grid's
+wide span at 1280 re-opens the whole Members composition for one column at one width and **would
+not remove the declaration** (a long enough address wraps in the wide track too), and un-declaring
+`Role` lets a four-value vocabulary wrap, which is what `fit` exists to prevent.
+
+**The transferable rule.** ADR-0058 says verify the claim; ADR-0081 extends it to a plan's tasks and
+ADR-0142 D4 to a plan's remedies. This adds the input: **a falsification condition is only as strong
+as the fixture it was judged against, so a condition about content wants the worst content the
+product can hold, chosen before the condition is judged rather than after it passes.** The failure
+mode is silent and flattering — the gate is green, the measurement is honest, and the population it
+measured was the easy one.
+
+**What else the sitting settled.** FC-5 clause 1 PASS (0 of 11 screens narrower at 1280/1646/1920,
+every `mainWidth` byte-identical to `m0/drift-*.json`) and FC-6 PASS (320px reflow, in the same
+journey run). FC-5's cited baseline `m3/drift-1646.json` **does not exist and never did** — written
+when the plan expected M3 to take a drift reading, which it did not, and unnoticed because nobody
+reads a baseline citation until they try to judge against it. Corrected in place.
+`docs/specs/table-wrap-coverage/m5/verdict.md` carries every figure and the three instruments of my
+own that were wrong first.
+
+---
+
 ## 2026-09-19 — A gate's roster is the thing to check, not its condition
 
 **What was decided.** `docs/TECH_DEBT.md` #344's wrap gate judges a wrapped cell by **the column's
