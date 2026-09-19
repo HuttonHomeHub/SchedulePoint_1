@@ -177,8 +177,9 @@ does. C0, C1 and C4 fail outright.
 **It is the only candidate that also removes the second failure mode.** `#344`'s 1280px card
 overflow needs the table's **min-content** reduced, which only a fold does: 473 → **416**, inside
 the 416px available. The photographs are the clearest statement of it —
-`members-1280-baseline.png` shows the address broken mid-token, the two dates over four lines
-each, and **`Revoke` clipped out of sight at the card edge**; `members-1280-C2c.png` shows one
+`members-1280-baseline.png` shows the address broken mid-token, `Sent`'s date over **four** lines
+and `Expires`'s over **five** (its leading word costs it one), and **`Revoke` clipped out of sight
+at the card edge**; `members-1280-C2c.png` shows one
 address on one line, the two facts stacked beneath it whole, and `Revoke` on screen.
 
 **FC-5 clause 1 passes and is largely structural.** Every screen's frame width is byte-identical

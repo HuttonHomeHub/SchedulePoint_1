@@ -111,16 +111,29 @@ describe('partitionWraps — the gate is discriminating, not merely wider', () =
     expect(findings.map((w) => w.header)).toEqual(['Status']);
   });
 
-  it('reports a wrapping fit or bounded column rather than tolerating it', () => {
-    // `fit` must never wrap — that is what the value means — and a wrapping `bounded` column is
-    // ADR-0145 M4-T2's defect, where a cap was measured and the content was never asked whether it
-    // still fitted inside it.
-    const { findings } = partitionWraps([
+  /**
+   * **The discriminator is whether the declaration PERMITS a wrap, not which word it is.**
+   *
+   * `fit` is `md:w-px md:whitespace-nowrap` — it must never wrap, that is what the value means — so
+   * a `fit` column that wraps is a finding whatever else is true. `undeclared` said nothing, which
+   * is ADR-0146 D3's case.
+   *
+   * `bounded` is the other way round and this case asserted the opposite until the #344 gate pass.
+   * It read "a wrapping `bounded` column is ADR-0145 M4-T2's defect", and that citation is wrong:
+   * M4-T2's defect was a fixed-pixel cap (`md:w-44`) whose content was never asked whether it
+   * still fitted, remedied by introducing `fit`. `bounded`'s own docblock promises a wrap —
+   * _"may grow, up to a reading measure, then wrap"_ — so the gate was written to go red for the
+   * one behaviour that value exists to provide.
+   */
+  it('reports a wrapping fit or undeclared column and tolerates a bounded one', () => {
+    const { findings, tolerated } = partitionWraps([
       wrap('calendars', 'Working days', 'fit'),
+      wrap('members', 'Email', 'undeclared'),
       wrap('resources', 'Code', 'bounded'),
     ]);
 
-    expect(findings).toHaveLength(2);
+    expect(findings.map((w) => w.header)).toEqual(['Working days', 'Email']);
+    expect(tolerated.map((w) => w.header)).toEqual(['Code']);
   });
 
   it('returns nothing from nothing, which is why the sweep carries its own positive case', () => {

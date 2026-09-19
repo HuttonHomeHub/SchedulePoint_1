@@ -10801,4 +10801,47 @@ making both detectors agree was a layout problem. It did not work, and it was th
 the diagnosis one level down to the instrument. The layout it would have changed is the one the
 measurement had already chosen (`m2/README.md` §6).
 
+**Addendum, 2026-09-19 (M5 component review):** the two copies are **still not byte-identical**
+after the hardening. `measure-column-fit.mjs`'s host sets `top: '0'` and `composition.spec.ts`'s
+does not, so an absolutely-positioned clone with no `top` falls back to its static-flow position —
+appended as the last child of `document.body` on a real page, that can be a long way down the
+document. It should not affect a **height** measurement, which is what the wrap rule reads, so this
+is recorded as a discrepancy rather than a second defect. What it costs is the sentence: the fix
+commit claims "the rule now lives the same way in both", and that is not literally true. **A
+divergence crept back in on the day agreement was restored, while one hand was editing both
+copies** — which is the argument for the extraction rather than against it. The eventual PR should
+diff the two bodies property by property rather than by eye.
+
 **Trigger:** the next change to either detector, or the next epic that widens the sweep's roster.
+
+### 346. Three of the four page-composition sweeps still carry hand-written screen lists
+
+**Status:** open · **Verified:** 2026-09-19 · **Raised:** 2026-09-19 (found by the M5 component
+review of #344) · **Size:** S · **Owner:** web
+
+`apps/web/e2e-page-composition/screen-roster.ts` was written to replace four independent per-screen
+rosters with one declaration, and **it replaced one**. The wrap sweep
+(`composition.spec.ts:291`) consumes `SWEPT`; three sweeps in the same file still hardcode their
+own list:
+
+| Sweep                                                          | Line   | List                                                |
+| -------------------------------------------------------------- | ------ | --------------------------------------------------- |
+| `every list screen is as wide as the organisation landing`     | `:523` | `clients, calendars, resources, members, audit-log` |
+| `no list screen overflows a 320px viewport`                    | `:743` | `calendars, resources, clients, recently-deleted`   |
+| `every list screen shows its first row above the fold at 1646` | `:783` | a `SETTLED` array of five `[path, marker]` pairs    |
+
+**There is no live blind spot today** — two of the three already include `members` and the third
+excludes it for a stated `fit`-column reason — which is exactly why this is a register row and not
+a fix inside #344's last milestone (ADR-0105). What is missing is the gate: `screen-roster.census.test.ts`
+compares this file against `measure-column-fit.mjs`'s `PAGES` and **has no reach into an array
+literal in a test body**, so a screen added to the roster or removed from it can diverge from these
+three with nothing failing. That is the #344 failure class in miniature, reproduced inside the file
+written to close it.
+
+**The docblock has been narrowed rather than left overstating**, so nobody reads "one declaration
+that every sweep reads" and concludes the file is roster-driven throughout. Each of the three needs
+a **different** subset of the roster (one deliberately excludes a screen), so this is a shared-gate
+change with a design question in it, not a mechanical substitution.
+
+**Trigger:** the next screen added to or removed from the roster, or the next epic that touches
+`composition.spec.ts`.

@@ -7,8 +7,8 @@
  * the two that could never have caught it and absent from the two that would. `recently-deleted`
  * appeared in exactly one; `client-detail`, `project-detail`, `my-activity` and `org-home` in none.
  *
- * So the answer is not "add `members` to a list". It is one declaration that every sweep reads, and
- * a census (`screen-roster.census.test.ts`) asserting it against
+ * So the answer is not "add `members` to a list". It is one declaration, and a census
+ * (`screen-roster.census.test.ts`) asserting it against
  * `apps/web/scripts/measure-column-fit.mjs`'s `PAGES` — the ten screens the measurement harness
  * covers — **in both directions**. A screen the probe measures and the gate never visits is the
  * defect; a screen the gate visits and the probe never measures means the two instruments disagree
@@ -17,6 +17,16 @@
  * **Every exemption is declared with its reason and is asserted, not assumed.** A set derived from
  * the run it is controlling agrees with itself (ADR-0120's A9, whose two sides shared one blind spot
  * and therefore could not disagree).
+ *
+ * **ONE sweep reads it today, not four, and this paragraph exists because the docblock claimed
+ * otherwise.** The wrap sweep (`composition.spec.ts:291`) consumes `SWEPT`; the width, reflow and
+ * first-row sweeps in the same file still carry their own inline lists at `:523`, `:743` and
+ * `:783`. Two of those three already include `members` and the third excludes it for a stated
+ * reason, so there is no live blind spot — but nothing gates them against drifting the way the
+ * wrap list did, and the census below **cannot see them**: it compares this file against the
+ * probe's `PAGES` and has no reach into an array literal in a test body. Finishing the migration
+ * is `docs/TECH_DEBT.md` #346 rather than this epic's last milestone, because each of the three
+ * needs a different subset and a shared-gate change belongs in its own change (ADR-0105).
  *
  * **Scope boundary, stated so "the gate reads the estate" is not over-read:** the estate here is
  * *the probe's* estate. `DataTable` has 23 call sites across 17 files, and `ActivitiesTable`,
@@ -123,6 +133,21 @@ export interface WrapObservation {
  * never mentioned `width`, which is ADR-0146 D3's rule ("`auto` must be written down") turned from
  * prose into something an instrument can read.
  *
+ * **`bounded` is tolerated too, and the first version of this got that wrong.** It shipped treating
+ * a wrapping `bounded` column as a finding, under a test citing "ADR-0145 M4-T2's defect" — and
+ * that citation does not hold: M4-T2's defect was fixed-pixel caps (`md:w-44`), remedied by
+ * introducing `fit`, which is the value that must never wrap. `bounded`'s own docblock says the
+ * opposite of what the gate was asserting — _"may grow, up to a reading measure, then wrap … It
+ * still WRAPS, which is the difference from `fit`"_ — so the gate would have gone red for exactly
+ * the behaviour the value promises, and the obvious fix would have been to re-declare the column
+ * `auto`, leaving `bounded` a value nobody can safely use.
+ *
+ * The discriminator is therefore **whether the declaration permits a wrap**, not which of two words
+ * it is: `auto` and `bounded` both say so, `fit` says the opposite, and `undeclared` says nothing.
+ * Latent rather than live — there are **zero** production `bounded` call sites today, the one grep
+ * hit being a docblock in `data-table.tsx` — which is why it is fixed now rather than on the day
+ * somebody's first `bounded` column turns a gate red for doing its job.
+ *
  * Pure, and separated from the `page.evaluate` that produces its input, so it can be tested without
  * a browser — `stack-record.structural.test.ts` is the recorded cost of asserting against a private
  * mirror of logic instead of the logic itself.
@@ -133,6 +158,7 @@ export function partitionWraps(observed: readonly WrapObservation[]): {
 } {
   const findings: WrapObservation[] = [];
   const tolerated: WrapObservation[] = [];
-  for (const wrap of observed) (wrap.colWidth === 'auto' ? tolerated : findings).push(wrap);
+  const permitsWrap = (colWidth: string): boolean => colWidth === 'auto' || colWidth === 'bounded';
+  for (const wrap of observed) (permitsWrap(wrap.colWidth) ? tolerated : findings).push(wrap);
   return { findings, tolerated };
 }

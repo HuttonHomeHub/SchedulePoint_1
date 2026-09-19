@@ -85,7 +85,7 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
        *
        * They were columns, and in a 466/649/732px grid track all three of this table's text
        * columns wrapped at **every** width measured — the address broken mid-token, and
-       * `Expires 26 Sept 2026, 16:57` over four lines inside 62px
+       * `Expires 26 Sept 2026, 16:57` over **five** lines inside 62px
        * (`docs/specs/table-wrap-coverage/m0/README.md`). Seven remedies were measured in one
        * sitting (`m2/README.md` §3) and this is the only one that fits: `naturalTotal` **750 →
        * 454**, zero wrapped cells at 1280, 1646 and 1920, **without declaring any column `auto`**
@@ -136,7 +136,18 @@ export function InvitationsSection({ orgSlug }: { orgSlug: string }): React.Reac
         </span>
       ),
     },
-    { header: 'Role', cell: (invitation) => ROLE_LABELS[invitation.role] },
+    {
+      header: 'Role',
+      /**
+       * **`fit`, so the slack goes to the cell carrying the dense content** — `DataTable`'s own
+       * rule: `fit` is for a value with a known bounded shape, which four role labels are. It was
+       * undeclared and rendered 85px at 1646 and 97px at 1920 for content needing 65
+       * (`m3/cf-1646.json`), i.e. 20–32px of dead space in front of `Actions` while the folded
+       * address line beside it was the tightest thing in the table.
+       */
+      width: 'fit',
+      cell: (invitation) => ROLE_LABELS[invitation.role],
+    },
     {
       header: 'Actions',
       srHeader: true,

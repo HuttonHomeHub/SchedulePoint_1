@@ -293,4 +293,52 @@ describe('DataTable — Column.width', () => {
     expect(cell).toContain('md:max-w-prose');
     expect(cell).not.toContain('md:max-w-40');
   });
+
+  /**
+   * **`data-col-width`, the attribute that makes `width: 'auto'` observable.**
+   *
+   * `docs/specs/table-wrap-coverage/feature-spec.md:465` says "Pinned by a unit test in both
+   * branches" and **there was no such test** — `docs/TECH_DEBT.md` #344's M1-T2 specified it
+   * precisely and the milestone shipped without it, which the M5 component review found by
+   * checking the claim rather than reading it. That matters more than a missing assertion usually
+   * would: the wrap gate's entire discriminator is `auto` (declared) against `undeclared`
+   * (omitted), so this attribute is the only channel by which a `width` declaration reaches an
+   * instrument, and the deliberate skeleton omission below had nothing holding it against a
+   * well-meaning tidy-up.
+   */
+  describe('the width declaration, as an attribute (docs/TECH_DEBT.md #344)', () => {
+    const declared: Column<Row>[] = [
+      { header: 'Fit', width: 'fit', cell: (row) => row.name },
+      { header: 'Bounded', width: 'bounded', cell: (row) => row.name },
+      { header: 'Auto', width: 'auto', cell: (row) => row.name },
+      { header: 'Silent', cell: (row) => row.name },
+    ];
+
+    it('emits each column’s declaration on its header and its cells', () => {
+      const { container } = render(
+        <DataTable
+          {...common}
+          columns={declared}
+          query={query({ data: [{ id: '1', name: 'a' }] })}
+        />,
+      );
+
+      const read = (selector: string): (string | null)[] =>
+        [...container.querySelectorAll(selector)].map((el) => el.getAttribute('data-col-width'));
+
+      // `undeclared` rather than an absent attribute: "this column never mentioned width" has to be
+      // a value a sweep can read, or omission and `auto` are indistinguishable in the DOM and the
+      // gate's discriminator does not exist.
+      expect(read('thead th')).toEqual(['fit', 'bounded', 'auto', 'undeclared']);
+      expect(read('tbody td')).toEqual(['fit', 'bounded', 'auto', 'undeclared']);
+    });
+
+    it('emits NOTHING on the loading skeleton, which is the strict reading rather than a hole', () => {
+      const { container } = render(
+        <DataTable {...common} columns={declared} query={query({ isPending: true })} />,
+      );
+
+      expect(container.querySelectorAll('[data-col-width]')).toHaveLength(0);
+    });
+  });
 });

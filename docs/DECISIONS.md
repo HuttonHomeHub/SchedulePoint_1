@@ -10,6 +10,66 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-19 — A gate's roster is the thing to check, not its condition
+
+**What was decided.** `docs/TECH_DEBT.md` #344's wrap gate judges a wrapped cell by **the column's
+own `width` declaration** and never by whether its table has spare width; its screen list is
+declared once in `apps/web/e2e-page-composition/screen-roster.ts` and read by all four sweeps; and
+`width: 'auto'` becomes observable in the DOM (`data-col-width`) so the rule is a fact rather than a
+convention. The superseded three-screen assertion is deleted rather than kept beside it.
+
+**Why.** The register row's first reading blamed the gate's **condition** — it concluded Members
+escaped because its table has no slack. That was wrong, and reading the gate's source rather than
+its name is what corrected it: the gate swept `calendars`, `resources` and `clients`, and **never
+visited the screen**. Three of ten.
+
+**FC-2 was stated three ways and only one of them was in the body.** The test's title said
+`no table cell wraps while its table has room`; its failure message printed
+`${path} has a cell wrapping inside a table with room`; the canonical condition in
+`page-composition/feature-spec.md:375` has **no slack clause at all**; and the body asserted no
+wrap, on three screens, checking slack nowhere. A sentence in a title and a sentence in an error
+string, neither implemented, and one of them is what a reader takes away from a red run.
+
+**A slack rule would have been a gate incapable of failing**, which is the measurement that settled
+it: **zero of the nine wraps in the measured estate sit in a table with positive slack**
+(`m0/README.md` §2). It would have excused this epic's defect and the audit log's deliberate one
+alike.
+
+**Three consequences worth keeping.**
+
+_The M8 verdict that missed it was evidenced by a reading taken two milestones earlier._ ADR-0146's
+FC-2 is recorded PASS in `m8-verdict.md:16` against `m2-measurement.md`, and the estate M8 left is
+not the estate M2 measured. A condition judged once and quoted afterwards is a claim like any other
+(ADR-0058) — and this is the first recorded instance of that shape inside a falsification table.
+
+_`width: 'auto'` is now load-bearing._ It still compiles to no CSS, and deleting it from a column
+that needs it turns a gate red — verified against `AuditEventList`, the one place in the product
+that deliberately wraps. A line whose whole documented property was "this changes nothing" now
+changes something, and `data-table.tsx` says so where somebody tidying it will read it.
+
+_Arming the gate found a defect in the gate._ `getComputedStyle(el).font` serialises to the **empty
+string** in Chromium whenever a longhand it cannot express is non-initial — Tailwind's `text-sm`
+sets `line-height`, so it is empty for every cell here. The journey's clone measured at the document
+default 16px against the product's 14px: every string ~14 % too wide, and a `text-xs` sub-line at
+16px rather than 12px ~33 % too wide. `measure-column-fit.mjs` never had it, because it copies the
+longhands. Two implementations of one rule (ADR-0065), and **arming the limb is what made them
+answer the same question**. The duplication is `docs/TECH_DEBT.md` #345.
+
+**Two of my own mistakes are recorded because the corrections are the useful part.**
+
+The first response to that finding was to change the **product** — stacking the folded facts rather
+than letting them reflow — on the theory that making the two detectors agree was a layout problem.
+It reproduced unchanged, and that failure is what sent the diagnosis one level down. Reverted: the
+layout it would have changed is the one M2's measurement had already chosen.
+
+And renaming the table's caption to fix a real duplicate-accessible-name defect broke four locators
+in `e2e-overview/members.spec.ts`, a suite this work never touched. `scripts/e2e-sweep.sh` exists
+for exactly this and its own docblock records three prior instances; I ran the suite CI would have
+named and not the sweep, which is what that docblock says never works. Found by a specialist review.
+**Three of the four would have failed loudly; the fourth would have passed vacuously**, because
+`toBeHidden()` on a name that no longer exists matches nothing — the more dangerous half, and the
+reason that file now names its positive control.
+
 ## 2026-09-17 — Reconciliation pass: the register's one `unverified` row is now measured
 
 **What was decided.** A second pass, one day after the 2026-09-16 one and at the product owner's
