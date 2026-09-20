@@ -86,6 +86,7 @@ const BASE: ActivitySummary = {
   visualEffectiveFinish: null,
   visualConflict: false,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,

@@ -133,9 +133,10 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   'visualEffectiveFinish',
   'visualConflict',
   'visualDriftDays',
-  // one-planning-surface M-A. The column exists and NO DTO exposes it yet, so a guest receives
-  // nothing — deny-by-default, and the honest description of today's state rather than a decision
-  // about M-E's float read-out, which is that milestone's to make.
+  // one-planning-surface. M-A added this entry when the column existed and no DTO exposed it —
+  // deny-by-default, and true of that milestone. **M-D exposes it on the member DTO**, so the entry
+  // now carries its real weight rather than describing an absence: the guest scope is SCHEDULE_READ
+  // (ADR-0051), and a float is analysis, not the schedule a share link exists to show.
   'remainingFloat',
   'levelingPriority',
   'leveledStart',

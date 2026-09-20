@@ -10617,6 +10617,33 @@ Neither is a defect in the shipped code. The action is to re-take the web number
 finish, and to decide whether a floor with a quarter of a point of headroom is still a ratchet or
 has become a tripwire.
 
+### 351. 61 web test files hand-build an `ActivitySummary` beside a shared factory that exists
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (one-planning-surface M-D; found by a required field breaking every one of them) · **Size:** M · **Owner:** web
+
+`apps/web/src/test/activity-fixture.ts` exists and builds an `ActivitySummary` with every field
+defaulted. **61 test files do not use it** and construct the whole ~60-field object by hand
+instead.
+
+Measured, not estimated: adding one required field to the shared type produced **63 typecheck
+errors** — 61 hand-built fixtures plus two production files that legitimately enumerate every field
+(`clone-projection.ts`'s disposition census and `guest-api.ts`'s widening, both of which SHOULD
+break, because each is a per-field decision somebody has to make).
+
+The 61 should not. Each was a mechanical `remainingFloat: null,` insertion carrying no information,
+and the same sweep will be required by every future field. It is not merely churn: a hand-built
+fixture also silently stops matching the shape the product produces, one field at a time, and
+nothing reports that — the fixtures compile, so they look maintained.
+
+**Why the factory was missed until now, which is the part worth carrying.** It is
+`src/test/activity-fixture.ts`, not `*.test.ts`, so a sweep scoped to test files does not find it —
+this one did not, and the last error in the run was the factory itself failing to satisfy the type
+it produces. A grep for `visualDriftDays:` in test files returned 61 and the answer was 62.
+
+**Not fixed here.** Converting 61 files is a mechanical change with a real review cost and no
+behavioural content, and folding it into a milestone that changes the engine would make that
+milestone's diff unreadable — ADR-0105's trigger in miniature. It wants its own small change.
+
 ### 349. `e2e-local.sh` refuses a busy port and not a busy database — so a contended run reports a product defect
 
 **Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (one-planning-surface M-B-T1; the same wall hit independently by a second agent in the same hour) · **Size:** S · **Owner:** repo

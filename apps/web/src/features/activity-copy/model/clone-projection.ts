@@ -238,6 +238,12 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
     disposition: 'withheld',
     reason: 'Engine output of the ADR-0033 second pass.',
   },
+  remainingFloat: {
+    disposition: 'withheld',
+    reason:
+      'Engine output (one-planning-surface M-D): total float minus the drift, recomputed by the ' +
+      'next recalculation. A clone carries no placement, so it has no drift to have spent.',
+  },
   leveledStart: { disposition: 'withheld', reason: 'Levelling output (ADR-0041), engine-owned.' },
   leveledFinish: { disposition: 'withheld', reason: 'Levelling output (ADR-0041), engine-owned.' },
   levelingDelayDays: {

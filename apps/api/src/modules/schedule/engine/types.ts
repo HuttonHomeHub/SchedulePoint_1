@@ -317,6 +317,24 @@ export interface EngineResult {
   visualConflict: boolean;
   visualDriftMinutes: number | null;
   /**
+   * **The float a hand-placed bar has left** (M-D; `docs/specs/one-planning-surface/` §4.3).
+   *
+   * `totalFloat` is measured from the pure-network EARLY finish. Once a planner places a bar, part
+   * of that room is already spent on the drift, so what remains is `totalFloat − drift`. Working
+   * **minutes** here, like `totalFloat` and `visualDriftMinutes`, and day-denominated exactly once
+   * at the write boundary on the activity's own calendar (ADR-0068 §4, ADR-0139).
+   *
+   * **The single rounding is the whole point.** A client subtracting the two day-denominated
+   * columns computes `round(T/f) − round(d/f)`, which is not `round((T − d)/f)` — on an eight-hour
+   * calendar those disagree by a whole day at ordinary values. Minutes are persisted for **neither**
+   * input, so a read-time derivation could only ever be the wrong one; that is why this is computed
+   * here and stored rather than derived on the way out.
+   *
+   * Never null: an unplaced activity has spent no drift, so its remaining float is its total float.
+   * That identity is asserted rather than assumed — it is also the shape a vacuous test would have.
+   */
+  remainingFloatMinutes: number;
+  /**
    * Resource-levelling overlay (ADR-0041 §3, Q2) — **additive**: produced by the opt-in
    * {@link levelSchedule} second pass and merged onto the network result; the pure
    * `early*`/`late*`/`totalFloat`/`isCritical` above are **never recomputed** on the leveled dates

@@ -644,6 +644,19 @@ export interface ActivitySummary {
   visualConflict: boolean;
   /** Engine-owned (ADR-0033): working-day offset of the placement from the early start (signed), or null. */
   visualDriftDays: number | null;
+  /**
+   * Engine-owned (one-planning-surface M-D): the working-day float a placement has NOT spent —
+   * `totalFloat - visualDriftDays`, **subtracted in minutes and rounded once**. Null until the plan
+   * is first calculated; equal to `totalFloat` wherever nothing is placed.
+   *
+   * **Negative is meaningful**, not an error state: the bar sits past what its own float allows.
+   *
+   * **Never derive this client-side from the two day columns.** The difference of two roundings is
+   * not the rounding of the difference wherever the drift is not a whole multiple of the activity's
+   * hours-per-day (ADR-0068), which a sub-day duration (ADR-0070) makes ordinary — and minutes are
+   * persisted for neither input, so no client can compute the right answer at all.
+   */
+  remainingFloat: number | null;
   // Resource-levelling overlay — engine-owned (ADR-0041 §3/§6 / Q2). The opt-in second levelling pass
   // (plan `levelResources`) runs AFTER the pure CPM network pass and produces these additive positions;
   // the pure early/late/float/critical are NOT recomputed on the leveled dates (network float stays

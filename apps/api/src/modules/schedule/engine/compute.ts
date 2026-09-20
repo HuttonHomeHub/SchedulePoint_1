@@ -887,6 +887,10 @@ export function computeSchedule(
         : workingIndexDate(cal, dataDate, vInclusiveFinishOwn),
       visualConflict: visualConflictMap.get(id)!,
       visualDriftMinutes: visualDriftMap.get(id)!,
+      // Remaining float (M-D): the room a placement has NOT already spent. Subtracted in minutes
+      // and converted once at the write boundary — see the field's docblock for why a client
+      // subtracting the two day columns gets a different, wrong answer.
+      remainingFloatMinutes: totalFloat - (visualDriftMap.get(id) ?? 0),
     });
   }
 

@@ -147,6 +147,7 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveFinish: null,
   visualConflict: false,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: 7,
   leveledStart: null,
   leveledFinish: null,

@@ -73,6 +73,7 @@ function source(): ActivitySummary {
     visualEffectiveFinish: '2026-01-11',
     visualConflict: true,
     visualDriftDays: 2,
+    remainingFloat: null,
     levelingPriority: 4,
     leveledStart: '2026-01-12',
     leveledFinish: '2026-01-14',
@@ -106,7 +107,12 @@ describe('the clone field census', () => {
     // on read from the driving assignment, so a clone carries no assignments and the server would
     // recompute it anyway — classified `withheld`. The tripwire did exactly its job here: it is the
     // only thing that asked why the shape moved.
-    expect(entries.length).toBe(60);
+    //
+    // 60 -> 61 on 2026-09-20: `remainingFloat` (one-planning-surface M-D). Engine output — total
+    // float minus the drift, recomputed by the next recalculation — and a clone carries no
+    // placement, so it has no drift to have spent. Classified `withheld`, same as its two
+    // ADR-0033 neighbours. The tripwire asked again, and this is the answer.
+    expect(entries.length).toBe(61);
   });
 
   it('sends nothing the census withholds', () => {

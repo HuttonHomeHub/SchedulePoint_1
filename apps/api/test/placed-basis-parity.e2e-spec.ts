@@ -230,4 +230,162 @@ describe.skipIf(!hasDatabase)('Placed-basis parity where nothing is placed (e2e)
     expect(by('DONE').earlyStart).toBe('2026-01-02');
     expect(by('DONE').earlyFinish).toBe('2026-01-03');
   });
+  /**
+   * **FC-4 — remaining float, over the real route, where the naive derivation is wrong** (M-D).
+   *
+   * `schedule.repository.day-factor.spec.ts` pins the arithmetic and states in its own docblock what
+   * it cannot see: it mocks `$executeRaw`, so **deleting the column from the `UPDATE SET` leaves it
+   * green** while the computed value reaches no column at all. Measured, not assumed — three
+   * mutations were run there and that one does not discriminate. This closes it by reading the value
+   * back over the public route from a real database.
+   *
+   * **The fixture is chosen so the two forms disagree**, because one where they agree passes against
+   * both implementations — the ADR-0139 shape. Eight-hour days; a four-hour predecessor so the
+   * successor's early start lands half a day in; the successor placed two days out. Drift is then
+   * `2 × 480 − 240 = 720` working minutes, total float 0, and:
+   *
+   * - naive (what a client can compute): `round(0/480) − round(720/480)` = `0 − 2` = **−2**
+   * - correct (one rounding): `round((0 − 720)/480)` = `round(−1.5)` = **−1**
+   *
+   * A planner nudging a critical bar a day and a half is told it is one day past its float, not two.
+   */
+  describe('remaining float over the public route (FC-4)', () => {
+    it('reports the single-rounding value, which the two day columns cannot produce', async () => {
+      const actor = await signUp('fc4-admin@example.com');
+      await actor.agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
+
+      // An eight-hour working day, Monday–Friday. Authored through the real calendar route, so the
+      // hours-per-day factor is derived the way ADR-0068 derives it and not asserted here.
+      const shifts = [0, 1, 2, 3, 4].map((weekday) => ({
+        weekday,
+        startMinute: 9 * 60,
+        endMinute: 17 * 60,
+      }));
+      const calendar = await actor.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({ name: 'Eight hours', shifts })
+        .expect(201);
+
+      const client = await actor.agent
+        .post('/api/v1/organizations/acme/clients')
+        .send({ name: 'Northgate' })
+        .expect(201);
+      const project = await actor.agent
+        .post(`/api/v1/organizations/acme/clients/${client.body.data.id}/projects`)
+        .send({ name: 'Riverside' })
+        .expect(201);
+      // Monday 2026-01-05, so the first working day is the data date itself.
+      const plan = await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
+        .send({ name: 'Eight-hour plan', plannedStart: '2026-01-05' })
+        .expect(201);
+      const planId = plan.body.data.id as string;
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ calendarId: calendar.body.data.id, version: plan.body.data.version })
+        .expect(200);
+
+      const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+      // Four HOURS, not days — this is what makes the successor's early start non-day-aligned, and
+      // without it the drift is a whole multiple of the factor and the two forms agree identically.
+      const lift = await actor.agent
+        .post(base)
+        .send({ name: 'Crane lift', code: 'LIFT', durationMinutes: 240 })
+        .expect(201);
+      const pour = await actor.agent
+        .post(base)
+        .send({ name: 'Pour', code: 'POUR', durationDays: 1, visualStart: '2026-01-07' })
+        .expect(201);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: lift.body.data.id, successorId: pour.body.data.id, type: 'FS' })
+        .expect(201);
+
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+      const rows = (await actor.agent.get(`${base}?limit=100`).expect(200)).body.data as {
+        code: string;
+        totalFloat: number | null;
+        visualDriftDays: number | null;
+        remainingFloat: number | null;
+      }[];
+      const placed = rows.find((r) => r.code === 'POUR')!;
+
+      // The fixture is only worth anything if the two forms disagree on it — assert that FIRST, or a
+      // change to the calendar or the durations could quietly make this case prove nothing.
+      const naive = (placed.totalFloat ?? 0) - (placed.visualDriftDays ?? 0);
+      expect(placed.visualDriftDays, 'the placement must have a sub-day-aligned drift').not.toBe(0);
+      expect(
+        placed.remainingFloat,
+        'the value must not be null — the plan was recalculated',
+      ).not.toBe(null);
+      expect(
+        naive,
+        'the fixture must make the naive and correct forms disagree, or it tests nothing',
+      ).not.toBe(placed.remainingFloat);
+      expect(placed.remainingFloat).toBe(-1);
+      expect(naive).toBe(-2);
+    });
+
+    it('equals total float on an activity nobody placed', async () => {
+      // The other half, and it is not filler: it is the identity M-D's engine field claims, and
+      // without it a build that wrote null (or zero) everywhere would satisfy the case above by
+      // accident of sign.
+      const actor = await signUp('fc4-unplaced@example.com');
+      await actor.agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
+      const client = await actor.agent
+        .post('/api/v1/organizations/acme/clients')
+        .send({ name: 'Northgate' })
+        .expect(201);
+      const project = await actor.agent
+        .post(`/api/v1/organizations/acme/clients/${client.body.data.id}/projects`)
+        .send({ name: 'Riverside' })
+        .expect(201);
+      const plan = await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
+        .send({ name: 'Unplaced', plannedStart: '2026-01-05' })
+        .expect(201);
+      const planId = plan.body.data.id as string;
+      const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+      const a = await actor.agent
+        .post(base)
+        .send({ name: 'Long', code: 'LONG', durationDays: 2 })
+        .expect(201);
+      const b = await actor.agent
+        .post(base)
+        .send({ name: 'Short', code: 'SHORT', durationDays: 1 })
+        .expect(201);
+      const c = await actor.agent
+        .post(base)
+        .send({ name: 'Join', code: 'JOIN', durationDays: 1 })
+        .expect(201);
+      for (const pred of [a, b]) {
+        await actor.agent
+          .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+          .send({ predecessorId: pred.body.data.id, successorId: c.body.data.id, type: 'FS' })
+          .expect(201);
+      }
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+      const rows = (await actor.agent.get(`${base}?limit=100`).expect(200)).body.data as {
+        code: string;
+        totalFloat: number | null;
+        remainingFloat: number | null;
+      }[];
+      // A float-bearing row must exist, or "they are equal" is true of nothing interesting.
+      expect(
+        rows.some((r) => (r.totalFloat ?? 0) > 0),
+        'the fixture needs real float',
+      ).toBe(true);
+      for (const r of rows) {
+        expect(r.remainingFloat, `${r.code} remaining float`).toBe(r.totalFloat);
+      }
+    });
+  });
 });

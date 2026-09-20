@@ -351,6 +351,20 @@ export class ActivityResponseDto implements ActivitySummary {
     nullable: true,
     type: Number,
     description:
+      'Working-day float a placement has NOT spent: total float minus the drift (signed, ' +
+      'engine-owned). Null until the plan is first calculated. Equal to totalFloat wherever ' +
+      'nothing is placed. NEGATIVE is meaningful, not an error — it means the bar was placed ' +
+      'past what its own float allows. Do NOT derive this by subtracting visualDriftDays from ' +
+      'totalFloat: both are already rounded to days, and the difference of two roundings is not ' +
+      'the rounding of the difference wherever the drift is not a whole multiple of the ' +
+      "activity's hours-per-day (ADR-0068) — which a sub-day duration (ADR-0070) makes ordinary.",
+  })
+  remainingFloat!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
       'Resource-levelling tie-break (ADR-0041 §1): LOWER = HIGHER priority. Client-settable; null = unset.',
   })
   levelingPriority!: number | null;
@@ -478,6 +492,7 @@ export class ActivityResponseDto implements ActivitySummary {
       visualEffectiveFinish: day(entity.visualEffectiveFinish),
       visualConflict: entity.visualConflict,
       visualDriftDays: entity.visualDriftDays,
+      remainingFloat: entity.remainingFloat,
       // Resource-levelling overlay (ADR-0041) — client-settable priority + engine-owned overlay.
       levelingPriority: entity.levelingPriority,
       leveledStart: day(entity.leveledStart),

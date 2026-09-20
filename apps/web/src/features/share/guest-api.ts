@@ -228,6 +228,10 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     visualEffectiveFinish: null,
     visualConflict: false,
     visualDriftDays: null,
+    // Null, like its neighbours: the guest scope is SCHEDULE_READ (ADR-0051) and a float is
+    // analysis. `guest-dto.spec.ts` forbids the field on the wire, so there is nothing to widen
+    // this from — the null is the honest value, not a placeholder.
+    remainingFloat: null,
     leveledStart: null,
     leveledFinish: null,
     levelingDelayDays: null,

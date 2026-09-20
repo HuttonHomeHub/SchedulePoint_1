@@ -772,6 +772,24 @@ export class ScheduleRepository {
         ? null
         : Math.round(r.visualDriftMinutes / factorFor(r.activityId)),
     );
+    /**
+     * Remaining float (M-D) — the float a placement has NOT already spent, day-denominated on the
+     * activity's own calendar like the two floats above.
+     *
+     * **Divided ONCE, from the engine's minute quantity.** The tempting derivation is
+     * `totalFloat[i] - visualDriftDays[i]`, both already computed two lines up — and it is a
+     * different number: `round(T/f) - round(d/f) ≠ round((T - d)/f)` wherever the drift is not a
+     * whole multiple of the factor, which a sub-day duration (ADR-0070) makes ordinary. At T = 0
+     * with a half-day drift on an eight-hour calendar the naive form reports **-1 day** of float on
+     * an activity that has exactly none left to spend.
+     *
+     * A client cannot compute the right answer either, and that is the argument for the column
+     * rather than a DTO derivation: minutes are persisted for NEITHER input, so anything downstream
+     * of this write has only the two rounded day values and can only ever produce the wrong form.
+     */
+    const remainingFloat = results.map((r) =>
+      Math.round(r.remainingFloatMinutes / factorFor(r.activityId)),
+    );
     // Resource-levelling overlay (ADR-0041 §3/§7) — engine-owned, written by this same batch so it
     // stays out of the version/updated_at optimistic-lock path. Null/false on every activity when
     // levelling is off (the pass never ran), which also CLEARS a stale overlay from a prior run.
@@ -809,6 +827,7 @@ export class ScheduleRepository {
         visual_effective_finish = v.visual_effective_finish,
         visual_conflict = v.visual_conflict,
         visual_drift_days = v.visual_drift_days,
+        remaining_float = v.remaining_float,
         leveled_start = v.leveled_start,
         leveled_finish = v.leveled_finish,
         leveling_delay_minutes = v.leveling_delay_minutes,
@@ -832,6 +851,7 @@ export class ScheduleRepository {
         ${visualEffectiveFinish}::date[],
         ${visualConflict}::boolean[],
         ${visualDriftDays}::int[],
+        ${remainingFloat}::int[],
         ${leveledStart}::text[]::date[],
         ${leveledFinish}::text[]::date[],
         ${levelingDelayMinutes}::int[],
@@ -841,7 +861,7 @@ export class ScheduleRepository {
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
         external_driven, loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
-        visual_conflict, visual_drift_days, leveled_start, leveled_finish,
+        visual_conflict, visual_drift_days, remaining_float, leveled_start, leveled_finish,
         leveling_delay_minutes, leveling_window_exceeded, self_over_allocated
       )
       WHERE a.id = v.id
