@@ -328,11 +328,26 @@ const BASELINES_OVER_PLACED_PLANS: DiagnosticEntry = {
  *   `early_start IS NULL` (never scheduled) and `early_start < constraint_date`.
  *
  * **That second case is why this is four classes and not three**, and the plan for this milestone
- * called its three "exhaustive and disjoint". After a recalculation `max(...)` makes
- * `early_start < constraint_date` unreachable — but the stored schedule can PREDATE the constraint,
- * because setting one does not recalculate the plan. Those rows are not inert and not binding; they
- * are unmeasured, and a migration cannot know where their bar would land. They are counted here and
- * touched by nothing.
+ * called its three "exhaustive and disjoint". It arises two ways, and the first draft of this
+ * paragraph named only the weaker one:
+ *
+ * - **The stored schedule predates the constraint.** Setting one does not recalculate the plan, so
+ *   `early_start` can be older than `constraint_date`. This clears itself on the next
+ *   recalculation.
+ * - **The activity has started, and it NEVER clears.** `compute.ts:765` is
+ *   `started ? activity.actualStart! : workingIndexDate(...)` — an actual start is written
+ *   **verbatim**, bypassing `clampForwardStart` altogether ("actuals never move", ADR-0035 §1). So
+ *   an activity that began on 2 January under an SNET of 15 January reads
+ *   `early_start < constraint_date` in a schedule computed seconds ago, permanently.
+ *
+ * This docblock asserted the opposite — that `max(...)` makes the case unreachable after a
+ * recalculation — until a `database-architect` probe ran it and found the progressed row. The
+ * arithmetic was right about the clamp and wrong about which rows reach it, which is why the
+ * distinction matters here: anything telling a planner these will resolve on the next
+ * recalculation would be false for the second group.
+ *
+ * Either way such a row is neither binding nor inert, it is unmeasured against its constraint, and
+ * a migration cannot know where its bar would land. They are counted here and touched by nothing.
  *
  * The three numerators are disjoint and their union is this shared denominator, which is the
  * cheapest possible guard against a mis-written `WHERE` and is asserted in the repository spec.
