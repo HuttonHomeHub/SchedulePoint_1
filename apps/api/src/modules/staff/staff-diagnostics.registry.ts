@@ -21,7 +21,17 @@ import { Prisma } from '@prisma/client';
  */
 
 /** The identifiers this console can report. A literal union, never an open string. */
-export const DIAGNOSTIC_IDS = ['day-factor-divergence', 'inherited-day-factor'] as const;
+export const DIAGNOSTIC_IDS = [
+  'day-factor-divergence',
+  'inherited-day-factor',
+  'visual-placement-plans',
+  'visual-placement-activities',
+  'baselines-over-placed-plans',
+  'snet-binding',
+  'snet-inert',
+  'snet-unclassified',
+  'snet-full-baseline-coverage',
+] as const;
 
 export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
 
@@ -199,5 +209,259 @@ const INHERITED_DAY_FACTOR: DiagnosticEntry = {
   `,
 };
 
+// ---------------------------------------------------------------------------------------------
+// The one-planning-surface readings (M0). `nature: 'prospective'` while that epic is open.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * **D-C — how much of the estate has ever been placed by hand.**
+ *
+ * A plan holding at least one activity with a `visual_start`. This is deliberately NOT filtered by
+ * `plans.scheduling_mode`: a placement written while the plan was `VISUAL` survives a switch back
+ * to `EARLY`, so filtering on the plan's CURRENT mode would undercount the population the collapse
+ * is about. The column is the evidence; the mode is not.
+ *
+ * `affected` and `affected_plans` are necessarily equal here because the unit of the question IS a
+ * plan. That redundancy is the fixed row shape doing its job rather than a mistake — a shape that
+ * bent per entry is what gate S-5 exists to prevent.
+ */
+const VISUAL_PLACEMENT_PLANS: DiagnosticEntry = {
+  id: 'visual-placement-plans',
+  label: 'Plans carrying a hand-placed activity',
+  nature: 'prospective',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM plans p
+    WHERE p.deleted_at IS NULL
+  `,
+  numerator: Prisma.sql`
+    SELECT count(DISTINCT p.id) AS affected,
+           count(DISTINCT p.id) AS affected_plans,
+           count(DISTINCT p.organization_id) AS affected_organizations
+    FROM plans p
+    JOIN activities a ON a.plan_id = p.id AND a.deleted_at IS NULL
+                     AND a.visual_start IS NOT NULL
+    WHERE p.deleted_at IS NULL
+  `,
+};
+
+/**
+ * **D-D — the same question at activity grain, which is the one that sizes the work.**
+ *
+ * One plan with four hundred placements and one plan with one are the same number under D-C. The
+ * overlay milestone's cost, the golden re-baseline's size and the strip's blast radius all track
+ * this count and not that one.
+ */
+const VISUAL_PLACEMENT_ACTIVITIES: DiagnosticEntry = {
+  id: 'visual-placement-activities',
+  label: 'Activities hand-placed (visual_start set)',
+  nature: 'prospective',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+  `,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL AND a.visual_start IS NOT NULL
+  `,
+};
+
+/**
+ * **D-E — baselines taken over a plan that carries a placement.**
+ *
+ * A baseline freezes the engine's OUTPUT (ADR-0025, ADR-0126) and can never be backfilled. Every
+ * baseline counted here was captured while its plan's placements meant what they mean today, and
+ * will be compared against plans where they mean something else once the collapse lands. The count
+ * decides whether the capture-level discriminator needs a migration or merely a default.
+ *
+ * Counted at BASELINE grain, so `affected` exceeds `affected_plans` wherever a plan has been
+ * baselined more than once — which is the normal case and is the number that matters, because each
+ * capture is separately comparable.
+ */
+const BASELINES_OVER_PLACED_PLANS: DiagnosticEntry = {
+  id: 'baselines-over-placed-plans',
+  label: 'Baselines captured over a plan carrying a placement',
+  nature: 'prospective',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM baselines b
+    JOIN plans p ON p.id = b.plan_id AND p.deleted_at IS NULL
+    WHERE b.deleted_at IS NULL
+  `,
+  numerator: Prisma.sql`
+    SELECT count(DISTINCT b.id) AS affected,
+           count(DISTINCT b.plan_id) AS affected_plans,
+           count(DISTINCT p.organization_id) AS affected_organizations
+    FROM baselines b
+    JOIN plans p      ON p.id = b.plan_id AND p.deleted_at IS NULL
+    JOIN activities a ON a.plan_id = b.plan_id AND a.deleted_at IS NULL
+                     AND a.visual_start IS NOT NULL
+    WHERE b.deleted_at IS NULL
+  `,
+};
+
+/**
+ * **D-F, D-G, D-H — the SNET population, split by EFFECT, because provenance is unrecoverable.**
+ *
+ * Dragging a bar on an `EARLY` plan writes `constraintType: 'SNET'` at the dropped date
+ * (`use-plan-workspace-model.ts`), overwriting whatever constraint was there. Setting one in the
+ * activity editor writes the identical row. **Nothing in the database distinguishes them** — the
+ * activity PATCH route is classified `PLAN_CONTENT` in the audit census
+ * (`audit-coverage.structural.spec.ts:264`) and is permanently unaudited under ADR-0073's
+ * content-edit exclusion, so there is no history to consult either. These entries therefore do not
+ * claim to count drag-created constraints; they count SNETs by what each one currently DOES, which
+ * is the only property that can be read.
+ *
+ * The classes come from the arithmetic and not from a taxonomy. An SNET applies as
+ * `Math.max(logicEarlyStart, constraint.startAbs)` (`engine/constraints.ts:155-156`), so:
+ *
+ * - **binding** (`early_start = constraint_date`) — the constraint is what puts the bar there.
+ * - **inert** (`early_start > constraint_date`) — logic already pushed the activity later and the
+ *   `max` discards the constraint entirely.
+ * - **unclassified** — everything else, and it is two situations rather than one:
+ *   `early_start IS NULL` (never scheduled) and `early_start < constraint_date`.
+ *
+ * **That second case is why this is four classes and not three**, and the plan for this milestone
+ * called its three "exhaustive and disjoint". After a recalculation `max(...)` makes
+ * `early_start < constraint_date` unreachable — but the stored schedule can PREDATE the constraint,
+ * because setting one does not recalculate the plan. Those rows are not inert and not binding; they
+ * are unmeasured, and a migration cannot know where their bar would land. They are counted here and
+ * touched by nothing.
+ *
+ * The three numerators are disjoint and their union is this shared denominator, which is the
+ * cheapest possible guard against a mis-written `WHERE` and is asserted in the repository spec.
+ * Only the PRIMARY constraint is considered: the drag writes `constraint_type`, and
+ * `secondary_constraint_type` is out of this question's scope rather than merely unexamined.
+ */
+const SNET_DENOMINATOR = Prisma.sql`
+  SELECT count(*) AS examined
+  FROM activities a
+  JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+  WHERE a.deleted_at IS NULL
+    AND a.constraint_type = 'SNET'
+    AND a.constraint_date IS NOT NULL
+`;
+
+const SNET_BINDING: DiagnosticEntry = {
+  id: 'snet-binding',
+  label: 'SNETs that currently place their activity',
+  nature: 'prospective',
+  denominator: SNET_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.constraint_type = 'SNET'
+      AND a.constraint_date IS NOT NULL
+      AND a.early_start = a.constraint_date
+  `,
+};
+
+const SNET_INERT: DiagnosticEntry = {
+  id: 'snet-inert',
+  label: 'SNETs logic has already overtaken',
+  nature: 'prospective',
+  denominator: SNET_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.constraint_type = 'SNET'
+      AND a.constraint_date IS NOT NULL
+      AND a.early_start > a.constraint_date
+  `,
+};
+
+const SNET_UNCLASSIFIED: DiagnosticEntry = {
+  id: 'snet-unclassified',
+  label: 'SNETs with no readable effect (unscheduled, or schedule predates the constraint)',
+  nature: 'prospective',
+  denominator: SNET_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.constraint_type = 'SNET'
+      AND a.constraint_date IS NOT NULL
+      AND (a.early_start IS NULL OR a.early_start < a.constraint_date)
+  `,
+};
+
+/**
+ * **D-I — of the binding SNETs, how many could be recovered if a strip went wrong.**
+ *
+ * ADR-0126 froze `constraint_type` / `constraint_date` on `baseline_activities`, but only at
+ * `revision_snapshot_level = 'FULL'` and only for captures taken since that release — a `NONE`
+ * baseline holds nulls there and a row count cannot tell "there was no constraint" from "nobody
+ * looked", which is exactly what the level column exists to say. So this counts the binding set
+ * against the ONE historic copy that exists anywhere in the system.
+ *
+ * **Neither this entry nor D-E uses `EXISTS`, and that is gate S-4 rather than preference.** The
+ * natural shape is a semi-join, and its `SELECT 1` is not an aliased `count(...)`, so the gate
+ * refuses it — correctly, even though an `EXISTS` projection is discarded and cannot reach the row
+ * shape. Widening a boundary gate to admit a form this file happens to want is the wrong way round,
+ * so both are written as joins with `count(DISTINCT ...)`, which is also why the distinct matters:
+ * a plan with several FULL baselines produces one row per covering capture.
+ *
+ * The join is `baseline_activities.source_activity_id = activities.id`: a PLAIN correlation UUID
+ * with no foreign key (ADR-0025), which is why this is an `EXISTS` over a non-FK column rather than
+ * a relation traversal. A low number here does not block anything by itself; it sizes how much of
+ * an irreversible migration would be irreversible in practice.
+ */
+const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
+  id: 'snet-full-baseline-coverage',
+  label: 'Binding SNETs a FULL baseline could restore',
+  nature: 'prospective',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.constraint_type = 'SNET'
+      AND a.constraint_date IS NOT NULL
+      AND a.early_start = a.constraint_date
+  `,
+  numerator: Prisma.sql`
+    SELECT count(DISTINCT a.id) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p               ON p.id = a.plan_id AND p.deleted_at IS NULL
+    JOIN baseline_activities ba ON ba.source_activity_id = a.id
+    JOIN baselines b            ON b.id = ba.baseline_id AND b.deleted_at IS NULL
+                              AND b.plan_id = a.plan_id
+                              AND b.revision_snapshot_level = 'FULL'
+    WHERE a.deleted_at IS NULL
+      AND a.constraint_type = 'SNET'
+      AND a.constraint_date IS NOT NULL
+      AND a.early_start = a.constraint_date
+  `,
+};
+
 /** The registry, in the order the panel renders it. D-A first, per CQ-1. */
-export const DIAGNOSTICS = [DAY_FACTOR_DIVERGENCE, INHERITED_DAY_FACTOR] as const;
+export const DIAGNOSTICS = [
+  DAY_FACTOR_DIVERGENCE,
+  INHERITED_DAY_FACTOR,
+  VISUAL_PLACEMENT_PLANS,
+  VISUAL_PLACEMENT_ACTIVITIES,
+  BASELINES_OVER_PLACED_PLANS,
+  SNET_BINDING,
+  SNET_INERT,
+  SNET_UNCLASSIFIED,
+  SNET_FULL_BASELINE_COVERAGE,
+] as const;

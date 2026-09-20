@@ -366,6 +366,123 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     await actor.agent.delete(`${org}/assignments/${orphaned.body.data.id as string}`).expect(204);
   }
 
+  // -------------------------------------------------------------------------------------------
+  // The one-planning-surface readings (M0). A second estate, deliberately separate from
+  // `seedEstate` above: that fixture is tuned to make the two day-factor questions discriminate,
+  // and folding placements and constraints into it would make both tables harder to read and each
+  // one's counts depend on the other's rows.
+  // -------------------------------------------------------------------------------------------
+
+  async function activityOn(
+    actor: Actor,
+    planId: string,
+    body: Record<string, unknown>,
+  ): Promise<string> {
+    const res = await actor.agent
+      .post(`${org}/plans/${planId}/activities`)
+      .send({ durationDays: 5, ...body })
+      .expect(201);
+    return res.body.data.id as string;
+  }
+
+  async function recalculate(actor: Actor, planId: string): Promise<void> {
+    await actor.agent.post(`${org}/plans/${planId}/schedule/recalculate`).expect(200);
+  }
+
+  /**
+   * **The placement estate. Three plans, and the SNET half is the part worth the setup cost.**
+   *
+   * The four SNET classes are read off `early_start` against `constraint_date`, because an SNET
+   * applies as `Math.max(logicEarlyStart, constraint.startAbs)` and provenance is unrecoverable —
+   * a drag and the activity editor write the identical row, and the PATCH route is unaudited.
+   *
+   * | Plan          | Activity     | Shape                                         | Class        |
+   * | ------------- | ------------ | --------------------------------------------- | ------------ |
+   * | Placed        | Placed A     | `visual_start` set                            | —            |
+   * | Placed        | Placed B     | `visual_start` set                            | —            |
+   * | Placed        | Unplaced     | nothing                                       | —            |
+   * | Constrained   | Anchor       | 10 d from the data date, no constraint        | —            |
+   * | Constrained   | Binding      | SNET after the data date, then recalculated   | binding      |
+   * | Constrained   | Inert        | successor of Anchor, SNET BEFORE Anchor ends  | inert        |
+   * | Constrained   | Stale        | recalculated, THEN its constraint moved later | unclassified |
+   * | Never touched | Unscheduled  | SNET, plan never recalculated                 | unclassified |
+   *
+   * **`Stale` is the row the implementation plan did not have, and it is why this is four classes
+   * and not three.** That plan called its binding / inert / unscheduled split "exhaustive and
+   * disjoint". It is not: setting a constraint does not recalculate the plan, so the stored
+   * schedule can predate it and leave `early_start < constraint_date` — a state the `max(...)`
+   * makes unreachable in a FRESH schedule and which is perfectly reachable in a stored one. This
+   * row reaches it through the public API in three ordinary calls, so it is a fact about the
+   * product rather than a hypothesis about it. Such a row is neither binding nor inert, and a
+   * migration cannot know where its bar would land, so it is counted and touched by nothing.
+   *
+   * Two baselines are captured, over DIFFERENT plans, and that separation is load-bearing: one
+   * over `Placed` (which is what `baselines-over-placed-plans` counts) and one over `Constrained`
+   * (which is what `snet-full-baseline-coverage` counts). A fixture with a single baseline over a
+   * plan that had both would let either query be wrong in the other's direction and stay green.
+   */
+  async function seedPlacementEstate(actor: Actor): Promise<void> {
+    const allDay = await calendar(actor, 'Round the clock (placements)', 24);
+
+    // --- Plan 1: placements, and the baseline that covers them -------------------------------
+    const placed = await planOn(actor, allDay, 'Placed');
+    const placedA = await activityOn(actor, placed, { name: 'Placed A' });
+    const placedB = await activityOn(actor, placed, { name: 'Placed B' });
+    await activityOn(actor, placed, { name: 'Unplaced' });
+    for (const id of [placedA, placedB]) {
+      await actor.agent
+        .patch(`${org}/activities/${id}`)
+        .send({ visualStart: '2026-03-02', version: 1 })
+        .expect(200);
+    }
+    await recalculate(actor, placed);
+    await actor.agent.post(`${org}/plans/${placed}/baselines`).send({ name: 'Over placements' });
+
+    // --- Plan 2: the three readable SNET classes ----------------------------------------------
+    const constrained = await planOn(actor, allDay, 'Constrained');
+    const anchor = await activityOn(actor, constrained, { name: 'Anchor', durationDays: 10 });
+    await activityOn(actor, constrained, {
+      name: 'Binding',
+      constraintType: 'SNET',
+      constraintDate: '2026-02-01',
+    });
+    const inert = await activityOn(actor, constrained, {
+      name: 'Inert',
+      constraintType: 'SNET',
+      constraintDate: '2026-01-02',
+    });
+    await actor.agent
+      .post(`${org}/plans/${constrained}/dependencies`)
+      .send({ predecessorId: anchor, successorId: inert })
+      .expect(201);
+    const stale = await activityOn(actor, constrained, {
+      name: 'Stale',
+      constraintType: 'SNET',
+      constraintDate: '2026-01-05',
+    });
+    await recalculate(actor, constrained);
+    await actor.agent.post(`${org}/plans/${constrained}/baselines`).send({ name: 'Over SNETs' });
+    // AFTER the recalculation, and deliberately without another: this is the whole point of the
+    // row. The stored schedule now predates the constraint it is compared against.
+    const staleNow = await actor.agent.get(`${org}/activities/${stale}`).expect(200);
+    await actor.agent
+      .patch(`${org}/activities/${stale}`)
+      .send({
+        constraintType: 'SNET',
+        constraintDate: '2026-06-01',
+        version: staleNow.body.data.version,
+      })
+      .expect(200);
+
+    // --- Plan 3: an SNET on a plan nothing has ever scheduled ---------------------------------
+    const untouched = await planOn(actor, allDay, 'Never touched');
+    await activityOn(actor, untouched, {
+      name: 'Unscheduled',
+      constraintType: 'SNET',
+      constraintDate: '2026-03-01',
+    });
+  }
+
   async function readDiagnostics(
     agent: ReturnType<typeof request.agent>,
   ): Promise<Map<string, DiagnosticRow>> {
@@ -400,6 +517,83 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     });
   });
 
+  it('counts placements and baselines over them, at both grains (M0, one planning surface)', async () => {
+    const actor = await adminWithOrg();
+    await seedPlacementEstate(actor);
+    const staff = await signedInStaff();
+
+    const byId = await readDiagnostics(staff);
+
+    // Three plans exist; one carries placements. The plan-grain and activity-grain questions are
+    // separate entries precisely because these two numbers diverge, and the fixture makes them.
+    expect(byId.get('visual-placement-plans')).toMatchObject({
+      examined: 3,
+      affected: 1,
+      affectedPlans: 1,
+      affectedOrganizations: 1,
+    });
+    expect(byId.get('visual-placement-activities')).toMatchObject({
+      examined: 8,
+      affected: 2,
+      affectedPlans: 1,
+      affectedOrganizations: 1,
+    });
+
+    // Two baselines, over different plans. Counting both would mean the placement predicate was
+    // dropped; counting neither would mean the join lost its rows.
+    expect(byId.get('baselines-over-placed-plans')).toMatchObject({
+      examined: 2,
+      affected: 1,
+      affectedPlans: 1,
+      affectedOrganizations: 1,
+    });
+  });
+
+  it('splits the SNET population by effect, exhaustively (M0, one planning surface)', async () => {
+    const actor = await adminWithOrg();
+    await seedPlacementEstate(actor);
+    const staff = await signedInStaff();
+
+    const byId = await readDiagnostics(staff);
+
+    const binding = byId.get('snet-binding');
+    const inert = byId.get('snet-inert');
+    const unclassified = byId.get('snet-unclassified');
+
+    expect(binding).toMatchObject({ examined: 4, affected: 1, affectedPlans: 1 });
+    expect(inert).toMatchObject({ examined: 4, affected: 1, affectedPlans: 1 });
+    // Two rows, in two plans: the never-scheduled one and the one whose schedule predates its
+    // constraint. `affectedPlans: 2` is what separates them from a single-cause miscount.
+    expect(unclassified).toMatchObject({ examined: 4, affected: 2, affectedPlans: 2 });
+
+    // **The cheapest possible guard against a mis-written WHERE**, and the reason the three share
+    // one denominator. A class that overlapped another, or a fourth state nobody had noticed,
+    // shows up here as arithmetic rather than as a judgement about SQL.
+    expect(
+      (binding?.affected ?? 0) + (inert?.affected ?? 0) + (unclassified?.affected ?? 0),
+      'the three classes must partition the SNET population exactly',
+    ).toBe(binding?.examined);
+  });
+
+  it('sizes what a FULL baseline could restore (M0, one planning surface)', async () => {
+    const actor = await adminWithOrg();
+    await seedPlacementEstate(actor);
+    const staff = await signedInStaff();
+
+    const byId = await readDiagnostics(staff);
+
+    // The denominator is the BINDING set, not every SNET — the only class a strip would touch.
+    // The `Constrained` baseline covers it, and the `Placed` one is over a different plan, so a
+    // query that lost its `b.plan_id = a.plan_id` clause would still report 1 here and be wrong
+    // for the wrong reason. That is what the second baseline is for.
+    expect(byId.get('snet-full-baseline-coverage')).toMatchObject({
+      examined: 1,
+      affected: 1,
+      affectedPlans: 1,
+      affectedOrganizations: 1,
+    });
+  });
+
   it('carries each entry’s nature, read from the registry rather than hard-coded', async () => {
     // TypeScript stops the field being DROPPED — it is non-optional on the DTO — and stops nothing
     // if a producer writes the wrong literal. Both entries are retrospective today, so this cannot
@@ -428,7 +622,17 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
 
     const byId = await readDiagnostics(staff);
 
-    expect([...byId.keys()]).toEqual(['day-factor-divergence', 'inherited-day-factor']);
+    expect([...byId.keys()]).toEqual([
+      'day-factor-divergence',
+      'inherited-day-factor',
+      'visual-placement-plans',
+      'visual-placement-activities',
+      'baselines-over-placed-plans',
+      'snet-binding',
+      'snet-inert',
+      'snet-unclassified',
+      'snet-full-baseline-coverage',
+    ]);
     for (const row of byId.values()) {
       expect(row).toMatchObject({ examined: 0, affected: 0, affectedPlans: 0 });
     }
