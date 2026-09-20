@@ -51,15 +51,16 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             // Canvas-first authoring ON, plus every layer it builds on (toolbar → workspace →
-            // editing surface + pen). Scheduling modes (ADR-0033) layers ON TOP of authoring and is
-            // now default-on, so it's pinned OFF here to keep this journey asserting the authoring
-            // surface it was written for (the single "Timeline start" control, no mode selector);
-            // the scheduling-modes surface is covered by its own unit suites.
+            // editing surface + pen).
+            // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
+            // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
+            // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
+            // times, each citing its neighbours as precedent. The flag now takes its default, which is
+            // what every shipped bundle carries (ADR-0088 D1).
             env: {
               VITE_CANVAS_AUTHORING: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_SCHEDULING_MODES: 'false',
             },
           },
         ],

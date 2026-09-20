@@ -82,10 +82,11 @@ export default defineConfig({
               // The Gantt, for M4's half of the match set. Default-on since ADR-0059 M6; pinned
               // here so this suite does not silently lose an assertion to a future flag change.
               VITE_GANTT_VIEW: 'true',
-              // Pinned OFF, mirroring the LOE / Gantt / WBS / authoring-flow suites: Visual mode
-              // changes what a bar's position means, and every assertion here is about where the
-              // viewport went rather than where a bar was placed.
-              VITE_SCHEDULING_MODES: 'false',
+              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
+              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
+              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
+              // times, each citing its neighbours as precedent. The flag now takes its default, which is
+              // what every shipped bundle carries (ADR-0088 D1).
             },
           },
         ],

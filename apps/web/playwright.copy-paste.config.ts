@@ -95,10 +95,11 @@ export default defineConfig({
               VITE_UNDO_REDO: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
-              // Pinned OFF, mirroring the LOE / Gantt / WBS suites: Visual mode changes what a
-              // bar's placement means, and the clone-placement assertions here are about lanes and
-              // carried fields rather than about hand-placed positions.
-              VITE_SCHEDULING_MODES: 'false',
+              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
+              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
+              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
+              // times, each citing its neighbours as precedent. The flag now takes its default, which is
+              // what every shipped bundle carries (ADR-0088 D1).
             },
           },
         ],

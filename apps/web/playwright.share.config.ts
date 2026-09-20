@@ -59,14 +59,18 @@ export default defineConfig({
             timeout: 120_000,
             // External-Guest share links ON, plus every layer the canvas-first plan workspace (and its
             // Row 2 · Do Share… item) builds on (canvas authoring → toolbar → workspace → editing surface
-            // + pen). Scheduling modes is pinned OFF (mirroring the LOE / resource-view / interchange
+            // + pen).
+            // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
+            // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
+            // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
+            // times, each citing its neighbours as precedent. The flag now takes its default, which is
+            // what every shipped bundle carries (ADR-0088 D1).
             // suites) to keep this journey asserting the plain authoring + share surface it was written for.
             env: {
               VITE_GUEST_SHARE_LINKS: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_SCHEDULING_MODES: 'false',
             },
           },
         ],

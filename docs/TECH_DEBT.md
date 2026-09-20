@@ -10617,6 +10617,67 @@ Neither is a defect in the shipped code. The action is to re-take the web number
 finish, and to decide whether a floor with a quarter of a point of headroom is still a ratchet or
 has become a tripwire.
 
+### 349. `e2e-local.sh` refuses a busy port and not a busy database — so a contended run reports a product defect
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (one-planning-surface M-B-T1; the same wall hit independently by a second agent in the same hour) · **Size:** S · **Owner:** repo
+
+`scripts/e2e-local.sh` refuses to start while anything answers on 3000 or 5173. That guard exists
+because ADR-0099 records `reuseExistingServer` silently adopting a leftover dev server, so a config's
+flag pins never applied and three consecutive diagnoses were made against the wrong environment.
+
+**The identical failure is reachable one layer down and nothing refuses it.** The script takes no
+lock on `app_test`, so two runs — or a run and a migration harness, or a run and a seeding pass —
+share one database. What comes back is a red journey with a plausible symptom.
+
+Measured, not hypothetical. While two agents held `app_test`, `web:authoring` failed with the create
+popover closing and the diagram listbox staying at zero options for 15 s — which reads exactly like
+"the drawn bar never plots", and a coherent false story was already under construction about
+ADR-0033 having removed ADR-0032's first-draw start pin. A second run failed **differently** (a 401
+on the clients list straight after the organisation was created), which is the only reason the
+environment came under suspicion at all: a defect does not change its symptom between two runs of
+the same code. On a quiet database the suite passed three consecutive times, and the other twelve
+passed first time. The second agent reached the same conclusion from the other side — it found a
+concurrent `vitest run` and an `ALTER TABLE ... waiting` lock and killed its own run.
+
+**Why the symptom is the dangerous part.** A contended database does not produce an error naming
+contention. It produces a red assertion about the product, with a screenshot, in the suite you were
+already editing — and the next move is to change the test. `docs/specs/one-planning-surface/m-b/triage.md`
+clause 3 records how close that came.
+
+**Candidate remedy, not yet costed:** a Postgres advisory lock taken on `app_test` for the life of
+the run, refusing with the holding PID rather than queueing — queueing would turn a fast failure into
+a slow one and hide the same fact. `pg_try_advisory_lock` on a fixed key is one line either side. The
+open question is whether the refusal should name the other run in a way a reader can act on, which
+needs `pg_stat_activity` and is the part worth measuring before writing.
+
+**What it is not.** Not a CI problem: CI provisions a container per job and the ADR-0138 shards do
+not share one. This is local-only, and it is exactly where the pre-push gate is supposed to be the
+cheap opinion.
+
+### 350. A seeded constraint case may be vacuous — `C_NONWORK` has no non-working time to resolve away
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (one-planning-surface M-B-T3; found by running the pure engine over the existing spec, not by reading it) · **Size:** S · **Owner:** api
+
+`constraintsPlan()`'s `C_NONWORK` exists, by its own comment, to prove that "a constraint date on a
+non-working day must resolve to a legal working instant rather than pinning the bar into the weekend
+wash". The plan declares no `defaultCalendarKey`, and `calendarId: null` resolves to the
+**all-minutes (24/7)** calendar — so there is no weekend, and nothing to resolve away.
+
+Observed rather than inferred: run through `specToEngineInput()` + `computeSchedule()`, that
+activity's successor starts on **Saturday 2026-03-07**, and the SNET of **2026-03-21** (also a
+Saturday) lands on exactly that date with no adjustment. The case passes, and would pass equally
+against an engine that did no non-working-day resolution at all — ADR-0093's shape, one file over.
+
+The same reading corrected a sibling assumption in the new placement plans before they shipped: their
+first draft also omitted the calendar, so their expected dates were wrong (successors starting on
+Saturdays). They now declare an explicit Mon–Fri calendar, matching `typesAndWbsPlan`.
+
+**Deliberately not fixed in the pass that found it.** Giving `constraintsPlan()` a working-week
+calendar changes the dates of a plan `docs/TEST_PLAYBOOK.md` already documents and other rows may
+lean on, which is a behavioural change to shared fixture data made as a drive-by. The fix is to give
+it an explicit Mon–Fri calendar, re-derive the playbook row's dates from the engine, and confirm the
+case is red against an engine that skips the resolution.
+
 ### 348. The float tail is drawn from the placed bar at total float, so it overshoots the late finish by the drift
 
 **Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (ui-architect review of the one-planning-surface overlay design; independently confirmed by reading) · **Size:** S · **Owner:** web
