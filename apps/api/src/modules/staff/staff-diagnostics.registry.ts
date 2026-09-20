@@ -469,22 +469,26 @@ const SNET_UNCLASSIFIED: DiagnosticEntry = {
  * looked", which is exactly what the level column exists to say. So this counts the binding set
  * against the ONE historic copy that exists anywhere in the system.
  *
- * **Neither this entry nor D-E uses `EXISTS`, and that is gate S-4 rather than preference — but
- * the gate cost nothing, which was not the prediction.** The natural shape is a semi-join, and its
- * `SELECT 1` is not an aliased `count(...)`, so the gate refuses it; widening a boundary gate to
- * admit a form one file happens to want is the wrong way round, so both are joins with
- * `count(DISTINCT ...)` (the distinct matters because a plan with several FULL baselines produces
- * one row per covering capture).
+ * **Neither this entry nor D-E uses `EXISTS`, and that is gate S-4 rather than preference.** The
+ * natural shape is a semi-join, and its `SELECT 1` is not an aliased `count(...)`, so the gate
+ * refuses it; widening a boundary gate to admit a form one file happens to want is the wrong way
+ * round, so both are joins with `count(DISTINCT ...)` (the distinct matters because a plan with
+ * several FULL baselines produces one row per covering capture).
  *
- * The join was then assumed to be the price. It is not. Measured on a 102,000-activity estate
- * (`docs/specs/one-planning-surface/m0/measurements.md`), D-E's join runs at **128 ms** and the
- * refused `EXISTS` form at **221-246 ms** — the gate's shape is 1.7-1.9x FASTER. The arithmetic
- * behind the assumption was correct as far as it went: `EXPLAIN` confirms the join materialises
- * 204,000 rows and spills to temp where a semi-join would stop at the first match. The correlated
- * subquery is simply re-planned per outer row while the join gets one memoised nested loop.
+ * **What that costs depends on the estate, and this docblock asserted otherwise twice before
+ * anybody varied the input that decides it.** Measured at three placement densities
+ * (`docs/specs/one-planning-surface/m0/measurements.md`, with both plans captured verbatim in
+ * `m0/join-vs-exists.sql`): with 8 of 40 plans carrying a placement the join runs at 141 ms and
+ * the refused `EXISTS` at 340; with EVERY activity placed the join is 516 ms and the `EXISTS`
+ * **2.7**. The cost models are opposite — a semi-join stops at a plan's first placed row, so it is
+ * cheapest when placements are dense and worst when a plan has none, since absence can only be
+ * proved by exhausting it; the join materialises every (baseline x placed activity) pair, so it is
+ * flat in the number of unplaced plans and grows with the product.
  *
- * Said here because the tempting future change is to widen S-4 and restore the `EXISTS`, and that
- * trade is now known to be negative in both directions at once.
+ * So the gate's shape is the right one **today** and the wrong one by two orders of magnitude once
+ * placement is universal — which is precisely what the one-planning-surface epic exists to make it.
+ * Re-open the shape when a substantial majority of plans carry a placement; do not inherit this
+ * verdict.
  *
  * The join is `baseline_activities.source_activity_id = activities.id`: a PLAIN correlation UUID
  * with no foreign key (ADR-0025), which is why this is an `EXISTS` over a non-FK column rather than

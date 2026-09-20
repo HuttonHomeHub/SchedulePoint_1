@@ -57,38 +57,81 @@ here is a whole-table question (`how much of the estate carries a placement?`), 
 selectivity to offer an index, and `docs/DATABASE.md` §"Indexing" says index real query patterns
 rather than columns.
 
-## The finding: gate S-4 made the expensive query FASTER, and I predicted the opposite
+## The finding, CORRECTED: the two shapes have opposite cost models and they cross over
 
-`baselines-over-placed-plans` and `snet-full-baseline-coverage` are both naturally semi-joins.
-Both were written that way first and **gate S-4 refused them** — its rule is that a `SELECT`
-projection contains aliased `count(...)` expressions and nothing else, and `EXISTS (SELECT 1 …)`
-projects a bare `1`. The gate is arguably over-strict here, since an `EXISTS` projection is
-discarded and cannot reach the row shape the gate protects; it was left alone anyway, because
-widening a boundary gate to fit one file's preferred SQL is the wrong way round and would fire
-ADR-0105's shared-gate trigger.
+> **This section replaced an earlier one headed "gate S-4 made the expensive query FASTER, and I
+> predicted the opposite". That finding was wrong to generalise and its stated mechanism was wrong
+> outright.** It was caught by a `database-architect` re-review that rebuilt the estate
+> independently and measured the refused shape at **1.5 ms** where this file had reported
+> 221-246 ms — a 150x disagreement. Neither number was a mistake. We had measured different data.
 
-Both were rewritten as joins with `count(DISTINCT …)`, and the cost of that was then reasoned
-about rather than measured. The reasoning: the join materialises the product of baselines and
-placed activities where a semi-join short-circuits at the first match. That is **true** —
-`EXPLAIN` shows a nested loop producing **204,000 rows** and spilling to temp
-(`temp read=1002 written=1006`) against 400 baselines.
+`baselines-over-placed-plans` and `snet-full-baseline-coverage` are naturally semi-joins. Gate S-4
+refuses `EXISTS (SELECT 1 …)`, because its rule is that a `SELECT` projection contains aliased
+`count(...)` expressions and nothing else. Both are therefore written as joins with
+`count(DISTINCT …)`. The gate is arguably over-strict — an `EXISTS` projection is discarded and
+cannot reach the row shape it protects — and it was left alone anyway, because widening a boundary
+gate to fit one file's preferred SQL is the wrong way round and would fire ADR-0105's shared-gate
+trigger.
 
-It is also the wrong conclusion. Measured, the refused `EXISTS` form runs at **220.8 / 225.4 /
-246.1 ms** — consistently **1.7–1.9× SLOWER** than the join's 128 ms. The correlated subquery is
-re-planned per outer row; the join gets one memoised nested loop. So the security gate cost this
-registry nothing, and the sentence that nearly went into the code comment — that the join shape is
-a price paid for the boundary rule — would have been a false claim used to justify a decision,
-which is ADR-0076 Class 3.
+**What the two shapes cost was then asserted, twice, in opposite directions, before anyone varied
+the one input that decides it.** Measured on one estate at three placement densities, same
+machine, same session, three runs each:
 
-The row arithmetic was right and the inference from it was wrong. Recorded here rather than
-quietly dropped, because the tempting future "optimisation" is to widen S-4 and restore the
-`EXISTS` — and that trade is now known to be negative in both directions at once.
+| placements                                    |      refused `EXISTS` |           shipped join |
+| --------------------------------------------- | --------------------: | ---------------------: |
+| 8 of 40 plans carry any (this file's fixture) |    340 / 377 / 340 ms |     141 / 141 / 153 ms |
+| all 40 plans, one placed activity each        |    301 / 318 / 333 ms |     143 / 143 / 143 ms |
+| **every activity placed**                     | **22 / 2.7 / 2.7 ms** | **516 / 519 / 511 ms** |
 
-**Escalation trigger for `baselines-over-placed-plans`:** its cost is
-O(baselines × placed activities per plan), so it grows with the product rather than with either
-factor. Re-run this file's harness if an installation reaches roughly 10× this estate on **both**
-at once — 4,000 baselines over plans averaging 5,000 placed activities. At that point the
-pre-aggregate the gate currently forbids becomes worth an ADR rather than a rewrite.
+**The cost models are opposite, which is why one number could never have settled it.**
+
+- The **semi-join** stops at a plan's first placed activity. Its cost is how deep that row sits in
+  index order — trivial when placements are dense, and worst when a plan has none, because absence
+  can only be established by exhausting the plan. The plan text shows `Rows Removed by Filter:
+2039` per probe at the sparse end (`join-vs-exists.sql`).
+- The **join** materialises every (baseline x placed activity) pair before `count(DISTINCT …)`
+  reduces them, so its cost is that product, and it is **flat in the number of plans that have no
+  placement at all**. 400 baselines x 510 placed = 204,000 rows and a spill to temp
+  (`temp read=1002 written=1006`).
+
+So at the sparse end the join wins by ~2.4x, and at the dense end it **loses by ~190x**.
+
+### Two claims are withdrawn rather than edited
+
+1. **"The gate cost this registry nothing."** Not established, and false in the regime this epic
+   is driving the product towards. What is true is narrower: on the estate as it stands the gate's
+   shape is the faster one.
+2. **"The correlated subquery is re-planned per outer row; the join gets one memoised nested
+   loop."** Wrong in both halves, and the plan text this file already contained showed it.
+   PostgreSQL pulls a simple `WHERE EXISTS` sublink up into a **`Nested Loop Semi Join`** at
+   planning time, so there is no per-row subplan to re-plan; and the `Memoize` node is on the
+   **join** plan, i.e. on the shape the sentence said lacked memoisation. A narration was written
+   where a plan node should have been read.
+
+### The escalation trigger, restated on the quantity that decides it
+
+The earlier trigger was a **conjunction** ("10x on both at once") over a cost that is a
+**product** — so 40,000 baselines at today's density would not have fired it while costing the
+same 20.4M joined rows. It is replaced by the crossover, which is the thing a reader can act on:
+
+> **Re-open the shape when a substantial majority of plans carry at least one placement.** At that
+> point the join is the wrong shape by two orders of magnitude, and the argument for widening gate
+> S-4 (or for a pre-aggregate it permits) becomes a measured one rather than a preference.
+
+**And the epic itself is what moves the estate across that line.** FC-1 predicts **zero**
+placements today — the sparsest possible case, where the shipped shape is right. One planning
+surface makes placement universal. So this is not a trigger that may never fire: it is one this
+programme is actively driving towards, and M-J should re-run this harness rather than inherit its
+verdict.
+
+### What the correction is really about
+
+The first version of this section was not careless about method — it ran the query, five times,
+and read the plan. It was careless about **scope**: it measured one distribution and wrote a
+conclusion about the shapes. The re-review made the same error in the opposite direction, and the
+two disagreeing is the only reason either was caught. A single-distribution benchmark of two
+strategies with opposite cost models is not a weak measurement; it is a measurement of something
+else.
 
 ## What this does NOT establish
 
@@ -97,6 +140,9 @@ pre-aggregate the gate currently forbids becomes worth an ADR rather than a rewr
   earlier epic's, and the readings that decide this epic's conditions must be taken on the product
   owner's installation through the staff console.
 - **Nothing about concurrency.** Every run was a lone query on an idle database.
+- **Nothing about a real `activities` row width.** This estate's rows are narrow, so any plan that
+  scans the heap costs less here than on the 60-column production table. That widens the sparse
+  end's gap and does not touch the dense end, where the semi-join never reaches the heap.
 - **Nothing about the four-class split being right.** That is a correctness question and is
   answered by the e2e fixture, whose exhaustiveness assertion was verified red against the
   implementation plan's own three-class version.
