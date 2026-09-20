@@ -10,6 +10,41 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-19 — Look in the log you already collected
+
+**What was decided.** A journey that fails once inside `scripts/e2e-sweep.sh` is diagnosed from the
+**per-suite log the sweep already wrote** (`.e2e-logs/`, and the `/tmp/sweep-<suite>.log` the run
+names on its way out) before any hypothesis is formed. `docs/TECH_DEBT.md` #347's two halves were
+both fixed this way, and neither needed the reproduction I thought it needed.
+
+**Why.** That row recorded the `narrow-shell` failure as unreproduced and named the TSLD legend as a
+"plausible" second `Data date`, adding that the screenshot had been cleaned. The screenshot had; the
+**log had not**, and Playwright prints every element a strict-mode violation matched. Opening it took
+one command and disproved the hypothesis twice over: the legend cannot render on that surface at all
+(`chromeless` is unconditional since ADR-0088 D3 retired both workspace flags), and the real second
+element is ADR-0106's axis-marker pill in the ruler band — a decision taken _after_ the assertion was
+written, which is why the assertion aged into ambiguity rather than being wrong when it shipped.
+
+**The shape it turned out to be.** Not accumulated state and not flakiness: a **race**. Both elements
+match `getByText('Data date', { exact: true })` once the canvas has painted, so the assertion was
+green only when it beat the paint — which it did three times standing alone and lost once on a loaded
+machine running 46 suites. Inserting a 2.5 s settle reproduces it on every run. That is the useful
+discriminator: _an intermittent failure that a delay makes deterministic is a race, and a delay is
+cheaper to try than a reproduction you have to wait for._
+
+**The sibling half is the opposite and worth the contrast.** `staff` fails **deterministically on a
+clean database** and passed only because the local machine had written sittings earlier — so the two
+symptoms looked identical in the sweep and had nothing in common. One was cured by making the
+assertion's precondition its own, the other by naming the element instead of matching its text.
+
+**The transferable rule.** ADR-0058 says verify the claim; ADR-0081 extends it to a plan's tasks and
+ADR-0142 D4 to a plan's remedies. This adds the cheapest case: **before recording something as
+unreproduced, check what the failing run already wrote down.** A row that says "not reproduced" when
+the evidence is on disk is worse than one that says nothing, because it tells the next reader the
+expensive path is the only path.
+
+---
+
 ## 2026-09-19 — A gate measures what it is given
 
 **What was decided.** The page-composition journey's fixture seeds a **second** invitation carrying

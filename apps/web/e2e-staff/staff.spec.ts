@@ -47,6 +47,13 @@ import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
  * for it is asking the same question they do.
  */
 const SITTING_TABLE = /^(Sweep of \d+ readings?|One reading) — /;
+/**
+ * The sitting INDEX's caption (`probe-sittings.tsx:384`), which renders **iff**
+ * `sittings.length > 1` — the same expression that supplies the comparability caveat's id
+ * (`:229`). That is why it is the right thing to read: the two cannot disagree, because one
+ * expression drives both. Counting rows, or asking the database, could.
+ */
+const SITTING_INDEX = 'Every sitting recorded on this installation, newest first';
 
 const PASSWORD = 'correct-horse-battery';
 /** Must equal the config's `STAFF_EMAILS` entry, modulo case and padding — that is the point. */
@@ -532,10 +539,13 @@ test('a staff member reaches the console; a member cannot tell it exists', async
       .getAttribute('aria-describedby');
     expect(describedBy, 'the table names what describes it').not.toBeNull();
     const ids = String(describedBy).split(/\s+/).filter(Boolean);
-    expect(
-      ids.length,
-      'the sitting describes itself as well as citing the shared caveat',
-    ).toBeGreaterThan(1);
+    // **Two descriptions are ALWAYS owed, and the caveat is not one of them.** This message read
+    // "the sitting describes itself as well as citing the shared caveat" and could not prove the
+    // second half: `describedBy` is `[factsId, CAP_ID, …, comparabilityId?]`
+    // (`probe-sittings.tsx:527-539`), so `[facts, cap]` satisfies a count of two with no caveat
+    // present — which is exactly the state that failed in the sweep while this line stayed green.
+    // The caveat is asserted below, against the condition that actually governs it.
+    expect(ids.length, 'the sitting cites its own facts and the cap note').toBeGreaterThan(1);
 
     let described = '';
     for (const id of ids) {
@@ -551,10 +561,43 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     // have gone red for the correction rather than for a regression. What it exists to prove is
     // that the shared caveat is among the descriptions the table names, which the rule's own words
     // carry (`docs/TECH_DEBT.md` #165(e)).
-    expect(described, 'the shared comparability caveat').toContain('same canvas size');
     // And the block's OWN facts, which differ per sitting and are what decide whether the numbers
-    // in this particular table mean anything.
+    // in this particular table mean anything. Unconditional: every block has them.
     expect(described, "this sitting's own machine facts").toContain('CI container');
+    // Likewise the cap note, which M7 wired to the block and not only to the index — and which
+    // nothing asserted until `docs/TECH_DEBT.md` #347, so that fix had no regression test.
+    expect(described, 'the cap note reaches the block, not only the index').toContain(
+      'Older sittings are not listed',
+    );
+
+    /**
+     * **The comparability caveat is CONDITIONAL, and this now reads the condition off the page
+     * rather than inheriting it from the database** (`docs/TECH_DEBT.md` #347).
+     *
+     * It asserted the caveat unconditionally, and that is a precondition the spec neither creates
+     * nor checks: the paragraph renders only when there is a second sitting to compare with
+     * (`probe-sittings.tsx:145`, a deliberate decision with its reasoning written above it —
+     * before that it is advice about an act the reader cannot perform). This block runs in the
+     * MEASURED branch, where the test has just taken a reading of its own — so on a database with
+     * no prior sitting that reading is the only one, the caveat is absent, and the assertion
+     * fails. **Reproduced deterministically**: emptying `perf_probe_results` and re-running gives
+     * the sweep's exact error, every time. It passed locally only because the machine happened to
+     * have written sittings earlier.
+     *
+     * **Both states are asserted rather than one being skipped.** A skipped assertion is
+     * indistinguishable from a passing one in a green report (ADR-0093, and this file's own rule
+     * fifty lines up about which branch ran), so the absence is pinned as firmly as the presence —
+     * which also makes this a regression test for the decision itself, in both directions.
+     */
+    const manySittings = (await staff.getByRole('region', { name: SITTING_INDEX }).count()) > 0;
+    if (manySittings) {
+      expect(described, 'the shared comparability caveat').toContain('same canvas size');
+    } else {
+      expect(
+        described,
+        'one sitting: the caveat is advice about a comparison the reader cannot make',
+      ).not.toContain('same canvas size');
+    }
   }
 
   // The overlay must be gone: it is `position: fixed; inset: 0`, so a leaked one would cover the
