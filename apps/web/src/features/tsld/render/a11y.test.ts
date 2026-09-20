@@ -67,7 +67,12 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     visualConflict: false,
     visualConflictReason: null,
     visualDriftDays: null,
-    remainingFloat: null,
+    // **Matched to `totalFloat` above, because the engine writes the pair together** (M-E-T7).
+    // Left at `null` beside a `totalFloat` of 0, this fixture described a row the product cannot
+    // produce — and once the Tier-1 sentence moved to the placed basis it silently stopped saying
+    // anything about float at all, which is how a fixture that is merely incomplete turns into one
+    // that is wrong.
+    remainingFloat: 0,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,
@@ -141,7 +146,7 @@ describe('describeActivity (Tier 1)', () => {
 
   it('prefixes the code and gives duration + a date range + lane (1-based)', () => {
     expect(describeActivity(activity({ code: 'A100', laneIndex: 2 }))).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float',
+      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float left',
     );
   });
 
@@ -153,13 +158,16 @@ describe('describeActivity (Tier 1)', () => {
   });
 
   it('collapses a single-day span to one date', () => {
-    expect(describeActivity(activity({ earlyFinish: '2026-01-01', totalFloat: 5 }))).toContain(
-      '1 Jan 2026, lane 1, 5 days float',
-    );
+    // `remainingFloat` beside `totalFloat`, because the engine writes the pair together and the
+    // sentence now reads the placed basis (M-E-T7). A fixture setting only one of them describes a
+    // row the product cannot produce.
+    expect(
+      describeActivity(activity({ earlyFinish: '2026-01-01', totalFloat: 5, remainingFloat: 5 })),
+    ).toContain('1 Jan 2026, lane 1, 5 days float left');
   });
 
   it('says "critical" (implying zero float) and never adds a float count', () => {
-    const s = describeActivity(activity({ isCritical: true, totalFloat: 0 }));
+    const s = describeActivity(activity({ isCritical: true, totalFloat: 0, remainingFloat: 0 }));
     expect(s).toContain(', critical');
     expect(s).not.toContain('float');
   });
@@ -174,7 +182,7 @@ describe('describeActivity (Tier 1)', () => {
           visualEffectiveFinish: null,
           visualConflict: false,
           visualDriftDays: null,
-          remainingFloat: null,
+          remainingFloat: 2,
           levelingPriority: null,
           leveledStart: null,
           leveledFinish: null,
@@ -190,7 +198,7 @@ describe('describeActivity (Tier 1)', () => {
           freeFloat: null,
         }),
       ),
-    ).toContain(', near-critical, 2 days float');
+    ).toContain(', near-critical, 2 days float left');
   });
 
   it('spells out a set date constraint (the spoken equivalent of the canvas pin)', () => {
@@ -210,8 +218,10 @@ describe('describeActivity (Tier 1)', () => {
   });
 
   it('states plain float, singular for one day, and omits float when uncomputed', () => {
-    expect(describeActivity(activity({ totalFloat: 1 }))).toContain(', 1 day float');
-    expect(describeActivity(activity({ totalFloat: null }))).toBe(
+    expect(describeActivity(activity({ totalFloat: 1, remainingFloat: 1 }))).toContain(
+      ', 1 day float left',
+    );
+    expect(describeActivity(activity({ totalFloat: null, remainingFloat: null }))).toBe(
       'Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1',
     );
   });
@@ -367,6 +377,12 @@ describe('chainNeighbour + announceChainStep', () => {
 // change one character of the parallel accessible representation: these pin the exact strings for
 // the badge-carrying cases the refresh touches visually (constraint pin, conflict triangle,
 // lane-overlap squares) and the lag phrase, so any drift fails loudly.
+//
+// **Re-baselined once, deliberately, at one-planning-surface M-E-T7**, when the float clause moved
+// from `totalFloat` to `remainingFloat` and gained the word `left`. The pin did its job: it was
+// one of two assertions that caught the sentence changing, which is exactly what a byte-for-byte
+// pin is for — the change is intended and is recorded here rather than absorbed by loosening the
+// assertion, which is how such a pin quietly stops pinning anything.
 describe('a11y-string parity across the M4 visual refresh', () => {
   it('pins the full badge-carrying Tier-1 sentence byte-for-byte', () => {
     expect(
@@ -377,12 +393,18 @@ describe('a11y-string parity across the M4 visual refresh', () => {
           constraintDate: '2026-01-02',
           visualConflict: true,
           visualDriftDays: -2,
-          remainingFloat: null,
+          // **2, not null** — `remainingFloat` is `totalFloat - visualDriftDays`, so a bar placed
+          // two working days before its earliest feasible start has two days of room before its
+          // late finish even while the placement itself is infeasible. The two facts are stated
+          // separately and always were: the float clause is about the finish, the conflict clause
+          // about the start. The fixture's previous `null` beside a drift of −2 was a row the
+          // engine cannot write.
+          remainingFloat: 2,
         }),
         { overlapsInLane: true },
       ),
     ).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 0 days float, ' +
+      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 2 days float left, ' +
         'Start no earlier than 02 Jan 2026, ' +
         'conflict: placed 2 working days before its earliest feasible start, ' +
         'overlaps another activity in its lane',

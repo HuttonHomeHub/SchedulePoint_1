@@ -10,9 +10,18 @@ import { formatFinishVariance } from '@/lib/schedule-format';
  * summary (Tier 2), and chain navigation — is exhaustively unit-testable with no DOM/React.
  */
 
-/** Pluralise a whole-day count: `1 day`, `3 days`. */
+/**
+ * Pluralise a whole-day count of float: `1 day float left`, `3 days float left`.
+ *
+ * **`left` is the label, and it is load-bearing** (M-E-T7). This sentence used to read
+ * `3 days float` over `totalFloat`, and now reads over `remainingFloat` — the slack left from
+ * where the bar is DRAWN rather than from where the network would put it. On an unplaced activity
+ * the two are equal, so the word is the only thing that tells a reader which question the number
+ * answered; without it the sentence would silently change meaning the first time somebody places
+ * a bar, which is exactly the defect class this register files most often.
+ */
 function days(n: number): string {
-  return `${n} ${n === 1 ? 'day' : 'days'} float`;
+  return `${n} ${n === 1 ? 'day' : 'days'} float left`;
 }
 
 /**
@@ -61,13 +70,17 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
     a.earlyFinish && a.earlyFinish !== a.earlyStart
       ? `${formatCalendarDate(a.earlyStart)} to ${formatCalendarDate(a.earlyFinish)}`
       : formatCalendarDate(a.earlyStart);
+  // **`remainingFloat`, not `totalFloat`** (M-E-T7). Criticality still comes from the engine's own
+  // flags, which are pure-network facts and stay so: an activity is critical because of the
+  // network, not because a planner spent its slack. Only the NUMBER moves to the placed basis, and
+  // `days()` labels it.
   const floatPart = a.isCritical
     ? ', critical'
-    : a.totalFloat === null
+    : a.remainingFloat === null
       ? ''
       : a.isNearCritical
-        ? `, near-critical, ${days(a.totalFloat)}`
-        : `, ${days(a.totalFloat)}`;
+        ? `, near-critical, ${days(a.remainingFloat)}`
+        : `, ${days(a.remainingFloat)}`;
   // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
   const constraint = formatConstraint(a);
   const constraintPart = constraint ? `, ${constraint.full}` : '';

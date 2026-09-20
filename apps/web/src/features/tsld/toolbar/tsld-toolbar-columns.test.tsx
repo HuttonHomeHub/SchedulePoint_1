@@ -71,13 +71,13 @@ describe('in the Gantt', () => {
     openView();
     // `predecessors` is the one hidden by default — the chart does not grow a column overnight.
     expect(screen.getByRole('checkbox', { name: 'Predecessors' })).not.toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Float' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Float left' })).toBeChecked();
   });
 
   it('hides a shown column through the host writer, never local state', () => {
     renderRows(ctx());
     openView();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Float' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Float left' }));
     expect(setHidden).toHaveBeenCalledTimes(1);
     const next = setHidden.mock.calls[0]?.[0] as ReadonlySet<string>;
     expect(next.has('totalFloat')).toBe(true);

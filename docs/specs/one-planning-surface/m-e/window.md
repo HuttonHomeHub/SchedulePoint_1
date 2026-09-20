@@ -363,3 +363,70 @@ severity question and the remaining three are `docs/TECH_DEBT.md` #353, because 
 lint rule is an ADR-0105 trigger and two of the three have a design question in them rather than a
 missing line. The transferable half is wider than the rule: **a gate whose pass/fail is binary makes
 a warning indistinguishable from silence.**
+
+---
+
+## 10. Remaining float on screen (M-E-T7)
+
+### What changed, and what deliberately did not
+
+Three planner-facing read-outs move from `totalFloat` to `remainingFloat` — the slack left from
+where the bar is **drawn** rather than from where the network would put it — and **each renames its
+label in the same commit**:
+
+| surface                 | was            | now                 |
+| ----------------------- | -------------- | ------------------- |
+| the canvas bar sentence | `3 days float` | `3 days float left` |
+| the Gantt grid column   | `Float`        | `Float left`        |
+| the activities table    | `Float`        | `Float left`        |
+
+The rename is not tidiness. **A column headed `Float` that quietly starts measuring from a
+different origin is unnoticeable**, because the number is plausible under either meaning — and on
+every plan in the estate today it is the _same_ number, since FC-1 predicts zero placements and
+`remainingFloat` is `totalFloat - visualDriftDays`. Nothing on any existing screen changes value;
+what changes is which question the number answers the first time somebody places a bar. That is the
+defect class this register files most often, and the label is the whole of the remedy.
+
+Criticality is **untouched**: `isCritical`/`isNearCritical` are pure-network facts, and an activity
+does not stop being critical because a planner spent slack it did not have. Only the number moves.
+
+### Total float stays where float is ANALYSED — and that is a gate, not a promise
+
+| surface                    | why it keeps total float                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DCMA metrics 4 and 5       | they grade the **network**; a programme is not well-built because nobody has placed its bars                                                           |
+| float paths                | ranks by network slack — drift would reorder the chains by where things were dropped                                                                   |
+| baseline float variance    | `remainingFloat` is in no baseline captured before M-C, so half the comparison is unavailable and the other half changes basis at the capture boundary |
+| the editor's context strip | already labelled `Total float`, and it is the one place both numbers can honestly sit                                                                  |
+
+**The failure pinned is a global swap, and it is the likely one**: somebody reads T7, sees
+`totalFloat` still in the tree, and finishes the job. Every test stays green, because the two fields
+are equal on every unplaced plan. It would surface months later, on the first placed programme, as a
+DCMA grade that moved when no logic changed.
+
+Two structural gates, one per side —
+`apps/api/src/modules/schedule/float-basis.structural.spec.ts` and
+`apps/web/src/features/float-paths/float-basis.structural.test.ts` — each with a **pinned positive
+case**, because the ban alone passes against a module that stopped reading float or a path that no
+longer exists. They are **greps, deliberately**: the two fields have the same type, so nothing a
+compiler can see distinguishes them; what distinguishes them is the question the module is
+answering. Both were **verified red against the actual global swap** (`sed s/totalFloat/remainingFloat/g`
+across all four guarded files): 2 of 2 and 3 of 4 red, green again on restore.
+
+`schedule-format.ts` is the one module that legitimately holds both, because it is where the split
+is declared — so it takes a narrower assertion than its neighbour's blanket ban.
+
+### What the fixtures revealed
+
+Eleven assertions across five suites went red, every one of them a fixture setting `totalFloat`
+and leaving `remainingFloat` at `null` — **a row no recalculation can produce**, since the engine
+writes the pair together. Incomplete fixtures are harmless until the field they omit starts being
+read; then they are wrong, silently, in the direction of saying nothing.
+
+The one worth naming is the ADR-0052 M4 **byte-for-byte parity pin**, which caught the sentence
+changing and is **re-baselined in place with the reason recorded** rather than loosened. That pin
+exists so a visual refresh cannot alter one character of the accessible representation; loosening it
+to accommodate an intended change is how such a pin quietly stops pinning anything. Its fixture also
+carried `visualDriftDays: -2` beside `remainingFloat: null`, which is arithmetically impossible —
+now `2`, with the note that a bar placed before its earliest feasible start still has room before its
+late finish, and that the two facts have always been stated separately.

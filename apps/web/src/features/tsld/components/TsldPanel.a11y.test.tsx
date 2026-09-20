@@ -104,7 +104,9 @@ const B = activity({
   visualEffectiveFinish: null,
   visualConflict: false,
   visualDriftDays: null,
-  remainingFloat: null,
+  // Matched to `totalFloat` below, because the engine writes the pair together and the Tier-1
+  // sentence reads the placed basis (M-E-T7).
+  remainingFloat: 2,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,
@@ -171,7 +173,7 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
     const { listbox } = renderPanel();
     fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // → B (near-critical, 2 days float)
     expect(announceSpy).toHaveBeenCalledWith(
-      expect.stringContaining('near-critical, 2 days float'),
+      expect.stringContaining('near-critical, 2 days float left'),
     );
   });
 
