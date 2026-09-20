@@ -72,6 +72,21 @@ exists rather than specifying it.
 **`placement-on-early-plan` is the population whose bars MOVE at the collapse** and nothing else
 measures it — it is the one reading that is about M-F rather than about the migration.
 
+**It is complete as a movement predictor ONLY AFTER M-P, and the qualification is load-bearing.**
+
+- **For the strip exclusion (FC-10 clause B) it is exact** — precisely the set §4.6 excludes.
+- **As a movement predictor it over-counts safely**: an activity whose `visual_start` equals its
+  logic-earliest is counted and will not move. Conservative, so harmless.
+- **And before M-P it under-counts, conditionally.** The moving population then also contains every
+  **started, complete, LOE and summary** activity with `visual_start` **NULL** — which this entry
+  excludes _by construction_, since it filters on `visual_start IS NOT NULL`. That is the **C11
+  population**, and it is invisible to this number.
+
+**The reason to write the qualification down rather than rely on the sequencing that makes it
+true:** this is exactly the number somebody would reach for to argue the collapse is cheap **if M-P
+were ever descoped or deferred** — so the moment the sentence stops being true is the moment it
+would be quoted. A reading that is sound only under an ordering must carry that ordering with it.
+
 **Decided in advance:**
 
 - **All zero** → `baselines.placement_snapshot_level` ships `DEFAULT NONE`, which is the literal

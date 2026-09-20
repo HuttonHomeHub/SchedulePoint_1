@@ -71,9 +71,13 @@ reading that already exists.
   `snet-full-baseline-coverage`.
 - **`placement-on-early-plan` is already there** (`:29`, `:296-297`, `:520`) — the
   `visual_start IS NOT NULL AND scheduling_mode = 'EARLY'` reading this revision was told to add.
-  **The task would have been a duplicate**; the closed `DIAGNOSTIC_IDS` union would have caught it
-  at typecheck, but the plan would have carried a false task. **Second time in this epic that
-  re-verifying a problem statement removed work** (spec C1 was the first) — CLAUDE.md §19.11.
+  **The task would have been a duplicate, and what caught it was re-reading the registry — not a
+  gate.** The closed `DIAGNOSTIC_IDS` union catches a duplicate **id**; it cannot catch a **second
+  entry asking the same question under a different id**, which is the shape a task saying "add this
+  reading" would actually have produced. _(An earlier draft of this bullet credited the union with
+  catching it. A safety net described as wider than it is will be relied on, so the claim is
+  narrowed to what it covers.)_ **Second time in this epic that re-verifying a problem statement
+  removed work** (spec C1 was the first) — CLAUDE.md §19.11.
 - **Four SNET classes, not three.** The fourth is
   `early_start IS NULL OR early_start < constraint_date`. It **arises two ways and only one
   clears**: a stored schedule predating the constraint (clears on recalculation), and a started
@@ -84,7 +88,13 @@ reading that already exists.
   row shape makes an in-entry split inexpressible; three entries share one denominator and
   exhaustiveness is asserted **across** them, verified red against the plan's own earlier
   three-class version.
-- **Neither `EXISTS` survived gate S-4**; both are joins with `count(DISTINCT …)`.
+- **Neither `EXISTS` survived gate S-4**; both are joins with `count(DISTINCT …)`. **What that
+  refusal costs is now known to depend on placement density, and this epic is what changes it** —
+  `m0/measurements.md:65-106` records the original "the gate cost this registry nothing" finding and
+  its stated mechanism as **withdrawn**: re-measured at three densities, the join and the refused
+  `EXISTS` have **opposite cost models and cross over** (at 8-of-40 plans placed the join wins
+  141 ms to 340; with every activity placed it loses 516 to 2.7). The escalation trigger is the
+  crossover, and **M-J must re-run that harness rather than inherit the verdict** — see M-J-T1.
 
 **Still owed from M0:** the ghost-cost probe, re-scoped by the product owner's overlay decision.
 
@@ -184,8 +194,27 @@ ones.**
   capture writes both column sets — the row is not one **or** the other; and only a level
   distinguishes "no placement" from "nobody looked". `revision_snapshot_level`'s own argument
   (ADR-0126). `DEFAULT NONE` is the literal truth of every existing row.
-- **Testing:** enum + column in two migrations (Postgres forbids using a label in the transaction
-  that added it — ADR-0053 M3).
+- **Testing:** enum + column in **ONE** migration.
+
+  > **This note previously said "two migrations (Postgres forbids using a label in the transaction
+  > that added it — ADR-0053 M3)", and that was wrong.** ADR-0053 M3's rule is about
+  > `ALTER TYPE … ADD VALUE` on an **existing** enum. `PlacementSnapshotLevel` is a **new** enum
+  > created whole, and `CREATE TYPE` + immediate use in one transaction is legal.
+  >
+  > **The repository refutes it at the line, on the same table, for the enum this column is
+  > explicitly modelled on.** `20260906120000_baseline_revision_snapshot/migration.sql:54-63`
+  > records having re-proved it against PostgreSQL 16.13 **both ways round** — `CREATE TYPE` + use
+  > in one explicit transaction COMMITs; `ALTER TYPE … ADD VALUE` + use in one transaction raises
+  > **55P04** — and notes that the negative control is what makes the positive result mean
+  > something. That migration then does it in **one file**: `CREATE TYPE "RevisionSnapshotLevel"`
+  > at `:74`, `ADD COLUMN … NOT NULL DEFAULT 'NONE'` at `:97`. A second shipped precedent is one
+  > table along (`20260802140000_baseline_assignment_costs`).
+  >
+  > **This document already stated the rule correctly at M-J-T2** — "the ADD VALUE hazard has no
+  > mirror on the drop side" — so it was internally inconsistent, which is the evidence the note
+  > was written from memory rather than read. Recorded rather than quietly fixed, because a
+  > checksummed redundant migration is cheap and **a wrong restatement of the Postgres rule, inside
+  > the document that will be copied for the next enum, is not.**
 
 ##### Task M-A-T3 — `activities.remaining_float` (**CQ-1 answered: persist**)
 
@@ -587,6 +616,12 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
   `backend-performance-reviewer`, `component-reviewer`, `accessibility-reviewer`, `ux-reviewer`.
   Ask each to **re-derive this epic's numbers from the shipped code**.
 - **Complexity:** L
+- **One re-run is mandatory rather than discretionary:** the M0 join-vs-`EXISTS` harness
+  (`m0/measurements.md:65-106`, `m0/join-vs-exists.sql`). Its two shapes have **opposite cost
+  models and cross over with placement density**, and **this epic is what moves the estate across
+  that crossover** — an estate with no placements today becomes one where plans carry them. So M-J
+  **re-runs it against the post-epic estate** and does not inherit M0's verdict. A measurement whose
+  independent variable the epic itself changes is not a measurement the epic may quote forward.
 
 ##### Task M-J-T2 — drop the column and the enum, **in ONE migration**
 
