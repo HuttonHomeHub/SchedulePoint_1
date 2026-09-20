@@ -74,9 +74,18 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // The Gantt ON, plus every layer the canvas-first plan workspace builds on. Scheduling
-            // modes is pinned OFF (mirroring the LOE / resource-view / interchange / share / library
-            // suites) to keep this journey asserting the plain authoring surface it was written for.
+            // The Gantt ON, plus every layer the canvas-first plan workspace builds on.
+            //
+            // **This comment said "Scheduling modes is pinned OFF (mirroring the LOE /
+            // resource-view / interchange / share / library suites)" and that was FALSE** — the
+            // `env` block three lines below has never contained the flag. It was copied with the
+            // config it was derived from, while the docblock above deliberately removed the pin
+            // and explains why: inheriting it made `Clear visual placement` vanish, leaving the
+            // journey asserting against a surface no shipped bundle produces. So the file said
+            // both things at once, and the false half was the one a reader met first.
+            //
+            // That decision is this milestone's whole argument, reached here first and left
+            // contradicted by a copied line.
             env: {
               VITE_GANTT_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
