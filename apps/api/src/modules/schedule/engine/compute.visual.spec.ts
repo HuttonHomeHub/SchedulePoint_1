@@ -213,10 +213,171 @@ describe('computeSchedule — effective-Visual pass, milestones', () => {
   });
 });
 
-describe('computeSchedule — effective-Visual pass, known M0 gap', () => {
-  it.todo(
-    'flags visualConflict when a placement is AFTER an explicit SNLT/FNLT ceiling (upper-bound case, follow-up to M0)',
-  );
+describe('computeSchedule — effective-Visual pass, the upper bound (M-D)', () => {
+  /**
+   * **The other side of the conflict, which the shipped flag never covered.**
+   *
+   * `visualConflict` asked one question — is the placement EARLIER than logic allows? — so a bar
+   * placed past an explicit ceiling reported `false` on all four upper-bound kinds. That was the
+   * `it.todo` this replaces, filed as "a follow-up to M0".
+   *
+   * `SLACK` carries **8 days of real float** (it runs parallel to a ten-day spine into a common
+   * successor), which the fixture needs and an earlier draft did not have: on a lone activity total
+   * float is 0, every placement takes the remainder negative, and the control row is
+   * indistinguishable from the breach. `docs/specs/one-planning-surface/m-d/upper-bound.md` has the
+   * measurement that settled the design.
+   */
+  const DAY = 1440;
+  const withSlack = (extra: Partial<EngineActivity>) => ({
+    activities: [
+      task('SPINE', 10),
+      task('SLACK', 2, extra),
+      task('JOIN', 1),
+    ] as readonly EngineActivity[],
+    edges: [edge('SPINE', 'JOIN'), edge('SLACK', 'JOIN')] as readonly EngineEdge[],
+  });
+  const slack = (extra: Partial<EngineActivity>) => {
+    const { activities, edges } = withSlack(extra);
+    return run(activities, edges).byId.get('SLACK')!;
+  };
+
+  it('flags a placement past an SNLT ceiling, and names the reason', () => {
+    const r = slack({
+      constraintType: 'SNLT',
+      constraintDate: '2026-01-05',
+      visualStart: '2026-01-10',
+    });
+    expect(r.visualConflict).toBe(true);
+    expect(r.visualConflictReason).toBe('LATER_THAN_BOUND');
+    // The breach is visible in the number too — which is why the REASON is what the field adds,
+    // not the detection. Both are asserted so neither can quietly stop being true.
+    expect(r.remainingFloatMinutes).toBeLessThan(0);
+  });
+
+  it('flags a placement past an FNLT ceiling', () => {
+    const r = slack({
+      constraintType: 'FNLT',
+      constraintDate: '2026-01-05',
+      visualStart: '2026-01-10',
+    });
+    expect(r.visualConflictReason).toBe('LATER_THAN_BOUND');
+  });
+
+  it('flags a placement past a MANDATORY start or finish', () => {
+    // The pair the spec claimed remaining float could not cover. It can — the pin collapses total
+    // float to zero — so these are here for the reason, not for the detection.
+    const mso = slack({
+      constraintType: 'MSO',
+      constraintDate: '2026-01-05',
+      visualStart: '2026-01-10',
+    });
+    expect(mso.visualConflictReason).toBe('LATER_THAN_BOUND');
+    expect(mso.totalFloat).toBe(0);
+    const mfo = slack({
+      constraintType: 'MFO',
+      constraintDate: '2026-01-05',
+      visualStart: '2026-01-10',
+    });
+    expect(mfo.visualConflictReason).toBe('LATER_THAN_BOUND');
+  });
+
+  it('does NOT flag a placement that merely outruns its own float', () => {
+    // The discriminator, and the case most likely to be "fixed" into firing. There is no bound to
+    // breach: the planner spent slack that was theirs to spend, and the negative number says so.
+    const r = slack({ visualStart: '2026-01-20' });
+    expect(r.remainingFloatMinutes).toBeLessThan(0);
+    expect(r.visualConflict).toBe(false);
+    expect(r.visualConflictReason).toBeNull();
+  });
+
+  it('does NOT flag a placement inside a generous ceiling', () => {
+    const r = slack({
+      constraintType: 'SNLT',
+      constraintDate: '2026-01-20',
+      visualStart: '2026-01-05',
+    });
+    expect(r.visualConflict).toBe(false);
+    expect(r.visualConflictReason).toBeNull();
+    expect(r.remainingFloatMinutes).toBeGreaterThan(0);
+  });
+
+  it('reports EARLIER_THAN_LOGIC when the placement breaks the lower bound', () => {
+    const { byId } = run(
+      [task('A', 3), task('B', 2, { visualStart: '2026-01-01' })],
+      [edge('A', 'B')],
+    );
+    const b = byId.get('B')!;
+    expect(b.visualConflict).toBe(true);
+    expect(b.visualConflictReason).toBe('EARLIER_THAN_LOGIC');
+  });
+
+  it('does NOT flag an UNPLACED activity that LOGIC pushes past its own ceiling', () => {
+    // The case a mutation found unguarded. An SNLT logic cannot meet is the classic negative-float
+    // shape — and nobody placed anything, so `LATER_THAN_BOUND` would be a false statement about a
+    // planner's action. Without the `visualStart != null` test this reads as a breach.
+    const { byId } = run(
+      [
+        task('LEAD', 10),
+        task('PINNED', 2, { constraintType: 'SNLT', constraintDate: '2026-01-03' }),
+      ],
+      [edge('LEAD', 'PINNED')],
+    );
+    const p = byId.get('PINNED')!;
+    expect(p.totalFloat, 'logic must genuinely breach the ceiling').toBeLessThan(0);
+    expect(p.visualConflict).toBe(false);
+    expect(p.visualConflictReason).toBeNull();
+  });
+
+  it('measures the PLACED FINISH against the ceiling, not the placed start', () => {
+    // An SNLT ceiling is the constraint day advanced by the duration, so a two-day bar placed one
+    // day past a 05 Jan SNLT has its START inside the ceiling and its FINISH outside. Comparing
+    // starts misses it, and a mutation confirmed the earlier fixtures could not tell the two apart.
+    const r = slack({
+      constraintType: 'SNLT',
+      constraintDate: '2026-01-05',
+      visualStart: '2026-01-06',
+    });
+    expect(r.visualConflictReason).toBe('LATER_THAN_BOUND');
+  });
+
+  it('honours a SECONDARY constraint as a ceiling too', () => {
+    // `clampSecondaryBackwardFinish` is in the derivation and nothing reached it: the mutation that
+    // removed the primary clamp passed the sentinel straight through, so it tested the primary.
+    const r = slack({
+      constraintType: 'SNET',
+      constraintDate: '2026-01-01',
+      secondaryConstraintType: 'FNLT',
+      secondaryConstraintDate: '2026-01-06',
+      visualStart: '2026-01-12',
+    });
+    expect(r.visualConflictReason).toBe('LATER_THAN_BOUND');
+  });
+
+  it('reports null on every unplaced activity', () => {
+    const { results } = run([task('A', 3), task('B', 2)], [edge('A', 'B')]);
+    for (const r of results) expect(r.visualConflictReason).toBeNull();
+  });
+
+  /**
+   * **This fixture carries its own purity assertion** — FC-2 clauses 1–2 cover the pre-existing
+   * corpus, and a case added after them is outside that guarantee unless it says so itself.
+   */
+  it('the upper-bound derivation perturbs no pure-network field', () => {
+    const clean = withSlack({ constraintType: 'SNLT', constraintDate: '2026-01-05' });
+    const placed = withSlack({
+      constraintType: 'SNLT',
+      constraintDate: '2026-01-05',
+      visualStart: '2026-01-10',
+    });
+    const a = run(clean.activities, clean.edges).byId;
+    const b = run(placed.activities, placed.edges).byId;
+    for (const id of ['SPINE', 'SLACK', 'JOIN']) {
+      expect(pureFields(b.get(id)!), `${id} pure fields`).toEqual(pureFields(a.get(id)!));
+    }
+    // And the placement really did something, or the comparison above is vacuous.
+    expect(b.get('SLACK')!.visualConflictReason).toBe('LATER_THAN_BOUND');
+    expect(DAY).toBe(1440);
+  });
 });
 
 describe('computeSchedule — effective-Visual pass, Pass 1 parity where nothing is placed (FC-11)', () => {

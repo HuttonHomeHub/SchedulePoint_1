@@ -30,6 +30,10 @@ function result(
     visualEffectiveStart: '2026-01-05',
     visualEffectiveFinish: '2026-01-09',
     visualConflict: false,
+    // Null throughout: these fixtures are about the day-factor conversion, and a conflict reason
+    // takes no factor. Present because `EngineResult` requires it (M-D), not because it is under
+    // test here.
+    visualConflictReason: null,
     visualDriftMinutes,
     // The engine subtracts in MINUTES; this mirrors it so the fixture cannot disagree with the
     // thing it is measuring (M-D, `docs/specs/one-planning-surface/` §4.3).

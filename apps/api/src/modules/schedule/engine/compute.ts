@@ -24,6 +24,7 @@ import {
   type ProgressMode,
   type ResolvedProgress,
 } from './progress';
+import type { VisualConflictReason } from './types';
 import type {
   CriticalPathDefinition,
   EngineActivity,
@@ -796,6 +797,45 @@ export function computeSchedule(
      */
     const vSpanOwn = efOwn - esOwn;
     const vInclusiveFinishOwn = pointLike ? vDisplayOwn : vDisplayOwn + vSpanOwn - 1;
+    /**
+     * **Why the placement conflicts — the upper bound, which the shipped flag never covered** (M-D,
+     * `docs/specs/one-planning-surface/m-d/upper-bound.md`).
+     *
+     * `visualConflictMap` holds Pass 2's own question: is the placement EARLIER than logic allows?
+     * Nothing asked the other side, so a bar placed past an explicit `SNLT`/`FNLT`/`MSO`/`MFO`
+     * ceiling reported `visualConflict: false` — measured, on all four.
+     *
+     * **Derived here and not in Pass 2**, because Pass 2 runs ABOVE the backward pass and no
+     * constraint-clamped bound exists where the placement is decided. Same ordering trap the
+     * summary rollup hit at M-P.
+     *
+     * **The ceiling is the EXISTING clamps with a sentinel logic bound, not a second backward
+     * pass** (SQ-e stands). Handing them `MAX_SAFE_INTEGER` makes each kind answer with its own
+     * bound and nothing else: `SNLT`/`FNLT` return the constraint, `MSO`/`MFO` return their pin
+     * (they ignore the logic bound by design), and `SNET`/`FNET`/absent return the sentinel
+     * unchanged — which is how "there is no ceiling" is spelled.
+     */
+    const NO_CEILING = Number.MAX_SAFE_INTEGER;
+    const constraintCeiling = clampSecondaryBackwardFinish(
+      activity,
+      clampBackwardFinish(activity, NO_CEILING, cal, dataDateAbs),
+      cal,
+      dataDateAbs,
+    );
+    // The placed bar's own finish instant, spanned the way the bar is drawn (M-P's derived span) so
+    // the comparison is about the picture rather than about an input the bar may not use.
+    const vPlacedFinishInst =
+      vSpanOwn === 0 ? vDisplayInst : advanceWorking(cal, vDisplayInst, vSpanOwn);
+    // **No explicit "is there a ceiling?" test, and that is measured rather than an oversight.** A
+    // `constraintCeiling !== NO_CEILING` conjunct was written here first and a mutation sweep showed
+    // it cannot fail: the sentinel is `MAX_SAFE_INTEGER`, so `vPlacedFinishInst > constraintCeiling`
+    // is already false wherever no constraint supplied one. An untestable guard is worse than none —
+    // it reads as protection and pins nothing.
+    const visualConflictReason: VisualConflictReason = visualConflictMap.get(id)
+      ? 'EARLIER_THAN_LOGIC'
+      : activity.visualStart != null && vPlacedFinishInst > constraintCeiling
+        ? 'LATER_THAN_BOUND'
+        : null;
 
     // A frozen actual endpoint (M2) displays its actual date VERBATIM: the data-date-anchored offset
     // mapping is lossy for instants BEFORE the data date (a completed/started activity in the past —
@@ -885,7 +925,12 @@ export function computeSchedule(
       visualEffectiveFinish: frozenByActuals
         ? earlyFinishDate
         : workingIndexDate(cal, dataDate, vInclusiveFinishOwn),
-      visualConflict: visualConflictMap.get(id)!,
+      // Two-sided now (M-D): the flag fires for a placement earlier than logic allows AND for one
+      // past an explicit ceiling. A plan with a breaching placement newly reports a conflict and
+      // newly appears in the ADR-0094 cycle — a deliberate change to a shipped flag, which is what
+      // this milestone's "two-sided conflict" means.
+      visualConflict: visualConflictReason !== null,
+      visualConflictReason,
       visualDriftMinutes: visualDriftMap.get(id)!,
       // Remaining float (M-D): the room a placement has NOT already spent. Subtracted in minutes
       // and converted once at the write boundary — see the field's docblock for why a client
