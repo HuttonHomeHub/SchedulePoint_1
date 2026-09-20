@@ -10,6 +10,41 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-20 — `git add -A` is unsafe while an agent is writing
+
+**What was decided.** A commit made while a background agent holds files open stages **named
+paths**, never `-A`. The agent's output is committed deliberately, in its own commit, with a
+message describing it.
+
+**Why.** Commit `68bbb82c` is titled _"cost the placement diagnostics, and correct what the gate
+cost"_ and its message is entirely about `EXPLAIN ANALYZE` timings and a wrong prediction about a
+security gate. It also carries, silently, the largest design change in the one-planning-surface
+epic: a new foundation milestone, a withdrawn parity claim, a rebuilt overlay model and a new
+falsification condition. The `feature-analyst` had written them between the moment I checked
+`git status` and the moment I ran `git add -A`.
+
+The second half is worse than the first. The **next** commit, `c17d9113`, states in its message
+that _"the spec and the falsification conditions are still being revised; this commit carries the
+plan alone"_. The first clause was false when it was written — both had landed one commit earlier
+— and the second was true, which is exactly what made the first plausible. So the history now says
+a design revision happened in a performance commit, and says it did not happen in the commit that
+claims to be waiting for it.
+
+**Consequences.** The record is corrected here rather than by rewriting: the commits are pushed, the
+branch is shared with an open pull request, and a force-push to tidy a message would cost more than
+the inaccuracy does. `git log` for these two commits is therefore wrong about its own contents, and
+this entry is the pointer. Nothing in the tree is wrong — the revision is complete and correct, and
+`c17d9113` really did carry the plan.
+
+**The general shape.** `git status` is a measurement, and a measurement taken before another writer
+finishes is stale by the time it is acted on — the same class as `docs/TECH_DEBT.md` #119a's
+sweep-measures-the-tree-it-runs-against finding, one tool along. `-A` then widens a stale reading
+into a silent one, because it stages what it finds rather than what was seen. Staging named paths
+makes the gap visible: files the agent wrote simply are not in the commit, and turn up dirty
+afterwards, which is a question rather than a wrong sentence.
+
+---
+
 ## 2026-09-19 — Look in the log you already collected
 
 **What was decided.** A journey that fails once inside `scripts/e2e-sweep.sh` is diagnosed from the
