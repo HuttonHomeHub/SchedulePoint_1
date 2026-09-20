@@ -26,6 +26,7 @@ export const DIAGNOSTIC_IDS = [
   'inherited-day-factor',
   'visual-placement-plans',
   'visual-placement-activities',
+  'placement-on-early-plan',
   'baselines-over-placed-plans',
   'snet-binding',
   'snet-inert',
@@ -273,6 +274,48 @@ const VISUAL_PLACEMENT_ACTIVITIES: DiagnosticEntry = {
 };
 
 /**
+ * **D-D2 — the population whose bars MOVE on the day the mode is collapsed.**
+ *
+ * The one reading that predicts a visible change for a planner who did nothing, and it exists
+ * because a `database-architect` review found nothing measuring it. An `EARLY` plan renders from
+ * `early_start` today and will render from `visual_effective_start` afterwards; those agree for an
+ * activity with no placement, and they do not agree for one that carries a stale `visual_start`.
+ *
+ * That combination is reachable and unremarkable: `visual_start` is accepted **regardless of the
+ * plan's mode** (`activities.service.ts:388`, `:526-528`, no mode check at either site), so a
+ * planner who placed bars while the plan was `VISUAL` and then switched it back to `EARLY` has
+ * left exactly these rows behind. D-C and D-D count placements wherever they sit; this counts the
+ * subset that is currently being ignored by the surface that will stop ignoring it.
+ *
+ * The denominator is every activity, shared with D-D, so the two are read together: D-D is how
+ * much of the estate has ever been placed, this is how much of it changes appearance at the
+ * collapse. It is also the population the strip must not silently overwrite — an activity here can
+ * carry a binding constraint AND a prior placement, and only one of the two survives a naive
+ * conversion.
+ */
+const PLACEMENT_ON_EARLY_PLAN: DiagnosticEntry = {
+  id: 'placement-on-early-plan',
+  label: 'Hand-placed activities on a plan still in Early mode',
+  nature: 'prospective',
+  denominator: Prisma.sql`
+    SELECT count(*) AS examined
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+  `,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.visual_start IS NOT NULL
+      AND p.scheduling_mode = 'EARLY'
+  `,
+};
+
+/**
  * **D-E — baselines taken over a plan that carries a placement.**
  *
  * A baseline freezes the engine's OUTPUT (ADR-0025, ADR-0126) and can never be backfilled. Every
@@ -474,6 +517,7 @@ export const DIAGNOSTICS = [
   INHERITED_DAY_FACTOR,
   VISUAL_PLACEMENT_PLANS,
   VISUAL_PLACEMENT_ACTIVITIES,
+  PLACEMENT_ON_EARLY_PLAN,
   BASELINES_OVER_PLACED_PLANS,
   SNET_BINDING,
   SNET_INERT,

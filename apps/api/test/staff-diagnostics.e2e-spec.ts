@@ -438,6 +438,22 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     await recalculate(actor, placed);
     await actor.agent.post(`${org}/plans/${placed}/baselines`).send({ name: 'Over placements' });
 
+    // --- Plan 1b: a placement on a plan that IS in Visual mode --------------------------------
+    // The negative witness for D-D2, and without it that entry's `scheduling_mode = 'EARLY'`
+    // clause has no test at all: with every placement sitting on an EARLY plan, D-D and D-D2
+    // return identical numbers and the clause could be deleted with the suite green. This row is
+    // counted by D-D and NOT by D-D2, which is the only thing that separates them.
+    const visual = await planOn(actor, allDay, 'Already visual');
+    const visualA = await activityOn(actor, visual, { name: 'Visual placement' });
+    await actor.agent
+      .patch(`${org}/activities/${visualA}`)
+      .send({ visualStart: '2026-04-01', version: 1 })
+      .expect(200);
+    await actor.agent
+      .patch(`${org}/plans/${visual}`)
+      .send({ schedulingMode: 'VISUAL', version: 2 })
+      .expect(200);
+
     // --- Plan 2: the three readable SNET classes ----------------------------------------------
     const constrained = await planOn(actor, allDay, 'Constrained');
     const anchor = await activityOn(actor, constrained, { name: 'Anchor', durationDays: 10 });
@@ -527,13 +543,24 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     // Three plans exist; one carries placements. The plan-grain and activity-grain questions are
     // separate entries precisely because these two numbers diverge, and the fixture makes them.
     expect(byId.get('visual-placement-plans')).toMatchObject({
-      examined: 3,
-      affected: 1,
-      affectedPlans: 1,
+      examined: 4,
+      affected: 2,
+      affectedPlans: 2,
       affectedOrganizations: 1,
     });
     expect(byId.get('visual-placement-activities')).toMatchObject({
-      examined: 8,
+      examined: 9,
+      affected: 3,
+      affectedPlans: 2,
+      affectedOrganizations: 1,
+    });
+
+    // D-D2 — two of the three, and the gap is the point. `Placed` is still in `EARLY` (the schema
+    // default) while `Already visual` is not, and `visualStart` is accepted regardless of mode. So
+    // the two on the EARLY plan are the bars that move on the day the mode collapses, for a
+    // planner who did nothing; the third already renders where it sits.
+    expect(byId.get('placement-on-early-plan')).toMatchObject({
+      examined: 9,
       affected: 2,
       affectedPlans: 1,
       affectedOrganizations: 1,
@@ -627,6 +654,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       'inherited-day-factor',
       'visual-placement-plans',
       'visual-placement-activities',
+      'placement-on-early-plan',
       'baselines-over-placed-plans',
       'snet-binding',
       'snet-inert',
