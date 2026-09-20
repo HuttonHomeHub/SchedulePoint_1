@@ -131,6 +131,13 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     percentComplete: 0,
     actualStart: null,
     actualFinish: null,
+    // The frozen PLACEMENT (M-C). All three null is the COMMONEST real capture, not an empty
+    // placeholder: an activity nobody has hand-placed has no `visualStart`, and on a plan that has
+    // never been recalculated the placed span is null too. The `placement_snapshot_level: 'FULL'`
+    // the capture writes beside these is what says those nulls were looked at.
+    placedStart: null,
+    placedFinish: null,
+    visualStart: null,
     ...overrides,
   };
 }

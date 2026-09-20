@@ -390,6 +390,132 @@ describe.skipIf(!hasDatabase)('Placed-basis parity where nothing is placed (e2e)
   });
 
   /**
+   * **M-C-T1 — a capture freezes the placement, and on an unplaced plan it freezes the early span.**
+   *
+   * This is the same parity claim as the suite's first case, one layer down: there it is asserted
+   * over the live read, here over what a baseline wrote. It is separate rather than folded in
+   * because it can fail on its own — the capture could read the right columns and write them to the
+   * wrong ones, or write nothing at all, while the live read stayed perfect.
+   *
+   * **It is the case that proves the M-P dependency, which is why the fixture is this one and not a
+   * plain plan.** Before M-P the effective-Visual pass had none of the pure pass's branches, so a
+   * progressed activity's placed span ran at full duration from the data date, an LOE and a WBS
+   * summary each collapsed to a point, and a capture taken then would have frozen all of that
+   * **immutably**. A plain five-task fixture passes against that defect.
+   *
+   * Read through Prisma rather than a route, deliberately: M-C ships dark, so no DTO exposes these
+   * columns yet and asserting over one would be asserting over something that does not exist.
+   */
+  describe('the baseline freezes the placement (M-C-T1)', () => {
+    it('freezes the placed span as the early span when nothing is placed, and says it looked', async () => {
+      const { actor, planId, rows } = await seedProgressedPlan();
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Contract' })
+        .expect(201);
+
+      const baseline = await prisma.baseline.findFirstOrThrow({
+        where: { planId, deletedAt: null },
+        include: { activities: { where: { deletedAt: null } } },
+      });
+
+      // The discriminator is the point of the milestone: all-null placement columns on a FULL
+      // baseline mean "there genuinely were none", and the same nulls on a NONE baseline mean
+      // nobody looked. Without this the assertions below are true of a capture that froze nothing.
+      expect(baseline.placementSnapshotLevel).toBe('FULL');
+      expect(baseline.activities).toHaveLength(rows.length);
+
+      // Whole-map, so a failure names every diverging activity rather than the first.
+      const byCode = new Map(baseline.activities.map((a) => [a.code, a]));
+      const placed = Object.fromEntries(
+        [...byCode].map(([code, a]) => [code, { s: a.placedStart, f: a.placedFinish }]),
+      );
+      const early = Object.fromEntries(
+        [...byCode].map(([code, a]) => [code, { s: a.baselineStart, f: a.baselineFinish }]),
+      );
+      expect(placed).toEqual(early);
+
+      // Non-vacuity, in both directions. A capture that wrote NULL to all six columns would satisfy
+      // the equality above perfectly, and so would one taken on a plan whose derived-span rows had
+      // collapsed to points — which is exactly the pre-M-P defect this case exists to pin.
+      const summary = byCode.get('SUMMARY')!;
+      const loe = byCode.get('LOE')!;
+      expect(summary.placedStart).not.toBeNull();
+      expect(summary.placedStart).not.toEqual(summary.placedFinish);
+      expect(loe.placedStart).not.toEqual(loe.placedFinish);
+      // And the planner placed nothing, which is what makes "placed equals early" the claim rather
+      // than a coincidence of this fixture.
+      expect(baseline.activities.every((a) => a.visualStart === null)).toBe(true);
+    });
+
+    /**
+     * **The case above cannot fail against a capture that froze the EARLY span twice**, and this is
+     * the one that can. On an unplaced plan the two are equal by definition, so `placedStart:
+     * a.earlyStart` — a plausible slip, since both columns are right there — satisfies every
+     * assertion in it. That blind spot is inherent to the claim rather than a weakness in how it is
+     * written, so it is closed by a second fixture rather than by a stricter assertion.
+     *
+     * A plan with ONE hand-placed bar, where the placement is a fortnight past what logic allows,
+     * so all three frozen columns are distinguishable from each other and from the early span.
+     */
+    it('freezes the placement itself, not a second copy of the early span', async () => {
+      const actor = await signUp('mc-placed@example.com');
+      await actor.agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
+      const client = await actor.agent
+        .post('/api/v1/organizations/acme/clients')
+        .send({ name: 'Northgate' })
+        .expect(201);
+      const project = await actor.agent
+        .post(`/api/v1/organizations/acme/clients/${client.body.data.id}/projects`)
+        .send({ name: 'Riverside' })
+        .expect(201);
+      const plan = await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
+        .send({ name: 'Placed', plannedStart: '2026-01-05' })
+        .expect(201);
+      const planId = plan.body.data.id as string;
+      const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+
+      await actor.agent
+        .post(base)
+        .send({ name: 'Free', code: 'FREE', durationDays: 2 })
+        .expect(201);
+      await actor.agent
+        .post(base)
+        .send({ name: 'Moved', code: 'MOVED', durationDays: 2, visualStart: '2026-01-19' })
+        .expect(201);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
+        .send({ name: 'Contract' })
+        .expect(201);
+
+      const baseline = await prisma.baseline.findFirstOrThrow({
+        where: { planId, deletedAt: null },
+        include: { activities: { where: { deletedAt: null } } },
+      });
+      const moved = baseline.activities.find((a) => a.code === 'MOVED')!;
+      const free = baseline.activities.find((a) => a.code === 'FREE')!;
+
+      // The whole point: on the placed bar the two columns DIFFER, so freezing the early span
+      // twice is now a failing state rather than an indistinguishable one.
+      expect(moved.placedStart).not.toEqual(moved.baselineStart);
+      expect(moved.placedStart).toEqual(moved.visualStart);
+      // And the planner's own input is frozen as well as the engine's answer — the third column is
+      // what separates "a planner put this here" from "the engine pushed it here", which neither of
+      // the other two can say on its own.
+      expect(moved.visualStart).not.toBeNull();
+      expect(free.visualStart).toBeNull();
+      // The unplaced neighbour still agrees, in the same capture — so the equality above is a
+      // property of being unplaced rather than of the fixture.
+      expect(free.placedStart).toEqual(free.baselineStart);
+    });
+  });
+
+  /**
    * **M-D-T3 — the conflict reason reaches the wire, in all three states.**
    *
    * `m-d/migration-proof.md` §6 names this as the one obligation that file does not discharge: it
