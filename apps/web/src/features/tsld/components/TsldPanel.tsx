@@ -45,8 +45,8 @@ import {
   composeListboxRowText,
   describeActivity,
   lagPhrase,
+  levelledGhostClause,
   levelledOverlaySummary,
-  placementClause,
   summarizeLogic,
   wbsGroupClause,
 } from '../render/a11y';
@@ -76,12 +76,7 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
-import {
-  toRenderActivities,
-  toRenderEdges,
-  windowFloatFor,
-  type BarDateSource,
-} from '../render/to-render-model';
+import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
 import {
   SelectionActionsBar,
@@ -1425,20 +1420,12 @@ export function TsldPanel({
           baseline: baselineClauseById?.get(a.id),
           wbsGroup: wbsGroupClauseById?.get(a.id),
           compare: compareClauseById?.get(a.id),
-          // The two M-E overlays, in ONE member (see `placementClause`). Composed from the row
-          // itself rather than from a precomputed map, unlike its four neighbours: those are gated
-          // on data the panel fetches separately (variance rows, comparison ghosts), so building
-          // the map IS the gate. Here both inputs are already on the activity, and the gates are a
-          // view toggle and one lookup — so a map would be a second copy of "which rows have a
-          // window" with nothing forcing the two to agree.
-          placement: placementClause({
-            windowShown: viewToggles.floatTails === true,
-            // `windowFloatFor`, never the conditional restated — the painter reads the same
-            // function, so the bracket and the sentence cannot describe different floats.
-            remainingFloatDays: windowFloatFor(a, barDateSource),
-            driftDays: a.visualDriftDays,
-            levelledStart: levelledStartById?.get(a.id) ?? null,
-          }),
+          // **The levelled ghost, and only that.** The feasible window needs no clause of its
+          // own: the Tier-1 sentence already states the remaining float, the positive drift and
+          // the negative-drift conflict, which are exactly the two facts the bracket's caps draw.
+          // Established by reading the finished row in a browser rather than by reasoning about
+          // two functions separately (`m-e/window.md` §11).
+          levelled: levelledGhostClause(levelledStartById?.get(a.id) ?? null),
         }),
       );
     }
@@ -1452,8 +1439,6 @@ export function TsldPanel({
     flaggedIds,
     baselineClauseById,
     wbsGroupClauseById,
-    viewToggles.floatTails,
-    barDateSource,
     levelledStartById,
     // **Omitted until 2026-09-20, and the omission was a live defect.** Toggling the comparison
     // overlay changes `compareClauseById` and nothing else this memo reads, so the map never
@@ -3155,12 +3140,25 @@ export function TsldPanel({
                 chrome. `bottom-1` rather than `top-1`, because the comparison overlay's strip owns
                 the top corner and both can be on at once.
               */
-              <p className="text-muted-foreground pointer-events-none absolute right-2 bottom-1 z-10 text-xs">
+              <p
+                aria-hidden
+                className="text-muted-foreground pointer-events-none absolute right-2 bottom-1 z-10 text-xs"
+              >
                 {levelledSummary.undrawnLabel}
               </p>
             ) : null}
             {levelledSummary !== null ? (
-              /* The spoken twin, inside the diagram region for ADR-0122 D2's reason. */
+              /*
+                The spoken twin, inside the diagram region for ADR-0122 D2's reason — and the ONLY
+                spoken copy, which is why the visible strip above is `aria-hidden`.
+
+                The journey caught them both rendering: a screen-reader user heard "Levelled
+                placement: resource levelling did not move any activity" and then "Levelled
+                placement: nothing to show — resource levelling did not move any activity", which
+                is the same fact twice in the channel least able to skim past it. The precedent is
+                already in this file — `searchStatus`'s chip is `aria-hidden` so the announcement
+                is heard once, from one place — and the fuller sentence is the one worth keeping.
+              */
               <p className="sr-only">{levelledSummary.heading}</p>
             ) : null}
             {compareSummary !== null && compareSummary.undrawn > 0 ? (

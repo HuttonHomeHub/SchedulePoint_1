@@ -430,3 +430,96 @@ to accommodate an intended change is how such a pin quietly stops pinning anythi
 carried `visualDriftDays: -2` beside `remainingFloat: null`, which is arithmetically impossible —
 now `2`, with the note that a bar placed before its earliest feasible start still has room before its
 late finish, and that the two facts have always been stated separately.
+
+---
+
+## 11. The journey, and the four things it found
+
+`apps/web/e2e-workspace-chrome/placement-overlays.spec.ts` is M-E's ADR-0081 obligation: the
+milestone claims user-facing capability, so something has to drive the real product. It found four
+things, **three of them defects and one of them a decision reversed**, and not one was visible to
+the unit tier.
+
+### 1. The window ships OFF, and the test was written assuming otherwise
+
+The first case asserted the `Feasible window` toggle checked, reasoning that the window replaced the
+float and drift tails and inherits their default. It went red. `DEFAULT_VIEW_TOGGLES` settles it:
+`floatTails` is **absent** from that record and optional in the type, so it has always been off and
+the window inherited exactly that. **The epic's headline mark is opt-in** — a real fact about what a
+planner sees on the day it ships, recorded here rather than quietly accommodated. Nothing about the
+default changed; what changed is that it is now written down and asserted, so a later flip cannot
+make every case in the file vacuous in the quiet direction.
+
+### 2. The window clause was redundant to the last word — the biggest finding, and a deletion
+
+M-E-T5 built **one** `ListboxRowParts` member describing both overlays, on the reasoning that the
+row is a budget and both answer "where may this bar sit". Its eight unit cases passed. The journey
+printed the finished row:
+
+```
+Dig trench, 3 working days, 05 Jan 2026 to 07 Jan 2026, lane 1, critical (no float)
+```
+
+`critical` and `(no float)` in one breath — `describeActivity` omits a float count for a critical
+bar _because critical implies none_, and the new clause said it anyway. Pulling that thread showed
+the whole window half to be redundant: the Tier-1 sentence **already** states the remaining float
+(M-E-T7), **already** names a positive drift, and **already** names the negative-drift conflict.
+Those are exactly the two facts the bracket's caps draw. **The window draws facts the sentence
+carries; it does not add a third.**
+
+So the clause is now `levelledGhostClause` — the levelled ghost alone, a third sibling of
+`baselineGhostClause` and `compareClause` — and six unit cases were **deleted**. That is the correct
+outcome, and the surviving suite says so at the point somebody would otherwise write them again.
+
+**Two unit suites could not see it, because each was right about its own function.** Only a reader
+looking at the finished sentence could, which is what ADR-0081 asks a journey to be.
+
+### 3. A shipped defect in the drift sentence, with no coverage anywhere
+
+Following finding 2 into `describeActivity` showed the drift clause sharing the float pluraliser,
+which appends the word _float_:
+
+```
+, drift 2 days float later than its earliest start
+```
+
+A sentence naming the wrong quantity, which does not parse. **It shipped that way** (confirmed at
+`HEAD~1`) and M-E-T7 made it worse — `2 days float left later than …` — before anybody noticed,
+because **nothing in the estate asserts that sentence at all**. The helper is now split
+(`floatDays` / `plainDays`) and the sentence has a regression case, verified red by putting the
+float helper back.
+
+**The same trap was avoided one function along**: `summarizeLogic`'s slack phrase carries a comment
+explaining precisely why it must not use the float helper. One correct pattern, applied to a control
+and not to its neighbour — the shape this register files most often, found here inside the file that
+records it.
+
+### 4. The undrawn sentence was announced twice
+
+The visible strip and the `sr-only` summary both rendered, so a screen-reader user heard "Levelled
+placement: resource levelling did not move any activity" and then "Levelled placement: nothing to
+show — resource levelling did not move any activity". The same fact twice, in the channel least able
+to skim past it. Surfaced as a strict-mode locator resolving to two elements rather than as anything
+anybody saw. The strip is now `aria-hidden`, which is the precedent already in that file —
+`searchStatus`'s chip is hidden for exactly this reason — and the fuller sentence is the one kept.
+
+### What the journey deliberately does NOT assert
+
+The **"levelling is off"** undrawn sentence is only transiently reachable, and the attempt to assert
+it is what established that: the lens is session-local view state, so the reload that makes a
+changed plan setting visible also turns the lens off — and with levelling off the control is shaded
+and cannot be turned back on. A planner meets that sentence only between changing the setting and
+reloading.
+
+**Which is right rather than a gap.** When levelling is off, the control's **own reason** is the
+message, and the second case asserts that reason resolves through `aria-describedby` — the one
+assertion no unit test in M-E can make. The strip covers the transient state, and its two wordings
+are pinned in `a11y.test.ts` with the mutation that collapses them verified red.
+
+### Two instrument corrections
+
+The activity route is **org-scoped, not plan-nested** (`/organizations/:org/activities/:id`); the
+first version nested it and got a 404 whose message begins `Cannot PATCH`, which is the router
+saying the _route_ does not exist rather than the resource. Read off `use-activities.ts` rather than
+guessed a second time. And the direct `playwright test` invocation cannot find a browser — the
+executable path is exported by `scripts/e2e-local.sh`, which is the documented way to run these.

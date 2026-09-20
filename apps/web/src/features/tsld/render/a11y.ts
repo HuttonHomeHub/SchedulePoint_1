@@ -20,8 +20,22 @@ import { formatFinishVariance } from '@/lib/schedule-format';
  * answered; without it the sentence would silently change meaning the first time somebody places
  * a bar, which is exactly the defect class this register files most often.
  */
-function days(n: number): string {
+function floatDays(n: number): string {
   return `${n} ${n === 1 ? 'day' : 'days'} float left`;
+}
+
+/**
+ * Pluralise a whole-day count that is **not** float: `1 day`, `3 days`.
+ *
+ * **Split out of {@link floatDays} because sharing it had shipped a broken sentence.** The drift
+ * clause below read `days(...)`, which appended the word *float*, so a bar placed later than its
+ * earliest start announced `drift 2 days float later than its earliest start` — a sentence that
+ * names the wrong quantity and does not parse. It shipped that way and M-E-T7 made it worse before
+ * anybody noticed, because **nothing in the estate asserts that sentence at all**: it was found by
+ * reading the function after a journey failed on a different line.
+ */
+function plainDays(n: number): string {
+  return `${n} ${n === 1 ? 'day' : 'days'}`;
 }
 
 /**
@@ -73,14 +87,14 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
   // **`remainingFloat`, not `totalFloat`** (M-E-T7). Criticality still comes from the engine's own
   // flags, which are pure-network facts and stay so: an activity is critical because of the
   // network, not because a planner spent its slack. Only the NUMBER moves to the placed basis, and
-  // `days()` labels it.
+  // `floatDays()` labels it.
   const floatPart = a.isCritical
     ? ', critical'
     : a.remainingFloat === null
       ? ''
       : a.isNearCritical
-        ? `, near-critical, ${days(a.remainingFloat)}`
-        : `, ${days(a.remainingFloat)}`;
+        ? `, near-critical, ${floatDays(a.remainingFloat)}`
+        : `, ${floatDays(a.remainingFloat)}`;
   // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
   const constraint = formatConstraint(a);
   const constraintPart = constraint ? `, ${constraint.full}` : '';
@@ -105,7 +119,7 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
   // float is a pure-network fact, drift is a placement fact.
   const driftPart =
     !a.visualConflict && a.visualDriftDays !== null && a.visualDriftDays > 0
-      ? `, drift ${days(a.visualDriftDays)} later than its earliest start`
+      ? `, drift ${plainDays(a.visualDriftDays)} later than its earliest start`
       : '';
   return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}${driftPart}${overlapPart}`;
 }
@@ -302,9 +316,8 @@ export interface ListboxRowParts {
   wbsGroup?: string | undefined;
   /** {@link compareClause} for this row, when the comparison overlay draws it a ghost. */
   compare?: string | undefined;
-  /** {@link placementClause} for this row — the feasible window and the levelled ghost, in ONE
-   * member, because the row's length is a budget and both describe one subject. */
-  placement?: string | undefined;
+  /** {@link levelledGhostClause} for this row, when the levelled lens draws it a ghost. */
+  levelled?: string | undefined;
 }
 
 /**
@@ -371,68 +384,36 @@ export function levelledOverlaySummary(
 }
 
 /**
- * The spoken equivalent of the **two M-E placement overlays** — the feasible window and the levelled
- * ghost (WCAG 1.4.1: a bracket and a dashed outline reach a sighted planner and nobody else).
+ * The spoken equivalent of a **levelled-placement ghost** (WCAG 1.4.1 — the ghost is a dashed
+ * outline and nothing else): where resource levelling moved this activity to.
  *
- * **ONE member of {@link ListboxRowParts}, composed here, rather than one per overlay.** The row is
- * read on every arrow keystroke, and `baselineGhostClause`'s own docblock already records that
- * budget as the reason it states the finish variance alone and not every variance column. Two
- * members would have been the natural shape — they are two toggles drawing two marks — and would
- * have spent the budget twice on one subject: where this bar may sit.
+ * The third sibling of {@link baselineGhostClause} and {@link compareClause}, and it exists for
+ * their identical reason: the canvas is `aria-hidden`, so an outline saying "levelling would put
+ * this here" reaches a sighted planner and nobody else.
  *
- * **It states OFFSETS, not spans, and the two halves reach that answer differently.**
+ * **It states the ghost's START DATE rather than an offset, which is a deliberate departure from
+ * both siblings.** The tempting field is `levelingDelayDays` — engine-owned, already in whole
+ * working days, sitting on the same row — and it is `leveledStart - earlyStart`, while the bar is
+ * drawn at the PLACED start. On an unplaced activity the two coincide, which is every plan in the
+ * estate today (FC-1); on a placed one — the case this epic exists to create — it would report an
+ * offset from a position the reader cannot see. Computing the true offset needs a working-day walk
+ * a pure render leaf has no business doing, so the honest short answer is the date, which is exact
+ * in every case.
  *
- * The window's caps are positioned by the painter from `remainingFloat` and `visualDriftDays`
- * multiplied out from the bar's own edges (`feasibleWindowRect`), so those two numbers ARE the
- * offsets the picture draws — reading them here is one derivation, not a second one. A span would
- * also make the listener do the arithmetic against dates the row's Tier-1 sentence has just read
- * them.
+ * **This is the ONLY clause the two M-E overlays need, and that was found by driving the product.**
+ * It began as one member describing both — the feasible window and this ghost — on the reasoning
+ * that the row's length is a budget and both describe where a bar may sit. The journey's first run
+ * printed the row, and the window's half was redundant to the last word: the Tier-1 sentence
+ * already states the remaining float (M-E-T7), already names a positive drift, and already names
+ * the negative-drift conflict. The window DRAWS two facts the sentence carries; it does not add a
+ * third. Two unit suites cannot see that, because each is right about its own function — only a
+ * reader looking at the finished sentence can (ADR-0081, `m-e/window.md` §11).
  *
- * The levelled half states the ghost's **start date** instead, and that is a deliberate departure
- * with a reason. The tempting field is `levelingDelayDays`, which is engine-owned, already in
- * whole working days, and sitting on the same row — and it is `leveledStart - earlyStart`, while
- * the bar is drawn at the PLACED start. On an unplaced activity the two coincide, which is every
- * plan in the estate today (FC-1); on a placed one — the case this whole epic exists to create —
- * it would report an offset from a position the reader cannot see. Computing the true offset needs
- * a working-day walk this render leaf has no business doing, so the honest short answer is the
- * date. One date is not a span, and it is exact in every case.
- *
- * Returns `''` when there is nothing to say, which is the same test each painter applies: absence
- * is not narrated.
+ * Returns `''` where the overlay draws no ghost for the row — absence is not narrated — which is
+ * the same test the painter applies, because both walk the same gated array.
  */
-export function placementClause(input: {
-  /** On iff the `floatTails` view toggle is on — the window is not described when it is not drawn. */
-  windowShown: boolean;
-  remainingFloatDays: number | null;
-  driftDays: number | null;
-  /** The levelled ghost's start, or null when the lens is off or drew this row no ghost. */
-  levelledStart: string | null;
-}): string {
-  const parts: string[] = [];
-  if (input.windowShown && input.remainingFloatDays !== null) {
-    const float = input.remainingFloatDays;
-    parts.push(
-      float > 0
-        ? `${workingDays(float)} of float`
-        : float === 0
-          ? 'no float'
-          : `${workingDays(-float)} past its bound`,
-    );
-    // The left cap. Zero drift puts it on the bar's own start, which the sentence has already read,
-    // so it says nothing — the picture says nothing there either.
-    const drift = input.driftDays ?? 0;
-    if (drift > 0) parts.push(`could start ${workingDays(drift)} earlier`);
-    else if (drift < 0) parts.push(`placed ${workingDays(-drift)} before its logic`);
-  }
-  if (input.levelledStart !== null) {
-    parts.push(`levelled to ${formatCalendarDate(input.levelledStart)}`);
-  }
-  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
-}
-
-/** `1 working day` / `3 working days` — the plural rule the baseline clause already speaks. */
-function workingDays(n: number): string {
-  return `${n} working ${n === 1 ? 'day' : 'days'}`;
+export function levelledGhostClause(leveledStart: string | null): string {
+  return leveledStart === null ? '' : ` (levelled to ${formatCalendarDate(leveledStart)})`;
 }
 
 /**
@@ -448,7 +429,7 @@ export function composeListboxRowText(parts: ListboxRowParts): string {
   const reasons = parts.dimReasons ?? [];
   const dim = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
   const overAllocated = parts.overAllocated === true ? ' (over-allocated)' : '';
-  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}${parts.placement ?? ''}`;
+  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}${parts.levelled ?? ''}`;
 }
 
 /**
@@ -502,9 +483,13 @@ export function summarizeLogic(
       .filter((x): x is { d: DependencySummary; gap: number } => (x.gap ?? 0) > 0)
       .map(({ d, gap }) => {
         const other = d.successor.id === id ? d.predecessor.name : d.successor.name;
-        // Deliberately not the `days()` helper: that one says "float", and a tie's gap is not
+        // Deliberately not the float helper: that one says "float", and a tie's gap is not
         // float — it is the room in this one relationship, which is exactly the distinction the
         // canvas chip makes by sitting on the link rather than on the bar.
+        //
+        // **This site avoided the trap and the drift clause above did not**, under the same shared
+        // helper, which is why `plainDays` now exists: the correct reasoning was written down here
+        // and never applied one function over.
         return `${other} ${gap} ${gap === 1 ? 'day' : 'days'}`;
       });
     if (waits.length > 0) text += `; slack to ${waits.join(', ')}`;

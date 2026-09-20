@@ -12,8 +12,8 @@ import {
   composeListboxRowText,
   describeActivity,
   lagPhrase,
+  levelledGhostClause,
   levelledOverlaySummary,
-  placementClause,
   summarizeLogic,
   wbsGroupClause,
 } from './a11y';
@@ -199,6 +199,32 @@ describe('describeActivity (Tier 1)', () => {
         }),
       ),
     ).toContain(', near-critical, 2 days float left');
+  });
+
+  it('names a positive drift in DAYS, never in "days float"', () => {
+    /**
+     * **A shipped defect with no coverage at all, found by reading rather than by failing.**
+     *
+     * The drift clause shared the float pluraliser, which appends the word *float* — so a bar
+     * placed later than its earliest start announced `drift 2 days float later than its earliest
+     * start`: a sentence naming the wrong quantity, which does not parse. It shipped that way and
+     * M-E-T7 made it worse (`2 days float left later than …`) before anybody noticed, because
+     * **nothing in the estate asserted this sentence**. It surfaced only because a journey failed
+     * on a different line and sent me into the function.
+     *
+     * The same trap was avoided one function along — `summarizeLogic`'s slack phrase carries a
+     * comment explaining precisely why it must not use the float helper. One correct pattern,
+     * applied to a control and not to its neighbour.
+     */
+    const s = describeActivity(
+      activity({ visualConflict: false, visualDriftDays: 2, remainingFloat: 3 }),
+    );
+    expect(s).toContain('drift 2 days later than its earliest start');
+    expect(s).not.toContain('2 days float later');
+    expect(s).not.toContain('2 days float left later');
+    // The float clause is untouched and still labelled — the two read as different facts, which is
+    // the distinction the drift clause's own comment says it exists to preserve.
+    expect(s).toContain('3 days float left');
   });
 
   it('spells out a set date constraint (the spoken equivalent of the canvas pin)', () => {
@@ -659,87 +685,45 @@ describe('the per-row compare clause', () => {
   });
 });
 
-describe('the placement clause — one member for two overlays', () => {
-  const base = {
-    windowShown: true,
-    remainingFloatDays: null,
-    driftDays: null,
-    levelledStart: null,
-  } as const;
-
-  it('says nothing when neither overlay has anything to describe', () => {
-    expect(placementClause(base)).toBe('');
+describe('the levelled ghost clause', () => {
+  it('says nothing when the lens drew this row no ghost', () => {
+    // Absence is not narrated, and the test is the same one the painter applies — both walk the
+    // gated array, so a row with a clause always has a ghost and one without never does.
+    expect(levelledGhostClause(null)).toBe('');
   });
 
-  it('withholds the window when the toggle is off, even with float to report', () => {
-    // The clause describes what is DRAWN. A sentence about a bracket nobody can see is worse than
-    // silence: it is the row's budget spent on a picture that is not there.
-    expect(placementClause({ ...base, windowShown: false, remainingFloatDays: 4 })).toBe('');
-  });
-
-  it('states the float as an OFFSET, never as a span', () => {
-    const clause = placementClause({ ...base, remainingFloatDays: 4 });
-    expect(clause).toBe(' (4 working days of float)');
-    // The row's Tier-1 sentence has just read the dates. A span would make the listener do the
-    // arithmetic against numbers they were given a moment ago.
-    expect(clause).not.toContain(' to ');
-  });
-
-  it('distinguishes no float from float it cannot report', () => {
-    // `no float` is a fact about a bar with none; the empty string is the absence of an answer.
-    // Collapsing them would tell a reader on an uncalculated plan that their activity is critical.
-    expect(placementClause({ ...base, remainingFloatDays: 0 })).toBe(' (no float)');
-    expect(placementClause({ ...base, remainingFloatDays: null })).toBe('');
-  });
-
-  it('names negative float as a breached bound rather than as negative days', () => {
-    expect(placementClause({ ...base, remainingFloatDays: -2 })).toBe(
-      ' (2 working days past its bound)',
-    );
-  });
-
-  it('reads the drift in the direction the left cap is drawn', () => {
-    // `visualDriftDays` is the signed offset of the placement FROM the early start, and the painter
-    // puts the left cap at `bar.x - drift * pxPerDay`. So a positive drift is room to move earlier,
-    // and a negative one is the EARLIER_THAN_LOGIC conflict, where the cap lands inside the bar.
-    expect(placementClause({ ...base, remainingFloatDays: 3, driftDays: 2 })).toBe(
-      ' (3 working days of float, could start 2 working days earlier)',
-    );
-    expect(placementClause({ ...base, remainingFloatDays: 3, driftDays: -2 })).toBe(
-      ' (3 working days of float, placed 2 working days before its logic)',
-    );
-  });
-
-  it('says nothing about zero drift, because the picture says nothing there either', () => {
-    expect(placementClause({ ...base, remainingFloatDays: 3, driftDays: 0 })).toBe(
-      ' (3 working days of float)',
-    );
-  });
-
-  it('states the levelled ghost as a DATE, not an offset', () => {
-    // The tempting field is `levelingDelayDays` — engine-owned, already in working days, on the
-    // same row — and it is measured from the EARLY start while the bar is drawn at the PLACED one.
-    // It would be right on every plan in the estate today and wrong on exactly the plans this epic
-    // exists to create.
-    const clause = placementClause({ ...base, levelledStart: '2026-03-12' });
+  it('states the ghost as a DATE, not an offset', () => {
+    /**
+     * The tempting field is `levelingDelayDays` — engine-owned, already in working days, on the
+     * same row — and it is measured from the EARLY start while the bar is drawn at the PLACED one.
+     * It would be right on every plan in the estate today and wrong on exactly the plans this epic
+     * exists to create.
+     */
+    const clause = levelledGhostClause('2026-03-12');
     expect(clause).toContain('levelled to');
+    expect(clause).toMatch(/12 Mar 2026/);
     expect(clause).not.toMatch(/\d+ working days? (later|earlier)/);
   });
 
-  it('joins both overlays inside ONE parenthesis, because the row is a budget', () => {
-    expect(
-      placementClause({
-        windowShown: true,
-        remainingFloatDays: 1,
-        driftDays: 1,
-        levelledStart: '2026-03-12',
-      }),
-    ).toMatch(/^ \([^()]*\)$/);
+  it('is one parenthesised clause, like its two ghost siblings', () => {
+    // The row is read on every arrow keystroke, and three ghost clauses already share its budget.
+    expect(levelledGhostClause('2026-03-12')).toMatch(/^ \([^()]*\)$/);
   });
 
-  it('speaks a single day in the singular', () => {
-    expect(placementClause({ ...base, remainingFloatDays: 1 })).toContain('1 working day of');
-  });
+  /**
+   * **What is NOT here, and why, because the absence is the milestone's main finding.**
+   *
+   * This clause began as one describing both M-E overlays — the feasible window and this ghost —
+   * with cases for float, zero float, negative float, drift in both directions and the joint form.
+   * Every one of them passed. The journey's first run printed the finished row and the window's
+   * half was redundant to the last word: `describeActivity` already states the remaining float
+   * (M-E-T7), already names a positive drift, and already names the negative-drift conflict. The
+   * bracket DRAWS two facts the sentence carries; it does not add a third.
+   *
+   * Two unit suites could not see it, because each was right about its own function. Deleting
+   * those cases is the correct outcome, and it is recorded here rather than left as a gap somebody
+   * later "fixes" by writing them again.
+   */
 });
 
 describe('the levelled overlay summary — the empty state is the common one', () => {

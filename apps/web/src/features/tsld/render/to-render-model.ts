@@ -101,13 +101,16 @@ export function toRenderEdges(dependencies: readonly DependencySummary[]): Rende
 /**
  * The feasible window's right-edge float, for one activity on one bar basis.
  *
- * **Exported so the accessible clause reads the same rule the painter does** (M-E-T5). It is one
- * conditional and the temptation to restate it at the second call site is real — which is exactly
- * how the defect this rule fixes arrived in the first place: the window was drawn from
- * `remainingFloat` while the projection above handed the painter `totalFloat`, and the bracket was
- * short by the drift on every placed activity. Two copies of a rule that is trivially easy to get
- * right both ways is how a picture and its description come to disagree about the same bar, and
- * only a reader who compared them would ever see it.
+ * **A named rule with ONE caller, which is deliberate.** It was extracted for a second consumer —
+ * the accessible clause M-E-T5 wrote — and that consumer was deleted at M-E's journey, once
+ * driving the real product showed the Tier-1 sentence already carried every fact the window draws.
+ * The extraction is kept rather than inlined because the rule is subtle and this repository has
+ * already shipped it wrong once: `#348` was the window drawn from `remainingFloat` while the
+ * projection handed the painter `totalFloat`, leaving the bracket short by the drift on every
+ * placed activity. A name at the call site is what stops the next reader "simplifying" the
+ * conditional back to one branch.
+ *
+ * Exported for its unit suite, and because a rule worth naming is worth being able to test.
  */
 export function windowFloatFor(
   a: Pick<ActivitySummary, 'remainingFloat' | 'totalFloat'>,

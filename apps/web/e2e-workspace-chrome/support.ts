@@ -572,3 +572,41 @@ export async function placeOnDay(
       `(reached ${String(final)}): ${trace.join('; ')}`,
   );
 }
+
+/**
+ * Set the plan's `levelResources` switch (ADR-0041) through the API, and return its new version.
+ *
+ * Through the API rather than through the settings screen on purpose: the claim under test is what
+ * the **levelled lens** does with the answer, and driving a settings dialog to get there would make
+ * a failure in that dialog read as a failure of the lens. The plan's own settings surface has its
+ * own coverage.
+ */
+export async function setLevelResources(page: Page, orgSlug: string, on: boolean): Promise<number> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id, levelResources }: { org: string; id: string; levelResources: boolean }) => {
+      const read = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        credentials: 'include',
+      });
+      if (!read.ok) throw new Error(`plan read ${String(read.status)}: ${await read.text()}`);
+      const { data: plan } = (await read.json()) as { data: { version: number } };
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ levelResources, version: plan.version }),
+      });
+      if (!response.ok) {
+        throw new Error(`plan patch ${String(response.status)}: ${await response.text()}`);
+      }
+      const { data } = (await response.json()) as { data: { version: number } };
+      return data.version;
+    },
+    { org: orgSlug, id: planId, levelResources: on },
+  );
+}
+
+/** Open `View ▾`. Its toggles are native checkboxes in labels, so they take the `checkbox` role. */
+export async function openViewMenu(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'View', exact: true }).click();
+}
