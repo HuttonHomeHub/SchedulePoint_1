@@ -51,7 +51,6 @@ const plans: PlanSummary[] = [
     name: 'Overall Schedule',
     description: null,
     status: 'DRAFT',
-    schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
     criticalPathDefinition: 'TOTAL_FLOAT',

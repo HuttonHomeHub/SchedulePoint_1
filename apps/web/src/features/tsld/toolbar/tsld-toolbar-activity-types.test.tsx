@@ -18,7 +18,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   CANVAS_ACTIVITY_TYPES_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: false,
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {

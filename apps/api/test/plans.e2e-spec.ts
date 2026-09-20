@@ -158,6 +158,57 @@ describe.skipIf(!hasDatabase)('Plans API (e2e)', () => {
     expect(got.body.data).toMatchObject({ ignoreExternalRelationships: true });
   });
 
+  /**
+   * **`schedulingMode` is gone from both write DTOs, and the refusal is the contract**
+   * (one-planning-surface M-F-T4).
+   *
+   * ADR-0033 split a plan into `EARLY` and `VISUAL`; the collapse leaves one planning surface, so a
+   * caller naming the field is asking a question the product has stopped having an answer to.
+   * `ValidationPipe` runs with `forbidNonWhitelisted`, which turns that into a **422 rather than a
+   * silent drop** — and the difference matters: a silently-ignored field would let an old client go
+   * on "setting the mode" for ever, succeeding, and changing nothing.
+   *
+   * Both verbs, because they are separate DTOs and removing a field from one is exactly the kind of
+   * half-done change that reads as complete. The response side is deliberately NOT asserted here:
+   * `PlanResponseDto` no longer carries the field, and a stale BUNDLE does not error on its absence
+   * — `plan-workspace-toolbar.tsx` defaulted it to `'EARLY'` — so a web image recreated before the
+   * API one renders placed plans at their early dates until it refreshes. ADR-0047 recreates the two
+   * independently, so that window is real; it is recorded in the ADR's consequences rather than
+   * pretended away by a test that cannot see it.
+   */
+  it('refuses schedulingMode on create and on update (422, one-planning-surface M-F)', async () => {
+    const { actor, projectId } = await setup();
+
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .send({ name: 'Mode on create', plannedStart: '2026-05-01', schedulingMode: 'VISUAL' })
+      .expect(422);
+    expect(created.body.error).toBeDefined();
+
+    // Nothing was created — the refusal is total, not partial.
+    const list = await actor.agent
+      .get(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .expect(200);
+    expect(list.body.data).toHaveLength(0);
+
+    const plan = await actor.agent
+      .post(`/api/v1/organizations/acme/projects/${projectId}/plans`)
+      .send({ name: 'Mode on update', plannedStart: '2026-05-01' })
+      .expect(201);
+    const id = plan.body.data.id as string;
+
+    const patched = await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${id}`)
+      .send({ schedulingMode: 'VISUAL', version: 1 })
+      .expect(422);
+    expect(patched.body.error).toBeDefined();
+
+    // And the refusal did not burn a version — the write never reached the service.
+    const got = await actor.agent.get(`/api/v1/organizations/acme/plans/${id}`).expect(200);
+    expect(got.body.data.version).toBe(1);
+    expect(got.body.data).not.toHaveProperty('schedulingMode');
+  });
+
   it('rejects a plan created without a start date (422, ADR-0033 M1)', async () => {
     const { actor, projectId } = await setup();
     const res = await actor.agent

@@ -128,7 +128,6 @@ export const SEED_CALENDAR_SCOPES = ['ORG', 'PROJECT'] as const;
 export const seedCalendarScopeSchema = z.enum(SEED_CALENDAR_SCOPES);
 export type SeedCalendarScope = z.infer<typeof seedCalendarScopeSchema>;
 
-export const SEED_SCHEDULING_MODES = ['EARLY', 'VISUAL'] as const;
 export const SEED_PROGRESS_RECALC_MODES = [
   'RETAINED_LOGIC',
   'PROGRESS_OVERRIDE',
@@ -341,7 +340,6 @@ export type SeedDependency = z.infer<typeof seedDependencySchema>;
  */
 export const seedPlanOptionsSchema = z
   .object({
-    schedulingMode: z.enum(SEED_SCHEDULING_MODES),
     progressRecalcMode: z.enum(SEED_PROGRESS_RECALC_MODES),
     useExpectedFinishDates: z.boolean(),
     criticalPathDefinition: z.enum(SEED_CRITICAL_PATH_DEFINITIONS),
@@ -357,7 +355,6 @@ export type SeedPlanOptions = z.infer<typeof seedPlanOptionsSchema>;
 
 /** The application's own defaults, so a spec states only what it deliberately varies. */
 export const DEFAULT_SEED_PLAN_OPTIONS: SeedPlanOptions = {
-  schedulingMode: 'EARLY',
   progressRecalcMode: 'RETAINED_LOGIC',
   useExpectedFinishDates: false,
   criticalPathDefinition: 'TOTAL_FLOAT',

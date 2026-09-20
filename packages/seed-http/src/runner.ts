@@ -188,7 +188,6 @@ export async function seedPlan(
         name: spec.plan.name,
         ...(spec.plan.description === null ? {} : { description: spec.plan.description }),
         plannedStart: spec.plan.dataDate,
-        schedulingMode: spec.plan.options.schedulingMode,
         // NOT `calendarId`: `CreatePlanDto` does not accept one — the plan's default calendar is set
         // by the update below, alongside the scheduling options. Sending it here is a 422.
       });

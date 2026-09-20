@@ -44,7 +44,6 @@ function report(overrides: Partial<ScheduleHealthReport> = {}): ScheduleHealthRe
     planName: 'Riverside programme',
     dataDate: '2026-01-05',
     computedAt: '2026-01-05T08:00:00.000Z',
-    schedulingMode: 'EARLY',
     activityCount: 10,
     relationshipCount: 12,
     baseline: null,

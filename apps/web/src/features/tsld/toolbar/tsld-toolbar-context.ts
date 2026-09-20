@@ -1,4 +1,4 @@
-import type { ActivitySummary, ActivityType, DependencyType, SchedulingMode } from '@repo/types';
+import type { ActivitySummary, ActivityType, DependencyType } from '@repo/types';
 import type { ReactNode } from 'react';
 
 import type { ExportScope } from '../export/export-csv';
@@ -82,13 +82,6 @@ export interface TsldToolbarContext {
         setHidden: (next: ReadonlySet<GanttColumnKey>) => void;
       }
     | undefined;
-  /** The plan's scheduling mode (ADR-0033) — EARLY or VISUAL. Drives the Mode selector's pressed
-   * state. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
-  schedulingMode: SchedulingMode;
-  /** Switch the plan's scheduling mode (targeted PATCH, pen-gated). `null` when the viewer can't edit
-   * the schedule — the registry then keeps the Early | Visual selector **visible but shaded** (the mode
-   * changes how the diagram reads, so viewers still see which is active), operable only by writers. */
-  setSchedulingMode: ((mode: SchedulingMode) => void) | null;
 
   /**
    * **Why a pen-gated command is shut, given a phrase naming what it does** — `null` when it is

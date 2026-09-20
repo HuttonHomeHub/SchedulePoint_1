@@ -258,7 +258,6 @@ export function useDiagramImage(args: {
     },
     [
       plan.plannedStart,
-      plan.schedulingMode,
       plan.name,
       // **The other plan's name, and omitting it was a live defect of exactly the kind this
       // callback's own docblock warns about.** It exists so the picture's title names BOTH plans

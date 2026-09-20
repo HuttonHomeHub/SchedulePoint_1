@@ -31,7 +31,6 @@ vi.mock('@/config/env', async (importOriginal) => {
   return {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
-    SCHEDULING_MODES_ENABLED: false,
     NOTES_ENABLED: false,
     UNDO_REDO_ENABLED: true,
   };

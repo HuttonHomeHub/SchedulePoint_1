@@ -51,7 +51,6 @@ export function visualPlacementsPlan(): SeedSpec {
       'there and is flagged instead. PL_SLACK is placed five weeks past a float of about a ' +
       'fortnight — an ordinary positive totalFloat today; once remaining float exists, this is ' +
       'where it goes negative.',
-    options: { schedulingMode: 'VISUAL' },
     defaultCalendarKey: PLACEMENT_CAL.key,
     calendars: [PLACEMENT_CAL],
     activities: [
@@ -99,34 +98,35 @@ export function visualPlacementsPlan(): SeedSpec {
 }
 
 /**
- * **A placement surviving a switch back to `EARLY`** (the `placement-on-early-plan` diagnostic,
- * ADR-0140's D-D2 reading). `visual_start` is accepted regardless of the plan's CURRENT mode
- * (`activities.service.ts:388`, `:526-528` — no mode check at either site), so this plan's end state
- * — an EARLY plan carrying a placed activity — is indistinguishable in the database from a planner
- * placing a bar in VISUAL and then switching the plan back. Nothing records the history, and the
- * diagnostic does not try to: it reads the current row, which this plan produces directly.
+ * **A placement left behind on a plan whose stored mode is `EARLY`** (the `placement-on-early-plan`
+ * diagnostic, ADR-0140's D-D2 reading). `visual_start` was always accepted regardless of the plan's
+ * mode (`activities.service.ts:388`, `:526-528` — no mode check at either site), so this plan's end
+ * state was indistinguishable in the database from a planner placing a bar in VISUAL and switching
+ * back. Nothing records the history, and the diagnostic does not try to: it reads the current row.
  *
- * The whole point is that `PE_PLACED`'s placement is currently INERT: this plan is EARLY, so the
- * surface renders `PE_PLACED`'s `early_start` (9 Mar) and ignores the placement (16 Mar) entirely —
- * correct today, and exactly what changes at the collapse (M-F). This is the population that MOVES
- * on the day the mode is deleted, and it is the one shape the epic's own FC-1 says nothing else
- * measures.
+ * **This plan is the epic's before/after exhibit, and the collapse flips what it proves.** Before
+ * M-F its placement was INERT — the surface rendered `PE_PLACED`'s `early_start` (9 Mar) and
+ * ignored the placement (16 Mar). After M-F the bar is drawn where it is PLACED, so it renders
+ * 16 Mar. **That is the population D-D2 was built to size, and it has now moved**; the plan is kept
+ * rather than deleted because it is the only seeded case that exhibits the change, and because the
+ * diagnostic remains live for the legacy rows the deployed estate still holds.
+ *
+ * The `schedulingMode: 'EARLY'` option is gone with the field (M-F-T4) rather than because the
+ * intent changed: `scheduling_mode` still defaults to `EARLY` in the database, so what this plan
+ * writes is unchanged — only the way it is asked for is.
  */
 export function placementOnEarlyPlan(): SeedSpec {
   return capabilityPlan({
     seedName: 'capability-placement-on-early',
     name: 'A placement left behind on an Early plan',
-    // EARLY is already the application's default; stated explicitly because it is the entire point
-    // of this plan, and a future change to that default must not silently move this plan onto it.
-    options: { schedulingMode: 'EARLY' },
     defaultCalendarKey: PLACEMENT_CAL.key,
     calendars: [PLACEMENT_CAL],
     description:
-      'PE_PLACED carries a visual_start of 16 Mar even though this plan is EARLY, not VISUAL — a ' +
-      'placement written once and left behind. Today the surface reads its early_start (9 Mar) and ' +
-      'ignores the placement entirely, which is correct while the plan is EARLY. Rendering 16 Mar ' +
-      'here, before the collapse ships, would mean the surface is reading visual_start on an EARLY ' +
-      'plan, which it must not.',
+      'PE_PLACED carries a visual_start of 16 Mar on a plan whose stored scheduling_mode is ' +
+      'EARLY — a placement written once and left behind. Before the one-planning-surface collapse ' +
+      'the surface read its early_start (9 Mar) and ignored the placement entirely; since the ' +
+      'collapse a bar is drawn where it is placed, so it renders 16 Mar. This is the population ' +
+      'the placement-on-early-plan diagnostic was built to size, exhibited.',
     activities: [
       activity('PE0', { name: 'Predecessor' }),
       activity('PE_PLACED', {

@@ -13,7 +13,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_NAV_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: true,
 }));
 
 const spies = {

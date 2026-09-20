@@ -33,7 +33,6 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: true,
 }));
 
 describe('toolbar labels — the `…` convention', () => {

@@ -7,8 +7,12 @@ import { expect, type Locator, type Page } from '@playwright/test';
  * `e2e-authoring-flow/support.ts` rather than importing it: a Playwright `testDir` is its own
  * compilation root, and a shared helper file whose fixture names two suites both mutate is how two
  * serial suites start failing each other on a shared database. What is NOT copied is the part that
- * matters here — this suite runs with `VITE_SCHEDULING_MODES` at its default, so it has Visual mode
- * and the placement helpers below, which no other journey can reach.
+ * matters here — the placement helpers below, which no other journey can reach.
+ *
+ * **`useVisualMode` used to live here** and clicked the `Visual mode` toggle. The one-planning-
+ * surface epic deleted the toggle (M-F-T5), so every plan this suite creates IS a planning surface
+ * and every caller simply dropped the line. Recorded rather than silently removed: a reader who
+ * finds a placement assertion with no mode setup should know the setup is gone, not missing.
  */
 
 /** Sign up + create an organisation; returns the org slug. */
@@ -260,15 +264,6 @@ export async function selectedActivityId(page: Page): Promise<string | null> {
   if (active === null) return null;
   const match = /-opt-([0-9a-f-]{36})$/.exec(active);
   return match?.[1] ?? null;
-}
-
-/** Switch the plan to Visual scheduling mode (ADR-0033), and confirm it took. */
-export async function useVisualMode(page: Page): Promise<void> {
-  const visual = page.getByRole('button', { name: 'Visual mode' });
-  await expect(visual).toBeVisible();
-  if ((await visual.getAttribute('aria-pressed')) === 'true') return;
-  await visual.click();
-  await expect(visual).toHaveAttribute('aria-pressed', 'true');
 }
 
 /** Zoom the time axis out `times` steps, so a whole week of scene fits inside the canvas. */

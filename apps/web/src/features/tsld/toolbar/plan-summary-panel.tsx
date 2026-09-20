@@ -4,7 +4,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 /**
  * The body of the toolbar's **Summary** popover (ADR-0031 amendment) — the single place a planner
  * glances for "how does this plan stand?". It folds the former standalone *Plan details* popover (the
- * key facts: status + data date, plus the scheduling mode when relevant) together with the computed
+ * key facts: status + data date) together with the computed
  * {@link ScheduleSummaryStrip} (finish / duration / critical), and offers an **Edit plan…** shortcut
  * for writers — so status, data date and the schedule live in one hub instead of three toolbar
  * buttons. `onEdit` is null for a read-only viewer (the action is simply omitted).
@@ -12,14 +12,11 @@ import { formatCalendarDate } from '@/lib/format-date';
 export function PlanSummaryPanel({
   statusLabel,
   dataDate,
-  schedulingModeLabel,
   orgSlug,
   planId,
 }: {
   statusLabel: string;
   dataDate: string | null;
-  /** "Early" / "Visual" when scheduling modes are on; omitted otherwise. */
-  schedulingModeLabel?: string | undefined;
   orgSlug: string;
   planId: string;
 }): React.ReactElement {
@@ -30,12 +27,11 @@ export function PlanSummaryPanel({
         <dd className="text-right font-medium">{statusLabel}</dd>
         <dt className="text-muted-foreground">Data date</dt>
         <dd className="text-right font-medium">{dataDate ? formatCalendarDate(dataDate) : '—'}</dd>
-        {schedulingModeLabel ? (
-          <>
-            <dt className="text-muted-foreground">Mode</dt>
-            <dd className="text-right font-medium">{schedulingModeLabel}</dd>
-          </>
-        ) : null}
+        {/* **The Mode row is gone** (one-planning-surface M-F-T5). It read "Early" or "Visual",
+            and there is now one planning surface, so the row could only ever have printed one word
+            — a fact about the product rather than about this plan, which is not what this list is
+            for. Its absence is not a shading: there is nothing shut, so ADR-0082's omit clause
+            applies. */}
       </dl>
 
       <div className="border-border border-t pt-3">

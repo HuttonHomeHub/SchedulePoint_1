@@ -151,12 +151,15 @@ export interface OrgMemberSummary {
 export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 
 /**
- * A plan's **scheduling mode** (ADR-0033). `EARLY` renders each activity at its
- * computed earliest dates (classic CPM). `VISUAL` honours the planner's hand-placed
- * `Activity.visualStart` (bars stay where dropped; the engine pushes unplaced
- * successors and flags conflicts). Mirrors the API's Prisma `SchedulingMode` enum.
+ * **`SchedulingMode` is gone from the public contract** (one-planning-surface M-F-T4). ADR-0033
+ * split a plan into `EARLY` (draw each activity at its computed earliest dates) and `VISUAL`
+ * (honour the planner's hand-placed `Activity.visualStart`); there is one planning surface now, so
+ * a bar is always drawn where it is placed and the discriminator has nothing left to discriminate.
+ *
+ * The Prisma column and its enum SURVIVE until the epic's migration milestone — a datamodel without
+ * a field the database still has makes `prisma migrate diff --exit-code` exit 2 — so do not read
+ * this absence as "the column is dropped".
  */
-export type SchedulingMode = 'EARLY' | 'VISUAL';
 
 /**
  * Why a hand-placed bar conflicts (one-planning-surface M-D). Mirrors the Postgres enum of the same
@@ -266,11 +269,6 @@ export interface PlanSummary {
   name: string;
   description: string | null;
   status: PlanStatus;
-  /**
-   * The scheduling mode (ADR-0033): `EARLY` (computed-earliest) or `VISUAL` (hand-placed).
-   * Defaults to `EARLY` (behaviour-preserving).
-   */
-  schedulingMode: SchedulingMode;
   /**
    * The out-of-sequence recalc mode (M2, ADR-0035 §1). Defaults to `RETAINED_LOGIC` (the P6 default,
    * behaviour-preserving); governs how a progressed activity's remaining work treats predecessor logic.
@@ -2809,7 +2807,6 @@ export interface ScheduleHealthReport {
   dataDate: string;
   /** When the persisted schedule was computed; null = never calculated. */
   computedAt: string | null;
-  schedulingMode: 'EARLY' | 'VISUAL';
   /** Active non-summary activities — the §3.1 denominator convention, made visible. */
   activityCount: number;
   relationshipCount: number;

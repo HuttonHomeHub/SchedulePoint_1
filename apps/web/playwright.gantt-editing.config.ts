@@ -15,9 +15,11 @@ import { defineConfig, devices } from '@playwright/test';
  * from it.
  *
  * **It pins no `VITE_` flag off, deliberately — and as of 2026-09-20 neither does anything else.**
- * The config this was copied from pinned `VITE_SCHEDULING_MODES: 'false'`, and inheriting that made
- * `Clear visual placement` vanish — the item is only registered when scheduling modes are on, so the
- * journey was asserting against a surface no shipped bundle produces. ADR-0088 D1 established that a
+ * The config this was copied from pinned the scheduling-modes flag off, and inheriting that made
+ * `Clear visual placement` vanish — the item was only registered when scheduling modes were on, so
+ * the journey was asserting against a surface no shipped bundle produces. (The pin is spelled out in
+ * prose rather than as `VITE_…: 'false'`, because `check-flags.mjs` reads these configs as raw text
+ * and cannot tell a pin from a comment describing one — `docs/TECH_DEBT.md` #354.) ADR-0088 D1 established that a
  * published image carries every flag at its default, and ADR-0088's own retrospective records the
  * base suite proving role-only editing "in a world no shipped bundle can produce" as worse than
  * covering a rollback path. The default surface IS the shipped surface, so that is what this drives.

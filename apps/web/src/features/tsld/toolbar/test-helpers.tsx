@@ -35,8 +35,6 @@ export function makeTsldToolbarContext(
     toggleView: vi.fn(),
     planView: 'tsld',
     setPlanView: vi.fn(),
-    schedulingMode: 'EARLY',
-    setSchedulingMode: vi.fn(),
     // Tools / author (pen-gated)
     isAddingActivity: false,
     toggleAddActivity: vi.fn(),

@@ -10979,3 +10979,51 @@ the reporting fixes the class.
 
 **Trigger:** the next epic touching `packages/config/eslint/`, or the next `exhaustive-deps` warning
 added to the estate — which nobody will see, which is the point.
+
+### 354. `check-flags.mjs` reads Playwright configs as raw text, so a comment describing a pin reads as a pin
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found when retiring
+`VITE_SCHEDULING_MODES` during one-planning-surface M-F-T5) · **Size:** S · **Owner:** repo
+
+Assertion 4 of `scripts/check-flags.mjs` scans every `apps/web/playwright*.config.ts` for
+`/(VITE_[A-Z0-9_]+)\s*:\s*'(true|false)'/g` and refuses to let a flag retire while a config pins it.
+The scan is over the **whole file**, so a docblock containing that literal is indistinguishable from
+an `env:` entry.
+
+**Measured, not hypothesised.** `playwright.gantt-editing.config.ts`'s docblock explained that the
+config it was copied from had pinned the scheduling-modes flag off, and wrote the pin out verbatim.
+Retiring the flag produced:
+
+```
+VITE_SCHEDULING_MODES is retired, but apps/web/playwright.gantt-editing.config.ts pins it OFF
+  — that config IS a flag-off harness, and its specs are written against the pinned world.
+```
+
+That config pins no flag at all, and says so two lines above the sentence the gate matched.
+
+**It is the fifth recorded instance of one class in this repository** — a scan whose subject is code
+matching prose that merely describes it. The four before it are ADR-0106 M4's
+`reset-fills.structural.test.ts` (a docblock explaining why a token must not be used counted as
+using it), ADR-0099 M4's sizing ratchet, ADR-0098's weight ratchet, and ADR-0124's `check:counts`
+firing on prose inside the entry documenting the gates built to stop that. Three of the four fixed
+themselves the same way: **strip comments before scanning**.
+
+**The direction of the failure is the mild one, and that is why this is a row rather than a fix
+folded into an epic.** A false pin BLOCKS a retirement — noisy, loud, and it stops the work rather
+than letting something through. The dangerous inverse (a real pin hidden from the scan) is not
+reachable: the regex is a superset of the true pin syntax.
+
+**Remedy:** strip block and line comments before `matchAll`, reusing whatever
+`scripts/lib/` offers rather than writing a fifth private stripper — that proliferation is half the
+reason this class keeps recurring. Two fixtures, one per direction: a config whose `env:` really
+pins a retired flag must still fail, and a config that only mentions one in prose must pass. Verify
+red against **both** before believing either.
+
+**Why it was worked around rather than fixed on the day.** `check-flags.mjs` is a shared gate, and
+ADR-0105 makes a shared-gate change a full-spec trigger; ADR-0136 records folding one into an epic's
+last milestone as exactly what that rule exists to stop (`docs/TECH_DEBT.md` #298). So M-F-T5
+reworded the docblock — the prose is accurate either way, and the literal was incidental — and left
+the scan for somebody to fix deliberately.
+
+**Trigger:** the next retirement blocked by a comment, or the next epic touching
+`scripts/check-flags.mjs`.

@@ -23,7 +23,6 @@ import type { UpdatePlanDto } from './dto/update-plan.dto';
  */
 export const PLAN_GOVERNANCE_FIELDS = [
   'plannedStart',
-  'schedulingMode',
   'calendarId',
   'status',
   'progressRecalcMode',

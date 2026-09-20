@@ -5,7 +5,6 @@ import { TSLD_VIEW_TOGGLE_KEYS } from './tsld-toolbar-items';
 import {
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_VISUAL_LANGUAGE_ENABLED,
-  SCHEDULING_MODES_ENABLED,
   CANVAS_DATA_DATE_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
@@ -69,7 +68,9 @@ describe('TSLD View▾ toggle registry', () => {
       // and the whole `TsldViewToggles` contract to describe the same overlay.
       'floatTails',
       'linkSlack',
-      // The ADR-0033 Late-start overlay — gated on VITE_SCHEDULING_MODES, not VITE_CANVAS_LIVE_FEEDBACK.
+      // The ADR-0033 Late-start overlay. It was gated on `VITE_SCHEDULING_MODES` rather than on
+      // `VITE_CANVAS_LIVE_FEEDBACK`; the collapse (M-F-T5) left it ungated, because it reads the
+      // LATE dates and never once consulted `schedulingMode`.
       'lateOverlay',
     ]);
   });
@@ -84,7 +85,6 @@ describe('TSLD View▾ toggle registry', () => {
     // Counted below rather than gated above — the count is what catches an entry added by
     // accident, and an ungated entry still has to be added on purpose.
     expect(CANVAS_LIVE_FEEDBACK_ENABLED).toBe(true);
-    expect(SCHEDULING_MODES_ENABLED).toBe(true);
     expect(CANVAS_VISUAL_LANGUAGE_ENABLED).toBe(true);
     expect(WBS_IMPROVEMENTS_ENABLED).toBe(true);
     expect(CANVAS_DATA_DATE_ENABLED).toBe(true);

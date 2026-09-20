@@ -479,9 +479,6 @@
   "plans/create-plan.plannedStart": {
     "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
   },
-  "plans/create-plan.schedulingMode": {
-    "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
-  },
   "plans/create-plan.status": {
     "surface": "components/ui/spinner.tsx"
   },
@@ -523,9 +520,6 @@
   },
   "plans/update-plan.progressRecalcMode": {
     "surface": "features/plans/components/PlanRecalcModePicker.tsx"
-  },
-  "plans/update-plan.schedulingMode": {
-    "surface": "components/layout/workspace/plan-workspace-toolbar.tsx"
   },
   "plans/update-plan.status": {
     "surface": "components/ui/spinner.tsx"

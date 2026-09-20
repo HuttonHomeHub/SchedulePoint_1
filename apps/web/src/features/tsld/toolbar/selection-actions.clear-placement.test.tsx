@@ -40,7 +40,6 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
-    clearPlacementApplies: true,
     onClearVisualPlacement: spies.onClearVisualPlacement,
     onOpenEditorAt: spies.onOpenEditorAt,
     onOpenLogic: spies.onOpenLogic,
@@ -121,33 +120,27 @@ describe('Clear visual start on the selection bar', () => {
     expect(clearButton()).toHaveAccessibleDescription('Start editing to clear the placement.');
   });
   /**
-   * **M1: omitted outside Visual mode, not shaded** (foot-row-and-deck epic).
+   * **The omission case is INVERTED, not deleted** (one-planning-surface M-F-T6).
    *
-   * The suite above pins the ADR-0082 SHADE case and its docblock calls that "rather than hidden".
-   * That is still right for every reason the gate can give **except one**: outside Visual mode the
-   * action does not apply to the plan at all, which is ADR-0082's own *omit* clause, not its shade
-   * clause. The two cases live side by side here so the distinction is visible to the next reader
-   * rather than inferred.
+   * It used to assert that `Clear visual start` is omitted outside Visual mode — ADR-0082's *omit*
+   * clause rather than its shade clause, because the action did not apply to a plan scheduled Early
+   * at all. The collapse removes the condition: there is one planning surface, every plan can carry
+   * a placement, and so every plan can clear one.
    *
-   * Measured, it is also load-bearing: the control is 146 px of a row that needs 1037.4 px and is
-   * given 775.6 px at 1646, where the resulting wrap costs the diagram 36 px
-   * (`docs/specs/workspace-foot-and-deck/m0-measurement.md`).
+   * Flipping it rather than deleting it is deliberate, and it is the ADR-0093 lesson. A suite that
+   * merely dropped this case would still pass if the item were deleted from the registry outright,
+   * and could not then tell "the mode gate is gone" from "the capability is gone". This asserts the
+   * capability, which is the fact M-F-T6 is claiming.
    *
-   * **Verified red**: with `isVisible` removed from the registry entry, the first case fails on the
-   * control still being found. The second case is the pinned positive — without it, deleting the
-   * item outright would pass the first assertion just as well, which is the ADR-0093 lesson about a
-   * green suite that cannot tell "the duplicate is gone" from "the capability is gone".
+   * The shade case above is untouched and still holds: a plan whose pen the reader does not hold
+   * shades this control with a reason. Only the plan-level applicability went.
+   *
+   * **Verified red**: restoring `isVisible: (ctx) => ctx.clearPlacementApplies` to the registry
+   * entry (with the field re-added to the context) fails this case on the control being absent.
    */
-  it('is omitted entirely when the plan is not in Visual mode', () => {
-    render(
-      <SelectionActionsBar
-        context={ctx({
-          clearPlacementApplies: false,
-          clearPlacement: { enabled: false, reason: 'Only available in Visual mode' },
-        })}
-      />,
-    );
-    expect(screen.queryByRole('button', { name: /Clear visual start/i })).toBeNull();
+  it('is offered on every plan, because every plan is a planning surface', () => {
+    render(<SelectionActionsBar context={ctx()} />);
+    expect(screen.getByRole('button', { name: /Clear visual start/i })).toBeInTheDocument();
   });
 
   /**

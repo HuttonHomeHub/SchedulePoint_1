@@ -12,7 +12,6 @@ import {
   placeOnDay,
   recalculate,
   seedActivities,
-  useVisualMode,
   zoomOut,
 } from './support';
 
@@ -35,10 +34,11 @@ import {
  *    bar — and for a hand-placed conflict that fix is the bar's own `Clear visual start`, not a
  *    second conflict-flavoured copy of it (ADR-0093's rule applied inside one surface).
  *
- * **Why this suite.** `workspace-chrome` is the only Playwright config in the repository that runs
- * in **Visual mode** (`VITE_SCHEDULING_MODES` on — ADR-0092 records the other fourteen canvas
- * configs pinning it off), and a `visualConflict` cannot exist without it. It is also the config
- * that already owns the dock and the placement rules this journey stands on.
+ * **Why this suite.** It already owns the dock and the placement rules this journey stands on.
+ * It used to be the ONLY config that could host this at all — `workspace-chrome` was the one
+ * Playwright config running in Visual mode, and a `visualConflict` could not exist outside it. The
+ * one-planning-surface epic removed the mode, so that reason has lapsed and the locality one has
+ * not.
  *
  * Controls are located by `[data-toolbar-item]` rather than by their copy, per ADR-0091's
  * retrospective rule — except where the copy IS the assertion, which is said at each such line.
@@ -81,7 +81,6 @@ test.describe('Conflict review', () => {
     await linkActivities(page, orgSlug, excavate.id, pour.id);
     await recalculate(page, orgSlug);
     await ensurePen(page);
-    await useVisualMode(page);
 
     // ── 1 · With nothing wrong, the control is on the row and says so ─────────────────────────
     const nextConflict = lookRow(page).locator('[data-toolbar-item="next-conflict"]');

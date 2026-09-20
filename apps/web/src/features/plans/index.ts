@@ -7,7 +7,6 @@ export {
   useDeletePlan,
   useSetPlanCalendar,
   useSetPlanStart,
-  useSetPlanSchedulingMode,
   useSetPlanRecalcMode,
   useSetPlanScheduleOption,
   plansQueryOptions,

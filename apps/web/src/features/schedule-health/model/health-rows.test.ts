@@ -28,7 +28,6 @@ function report(metrics: HealthMetricResult[]): ScheduleHealthReport {
     planName: 'Plan',
     dataDate: '2026-01-01',
     computedAt: '2026-01-01T08:00:00.000Z',
-    schedulingMode: 'EARLY',
     activityCount: 10,
     relationshipCount: 12,
     baseline: null,

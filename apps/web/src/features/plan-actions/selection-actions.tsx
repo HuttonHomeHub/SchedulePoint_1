@@ -37,7 +37,6 @@ import {
   ENTRY_ROUTES_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
-  SCHEDULING_MODES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
@@ -93,15 +92,6 @@ export interface SelectionActionContext {
    * `BulkActionGate` type the plural bar uses, imported rather than re-typed: a third structurally
    * identical gate object is how two of them end up disagreeing about what `reason: null` means. */
   clearPlacement: BulkActionGate;
-  /**
-   * Whether `Clear visual start` **exists for this plan** — `clearVisualPlacementApplies`, computed
-   * once by the host from the same input as `clearPlacement` above, never re-derived here.
-   *
-   * ADR-0082's omit-vs-shade line: in Early mode there is no hand-placed start to clear, so the
-   * control is omitted rather than shaded. Measured, that is also 154 px of a row whose wrap costs
-   * the diagram 36 px at 1646 — see `docs/specs/workspace-foot-and-deck/m0-measurement.md`.
-   */
-  clearPlacementApplies: boolean;
   /** Withdraw the selected activity's hand-placed `visualStart`. */
   onClearVisualPlacement: () => void;
   /** Open the activity editor where a conflict actually lives. Opaque on purpose: `features/tsld`
@@ -483,8 +473,7 @@ function ConflictRemedyControl({
  *   themselves switches to the Gantt, which moves focus to the button they pressed — in a different
  *   container. Nothing else can remove them, so the handoff's premise never holds.
  * - `edit`. It has no `isVisible` at all since the ADR-0093 M5 pass; it is shaded, not omitted.
- * - Every flag-gated item in `tsld-toolbar-items.tsx` (`SCHEDULING_MODES_ENABLED`,
- *   `GANTT_VIEW_ENABLED`, `CANVAS_AUTHORING_ENABLED`, `NOTES_ENABLED`). A `VITE_` constant is
+ * - Every flag-gated item in `tsld-toolbar-items.tsx` (`GANTT_VIEW_ENABLED`, `CANVAS_AUTHORING_ENABLED`, `NOTES_ENABLED`). A `VITE_` constant is
  *   inlined at build time (ADR-0088 D1), so those predicates are constant for the life of a bundle
  *   and cannot flip under anybody.
  * - `next-conflict-status`, which is `presentational` — it never holds a roving stop, so it cannot
@@ -775,8 +764,10 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // whole point of deriving both rosters from the registries rather than listing them.
     //
     // Order 6.5 — after Delete, so it demotes to the `⋯` FIRST under width pressure. It is the
-    // rarest action on the bar and the only one that is inert outside Visual mode.
-    ...(SCHEDULING_MODES_ENABLED && TOOLBAR_QUICK_WINS_ENABLED
+    // rarest action on the bar. The second half of that sentence said "and the only one that is
+    // inert outside Visual mode", which stopped being true with the mode (M-F-T6): there is one
+    // planning surface, so every plan can carry a placement and every plan can clear one.
+    ...(TOOLBAR_QUICK_WINS_ENABLED
       ? [
           {
             id: 'clear-visual-placement',
@@ -785,20 +776,18 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             showLabel: 'always' as const,
             order: 6.5,
             label: 'Clear visual start',
-            // **Omitted outside Visual mode, not shaded** (foot-row-and-deck M1). ADR-0082's own
-            // discriminator: the action does not APPLY to a plan scheduled Early, so there is
-            // nothing for a reason sentence to say beyond "this does not exist here". It was the
-            // only permanently-shaded control on the bar, and at 146 px the second-widest of the
-            // ten — measured, omitting it is a necessary half of the fix for a wrap that costs the
-            // diagram 36 px at 1646 (and it is NOT sufficient: `m0-candidates.spec.ts` shows the
-            // bar still wraps at 819.4 px against 775.6 px available).
-            isVisible: (ctx: SelectionActionContext) => ctx.clearPlacementApplies,
-            // **The one case this was measured on** (`docs/TECH_DEBT.md` #204(c)). A second Planner
-            // can flip the plan's `schedulingMode` holding no pen, and the reader's next refetch
-            // takes this control out from under their focus ring. A sentence about the CONDITION,
-            // present tense, true both before the flip and after — which is what makes a static
-            // string honest here and a `(ctx) => string` unanswerable.
-            lostReason: 'This action applies only while the plan is scheduled in Visual mode.',
+            // **No `isVisible` and no `lostReason` any more** (M-F-T6), and both deletions are the
+            // same fact. foot-row-and-deck M1 omitted this control outside Visual mode on ADR-0082's
+            // discriminator — the action did not APPLY to a plan scheduled Early — and it carried a
+            // `lostReason` because `docs/TECH_DEBT.md` #204(c) measured the one way it could vanish
+            // under a reader's focus ring: a second Planner flipping `schedulingMode` while holding
+            // no pen. The collapse removes the condition rather than the handling of it. Every plan
+            // is a planning surface, so this applies everywhere and can no longer be taken away.
+            //
+            // The 146 px it costs the bar is therefore permanent, and that is a real loss recorded
+            // rather than waved through: `m0-candidates.spec.ts` measured the bar wrapping at
+            // 819.4 px against 775.6 px available with this control PRESENT, so the wrap this width
+            // contributes to is now unconditional too.
             /**
              * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
              *

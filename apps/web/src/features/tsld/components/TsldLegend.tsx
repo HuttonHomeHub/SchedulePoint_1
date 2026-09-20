@@ -14,7 +14,6 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
-  SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
 import { cn } from '@/lib/utils';
 
@@ -98,9 +97,13 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
         { label: 'Lag (waiting time)', lag: true } as const,
       ]
     : []),
-  // Visual-Planning conflict cue (ADR-0033) — an outlined warning triangle on a bar placed before its
-  // earliest feasible start. Only meaningful under scheduling modes, so listed only when enabled.
-  ...(SCHEDULING_MODES_ENABLED ? [{ label: 'Visual conflict', conflict: true } as const] : []),
+  // Placement-conflict cue (ADR-0033) — an outlined warning triangle on a bar placed outside its
+  // feasible window. **Unconditional since the collapse** (one-planning-surface M-F-T5): it was
+  // listed only under `SCHEDULING_MODES_ENABLED` because a conflict needed a hand-placed start and
+  // only a VISUAL plan could carry one. Every plan is a planning surface now, so every plan can
+  // paint this mark — which is precisely why withdrawing the key with the flag would have left the
+  // commonest cue in the diagram unexplained.
+  { label: 'Visual conflict', conflict: true } as const,
   // The ADR-0054 §4/§5 insight marks (behind `VITE_CANVAS_LIVE_FEEDBACK`). Listed like every other
   // toggleable cue here (Non-working and Today are keyed whether or not their toggle is on), so a
   // planner who turns `Feasible window` on has somewhere to learn what the hatched bracket means.

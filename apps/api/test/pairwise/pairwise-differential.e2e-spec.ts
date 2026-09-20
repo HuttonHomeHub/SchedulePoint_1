@@ -353,7 +353,6 @@ function loeCaseSpec(): SeedSpec {
       defaultCalendarKey: null,
       currencyCode: null,
       options: {
-        schedulingMode: 'EARLY',
         progressRecalcMode: 'RETAINED_LOGIC',
         useExpectedFinishDates: false,
         criticalPathDefinition: 'TOTAL_FLOAT',

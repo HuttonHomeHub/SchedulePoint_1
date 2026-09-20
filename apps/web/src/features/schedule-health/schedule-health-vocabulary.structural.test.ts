@@ -107,7 +107,6 @@ describe('G3 — one source per number', () => {
         planName: 'P',
         dataDate: '2026-01-01',
         computedAt: null,
-        schedulingMode: 'EARLY',
         activityCount: 1,
         relationshipCount: 0,
         baseline: null,

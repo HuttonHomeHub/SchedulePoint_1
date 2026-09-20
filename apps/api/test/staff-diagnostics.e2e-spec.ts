@@ -449,10 +449,16 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       .patch(`${org}/activities/${visualA}`)
       .send({ visualStart: '2026-04-01', version: 1 })
       .expect(200);
-    await actor.agent
-      .patch(`${org}/plans/${visual}`)
-      .send({ schedulingMode: 'VISUAL', version: 2 })
-      .expect(200);
+    // **Written straight to the column, and that is the only way left** (one-planning-surface
+    // M-F-T4). `schedulingMode` is gone from `UpdatePlanDto`, so a PATCH naming it now yields 422 —
+    // the fixture cannot ask the API for this state because the product no longer offers it.
+    //
+    // Departing from this suite's own "built through the public REST API throughout" rule is the
+    // point rather than a corner cut: D-D2 exists to SIZE a population the product can no longer
+    // create, on plans written before the collapse, and a diagnostic about legacy rows is tested
+    // against legacy rows or against nothing. The column survives until the epic's migration
+    // milestone, which is what keeps this reachable at all.
+    await prisma.plan.update({ where: { id: visual }, data: { schedulingMode: 'VISUAL' } });
 
     // --- Plan 2: the three readable SNET classes ----------------------------------------------
     const constrained = await planOn(actor, allDay, 'Constrained');

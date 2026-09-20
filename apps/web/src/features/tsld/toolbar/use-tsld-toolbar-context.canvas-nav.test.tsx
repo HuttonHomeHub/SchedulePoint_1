@@ -20,11 +20,9 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_NAV_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: true,
 }));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
-  useSetPlanSchedulingMode: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculateCommand: () => ({ isPending: false, run: vi.fn() }),
@@ -131,7 +129,6 @@ function makeCanvasUi(navState: Partial<NavState>): TsldCanvasUiState {
 const PLAN = {
   status: 'ACTIVE',
   plannedStart: '2026-01-01',
-  schedulingMode: 'EARLY',
   version: 1,
 } as unknown as LoadedPlan;
 

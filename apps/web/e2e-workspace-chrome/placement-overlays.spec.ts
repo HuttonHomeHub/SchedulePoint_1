@@ -13,7 +13,6 @@ import {
   requirePlacement,
   seedActivities,
   setLevelResources,
-  useVisualMode,
 } from './support';
 
 /**
@@ -37,7 +36,8 @@ import {
  * **It also carries M-D's cover**, which M-D itself could not: that decision did not ship dark, and
  * its `visualConflictReason` is only observable end to end through what the product does with it.
  *
- * Serial, and in Visual mode — this config is the only one in the repository that drives it.
+ * Serial. It was also the only config in the repository driving Visual mode; the mode is gone
+ * (one-planning-surface M-F), and every plan is a planning surface.
  */
 test.describe.configure({ mode: 'serial' });
 
@@ -227,7 +227,6 @@ test.describe('the feasible window and the levelled lens', () => {
     if (!first || !second) throw new Error('seeding returned too few activities');
     await recalculate(page, orgSlug);
     await ensurePen(page);
-    await useVisualMode(page);
 
     // Place the successor BEFORE its own earliest feasible start by writing `visualStart` directly.
     // The gesture that produces this is a drag, which `placement.spec.ts` already drives; what is

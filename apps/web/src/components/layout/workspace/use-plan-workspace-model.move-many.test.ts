@@ -17,10 +17,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * What each case here exists to catch, stated so a future reader can tell a real failure from a
  * fixture drift:
  *
- * - **Mode.** EARLY pins an SNET; VISUAL writes `visualStart`. Getting this wrong writes the wrong
- *   field on every bar of the drag — silently, with correct-looking dates, on exactly the plans
- *   where placement is hand-made. A TDZ slip during development had `isVisualMode` missing from the
- *   memo's dependencies, which produced precisely that.
+ * - **The field a move writes.** It is `visualStart`, on every plan (one-planning-surface M-F-T3).
+ *   Getting this wrong writes the wrong field on every bar of the drag — silently, with
+ *   correct-looking dates. This bullet used to describe a fork (EARLY pinned an SNET, VISUAL wrote
+ *   a placement) and named the defect that made it worth testing: a TDZ slip had `isVisualMode`
+ *   missing from the memo's dependencies. The fork is gone with the mode; the assertion that a move
+ *   writes a placement and nothing else is what it leaves behind, and it is the half that mattered.
  * - **Conflict and pen loss.** These branches did not exist until the consolidation pass: the whole
  *   method had no `catch`, so a 409 propagated as a raw rejection and a 423 skipped
  *   `pen.onWriteRejected` entirely, leaving the client's pen state stale until the next poll. The
@@ -32,7 +34,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   undoRedo: false,
-  visual: false,
   record: vi.fn(),
   notify: vi.fn(),
   hold: vi.fn(),
@@ -48,7 +49,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
     NOTES_ENABLED: false,
-    SCHEDULING_MODES_ENABLED: true,
     get UNDO_REDO_ENABLED() {
       return h.undoRedo;
     },
@@ -85,7 +85,6 @@ vi.mock('@/features/plans', () => ({
       id: 'p1',
       projectId: 'proj1',
       plannedStart: '2026-01-01',
-      schedulingMode: h.visual ? 'VISUAL' : 'EARLY',
     }),
 }));
 vi.mock('@/features/projects', () => ({ useProject: () => query({ clientId: 'c1' }) }));
@@ -219,7 +218,6 @@ function apiError(status: number): ApiFetchError {
 beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
-  h.visual = false;
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.batchPlacements.mockResolvedValue([
     { id: 'a1', version: 8 },

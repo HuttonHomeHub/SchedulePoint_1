@@ -15,7 +15,6 @@ const PLAN: PlanSummary = {
   name: 'Baseline',
   description: null,
   status: 'ACTIVE',
-  schedulingMode: 'EARLY',
   progressRecalcMode: 'RETAINED_LOGIC',
   useExpectedFinishDates: false,
   criticalPathDefinition: 'TOTAL_FLOAT',

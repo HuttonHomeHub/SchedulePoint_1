@@ -60,7 +60,6 @@ import {
   FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
-  SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { useUpdateActivityParents } from '@/features/activities';
@@ -147,7 +146,6 @@ const MD_QUERY = '(min-width: 48rem)';
  * silently reinstating the undifferentiated group.
  */
 export const PLAN_MODE_SEGMENT_LABELS = {
-  'scheduling-mode': 'Scheduling mode',
   'view-mode': 'Plan view',
 } as const;
 
@@ -458,7 +456,10 @@ export function ToolbarPlanWorkspace({
   // Hoisted above the toolbar context because the PRINT path needs both, and re-deriving them
   // there would be the second derivation `host-parity.structural.test.ts` exists to prevent —
   // on the one artefact where a disagreement is least visible and most costly.
-  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
+  // **Ungated with the mode** (one-planning-surface M-F-T5): the Late-start overlay reads the LATE
+  // dates, has never consulted `schedulingMode`, and only carried `SCHEDULING_MODES_ENABLED &&`
+  // because ADR-0033 shipped the two together.
+  const lateOverlayActive = canvasUi.viewToggles.lateOverlay;
   /*
    * **The `schedulingMode` local is DELETED** (M-F-T6), and its story is worth one line: it existed
    * because the same ternary had been written out four times in this file, which a component review
@@ -1012,7 +1013,8 @@ export function ToolbarPlanWorkspace({
       onNotes={model.revealActivityNotes}
       // The conflict remedies (ADR-0094 M4), and the `clear-visual-placement` action M4-T1 moved off
       // the command surface onto the selection bar. The gate is computed HERE because it reads the
-      // plan's `schedulingMode` and the Late-start overlay, neither of which `TsldPanel` owns — and
+      // Late-start overlay, which `TsldPanel` does not own — it also read the plan's
+      // `schedulingMode` until the collapse (M-F-T6) — and
       // it is the SHARED `clearVisualPlacementGate`, so the bar and any future caller cannot drift
       // about what "you cannot clear this" means. `hasSelection` is `true` by construction: this bar
       // renders only for a selection (the ADR-0090 M2-T1 argument).
@@ -1796,15 +1798,18 @@ export function ToolbarPlanWorkspace({
                   <Toolbar
                     items={rows.mode}
                     context={ctx}
-                    // **"Plan mode and view", not "Plan mode"** (ADR-0119, ux gate). A region named
-                    // `Plan mode` containing a group named `Plan view` contradicts itself, and an AT
-                    // user heard "Plan mode, toolbar → Plan view, group" — the container denying its
-                    // own child. A compound name is **wrong for a group and right for a container of
-                    // two groups**: the group could not say where one switch ended, which is why
-                    // `Scheduling and view` had to go; this names two things that really are two.
-                    label="Plan mode and view"
+                    // **"Plan view", down from "Plan mode and view"** (one-planning-surface
+                    // M-F-T5). ADR-0119's ux gate established the rule: a compound name is wrong for
+                    // a group and right for a **container of two groups** — `Plan mode` wrapping a
+                    // group named `Plan view` had an AT user hearing the container deny its own
+                    // child. The scheduling-mode segment is gone, so this container now holds one
+                    // group, and keeping the compound name would reintroduce that contradiction
+                    // from the other end: a container promising a mode that is not in it.
+                    label="Plan view"
                     authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                    // Two named sub-groups — see the map's docblock.
+                    // One named sub-group now — see the map's docblock. ADR-0119's precondition is
+                    // all-or-nothing rather than plural, and it records the one-segment case
+                    // explicitly, so the partition still holds with `view-mode` alone.
                     //
                     // **`groupLabels` is defence in depth, not decoration** (accessibility gate).
                     // The partition is all-or-nothing, so an item arriving without a `segment` makes
@@ -1813,7 +1818,7 @@ export function ToolbarPlanWorkspace({
                     // the collision `Toolbar.tsx:44-46` records a UX review rejecting once already.
                     // It costs nothing while the structural gate holds and only matters the one day
                     // it does not.
-                    groupLabels={{ lens: 'Scheduling mode and view' }}
+                    groupLabels={{ lens: 'Plan view' }}
                     segmentLabels={PLAN_MODE_SEGMENT_LABELS}
                   />
                 </div>

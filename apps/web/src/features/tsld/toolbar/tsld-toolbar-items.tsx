@@ -4,7 +4,6 @@
 import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
-  ArrowLeftToLine,
   BookOpen,
   CalendarDays,
   ChartArea,
@@ -19,7 +18,6 @@ import {
   FileText,
   FileType,
   Filter,
-  Hand,
   ImageDown,
   Info,
   Layers,
@@ -96,7 +94,6 @@ import {
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
-  SCHEDULING_MODES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
@@ -508,7 +505,12 @@ const VIEW_TOGGLE_META: Record<
     enabled: CANVAS_LIVE_FEEDBACK_ENABLED,
   },
   linkSlack: { group: 'insight', label: 'Link slack', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
-  lateOverlay: { group: 'insight', label: 'Late-start overlay', enabled: SCHEDULING_MODES_ENABLED },
+  // **The overlay survives the mode** (one-planning-surface M-F-T5). It was gated on
+  // `VITE_SCHEDULING_MODES` because ADR-0033 shipped it beside the Early/Visual selector, but it
+  // reads the LATE dates and has never consulted `schedulingMode` — so deleting the mode leaves it
+  // with nothing to be gated on. Ungating it is what stops the collapse taking a working read-only
+  // lens away as collateral.
+  lateOverlay: { group: 'insight', label: 'Late-start overlay' },
 };
 
 function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof TsldViewToggles> {
@@ -600,11 +602,12 @@ function GoToTodayControl({
   const { open, openPanel, close, panel } = usePopoverPanel({ triggerRef: primaryRef });
 
   const primaryDisabled = !(ctx.hasDiagram && ctx.canvasActive);
-  // **Only a state the reader can change.** `SCHEDULING_MODES_ENABLED` is deliberately NOT folded in
-  // here: a flag being off is not something a planner can act on, and shading the caret for it would
-  // print "Set the plan's start date first" to somebody whose plan already has a start date — a
-  // sentence that is simply false. The flag decides whether this control has a caret at all, one
-  // level up (see the registry entry); ADR-0082's discriminator, applied where it belongs.
+  // **Only a state the reader can change** — ADR-0082's discriminator. This comment used to explain
+  // why `SCHEDULING_MODES_ENABLED` was deliberately not folded in here (a flag being off is not
+  // something a planner can act on, and shading the caret for it would print "Set the plan's start
+  // date first" to somebody whose plan already has a start date). The flag is gone with the mode
+  // (one-planning-surface M-F-T5); the rule it was an instance of is not, so it is restated rather
+  // than deleted with its example.
   const caretDisabled = ctx.plannedStart === null;
   const primaryReason = canvasViewportReason(ctx, 'Add an activity to go to today');
 
@@ -2478,24 +2481,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           //
           // `showLabel` is gone with the merge: a `render` item owns its own chrome, and this one
           // compacts from `api.layout` exactly as its `View ▾` and `Summary ▾` neighbours do.
-          ...(SCHEDULING_MODES_ENABLED
-            ? {
-                tier: 1 as const,
-                order: -2,
-                render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
-                  <GoToTodayControl ctx={ctx} api={api} />
-                ),
-              }
-            : {
-                // **No date capability in this build ⇒ no caret**, rather than a caret shaded with a
-                // reason that would be untrue. This is byte-for-byte the plain command `today` was
-                // before the merge, which is also what keeps the flag-off surface unchanged.
-                showLabel: { atLeast: 'comfortable' } as const,
-                isEnabled: (ctx: TsldToolbarContext) => ctx.hasDiagram && ctx.canvasActive,
-                disabledReason: (ctx: TsldToolbarContext) =>
-                  canvasViewportReason(ctx, 'Add an activity to go to today'),
-                onActivate: (ctx: TsldToolbarContext) => ctx.goToDate(ctx.todayIso),
-              }),
+          // **Go-to-date outlives the mode it shipped beside** (one-planning-surface M-F-T5).
+          // `VITE_SCHEDULING_MODES` gated the caret because ADR-0033 delivered the date control in the
+          // same milestone as the Early/Visual selector; the control itself is display-only and reads
+          // no mode. The flag-off arm went with the flag — and it was the arm that rendered NO caret,
+          // so keeping it would have been keeping the surface without the capability.
+          tier: 1 as const,
+          order: -2,
+          render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
+            <GoToTodayControl ctx={ctx} api={api} />
+          ),
         }
       : placeholderItem(todayShape),
 
@@ -2520,56 +2515,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           <ViewTogglesPanel ctx={ctx} />
         </ToolbarPopover>
       ),
-    },
-    // Scheduling-mode selector (ADR-0033 M3, flag-on only): the Early | Visual segment, immediately
-    // after View in the Lens group. Two-row rule (ADR-0031 amendment): shown **always** (flag-on) and
-    // shaded — not hidden — for a read-only viewer (null setter), since the mode changes how the
-    // diagram reads and must be legible to everyone; only writers can operate it. Tier 1 so the labels
-    // render (a tier-2 label-less segment paints blank — ux review).
-    {
-      id: 'mode-early',
-      group: 'lens',
-      row: 'mode',
-      tier: 1,
-      // `showLabel: 'always'` is the row's rule and the RAIL overrides it (Graphite M5): a vertical
-      // 48 px toolbar has no room for a word, so these four render icon-only there with the label as
-      // the accessible name. The comment said "stays labelled at every width" until the M10 gate pass
-      // read it beside the rail it now lives in — true when written, false since the mode cluster
-      // moved, and the kind of stale claim ADR-0076 exists to catch. The declaration is kept rather
-      // than dropped: it is still the rule for any host that has a row (TECH_DEBT #61).
-      showLabel: 'always',
-      order: 1,
-      segment: 'scheduling-mode',
-      label: 'Early mode',
-      icon: <ArrowLeftToLine className="size-4" aria-hidden="true" />,
-      isVisible: () => SCHEDULING_MODES_ENABLED,
-      isEnabled: (ctx) => ctx.setSchedulingMode !== null,
-      disabledReason: (ctx) =>
-        ctx.setSchedulingMode === null
-          ? (ctx.scheduleRefusal('change the scheduling mode') ?? undefined)
-          : undefined,
-      isActive: (ctx) => ctx.schedulingMode === 'EARLY',
-      onActivate: (ctx) => ctx.setSchedulingMode?.('EARLY'),
-    },
-    {
-      id: 'mode-visual',
-      group: 'lens',
-      row: 'mode',
-      tier: 1,
-      // Icon-only on the rail; see `mode-early` above (TECH_DEBT #61).
-      showLabel: 'always',
-      order: 2,
-      segment: 'scheduling-mode',
-      label: 'Visual mode',
-      icon: <Hand className="size-4" aria-hidden="true" />,
-      isVisible: () => SCHEDULING_MODES_ENABLED,
-      isEnabled: (ctx) => ctx.setSchedulingMode !== null,
-      disabledReason: (ctx) =>
-        ctx.setSchedulingMode === null
-          ? (ctx.scheduleRefusal('change the scheduling mode') ?? undefined)
-          : undefined,
-      isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
-      onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
     },
     // View-mode switch — the slot ADR-0031 §296 reserved, now filled (ADR-0059 §3). It follows the
     // `mode-early`/`mode-visual` idiom: a segment is TWO registry items whose `isActive` reads the

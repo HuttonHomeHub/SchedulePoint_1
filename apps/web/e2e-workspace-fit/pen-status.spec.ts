@@ -213,7 +213,7 @@ test.describe('the merged header row', () => {
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
     await ensurePen(page);
-    await expect(page.getByRole('toolbar', { name: 'Plan mode and view' })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Plan view' })).toBeVisible();
   });
 
   test.afterAll(async () => {
@@ -269,7 +269,7 @@ test.describe('the merged header row', () => {
       // The four modes stay on one line inside the row: a mode cluster that folds turns one clean
       // row into two ragged ones, which is the hazard ADR-0109 D1 left behind when it replaced
       // demotion with wrapping.
-      const modes = page.getByRole('toolbar', { name: 'Plan mode and view' });
+      const modes = page.getByRole('toolbar', { name: 'Plan view' });
       const modeBox = await modes.boundingBox();
       const firstMode = await modes.getByRole('button').first().boundingBox();
       expect(

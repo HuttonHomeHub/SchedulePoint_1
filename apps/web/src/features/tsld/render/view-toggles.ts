@@ -50,7 +50,7 @@ export interface TsldViewToggles {
   linkSlack?: boolean;
   /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
-   * Default off. Only surfaced under `SCHEDULING_MODES_ENABLED`. */
+   * Default off. Ungated since the mode collapsed (one-planning-surface M-F-T5). */
   lateOverlay: boolean;
   /** User preference for the alternating month-band ground (F7b, `VITE_CANVAS_TIME_AXIS` +
    * `VITE_CANVAS_VISUAL_LANGUAGE`) — a plain boolean here so the pure painter module never imports

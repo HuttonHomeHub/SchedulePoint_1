@@ -68,13 +68,14 @@ export const CONFLICT_REMEDIES: Readonly<Record<ConflictKey, ConflictRemedy>> = 
   // likely does not know is that the bound EXISTS — so a remedy that renders nothing would leave the
   // one fact worth surfacing invisible, and would look correct doing it.
   //
-  // A route instead, and the cost of the choice is **zero** rather than a trade, for a reason that
-  // holds today rather than after M-F: a placement conflict requires a PLACEMENT, which requires
-  // Visual mode — and `clearVisualPlacementApplies` below is exactly `schedulingMode === 'VISUAL'`.
-  // So the withdraw-my-placement route is applicable in precisely the cases this remedy is needed
-  // in, by construction, and stays so when §4.12 makes that item unconditional. Routing here ADDS
-  // the second route rather than replacing the first, which is what stops this picking for them —
-  // the objection that gave `levelingWindowExceeded` a route and not a button.
+  // A route instead, and the cost of the choice is **zero** rather than a trade: a placement
+  // conflict requires a PLACEMENT, so the withdraw-my-placement control is applicable in precisely
+  // the cases this remedy is needed in, by construction. That used to be argued through the mode —
+  // a placement required Visual mode, and `clearVisualPlacementApplies` was exactly
+  // `schedulingMode === 'VISUAL'` — and M-F-T6 made the item unconditional, which is the stronger
+  // version of the same statement rather than a change to it. Routing here ADDS the second route
+  // rather than replacing the first, which is what stops this picking for them — the objection that
+  // gave `levelingWindowExceeded` a route and not a button.
   //
   // It shares `constraintViolated`'s destination and copy deliberately. They are different conflicts
   // and the same errand: go and look at the constraint. Two labels for one destination would read as

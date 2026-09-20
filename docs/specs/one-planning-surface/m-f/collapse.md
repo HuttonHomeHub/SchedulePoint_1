@@ -200,3 +200,139 @@ Its `it.each` over the two modes becomes an `it.each` over the two **date source
 weaker sweep and is labelled as one: `'early'` is now reachable there only through an analysis
 surface rather than a plan setting, and the case is kept because the two sources still read
 different columns.
+
+---
+
+## T4 — the contract, and what the task list missed
+
+`schedulingMode` leaves `CreatePlanDto`, `UpdatePlanDto`, `PlanResponseDto`, `PlanPatch`,
+`PLAN_GOVERNANCE_FIELDS`, `packages/types` (`SchedulingMode`, `PlanSummary.schedulingMode`,
+`ScheduleHealthReport.schedulingMode`) and the health read-model's `HealthPlanInput`.
+
+**`schema.prisma` keeps `scheduling_mode` and `enum SchedulingMode` until M-J**, which the task's
+own risk note demanded: a datamodel without a field the database still has makes
+`prisma migrate diff --exit-code` exit 2.
+
+### Four things the task list did not name, found by running rather than by reading
+
+1. **`PlanScheduleSettings` does not contain the field and never did.** The task names it among the
+   five places to edit; it renders `totalFloatMode` and nothing else (`grep -cin mode` → twelve
+   hits, all `TotalFloatMode`). A plan's list of places is a claim like any other.
+2. **`plan-health-check.dto.ts` and `health/compute-health.ts`** carry it as pure provenance — the
+   report printed "Early scheduling" beside the data date. Not in the list; named in the wake-up
+   note that carried this task, which is where it was first caught.
+3. **The seed catalogue posts it.** `seed-http/runner.ts` sent `schedulingMode` on plan create, so
+   T4 would have made the whole catalogue 422. It is removed from `seedPlanOptionsSchema`, the
+   defaults, `SEED_SCHEDULING_MODES`, the API's `seed-vocabulary.spec.ts` pairing, and the
+   **pairwise dimension table** — the last necessarily, because `pairwise.spec.ts` asserts every
+   dimension has more than one reachable value, and a one-value dimension would have failed loudly
+   rather than shrinking the covering array quietly. That gate did its job.
+4. **Two API e2e fixtures.** `audit-coverage.e2e-spec.ts` resent `schedulingMode` unchanged beside a
+   changed field, which is how it proves the governance producer diffs by VALUE rather than by
+   presence; it now resends `totalFloatMode`, the nearest sibling the settings dialog also resends.
+   And `staff-diagnostics.e2e-spec.ts` built D-D2's negative witness by PATCHing a plan to `VISUAL`
+   — the one state the API can no longer be asked for. It writes the column with Prisma now, with
+   the departure from this suite's "through the public REST API throughout" rule stated in place:
+   **D-D2 exists to size a population the product can no longer create**, so it is tested against
+   legacy-shaped rows or against nothing.
+
+### The response side is not symmetric, and no test can see it
+
+A stale **bundle** does not error on the field's absence — `plan-workspace-toolbar.tsx` defaulted it
+to `'EARLY'` — so a web image recreated before the API one renders placed plans at their **early
+dates** until it refreshes. ADR-0047 recreates `web` and `api` independently, so the window is real.
+It goes in the ADR's consequences; the e2e case says in its own docblock that it deliberately does
+not assert it.
+
+---
+
+## T4b — the four mode tests, converted
+
+Measured in M-B-T1 clause 5 and correct: two break outright (`grid-edit.spec.ts:480`,
+`bar-drag.spec.ts:157` — the only callers of each file's private `useVisualMode`), and two become
+**wrong** (`grid-edit.spec.ts:437`, `bar-drag.spec.ts:138`) by asserting EARLY behaviour the epic
+replaces. Each pair collapses into **one** test keeping the half that mattered — _and NO
+constraint_ — which is the only end-to-end proof that the collapse did not leave the SNET write in
+place behind the placement. Both helpers are deleted rather than pointed elsewhere.
+
+**A fifth test was in scope and the measurement did not find it**, because the count was of helper
+callers and this one calls nothing: `object-actions-reach.spec.ts` asserted `Clear visual start` is
+**ABSENT** on an Early plan. T6 makes it present, so that case breaks **loudly** — an absence that
+became a presence — and is inverted rather than deleted, with its pinned positive kept (ADR-0093: a
+`toHaveCount(0)` passes equally if the bar never rendered). Recorded rather than smoothed over: a
+count of callers cannot find fallout that reaches the condition another way, and a test run can.
+
+### `e2e-workspace-chrome` loses its own `useVisualMode`, and one journey loses its subject
+
+Three suites simply drop the line (`placement`, `conflict-review`, `placement-overlays`): every plan
+they create is a planning surface now, so the setup is gone rather than missing — said in
+`support.ts` so the next reader is not looking for it.
+
+**`peer-unmount-focus.spec.ts` needed a new mechanism, and finding one is the finding.** It is
+ADR-0135's only end-to-end instrument, and its whole case was a peer flipping `schedulingMode` while
+the reader held the pen — reachable precisely because `PATCH …/plans/:planId` is not pen-gated.
+After the collapse **there is no plan-level field a peer can write that removes a registry item**,
+which was established by enumerating every `isVisible` in both registries rather than assumed. So
+the fixture inverts: the **peer** holds the pen and retypes the selected activity to `WBS_SUMMARY`,
+and the reader — holding no pen, because an activity write asserts `assertHoldsPen` and the two
+cannot both be true — is standing on `Duplicate` (`isVisible: !ctx.isSummary`). Same hook, same
+three guards, one control disappearing from under a focus ring because somebody else wrote. Guard 2
+counts **activity** reads rather than plan reads, because the subject moved from a plan field to an
+activity field and counting the old one would count a request that says nothing about it.
+
+It also depends on `Duplicate` being **focusable while shaded**, which is ADR-0082's ruling: a
+primitive that skipped `aria-disabled` items would make the reason unreachable by keyboard _and_
+make this case impossible to construct.
+
+**`measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts` is deleted** rather than converted. It
+was #204(c)'s M0 evidence and its entire mechanism was the mode flip; converting it would have made
+it produce a **different** reading from the one `docs/specs/unmount-focus-handoff/` records, and a
+measurement file that no longer reproduces its own recorded measurement is worse than none. Its two
+registered dependency citations (`@tanstack/query-core`'s `focusManager.js:11-13` and `:56-59`) move
+to the journey, where the wake mechanism is still load-bearing — `check:claims` green afterwards.
+
+---
+
+## T5 — the flag, and the three things it was NOT gating
+
+`VITE_SCHEDULING_MODES` is removed: the declaration, the `vite-env.d.ts` entry, every
+`SCHEDULING_MODES_ENABLED` reference and ~26 test mocks of it. The register entry moves to
+`retired` with the reason, and **that reason is not ADR-0088's**: this flag was class B with a
+`keep`, i.e. never scheduled to fall. What changed is that the capability it gated no longer
+exists, so a guard with nothing left to guard is dead config rather than a rollback contract.
+
+Deleted with it: the `mode-early` / `mode-visual` registry items, `schedulingMode` /
+`setSchedulingMode` on `TsldToolbarContext`, `useSetPlanSchedulingMode`, the Summary popover's
+**Mode** row, and `clearPlacementApplies` — a boolean whose only falsifying condition was "the plan
+is scheduled Early".
+
+**Three things it also gated are ungated rather than deleted, and that is the load-bearing half:**
+
+| kept                           | why it was never about the mode                                                                 |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| the **Late-start overlay**     | reads the LATE dates; never consulted `schedulingMode`                                          |
+| the **Visual conflict** legend | keys a mark every plan can now paint — withdrawing it would leave the commonest cue unexplained |
+| **Go-to-date**'s caret         | display-only; the flag-off arm rendered **no** caret at all                                     |
+
+Each carried `SCHEDULING_MODES_ENABLED` only because ADR-0033 shipped them in the same milestone.
+Following the flag would have taken three working capabilities away as collateral.
+
+The ADR-0119 `segment` partition still holds: `scheduling-mode` and `view-mode` were the two
+segments of the `mode` row, and removing one leaves `view-mode` alone — the one-segment case that
+ADR gate already covers, with the all-or-nothing precondition intact.
+
+### A gate said no for a reason that was not a fact
+
+Retiring the flag made `check:flags` refuse:
+
+```
+VITE_SCHEDULING_MODES is retired, but apps/web/playwright.gantt-editing.config.ts pins it OFF
+```
+
+That config pins **no** flag, and says so two lines above the sentence the gate matched: its
+docblock spelled out the pin it had deliberately _not_ inherited, and assertion 4 scans these files
+as raw text. Fifth recorded instance in this repository of a scan matching prose that describes its
+own subject. The docblock is reworded (the literal was incidental) and the blind spot is filed as
+`docs/TECH_DEBT.md` **#354** with a named remedy, rather than fixed here — `check-flags.mjs` is a
+shared gate, and ADR-0105 makes that a full-spec trigger that ADR-0136 records being violated once
+already.

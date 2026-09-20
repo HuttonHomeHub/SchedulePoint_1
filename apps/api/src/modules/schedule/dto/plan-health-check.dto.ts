@@ -218,9 +218,6 @@ export class ScheduleHealthReportDto implements ScheduleHealthReport {
   })
   computedAt!: string | null;
 
-  @ApiProperty({ enum: ['EARLY', 'VISUAL'] })
-  schedulingMode!: 'EARLY' | 'VISUAL';
-
   @ApiProperty({
     description: 'Active non-summary activities — the denominator convention, made visible.',
   })

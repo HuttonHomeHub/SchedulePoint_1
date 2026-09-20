@@ -940,7 +940,6 @@ export class ScheduleService {
         name: plan.name,
         dataDate: formatCalendarDate(plan.plannedStart),
         computedAt: plan.scheduleComputedAt?.toISOString() ?? null,
-        schedulingMode: plan.schedulingMode,
       },
       activities,
       dependencies: edges.map((e) => ({

@@ -6,13 +6,18 @@ import { PLAN_MODE_SEGMENT_LABELS } from '@/components/layout/workspace/plan-wor
 import { splitByRow } from '@/components/ui/toolbar';
 
 /**
- * **The mode row's two switches stay named** (`docs/TECH_DEBT.md` #201, US-5).
+ * **The mode row's switch stays named** (`docs/TECH_DEBT.md` #201, US-5).
+ *
+ * **It was two switches — `Early | Visual` and `Diagram | Gantt` — until one-planning-surface
+ * M-F-T5.** The collapse deleted the scheduling-mode pair, so the row carries one segment. That is
+ * the case ADR-0119 records explicitly rather than an erosion of its precondition: all-or-nothing
+ * is about every item declaring a segment, not about there being several.
  *
  * `Toolbar.segmentLabels` is all-or-nothing by design: if ANY item in the taxonomy group lacks a
  * labelled `segment`, the whole group falls back to one region named from `groupLabels`. That
  * fallback is the right behaviour — a partial partition would leave an unnamed region, which is
  * worse than the defect — but it is **silent**. An item added to the mode row without a `segment`
- * would quietly reinstate the undifferentiated four-way group this epic exists to remove, and
+ * would quietly reinstate the undifferentiated group this file exists to prevent, and
  * nothing on screen or in any other suite would say so.
  *
  * So the two halves of the precondition are asserted here, against the **real** registry and the
@@ -34,16 +39,28 @@ describe('the plan mode row is fully segmented', () => {
    * What the first version claimed was that the flags could empty the row — that with
    * `GANTT_VIEW_ENABLED` off "a build that rendered no mode row at all would pass this file
    * perfectly". **That is false today**: `rows.mode` comes from `splitByRow`, which partitions on
-   * the static `row` field alone and never consults `isVisible`, so all four items are always here
+   * the static `row` field alone and never consults `isVisible`, so every item is always here
    * whatever the flags say. The guard is against a future refactor that filters at registration
    * time, not against today's mechanism — which is a weaker reason, and the real one (component
    * review, 2026-08-30).
    */
-  it('has at least the four items the epic is about', () => {
-    expect(rows.mode.length).toBeGreaterThanOrEqual(4);
-    expect(rows.mode.map((i) => i.id)).toEqual(
-      expect.arrayContaining(['mode-early', 'mode-visual', 'view-tsld', 'view-gantt']),
+  it('has at least the two items the epic is about', () => {
+    expect(rows.mode.length).toBeGreaterThanOrEqual(2);
+    expect(rows.mode.map((i) => i.id)).toEqual(expect.arrayContaining(['view-tsld', 'view-gantt']));
+  });
+
+  /**
+   * **And the scheduling-mode pair is gone rather than merely unasserted** (M-F-T5).
+   *
+   * Dropping the two ids from the list above would have left a suite that passes whether or not the
+   * collapse reached the registry — the ADR-0093 shape this file already carries a case about, one
+   * step along. This says what must NOT be there.
+   */
+  it('carries no scheduling-mode segment — there is one planning surface', () => {
+    expect(rows.mode.map((i) => i.id)).not.toEqual(
+      expect.arrayContaining(['mode-early', 'mode-visual']),
     );
+    expect(rows.mode.map((i) => i.segment)).not.toContain('scheduling-mode');
   });
 
   it('every item on the row declares a segment', () => {

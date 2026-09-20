@@ -63,7 +63,6 @@ vi.mock('@/features/gantt', async (importOriginal) => ({
 
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
-  useSetPlanSchedulingMode: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculateCommand: () => ({ isPending: false, run: vi.fn() }),
@@ -177,7 +176,6 @@ const PLAN = {
   name: 'North Tower',
   status: 'ACTIVE',
   plannedStart: '2026-01-01',
-  schedulingMode: 'EARLY',
   version: 1,
 } as unknown as LoadedPlan;
 

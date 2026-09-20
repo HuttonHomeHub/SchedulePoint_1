@@ -4,7 +4,6 @@ import {
   EacMethod,
   PlanStatus,
   ProgressRecalcMode,
-  SchedulingMode,
   TotalFloatMode,
 } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
@@ -54,14 +53,6 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsEnum(PlanStatus)
   status?: PlanStatus;
-
-  @ApiPropertyOptional({
-    enum: SchedulingMode,
-    description: 'Switch scheduling mode (ADR-0033): EARLY or VISUAL.',
-  })
-  @IsOptional()
-  @IsEnum(SchedulingMode)
-  schedulingMode?: SchedulingMode;
 
   @ApiPropertyOptional({
     enum: ProgressRecalcMode,

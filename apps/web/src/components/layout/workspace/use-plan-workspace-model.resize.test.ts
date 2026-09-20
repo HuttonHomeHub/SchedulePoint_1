@@ -16,8 +16,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   undoRedo: false,
   authoring: false,
-  schedulingModes: false,
-  planMode: 'EARLY',
   record: vi.fn(),
   updateMutateAsync: vi.fn(),
   setVisualStartMutateAsync: vi.fn(),
@@ -32,9 +30,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     get CANVAS_AUTHORING_ENABLED() {
       return h.authoring;
-    },
-    get SCHEDULING_MODES_ENABLED() {
-      return h.schedulingModes;
     },
     NOTES_ENABLED: false,
     get UNDO_REDO_ENABLED() {
@@ -73,8 +68,7 @@ vi.mock('@/features/plan-lock', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/features/plans', () => ({
-  usePlan: () =>
-    query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01', schedulingMode: h.planMode }),
+  usePlan: () => query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01' }),
 }));
 vi.mock('@/features/projects', () => ({ useProject: () => query({ clientId: 'c1' }) }));
 vi.mock('@/features/clients', () => ({ useClient: () => query({ id: 'c1' }) }));
@@ -199,8 +193,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
   h.authoring = false;
-  h.schedulingModes = false;
-  h.planMode = 'EARLY';
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, durationDays: 8, version: 4 });
   h.setVisualStartMutateAsync.mockResolvedValue({
     ...ACTIVITY,
@@ -383,23 +375,23 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
     expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('records the mode-matching coalescable command on the SHARED resize:{id} key', async () => {
+  /**
+   * **One run, where there were two** (one-planning-surface M-F-T5).
+   *
+   * This case used to render the hook twice — once with `schedulingMode: 'EARLY'`, once with
+   * `'VISUAL'` — and assert that both recorded the same label and the same coalescing key. The
+   * point was that an undo entry does not change shape with the mode. There is one mode now, so
+   * the second run was a re-run of the first: two identical renders agreeing with each other,
+   * which is a test that can no longer discriminate.
+   *
+   * The surviving assertion is the one that was ever load-bearing — the SHARED `resize:{id}` key,
+   * which is what lets a drag's many frames coalesce into one undo entry.
+   */
+  it('records a coalescable command on the shared resize:{id} key', async () => {
     h.undoRedo = true;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
-    });
-    expect(h.record).toHaveBeenCalledTimes(1);
-    const early = h.record.mock.calls[0]![0];
-    expect(early.label).toBe('Resize “Excavate”');
-    expect(early.coalescing?.key).toBe('resize:a1');
-
-    h.record.mockClear();
-    h.schedulingModes = true;
-    h.planMode = 'VISUAL';
-    const visual = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await visual.result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
     });
     expect(h.record).toHaveBeenCalledTimes(1);
     const command = h.record.mock.calls[0]![0];
@@ -407,10 +399,8 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
     expect(command.coalescing?.key).toBe('resize:a1');
   });
 
-  it('VISUAL undo restores the prior visualStart AND duration through the same seam', async () => {
+  it('undo restores the prior visualStart AND duration through the same seam', async () => {
     h.undoRedo = true;
-    h.schedulingModes = true;
-    h.planMode = 'VISUAL';
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });

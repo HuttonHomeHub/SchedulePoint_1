@@ -17,7 +17,6 @@ const h = vi.hoisted(() => ({ role: 'PLANNER' }));
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
-  SCHEDULING_MODES_ENABLED: false,
   NOTES_ENABLED: true,
   TOOLBAR_QUICK_WINS_ENABLED: true,
   // This suite asserts the Comments-reveal path; the programme section (now default-on) mounts its

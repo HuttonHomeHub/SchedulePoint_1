@@ -31,7 +31,6 @@ import {
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
-  SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
 import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
 import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
@@ -46,7 +45,7 @@ import {
   type InterchangeExportFormat,
 } from '@/features/interchange';
 import type { PenLockView } from '@/features/plan-lock';
-import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
+import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import type { BarDateSource } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -168,7 +167,6 @@ export function useTsldToolbarContext({
   // re-checks the permission + org-scopes the target plan (anti-IDOR).
   const canInterchangeExport = model.canExportSchedule;
   const recalc = useRecalculateCommand(orgSlug, planId);
-  const setPlanMode = useSetPlanSchedulingMode(orgSlug);
   // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
   // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
   // client state; nothing persists.
@@ -218,7 +216,10 @@ export function useTsldToolbarContext({
   // same way to build `authoringEnabled`. Expose it on the context so a pen-gated item disabled BY the
   // overlay (not by role/pen) can still explain why (toolbar quick-wins A1) — `canEditSchedule` stays
   // true under the overlay, so without this the button would disable with no reason.
-  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
+  // **Ungated with the mode** (one-planning-surface M-F-T5): this read `SCHEDULING_MODES_ENABLED &&`
+  // until the flag went, and the overlay it names is a read-only lens over the LATE dates that never
+  // consulted `schedulingMode` at all.
+  const lateOverlayActive = canvasUi.viewToggles.lateOverlay;
   // Edit-plan opens the plan form (writer only). **One caller now — the header's edit-pencil.**
   // It used to have two, and that was the whole of foot-row-and-deck M5: the Summary popover
   // rendered a labelled `Edit plan…` shortcut from this same memo, so one callback reached a
@@ -232,25 +233,18 @@ export function useTsldToolbarContext({
     [canWrite, setEditing],
   );
 
-  // The Summary popover folds the former Plan-details facts (status + data date, plus the scheduling
-  // mode) together with the computed schedule strip and an Edit-plan shortcut (ADR-0031 amendment).
+  // The Summary popover folds the former Plan-details facts (status + data date) together with the
+  // computed schedule strip and an Edit-plan shortcut (ADR-0031 amendment).
   const summaryContent = useMemo(
     () => (
       <PlanSummaryPanel
         statusLabel={PLAN_STATUS_LABELS[plan.status]}
         dataDate={plan.plannedStart}
-        schedulingModeLabel={
-          SCHEDULING_MODES_ENABLED
-            ? plan.schedulingMode === 'VISUAL'
-              ? 'Visual'
-              : 'Early'
-            : undefined
-        }
         orgSlug={orgSlug}
         planId={planId}
       />
     ),
-    [orgSlug, planId, plan.status, plan.plannedStart, plan.schedulingMode],
+    [orgSlug, planId, plan.status, plan.plannedStart],
   );
 
   const { open: legendOpen, toggle: toggleLegend } = legend;
@@ -446,26 +440,6 @@ export function useTsldToolbarContext({
       planView,
       ganttColumns,
       setPlanView,
-      // Scheduling mode (ADR-0033 M3): read the plan's mode + a pen-gated switch. Read-only viewers
-      // get a null setter so the selector renders inert. Announces the switch (the bars re-source on
-      // the next recalc).
-      schedulingMode: plan.schedulingMode,
-      setSchedulingMode: canEditSchedule
-        ? (nextMode) =>
-            setPlanMode.mutate(
-              { planId, version: plan.version, schedulingMode: nextMode },
-              {
-                onSuccess: () =>
-                  announce(
-                    nextMode === 'VISUAL'
-                      ? 'Scheduling mode set to Visual planning.'
-                      : 'Scheduling mode set to Early start.',
-                  ),
-                onError: () => announce('Couldn’t change the scheduling mode. Please try again.'),
-              },
-            )
-        : null,
-
       // Tools (pen-gated as a set at the toolbar via authoringEnabled)
       isAddingActivity: mode === 'add-activity',
       toggleAddActivity: () => setMode((m) => (m === 'add-activity' ? 'select' : 'add-activity')),
@@ -894,9 +868,7 @@ export function useTsldToolbarContext({
     plan.plannedStart,
     planView,
     setPlanView,
-    plan.schedulingMode,
     plan.version,
-    setPlanMode,
     planId,
     viewToggles,
     toggleView,
