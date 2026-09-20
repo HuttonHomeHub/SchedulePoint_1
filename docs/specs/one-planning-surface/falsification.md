@@ -314,14 +314,47 @@ pixel-identical once**, found by a ux review. A condition that ignores them repe
 **Bar, five clauses:**
 
 1. Each new stroke clears **3:1** against the canvas ground in the **canvas surface scope**
-   (ADR-0102), with the pairs added to the matrix **before** the CSS is written.
+   (ADR-0102), with the pairs added to the matrix **before** the CSS is written — **and, for each
+   cap, against the BAR FILL as well, because in the inverted state (spec §4.8) the cap's adjacent
+   colour is not the ground.**
+
+   **WCAG 1.4.11 is about ADJACENT colours**, and a cap drawn over a bar is adjacent to
+   `barColour()` (`paint.ts:379-389`): `palette.critical`, `palette.nearCritical`, `palette.bar`, or
+   an **arbitrary per-id `barFill`** from the Colour-by ramp. A token derived against the ground
+   carries **no guarantee** there. The SC is claimed deliberately rather than strained — a non-text
+   graphical object needed to understand the content, whose adjacent colour in this state is a
+   variable fill. _(This register has overstated an SC citation once, ADR-0082, so the care is
+   deliberate.)_
+
+   **The product already solved this one severity up, and that precedent is the shape to copy:**
+   `barInk` (`paint.ts:275-280`) is a per-id ink override **paired 1:1 with `barFill`** so an
+   inside-bar label clears **4.5:1** on a recoloured bar.
+
+   **This belongs in clause 1 rather than at implementation time, and that is the whole point of
+   clause 1's "before the CSS is written".** Found later, the cap token already exists and the path
+   of least resistance is to reuse it on a fill it was never measured against.
+
 2. Every new token pair is in `@theme inline` and resolves to a real value **in a browser**
    (ADR-0100 M4's reachability limb; ADR-0121's `var()`-to-`fillStyle` silent discard).
 3. **With colour removed**, all of these are mutually distinguishable in one frame: the **placed
    bar**, the **feasible window**, the **levelled ghost**, a **baseline ghost** and a **compare
    ghost**.
-4. **The fixture carries an active baseline and a selected revision pair**, or clause 3 is asserted
-   over a vocabulary smaller than the one that ships.
+4. **The fixture carries an active baseline and a selected revision pair** — or clause 3 is asserted
+   over a vocabulary smaller than the one that ships — **and additionally one activity with negative
+   remaining float and one with negative drift.**
+
+   **Widened rather than given a sixth clause, because it is this clause's own reasoning applied
+   again.** An ordinary fixture has non-negative remaining float and drift everywhere, so the
+   greyscale shot would never contain an **inverted cap** (spec §4.8) and the exceptional draw order
+   would be **ungated entirely** — the same hole clause 4 already exists to close for the two
+   pre-existing ghost layers. It is also ADR-0143's axe scan certifying only the all-PASS state, and
+   ADR-0121's fixture with levelling off reporting a number for a model the product does not have.
+
+   **The two halves of the inverted-cap problem land in different clauses, and that is correct:**
+   the fixture widening serves the **shot** (clauses 3–5 — lightness and shape), and the fill
+   adjacency serves the **matrix** (clause 1 — a computed ratio). A greyscale screenshot cannot
+   answer a contrast-ratio question, so neither substitutes for the other.
+
 5. The window is a **bracket**, not a dashed outline — a different shape class from both existing
    ghosts, which is what keeps it structurally out of the collision rather than tuned out of it.
 
