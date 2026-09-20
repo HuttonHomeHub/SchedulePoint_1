@@ -61,6 +61,10 @@ const opts = (o: Partial<ClassifyOptions> = {}): ClassifyOptions => ({
   fromScheduled: true,
   toScheduled: true,
   bothSnapshotted: true,
+  // The M-C default, separate from the one above because the two levels are written by different
+  // milestones — see `ClassifyOptions.bothPlacementSnapshotted`. True keeps every existing case
+  // running against exactly the behaviour it always did.
+  bothPlacementSnapshotted: true,
   // The same-plan default: matched on ACTIVITY ID, so a re-code is a real, reportable change and
   // every existing case below runs against exactly the behaviour it always did.
   codeIsTheCorrelationKey: false,
@@ -203,6 +207,58 @@ describe('the revision change classifier', () => {
       expect(classOf(report, c)?.rows).toEqual([]);
       expect(classOf(report, c)?.total).toBe(0);
     }
+  });
+
+  describe('the placement, and whether it can be compared at all (M-C-T2)', () => {
+    it('reports a reason when a side froze no placement, even with nothing to compare', () => {
+      // **Both sides empty is the discriminating fixture, not a lazy one.** The rule the three
+      // `*_snapshot_level` columns are all written under is that the discriminator does not depend
+      // on there being content — a reason that appeared only when there was something to compare
+      // could not separate "nobody looked" from "we looked and there was nothing". A conditional
+      // implementation returns null here and passes every other case in this file.
+      const report = classifyRevisionChanges(
+        side([]),
+        side([]),
+        opts({ bothPlacementSnapshotted: false }),
+      );
+      expect(report.classes.every((c) => c.rows.length === 0)).toBe(true);
+      expect(report.placementNotAssessableReason).toBe('NOT_SNAPSHOTTED');
+    });
+
+    it('reports NOTHING — not a verdict — when both sides froze one', () => {
+      const report = classifyRevisionChanges(
+        side([]),
+        side([]),
+        opts({ bothPlacementSnapshotted: true }),
+      );
+      // `null` is the ONLY thing that can mean comparable. A three-valued verdict would invite the
+      // `?? 'MATCH'` the criticality mirrors exist to forbid — absence cannot be defaulted into
+      // existence, and that is why this field is a nullable reason and not a verdict.
+      expect(report.placementNotAssessableReason).toBeNull();
+    });
+
+    it('is decided independently of the SHAPE snapshot, in both directions', () => {
+      // The case a "just reuse `bothSnapshotted`" simplification breaks, and it is the reason the
+      // second flag exists. The two levels are written by different milestones, so a baseline can
+      // carry either without the other — and folding them is wrong in BOTH directions, each
+      // silently: a shape-complete baseline would report its placement as recorded when it is not,
+      // and a placement-complete one would report its logic as unrecorded.
+      const shapeOnly = classifyRevisionChanges(
+        side([]),
+        side([]),
+        opts({ bothSnapshotted: true, bothPlacementSnapshotted: false }),
+      );
+      expect(shapeOnly.placementNotAssessableReason).toBe('NOT_SNAPSHOTTED');
+      expect(classOf(shapeOnly, 'RELOGICKED')?.notAssessableReason).toBeNull();
+
+      const placementOnly = classifyRevisionChanges(
+        side([]),
+        side([]),
+        opts({ bothSnapshotted: false, bothPlacementSnapshotted: true }),
+      );
+      expect(placementOnly.placementNotAssessableReason).toBeNull();
+      expect(classOf(placementOnly, 'RELOGICKED')?.notAssessableReason).toBe('NOT_SNAPSHOTTED');
+    });
   });
 
   describe('the paid classes, once both sides recorded the shape', () => {

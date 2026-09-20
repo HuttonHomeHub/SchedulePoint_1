@@ -326,6 +326,20 @@ export class RevisionChangeReportDto implements RevisionChangeReport {
   classes!: readonly RevisionClassAssessmentDto[];
 
   @ApiProperty() cap!: number;
+
+  @ApiProperty({
+    nullable: true,
+    enum: REVISION_NOT_ASSESSABLE_REASONS,
+    description:
+      'Whether the two sides’ PLACEMENTS can be compared at all — null when both recorded one, a ' +
+      'reason when they did not. A baseline froze where the NETWORK said work could go and never ' +
+      'where a planner had put it, so every baseline captured before that change is ' +
+      '`placement_snapshot_level: NONE` and **permanently** so: a backfill would state as history ' +
+      'a placement that baseline never saw. Reported whether or not either plan happens to hold a ' +
+      'placement — a reason that appeared only when there was something to compare could not ' +
+      'separate "nobody looked" from "we looked and there was nothing".',
+  })
+  placementNotAssessableReason!: RevisionNotAssessableReason | null;
 }
 
 export class RevisionGhostBarDto implements RevisionGhostBar {

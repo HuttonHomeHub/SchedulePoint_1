@@ -3130,6 +3130,27 @@ export interface RevisionChangeReport {
   /** Every class, assessed or not — total over the union, so a class is never simply missing. */
   readonly classes: readonly RevisionClassAssessment[];
   readonly cap: number;
+  /**
+   * **Whether the two sides' PLACEMENTS can be compared at all** — null when both recorded one, a
+   * reason when they did not (one-planning-surface M-C).
+   *
+   * A baseline froze where the NETWORK said work could go and never where a planner had put it,
+   * until `placed_start`/`placed_finish`/`visual_start` were frozen beside the early columns. Every
+   * baseline captured before that is `placement_snapshot_level: 'NONE'` and **permanently** so: a
+   * backfill would state as history a placement that baseline never saw.
+   *
+   * **It is reported whether or not either plan happens to hold a placement**, which is the same
+   * rule the three `*_snapshot_level` columns are written under and is deliberate. Making it
+   * conditional on there being something to compare is how a NULL meaning "nobody looked" becomes
+   * indistinguishable from one meaning "we looked and there was nothing" — the exact absence this
+   * field exists to remove, and the likelier slip here than elsewhere, because an unplaced plan's
+   * placement columns are all null and read as nothing worth reporting.
+   *
+   * It is a nullable REASON and deliberately not a three-valued verdict. A verdict invites the
+   * `?? 'MATCH'` that the criticality mirrors exist to forbid; absence of a reason is the only
+   * thing that can mean "comparable", and it cannot be defaulted into existence.
+   */
+  readonly placementNotAssessableReason: RevisionNotAssessableReason | null;
 }
 
 /**
@@ -3297,6 +3318,14 @@ export interface CrossPlanClassAssessment extends Omit<RevisionClassAssessment, 
 export interface CrossPlanChangeReport {
   readonly classes: readonly CrossPlanClassAssessment[];
   readonly cap: number;
+  /**
+   * The same question as {@link RevisionChangeReport.placementNotAssessableReason}, and it is NOT
+   * trivially null here. A cross-plan comparison matches two **plans** on the activity code, but
+   * either side may still be one of that plan's baselines — so a pre-M-C snapshot reaches this
+   * route exactly as it reaches the plan-nested one, and reporting nothing would tell a reader the
+   * placements agreed when nobody recorded one of them.
+   */
+  readonly placementNotAssessableReason: RevisionNotAssessableReason | null;
 }
 
 export interface CrossPlanCriticalPathDelta extends Omit<

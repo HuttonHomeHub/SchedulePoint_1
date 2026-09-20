@@ -1832,6 +1832,14 @@ export class ScheduleService {
       fromBaseline.revisionSnapshotLevel === 'FULL' &&
       (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
 
+    // The PLACEMENT half of the same question (one-planning-surface M-C). A SECOND derivation
+    // rather than a widening of the one above: the two levels are written by different milestones,
+    // so a baseline can carry either without the other, and folding them would make a
+    // shape-complete baseline report its placement as recorded when it is not.
+    const bothPlacementSnapshotted =
+      fromBaseline.placementSnapshotLevel === 'FULL' &&
+      (toBaseline === null || toBaseline.placementSnapshotLevel === 'FULL');
+
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
 
     // **The change list, only when asked for.**
@@ -1847,6 +1855,7 @@ export class ScheduleService {
             fromScheduled: sideScheduled(fromBaseline, plan.scheduleComputedAt),
             toScheduled: sideScheduled(toBaseline, plan.scheduleComputedAt),
             bothSnapshotted,
+            bothPlacementSnapshotted,
             // The plan's own revisions are matched on ACTIVITY ID, so a re-code is a real,
             // reportable change here — the opposite of the cross-plan case.
             codeIsTheCorrelationKey: false,
@@ -1867,6 +1876,10 @@ export class ScheduleService {
         ? null
         : {
             cap: changes.cap,
+            // Carried through verbatim, never re-derived here. The classifier is the one thing
+            // entitled to decide it, and a second derivation beside the `existsLive` widening
+            // below is exactly how the two would drift.
+            placementNotAssessableReason: changes.placementNotAssessableReason,
             classes: changes.classes.map((c) => ({
               ...c,
               rows: c.rows.map((r) => ({ ...r, existsLive: liveIds.has(r.activityId) })),
@@ -2366,6 +2379,11 @@ export class ScheduleService {
       (fromBaseline === null || fromBaseline.revisionSnapshotLevel === 'FULL') &&
       (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
 
+    // The PLACEMENT half (M-C) — see the sibling derivation on the plan-nested route.
+    const bothPlacementSnapshotted =
+      (fromBaseline === null || fromBaseline.placementSnapshotLevel === 'FULL') &&
+      (toBaseline === null || toBaseline.placementSnapshotLevel === 'FULL');
+
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
     // The edges re-keyed onto the SAME natural key the rows were, so the classifier can diff them.
     const fromCorrelated = correlateEdges(fromRawEdges, fromRawRows);
@@ -2381,6 +2399,7 @@ export class ScheduleService {
             fromScheduled,
             toScheduled,
             bothSnapshotted,
+            bothPlacementSnapshotted,
             /**
              * **The sides are matched ON the code here, so the `RECODED` class is unanswerable.**
              *
@@ -2403,6 +2422,10 @@ export class ScheduleService {
         ? null
         : {
             cap: changes.cap,
+            // Carried through verbatim, never re-derived here. The classifier is the one thing
+            // entitled to decide it, and a second derivation beside the `existsLive` widening
+            // below is exactly how the two would drift.
+            placementNotAssessableReason: changes.placementNotAssessableReason,
             classes: changes.classes.map((c) => ({
               ...c,
               rows: c.rows.map((r) => ({
