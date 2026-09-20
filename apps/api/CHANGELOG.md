@@ -1,5 +1,15 @@
 # @repo/api
 
+## 0.69.0
+
+### Minor Changes
+
+- [#637](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/637) [`fcaba7c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fcaba7c7d9588f838bcfeaa5bb99a5438de091d7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Staff diagnostics gains seven entries sizing the estate ahead of the
+  one-planning-surface epic: hand-placed plans and activities, baselines captured
+  over a placed plan, the Start-No-Earlier-Than population split by what each
+  constraint currently does, and how many of those a full baseline could restore.
+  Read-only counts with no caller input, like every other entry in the registry.
+
 ## 0.68.0
 
 ### Minor Changes
