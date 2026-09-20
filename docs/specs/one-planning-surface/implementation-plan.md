@@ -1,14 +1,13 @@
-# Implementation Plan: One planning surface — Visual is the plan, Early, Late and Levelled are overlays
+# Implementation Plan: One planning surface
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
-- **Falsification conditions:** [`./falsification.md`](./falsification.md) — **committed in its own
-  commit before any harness runs** (ADR-0128's ordering)
+- **Falsification conditions:** [`./falsification.md`](./falsification.md)
 - **Status:** Draft
 - **Owner:** _(to be assigned)_
-- **Revised 2026-09-20** after the product owner answered §6. Three answers went against the stated
-  defaults; **two new milestones exist that did not before (M-H programme, M-I the strip), M-E
-  roughly doubled, and the strip created a hard ordering constraint** — everything is re-derived
-  rather than patched.
+- **Revised twice.** After §6 was answered (three answers against the stated defaults), and after
+  four specialist reviews — two blocking — plus a product-owner decision on the overlay shape.
+  **This revision adds a foundation milestone (M-P) the epic cannot ship without, rebuilds M-E
+  around one window plus one rival ghost, and corrects M0-T1 to what has actually shipped.**
 
 ---
 
@@ -16,751 +15,608 @@
 
 ```mermaid
 flowchart LR
-  E["Epic: one planning surface"] --> M0["M0 · measure"]
+  E["Epic"] --> M0["M0 · measure (SHIPPED)"]
   M0 --> MA["M-A · schema + ADR"]
   M0 --> MB["M-B · convert 13 journeys"]
-  MA --> MD["M-D · engine"]
+  MA --> MP["M-P · teach Pass 2 the three branches"]
+  MP --> MD["M-D · remaining float + conflict"]
   MD --> MC["M-C · baselines"]
-  MD --> ME["M-E · THREE overlays + remaining float"]
+  MD --> ME["M-E · window + levelled lens"]
   MB --> MF["M-F · the collapse"]
   ME --> MF
   MC --> MF
   MF --> MG["M-G · interchange"]
-  MF --> MH["M-H · programme reads placed"]
-  MF --> MI["M-I · strip drag-created SNETs"]
-  MG --> MJ["M-J · gate pass + drop the column"]
+  MF --> MH["M-H · programme"]
+  MF --> MI["M-I · the strip"]
+  MG --> MJ["M-J · gate pass + drop"]
   MH --> MJ
   MI --> MJ
 ```
 
-**Why the collapse is late among the behavioural milestones.** The tempting sequence starts with it
-— it is the headline and it is one ternary (spec C1). It is also the sequence in which a planner
-gets placed bars with _total_ float beside them, no lens to judge a placement by, a Late overlay
-deleted with the mode that gated it, and thirteen journeys going red at once.
+**Three orderings are hard constraints, not preferences.**
 
-**Why the strip is later still, and this is a hard constraint rather than a preference.** Converting
-a binding `SNET` to a `visualStart` preserves the bar **only for a renderer reading
-`visualEffective*`**. Before M-F, an `EARLY` plan renders from `early*` — and stripping the
-constraint makes `early*` fall back to logic-earliest, which is **earlier**. So running the strip
-before the collapse would move every affected bar on every `EARLY` plan: the precise outcome FC-10
-clause C exists to forbid. **M-I cannot precede M-F**, and the plan says so where somebody
-resequencing under pressure will read it.
+1. **M-P before M-C and M-F.** Pass 2 is **not** a superset of Pass 1 (spec C11): a started
+   activity's `earlyStart` is its actual start verbatim (`compute.ts:765`), a complete one's finish
+   is its actual finish, and an LOE or summary spans its **derived** instants (`:752-753`) — none of
+   which Pass 2 knows (`:305-352`, `:815-816`). Without M-P, **M-C freezes the data date instead of
+   the actual start for every progressed activity, and a zero-length point for every summary and
+   LOE — immutably and unbackfillably, under a column asserting it is a faithful record** — and M-F
+   moves every such bar on screen.
+2. **M-B before M-F** (FC-6 clause 1; ADR-0084 batch-1).
+3. **M-F before M-I.** The strip preserves a bar only for a renderer reading `visualEffective*`.
+   Before the collapse an `EARLY` plan renders from `early*`, which the strip makes **earlier** — so
+   running it first moves every affected bar, which FC-10 clause C forbids.
 
 ### Epic
 
-**One planning surface** — delete `schedulingMode`; placed dates become the single downstream truth,
-including across a plan boundary; earliest, latest **and levelled** become ghost overlays beside
-unmoved bars; screen float becomes remaining float; drag-created constraints are stripped once,
-recorded and reported. Roadmap theme: the scheduling model (`docs/ROADMAP.md` §53–54).
+Delete `schedulingMode`; placed dates become the single downstream truth including across a plan
+boundary; the **feasible window** and the **levelled ghost** become overlays beside unmoved bars;
+screen float becomes remaining float; drag-created constraints are stripped once, recorded and
+reported.
 
 ---
 
-## Milestone M0 — Measure before anything is built
+## Milestone M0 — Measure before anything is built · **SHIPPED**
 
-**Outcome:** six readings that decide four design questions.
-**Ships dark:** the only deployed artefact is new entries in the staff diagnostics registry.
-**Entry point (staff, not planner):** `Staff console → Diagnostics → Run`.
-**Journey:** `e2e-staff` gains a case asserting the new entries render with the fixed all-numeric row
-shape. (The planner-facing journey lands at M-E, the first user-facing milestone — ADR-0081.)
+**Status: landed** (`6b63bd82`, corrected by `5e6fb3ef`). Recorded here as built, not as planned —
+and **corrected against what shipped**, because the instruction for this revision asked for a
+reading that already exists.
 
-> **Grown by CQ-7's answer.** M0 now sizes the strip population as well as the baseline question,
-> because the product owner's instruction was explicit: _measure the exact population before M-I
-> strips anything_, and that measurement **gates** the strip (FC-10 clause B) rather than informing
-> it.
+**What shipped, and how it differs from this plan's previous version:**
 
-#### Feature: estate readings
+- **Eight** new registry entries, **ten** total — not five, and not the "seven" the revision brief
+  named. `DIAGNOSTIC_IDS` (`staff-diagnostics.registry.ts:24-35`) holds
+  `visual-placement-plans`, `visual-placement-activities`, **`placement-on-early-plan`**,
+  `baselines-over-placed-plans`, `snet-binding`, `snet-inert`, `snet-unclassified`,
+  `snet-full-baseline-coverage`.
+- **`placement-on-early-plan` is already there** (`:29`, `:296-297`, `:520`) — the
+  `visual_start IS NOT NULL AND scheduling_mode = 'EARLY'` reading this revision was told to add.
+  **The task would have been a duplicate**; the closed `DIAGNOSTIC_IDS` union would have caught it
+  at typecheck, but the plan would have carried a false task. **Second time in this epic that
+  re-verifying a problem statement removed work** (spec C1 was the first) — CLAUDE.md §19.11.
+- **Four SNET classes, not three.** The fourth is
+  `early_start IS NULL OR early_start < constraint_date`. It **arises two ways and only one
+  clears**: a stored schedule predating the constraint (clears on recalculation), and a started
+  activity whose actual start bypasses the clamp (`compute.ts:765` — spec C11 one surface along), so
+  it reads below its constraint in a schedule computed seconds ago and **never** clears. M-I's
+  notice must not imply these resolve.
+- **The three-way split lives across three entries, not inside one.** Gate S-5's fixed all-numeric
+  row shape makes an in-entry split inexpressible; three entries share one denominator and
+  exhaustiveness is asserted **across** them, verified red against the plan's own earlier
+  three-class version.
+- **Neither `EXISTS` survived gate S-4**; both are joins with `count(DISTINCT …)`.
 
-> **Complexity:** M (was S — two more entries, one with a three-way split)
-> **Dependencies:** none
-> **Risks:** the registry's row shape is closed and all-numeric (gates S-1/S-4) → every question is
-> `count(*)` plus `affected_plans`/`affected_organizations`, which they already are. · A query taking
-> caller input reintroduces the differencing oracle ADR-0140 D2 clause 2 forbids → all take **no
-> parameters**. · An uncosted query → ADR-0140's own M0 found the obvious anchoring argument false
-> and the candidate index **not chosen at all**; cost each against a diluted estate first.
-> **Testing requirements:** the registry's structural gates; one repository spec per entry with a
-> fixture where the count is non-zero **and** one where it is zero (a query that always returns zero
-> passes a subset assertion).
+**Still owed from M0:** the ghost-cost probe, re-scoped by the product owner's overlay decision.
 
-##### Task M0-T1 — five diagnostics entries
+##### Task M0-T2 — the overlay cost probe _(re-scoped, not yet run)_
 
-- **Description:** `visual-placement-plans`; `visual-placement-activities`;
-  `baselines-over-placed-plans`; **`drag-created-snet-population`** (three-way split: binding
-  `early_start = constraint_date`, inert `early_start > constraint_date`, unknown
-  `early_start IS NULL`); **`snet-full-baseline-coverage`** (of the binding set, how many a
-  post-ADR-0126 `revision_snapshot_level = 'FULL'` baseline covers). `nature: 'prospective'` while
-  the epic is open.
+- **Description:** measure **window only**, **levelled only**, **both**, and **neither**, at Week and
+  Fit, 500 and 2,000 — per FC-5's increments.
+- **Complexity:** M
+- **Risks:** a container reading is worthless (ADR-0127 D8 disqualified that environment by name).
+  · **A fixture where almost nothing is levelling-delayed reports the cost of almost nothing** →
+  FC-5's strengthened non-vacuity: a **stated proportion** of delayed activities, using
+  `plan:capability-levelling` from the seed catalogue. · **The Fit limb needs the spread safeguard
+  its Week sibling already had** — CLAUDE.md §17 records that framing needing five sittings and a
+  measured 0.4 fps noise floor after two readings disagreed by 8.9 fps with no code change.
+- **Development steps:** add the scenario; take the four increments at both framings; commit with
+  spreads; apply FC-5's ladder if limb 2 fails and record which rung.
+
+---
+
+## Milestone M-P — Teach Pass 2 the three branches
+
+**Outcome:** with no placement anywhere, `visualEffective*` equals `early*` for **every** activity,
+including started, complete, LOE and `WBS_SUMMARY`.
+**Ships dark:** no screen reads Pass 2 as authoritative yet; nothing user-visible changes for a plan
+without progress, LOE or summary. **A progressed plan's placed-view dates change — to the correct
+ones.**
+**Journey:** none. FC-11 (engine) and FC-7 Part B (product, over the seed catalogue).
+
+> **New, and the epic's foundation.** It exists because spec §1.2's premise — "Early is Visual's
+> resting state" — was **true of the fixture and false in general**, and its citation
+> (`compute.visual.spec.ts:71-80`) is five plain tasks in a 220-line file containing **zero**
+> `actualStart`, `percentComplete`, `WBS_SUMMARY` or `LEVEL_OF_EFFORT`.
+
+#### Feature: the three branches
+
+> **Complexity:** L · **Dependencies:** M-A (ADR only — no schema)
+> **Risks:** **touching Pass 1 while adding Pass 2 branches** → FC-2, with clause 3's verified-red
+> step run here. · **Reading the actual-start rule from Pass 1 by paraphrase rather than by
+> reference** → the branch conditions are `started`/`isComplete`/`pointLike` as Pass 1 computes
+> them (`:752`, `:763-764`), shared rather than restated, or the two will drift exactly where they
+> are meant to agree. · The `pointLike` rule is **type-dependent** (`activityIsLoe || activityIsSummary
+? efInst === esInst : duration === 0`) and a careless port collapses a zero-duration TASK.
+> **Testing requirements:** FC-11, verified red on all four rows first; FC-2 clause 3.
+
+##### Task M-P-T1 — the parity case, red first
+
+- **Description:** a `compute.visual.spec.ts` case with a started activity, a complete one, an LOE
+  and a summary over a multi-day child, **no placement**, asserting `visualEffective* === early*`
+  for every activity.
 - **Complexity:** M · **Dependencies:** none
-- **Risks:** the three-way split must be **exhaustive and disjoint** — an activity is binding, inert
-  or unknown and nothing else → assert `binding + inert + unknown === total SNET count` in the
-  repository spec, which is the cheapest possible guard against a mis-written `WHERE`.
-- **Development steps:**
-  1. Add five `DiagnosticEntry` constants; extend `DIAGNOSTIC_IDS`.
-  2. Cost each on a diluted estate; commit `m0/measurements.md` with the plan output and the
-     re-arm trigger.
-  3. Take the readings on the deployed host; commit `m0/estate-readings.md`.
-  4. **Apply FC-1's decision table and FC-10 clause B's bound**, in writing, before M-A and M-I open.
+- **Testing:** **this is written and confirmed red before M-P-T2 exists.** Expected failures:
+  in-progress early 02 Jan vs visualEffective 10 Jan; complete 02–05 vs 10–14; summary and LOE each
+  collapsing to a point.
 
-#### Feature: the ghost-overlay cost probe
+##### Task M-P-T2 — the branches
 
-> **Complexity:** M
-> **Dependencies:** none
-> **Risks:** a container measurement is worthless — ADR-0127 D8 disqualified that environment by
-> name after its no-change baseline moved 0.93 → 10.00 pp in an hour → taken on the product owner's
-> hardware, one sitting, spread reported. · **A fixture with levelling off draws two ghosts and
-> reports a number for a model the product does not have** → the fixture sets `levelResources` and
-> the probe asserts a non-zero count of **levelled** ghosts drawn while measured (ADR-0129 P3's
-> rule; ADR-0066's finding that a draw benchmark once measured the cull rather than the painter). ·
-> A prototype that bypasses the real painter measures the prototype → it paints through
-> `paintScene`, and its docblock says where it bypasses the product (ADR-0081's third decision).
-> **Testing requirements:** the probe judge's `INDETERMINATE` branch is reachable and asserted.
+- **Description:** `visualEffectiveStart` takes the actual start verbatim when started;
+  `visualEffectiveFinish` takes the actual finish when complete; `vInclusiveFinishOwn` uses the
+  **derived** span for LOE and summary rather than the input duration.
+- **Complexity:** L · **Dependencies:** M-P-T1
+- **Risks:** a placed **and** started activity is a real combination — the actual start wins, as it
+  does in Pass 1 ("actuals never move", ADR-0035 §1), and the placement is then inert for that
+  activity. **Assert it**; it is the case a reader will assume goes the other way.
+- **Testing:** FC-11; plus a placed-and-started case; plus FC-2 clause 3's mutation.
 
-##### Task M0-T2 — `ghost-overlay` probe scenario, **three members**
+##### Task M-P-T3 — the product-level parity run
 
-- **Complexity:** M · **Dependencies:** M0-T1 (sequenced so one staff release carries both)
-- **Risks:** judging at Fit alone → FC-5 splits the limbs; #260 records a Fit baseline of 98.33 pp
-  leaving less headroom than the bar, so a pp delta there cannot fail.
-- **Development steps:**
-  1. Add the scenario; throwaway three-member ghost painter behind it.
-  2. Take Week/500, Week/2,000, Fit/500, Fit/2,000, with 0, 1, 2 and 3 overlays on — **the
-     per-member increment is what the withdrawal ladder needs**, and a single all-on reading cannot
-     supply it.
-  3. Commit the readings **with the spread**; apply FC-5's ladder if limb 2 fails and record which
-     rung was needed.
+- **Description:** FC-7 Part B over the seed catalogue — a plan with progress, an LOE and a summary
+  renders identically before and after.
+- **Complexity:** M · **Dependencies:** M-P-T2
+- **Testing:** committed as `m-p/progress-parity.md`. ADR-0066's rule: the engine half and the
+  product half do not substitute for each other.
 
 ---
 
 ## Milestone M-A — The schema, and the ADR
 
-**Outcome:** the columns and the table this epic needs exist and are described.
-**Ships dark:** every new column is unwritten and unread.
-**Journey:** none. API e2e asserts the migrations against a **populated** database.
+**Outcome:** the columns and the table exist and are described. **Ships dark.**
+**Journey:** none; API e2e against a **populated** database.
 
-> **Every item goes through `database-architect`, without exception** (CLAUDE.md §19.3/§20). If it
-> returns nothing, fails, or is slow, **re-run it**. Waiting is cheap; a checksummed migration
-> against a real database is not.
+> **Every item through `database-architect`, without exception.** Re-run on failure; waiting is
+> cheap, a checksummed migration is not.
 
-#### Feature: baseline placement columns + the basis discriminator
+##### Task M-A-T1 — baseline capture columns
 
-> **Complexity:** M · **Dependencies:** M0 (FC-1 decides the DEFAULT)
-> **Risks:** a migration a pristine database cannot test (ADR-0107) → rehearsed against a database
-> populated by replaying the earlier migrations, negative control naming the constraint. · A fourth
-> child table off `baseline` broke 557 of 587 API e2e tests on a RESTRICT FK (ADR-0126) → **columns
-> only here**, and the DMMF-derived retention census is re-run.
-> **Testing requirements:** a migration spec reading the SQL **from the shipped file**, never
-> restated; each case verified red against the defect it guards.
-
-##### Task M-A-T1 — `baseline_activities.placed_start` / `placed_finish`
-
-- **Description:** two nullable `DATE`, **no DEFAULT** — unknowable for a pre-existing row
-  (ADR-0126; `budgetedExpense`'s "0 is a claim").
+- **Description:** `baseline_activities.placed_start`, `.placed_finish` **and `.visual_start`** —
+  `DATE NULL`, no DEFAULT.
 - **Complexity:** S · **Dependencies:** M0
+- **Risks:** omitting `visual_start` leaves a comparison unable to distinguish **"the planner moved
+  it"** from **"the logic moved it"** — after this epic it is _the_ planner input.
 
-##### Task M-A-T2 — `baselines.date_basis`
+##### Task M-A-T2 — `baselines.placement_snapshot_level`
 
-- **Description:** records what the existing `baseline_start`/`baseline_finish` **mean** — the
-  question a row count structurally cannot answer.
-- **Complexity:** S · **Dependencies:** M-A-T1, **FC-1's decision**
-- **Risks:** `DEFAULT 'EARLY'` over a baseline captured from a placed plan asserts a basis that row
-  never had → FC-1 reading 3 gates it.
-- **Development steps:**
-  1. Apply FC-1's branch, justifying it in the migration comment by `baseline.repository.ts:207-208`
-     being the only write path and carrying no branch on the mode.
-  2. Enum + column in two migrations — Postgres forbids using a label in the transaction that added
-     it (ADR-0053 M3).
-  3. Test both worlds regardless of which shipped, so the branch not taken is still described.
+- **Description:** `{NONE, FULL} DEFAULT NONE` — a **level**, not a two-valued basis.
+- **Complexity:** S · **Dependencies:** M-A-T1
+- **Risks:** a two-valued `date_basis` cannot describe a post-epic row, because **every** post-epic
+  capture writes both column sets — the row is not one **or** the other; and only a level
+  distinguishes "no placement" from "nobody looked". `revision_snapshot_level`'s own argument
+  (ADR-0126). `DEFAULT NONE` is the literal truth of every existing row.
+- **Testing:** enum + column in two migrations (Postgres forbids using a label in the transaction
+  that added it — ADR-0053 M3).
 
-##### Task M-A-T3 — `activities.remaining_float` (**CQ-1**)
+##### Task M-A-T3 — `activities.remaining_float` (**CQ-1 answered: persist**)
 
-- **Description:** nullable `INT`, engine-owned, written by the existing `unnest`, outside the
-  version/`updated_at` path. Mirrors `free_float`.
-- **Complexity:** S · **Dependencies:** **CQ-1's answer — `database-architect`'s, not the product
-  owner's.** If the answer is "derive at the DTO", **this task does not exist**. Do not build both.
+- **Description:** `INT NULL`, day-denominated, engine-owned, the **22nd column of the existing
+  `unnest` batch**, never in a write DTO, **no index**, **no CHECK** (negative is the feature).
+- **Complexity:** S
+- **Risks:** **a reader adds the index later** → the docblock states that the Gantt sorts **in the
+  browser** (`row-model.ts:154`) and the activities list has no sort parameter, so persisting buys
+  **no sorting capability anyone uses** — and that CQ-1's own stated reason was therefore false. ·
+  **A reader proposes the DTO alternative** → it does not exist: minutes are persisted for neither
+  input, so a read-time derivation can only compute `round(T/f) − round(d/f)`, the C6 defect.
+  · **A reader "fixes" the unit to match `remainingDurationDays`/`Minutes`** in the same DTO → the
+  docblock says why: this is a **float**, following `totalFloat`/`freeFloat`; the paired convention
+  belongs to **durations**, which are planner inputs needing sub-day precision (ADR-0070).
 
-##### Task M-A-T4 — `placement_migration_log` (**new, for CQ-7**)
+##### Task M-A-T4 — `placement_migration_log`
 
-- **Description:** write-once: `activity_id` (**non-FK**), `plan_id`, `organization_id`,
-  `prior_constraint_type`, `prior_constraint_date`, `migrated_at`.
-- **Complexity:** M · **Dependencies:** none
-- **Risks:** **an FK to `activities` would reproduce ADR-0126's RESTRICT trap** and would also
-  delete the record exactly when somebody wants it (after the activity is gone) → non-FK, the
-  ADR-0025 `source_activity_id` precedent. · A table nobody ever reads is dead weight → M-I ships
-  its read endpoint and its notice in the same milestone, so it is never write-only.
-- **Testing:** the retention census (ADR-0126 M4) is re-run — a new table is exactly what that
-  census exists to notice. **Whether this table is swept by ADR-0096 retention is a question for
-  `database-architect`**, and the spec does not answer it: a record of an irreversible act arguably
-  should outlive a 90-day window, and that is a decision, not an omission.
-
-#### Feature: the ADR
+- **Description:** **a primary key**; `activity_id` **non-FK**; **`plan_id` FK Cascade**;
+  **`organization_id` FK Restrict**; **denormalised activity code and name**;
+  `prior_constraint_type`, `prior_constraint_date`, **`prior_visual_start`**; `migrated_at`.
+- **Complexity:** M
+- **Risks:** **a table with no FK at all is structurally invisible to
+  `hierarchy-expiry.structural.spec.ts:118-140`**, which derives its completeness census from the
+  Prisma DMMF — and ADR-0096's expiry **hard-deletes plans**, orphaning org-scoped rows forever.
+  **Cascade is the shape that census explicitly excludes**, so the row dies with its plan and no
+  hand-maintained list grows. · After a hard delete the log can otherwise only say "N activities" →
+  the denormalised code/name, the `audit_events.subject_label` rule. · **Do not carry the
+  RESTRICT-trap justification** — `docs/TECH_DEBT.md` #253 records that ADR-0126 breakage as **test
+  teardown**, since fixed by `clearBaselineTree`; never a production hazard, and gone. **Carrying
+  the stale reason is what would lead a reader to extend non-FK to `plan_id`.** The non-FK
+  `activity_id` stands on ADR-0025's `source_activity_id` leg alone.
+- **Testing:** **it does NOT join `RETENTION_TABLES` and takes no window** (CQ-8) — it is org-scoped
+  customer content read by a member, which that set has never contained
+  (`docs/DATABASE.md:1389-1396`), and `retention-boundary.structural.spec.ts:53-58` asserts the set
+  **by equality**, so this is a decision written down rather than an omission. The Cascade FK
+  already gives the right lifecycle.
 
 ##### Task M-A-T5 — draft ADR-01NN
 
-- **Description:** spec §4.15's outline, **ten decisions** (D9 levelled-as-renderer and D10 the
-  programme basis are new). Filed at the next free number, **checked at the moment of filing** —
-  ADR-0079 took `0079` rather than the `0078` its plan named, because the number was taken in
-  between.
-- **Complexity:** M · **Dependencies:** M0's readings (the ADR quotes them)
-- **Testing:** `pnpm check:adr-coverage` (index **and** `docs/ROADMAP.md`), `check:adr-register` —
-  **and the `CLAUDE.md` §16 entry is written in the same commit** (ADR-0147 exists because that was
-  missed ten times; the gate now refuses the commit).
-- **Development steps:**
-  1. Write it; record every §0 correction as the ADR's own findings.
-  2. `CLAUDE.md` §16 bullet **and** `docs/ROADMAP.md` entry.
-  3. Spec header → `Approved` (`check:spec-status` refuses a `Draft` spec any ADR cites, ADR-0131).
+- **Description:** spec §4.16's outline, **twelve decisions** (D0 Pass-2 branches and D11 the log's
+  lifecycle are new). Filed at the next free number, **checked at filing** (ADR-0079 took `0079`
+  rather than the `0078` its plan named).
+- **Complexity:** M
+- **Testing:** `check:adr-coverage`, `check:adr-register` — **and the `CLAUDE.md` §16 entry in the
+  same commit** (ADR-0147). Spec header → `Approved` (ADR-0131).
 
 ---
 
-## Milestone M-B — Convert the thirteen journeys, before the flag goes
+## Milestone M-B — Convert the thirteen journeys · _(unchanged in substance)_
 
-**Outcome:** every canvas journey runs with placement live and is green.
-**Ships dark:** test-only.
-**Journey:** this milestone **is** the journeys.
-
-> **ADR-0084 batch-1 applied in advance**, and a hard gate: that retirement retired three flags, CI
-> found two were pinned off by a whole config, six editing specs stranded. Convert the harness
-> **before** the flag goes.
->
-> **It is also the largest coverage change in the epic.** ADR-0092 records `e2e-workspace-chrome` as
-> the first journey ever to run in Visual mode — _"and that is exactly where a real placement defect
-> was hiding"_. Expect findings; that is the point.
-
-#### Feature: unpin and triage
-
-> **Complexity:** L — **the largest single unknown, deliberately unpredicted** (FC-6's stated absent
-> prediction)
-> **Dependencies:** none — parallel with M-A
-> **Risks:** the cheap way out of a red suite is a pin, which restores the condition the epic deletes
-> while leaving the suite green → FC-6 clause 2, unwaivable. · A spec asserting the Early surface is
-> not a failure to fix → FC-6's clause allows **deletion** (ADR-0088's "a world no shipped bundle can
-> produce").
-> **Testing requirements:** `scripts/e2e-sweep.sh` over the **derived** list — ADR-0112 found it
-> wrong in both directions, so a hand-typed subset is not evidence.
+**Ships dark:** test-only. **Journey:** this milestone is the journeys.
 
 ##### Task M-B-T1 — remove the thirteen pins, one commit per suite
 
-- **Description:** `interchange:65`, `loe:63`, `authoring-flow:75`, `library:76`, `wbs:77`,
+- **The thirteen:** `interchange:65`, `loe:63`, `authoring-flow:75`, `library:76`, `wbs:77`,
   `resource-view:81`, `search-nav:88`, `copy-paste:101`, `gantt:73`, `share:69`, `undo:61`,
   `authoring:62`, `multi-select:94`.
-- **Complexity:** L · **Dependencies:** none
-- **Risks:** a suite green for the wrong reason → each conversion run locally
-  (`scripts/e2e-local.sh web:<suite>`) before pushing; CI is the second opinion.
-- **Development steps:**
-  1. Smallest first. Remove the pin, run locally, record the outcome.
-  2. Triage every failure into FC-6 clause 3's three classes with a one-line reason.
-  3. Commit `m-b/triage.md`. **A count with no classification does not satisfy the clause.**
-  4. Fix class (a) defects **here**, each with a regression test verified red first. They are
-     pre-existing defects the pins were hiding, not this epic's regressions, and each may deserve
-     its own register row.
+- **Complexity:** L
+- **Risks:** a pin is the cheap way out of a red suite and restores the condition the epic deletes →
+  FC-6 clause 2, unwaivable.
+- **Testing:** **FC-6 now triages PASSES as well as failures** — every green suite carries a
+  one-line note stating whether it holds an assertion **provably sensitive to placement being
+  live**, and if not, that is recorded as coverage the conversion did **not** buy. A converted
+  journey can pass for three indistinguishable reasons and thirteen green ticks report all three
+  identically. **`test-engineer` reviews the triage itself** before M-F opens.
 
-##### Task M-B-T2 — rewrite the three flag docblocks
+##### Task M-B-T2 — rewrite the three flag docblocks _(unchanged)_
 
-- **Description:** `library:13`, `gantt-editing:17-23`, `workspace-chrome:8` explain decisions about
-  a flag that will not exist. Two carry load-bearing history (gantt-editing's records a real defect)
-  → **rewrite, preserving the finding, dropping the flag name**; do not delete.
-- **Complexity:** S · **Dependencies:** M-B-T1
+---
+
+## Milestone M-D — Remaining float and the two-sided conflict
+
+**Ships dark.** **Journey:** none.
+
+##### Task M-D-T1/T2 — `remainingFloatMinutes`, one rounding
+
+- Unchanged in substance. **Dependencies: M-P** (same engine area; M-P's parity case must be green
+  first, or a failure here is unattributable).
+- **Testing:** FC-4's disagreeing fixture; **FC-3's named artefacts** — `goldens.spec.ts` is
+  `.toEqual()` against hand-typed literals (rule: **purely additive inside each expected block, zero
+  modified lines**, ~30–40 pairs), and `level.parity.spec.ts:185` is the module's only real snapshot
+  and **must not move**.
+
+##### Task M-D-T3 — `visualConflictReason`
+
+- Unchanged. **Testing:** the `it.todo` at `compute.visual.spec.ts:216-219` becomes real, with an
+  `MSO`/`MFO` sibling. **Per FC-2's scope clause, this fixture carries its own purity assertion** —
+  FC-2 clauses 1–2 cover the existing corpus only.
+
+##### Task M-D-T4 — the conflict key and its remedy _(unchanged)_
 
 ---
 
 ## Milestone M-C — A baseline freezes the placement
 
-**Outcome:** a capture records where the work was placed and which basis it froze.
-**Ships dark, deliberately, and says so** (ADR-0081: there is no third state) — the columns are
-written and returned; no screen reads them until M-F.
-**Journey:** none. API e2e.
+**Ships dark, deliberately.** **Dependencies: M-P** — without it the capture freezes the data date
+for every progressed activity and a point for every summary and LOE, **immutably**.
 
-#### Feature: capture and report the basis
-
-> **Complexity:** M · **Dependencies:** M-A-T1/T2, M-D
-> **Risks:** writing placed dates into `baseline_start` would **silently redefine** a public field
-> five consumers read → the existing columns keep their meaning and the placement gets new ones,
-> which is what makes `date_basis` meaningful rather than decorative.
-> **Testing requirements:** a capture over a placed plan and an unplaced one, asserting the unplaced
-> capture's placed columns **equal** its early columns (`compute.visual.spec.ts:71-80` at product
-> level).
-
-##### Task M-C-T1 — capture writes placed dates + basis
+##### Task M-C-T1 — capture writes placed dates, the planner input, and the level
 
 - **Description:** `baseline.repository.ts:207-208` gains `placedStart: a.visualEffectiveStart`,
-  `placedFinish: a.visualEffectiveFinish`; the `baselines` row gains `date_basis: 'PLACED'`. Inside
-  the plan advisory lock the capture already holds — ADR-0125 CQ-1's pairing argument: the copy must
-  be paired with the recalculation that produced the frozen rows.
-- **Complexity:** S · **Dependencies:** M-A-T1/T2
-- **Testing:** the immutability assertion (soft-delete/restore stamps only `deletedAt`/
-  `deleteBatchId`) extended to the new columns.
+  `placedFinish: a.visualEffectiveFinish`, **`visualStart: a.visualStart`**; the `baselines` row
+  gains `placement_snapshot_level: 'FULL'`. Inside the plan advisory lock the capture already holds
+  (ADR-0125 CQ-1's pairing argument).
+- **Complexity:** M
+- **Testing:** an unplaced capture's placed columns **equal** its early columns — which after M-P is
+  true for progressed, LOE and summary activities too, and **was not before**.
 
 ##### Task M-C-T2 — the comparison reports what it cannot assess
 
-- **Description:** variance and the revision delta read `date_basis`; an `EARLY`-basis baseline
-  against a placed live plan reports a **typed reason**, never a number. Reuse ADR-0126's
-  `NOT_ASSESSABLE` vocabulary rather than inventing a second.
-- **Complexity:** M · **Dependencies:** M-C-T1
-- **Risks:** `?? 'MATCH'` is the exact lie the discriminator prevents (ADR-0125's words) → asserted
-  with a case verified red against a coalesce. · **A migrated plan (M-I) will show float variance
-  against a pre-migration baseline** — that is a basis change, not slippage, and the comparison must
-  not present it as slippage.
-- **Testing:** unit cases for all four basis pairings; an API e2e comparing **whole payloads**
-  rather than three empty arrays — an oracle is a difference (ADR-0098).
+- **Description:** reads `placement_snapshot_level`; a `NONE`-level baseline against a placed live
+  plan reports a **typed reason**. Reuse ADR-0126's `NOT_ASSESSABLE` vocabulary.
+- **Complexity:** M
+- **Risks:** `?? 'MATCH'` is the exact lie the level prevents. · **A migrated plan (M-I) shows float
+  variance against a pre-migration baseline** — a basis change, not slippage, and this must not
+  present it as slippage.
 
 ---
 
-## Milestone M-D — The engine: remaining float and the two-sided conflict
+## Milestone M-E — The feasible window and the levelled lens
 
-**Outcome:** the two derived quantities exist and are on the wire.
-**Ships dark:** additive, absent-safe; no screen reads them.
-**Journey:** none. Engine units, conformance, API e2e.
+**Outcome:** a planner sees the window their bar may legally occupy, the position resources would
+force, and the float they have left.
+**Entry point:** the **existing `Insight overlays` group** — `Feasible window` (a view **toggle**)
+and `Levelled` (a **lens**) — plus the float read-out on the bar, the Gantt `Float` column and the
+activities table.
+**Journey:** `e2e-workspace-chrome` (the one config already running with placement live) toggles
+both, asserts the window brackets an unmoved bar, asserts the levelled lens is **shaded with a
+reason** when `levelResources` is off, asserts **editing is still available**, and asserts the
+**undrawn** state says so.
 
-#### Feature: remaining float
+> **Rebuilt.** The product owner chose **one feasible window plus one rival ghost** over three peer
+> ghosts: the simultaneous case is answered in one shape, the ghost-vs-ghost collision disappears,
+> and **two thirds of the window is already on screen** — the drift tail's left edge is earliest and
+> the corrected float tail's right edge is latest. **A bound and a position are different objects**,
+> which is why levelled stays separate.
 
-> **Complexity:** M · **Dependencies:** M-A-T3 (if CQ-1 persists it)
-> **Risks:** FC-2/FC-3 govern the golden suite; a `-u` re-baseline makes a correct value beside a
-> silent second change invisible (ADR-0106). · Client derivation is a day wrong on the 19-of-164
-> deployed activities ADR-0140 measured (C6).
-> **Testing requirements:** FC-2 (Pass 1 byte-identical, suites **unedited**), FC-3 (enumerated
-> re-baseline), FC-4 (a fixture where naive and correct **disagree**, verified red).
+#### Feature: the float tail's datum — a prerequisite, not a follow-up
 
-##### Task M-D-T1 — `remainingFloatMinutes` on `EngineResult`
+##### Task M-E-T0 — fix the float tail, and file the row
 
-- **Description:** `totalFloat − (visualDriftMinutes ?? 0)`, in minutes. Null drift ⇒ equals total
-  float, which is what makes the no-placement path identical.
-- **Complexity:** S · **Testing:** the null-drift case asserted explicitly — it is what every plan in
-  the estate takes today.
+- **Description:** `paint.ts:1635` passes the **bar** rect with `activity.totalFloat`. Total float is
+  measured from the **early** finish; from a **placed** finish the room left is `T − d`. **The tail
+  overshoots by exactly the drift on every Visual plan with a placement.**
+- **Complexity:** S · **Dependencies:** M-D-T2 (remaining float is the corrected length)
+- **Risks:** **it cannot be left open while the window ships** — the window's right edge is
+  `lateFinish` and an overshooting tail would visibly disagree with it. · Its provenance is
+  ADR-0054 §4, not this epic → **it gets its own `docs/TECH_DEBT.md` row**, which this task closes,
+  so the history is not absorbed.
+- **Testing:** a paint case verified red against the current datum.
 
-##### Task M-D-T2 — one rounding in the repository
+#### Feature: the window
 
-- **Description:** the same `factorFor(activityId)` used at `:750-754`/`:770-773`. **Never**
-  `round(T/f) − round(d/f)`.
-- **Complexity:** S · **Dependencies:** M-D-T1 · **Testing:** FC-4's disagreeing fixture.
+> **Complexity:** M _(down from L — one bracket, and two thirds already drawn)_
+> **Dependencies:** M0-T2 (FC-5), M-D, M-E-T0
+> **Risks:** a new token pair absent from `@theme inline` paints **nothing in a browser while the
+> contrast gate stays green** (ADR-0100 M4); a `var()` handed to `fillStyle` is **silently
+> discarded** (ADR-0121) → FC-8 clause 2. · **Two ghost layers already exist** — `baselineGhosts`
+> (`GHOST_DASH [2,2]`) and `compareGhosts` (`COMPARE_DASH [6,3]`), whose docblock records them
+> having been **pixel-identical once** → the window is a **bracket**, a different shape class, and
+> FC-8 clause 4 requires a fixture carrying an active baseline **and** a selected revision pair.
+> **Testing requirements:** FC-8 all five clauses; the counting-stub gates (ADR-0054's
+> shape-not-milliseconds pattern); the golden paint log re-baselined against a written list.
 
-#### Feature: the two-sided conflict flag
+##### Task M-E-T1 — the bracket, and **read what the export does today**
 
-> **Complexity:** M · **Dependencies:** M-D-T1 (same engine visit)
-> **Risks:** reaching for a second backward pass → ADR-0033 D5 settled SQ-e and that stands; the
-> bound comes from the existing `clampBackwardFinish`/`clampSecondaryBackwardFinish`. · Changing what
-> a constraint **means** would move ADR-0035 → the clamps are read, never reinterpreted.
-> **Testing requirements:** the `it.todo` at `compute.visual.spec.ts:216-219` becomes real, with an
-> `MSO`/`MFO` sibling beside it — today a placement **later** than an `MSO` produces no flag at all,
-> because `compute.ts:320` clamps `logicEarliest` **to** the pin.
+- **Description:** one `windowRect`-style derivation beside the existing tails; one painter in the
+  ADR-0078 layer model, drawn **before** the bars.
+- **Complexity:** M
+- **Risks:** **the export/print question must be answered by reading, not assumed** → this task
+  **reads and reports** whether the existing float/drift tails reach the exported PNG and the
+  printed programme. The decision is that the window **does** reach them (ADR-0103: the exported
+  diagram _is_ the diagram) — but if lens state currently does not (`docs/TECH_DEBT.md` #167), then
+  two thirds of the window already does and the asymmetry is a **regression risk**, not a gap.
+  `scene-parity.structural.test.ts` forces an answer at implementation time; this gives it one.
 
-##### Task M-D-T3 — `visualConflictReason`
+##### Task M-E-T2 — the toggle, in the existing group
 
-- **Description:** `visualConflict` stays boolean; a sibling says which. Assert it only ever gains
-  `true` where it is `false` today.
-- **Complexity:** M · **Dependencies:** M-D-T1
+- **Description:** `Feasible window` joins `floatTails` as a **view toggle** in the existing
+  `Insight overlays` group — **not a new "Overlays" group beside it**.
+- **Complexity:** S
+- **Risks:** **inventing the mechanism** → `view-toggles.ts:22-32` already states the discriminator
+  (a lens exists because its data can be absent; float/drift "are already on every activity, so the
+  control can never be unavailable"). `early*`/`late*` are the same. Do not build a second one.
 
-##### Task M-D-T4 — the conflict key and its remedy
+#### Feature: the levelled lens
 
-- **Description:** ADR-0094's record is **total**, so the key is a typecheck failure until the remedy
-  exists. That is the feature.
-- **Complexity:** S · **Dependencies:** M-D-T3
-- **Risks:** a remedy rendering nothing → ADR-0094 records one of its three legitimately doing so;
-  if that is the answer, **say so** rather than building a conflict-flavoured twin of an existing
-  control (ADR-0093's defect inside one surface).
+##### Task M-E-T3 — three states, derived from `level.ts`
 
----
-
-## Milestone M-E — Three overlays, and the remaining-float read-out
-
-**Outcome:** a planner sees earliest, latest **and levelled** beside their placed bars, keeps
-editing, and reads the float they have left.
-**Entry point:** `View ▾ ▸ Overlays ▸ Earliest dates / Latest dates / Levelled dates`; and the float
-read-out on the bar, the Gantt `Float` column and the activities table.
-**Journey:** `e2e-workspace-chrome` — **the one config already running with placement live**
-(ADR-0092) — toggles all three, asserts a ghost is present and the bar has **not** moved, asserts
-the listbox row states the overlay dates, asserts **editing is still available** with an overlay on,
-and asserts the `Levelled` toggle is **shaded with a reason** on a plan where levelling never ran.
-**ADR-0081: the journey lands here, not at enablement.**
-
-> **Roughly doubled by CQ-4's answer, and the reason is spec finding C8: `leveledStart`/
-> `leveledFinish` are rendered by NOTHING today.** This is not folding an existing surface into a
-> model — it is the first renderer those columns have ever had, which means there is **no existing
-> behaviour to preserve and no parity suite to lean on**, the usual safety net for this epic's other
-> surfaces. ADR-0041 shipped the pass and the columns and never the surface: the ADR-0067/0070/0071
-> shape, one field along.
-
-#### Feature: the ghost layer
-
-> **Complexity:** L · **Dependencies:** M0-T2 (FC-5's verdict), M-D
-> **Risks:** **FC-5's withdrawal ladder may cap or remove overlays below a `pxPerDay` floor** — a
-> designed outcome, not a failure. · A new canvas token pair absent from `@theme inline` paints
-> **nothing in a browser while the contrast gate stays green** (ADR-0100 M4), and a `var()` handed to
-> `fillStyle` is **discarded silently, keeping the previous colour** (ADR-0121) → FC-8 clause 2
-> asserts reachability in a browser; the palette resolves against the **canvas root** (ADR-0102's
-> finding that the painter had never once used the canvas surface scope). · **Three kinds that are
-> distinguishable from the bar but not from each other** is a 1.4.1 failure a two-member design
-> cannot exhibit → FC-8 clause 3 is three-way and its fixture draws all three on one activity.
-> **Testing requirements:** FC-8 all four clauses; the paint counting-stub gates (ADR-0054's shape-
-> not-milliseconds pattern); the golden paint log re-baselined against a written list (ADR-0106).
-
-##### Task M-E-T1 — `ghostRect` beside the existing tails
-
-- **Description:** one function in `render/geometry.ts` beside `floatTailRect`/`driftTailRect`
-  (`:145-184`). **Reuse the ADR-0054 vocabulary; do not invent a parallel one** (ADR-0065).
-- **Complexity:** S · **Testing:** the coincidence case — a ghost equal to the bar returns null —
-  verified red.
-
-##### Task M-E-T2 — **one** layer, three members
-
-- **Description:** one painter taking the `PaintFrame`, drawn **before** the bars so a ghost never
-  occludes its subject. **A painter per member is the drift this argument exists to prevent.**
+- **Description:**
+  - `plan.levelResources === false` → **lens shaded with a reason** naming the plan setting;
+  - `levelResources` true, `leveledStart === null` → **not applicable**: no ghost, **no shading**;
+  - participant → ghost **iff `levelingDelay > 0`**.
 - **Complexity:** M · **Dependencies:** M-E-T1
-- **Risks:** culling by `visibleIds` is **correct here** (the ghost's subject is a scene activity)
-  and was **wrong** in ADR-0127's analogous layer (removed work is by definition not in the scene) →
-  assert it rather than inherit the instruction.
+- **Risks:** **the previous plan's semantics were false in both directions** and came from
+  `goldens.ts:628-635`, the one levelling golden where every activity is a participant — ADR-0076
+  Class 2. Derive from `level.ts`'s three exit paths: `:186` (`if (finiteAsgs.length === 0)
+continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
+  `leveledStart: r.earlyStart`). · **An undelayed participant's ghost coincides with the window's
+  LEFT EDGE, not with the bar** — the old withholding rule was aimed at the wrong collision.
+- **Testing:** all three states; the journey covers the shaded one, since only a browser shows a
+  shaded control's reason.
 
-##### Task M-E-T3 — the levelled member's two absences
+##### Task M-E-T4 — `tsld-toolbar-items` wiring
 
-- **Description:** `leveledStart === null` ⇔ the pass never ran → toggle **shaded with a reason**
-  naming the plan setting (ADR-0082). `leveledStart` non-null with `levelingDelay` 0 ⇔ the pass ran
-  and this activity did not move → ghost coincides → withheld by M-E-T1's rule.
-- **Complexity:** M · **Dependencies:** M-E-T2
-- **Risks:** **collapsing the two is the ADR-0126 "zero rows vs nobody looked" defect one field
-  along** → the distinction is **asserted, not assumed**: `goldens.ts:628-635` shows an undelayed
-  activity receiving `leveledStart` with `levelingDelay: 0` when the pass runs, and
-  `schedule.repository.ts:776-777` writes all-null when it is off. A structural test pins that the
-  engine writes a value for **every** activity when the pass runs, because the whole toggle state
-  depends on it.
-- **Testing:** both states in the journey, since only a real browser shows a shaded toggle's reason.
+- **Description:** use the existing `reason` field and ADR-0082 wiring at
+  `tsld-toolbar-items.tsx:209-247`. **Do not invent the mechanism.**
+- **Complexity:** S
 
-##### Task M-E-T4 — the toggles
+#### Feature: the accessible channel and the empty state
 
-- **Description:** `View ▾ ▸ Overlays`, three checkboxes, URL-backed through the **ADR-0123 codec** —
-  `?overlay=early,late,levelled` is a string; a lone value must not coerce.
-- **Complexity:** M · **Dependencies:** M-E-T3
-- **Risks:** the existing `Late Start overlay` suppresses editing (ADR-0033 D6) and its replacement
-  must not → asserted in the journey; no unit test sees a suppressed pointer handler.
+##### Task M-E-T5 — one listbox member, stating the **offset**
 
-##### Task M-E-T5 — the accessible channel
+- **Description:** **one** `ListboxRowParts` member composed by one function beside
+  `baselineGhostClause`, stating the **offset, not the span** — `a11y.ts:136-137` records the
+  row-length budget.
+- **Complexity:** M
+- **Risks:** a per-overlay member blows the budget → one member, composed.
 
-- **Description:** the listbox row states each active overlay's dates in words. **A canvas claim is
-  not an accessible claim** (ADR-0122, written after two places asserted a text equivalent for the
-  WBS band that did not exist).
-- **Complexity:** M · **Dependencies:** M-E-T2
-- **Testing:** the a11y suite; the journey asserts the row text, not the canvas.
+##### Task M-E-T6 — the undrawn state, which is the **common** case
 
-#### Feature: remaining float on screen
+- **Description:** an overlay that is on and drew nothing says so, in `compareOverlaySummary`'s
+  `undrawnLabel` shape.
+- **Complexity:** S
+- **Risks:** **FC-1 predicts zero placements across the estate**, so on every existing plan the
+  window brackets a bar with no drift and the levelled lens draws nothing. **A control that lights
+  and does nothing is the lit-but-inert dead end ADR-0081 records four times** — this is not an
+  edge case, it is the default state of the product on the day it ships.
 
-##### Task M-E-T6 — one formatter, three surfaces
+##### Task M-E-T7 — remaining float on screen _(one formatter, three surfaces)_
 
-- **Description:** a labelled sibling to `formatFloat` in `lib/schedule-format.ts`, consumed by the
-  bar read-out, the Gantt `Float` column and the activities table.
-- **Complexity:** M · **Dependencies:** M-D-T2
-- **Risks:** **a bare "Float" label that silently changed meaning is the defect class this register
-  files most often** → the label says which float it is. · Total float is still right in three places
-  (DCMA health metrics, baseline float variance, float-paths) → a structural test pins that those
-  three still read `totalFloat`, verified red against a global swap.
+- **Risks:** a bare "Float" label that silently changed meaning is the defect class this register
+  files most often → the label says which float. · Total float stays right in three places (DCMA,
+  baseline float variance, float-paths) → a structural test pins them, verified red against a global
+  swap.
 
 ---
 
 ## Milestone M-F — The collapse
 
-**Outcome:** `schedulingMode` is gone; every surface reads placed dates unconditionally; every drag
-hand-places.
-**Entry point:** none added — this **removes** the `Scheduling mode` control. What becomes reachable
-is that every planner now gets what M-E built.
-**Journey:** the full sweep, plus FC-7's no-placement parity comparison.
+**Entry point:** none added — this **removes** the `Scheduling mode` control.
+**Journey:** the full sweep, plus FC-7 Part A.
 
-> **Blocked on M-B** (FC-6 clause 1). Deleting the flag before the configs are converted is the
-> ADR-0084 batch-1 failure.
+##### Task M-F-T1/T2/T3 — the derivation, `BarDateSource`, the drag _(unchanged in substance)_
 
-#### Feature: delete the selector
+- **Risks:** **"Early mode is Pass 1, so deleting the mode means deleting Pass 1"** — Pass 1 **is**
+  the float, criticality, Late dates, the drift baseline, DCMA and the whole ADR-0034 matrix. In the
+  plan, the ADR and the engine docblock.
 
-> **Complexity:** L · **Dependencies:** M-B (all clauses), M-C, M-E
-> **Risks:** **the most dangerous misreading available is "Early mode is Pass 1, so deleting the mode
-> means deleting Pass 1".** Pass 1 **is** the float, criticality, Late dates, the drift baseline,
-> DCMA and the whole ADR-0034 matrix. The mode is a render-selector; the pass is the arithmetic.
-> Written in the plan, the ADR and the engine docblock because it reads as a tidy-up.
-> **Testing requirements:** FC-7 (narrowed — see its own text), the full sweep, SC-1's grep.
+##### Task M-F-T4 — DTOs, and **keep the Prisma field**
 
-##### Task M-F-T1 — delete the one derivation
+- **Description:** `schedulingMode` out of `CreatePlanDto`, `UpdatePlanDto`, `PlanResponseDto`,
+  `PlanScheduleSettings`, `plan-governance-fields.ts`.
+- **Complexity:** M
+- **Risks:** **`schema.prisma` MUST KEEP `scheduling_mode` and `enum SchedulingMode` until M-J.**
+  Measured: a datamodel without the field against a database with it makes
+  `prisma migrate diff --exit-code` **exit 2**. **SC-1's grep pushes a reader to violate this** — so
+  it is said here, and **SC-1 is satisfiable only at M-J**. · The governance set is one `const` the
+  redactor spreads, so removing a member stops it being recordable in the same commit — but
+  **existing audit rows keep naming it**, correctly and permanently. Do not clean up history.
+- **Testing:** an API e2e asserting the removed field yields **422** (`app.module.ts:141-147`).
+  **And the response side, which is not symmetric:** a stale bundle does **not** error —
+  `plan-workspace-toolbar.tsx:476` defaults to `'EARLY'` — so it **silently renders Early dates for
+  placed plans** until it refreshes. ADR-0047 recreates `web` and `api` independently, so the window
+  is real. It goes in the ADR's consequences and in `docs/API.md`.
 
-- **Description:** `plan-workspace-toolbar.tsx:476-480`. **This is the whole of "one truth
-  downstream"** (spec C1).
-- **Complexity:** S · **Dependencies:** M-E
-- **Testing:** `date-source-consistency.test.ts` is the before/after oracle — its Visual cases become
-  the only cases; its Early cases are deleted or inverted deliberately, one at a time.
+##### Task M-F-T5 — the flag and the segmented control _(unchanged)_
 
-##### Task M-F-T2 — narrow or remove `BarDateSource`
+- **Risks:** `SCHEDULING_MODES_ENABLED` is **derived** (`&& CANVAS_AUTHORING_ENABLED`). · The mode
+  control is one half of an ADR-0119 `segment` partition whose precondition is **all-or-nothing**.
 
-- **Description:** **prefer removing the parameter** over a one-value union, which invites a second
-  value back; the compiler drives the ~40 sites. `'late'` survives only if the overlay needs it — and
-  under M-E it does **not**, because a ghost reads the late columns directly rather than re-sourcing
-  the bar.
-- **Complexity:** M · **Dependencies:** M-F-T1
-
-##### Task M-F-T3 — the drag always places
-
-- **Description:** delete the `isVisualMode` branches (`:659-661`, `:1064-1112`, `:1181-1220`, and
-  `moveMany`'s at `:776-780`). The SNET arms go; the `setVisualStart` arms become unconditional.
-- **Complexity:** M · **Dependencies:** M-F-T1
-- **Risks:** `moveMany` branches through `bulkMoveSnapshots` precisely so singular and plural cannot
-  disagree (its own comment) → remove the branch in **one** place.
-
-##### Task M-F-T4 — DTO and plan settings
-
-- **Description:** out of `CreatePlanDto`, `UpdatePlanDto`, `PlanResponseDto`, `PlanScheduleSettings`
-  and `plan-governance-fields.ts`.
-- **Complexity:** M · **Dependencies:** M-F-T1
-- **Risks:** the governance set is **one `const` the redactor spreads**, so removing a member stops it
-  being recordable in the same commit (ADR-0073 C3.2, designed) — but **existing audit rows keep
-  naming it**, which is correct and permanent. Do not "clean up" history.
-- **Testing:** API e2e asserting the removed field yields **422** (`app.module.ts:141-147`,
-  verified); `docs/API.md` and OpenAPI in the same PR, stating the 422 and the ADR-0047 window in
-  which a cached bundle's save is refused.
-
-##### Task M-F-T5 — the flag, and the segmented control
-
-- **Description:** delete `SCHEDULING_MODES_ENABLED` (`config/env.ts:161-162`) — **note it is
-  derived** (`&& CANVAS_AUTHORING_ENABLED`), so not a one-line removal. Delete the mode segmented
-  control.
-- **Complexity:** M · **Dependencies:** M-B, M-F-T1..T4
-- **Risks:** the control is one half of an ADR-0119 `segment` partition whose precondition is
-  **all-or-nothing** — a partial partition leaves an unnamed region a reader must enter to discover
-  is empty → re-check `partitionBySegment` holds with one switch; its development-only warning fires
-  if not.
-- **Testing:** `pnpm check:flags`; toolbar structural tests; FC-6 clause 2 (**zero** re-pins).
-
-##### Task M-F-T6 — `clear-visual-placement` becomes unconditional
-
-- **Description:** its Visual-mode gate goes. **Dissolves `docs/TECH_DEBT.md` #204(c)'s cause** (its
-  symptom is already fixed by ADR-0135's focus hand-off). Update the row rather than closing it
-  silently.
-- **Complexity:** S · **Dependencies:** M-F-T1
+##### Task M-F-T6 — `clear-visual-placement` unconditional _(unchanged; dissolves #204(c)'s cause)_
 
 ---
 
 ## Milestone M-G — Interchange reports the placement
 
-**Outcome:** an export says what happened to the placements instead of dropping them in silence.
-**Entry point:** the existing export dialog; the report gains a finding.
-**Journey:** `e2e-interchange` — unpinned by M-B — asserts the finding on a placed plan and a
-byte-identical export for an unplaced one.
+##### Task M-G-T1 — one aggregate finding, and a table row for import
 
-#### Feature: the mapping contract tells the truth
-
-> **Complexity:** M · **Dependencies:** M-F · **CQ-3 answered (B)**
-> **Risks:** translating to `SNET` exports a commitment the planner never made — **ADR-0033 rejected
-> this shape by name** (`0033-…:146-148`) → (B) is the decision; option (C) is not built.
-> **Testing requirements:** round-trip (export → re-import → structural equivalence), ADR-0050's
-> strongest correctness gate; plus the byte-identical assertion for the unplaced path.
-
-##### Task M-G-T1 — the finding and the table
-
-- **Description:** the `InterchangeReport` states that placements did not travel and how many there
-  were; ADR-0050's mapping-contract table gains `visualStart` **in both directions** (absent today,
-  so the current drop is not even a documented approximation).
-- **Complexity:** M · **Dependencies:** M-F
+- **Description:** **copy `export-mapper.ts:226-242` (`lagMinutes`) exactly** — one **aggregate**
+  finding, **one producer, never duplicated in both serialisers**.
+- **Complexity:** M
+- **Risks:** **the import direction needs a mapping-TABLE row only, NOT a runtime finding** — no
+  format has ever encoded a hand-placement, so nothing is lost and nothing is ambiguous, and a
+  standing finding on every import is exactly the noise that comment warns against. _(The previous
+  revision implied symmetry.)_
+- **Testing:** round-trip; byte-identical export when nothing is placed.
 
 ---
 
 ## Milestone M-H — The programme reads placed dates
 
-**Outcome:** a downstream plan is driven by where upstream work was **placed**.
-**Entry point:** none added — a programme recalculation, which already exists, now derives from a
-different basis. **Ships as a behaviour change, and the release note says so.**
-**Journey:** `e2e-programme` asserts a downstream bound moving when an upstream bar is placed, and
-**not** moving when the upstream closure carries no placement.
-
-> **New, from CQ-5's answer against the stated default.** It is its own milestone because it alters
-> the arithmetic of every linked plan, and its blast radius is not this epic's other surfaces.
-
-#### Feature: the upstream basis
-
-> **Complexity:** M · **Dependencies:** M-F
-> **Risks:** **leaving the field named `predecessorEarlyFinish` while feeding it placed dates is the
-> silent-redefinition defect this spec refuses for `baselineStart`** → the rename is part of the
-> change, not a follow-up. · **Two producers** (spec C9) → both move together, or the conformance
-> harness certifies a basis the product does not use, **green**.
-> **Testing requirements:** FC-9, both clauses, with the harness shown to fail when **either**
-> producer alone is switched.
+**Entry point:** none added — a behaviour change, with a release note.
+**Journey:** `e2e-programme`.
 
 ##### Task M-H-T1 — switch the projection and rename it
 
-- **Description:** `cross-plan-dependency.repository.ts:189` selects the placed columns;
-  `IncomingCrossPlanEdgeRow` (`:37-43`), `IncomingCrossPlanEdge`
+- **Description:** `cross-plan-dependency.repository.ts:189` selects
+  **`visualEffectiveStart`/`visualEffectiveFinish`** — named explicitly here, because it was
+  previously only inferable from `falsification.md` and getting it wrong breaks both the rename and
+  FC-9. `IncomingCrossPlanEdgeRow` (`:37-43`), `IncomingCrossPlanEdge`
   (`cross-plan-derivation.ts:34-35`) and the `schedule.service.ts:1467-1472` mapping rename to
   `predecessorPlaced*`. **`forwardBound`'s arithmetic (`:122-150`) is untouched.**
-- **Complexity:** M · **Dependencies:** M-F
-- **Testing:** FC-9 clause 1 (byte-identical with no upstream placement) and clause 2.
+- **Complexity:** M
+- **Risks:** leaving the field named `predecessorEarlyFinish` while feeding it placed dates is the
+  silent-redefinition defect this spec refuses for `baselineStart`.
 
-##### Task M-H-T2 — move the second producer with it
+##### Task M-H-T2 — move the second producer, and guard the backward side
 
-- **Description:** `conformance/cross-plan-adapter.ts:130-131` builds the same shape from an
-  in-memory map. Move it in the same commit.
-- **Complexity:** S · **Dependencies:** M-H-T1
-- **Risks:** moving one and not the other is green and wrong → a structural test asserts both
-  producers name the same field.
+- **Description:** `conformance/cross-plan-adapter.ts:130-131` moves in the same commit. **Plus a
+  NEGATIVE structural guard that the backward side is _not_ renamed to a "Placed" variant** — the
+  plan asserts the positive half only, and a reader completing the symmetry would introduce a basis
+  that cannot exist.
+- **Complexity:** S
+- **Testing:** FC-9 clause 3 — the harness **shown to fail when either producer alone is switched**.
 
-##### Task M-H-T3 — state the asymmetry
+##### Task M-H-T3 — document both recalculate routes
 
-- **Description:** the **backward** bound keeps reading the successor's **late** dates
-  (`:201-206`) because **there is no placed-late** — Pass 2 is forward-only and ADR-0033 D5 settled
-  SQ-e. Record it in the ADR (D10), in the repository docblock and in `docs/API.md`.
-- **Complexity:** S · **Dependencies:** M-H-T1
-- **Risks:** a reader meeting half a change assumes the other half was forgotten and "fixes" it →
-  the docblock says why it cannot exist, not merely that it was not done.
+- **Description:** the cross-plan derivation runs inside **ordinary** recalculation whenever
+  `countActiveForPlan > 0` (`schedule.service.ts:1425-1432`), so **`POST …/schedule/recalculate`
+  and `…/recalculate-programme` both change** and both get rows in `docs/API.md` and the OpenAPI
+  spec **before this milestone ships**.
+- **Complexity:** S
+- **Risks:** this is the ADR-0130 documentation-gap shape the epic's own risk table names.
 
 ---
 
 ## Milestone M-I — Strip the drag-created constraints
 
-**Outcome:** the constraints a drag wrote are converted to placements, recorded, and reported.
-**Entry point:** `Plan workspace → dock notice: "N activities had a drag-created constraint
-converted to a placement"`, with a link to the affected activities.
-**Journey:** a new `e2e-placement-migration` — seeds a plan with a binding SNET, an inert SNET and an
-uncalculated activity; runs the migration; asserts **every bar is where it was**, asserts the inert
-and uncalculated ones were **not touched**, asserts the notice states the count, asserts dismissal
-persists.
+**Entry point:** the dock notice.
+**Journey:** `e2e-placement-migration`.
+**Blocked on M-F** — see the ordering note at the top.
 
-> **New, from CQ-7's answer against the stated default: _"this is the one irreversible decision in
-> the epic and it needs rails, not a warning."_**
->
-> **It cannot precede M-F.** The conversion preserves a bar only for a renderer reading
-> `visualEffective*`; before the collapse an `EARLY` plan renders from `early*`, which the strip
-> makes **earlier**. Running it first would move every affected bar — exactly what FC-10 clause C
-> forbids.
+##### Task M-I-T1 — the migration, four classes
 
-#### Feature: the conversion
-
-> **Complexity:** L · **Dependencies:** M-F, M-A-T4, **M0-T1 reading 4 + FC-10 clause B**
-> **Risks:** **stripping an inert SNET places the bar earlier than logic allows and raises a conflict
-> on a plan nobody touched** → the binding/inert test is the whole safety argument, and FC-10 clause
-> C is verified red against a strip that converts the inert one. · **The strip is unauditable by
-> construction** (`REASONS.PLAN_CONTENT`, `audit-coverage.structural.spec.ts:264`, verified) → the
-> durable record is not a nicety. · A plan never recalculated has no discriminator → **left alone,
-> counted, reported**. · **Downstream `early*`, float and criticality change**, legitimately → said
-> out loud in the notice and in the release note, and FC-10 clause C asserts it **positively**.
-> **Testing requirements:** FC-10 clauses C and D; the journey above.
-
-##### Task M-I-T1 — the migration
-
-- **Description:** for each activity with `constraint_type = 'SNET'` and
-  `early_start = constraint_date`: write the `placement_migration_log` row, set
-  `visual_start = constraint_date`, clear `constraint_type`/`constraint_date` — **in one
-  transaction**, record first.
+- **Description:** convert **binding** rows only. **Leave, count and report: inert, unclassified,
+  and — new — any row already carrying a `visual_start`.**
 - **Complexity:** L · **Dependencies:** M-A-T4, FC-10 clause B's verdict
-- **Risks:** **Prisma does not chunk an `{ in: [...] }` list** — ADR-0096 hit a bind-parameter error
-  at 16,384 ids that its catch block reported as a retryable failure → batch explicitly. · Touching a
-  non-`SNET` constraint → the `WHERE` names the kind, and a test asserts every other kind is
-  untouched.
-- **Development steps:**
-  1. Apply FC-10 clause B: **unattended** if within bound, otherwise the planner-initiated form.
-  2. Write the record, then the conversion, in one transaction, batched.
-  3. Assert the three-way split is exhaustive and disjoint (M0-T1's guard, reused).
+- **Risks:** **the naive `WHERE` destroys an existing placement.** `visual_start` is accepted
+  regardless of mode (`activities.service.ts:388`, `:526-528`), so a row can carry a stale placement
+  **and** a binding SNET. Excluded — and **FC-10 clause B's bound is read against the population
+  after that exclusion**. · **Prisma does not chunk an `{ in: [...] }` list** — ADR-0096 hit a
+  bind-parameter error at 16,384 ids that its catch block reported as retryable → batch explicitly.
+  · Touching a non-`SNET` kind → the `WHERE` names the kind and a test asserts the others untouched.
+- **Development steps:** apply FC-10 clause B; write the record (including **`prior_visual_start`**)
+  then convert, one transaction, batched; reuse M0's cross-entry exhaustiveness assertion.
 
 ##### Task M-I-T2 — the report
 
-- **Description:** `GET …/plans/:planId/placement-migration` over the log; a dock strip (ADR-0092's
-  outlet — **0 px of canvas**) stating the count and **naming the consequence**: bars have not moved,
-  successors may now show more float. Dismissed per user in `localStorage` keyed by user id
-  (ADR-0098's precedent; sign-out sweeps it).
-- **Complexity:** M · **Dependencies:** M-I-T1
-- **Risks:** a notice that states a count without the consequence leaves the planner to discover the
-  float change themselves, which is the silence CQ-7 rejected → the copy names both. · A write-only
-  table is dead weight → this endpoint is why M-A-T4 is not.
-- **Testing:** the journey; an a11y check on the strip; **the notice's copy is reviewed by
-  `ux-reviewer` before M-J**, because it is the only place the product explains an irreversible act.
+- **Description:** `GET …/plans/:planId/placement-migration`; a dock strip (ADR-0092's outlet, 0 px
+  of canvas) stating the count and **naming the consequence**: bars have not moved, successors may
+  now show more float. Dismissed per user (ADR-0098's precedent).
+- **Complexity:** M
+- **Risks:** **the notice must not imply the unclassified rows resolve** — one of the two ways that
+  class arises **never clears** (a started activity's actual start bypasses the clamp). · A
+  write-only table is dead weight → this endpoint is why M-A-T4 is not.
+- **Testing:** the journey; an a11y check; **`ux-reviewer` reviews the copy before M-J** — it is the
+  only place the product explains an irreversible act.
 
 ---
 
-## Milestone M-J — The gate pass, and the column goes
-
-**Outcome:** the specialist reviews are folded; release N+1 drops the column and the enum.
-**Entry point:** none.
-**Journey:** the full sweep on the release that drops the column.
-
-> **Two releases, ADR-0107's ordering.** M-F stops reading and writing `scheduling_mode`; M-J drops
-> it. One release means a rollback meets a missing column — _a rollback causing a worse outage than
-> the fault._
-
-#### Feature: the specialist gate pass
-
-> **Complexity:** L · **Dependencies:** M-G, M-H, M-I
-> **Risks:** nine consecutive epics here have run a gate pass and **every one blocked on defects that
-> passed a human read**; the commonest shape is _one correct pattern applied to a control and not its
-> neighbour_. Budget for fold-ins.
-> **Testing requirements:** every fold-in carries a regression test **verified red first**.
+## Milestone M-J — The gate pass, and the drop
 
 ##### Task M-J-T1 — the reviews
 
-- **Description:** `database-architect` (the migrations again, against the final code — **including
-  whether `placement_migration_log` is swept by ADR-0096 retention**), `security-reviewer`,
-  `api-reviewer`, `backend-performance-reviewer`, `component-reviewer`, `accessibility-reviewer`,
-  `ux-reviewer` (**the migration notice copy specifically**). Ask each to **re-derive this epic's
-  numbers from the shipped code** rather than trusting the spec.
-- **Complexity:** L · **Dependencies:** M-G, M-H, M-I
+- **Description:** `database-architect`, `security-reviewer`, `api-reviewer`,
+  `backend-performance-reviewer`, `component-reviewer`, `accessibility-reviewer`, `ux-reviewer`.
+  Ask each to **re-derive this epic's numbers from the shipped code**.
+- **Complexity:** L
 
-##### Task M-J-T2 — drop the column and the enum
+##### Task M-J-T2 — drop the column and the enum, **in ONE migration**
 
-- **Complexity:** S · **Dependencies:** M-J-T1, **one release of separation from M-F**
-- **Testing:** rehearsed against a populated database; the retention census re-run.
+- **Description:** `BEGIN; ALTER TABLE plans DROP COLUMN scheduling_mode; DROP TYPE "SchedulingMode"; COMMIT;`
+- **Complexity:** M · **Dependencies:** M-J-T1, **one release of separation from M-F**
+- **Risks:** **not two migrations** — measured on a populated 200k-row table: `DROP TYPE` alone
+  fails on the dependency; the combined transaction succeeds, metadata-only, no rewrite. **The ADD
+  VALUE hazard has no mirror on the drop side.** · **The releases still split one apart, and the
+  reason is the rollback, not the transaction**: a release-N image still selecting
+  `plans.scheduling_mode` **500s on every plan read**, which is worse than ADR-0107's write-path
+  case. **So the rollback is a RESTORE, not a redeploy**, and that is stated in the migration's
+  comment and the release note.
+- **Testing:** the ADR-0107 proof shape — **replay all migrations, populate, apply, assert** — plus
+  a **negative control** issuing `DROP TYPE` first and asserting the failure **names the
+  constraint**. SC-1's grep becomes satisfiable here and nowhere earlier.
 
-##### Task M-J-T3 — close the documents
-
-- **Description:** spec header → `Accepted — shipped (ADR-01NN)` in the same commit that files the
-  ADR's final state (ADR-0131). `#204(c)` updated with its cause dissolved. The `it.todo` at
-  `compute.visual.spec.ts:216-219` is gone and the register says so. Re-nature the M0 diagnostics
-  entries `retrospective` (**CQ-6**).
-- **Complexity:** S · **Dependencies:** M-J-T2
+##### Task M-J-T3 — close the documents _(unchanged; plus the float-tail row from M-E-T0)_
 
 ---
 
 ## Sequencing & slices
 
-| Order | Milestone                               | Releasable alone? | User-visible?                               |
-| ----- | --------------------------------------- | ----------------- | ------------------------------------------- |
-| 1     | **M0** measure                          | yes               | staff console only                          |
-| 2     | **M-A** schema + ADR                    | yes               | no (dark)                                   |
-| 2′    | **M-B** convert journeys (**parallel**) | yes               | no (test-only)                              |
-| 3     | **M-D** engine                          | yes               | no (dark)                                   |
-| 4     | **M-C** baselines                       | yes               | no (dark)                                   |
-| 5     | **M-E** three overlays + float          | yes               | **yes — first user-facing**                 |
-| 6     | **M-F** the collapse                    | yes               | **yes — breaking DTO (422)**                |
-| 7     | **M-G** interchange                     | yes               | yes                                         |
-| 8     | **M-H** programme                       | yes               | **yes — behaviour change for linked plans** |
-| 9     | **M-I** the strip                       | yes               | **yes — irreversible; gated on FC-10**      |
-| 10    | **M-J** gate pass + drop                | yes               | no                                          |
+| Order | Milestone                                 | User-visible?                                            |
+| ----- | ----------------------------------------- | -------------------------------------------------------- |
+| 0     | **M0** measure — **shipped**              | staff console only                                       |
+| 1     | **M-A** schema + ADR                      | no                                                       |
+| 1′    | **M-B** journeys (**parallel**)           | no                                                       |
+| 2     | **M-P** Pass 2's three branches           | **progressed plans' placed dates correct themselves**    |
+| 3     | **M-D** engine                            | no                                                       |
+| 4     | **M-C** baselines                         | no                                                       |
+| 5     | **M-E** window + levelled lens            | **yes — first planner-facing**                           |
+| 6     | **M-F** the collapse                      | **yes — breaking DTO (422); stale bundles render Early** |
+| 7     | **M-G** interchange                       | yes                                                      |
+| 7′    | **M-H** programme (**parallel with M-G**) | **yes — linked plans**                                   |
+| 8     | **M-I** the strip                         | **yes — irreversible; gated on FC-10**                   |
+| 9     | **M-J** gate pass + drop                  | no                                                       |
 
-**No feature flag** (ADR-0088 D1). **The rollback is a commit boundary**, which is why each milestone
-is one — and why M-E lands the overlays _before_ M-F makes placement universal, so reverting the
-collapse leaves a coherent product.
+**No feature flag** (ADR-0088 D1); the rollback is a commit boundary — **except M-J, where it is a
+database restore**.
 
-**Two orderings are hard constraints, not preferences:** M-B before M-F (FC-6 clause 1), and
-**M-F before M-I** (the strip's bar-preservation depends on the renderer reading `visualEffective*`).
-
-**Version impact:** M-F is **breaking** (three DTOs lose a field; an old bundle gets 422). Pre-1.0 →
-**minor** (CLAUDE.md §10), `BREAKING CHANGE:` footer, migration note. M-H is a behaviour change for
-linked plans and needs its own release note. M-I is irreversible-in-effect and needs the loudest note
-of the three.
+**Version impact:** M-F is **breaking** → minor (pre-1.0), `BREAKING CHANGE:` footer. M-H and M-I
+each need their own release note; M-I's is the loudest.
 
 ## Definition of Done (per task)
 
-Each PR satisfies the Feature Completion Criteria in [`docs/PROCESS.md`](../../PROCESS.md). Three
-carry extra weight, each missed in this repository within the last month:
-
-- **The pre-push gate is `pnpm prepush`, one command.** Running its parts by hand is how a gate gets
-  missed — following the older wording sent an ADR to CI that `check:adr-coverage` refused, in a
-  change whose whole subject was filing one.
-- **`scripts/e2e-local.sh api`** for every `apps/api` change and **`web:<suite>`** for every touched
-  journey, **before** pushing.
-- **Every schema change goes through `database-architect`.** No exceptions; an unavailable agent is a
-  reason to wait, never to proceed.
+Per [`docs/PROCESS.md`](../../PROCESS.md). Three with extra weight: **`pnpm prepush` is one
+command**; **`scripts/e2e-local.sh api` / `web:<suite>` before pushing**; **every schema change
+through `database-architect`, no exceptions**.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                              | Likelihood                    | Impact                    | Mitigation                                                                                                                                                         |
-| ------------------------------------------------------------------------------ | ----------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Thirteen journeys find real placement defects on first unpinned run**        | **high**                      | med                       | M-B is its own milestone, parallel, blocking M-F. Findings are the point.                                                                                          |
-| **Three ghost kinds exceed the canvas's 2.2 fps of headroom at Fit**           | **med-high** (raised by CQ-4) | med                       | FC-5's ladder, measured **before** the layer is designed, with a **per-member** increment so the cap is derivable. ADR-0141's pitch floor is free and tried first. |
-| **The levelled overlay is dark capability being lit — no parity suite exists** | **certain** (C8)              | med                       | ADR-0081 in full: entry point named, journey with the milestone. M-E-T3's two-absence distinction asserted structurally, not assumed.                              |
-| **The strip moves a bar**                                                      | low                           | **high, irreversible**    | The binding/inert test; FC-10 clause C verified red against a strip that converts an inert one; M-F before M-I.                                                    |
-| **The strip is unauditable**                                                   | **certain** (verified)        | med                       | The durable non-FK record, written before the delete, in the same transaction — and a read endpoint so it is never write-only.                                     |
-| **The estate is bigger than the one measurement suggests**                     | low                           | med                       | FC-10 clause B's bound **fails loudly** rather than scaling silently; above it the strip becomes planner-initiated.                                                |
-| **A migrated plan shows float variance against a pre-migration baseline**      | **certain**                   | low-med                   | It is a basis change, not slippage. `date_basis` is the vocabulary; M-C-T2 must not present it as slippage.                                                        |
-| **The programme rename is done on one producer only**                          | med                           | **high, green and wrong** | FC-9's "shown to fail when either producer alone is switched"; a structural test asserts both name the same field.                                                 |
-| Somebody reads "delete Early mode" as "delete Pass 1"                          | low                           | **catastrophic**          | In the plan, the ADR and the engine docblock. FC-2 makes it a hard failure.                                                                                        |
-| A baseline exists over a placed plan, so `DEFAULT 'EARLY'` would lie           | **unknown until M0**          | med                       | FC-1 reading 3 gates it; both branches designed and tested.                                                                                                        |
-| Remaining float's correctness motive is unexhibitable                          | low                           | low                       | FC-4's withdrawal clause narrows the justification in place.                                                                                                       |
-| A new canvas token paints nothing while the gate stays green                   | **med**                       | med                       | FC-8 clause 2 (ADR-0100 M4), plus ADR-0121's `var()` finding and ADR-0102's canvas-root resolution.                                                                |
-| The golden re-baseline hides a second change                                   | med                           | high                      | FC-3: a written list committed **before**. Never `-u`.                                                                                                             |
-| Guest sees placed dates; levelled overlay absent                               | **certain, and correct**      | low                       | Asserted in `e2e-share`; `guest-api.ts:230` nulls `leveledStart`.                                                                                                  |
-| `docs/API.md` not updated                                                      | med                           | med                       | ADR-0130's finding: `docs/DATABASE.md` got a full update for a change `docs/API.md` never heard about. Same PR.                                                    |
-| This epic's own claims go stale                                                | med                           | med                       | Spec §0 records ten corrections. Re-verify the **problem** statement at each milestone (CLAUDE.md §19.11).                                                         |
+| Risk                                                           | Likelihood                                  | Impact                              | Mitigation                                                                                           |
+| -------------------------------------------------------------- | ------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Pass 2 is not a superset of Pass 1**                         | **certain — measured**                      | **was catastrophic, now scheduled** | M-P first, FC-11 red-first, FC-7 Part B.                                                             |
+| **A baseline freezes the data date for a progressed activity** | **certain without M-P**                     | **irreversible**                    | M-C depends on M-P.                                                                                  |
+| Thirteen journeys find real defects                            | high                                        | med                                 | M-B parallel, blocking M-F; FC-6 now triages passes too.                                             |
+| Window + levelled exceed the canvas headroom                   | med                                         | med                                 | FC-5, measured before the layer is built, per-member increments, spread on **both** limbs.           |
+| **The overlay draws nothing on every existing plan**           | **certain — FC-1 predicts zero placements** | med                                 | M-E-T6's undrawn state is designed, not discovered.                                                  |
+| The strip destroys an existing placement                       | **was certain, now excluded**               | high                                | The fourth class; FC-10's bound read after exclusion.                                                |
+| The strip moves a bar                                          | low                                         | high, irreversible                  | Binding/inert test; FC-10 clause C red-verified; M-F before M-I.                                     |
+| A stale bundle silently renders Early                          | **certain for one release**                 | med                                 | Stated in the ADR and `docs/API.md`; one refresh clears it.                                          |
+| The programme rename done on one producer                      | med                                         | **green and wrong**                 | FC-9 clause 3; the negative backward guard.                                                          |
+| `prisma migrate diff` exits 2 at M-F                           | **certain if SC-1's grep is obeyed early**  | med                                 | M-F-T4 says keep the Prisma field; SC-1 only at M-J.                                                 |
+| Migration log invisible to the expiry census                   | **was certain with no FK**                  | med                                 | Cascade `plan_id`, Restrict `organization_id`; outside `RETENTION_TABLES` by decision.               |
+| This epic's own claims go stale                                | med                                         | med                                 | §0 records thirteen corrections across three drafts. Re-verify the **problem**, not only the design. |
