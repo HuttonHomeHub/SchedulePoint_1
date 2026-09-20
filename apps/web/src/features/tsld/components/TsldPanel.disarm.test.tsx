@@ -78,6 +78,7 @@ function activity(id: string, name: string, laneIndex: number): ActivitySummary 
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
     remainingFloat: null,
     levelingPriority: null,

@@ -234,6 +234,11 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
     reason: 'Engine output of the ADR-0033 second pass.',
   },
   visualConflict: { disposition: 'withheld', reason: 'Engine flag from the ADR-0033 second pass.' },
+  visualConflictReason: {
+    disposition: 'withheld',
+    reason:
+      'Engine output (one-planning-surface M-D); the clone earns its own on first recalculation.',
+  },
   visualDriftDays: {
     disposition: 'withheld',
     reason: 'Engine output of the ADR-0033 second pass.',

@@ -72,6 +72,7 @@ function source(): ActivitySummary {
     visualEffectiveStart: '2026-01-09',
     visualEffectiveFinish: '2026-01-11',
     visualConflict: true,
+    visualConflictReason: null,
     visualDriftDays: 2,
     remainingFloat: null,
     levelingPriority: 4,
@@ -112,7 +113,15 @@ describe('the clone field census', () => {
     // float minus the drift, recomputed by the next recalculation — and a clone carries no
     // placement, so it has no drift to have spent. Classified `withheld`, same as its two
     // ADR-0033 neighbours. The tripwire asked again, and this is the answer.
-    expect(entries.length).toBe(61);
+    //
+    // 61 -> 62 on 2026-09-20: `visualConflictReason` (one-planning-surface M-D). Engine output
+    // again, and the answer follows from what the field IS rather than from its neighbours: it says
+    // why a PLACEMENT conflicts, and a clone carries no placement, so there is nothing for it to be
+    // about. Carrying it would be worse than redundant — the database's
+    // `ck_activities_visual_conflict_matches_reason` refuses a row whose reason and flag disagree,
+    // and the flag is not carried either, so a carried reason would be a write the schema rejects.
+    // Classified `withheld`.
+    expect(entries.length).toBe(62);
   });
 
   it('sends nothing the census withholds', () => {

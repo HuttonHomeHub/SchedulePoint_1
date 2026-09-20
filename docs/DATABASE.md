@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 32
-> models across 66 committed migrations — is the single source of truth for the data model.
+> models across 67 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -462,6 +462,78 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
     **float** — an engine output derived from two day-denominated float quantities and
     read beside them — while the paired convention belongs to **durations**, which are
     planner inputs needing sub-day precision (ADR-0070).
+- **`visual_conflict_reason` — WHY a placement conflicts** (one-planning-surface M-D;
+  `docs/specs/one-planning-surface/m-d/upper-bound.md`). A nullable
+  `VisualConflictReason` enum — `EARLIER_THAN_LOGIC` (the placement is before the
+  earliest feasible start) or `LATER_THAN_BOUND` (it breaches an explicit upper bound:
+  `SNLT`, `FNLT`, `MSO` and `MFO` **alike**). Engine-owned exactly like
+  `visual_conflict` beside it — it takes the `unnest` batch in `schedule.repository.ts`
+  `writeResults` from 22 engine-owned columns to **23**, as its **19th argument**, and is
+  never accepted from a write DTO and never touches `version`/`updated_at`/`updated_by`
+  (ADR-0022).
+  - **The spec's stated reason for the column was wrong and its conclusion stands**,
+    recorded because the wrong reason is the one a reader re-derives. §4.4 argued that
+    `MSO`/`MFO` need a flag "because remaining float does not cover them"; measured, it
+    covers all four — a mandatory pin collapses total float to zero, so any drift takes
+    the remainder negative exactly as a "no later than" ceiling does. What the **number**
+    cannot say is which of two things happened: a planner overran their **own slack**,
+    which is theirs to spend, or they overran a **commitment somebody recorded**. Same
+    sign, different sentence. A placement past an activity's own float with **no**
+    constraint therefore gets **no** reason — there is no bound to breach, and flagging
+    it would fire on every deliberate over-placement.
+  - **`visual_conflict` became two-sided with it.** That boolean had fired for
+    `placed < logicEarliest` and nothing else since it shipped, so a bar placed past an
+    explicit ceiling reported `false`. It is now derived (`reason IS NOT NULL`), which
+    means a plan with a breaching placement newly reports a conflict and newly enters the
+    ADR-0094 conflict cycle — a deliberate change to a shipped flag.
+  - **Nullable, no default — and "no conflict" is deliberately NOT distinguished from
+    "not yet calculated".** NULL means "no reason": no placement, or one that breaches
+    nothing; an uncalculated row reads NULL too. Calculation is a **plan-level** event —
+    `writeResults` writes every activity of a plan in one statement and throws unless the
+    count matches — so `plans.schedule_computed_at` is that fact at its proper grain, and
+    `visual_drift_days` (NULL = unplaced **or** uncalculated) and
+    `leveled_start`/`leveling_delay_minutes` already carry the identical conflation. A
+    sentinel third label would also put the pair permanently at odds with the CHECK below.
+  - **CHECKED, and this is the one engine-owned pair the database constrains.**
+    `ck_activities_visual_conflict_matches_reason`:
+    `visual_conflict = (visual_conflict_reason IS NOT NULL)` — raw SQL in the migration,
+    so there is **no `@@index` or other Prisma declaration** to drift against, and note
+    that `prisma migrate diff` reports a CHECK **not at all** (the other side of "Prisma
+    cannot express CHECK", measured). The boolean is now a **denormalised derived
+    column**, kept only because it is shipped and read (the plan-standing
+    `COUNT(*) FILTER (WHERE act.visual_conflict)` and the activity DTO); a CHECK is how a
+    deliberately kept redundancy is stopped from becoming a contradiction. It catches a
+    defect this repository has **measured** as invisible: `writeResults` wires a column in
+    four places and a unit test mocking `$executeRaw` cannot see a missing `UPDATE SET`
+    entry, under which this column stays NULL for ever while the boolean goes true. The
+    cost is stated rather than glossed — if a future engine change decouples the two
+    **legitimately**, the constraint turns that into a failed recalculation rather than an
+    inconsistent read, and the remedy is one compensating migration.
+  - **The migration backfills `EARLIER_THAN_LOGIC` where the flag is already set**, and
+    that is a **transcription, not a fabrication**: the value is knowable, because the
+    boolean has meant that one condition for its entire history (two commits have touched
+    the rule; it is the same line in both). It is also **required** — without it the
+    `VALIDATE CONSTRAINT` fails on any populated host while **succeeding on the empty
+    database CI provisions**, which under ADR-0018 is the API failing to boot. Proved both
+    ways in `docs/specs/one-planning-surface/m-d/migration-proof.md` §3 N1.
+  - **No index.** The only query filtering on the pair is the overview's
+    `COUNT(*) FILTER (WHERE act.visual_conflict)` inside a LATERAL already restricted to
+    one plan — an aggregate over a set being scanned anyway, which no index could serve.
+    The activities list has no filter and no sort parameter, and the ADR-0140 staff
+    diagnostics registry (read, not assumed) filters on `visual_start`/`scheduling_mode`
+    and never on either column. Index query patterns, not columns.
+  - **A Postgres enum, not `TEXT` + CHECK**, per this file's own data-type convention —
+    all **25** enumerated domains that existed before it are Postgres enums (a count
+    that excludes this one — a precedent that counts itself is not a precedent), and
+    there is no `TEXT` + `CHECK … IN (…)` column anywhere to copy. The decisive argument
+    is the **type**: the engine's `VisualConflictReason` is a closed union chosen so a
+    reader handling one case
+    is forced by the compiler to decide about the other, and `TEXT` makes the generated
+    field `string | null`, spending exactly that. The two-migration rule (ADR-0053 M3) is
+    about `ALTER TYPE … ADD VALUE` and **does not apply** to creating a type and using it
+    in one transaction; a third label later is one migration unless that same file also
+    uses it (a DEFAULT, a CHECK, a backfill), and this column has no default while the
+    CHECK tests nullness rather than membership.
 - **`calendar_id`** is the activity's own working-time calendar (**M5, ADR-0037**):
   a nullable, **client-settable** UUID FK to `calendars` (`onDelete: Restrict`),
   mirroring `Plan.calendar` exactly. `null` means **inherit the plan default** —

@@ -159,6 +159,13 @@ export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 export type SchedulingMode = 'EARLY' | 'VISUAL';
 
 /**
+ * Why a hand-placed bar conflicts (one-planning-surface M-D). Mirrors the Postgres enum of the same
+ * name; **`null` is the third state and lives in the field's nullability**, never as a label — a
+ * sentinel would have to be asserted onto every pre-existing row (ADR-0126's `lane_index` trap).
+ */
+export type VisualConflictReason = 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND';
+
+/**
  * A plan's **out-of-sequence recalc mode** (M2, ADR-0035 §1). Governs how an in-progress activity's
  * remaining work treats predecessor logic: `RETAINED_LOGIC` (the P6 default — remaining waits for
  * incomplete predecessors), `PROGRESS_OVERRIDE` (remaining runs from the data date, ignoring
@@ -640,8 +647,30 @@ export interface ActivitySummary {
    */
   visualEffectiveStart: string | null;
   visualEffectiveFinish: string | null;
-  /** Engine-owned (ADR-0033): true when the placement is earlier than the logic-earliest feasible start. */
+  /**
+   * Engine-owned (ADR-0033, widened by one-planning-surface M-D): true when the placement conflicts
+   * with something. **Derived** — the engine computes it as `visualConflictReason !== null`, and
+   * `ck_activities_visual_conflict_matches_reason` refuses a row where the two disagree. Kept
+   * because it is shipped and read; prefer the reason wherever the sentence matters.
+   */
   visualConflict: boolean;
+  /**
+   * Engine-owned (one-planning-surface M-D): **why** the placement conflicts, or null when it does
+   * not. Null also reads for an unplaced activity and for a plan that has never been calculated —
+   * the same conflation `visualDriftDays` and `leveledStart` already carry, and
+   * `plan.scheduleComputedAt` is the fact at the grain that can separate them.
+   *
+   * - `EARLIER_THAN_LOGIC` — placed before the earliest feasible start. The only case the boolean
+   *   ever covered on its own.
+   * - `LATER_THAN_BOUND` — placed past an explicit upper bound (`SNLT`, `FNLT`, `MSO` or `MFO`
+   *   alike). **A placement past an activity's own float with no constraint gets no reason**: there
+   *   is no bound to breach, and `remainingFloat` going negative is the whole story.
+   *
+   * The two are not interchangeable to a reader. Negative remaining float means either that a
+   * planner overran their own slack, which is theirs to spend, or that they overran a commitment
+   * somebody recorded — same sign, different sentence.
+   */
+  visualConflictReason: VisualConflictReason | null;
   /** Engine-owned (ADR-0033): working-day offset of the placement from the early start (signed), or null. */
   visualDriftDays: number | null;
   /**

@@ -70,6 +70,7 @@ function activity(over: Partial<ActivitySummary> & { id: string; name: string })
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
     remainingFloat: null,
     levelingPriority: null,

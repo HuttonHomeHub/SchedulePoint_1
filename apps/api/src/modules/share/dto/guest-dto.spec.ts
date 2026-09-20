@@ -71,6 +71,10 @@ function activityRow(): WithDayFactor<Activity> {
     visualEffectiveStart: DAY,
     visualEffectiveFinish: DAY,
     visualConflict: false,
+    // one-planning-surface M-D. NULL here is the ONLY value consistent with the `false` above:
+    // ck_activities_visual_conflict_matches_reason refuses a row where the flag and the reason
+    // disagree, so a fixture pairing them differently would describe a state the database refuses.
+    visualConflictReason: null,
     visualDriftDays: 0,
     remainingFloat: 3,
     leveledStart: DAY,
@@ -132,6 +136,11 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   'visualEffectiveStart',
   'visualEffectiveFinish',
   'visualConflict',
+  // one-planning-surface M-D. The guest scope is SCHEDULE_READ (ADR-0051): a guest is shown where
+  // the work sits, never the planner's working notes about why a placement is contentious. The
+  // exact-key assertion above already enforces this structurally; the entry is here because every
+  // sibling exclusion is, and an exclusion nobody wrote down reads as an accident.
+  'visualConflictReason',
   'visualDriftDays',
   // one-planning-surface. M-A added this entry when the column existed and no DTO exposed it —
   // deny-by-default, and true of that milestone. **M-D exposes it on the member DTO**, so the entry

@@ -10705,6 +10705,38 @@ lean on, which is a behavioural change to shared fixture data made as a drive-by
 it an explicit Mon–Fri calendar, re-derive the playbook row's dates from the engine, and confirm the
 case is red against an engine that skips the resolution.
 
+### 352. `docs/DATABASE.md` documents a snake_case enum convention that 24 of 26 enums do not follow
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (database-architect, designing `VisualConflictReason` for one-planning-surface M-D) · **Size:** S · **Owner:** docs
+
+`docs/DATABASE.md:33` states the house convention as **"Enums: `snake_case` type,
+`SCREAMING_SNAKE_CASE` values."** Its two neighbouring bullets — "Tables: plural `snake_case`" and
+"Columns: `snake_case`" — are both about the **database** name, so this one reads the same way.
+
+Measured against the schema: **all 26 Prisma enum types are PascalCase**, and exactly **two** carry
+an `@@map` to a snake_case database type (`AuditActorType` → `audit_actor_type`, `AuditOutcome` →
+`audit_outcome`). So at the database level 24 of 26 diverge from the documented rule and 2 comply.
+The values half of the bullet is followed everywhere.
+
+**The agent that raised it reported "24 of 26 are PascalCase, the two exceptions are
+`audit_actor_type`/`audit_outcome`", which understates it** — those two are not PascalCase
+exceptions, they are the only two that _comply_, and they comply at the layer the rule is about.
+Re-derived here by reading `^enum ` declarations and their `@@map`s rather than by accepting the
+count, which is the only reason the direction came out right.
+
+**Do not "fix" this by renaming the types.** Renaming a Postgres enum type is a migration each, on
+types referenced by columns across 32 models, for zero user-visible benefit and a non-zero chance of
+a checksummed migration going wrong on a host that self-migrates at boot (ADR-0018). The question is
+which way the convention should point, and the answer the code has already given 24 times is
+PascalCase — consistent with `ConstraintType`, `SchedulingMode`, `PlacementSnapshotLevel` and the
+rest.
+
+**The likely remedy is to correct the document to describe the code**, and to say what the two
+`@@map`ped audit enums are (they predate the pattern and are not worth churning either). That is a
+one-line change plus a sentence, and it stops the next schema author doing what this one did: reading
+the rule, finding the code contradicts it, and having to decide alone which to follow. `VisualConflictReason`
+followed the code.
+
 ### 348. The float tail is drawn from the placed bar at total float, so it overshoots the late finish by the drift
 
 **Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (ui-architect review of the one-planning-surface overlay design; independently confirmed by reading) · **Size:** S · **Owner:** web

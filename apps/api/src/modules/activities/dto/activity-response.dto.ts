@@ -8,7 +8,7 @@ import {
   PercentCompleteType,
   type Activity,
 } from '@prisma/client';
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, VisualConflictReason } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 import { minutesToDays, type WithDayFactor } from '../day-factor';
@@ -336,9 +336,25 @@ export class ActivityResponseDto implements ActivitySummary {
   visualEffectiveFinish!: string | null;
 
   @ApiProperty({
-    description: 'True when the placement is before the earliest feasible start (engine-owned).',
+    description:
+      'True when the placement conflicts with something (engine-owned). DERIVED — the engine ' +
+      'computes it as `visualConflictReason !== null`, and a database CHECK refuses a row where ' +
+      'the two disagree. Read `visualConflictReason` wherever the reason matters.',
   })
   visualConflict!: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    enum: ['EARLIER_THAN_LOGIC', 'LATER_THAN_BOUND'],
+    description:
+      'Why the placement conflicts, or null when it does not (engine-owned). ' +
+      '`EARLIER_THAN_LOGIC` — placed before the earliest feasible start. `LATER_THAN_BOUND` — ' +
+      'placed past an explicit upper bound (SNLT, FNLT, MSO or MFO alike). A placement past the ' +
+      "activity's own float with NO constraint gets no reason: there is no bound to breach, and " +
+      'remainingFloat going negative is the whole story. Null also reads for an unplaced activity ' +
+      'and for a plan never calculated — see plan.scheduleComputedAt to separate those.',
+  })
+  visualConflictReason!: VisualConflictReason | null;
 
   @ApiProperty({
     nullable: true,
@@ -491,6 +507,7 @@ export class ActivityResponseDto implements ActivitySummary {
       visualEffectiveStart: day(entity.visualEffectiveStart),
       visualEffectiveFinish: day(entity.visualEffectiveFinish),
       visualConflict: entity.visualConflict,
+      visualConflictReason: entity.visualConflictReason,
       visualDriftDays: entity.visualDriftDays,
       remainingFloat: entity.remainingFloat,
       // Resource-levelling overlay (ADR-0041) — client-settable priority + engine-owned overlay.

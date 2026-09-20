@@ -388,4 +388,117 @@ describe.skipIf(!hasDatabase)('Placed-basis parity where nothing is placed (e2e)
       }
     });
   });
+
+  /**
+   * **M-D-T3 — the conflict reason reaches the wire, in all three states.**
+   *
+   * `m-d/migration-proof.md` §6 names this as the one obligation that file does not discharge: it
+   * drives `writeResults` against a real database with **hand-built** `EngineResult`s, so it proves
+   * the column and the `text[]`→enum cast and says nothing about whether `computeSchedule` produces
+   * the right reason or whether the DTO exposes it. `compute.visual.spec.ts` proves the engine in
+   * isolation. Neither crosses the seam, and the seam is four edits to one raw statement plus a DTO
+   * field — exactly the shape a mocked `$executeRaw` cannot see (measured at M-D-T2).
+   *
+   * **All three states in one plan**, so the assertion can be a whole-map comparison and a failure
+   * names every wrong row rather than the first.
+   *
+   * **What this case does NOT cover, stated because the obvious reading is wrong.** The array this
+   * write path sends is `text[]`, and `m-d/migration-proof.md` §4 mutation (a′) measured that the
+   * naive `::"VisualConflictReason"[]` cast fails on the **all-null** array and passes on a mixed
+   * one — the failure is the wrong way round, so a plan that HAS a conflict writes fine while a plan
+   * that has none breaks. This fixture is mixed, so it is the half that would have passed against
+   * that defect. The all-null half is covered by the sibling cases above, every one of which
+   * recalculates a plan with no conflicting placement anywhere.
+   */
+  describe('the placement conflict reason over the public route (M-D-T3)', () => {
+    it('reports EARLIER_THAN_LOGIC, LATER_THAN_BOUND and null from one recalculation', async () => {
+      const actor = await signUp('conflict-reason@example.com');
+      await actor.agent.post('/api/v1/organizations').send({ name: 'Acme' }).expect(201);
+      const client = await actor.agent
+        .post('/api/v1/organizations/acme/clients')
+        .send({ name: 'Northgate' })
+        .expect(201);
+      const project = await actor.agent
+        .post(`/api/v1/organizations/acme/clients/${client.body.data.id}/projects`)
+        .send({ name: 'Riverside' })
+        .expect(201);
+      // Monday 2026-01-05 is the data date, so it is also the first working day.
+      const plan = await actor.agent
+        .post(`/api/v1/organizations/acme/projects/${project.body.data.id}/plans`)
+        .send({ name: 'Conflicts', plannedStart: '2026-01-05' })
+        .expect(201);
+      const planId = plan.body.data.id as string;
+      const base = `/api/v1/organizations/acme/plans/${planId}/activities`;
+
+      // (1) A predecessor forcing a later earliest start, so EARLY can be placed BEFORE logic.
+      const lead = await actor.agent
+        .post(base)
+        .send({ name: 'Lead-in', code: 'LEAD', durationDays: 5 })
+        .expect(201);
+      // Placed on the data date — five working days before anything its predecessor permits.
+      const early = await actor.agent
+        .post(base)
+        .send({ name: 'Too early', code: 'EARLY', durationDays: 2, visualStart: '2026-01-05' })
+        .expect(201);
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: lead.body.data.id, successorId: early.body.data.id, type: 'FS' })
+        .expect(201);
+
+      // (2) An explicit upper bound, breached by the placement. SNLT rather than a mandatory pin
+      // deliberately: `upper-bound.md` §3 established that all four bound kinds behave identically
+      // here, and SNLT is the one `feature-spec.md` §4.4 claimed needed no flag — so this is the
+      // case that would silently report `false` if the M-D branch were dropped.
+      await actor.agent
+        .post(base)
+        .send({
+          name: 'Too late',
+          code: 'LATE',
+          durationDays: 2,
+          constraintType: 'SNLT',
+          constraintDate: '2026-01-06',
+          visualStart: '2026-01-14',
+        })
+        .expect(201);
+
+      // (3) A placed bar breaching nothing at all. **Placed, not unplaced** — an unplaced row reads
+      // null for want of a placement, which would leave "no bound was breached" untested and the
+      // null column indistinguishable from an inert one.
+      await actor.agent
+        .post(base)
+        .send({ name: 'Fine', code: 'FINE', durationDays: 2, visualStart: '2026-01-07' })
+        .expect(201);
+
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/schedule/recalculate`)
+        .send({})
+        .expect(200);
+
+      const rows = (await actor.agent.get(`${base}?limit=100`).expect(200)).body.data as {
+        code: string;
+        visualConflict: boolean;
+        visualConflictReason: string | null;
+      }[];
+
+      // Assert the fixture before asserting over it: a seeding change that dropped a row would
+      // otherwise leave a narrower comparison green (ADR-0093).
+      expect(rows.map((r) => r.code).sort()).toEqual(['EARLY', 'FINE', 'LATE', 'LEAD'].sort());
+
+      // One whole-map comparison, so a failure names every wrong row rather than the first.
+      expect(Object.fromEntries(rows.map((r) => [r.code, r.visualConflictReason]))).toEqual({
+        LEAD: null,
+        EARLY: 'EARLIER_THAN_LOGIC',
+        LATE: 'LATER_THAN_BOUND',
+        FINE: null,
+      });
+
+      // The boolean is DERIVED from the reason (`compute.ts`) and the database refuses any other
+      // pairing (`ck_activities_visual_conflict_matches_reason`). Asserting it here is what proves
+      // the two travelled together through the write and the read, rather than being written from
+      // one source and serialised from another.
+      for (const r of rows) {
+        expect(r.visualConflict, `${r.code} flag vs reason`).toBe(r.visualConflictReason !== null);
+      }
+    });
+  });
 });

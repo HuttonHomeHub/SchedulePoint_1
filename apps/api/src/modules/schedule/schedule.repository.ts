@@ -241,7 +241,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the twenty-one engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the twenty-three engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -721,7 +721,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the twenty-one engine
+   * id can never write across a plan or tenant). Sets only the twenty-three engine
    * columns; a no-op for an empty result set.
    */
   async writeResults(
@@ -790,6 +790,35 @@ export class ScheduleRepository {
     const remainingFloat = results.map((r) =>
       Math.round(r.remainingFloatMinutes / factorFor(r.activityId)),
     );
+    /**
+     * WHY the placement conflicts (M-D) — the reason beside the flag on the line above, which the
+     * engine now DERIVES from it (`visualConflict: visualConflictReason !== null`). The database
+     * says so too: `ck_activities_visual_conflict_matches_reason` refuses a row where the two
+     * disagree, so dropping either of these from the `UPDATE SET` below fails loudly on the first
+     * recalculation of a plan that has a conflict instead of silently leaving this column NULL —
+     * which is the shape of a defect **no unit test here can see**, because a mocked `$executeRaw`
+     * records the arguments and never parses the statement (measured for `remaining_float`, and
+     * re-measured for this column: deleting its `SET` entry and re-running the real statement
+     * against a real database raises 23514 on the first conflicting activity).
+     *
+     * **It is the NINETEENTH `unnest` argument rather than sitting beside `visual_conflict`, and
+     * that position is load-bearing.** `schedule.repository.day-factor.spec.ts` pins
+     * `visual_drift_days` and `remaining_float` at indices 16 and 17 BY POSITION; an argument
+     * inserted before them renumbers both. Appending after `remaining_float` leaves every existing
+     * index untouched — measured, by inserting it beside the flag first and watching that spec go
+     * red against otherwise-correct code. The `SET` list, the `unnest` list and the `AS v(…)` list
+     * are kept in ONE order so the three cannot be read as disagreeing.
+     *
+     * **Travels as `text[]` and is cast at the `SET`**, which is this repository's established shape
+     * for a nullable enum array (`activity.repository.ts` `updatePlacements`) and is load-bearing
+     * rather than stylistic: on the parity path NO activity conflicts, so this is an ALL-NULL array,
+     * and Prisma serialises one with no element-type hint — Postgres infers `integer[]`, and
+     * `integer[] → "VisualConflictReason"[]` is an illegal cast. The same trap `leveled_start`
+     * documents below, reached here by the COMMON case rather than an edge one — and the failure is
+     * the wrong way round for anyone testing by hand: with the naive enum cast a plan that HAS a
+     * conflict writes fine and a plan that has none raises 42846. Measured both ways.
+     */
+    const visualConflictReason = results.map((r) => r.visualConflictReason);
     // Resource-levelling overlay (ADR-0041 §3/§7) — engine-owned, written by this same batch so it
     // stays out of the version/updated_at optimistic-lock path. Null/false on every activity when
     // levelling is off (the pass never ran), which also CLEARS a stale overlay from a prior run.
@@ -828,6 +857,7 @@ export class ScheduleRepository {
         visual_conflict = v.visual_conflict,
         visual_drift_days = v.visual_drift_days,
         remaining_float = v.remaining_float,
+        visual_conflict_reason = v.visual_conflict_reason::"VisualConflictReason",
         leveled_start = v.leveled_start,
         leveled_finish = v.leveled_finish,
         leveling_delay_minutes = v.leveling_delay_minutes,
@@ -852,6 +882,7 @@ export class ScheduleRepository {
         ${visualConflict}::boolean[],
         ${visualDriftDays}::int[],
         ${remainingFloat}::int[],
+        ${visualConflictReason}::text[],
         ${leveledStart}::text[]::date[],
         ${leveledFinish}::text[]::date[],
         ${levelingDelayMinutes}::int[],
@@ -861,8 +892,8 @@ export class ScheduleRepository {
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
         external_driven, loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
-        visual_conflict, visual_drift_days, remaining_float, leveled_start, leveled_finish,
-        leveling_delay_minutes, leveling_window_exceeded, self_over_allocated
+        visual_conflict, visual_drift_days, remaining_float, visual_conflict_reason, leveled_start,
+        leveled_finish, leveling_delay_minutes, leveling_window_exceeded, self_over_allocated
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid

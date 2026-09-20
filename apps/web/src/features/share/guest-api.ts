@@ -227,6 +227,11 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
+    // Null beside the `false` above, which is what the database's own
+    // `ck_activities_visual_conflict_matches_reason` requires of the pair — so this projection
+    // cannot express a state a real row could not hold. Out of scope rather than absent: the guest
+    // scope is SCHEDULE_READ (ADR-0051), and `guest-dto.spec.ts` forbids the field on the wire.
+    visualConflictReason: null,
     visualDriftDays: null,
     // Null, like its neighbours: the guest scope is SCHEDULE_READ (ADR-0051) and a float is
     // analysis. `guest-dto.spec.ts` forbids the field on the wire, so there is nothing to widen

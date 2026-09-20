@@ -69,6 +69,7 @@ function activity(): ActivitySummary {
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
     remainingFloat: null,
     levelingPriority: null,

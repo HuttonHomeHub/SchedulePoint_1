@@ -74,6 +74,7 @@ const BASE_LOE: ActivitySummary = {
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
+  visualConflictReason: null,
   visualDriftDays: null,
   remainingFloat: null,
   levelingPriority: null,

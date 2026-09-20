@@ -508,6 +508,35 @@ enum ConstraintType {
   MANDATORY_FINISH
 }
 
+// WHY a hand-placed bar conflicts (M-D; docs/specs/one-planning-surface/m-d/upper-bound.md).
+// Engine-owned output, written only by the recalculation — never accepted from a DTO.
+//
+//   * EARLIER_THAN_LOGIC — the placement is before the earliest feasible start. This is the ONLY
+//     case `activities.visual_conflict` has ever covered: since 20260714120000 that boolean has
+//     been `placed !== null && placed < logicEarliest` and nothing else (read from the two commits
+//     that have ever touched the rule, not assumed).
+//   * LATER_THAN_BOUND — the placement breaches an explicit upper bound. ALL FOUR kinds — SNLT,
+//     FNLT, MSO and MFO — because the measurement shows them behaving identically (a mandatory pin
+//     collapses total float to zero, so any drift takes the remainder negative exactly as a "no
+//     later than" ceiling does). Restricting it to the mandatory pair would encode a distinction
+//     the engine does not make.
+//
+// THERE IS NO "NO CONFLICT" LABEL, AND THAT IS THE DESIGN. Absence is the column's NULL. A sentinel
+// third label would have to be written onto every pre-existing row as a DEFAULT, asserting
+// "assessed, nothing wrong" about rows nothing has assessed (ADR-0126's `lane_index` trap,
+// ADR-0071 M3's "0 is a claim") — and it would put the pair permanently at odds with
+// ck_activities_visual_conflict_matches_reason.
+//
+// NOTE FOR A READER HOLDING BOTH TYPES: this Prisma enum is the two labels; the ENGINE's
+// `VisualConflictReason` (engine/types.ts) is a union that INCLUDES `null`. They are deliberately
+// not the same set — here the third state is the field's nullability — so `Prisma.
+// VisualConflictReason | null` is the engine union, and the bare names are not interchangeable.
+// MUST stay in lock-step with the TypeScript union in @repo/types.
+enum VisualConflictReason {
+  EARLIER_THAN_LOGIC
+  LATER_THAN_BOUND
+}
+
 // The parent-entity kind a Note hangs off (the polymorphic discriminator, ADR-0046).
 // v1 covers PLAN + ACTIVITY only; CLIENT + PROJECT are reserved for a later slice and
 // added with `ALTER TYPE "NoteEntityType" ADD VALUE …` (a non-breaking additive enum
@@ -1279,6 +1308,63 @@ model Activity {
   visualEffectiveFinish DateTime? @map("visual_effective_finish") @db.Date
   visualConflict        Boolean   @default(false) @map("visual_conflict")
   visualDriftDays       Int?      @map("visual_drift_days")
+
+  // WHY THE PLACEMENT CONFLICTS (M-D; docs/specs/one-planning-surface/m-d/upper-bound.md). Engine-
+  // owned exactly like `visual_conflict` immediately above — written ONLY by the recalculation's
+  // batched `unnest` UPDATE (schedule.repository `writeResults`, which it takes from twenty-two
+  // engine-owned columns to twenty-three), NEVER accepted from a write DTO, and NEVER touching
+  // version/updated_at/updated_by so a recalculation stays invisible to optimistic locking
+  // (ADR-0022).
+  //
+  // THE SPEC'S STATED REASON FOR THE FIELD IS WRONG AND ITS CONCLUSION STANDS — recorded here
+  // because the wrong reason is the one a reader would re-derive. §4.4 argued MSO/MFO need a flag
+  // "because remaining float does not cover them". Measured, it covers all four: a mandatory pin
+  // collapses total float to zero, so any drift takes the remainder negative just as a "no later
+  // than" ceiling does. What the NUMBER cannot say is WHICH of two things happened — a planner
+  // overran their own slack, which is theirs to spend, or they overran a commitment somebody
+  // recorded. Same sign, different sentence. A placement past an activity's own float with NO
+  // constraint gets NO reason, and that is the discriminator rather than an omission: there is no
+  // bound to breach, and flagging it would fire on every deliberate over-placement.
+  //
+  // NULLABLE, NO DEFAULT — AND "no conflict" IS NOT DISTINGUISHED FROM "not yet calculated". NULL
+  // means "no reason": no placement, or one that breaches nothing. An uncalculated row reads NULL
+  // too, and separating those is neither possible here nor wanted:
+  //   * calculation is a PLAN-level event with a plan-level column. `writeResults` writes every
+  //     activity of a plan in one statement and throws unless the count matches, so "not yet
+  //     calculated" is never a property of one row; `plans.schedule_computed_at` is that fact at
+  //     that grain (and ck_plans_schedule_criticality_requires_cursor already makes it the
+  //     discriminator other engine-owned columns are read against).
+  //   * `visual_drift_days` one line up carries the identical conflation (NULL = unplaced OR
+  //     uncalculated), as do `leveled_start`/`leveling_delay_minutes` below. Direct precedent, not
+  //     an analogy.
+  //   * and `visual_conflict` itself already reads `false` in both cases, so a third sentinel state
+  //     here would put the pair at odds by construction.
+  //
+  // THE MIGRATION BACKFILLS `EARLIER_THAN_LOGIC` WHERE THE FLAG IS ALREADY SET, and that is a
+  // TRANSCRIPTION rather than the fabrication ADR-0126 forbids: the value is KNOWABLE, because
+  // `visual_conflict = true` has meant "placed earlier than logic" and nothing else since the
+  // column shipped (two commits have ever touched the rule; it is the same line in both). Not
+  // backfilling is what would leave a row whose two columns disagree — and it is also what makes
+  // the CHECK's VALIDATE fail at boot on any populated host, which CI structurally cannot see.
+  //
+  // CHECKED — ck_activities_visual_conflict_matches_reason: `visual_conflict = (reason IS NOT
+  // NULL)`, raw SQL in the migration (Prisma cannot express a CHECK), so there is NO `@@index`
+  // or other declaration here to drift against. The boolean is now DERIVED from this column
+  // (`compute.ts` computes it as `visualConflictReason !== null`) and is kept only because it is
+  // shipped and read — by the plan-standing `COUNT(*) FILTER (WHERE act.visual_conflict)` and the
+  // activity DTO. A CHECK is how a deliberately kept redundancy is stopped from becoming a
+  // contradiction, and it catches a defect this repository has MEASURED as invisible: `writeResults`
+  // wires a column in four places and a unit test mocking `$executeRaw` cannot see a missing
+  // `UPDATE SET` entry, under which this column would stay NULL forever while the boolean went true.
+  //
+  // NO INDEX. The only query that filters on the pair is the overview's
+  // `COUNT(*) FILTER (WHERE act.visual_conflict)` inside a LATERAL already restricted to one plan —
+  // an aggregate over a set being scanned anyway, which no index could serve. The activities list
+  // has no filter and no sort parameter, and the ADR-0140 staff diagnostics registry (read, not
+  // assumed) filters on `visual_start`/`scheduling_mode` and never on either of these. Index query
+  // patterns, not columns (docs/DATABASE.md) — the same decision `visual_conflict` made, which
+  // reserved a partial "list conflicts" index as an explicit follow-up if a panel ever needs one.
+  visualConflictReason VisualConflictReason? @map("visual_conflict_reason")
 
   // REMAINING FLOAT — the room a PLACED bar has left, in whole working days (one-planning-surface
   // §4.3 / US-3, CQ-1 answered "persist"). `total_float` is measured from the pure-network EARLY

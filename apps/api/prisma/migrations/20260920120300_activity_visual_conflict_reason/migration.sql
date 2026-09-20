@@ -1,0 +1,204 @@
+-- WHY A PLACEMENT CONFLICTS — the reason beside the shipped flag, as engine-owned CPM output.
+-- Spec: docs/specs/one-planning-surface/m-d/upper-bound.md (the measurement that produced this
+-- design) and feature-spec.md §4.4 / §7 (`GET …/activities` gains `visualConflictReason`).
+-- Milestone M-D-T3.
+--
+-- WHY, AND THE SPEC'S OWN STATED REASON IS WRONG WHILE ITS CONCLUSION STANDS. §4.4 argued that
+-- `MSO`/`MFO` need a flag because remaining float does not cover them, and `SNLT`/`FNLT` come free.
+-- Measured (upper-bound.md §2), the number moves for ALL FOUR: a mandatory pin collapses total
+-- float to zero, so any positive drift takes the remainder negative exactly as it does under a
+-- "no later than" ceiling. There is no pair that needs the flag "because the number does not move".
+-- The column is still worth having for a reason the spec does not give: THE SIGN IS THE SAME AND
+-- THE SENTENCE IS NOT. Negative remaining float means one of two different things — the planner
+-- overran THEIR OWN SLACK, which is theirs to spend, or they overran an EXPLICIT COMMITMENT
+-- somebody recorded as a constraint. A reader cannot tell those apart from the magnitude, and they
+-- are not the same conversation.
+--
+-- AND THE SHIPPED BOOLEAN COVERS NEITHER SIDE OF IT. `activities.visual_conflict` has fired since
+-- 20260714120000 for exactly one condition — `placed !== null && placed < logicEarliest`
+-- (`compute.ts`, unchanged across both commits that have ever touched the rule) — so a bar placed
+-- PAST an explicit `SNLT`/`FNLT`/`MSO`/`MFO` ceiling reported `false`. Measured on all four. M-D
+-- makes the flag two-sided; this column says which side.
+--
+-- A POSTGRES ENUM, NOT `TEXT` + CHECK, AND THE TWO-MIGRATION RULE DOES NOT BITE THIS FILE.
+--   * `docs/DATABASE.md` ("Data types & conventions") says enums are Postgres enums via Prisma, and
+--     all TWENTY-FIVE enumerated domains that existed before this one are. The count deliberately
+--     EXCLUDES this column: a precedent that counts itself is not a precedent. There is NOT ONE
+--     `TEXT` + `CHECK … IN (…)` column to copy — checked rather than assumed,
+--     `grep -n "CHECK" prisma/migrations/*/migration.sql | grep " IN ("` returns nothing.
+--   * The decisive argument is the TYPE, not the storage. The engine's `VisualConflictReason` is a
+--     closed union chosen so "a reader handling one case is forced by the compiler to decide about
+--     the other" (engine/types.ts). A `TEXT` column makes Prisma's generated field `string | null`,
+--     which loses exactly that property at the boundary where the value enters the application — so
+--     `TEXT` would buy cheap extensibility by spending the reason the union exists.
+--   * THE ORDERING TRAP IS ABOUT `ALTER TYPE … ADD VALUE`, WHICH THIS FILE DOES NOT DO. PostgreSQL
+--     forbids USING a label in the transaction that added it (ADR-0053 M3; re-proved both ways in
+--     20260920120000_baseline_placement_snapshot's header against this repository's PostgreSQL
+--     16.13). CREATE TYPE and use it in one transaction is legal, and is what happens below.
+--   * WHAT IT COSTS LATER, STATED PRECISELY RATHER THAN AS FOLKLORE. A third reason needs
+--     `ALTER TYPE "VisualConflictReason" ADD VALUE 'X'`, and that is ONE migration unless the same
+--     file also USES the label — in a DEFAULT, a CHECK or a backfill. This column has no default,
+--     and the CHECK below tests NULLNESS rather than membership, so it will not need re-stating.
+--     A future backfill of the new label is the one case that needs two files.
+--
+-- NULLABLE, NO DEFAULT — AND "NO CONFLICT" IS NOT DISTINGUISHED FROM "NOT YET CALCULATED", ON
+-- PURPOSE. NULL here means "no reason": no placement, or a placement that breaches nothing. A row
+-- on a plan that has never been recalculated also reads NULL, and those two are deliberately NOT
+-- separated:
+--   * CALCULATION IS A PLAN-LEVEL EVENT AND ALREADY HAS A PLAN-LEVEL COLUMN. `writeResults` writes
+--     EVERY activity of a plan in one statement and throws unless the row count matches, so "not
+--     yet calculated" is never a property of one row. `plans.schedule_computed_at` is exactly that
+--     fact at exactly that grain, and `ck_plans_schedule_criticality_requires_cursor` already makes
+--     it the discriminator other engine-owned columns are read against.
+--   * THE PRECEDENT IS DIRECT AND REPEATED, not an analogy. `visual_drift_days` is NULL for an
+--     unplaced activity AND for an uncalculated one; `leveled_start` / `leveling_delay_minutes` are
+--     NULL for "not levelled" AND for "not calculated". This column sits between them and carries
+--     the same conflation for the same reason.
+--   * AND THE ROW'S OWN BOOLEAN ALREADY SAYS IT. `visual_conflict` reads `false` on an uncalculated
+--     row and on a calculated row with no conflict — the identical conflation, shipped since 2026-07
+--     and the thing this column must agree with (see the CHECK). A third sentinel label would make
+--     the pair disagree by construction.
+-- A `DEFAULT 'NONE'`-style sentinel is therefore REFUSED rather than overlooked: it would assert
+-- "assessed, and nothing was wrong" about rows nothing has assessed. That is ADR-0126's `lane_index`
+-- trap and ADR-0071 M3's "0 is a claim", and it is also what keeps the ADD COLUMN metadata-only.
+--
+-- THE BACKFILL IS A TRANSCRIPTION, NOT A FABRICATION — AND THE DISCRIMINATOR IS THAT THE VALUE IS
+-- KNOWABLE. ADR-0126's rule forbids inventing a value that was never recorded. Here it WAS
+-- recorded: `visual_conflict = true` has meant "placed earlier than logic allows" and nothing else
+-- for the column's entire history, established by reading it rather than assuming it —
+-- `git log -S visualConflictMap -- engine/compute.ts` returns exactly two commits (c073c750 which
+-- introduced the rule, 3e2ae7c6 which is this milestone), and the rule is the same line in both. So
+-- `'EARLIER_THAN_LOGIC'` is what those rows already say in the column beside it; writing it down is
+-- the opposite of a claim about unknowable history. NOT backfilling is what would leave a row whose
+-- two columns disagree.
+--
+-- IT IS ALSO REQUIRED, WHICH IS THE PART A PRISTINE DATABASE HIDES. Without it `VALIDATE CONSTRAINT`
+-- below FAILS on any host where a single activity currently carries `visual_conflict = true` — the
+-- migration aborts, and under ADR-0018 that is the API failing to BOOT, on a host that pulls and
+-- recreates images unattended (ADR-0047): P3018 once and P3009 on every retry, forever. CI cannot
+-- see it, because CI provisions an EMPTY database where the constraint validates trivially. This is
+-- ADR-0107's finding exactly, one column along, and it is DEMONSTRATED rather than reasoned about —
+-- docs/specs/one-planning-surface/m-d/migration-proof.md §3 N1 shows the same VALIDATE failing on a
+-- populated database with the backfill removed.
+--
+-- THE CHECK: THE BOOLEAN IS NOW DERIVED, SO THE DATABASE SAYS SO. `visual_conflict` is computed as
+-- `visualConflictReason !== null` one line above the result literal (`compute.ts`), which makes it a
+-- DENORMALISED DERIVED COLUMN kept only because it is shipped and read (the plan-standing
+-- `COUNT(*) FILTER (WHERE act.visual_conflict)` in overview.repository.ts, and the activity DTO).
+-- docs/DATABASE.md permits denormalising "with a measured reason (documented)"; a CHECK is how a
+-- kept redundancy is stopped from becoming a contradiction.
+--   * IT CATCHES A DEFECT THIS REPOSITORY HAS ALREADY MEASURED AS INVISIBLE. `writeResults` wires a
+--     column in FOUR places (the derived array, the `UPDATE SET`, the `unnest` argument list and the
+--     `AS v(…)` column list), and a unit test that mocks `$executeRaw` CANNOT SEE a missing `SET`
+--     entry — measured for `remaining_float` at M-D. Under that defect this column stays NULL
+--     forever while `visual_conflict` goes true, silently. The CHECK turns it into a loud failure on
+--     the first recalculation of a plan that has a conflict, and it catches the mirror-image defect
+--     (the boolean dropped from `SET`, the reason written) in the same expression.
+--   * A FALSE POSITIVE IS UNREACHABLE FROM LEGITIMATE ENGINE OUTPUT, which is what makes the blast
+--     radius acceptable. There is exactly one producer of `EngineResult.visualConflict` in the whole
+--     of `apps/api/src` (`compute.ts:932`) and it is defined AS the reason's nullness; no create,
+--     copy, import or DTO path writes either column (checked). So the only state that can violate
+--     this is a wiring defect.
+--   * THE COST IS STATED RATHER THAN GLOSSED. If a future engine change decouples them LEGITIMATELY,
+--     this constraint converts that into a failed recalculation — an HTTP 500 on the core write path
+--     — rather than an inconsistent read. That is the deliberate trade: the remedy is one
+--     compensating migration, and the defect it prevents is invisible. It is the same trade
+--     `ck_plans_schedule_criticality_requires_cursor` made for the same reason ("this constraint is
+--     the only thing behind" a raw parameterised UPDATE that bypasses every Prisma and DTO guard),
+--     and the same one `writeResults`' own row-count assertion already makes ("fail loud rather than
+--     half-write", ADR-0022).
+--   * WRITTEN AS A NULLNESS TEST, NOT A MEMBERSHIP TEST, so adding a third reason label later does
+--     not have to re-state it. `visual_conflict` is NOT NULL and `(… IS NOT NULL)` is never NULL, so
+--     the expression can never pass by being unknown — it is strict.
+--
+-- NO INDEX, AND THE ONE QUERY THAT DOES FILTER ON THE PAIR IS THE REASON RATHER THAN THE EXCEPTION.
+-- `overview.repository.ts` computes `COUNT(*) FILTER (WHERE act.visual_conflict)` inside a LATERAL
+-- already restricted to `act.plan_id = p.id AND act.deleted_at IS NULL` — an aggregate over a set
+-- being scanned anyway, not a selective predicate, so no index on either column could serve it. The
+-- activities list (`findManyActiveByPlan`) has no filter and no sort parameter at all: it orders by
+-- a fixed `(created_at, id)` and pages. The ADR-0140 staff diagnostics registry was read rather than
+-- assumed — its four placement entries filter on `visual_start`, `scheduling_mode` and soft-delete,
+-- and NONE on `visual_conflict`. Index query patterns, not columns (docs/DATABASE.md); this mirrors
+-- `visual_conflict`'s own "no index" decision (20260714120000), which reserved a partial "list
+-- conflicts" index as an explicit follow-up if a conflicts panel ever needs one.
+--
+-- ENGINE-OWNED (ADR-0022). It takes the existing batched UPDATE in `schedule.repository.ts`
+-- `writeResults` from twenty-two engine-owned columns to TWENTY-THREE, and is its NINETEENTH
+-- `unnest` argument — a position chosen
+-- rather than taken: `schedule.repository.day-factor.spec.ts` pins `visual_drift_days` and
+-- `remaining_float` at argument indices 16 and 17 BY POSITION, so appending after `remaining_float`
+-- renumbers nothing while inserting it beside `visual_conflict` (where it reads better) turns that
+-- spec red against otherwise-correct code. Measured by doing it. Written only there, NEVER accepted
+-- from a write DTO, and NEVER touching version/updated_at/updated_by, so a recalculation stays
+-- invisible to optimistic locking. It travels through `unnest` as `text[]` and is cast at the
+-- `SET`, which is this repository's established shape for a nullable enum array
+-- (`activity.repository.ts` `updatePlacements`: "a nullable enum[] parameter round-trips more
+-- reliably as text[] here") and which also structurally avoids the all-NULL trap documented
+-- beside `leveled_start`: Prisma serialises an all-null array with no element-type hint, Postgres
+-- infers `integer[]`, and `integer[] → "VisualConflictReason"[]` is an illegal cast. THE ALL-NULL
+-- ARRAY IS THE COMMON CASE HERE, not an edge one — FC-1 predicts zero placements anywhere on the
+-- deployed estate — and the failure is the wrong way round for anyone testing by hand: measured,
+-- the naive enum cast writes a plan that HAS a conflict perfectly and raises 42846 on a plan that
+-- has none.
+--
+-- BOOT SAFETY (ADR-0018 / ADR-0047), OBSERVED RATHER THAN ASSERTED against a POPULATED PostgreSQL
+-- 16.13 database (migration-proof.md):
+--   * CREATE TYPE is catalogue-only.
+--   * ADD COLUMN of a nullable column with no default is metadata-only — `pg_attribute` reads
+--     `atthasmissing = f, attmissingval = NULL`, and `activities.relfilenode` is unchanged across
+--     the apply, which a rewrite would not have produced.
+--   * The backfill and the VALIDATE are each ONE sequential scan of `activities`, and the backfill
+--     writes only the rows its predicate selects. MEASURED at 5,000 activities of which 312 carry a
+--     flag: CREATE TYPE 1.6 ms, ADD COLUMN 1.0 ms, the backfill 11.1 ms, ADD CONSTRAINT NOT VALID
+--     0.8 ms, VALIDATE 1.8 ms — 16.4 ms of statement time, 60 ms for the whole file including psql
+--     startup. The backfill dominates because it WRITES (312 new row versions plus WAL) where the
+--     VALIDATE only reads. Both scale linearly with the table; there is no index that would avoid
+--     that and adding one for a once-ever statement would cost every recalculation forever.
+--   * NOT covered by the CI schema-drift check, stated so nobody assumes otherwise: `prisma migrate
+--     diff` reports a CHECK NOT AT ALL (measured for the M-A migrations; it is the other side of
+--     "Prisma cannot express CHECK"). The column and the enum ARE covered — the drift check reports
+--     "No difference detected" against this schema.
+--
+-- NO BACKFILL BEYOND THAT ONE PREDICATE, AND NONE IS POSSIBLE. A row with `visual_conflict = false`
+-- may be an uncalculated row or a calculated one with no conflict, and NULL is the correct, literal
+-- answer for both (see above). `LATER_THAN_BOUND` is unrecoverable for every pre-existing row by
+-- construction: nothing has ever computed it, which is the defect this milestone fixes. Those rows
+-- acquire it on their plan's next recalculation.
+--
+-- PARITY. `computeSchedule`'s signature is unchanged by this file — it adds a column and a
+-- constraint and touches nothing under src/modules/schedule/engine/. M-D's engine change is a
+-- separate, deliberate re-baseline (FC-3) and carries its own enumeration.
+
+-- CreateEnum: why a placement conflicts. `EARLIER_THAN_LOGIC` is the case the shipped boolean
+-- already covered; `LATER_THAN_BOUND` is the side it never did — any explicit upper bound, SNLT,
+-- FNLT, MSO and MFO alike, because the measurement shows the four behaving identically and
+-- restricting it to the mandatory pair would encode a distinction the engine does not make. "No
+-- reason" is the column's NULL and is deliberately NOT a label here (see the header).
+CREATE TYPE "VisualConflictReason" AS ENUM ('EARLIER_THAN_LOGIC', 'LATER_THAN_BOUND');
+
+-- AddColumn: nullable, no default, no index. Each of those three is a decision with a reason in the
+-- header rather than an omission.
+ALTER TABLE "activities" ADD COLUMN "visual_conflict_reason" "VisualConflictReason";
+
+-- Backfill: transcribe what the existing boolean already says. One statement, predicated so it
+-- writes ONLY the rows that carry a flag today. Required for the VALIDATE below to succeed on a
+-- populated database — see the header, and migration-proof.md §3 N1 for the same VALIDATE failing
+-- without it.
+UPDATE "activities"
+   SET "visual_conflict_reason" = 'EARLIER_THAN_LOGIC'
+ WHERE "visual_conflict";
+
+-- The kept redundancy is not allowed to become a contradiction. `NOT VALID` then `VALIDATE` is the
+-- ck_plans_schedule_criticality_* shape: the ADD takes its lock without scanning, the VALIDATE
+-- scans under a weaker lock (SHARE UPDATE EXCLUSIVE) that does not block concurrent reads or writes.
+ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_visual_conflict_matches_reason" CHECK (
+  "visual_conflict" = ("visual_conflict_reason" IS NOT NULL)
+) NOT VALID;
+ALTER TABLE "activities" VALIDATE CONSTRAINT "ck_activities_visual_conflict_matches_reason";
+
+-- Down (forward-only in production, ADR-0018; documented for completeness). Safe in a way most of
+-- its siblings are not: the column is engine-owned output, so dropping it destroys nothing a
+-- recalculation could not reproduce. Drop in this order — the constraint names the column.
+--   ALTER TABLE "activities" DROP CONSTRAINT "ck_activities_visual_conflict_matches_reason";
+--   ALTER TABLE "activities" DROP COLUMN "visual_conflict_reason";
+--   DROP TYPE "VisualConflictReason";
