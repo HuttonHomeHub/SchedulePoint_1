@@ -52,7 +52,16 @@ progressed plan in the estate would move its bars at M-F.
 
 ---
 
-#### FC-1 — the deployed estate decides the baseline default and the strip's bound
+#### FC-1 — the deployed estate sizes the strip, and decides one test's fixture
+
+> **The heading previously read "decides the baseline default and the strip's bound", and its own
+> body contradicts both halves.** `placement_snapshot_level` ships `DEFAULT NONE` **regardless of
+> the readings** — it is the literal truth of every existing row either way, and
+> `database-architect`'s S2 settled it independently — so all the reading decides is whether
+> M-C-T2's test gets a **fixture or a hypothetical**. And the strip's bound is **withdrawn**
+> (FC-10 clause B). A heading is what a reader skims, so a wrong one is repeated rather than
+> caught: this one was relayed to the product owner several times. Recorded as **C15** in the
+> spec's §0.
 
 **Bar:** the readings below, through the ADR-0140 staff diagnostics panel on the deployed host
 (never `psql`). **M0-T1 has shipped** with **eight** new entries (ten total), so this reads what
@@ -412,16 +421,37 @@ plan's own earlier three-class version.
 **Prediction, to be falsified:** binding is **under 200 activities in one plan and one
 organisation**; FULL-baseline coverage is **zero**.
 
-**Clause B — the bound, read against the population AFTER the placement exclusion.** The strip runs
-unattended **only if** the binding population, **excluding rows with `visual_start IS NOT NULL`**,
-is **≤ 500 activities across ≤ 5 plans**. Above either, it becomes planner-initiated with the same
-rule and record.
+**Clause B — the unattended bound is WITHDRAWN** _(product-owner decision, 2026-09-20)_.
 
-**The exclusion is load-bearing and is a gap closed.** `visual_start` is accepted regardless of mode,
-so a row can carry a stale placement **and** a binding SNET — and the naive `WHERE` would **destroy
-the placement**. Those rows are left, counted and reported, the treatment the other undecidable
-classes get. Measuring the bound before the exclusion would size a population the strip does not
-touch.
+It previously read: the strip runs unattended only if the binding population, excluding rows with
+`visual_start IS NOT NULL`, is ≤ 500 activities across ≤ 5 plans; above either it becomes
+planner-initiated.
+
+**Its premise was that the estate contains work somebody would mind losing, and the product owner
+has stated it does not** — every plan on the deployed installation is a test plan, and they do not
+mind if this epic alters or destroys them. A bound whose only purpose is protecting planner work
+protects nothing here, and a gate that cannot fail is decoration (ADR-0058).
+
+**The expiry is a trigger, not a date, and it is checkable.** The strip is a **one-time migration
+that runs when M-I deploys**. **If M-I ships after a real customer exists, the premise lapses and
+the bound is owed again** — the same trigger ADR-0085 and ADR-0137 both name, which is what makes
+it a condition somebody can test rather than a memory somebody must keep.
+
+**M0's `snet-binding` reading is no longer a gate; keep taking it as an input.** It still sizes what
+the migration will do and still feeds the M-I-T2 notice's count — it has simply stopped being a
+permission.
+
+**What survives the withdrawal, and why each is not safety work:**
+
+- **`placement_migration_log`** — its second job is **diagnostic**, and that job is worth **more** on
+  disposable data, not less: it is how anybody finds out the strip did something nobody predicted. A
+  migration with no record turns a surprising result into a **mystery instead of a diff**. Its FKs,
+  PK, denormalised label and `prior_visual_start` all stand.
+- **The "already placed" exclusion** (`visual_start IS NOT NULL`) — **about converting correctly, not
+  about safety.** `visual_start` is accepted regardless of mode, so a row can carry a stale placement
+  **and** a binding SNET, and only one of the two survives a naive conversion **whatever the data is
+  worth**. Those rows are left, counted and reported.
+- **The after-the-fact report** — the same argument as the log.
 
 **Clause C — the bars do not move, proved on a real plan.** For a plan carrying binding `SNET`s,
 every `visualEffectiveStart`/`Finish` is **identical** before and after; and the plan's downstream

@@ -283,6 +283,57 @@ ones.**
 
 ##### Task M-B-T2 — rewrite the three flag docblocks _(unchanged)_
 
+#### Feature: seed an estate these conditions can actually fail against
+
+> **New** _(product-owner decision, 2026-09-20)_. **FC-1 predicts every reading is zero**, and if
+> that holds, several conditions **cannot discriminate**: FC-7's "nothing moves where nothing was
+> placed" is vacuous when nothing was ever placed, and the collapse's central behaviour would ship
+> without once running against **real persisted rows**. That is the ADR-0093 vacuity shape at estate
+> scale — a green result that cannot tell "correct" from "there was nothing to test" — and it is
+> exactly what the ADR-0066 catalogue exists to prevent: plans built through the **public REST API**,
+> so the write path, the DTOs and the guards are exercised and not just `computeSchedule`.
+>
+> **Seeded into TEST databases, never the product owner's host** — so the deployed estate stays
+> representative of a **fresh** installation, which is what makes FC-1's readings meaningful.
+> **Nothing in this task may write to their installation.**
+
+##### Task M-B-T3 — extend the seed catalogue
+
+- **Description:** **extend `packages/seed` and `docs/TEST_PLAYBOOK.md`; do not build a parallel
+  estate.** Checked before writing this task, and **four of the six shapes already exist** (spec
+  C16):
+
+  | Shape                                                                                                  | Status                                                          |
+  | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+  | Started / complete / suspended                                                                         | **exists** — `plan:capability-progress` (`TEST_PLAYBOOK.md:79`) |
+  | LOE + WBS summary over a multi-day child                                                               | **exists** — `plan:capability-types-and-wbs` (`:87`)            |
+  | Levelled plan with delayed participants                                                                | **exists** — `plan:capability-levelling` (`:94`)                |
+  | Every constraint type, one activity each                                                               | **exists** — `plan:capability-constraints` (`:65`)              |
+  | **Placements** (differing from logic-earliest; coinciding with it; on a plan switched back to `EARLY`) | **ABSENT** — no playbook row claims one                         |
+  | **The four SNET classes, classified**; **negative remaining float**; **negative drift**                | **ABSENT**                                                      |
+
+- **The model already supports it.** `SeedSpec` carries `visualStart`
+  (`packages/seed/src/spec.ts:309-310`, "the advisory hand-placement read in VISUAL mode") and every
+  builder defaults it to `null` (`pairwise/cases.ts:322`). **So the gap is a documented plan and its
+  playbook rows, not a mechanism** — which is why this is an extension and not a new harness.
+- **Complexity:** M · **Dependencies:** none (parallel with M-A)
+- **Risks:** **duplicating a shape that already exists** — third time this epic would have carried a
+  task describing work already done (C1, C13, C16) → the table above is the check, and
+  `pnpm check:playbook` gates that every row resolves **in both directions**. · **Seeding by direct
+  SQL** would reproduce the exact defect ADR-0066 was written about: two defects green at the engine
+  and wrong in the product because nothing drove the write path. **Public API only.** · A shape
+  seeded but not _claimed_ is invisible to the catalogue → every new plan gets its playbook row with
+  its "what wrong looks like".
+- **One existing row needs widening rather than a new plan**, and it is the sharpest thing this
+  check turned up: `TEST_PLAYBOOK.md:87`'s "what wrong looks like" for `plan:capability-types-and-wbs`
+  is **the C11 defect verbatim** — _"a summary at the data date with zero length (`parentId` not
+  reaching the engine); an LOE as a zero-duration task (the importer's coercion). **Both shipped**"_
+  — but it claims that only for the **early** basis. FC-7 Part B needs the same plans read through
+  the **placed** basis, so the row's claim widens; the plan does not change.
+- **Testing:** `pnpm check:playbook` green in both directions; each new plan's row states what wrong
+  looks like; FC-5's levelling proportion, FC-7 Part A/B, FC-8 clause 4 and FC-11 all name the plan
+  they run against.
+
 ---
 
 ## Milestone M-D — Remaining float and the two-sided conflict
