@@ -92,3 +92,42 @@ rect.w`) is the difference between a saving nobody sees and a gap at each edge o
 - **`docs/TECH_DEBT.md` #348 stays open until this milestone lands**, per its own instruction: the
   defect is true on shipped code and this closes it by fixing it, which is a different thing from
   closing it by pointing at an epic.
+
+---
+
+## 6. M-E-T2 — the rename, and a risk note that described a mechanism that does not exist
+
+The control keeps its key (`floatTails`) and changes its label to **Feasible window**. The legend's
+**two** keys become **one**, because the canvas no longer paints two things.
+
+**The plan's risk note is wrong and is corrected rather than followed.** It says the rename must
+"preserve its state rather than resetting it — a planner who had it on keeps it on", and asks for
+"a unit case pinning that the persisted toggle state survives the rename". There is no persisted
+state: `use-tsld-canvas-ui-state.ts:180` is `useState(DEFAULT_VIEW_TOGGLES)`, and its own docblock
+at `:63` calls this class of state _"never server state, never persisted"_. The toggle already
+resets on every mount, under either name.
+
+So the key stays for a different and true reason — renaming it touches three consumers and the whole
+`TsldViewToggles` contract to describe the same overlay — and the test the plan asked for **cannot
+be written**, because it would assert a mechanism that does not exist. What is pinned instead is
+what is real: the ordered key list in `tsld-view-toggles.registry.test.ts` (the key did not move) and
+`tsld-toolbar-scheduling-modes.test.tsx` (the label did).
+
+**A case asserting the key/label split directly was written and then deleted**, because it needed
+`VIEW_TOGGLE_META` exported. Exporting a module's internals so a test can reach them is how the
+internals stop being internal; both facts were already pinned, each in the file that owns it.
+
+**The first version of the registry comment repeated the plan's false sentence**, which is how a
+wrong claim in a plan becomes a wrong claim in the code and then gets cited. Corrected in place.
+
+### The legend key: two became one
+
+The old pair had to explain why the left-hand tail was _usually absent_ — drift is zero everywhere
+in Early mode by construction — and that apology disappears with the shape rather than being
+rewritten: a bracket with no drift simply starts at the bar. The case pinning that apology
+(`says when drift appears`) is **deleted with its reason recorded in the file**, not rewritten,
+because keeping it would have meant keeping a second key alive to satisfy it.
+
+The replacement count assertion is `getAllByText(/[Ff]easible window/)` with length **1** rather
+than an absence check on the old copy: a legend that lost the key altogether would satisfy "the old
+wording is gone" perfectly.

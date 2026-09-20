@@ -244,6 +244,6 @@ describe('TSLD toolbar — scheduling modes (flag on)', () => {
     const insightFieldset = insightLegend.closest('fieldset');
     expect(insightFieldset).not.toBeNull();
     expect(within(insightFieldset!).getByLabelText('Late-start overlay')).toBeInTheDocument();
-    expect(within(insightFieldset!).getByLabelText('Float & drift')).toBeInTheDocument();
+    expect(within(insightFieldset!).getByLabelText('Feasible window')).toBeInTheDocument();
   });
 });

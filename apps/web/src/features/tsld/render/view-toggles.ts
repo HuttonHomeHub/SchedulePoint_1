@@ -19,13 +19,26 @@ export interface TsldViewToggles {
    * Optional so every existing caller/fixture stays valid and paints byte-for-byte; absent or
    * false ⇒ the pass never runs and not one `measureText` is spent. */
   dates?: boolean;
-  /** The GPM **float / drift tails** (ADR-0054 §4, `VITE_CANVAS_LIVE_FEEDBACK`): a hollow tail
-   * right of each bar for total float, left for drift.
+  /**
+   * The **feasible window** (one-planning-surface M-E, `VITE_CANVAS_LIVE_FEEDBACK`): one hollow
+   * bracket spanning `[earlyStart, lateFinish]` with a cap at each end, drawn beneath the bar so
+   * the bar occludes its middle.
    *
-   * A view TOGGLE rather than a lens (a deliberate departure from the plan's "beside Baseline
-   * overlay"): a lens exists because it needs data that can be loading or absent — Baseline
-   * overlay is disabled with a reason when there is no active baseline. Float and drift are
-   * already on every activity, so the control can never be unavailable and needs none of the
+   * **The KEY is deliberately unchanged from when this drew the ADR-0054 §4 float and drift
+   * tails**, which the window replaces — they were one fact drawn twice. Renaming the key would
+   * touch three consumers and the whole `TsldViewToggles` contract to describe the same overlay;
+   * the label is what a planner reads, and that is what moved.
+   *
+   * **Its risk note in the plan said the rename must "preserve the planner's state rather than
+   * resetting it", and there is no state to preserve.** `use-tsld-canvas-ui-state.ts` holds this in
+   * `useState(DEFAULT_VIEW_TOGGLES)` and its own docblock calls it "never server state, never
+   * persisted" — so the toggle already resets on every mount, under either name. Recorded here
+   * rather than left as a reassuring sentence in a plan nobody re-reads.
+   *
+   * A view TOGGLE rather than a lens (a deliberate departure from the original plan's "beside
+   * Baseline overlay"): a lens exists because it needs data that can be loading or absent —
+   * Baseline overlay is disabled with a reason when there is no active baseline. The window's
+   * inputs are on every activity, so the control can never be unavailable and needs none of the
    * lens context's loading/error/enablement machinery. It belongs with Labels and Dates.
    *
    * Optional ⇒ absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */

@@ -462,7 +462,21 @@ const VIEW_TOGGLE_META: Record<
   nonWorking: { group: 'markers', label: 'Non-working' },
   labels: { group: 'markers', label: 'Labels' },
   dates: { group: 'insight', label: 'Dates', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
-  floatTails: { group: 'insight', label: 'Float & drift', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  // **Renamed, not replaced** (one-planning-surface M-E): the float and drift tails were one fact
+  // drawn twice and became one bracket, so the control describes the same overlay under a name
+  // that matches the picture. The KEY stays `floatTails` because renaming it would touch three
+  // consumers and the whole `TsldViewToggles` contract to say nothing new.
+  //
+  // **NOT because it preserves a planner's state — there is none to preserve.** The plan's risk
+  // note said so and it is false: `use-tsld-canvas-ui-state.ts` holds these in
+  // `useState(DEFAULT_VIEW_TOGGLES)` and calls them "never persisted" in its own docblock, so the
+  // toggle already resets on every mount under either name. The first version of this comment
+  // repeated the plan's sentence; it is corrected here rather than left to be cited later.
+  floatTails: {
+    group: 'insight',
+    label: 'Feasible window',
+    enabled: CANVAS_LIVE_FEEDBACK_ENABLED,
+  },
   linkSlack: { group: 'insight', label: 'Link slack', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
   lateOverlay: { group: 'insight', label: 'Late-start overlay', enabled: SCHEDULING_MODES_ENABLED },
 };

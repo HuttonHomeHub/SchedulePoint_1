@@ -8,27 +8,42 @@ import { TsldLegend } from './TsldLegend';
  * key has to explain them — a hatched rectangle hanging off a bar means nothing on sight.
  *
  * The drift row is the one that matters most: drift is zero everywhere in Early mode by
- * construction, so a planner who turns `Float & drift` on and sees only right-hand tails has no way
+ * construction, so a planner who turns `Feasible window` on has no way
  * to tell "correct" from "half-broken" unless the key says when the left-hand one appears.
  *
  * The flag is default-on, so this is the shipped legend; the flag-off key (no new rows — the
  * rollback contract) is covered by the default TsldLegendPanel suite.
  */
 describe('TsldLegend — ADR-0054 insight marks', () => {
-  it('keys the float tail, the drift tail and the link-slack chip', () => {
+  it('keys the feasible window and the link-slack chip', () => {
     render(<TsldLegend />);
     const legend = screen.getByRole('list', { name: 'Legend' });
-    expect(within(legend).getByText('Total float (room to slip)')).toBeInTheDocument();
+    expect(within(legend).getByText(/^Feasible window/)).toBeInTheDocument();
     expect(within(legend).getByText('Link slack (days)')).toBeInTheDocument();
   });
 
-  it('says when drift appears, so its absence in Early mode does not read as a defect', () => {
+  it('keys the window ONCE, where the two tails were keyed twice', () => {
+    // The tails were one fact drawn twice and are now one bracket (one-planning-surface M-E), so
+    // two keys would describe a picture the canvas no longer paints. Asserted as a count rather
+    // than by absence of the old copy: a legend that lost the key altogether would satisfy "the
+    // old wording is gone" perfectly.
     render(<TsldLegend />);
     const legend = screen.getByRole('list', { name: 'Legend' });
-    expect(within(legend).getByText(/^Drift/)).toHaveTextContent('Visual mode');
+    expect(within(legend).getAllByText(/[Ff]easible window/)).toHaveLength(1);
   });
 
-  it('keeps the rows under an active Colour-by lens (they are shape cues, not fills)', () => {
+  /*
+   * **`says when drift appears` is DELETED rather than rewritten**, and the reason is the shape
+   * change rather than the copy change.
+   *
+   * That case pinned the drift key naming *Visual mode*, because drift is zero everywhere in Early
+   * mode by construction and a permanently-absent left-hand tail read as a broken feature. The
+   * window has no such absence to apologise for: with no drift the bracket simply starts at the
+   * bar, which is a picture rather than a missing one. Keeping the assertion would have meant
+   * keeping a second key alive to satisfy it.
+   */
+
+  it('keeps the row under an active Colour-by lens (it is a shape cue, not a fill)', () => {
     render(
       <TsldLegend
         lens={{
@@ -39,6 +54,6 @@ describe('TsldLegend — ADR-0054 insight marks', () => {
       />,
     );
     const legend = screen.getByRole('list', { name: 'Legend' });
-    expect(within(legend).getByText('Total float (room to slip)')).toBeInTheDocument();
+    expect(within(legend).getByText(/^Feasible window/)).toBeInTheDocument();
   });
 });

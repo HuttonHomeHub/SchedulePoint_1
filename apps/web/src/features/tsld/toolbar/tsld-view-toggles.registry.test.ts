@@ -63,6 +63,10 @@ describe('TSLD View▾ toggle registry', () => {
       'labels',
       // The ADR-0054 insight layers — each one's paint pass is dead code without its entry here.
       'dates',
+      // **The key is `floatTails` and the LABEL is "Feasible window"** (one-planning-surface M-E).
+      // The window replaced the float and drift tails — one fact that had been drawn twice — and
+      // the key deliberately did not move with the copy: renaming it would touch three consumers
+      // and the whole `TsldViewToggles` contract to describe the same overlay.
       'floatTails',
       'linkSlack',
       // The ADR-0033 Late-start overlay — gated on VITE_SCHEDULING_MODES, not VITE_CANVAS_LIVE_FEEDBACK.
