@@ -218,3 +218,145 @@ describe('computeSchedule — effective-Visual pass, known M0 gap', () => {
     'flags visualConflict when a placement is AFTER an explicit SNLT/FNLT ceiling (upper-bound case, follow-up to M0)',
   );
 });
+
+describe('computeSchedule — effective-Visual pass, Pass 1 parity where nothing is placed (FC-11)', () => {
+  /**
+   * **The epic's foundation, and the condition whose absence let a false premise ship.**
+   *
+   * `docs/specs/one-planning-surface/` §1.2 asserted that "Early is Visual's resting state" and
+   * cited this file. That citation is five plain tasks: the file contains **zero** `actualStart`,
+   * `remainingMinutes`, `WBS_SUMMARY` or `LEVEL_OF_EFFORT`, so it could only ever have established
+   * the claim for the one shape where it is trivially true. Pass 2 is **not** a superset of Pass 1 —
+   * Pass 1 has three branches Pass 2 has never had, and each is invisible to a fixture of plain
+   * unprogressed tasks.
+   *
+   * Written and confirmed RED before the branches exist (M-P-T1, plan task; ADR-0110 D5's rule that
+   * a gate is finished when it has been made to fail by the defect it was written for).
+   */
+  const DAY = 1440;
+
+  /** Every activity a placed view must render exactly where Pass 1 renders it — none placed. */
+  const activities: readonly EngineActivity[] = [
+    // In progress: started 02 Jan, two of its four days left. Pass 1 freezes the actual start and
+    // reschedules the remainder from the data date.
+    task('STARTED', 4, { actualStart: '2026-01-02', remainingMinutes: 2 * DAY }),
+    // Complete: frozen on both actuals, which sit BEFORE the data date.
+    task('DONE', 4, { actualStart: '2026-01-02', actualFinish: '2026-01-05' }),
+    // Complete with NO actual start. `resolveProgress` derives `started` and `finished`
+    // INDEPENDENTLY (`progress.ts:84-86`), so this is COMPLETE with `actualStartInst === null` —
+    // and Pass 1 accordingly takes its start from the computed mapping and its finish from the
+    // actual. Unreachable through the public API (N06, `FINISH_WITHOUT_START`,
+    // `activities.service.ts:1125-1129`) and perfectly reachable here, which is the level FC-11 is
+    // judged at. It is in the fixture because a mutation sweep found that WITHOUT it, deleting the
+    // `isComplete` branch left this case green — `started` covers a complete activity in every
+    // other shape, so the branch reads as dead code when it is not.
+    task('DONE_NO_START', 4, { actualFinish: '2026-01-05' }),
+    // A summary over a multi-day child: its span is rolled up, and its own duration is zero.
+    //
+    // **The child starts AFTER the data date, deliberately.** The first draft of this fixture had
+    // `CHILD` beginning at the data date, so the summary's rolled-up start and Pass 2's bare
+    // `logicEarliest` coincided — and this case went green over a summary that renders at the data
+    // date whatever its children do. Only a separate probe with a late child found it. A fixture
+    // whose two answers agree by accident tests nothing, and the accident is invisible: ADR-0093.
+    { id: 'SUMMARY', durationMinutes: 0, type: 'WBS_SUMMARY' },
+    task('LEAD', 5),
+    task('CHILD', 4, { parentId: 'SUMMARY' }),
+    // A Level of Effort hammocking a two-task spine: its span is DERIVED from its SS-predecessor's
+    // start to its FF-successor's finish, and its own input duration is zero (ADR-0035 §21). Note
+    // the LOE is the PREDECESSOR of the FF edge — the first draft of this fixture made it the
+    // successor of both, which gives it no span at all, so Pass 1 collapsed it to a point and the
+    // case could not have demonstrated Pass 2 collapsing one. Read off `compute.loe.spec.ts`'s own
+    // fixture rather than assumed.
+    { id: 'LOE', durationMinutes: 0, type: 'LEVEL_OF_EFFORT' },
+    task('SPINE', 3),
+    task('TAIL', 2),
+  ];
+  const edges: readonly EngineEdge[] = [
+    edge('SPINE', 'TAIL', 'FS'),
+    edge('SPINE', 'LOE', 'SS'),
+    edge('LOE', 'TAIL', 'FF'),
+    edge('LEAD', 'CHILD', 'FS'),
+  ];
+
+  it('visualEffective* equals early* for every activity when nothing is placed', () => {
+    const { results } = run(activities, edges);
+    expect(results).toHaveLength(9);
+    // Asserted as a whole map rather than per row, so a failure names EVERY diverging activity in
+    // one run. Four separate `expect`s would stop at the first and hide the other three, which is
+    // exactly the shape this case exists to enumerate.
+    const actual = Object.fromEntries(
+      results.map((r) => [
+        r.activityId,
+        { start: r.visualEffectiveStart, finish: r.visualEffectiveFinish },
+      ]),
+    );
+    const expected = Object.fromEntries(
+      results.map((r) => [r.activityId, { start: r.earlyStart, finish: r.earlyFinish }]),
+    );
+    expect(actual).toEqual(expected);
+  });
+
+  it('the placed basis is not drifting or conflicted either — nothing was placed', () => {
+    const { results } = run(activities, edges);
+    for (const r of results) {
+      expect(r.visualConflict, `${r.activityId} conflict`).toBe(false);
+      expect(r.visualDriftMinutes, `${r.activityId} drift`).toBeNull();
+    }
+  });
+});
+
+describe('computeSchedule — effective-Visual pass, a placement is inert against an actual (M-P)', () => {
+  const DAY = 1440;
+
+  it('a placed AND started activity renders on its actual, not on its placement', () => {
+    // The combination a reader will assume goes the other way. Pass 1's rule is "actuals never move"
+    // (ADR-0035 §1) and Pass 2 defers to it, so the placement is inert for THIS activity — it is not
+    // ignored, it is simply outranked. Asserted because nothing else in this file covers it.
+    const { byId } = run(
+      [
+        task('P', 4, {
+          actualStart: '2026-01-02',
+          remainingMinutes: 2 * DAY,
+          visualStart: '2026-01-20',
+        }),
+      ],
+      [],
+    );
+    const p = byId.get('P')!;
+    expect(p.visualEffectiveStart).toBe(p.earlyStart);
+    expect(p.visualEffectiveStart).toBe('2026-01-02');
+    expect(p.visualEffectiveStart).not.toBe('2026-01-20');
+    expect(p.visualEffectiveFinish).toBe(p.earlyFinish);
+    // The placement is recorded even though it moves nothing: the drift is real and a reader is
+    // entitled to see that somebody placed this bar somewhere it cannot go.
+    expect(p.visualDriftMinutes).not.toBeNull();
+  });
+
+  it('a placed summary and a placed LOE keep their DERIVED span, moved to the placement', () => {
+    // The span rule and the placement rule, composed. A summary's and an LOE's input duration is
+    // zero, so reading it collapses each to a point wherever it is placed — which is what shipped.
+    const activities: readonly EngineActivity[] = [
+      { id: 'S', durationMinutes: 0, type: 'WBS_SUMMARY', visualStart: '2026-01-10' },
+      task('KID', 4, { parentId: 'S' }),
+      { id: 'H', durationMinutes: 0, type: 'LEVEL_OF_EFFORT', visualStart: '2026-01-10' },
+      task('A', 3),
+      task('B', 2),
+    ];
+    const { byId } = run(activities, [
+      edge('A', 'B', 'FS'),
+      edge('A', 'H', 'SS'),
+      edge('H', 'B', 'FF'),
+    ]);
+    const s = byId.get('S')!;
+    const h = byId.get('H')!;
+    // Pass 1's spans, in days, are what the placed bars must keep.
+    const spanDays = (start: string, finish: string) =>
+      (Date.parse(finish) - Date.parse(start)) / 86_400_000;
+    expect(spanDays(s.earlyStart, s.earlyFinish)).toBe(3); // 4-day child, inclusive
+    expect(spanDays(h.earlyStart, h.earlyFinish)).toBe(4); // A's start … B's finish, inclusive
+    expect(s.visualEffectiveStart).toBe('2026-01-10');
+    expect(spanDays(s.visualEffectiveStart, s.visualEffectiveFinish)).toBe(3);
+    expect(h.visualEffectiveStart).toBe('2026-01-10');
+    expect(spanDays(h.visualEffectiveStart, h.visualEffectiveFinish)).toBe(4);
+  });
+});

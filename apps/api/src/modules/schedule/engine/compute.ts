@@ -753,8 +753,49 @@ export function computeSchedule(
     const inclusiveFinishOwn = pointLike ? esOwn : efOwn - 1;
     const inclusiveLateFinishOwn = pointLike ? lsOwn : lfOwn - 1;
     const vDisplayInst = visualDisplayStart.get(id)!;
-    const vDisplayOwn = offsetFromDataDate(cal, dataDateAbs, vDisplayInst);
-    const vInclusiveFinishOwn = duration === 0 ? vDisplayOwn : vDisplayOwn + duration - 1;
+    /**
+     * **An unplaced `WBS_SUMMARY` displays where Pass 1 put it** (M-P).
+     *
+     * A summary carries no logic — it is never a dependency endpoint (ADR-0038) — so Pass 2's
+     * forward walk has no incoming edge that could reach it and its `logicEarliest` is the bare data
+     * date for every summary in every plan. Pass 1 rolls the span up from the children, but that pass
+     * runs BELOW Pass 2 (`§WBS-summary rollup`), which is why this correction lives here and not at
+     * the `display` decision: by the results loop `esInst` is rolled up and there it is not.
+     *
+     * Reading `vDisplayOwn` rendered a summary at the data date whatever its children did. That is
+     * **invisible to a fixture whose children start ON the data date**, which is how FC-11's first
+     * draft passed against it — the case was written, it went green, and only a probe with a
+     * late-starting child showed the summary sitting five days left of its own subtree (ADR-0093's
+     * "a green result that cannot tell correct from nothing-to-test").
+     *
+     * A PLACED summary still honours its placement: this is the resting state, not a ruling on
+     * whether a summary may be placed at all, which is ADR-0063's question and not this pass's.
+     */
+    const vDisplayOwn =
+      activityIsSummary && activity.visualStart == null
+        ? esOwn
+        : offsetFromDataDate(cal, dataDateAbs, vDisplayInst);
+    /**
+     * **The placed bar's LENGTH is Pass 1's length, and it is read the way Pass 1 reads it** (M-P,
+     * `docs/specs/one-planning-surface/`).
+     *
+     * This was `duration === 0 ? vDisplayOwn : vDisplayOwn + duration - 1` — the INPUT duration,
+     * which is right for a plain unprogressed task and wrong for every activity whose span is
+     * derived. An LOE and a `WBS_SUMMARY` both carry an always-zero input duration (ADR-0035
+     * §21/§24), so the old expression collapsed each of them to a **point** wherever the placed
+     * basis was read, while Pass 1 rendered their full rolled-up span two lines above. An
+     * in-progress activity diverged the other way: Pass 1 schedules the REMAINING work, so its bar
+     * is shorter than `duration`, and the placed basis drew it at full length.
+     *
+     * Reusing `pointLike` rather than restating it is the point. That rule is **type-dependent**
+     * (`activityIsLoe || activityIsSummary ? efInst === esInst : duration === 0`) and a re-derived
+     * copy collapses a zero-duration TASK, which is a task and not a milestone (ADR-0035 §22). With
+     * `pointLike` shared and the span taken from the same instants, substituting `esOwn` for
+     * `vDisplayOwn` reproduces `inclusiveFinishOwn` **exactly** — so an unplaced activity is
+     * byte-identical to Pass 1 by construction rather than by coincidence, which is FC-11's bar.
+     */
+    const vSpanOwn = efOwn - esOwn;
+    const vInclusiveFinishOwn = pointLike ? vDisplayOwn : vDisplayOwn + vSpanOwn - 1;
 
     // A frozen actual endpoint (M2) displays its actual date VERBATIM: the data-date-anchored offset
     // mapping is lossy for instants BEFORE the data date (a completed/started activity in the past —
@@ -770,6 +811,9 @@ export function computeSchedule(
     const lateFinishDate = isComplete
       ? activity.actualFinish!
       : workingIndexDate(cal, dataDate, inclusiveLateFinishOwn);
+    // Pass 2 defers to Pass 1 wherever an actual froze an endpoint (M-P) — see the two
+    // `visualEffective*` fields below for why this is one predicate and not two.
+    const frozenByActuals = started || isComplete;
 
     // Project finish = the latest inclusive finish INSTANT, displayed on its own calendar. A task's
     // last occupied minute is `efInst − 1` (one real minute before its exclusive end boundary); a
@@ -812,8 +856,35 @@ export function computeSchedule(
       earlyFinish: earlyFinishDate,
       lateStart: lateStartDate,
       lateFinish: lateFinishDate,
-      visualEffectiveStart: workingIndexDate(cal, dataDate, vDisplayOwn),
-      visualEffectiveFinish: workingIndexDate(cal, dataDate, vInclusiveFinishOwn),
+      /**
+       * **An activity carrying ANY actual renders where Pass 1 renders it** (M-P; ADR-0035 §1,
+       * "actuals never move"). One rule, deliberately, rather than three branches shadowing Pass 1's
+       * three: a placement is **inert against a reported actual**, so the honest expression is "defer
+       * to Pass 1", not "re-derive what Pass 1 derived".
+       *
+       * Pass 1 has had those branches since M2 and Pass 2 had **none** of them, so a progressed
+       * activity rendered in two places at once — its early bar on its actuals, its placed bar on the
+       * data-date-anchored offset mapping, which is lossy for any instant BEFORE the data date. The
+       * epic's spec §1.2 claimed "Early is Visual's resting state" and cited a fixture of five plain
+       * unprogressed tasks: true of that fixture, false of any plan anybody has reported progress on.
+       *
+       * `started || isComplete` rather than `started` alone, because `resolveProgress` derives the
+       * two **independently** (`progress.ts:84-86`) — an activity with an `actualFinish` and no
+       * `actualStart` is COMPLETE with `actualStartInst === null`, and Pass 1 then takes its start
+       * from the computed mapping and its finish from the actual. That shape is refused at the public
+       * boundary (N06 `FINISH_WITHOUT_START`) and reachable here, which is the level the parity
+       * condition is judged at. Its Pass 1 start can land AFTER its finish; parity means reproducing
+       * that, not quietly improving on it.
+       *
+       * A placed AND started activity is a real combination and the actual wins — a reader will
+       * assume it goes the other way, so `compute.visual.spec.ts` asserts it.
+       */
+      visualEffectiveStart: frozenByActuals
+        ? earlyStartDate
+        : workingIndexDate(cal, dataDate, vDisplayOwn),
+      visualEffectiveFinish: frozenByActuals
+        ? earlyFinishDate
+        : workingIndexDate(cal, dataDate, vInclusiveFinishOwn),
       visualConflict: visualConflictMap.get(id)!,
       visualDriftMinutes: visualDriftMap.get(id)!,
     });
