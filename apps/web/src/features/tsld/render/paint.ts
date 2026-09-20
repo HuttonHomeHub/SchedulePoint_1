@@ -46,9 +46,8 @@ import {
   LABEL_GAP_PX,
   DATE_LABEL_MIN_PX_PER_DAY,
   dateLabelSlot,
-  driftTailRect,
   edgeGapDays,
-  floatTailRect,
+  feasibleWindowRect,
   formatCanvasDate,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
@@ -401,6 +400,21 @@ const GESTURE_SOURCE_ALPHA = 0.18;
 
 /** Spacing (px) between a float/drift tail's hatch strokes — the non-colour cue's density. */
 const TAIL_HATCH_STEP = 6;
+
+/**
+ * Trace one vertical cap of a feasible window into the caller's open path.
+ *
+ * **One function, called from both layers**, because a cap drawn before the bars and a cap drawn
+ * after one must be the same mark — that is the whole content of "the window is a bracket". Two
+ * tracers is how the inverted case would end up a pixel taller or a half-pixel off, visible only on
+ * the placements this milestone exists to show.
+ *
+ * The half-pixel offsets match the span's, so a cap meets the rails it closes.
+ */
+function traceWindowCap(ctx: Ctx2D, x: number, band: Rect): void {
+  ctx.moveTo(x + 0.5, band.y + 0.5);
+  ctx.lineTo(x + 0.5, band.y + band.h - 0.5);
+}
 
 /** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
 const SLACK_CHIP_H = 13;
@@ -1439,6 +1453,70 @@ export function paintScene(
   // move later; this line keeps today's ordering byte-for-byte until someone measures it.
   const rects = frame.rects();
 
+  // Layer 2.7: the **FEASIBLE WINDOW** (one-planning-surface M-E, spec §4.8) — the span
+  // `[earlyStart, lateFinish]` a bar may legally occupy, as ONE hollow bracket with a vertical cap
+  // at each end.
+  //
+  // **It REPLACES the shipped float and drift tails rather than sitting beside them**, on the
+  // product owner's decision: they were one fact drawn twice. Both centred on this same band, and
+  // their extremes were already this window's — the drift tail's left edge is `earlyStart`, and a
+  // CORRECTED float tail's right edge is `lateFinish`. Two thirds of this was on screen already.
+  //
+  // **Drawn BEFORE the bars**, which is what lets one rect read as two flanking tails: the bar
+  // paints over the middle. The two cases where a cap falls inside the bar invert that and are
+  // handled at Layer 3.56 — stated there rather than discovered.
+  //
+  // Hollow and hatched, never filled: a filled extension would read as duration, and the hatch is
+  // the non-colour cue (WCAG 1.4.1) that survives a monochrome print. **The hatch skips the span
+  // the bar covers** — that region is occluded, so tracing it is invisible work; the OUTLINE still
+  // spans the whole window, because the caps must sit at the true ends.
+  //
+  // Cheap by construction: no text, no measurement, culled with the bar. Toggle off ⇒ not one call
+  // ⇒ parity.
+  if (toggles.floatTails === true) {
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = palette.labelBeside;
+    // ONE batched path for every window on screen (the file's established discipline — a stroke
+    // per bar would be up to 4,000 calls).
+    ctx.beginPath();
+    for (const [id, rect] of rects) {
+      const activity = byId.get(id)!;
+      const win = feasibleWindowRect(rect, activity.remainingFloat, activity.visualDriftDays, view);
+      if (!win) continue;
+      const { rect: band } = win;
+      if (band.w >= 2) {
+        // The span, minus the caps, which are traced separately so an inverted one can be held
+        // back to Layer 3.56.
+        ctx.moveTo(band.x + 0.5, band.y + 0.5);
+        ctx.lineTo(band.x + band.w - 0.5, band.y + 0.5);
+        ctx.moveTo(band.x + 0.5, band.y + band.h - 0.5);
+        ctx.lineTo(band.x + band.w - 0.5, band.y + band.h - 0.5);
+        // Diagonal hatch — CLAMPED TO THE VIEWPORT, which is the difference between bounded and
+        // unbounded work: a window's width is `(drift + duration + float) × pxPerDay`, so a routine
+        // 200-day float at day zoom runs thousands of pixels off the side of the screen. Hatching
+        // its full length measured 320,000 segments for a 2,000-activity plan — cost scaling with
+        // the DATA rather than the screen.
+        const from = Math.max(band.x + TAIL_HATCH_STEP, -band.h);
+        const to = Math.min(band.x + band.w, size.width);
+        // …and skips the occluded middle. `rect` is the bar; everything between its edges is
+        // painted over by Layer 3 a few lines below.
+        for (let hx = from; hx < to; hx += TAIL_HATCH_STEP) {
+          // Skip only the FULLY occluded lines. A hatch stroke runs from `hx` to `hx + band.h`,
+          // so one starting just left of the bar is still partly visible and must be traced —
+          // the conservative test is the difference between an invisible saving and a visible gap
+          // at each edge of every bar.
+          if (hx >= rect.x && hx + band.h <= rect.x + rect.w) continue;
+          ctx.moveTo(hx, band.y + band.h);
+          ctx.lineTo(hx + band.h, band.y);
+        }
+      }
+      if (!win.leftCapInsideBar) traceWindowCap(ctx, win.leftCapX, band);
+      if (!win.rightCapInsideBar) traceWindowCap(ctx, win.rightCapX, band);
+    }
+    ctx.stroke();
+  }
+
   // Layer 3: activity bars + milestone diamonds. Critical/near-critical activities also
   // get a solid/dashed outline (a non-colour cue for criticality — WCAG 1.4.1).
   for (const [id, rect] of rects) {
@@ -1611,46 +1689,32 @@ export function paintScene(
     ctx.setLineDash([]);
   }
 
-  // Layer 3.55: GPM **float / drift tails** (ADR-0054 §4) — a hollow tail right of the bar for
-  // total float ("how far can this slip?") and left of it for drift ("how much earlier could it
-  // have gone?"), in the same time-scale as the bar so slack is comparable across the whole
-  // diagram at a glance, which a number printed on a link cannot be.
+  // Layer 3.56: the feasible window's INVERTED CAPS — the two states that draw AFTER the bars.
   //
-  // Hollow and hatched, never filled: a filled extension would read as duration. The hatch is the
-  // non-colour cue (WCAG 1.4.1), so the tails survive a monochrome print and a colour-blind
-  // reader. Drawn BELOW the labels, so no name is ever obscured by slack.
+  // The window itself is Layer 2.7, below the bars, so the bar occludes its middle and the span
+  // reads as two flanking tails with no special-casing. These are that rule's only exceptions, and
+  // they are independent: a cap that falls INSIDE the bar would be painted over and invisible.
   //
-  // Cheap by construction: no text, no measurement — two stroked rects and a few hatch lines per
-  // bar, culled with the bar itself. Absent flag ⇒ not one call ⇒ parity.
+  //   * RIGHT, when remaining float is negative — the placement is past a ceiling, so the bar
+  //     overflows its own window.
+  //   * LEFT, when drift is negative — ADR-0033's stay-and-flag KEEPS a placement earlier than
+  //     logic allows rather than clamping it, and drift is signed.
+  //
+  // **Both states drew nothing at all before M-E** (`floatTailRect`/`driftTailRect` each returned
+  // `null` for a non-positive quantity), so each becomes visible here for the first time. The left
+  // one was missing from the spec until an architecture review: one correct pattern applied to a
+  // control and not its neighbour, which is this register's most-recorded shape.
   if (toggles.floatTails === true) {
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     ctx.strokeStyle = palette.labelBeside;
-    // ONE batched path for every hatch line on screen (the file's established discipline — a
-    // stroke per bar would be up to 4,000 calls), traced after the outlines.
     ctx.beginPath();
     for (const [id, rect] of rects) {
       const activity = byId.get(id)!;
-      const tails = [
-        floatTailRect(rect, activity.totalFloat, view),
-        driftTailRect(rect, activity.visualDriftDays, view),
-      ];
-      for (const tail of tails) {
-        if (!tail || tail.w < 2) continue; // sub-2px slack is not worth a shape
-        ctx.strokeRect(tail.x + 0.5, tail.y + 0.5, tail.w - 1, tail.h - 1);
-        // Diagonal hatch — the non-colour cue. CLAMPED TO THE VIEWPORT, which is the difference
-        // between bounded and unbounded work: a tail's width is `float × pxPerDay`, so a routine
-        // 200-day float at day zoom is 8,000px of tail off the side of a 1,920px screen. Hatching
-        // its full length measured 320,000 line segments for a 2,000-activity plan — cost scaling
-        // with the DATA rather than with the screen. The visible span is all that can be seen, so
-        // it is all that is traced (the same clamp the day grid a few layers above applies).
-        const from = Math.max(tail.x + TAIL_HATCH_STEP, -tail.h);
-        const to = Math.min(tail.x + tail.w, size.width);
-        for (let hx = from; hx < to; hx += TAIL_HATCH_STEP) {
-          ctx.moveTo(hx, tail.y + tail.h);
-          ctx.lineTo(hx + tail.h, tail.y);
-        }
-      }
+      const win = feasibleWindowRect(rect, activity.remainingFloat, activity.visualDriftDays, view);
+      if (!win) continue;
+      if (win.leftCapInsideBar) traceWindowCap(ctx, win.leftCapX, win.rect);
+      if (win.rightCapInsideBar) traceWindowCap(ctx, win.rightCapX, win.rect);
     }
     ctx.stroke();
   }

@@ -69,9 +69,18 @@ export function toRenderActivities(
     // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,
     // so the canvas and the table can never disagree on how complete an activity is.
     percentComplete: a.percentComplete,
-    // Engine-owned total float, for the GPM float tail (ADR-0054 §4). Carried straight through —
-    // the canvas never computes float, it only draws what the engine decided.
+    // Engine-owned total float. Carried straight through — the canvas never computes float, it
+    // only draws what the engine decided.
     totalFloat: a.totalFloat,
+    // **The feasible window's right edge, and it is gated on the SAME basis the bar is drawn on**
+    // (one-planning-surface M-E). `remainingFloat` is the room left from the PLACED finish; from
+    // the EARLY finish the room is the whole `totalFloat`. So a plan switched back to Early mode
+    // while still holding placements — which the product permits — would otherwise get a window
+    // measured from one basis and drawn on another, short by exactly the drift.
+    //
+    // The two lines are deliberately parallel to the `visualDriftDays` gate above: they are the two
+    // halves of one window, and M-F collapses both when the mode goes.
+    remainingFloat: source === 'visual' ? a.remainingFloat : a.totalFloat,
   }));
 }
 

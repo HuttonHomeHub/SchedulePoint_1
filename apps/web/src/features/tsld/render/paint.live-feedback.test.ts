@@ -256,8 +256,8 @@ describe('cursor date readout (ADR-0054 §2)', () => {
   });
 });
 
-describe('float & drift tails (ADR-0054 §4)', () => {
-  const withTails = (activity: Partial<RenderActivity>) => {
+describe("the feasible window (one-planning-surface M-E, replacing ADR-0054 §4's tails)", () => {
+  const withWindow = (activity: Partial<RenderActivity>) => {
     const ctx = mockCtx();
     const scene: TsldScene = {
       activities: [task(activity)],
@@ -269,30 +269,73 @@ describe('float & drift tails (ADR-0054 §4)', () => {
     return ctx;
   };
 
-  it('draws a float tail for an activity with slack', () => {
-    const none = withTails({ totalFloat: 0 });
-    const some = withTails({ totalFloat: 5 });
-    expect(some.strokeRect.mock.calls.length).toBeGreaterThan(none.strokeRect.mock.calls.length);
+  // The window is ONE batched path, so every assertion here counts `moveTo` rather than
+  // `strokeRect`. That is the change of treatment, not a change of instrument: two stroked rects
+  // became one bracket, which is the whole point of the window replacing the tails.
+  const marks = (activity: Partial<RenderActivity>) =>
+    withWindow(activity).moveTo.mock.calls.length;
+
+  it('widens with the float it is derived from', () => {
+    expect(marks({ remainingFloat: 5 })).toBeGreaterThan(marks({ remainingFloat: 0 }));
   });
 
-  it('draws nothing for zero, negative or uncomputed float — no backwards rectangles', () => {
-    const base = withTails({ totalFloat: 0 }).strokeRect.mock.calls.length;
-    // Negative float means the activity is already late; that is not slack and gets no tail.
-    expect(withTails({ totalFloat: -3 }).strokeRect.mock.calls.length).toBe(base);
-    expect(withTails({ totalFloat: null }).strokeRect.mock.calls.length).toBe(base);
-    expect(withTails({}).strokeRect.mock.calls.length).toBe(base);
+  it('is derived from remainingFloat, NEVER from totalFloat', () => {
+    // The #348 fix, pinned. The shipped tail drew `totalFloat` from the PLACED finish, so it
+    // overshot the late finish by exactly the drift on every plan with a placement. A window built
+    // from `totalFloat` would be indistinguishable from this one wherever nothing is placed — so
+    // the fixture places something, which is what makes the two quantities differ.
+    const correct = marks({ remainingFloat: 2, visualDriftDays: 8, totalFloat: 10 });
+    const overshooting = marks({ remainingFloat: 10, visualDriftDays: 8, totalFloat: 10 });
+    expect(correct).not.toBe(overshooting);
   });
 
-  it('draws no drift tail in Early mode — drift is zero there by construction', () => {
-    // ADR-0054 §4: an early-start schedule already places everything as early as logic allows, so
-    // `visualDriftDays` is 0/absent and the LEFT tail is correctly absent. Not a defect.
-    const early = withTails({ totalFloat: 4 });
-    const visual = withTails({ totalFloat: 4, visualDriftDays: 3 });
-    expect(visual.strokeRect.mock.calls.length).toBeGreaterThan(early.strokeRect.mock.calls.length);
+  it("draws a window for a critical, unplaced bar — the estate's COMMON case", () => {
+    // The old tails returned null for non-positive float and drew NOTHING, which is how a planner
+    // learns a control does nothing. FC-1 predicts no placements anywhere on the deployed estate,
+    // so a zero-float unplaced bar is not an edge case — it is what most bars look like.
+    //
+    // Measured against the UNCALCULATED scene rather than against zero: `moveTo` is used by the
+    // grid, the lane hairlines and the edge layer too, so an absolute count is an instrument that
+    // measures the whole frame. The first version of this case asserted `> 0` and passed for that
+    // reason; its sibling below asserted `=== 0` and failed, which is what exposed it.
+    expect(marks({ remainingFloat: 0, visualDriftDays: null })).toBeGreaterThan(
+      marks({ remainingFloat: null }),
+    );
   });
 
-  it('hatches each tail, so the cue is never colour alone (WCAG 1.4.1)', () => {
-    const ctx = withTails({ totalFloat: 10 });
+  it('draws nothing at all when the plan has never been calculated', () => {
+    // The ONE state with no honest answer: no remaining float means no late finish to bracket.
+    // Distinct from zero, which is a real and common answer — the case above is that one.
+    const uncalculated = marks({ remainingFloat: null });
+    expect(marks({})).toBe(uncalculated);
+    // …and it matches the toggle-off frame exactly, which is what "nothing" means here.
+    const off = mockCtx();
+    paintScene(
+      off,
+      {
+        activities: [task({ remainingFloat: null })],
+        edges: [],
+        dataDate: DATA_DATE,
+        view: { ...ALL_ON, floatTails: false },
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+      1,
+    );
+    expect(uncalculated).toBe(off.moveTo.mock.calls.length);
+  });
+
+  it('draws the two states the shipped tails could not: negative float, and negative drift', () => {
+    // Both returned `null` from their rect helpers and drew nothing, so each becomes visible here
+    // for the first time. Negative drift is ADR-0033's stay-and-flag — a placement EARLIER than
+    // logic allows is kept, not clamped.
+    expect(marks({ remainingFloat: -4 })).toBeGreaterThan(0);
+    expect(marks({ remainingFloat: 3, visualDriftDays: -4 })).toBeGreaterThan(0);
+  });
+
+  it('hatches the span, so the cue is never colour alone (WCAG 1.4.1)', () => {
+    const ctx = withWindow({ remainingFloat: 10 });
     expect(ctx.moveTo).toHaveBeenCalled();
     expect(ctx.lineTo).toHaveBeenCalled();
   });
@@ -300,7 +343,7 @@ describe('float & drift tails (ADR-0054 §4)', () => {
   it('is a no-op without the toggle — the flag-off parity contract', () => {
     const off = mockCtx();
     const absent = mockCtx();
-    const activities = [task({ totalFloat: 8, visualDriftDays: 2 })];
+    const activities = [task({ remainingFloat: 8, visualDriftDays: 2 })];
     paintScene(
       off,
       { activities, edges: [], dataDate: DATA_DATE, view: { ...ALL_ON, floatTails: false } },

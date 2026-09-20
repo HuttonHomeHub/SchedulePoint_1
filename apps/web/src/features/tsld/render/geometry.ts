@@ -141,46 +141,83 @@ export function slackByDependencyId(args: {
 export const TAIL_HEIGHT = 6;
 
 /**
- * The hollow **float** tail (ADR-0054 §4): the room this activity has to slip, drawn extending
- * RIGHT from its finish in the same time-scale as the bar, so slack is comparable between two
- * activities by eye without selecting either — the Graphical Path Method idiom.
+ * **The feasible window** — the span `[earlyStart, lateFinish]` a bar may legally occupy
+ * (one-planning-surface M-E, spec §4.8). It **replaces** the shipped float and drift tails rather
+ * than sitting beside them, on the product owner's decision: they were one fact drawn twice.
  *
- * Returns `null` when there is nothing truthful to draw: no float computed yet, or zero/negative
- * float (a critical activity has no room, and a negative-float one is already late — neither is a
- * tail, and drawing a backwards rectangle would be a lie).
+ * **Two thirds of it was already on screen.** The drift tail's left edge is `placedStart − d =
+ * earlyStart`, and a *corrected* float tail's right edge is `placedFinish + (T − d) = lateFinish`.
+ * So the two tails already spanned exactly this, in exactly this band — keeping both would be two
+ * treatments of one fact.
+ *
+ * **The right edge derives from `remainingFloat`, NEVER independently from `lateFinish`, and that
+ * is the load-bearing decision.** `totalFloat` and `visualDriftDays` are independently rounded day
+ * columns (`schedule.repository.ts`), so two derivations could put the cap and the span's end a day
+ * apart on a non-24-hour calendar — a population ADR-0140's first press measured at **19 of 164**
+ * deployed activities. One derivation makes that disagreement unreachable rather than untested.
+ *
+ * It is also what closes `docs/TECH_DEBT.md` #348: the shipped float tail was drawn from the
+ * **placed** finish using `totalFloat`, which is measured from the **early** finish, so it
+ * overshot the late finish by exactly the drift on every plan with a placement.
+ *
+ * Returns `null` only when the plan has never been calculated (`remainingFloatDays === null`).
+ * **A window with no drift and no float is still drawn** — a zero-width bracket on a critical,
+ * unplaced bar is the truthful answer and is the COMMON case on the deployed estate, where FC-1
+ * predicts no placements at all. The old tails returned `null` there and drew nothing, which is
+ * how a planner learns the control does nothing.
  */
-export function floatTailRect(
-  bar: Rect,
-  totalFloatDays: number | null | undefined,
-  view: Viewport,
-): Rect | null {
-  if (totalFloatDays === null || totalFloatDays === undefined || totalFloatDays <= 0) return null;
-  return {
-    x: bar.x + bar.w,
-    y: bar.y + (bar.h - TAIL_HEIGHT) / 2,
-    w: totalFloatDays * view.pxPerDay,
-    h: TAIL_HEIGHT,
-  };
+export interface FeasibleWindow {
+  /**
+   * The whole span, `earlyStart` → `lateFinish`, in the tails band this inherits. The bar paints
+   * over its middle, so the result reads as two tails flanking the bar with no special-casing.
+   */
+  rect: Rect;
+  /** Screen x of the earliest edge — the left cap. */
+  leftCapX: number;
+  /** Screen x of the latest edge — the right cap. */
+  rightCapX: number;
+  /**
+   * Whether each cap falls INSIDE the bar and must therefore be drawn **after** it, inverting the
+   * layer's "window before bars" rule. These are the rule's only two exceptions and they are
+   * independent; on a long bar with negative float placed early, both fire at once.
+   *
+   * - **left** when drift is negative — ADR-0033's stay-and-flag keeps a placement earlier than
+   *   logic allows rather than clamping it, and drift is signed.
+   * - **right** when remaining float is negative — a placement past a ceiling, so the bar overflows
+   *   its own window to the right.
+   *
+   * Both states draw **nothing at all** today (`floatTailRect`/`driftTailRect` returned `null` for
+   * a non-positive quantity), so each becomes visible for the first time here.
+   */
+  leftCapInsideBar: boolean;
+  rightCapInsideBar: boolean;
 }
 
-/**
- * The hollow **drift** tail (ADR-0054 §4): how much earlier this activity could have gone, drawn
- * extending LEFT from its start.
- *
- * **Absent in Early mode by construction, and that is correct rather than a defect** — an
- * early-start schedule already places everything as early as logic allows, so drift is zero
- * everywhere. It becomes non-zero only under Visual mode (hand placement, ADR-0033) or where a
- * constraint pushes an activity later than its logic permits. The datum is the engine's
- * `visualDriftDays`; the canvas never computes drift itself.
- */
-export function driftTailRect(
+export function feasibleWindowRect(
   bar: Rect,
+  remainingFloatDays: number | null | undefined,
   driftDays: number | null | undefined,
   view: Viewport,
-): Rect | null {
-  if (driftDays === null || driftDays === undefined || driftDays <= 0) return null;
-  const w = driftDays * view.pxPerDay;
-  return { x: bar.x - w, y: bar.y + (bar.h - TAIL_HEIGHT) / 2, w, h: TAIL_HEIGHT };
+): FeasibleWindow | null {
+  if (remainingFloatDays === null || remainingFloatDays === undefined) return null;
+  // Null drift means UNPLACED, not unknown — the bar is already at its early start, so the left
+  // edge is the bar's own. (Uncalculated is caught by the remaining-float guard above; the two
+  // share a null on the wire and only one of them is a missing answer.)
+  const drift = driftDays ?? 0;
+  const leftCapX = bar.x - drift * view.pxPerDay;
+  const rightCapX = bar.x + bar.w + remainingFloatDays * view.pxPerDay;
+  return {
+    rect: {
+      x: Math.min(leftCapX, rightCapX),
+      y: bar.y + (bar.h - TAIL_HEIGHT) / 2,
+      w: Math.abs(rightCapX - leftCapX),
+      h: TAIL_HEIGHT,
+    },
+    leftCapX,
+    rightCapX,
+    leftCapInsideBar: drift < 0,
+    rightCapInsideBar: remainingFloatDays < 0,
+  };
 }
 
 /** Month abbreviations for {@link formatCanvasDate} — fixed, never locale-derived. */
@@ -388,6 +425,19 @@ export interface RenderActivity {
   visualConflict?: boolean;
   /** Engine-owned (ADR-0033): working-day drift of the placement from the early start (signed). */
   visualDriftDays?: number | null;
+  /**
+   * Engine-owned (one-planning-surface M-D): the working-day float this bar has NOT already spent —
+   * `totalFloat − visualDriftDays`, subtracted in minutes and rounded **once** on the server.
+   *
+   * **The window's right edge is derived from this and never independently from `lateFinish`.**
+   * That is what makes the bracket's cap and the span's end the same point by construction: the two
+   * day columns it is built from are rounded independently, so two derivations could put them a day
+   * apart on a non-24-hour calendar — 19 of 164 deployed activities, measured.
+   *
+   * **Never derive it client-side from `totalFloat − visualDriftDays`**: the difference of two
+   * roundings is not the rounding of the difference, and minutes are persisted for neither input.
+   */
+  remainingFloat?: number | null;
   /** True when this bar shares a lane with a time-overlapping neighbour (TECH_DEBT #24c) — a manual
    * lane drop can create one (auto-arrange never does). Derived at the mapping seam from the drawn
    * dates + lane (`laneOverlapIds`); the painter marks it and the listbox speaks it. */
