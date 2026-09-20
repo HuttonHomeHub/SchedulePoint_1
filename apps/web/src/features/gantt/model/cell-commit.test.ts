@@ -46,7 +46,6 @@ const activity = (over: Partial<ActivitySummary> = {}): ActivitySummary =>
 const ctx = (over: Partial<CellWriteContext> = {}): CellWriteContext => ({
   activity: activity(),
   hoursPerDay: EIGHT_HOUR,
-  schedulingMode: 'EARLY',
   barDateSource: 'early',
   ...over,
 });
@@ -107,49 +106,43 @@ describe('cellWriteFields', () => {
    * shipped. The relationship test below is the one that can see that, and it is kept.
    */
   describe('a typed date', () => {
-    it('pins the start as an SNET in Early mode, holding the finish', () => {
-      // D2. The start is computed, so the only honest way to move it is to pin it — and the
-      // duration shrinks so the finish stays where the planner can see it.
-      // New start Wed 4 March, finish still Fri 6 → 3 calendar days inclusive.
-      expect(fieldsOf(cellWriteFields('earlyStart', '04 Mar 2026', ctx()))).toEqual({
-        constraintType: 'SNET',
-        constraintDate: '2026-03-04',
-        durationDays: 3,
-      });
-    });
-
-    it('hand-places the start in Visual mode, and writes NO constraint', () => {
-      // D1. A placement is advisory and a constraint is not; the ADR-0033 effective-Visual pass
-      // pins the bar afterwards, exactly as it does for a reposition drop. Verified red by
-      // returning the Early branch's fragment here.
+    /**
+     * **The `EARLY` case is DELETED** (M-F-T6). It asserted D2 — a typed start pinned as an
+     * `SNET`, which by design overwrote whatever constraint the row carried. That branch went
+     * with the mode, and the sibling below is now what a typed start always does.
+     *
+     * D2 existed for a good reason: in Early mode a start is computed, so pinning was the only
+     * honest way to move it. A placement column makes it unnecessary rather than makes it wrong.
+     */
+    it('hand-places the start, and writes NO constraint', () => {
+      // D1. A placement is advisory and a constraint is not; the effective-Visual pass pins the
+      // bar afterwards, exactly as it does for a reposition drop. The negative half is the one
+      // that survives the collapse: a typed start must not write a constraint at all.
       const result = fieldsOf(
-        cellWriteFields(
-          'earlyStart',
-          '04 Mar 2026',
-          ctx({ schedulingMode: 'VISUAL', barDateSource: 'visual' }),
-        ),
+        cellWriteFields('earlyStart', '04 Mar 2026', ctx({ barDateSource: 'visual' })),
       );
       expect(result).toEqual({ visualStart: '2026-03-04', durationDays: 3 });
       expect(result).not.toHaveProperty('constraintType');
     });
 
-    it.each([
-      ['EARLY' as const, 'early' as const],
-      ['VISUAL' as const, 'visual' as const],
-    ])('writes a DURATION for a typed finish in %s mode, and no constraint', (mode, source) => {
-      // **D3, the branch a reader expects to be FNLT and is not.** A finish-edge resize "spreads
-      // neither field, leaving the stored constraint round-tripped verbatim"; a typed finish does
-      // the same. Making the grid differ would invent the second answer ADR-0134 exists to prevent.
-      // Start stays Mon 2, new finish Tue 10 → 9 calendar days inclusive.
-      const result = fieldsOf(
-        cellWriteFields(
-          'earlyFinish',
-          '10 Mar 2026',
-          ctx({ schedulingMode: mode, barDateSource: source }),
-        ),
-      );
-      expect(result).toEqual({ durationDays: 9 });
-    });
+    it.each(['early' as const, 'visual' as const])(
+      'writes a DURATION for a typed finish reading the %s dates, and no constraint',
+      (source) => {
+        // **D3, the branch a reader expects to be FNLT and is not.** A finish-edge resize "spreads
+        // neither field, leaving the stored constraint round-tripped verbatim"; a typed finish does
+        // the same. Making the grid differ would invent the second answer ADR-0134 exists to
+        // prevent. Start stays Mon 2, new finish Tue 10 → 9 calendar days inclusive.
+        //
+        // **Parameterised on the SOURCE rather than the mode since M-F-T6**, which is a weaker
+        // sweep honestly labelled: the mode is gone, and `'early'` is now reachable here only
+        // through an analysis surface rather than through a plan setting. Kept because the two
+        // sources still read different columns, which is what this case is really about.
+        const result = fieldsOf(
+          cellWriteFields('earlyFinish', '10 Mar 2026', ctx({ barDateSource: source })),
+        );
+        expect(result).toEqual({ durationDays: 9 });
+      },
+    );
 
     it('accepts exactly what the cell displays, because the cell is seeded from it', () => {
       // The round trip that matters in practice: a planner opens a date cell, edits one character,
@@ -157,11 +150,7 @@ describe('cellWriteFields', () => {
       // output, so the parser has to accept that form or the product refuses the value it showed.
       expect(
         fieldsOf(cellWriteFields('earlyStart', formatCalendarDate('2026-03-04'), ctx())),
-      ).toEqual({
-        constraintType: 'SNET',
-        constraintDate: '2026-03-04',
-        durationDays: 3,
-      });
+      ).toEqual({ visualStart: '2026-03-04', durationDays: 3 });
     });
 
     it('refuses a MANDATORY constraint with a reason naming where to change it', () => {
@@ -303,7 +292,6 @@ describe('commitCell', () => {
       key: 'duration',
       text: '4h',
       hoursPerDay: EIGHT_HOUR,
-      schedulingMode: 'EARLY',
       barDateSource: 'early',
       update,
     });
@@ -326,7 +314,6 @@ describe('commitCell', () => {
       key: 'duration',
       text: '2 weeks',
       hoursPerDay: EIGHT_HOUR,
-      schedulingMode: 'EARLY',
       barDateSource: 'early',
       update,
     });
@@ -346,7 +333,6 @@ describe('commitCell', () => {
       key: 'name',
       text: 'Piling',
       hoursPerDay: EIGHT_HOUR,
-      schedulingMode: 'EARLY',
       barDateSource: 'early',
       update,
     });

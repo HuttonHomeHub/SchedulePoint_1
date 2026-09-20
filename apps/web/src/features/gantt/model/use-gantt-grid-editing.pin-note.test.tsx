@@ -63,7 +63,6 @@ function setup() {
       gating: GATING,
       hasComputedSchedule: true,
       barDateSource: 'early',
-      schedulingMode: 'EARLY',
       hoursPerDayFor: HOURS_PER_DAY,
       updateFields,
       announce,

@@ -18,7 +18,6 @@ import { clearVisualPlacementGate, type ClearVisualPlacementInput } from './conf
  * and it is asserted here directly rather than implied.
  */
 const open: ClearVisualPlacementInput = {
-  schedulingMode: 'VISUAL',
   canEditSchedule: true,
   lateOverlayActive: false,
   hasSelection: true,
@@ -26,16 +25,20 @@ const open: ClearVisualPlacementInput = {
 };
 
 describe('clearVisualPlacementGate', () => {
-  it('is open in Visual mode with the pen, no overlay and a selection', () => {
+  it('is open with the pen, no overlay and a selection', () => {
     expect(clearVisualPlacementGate(open)).toEqual({ enabled: true, reason: null });
   });
 
-  it('refuses outside Visual mode, naming the mode (U1)', () => {
-    expect(clearVisualPlacementGate({ ...open, schedulingMode: 'EARLY' })).toEqual({
-      enabled: false,
-      reason: 'Only available in Visual mode',
-    });
-  });
+  /**
+   * **The mode rung is DELETED** (M-F-T6). It refused with "Only available in Visual mode", and
+   * before that ADR-0115 had made the action **omitted** outside Visual mode rather than shaded —
+   * ADR-0082's discriminator, since an Early plan had no hand-placed start to refuse clearing.
+   *
+   * Every plan can hold a placement now, so the action applies always and the ladder is three rungs
+   * rather than four. The precedence case below loses its permanent rung with it, which is why the
+   * "leads with the PERMANENT refusal" assertion is rewritten rather than dropped: what it pinned
+   * is that the ladder is ordered at all, and that survives.
+   */
 
   it('refuses without the pen, through the host-supplied refusal (never a sentence of its own)', () => {
     // `canEditSchedule` has already fused role and pen, so a sentence built here would be false for
@@ -62,23 +65,20 @@ describe('clearVisualPlacementGate', () => {
     });
   });
 
-  it('leads with the PERMANENT refusal when several apply', () => {
-    // A Viewer, in Early mode, with nothing selected. Three conditions fail; the mode is the one
-    // that gets said, because it is the one that is true of the whole plan rather than of this
-    // moment. Nothing pinned this before — the old suite tested one condition at a time.
-    expect(
-      clearVisualPlacementGate({
-        ...open,
-        schedulingMode: 'EARLY',
-        canEditSchedule: false,
-        hasSelection: false,
-      }).reason,
-    ).toBe('Only available in Visual mode');
-
-    // In Visual mode the pen outranks the selection, for the same reason: "start editing" is true
-    // until they take the pen; "select an activity" would be answered and then refused again.
+  it('leads with the standing refusal when several apply', () => {
+    // A Viewer with nothing selected. Both conditions fail and the PEN is the one that gets said,
+    // because it is true until they act on it, where "select an activity" would be answered and
+    // then refused again. Nothing pinned the ordering before this suite — the old one tested one
+    // condition at a time, in whatever order somebody wrote them.
     expect(
       clearVisualPlacementGate({ ...open, canEditSchedule: false, hasSelection: false }).reason,
     ).toBe('Start editing to clear the placement.');
+
+    // And the overlay outranks the selection for the same reason: it is a state of the view rather
+    // than of this moment. This pair was the mode-vs-pen assertion before M-F-T6 removed the rung
+    // above them both; the property it pinned — that the ladder is ordered — is what is kept.
+    expect(
+      clearVisualPlacementGate({ ...open, lateOverlayActive: true, hasSelection: false }).reason,
+    ).toBe('Turn off the Late-start overlay to clear the placement');
   });
 });

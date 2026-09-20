@@ -111,7 +111,6 @@ export function leadingConflictKey(activity: ConflictFlagFields): ConflictKey | 
 
 /** The inputs `clearVisualPlacementGate` needs. Named so both call sites pass the same thing. */
 export interface ClearVisualPlacementInput {
-  schedulingMode: 'EARLY' | 'VISUAL';
   canEditSchedule: boolean;
   lateOverlayActive: boolean;
   hasSelection: boolean;
@@ -120,23 +119,25 @@ export interface ClearVisualPlacementInput {
 }
 
 /**
- * Whether this action **exists for this plan at all** — as opposed to existing and being shut.
+ * **`clearVisualPlacementApplies` is DELETED** (M-F-T6), and what it decided is worth recording
+ * because the reasoning was right and its premise is gone.
  *
- * ADR-0082 draws that line and it is not a shade of the same thing: *omit* when the action does not
- * apply to the object, *shade with a reason* when it is shut by a state the reader can change or by
- * their role. A plan in Early mode has no hand-placed `visualStart` to clear, so there is nothing
- * here to refuse — and the control was holding 146 px of a row that wraps, to say so.
+ * ADR-0115 omitted this action outside Visual mode on ADR-0082's discriminator — *omit* when the
+ * action does not apply to the object, *shade with a reason* when it is shut by something the
+ * reader can change — because an Early plan had no hand-placed start to clear, so there was
+ * nothing to refuse, and the control was holding 146 px of a row that wraps to say so. After the
+ * collapse every plan can hold a placement, so it applies to every plan, always.
  *
- * **It is a separate predicate rather than a third field on the gate's return**, because
- * `BulkActionGate` is shared with the plural bar where `applicable` would be meaningless for `link`
- * and `remove`. The gate calls it, so `schedulingMode` is still read in exactly one place — which
- * is the property the gate's own docblock was extracted to protect.
+ * **Its 146 px come back to the selection bar unconditionally**, which is a real cost on a row
+ * five epics have spent fitting, and it is stated rather than absorbed.
+ *
+ * **The tempting refinement is rejected here rather than left unconsidered**: omitting when the
+ * SELECTED activity carries no `visualStart` would keep the row narrow most of the time and make
+ * the bar's contents change as the selection moves, which ADR-0094 refused for its own remedy
+ * ("a per-context order would re-run the ladder as the selection changes"). It is also a new
+ * behaviour rather than a consequence of the collapse, so it belongs to whoever measures the row
+ * rather than to this milestone.
  */
-export function clearVisualPlacementApplies(
-  input: Pick<ClearVisualPlacementInput, 'schedulingMode'>,
-): boolean {
-  return input.schedulingMode === 'VISUAL';
-}
 
 /**
  * Whether clearing a hand-placed `visualStart` is actionable, and why not when it is not.
@@ -152,9 +153,6 @@ export function clearVisualPlacementGate(input: ClearVisualPlacementInput): {
   enabled: boolean;
   reason: string | null;
 } {
-  if (!clearVisualPlacementApplies(input)) {
-    return { enabled: false, reason: 'Only available in Visual mode' };
-  }
   if (!input.canEditSchedule) {
     return { enabled: false, reason: input.scheduleRefusal('clear the placement') };
   }

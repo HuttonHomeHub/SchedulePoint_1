@@ -155,3 +155,48 @@ Two mock defects were fixed with them, and both would have made a case green abo
 reposition seam was asserting against a mutation nothing tracked), and a 409 case rejecting
 `updateMutateAsync` — the seam a start-edge drag no longer uses, so the mock would have resolved
 happily and the conflict path under test would never have been entered.
+
+---
+
+## T6 — `clear-visual-placement`, and the typed date
+
+### The action applies to every plan now
+
+`clearVisualPlacementApplies` was exactly `schedulingMode === 'VISUAL'`. ADR-0115 used it to
+**omit** the control outside Visual mode rather than shade it — ADR-0082's discriminator, since an
+Early plan had no hand-placed start to refuse clearing, and the control was holding 146 px of a row
+that wraps to say so. Every plan can hold a placement now, so it applies always; the predicate, its
+`schedulingMode` input and the `clearPlacementApplies` prop threaded through four files are deleted
+rather than left defaulting to `true`, which would be a lever with no caller (the ADR-0101 #156
+shape).
+
+**Its 146 px come back to the selection bar unconditionally, and that is a real cost** on a row five
+epics have spent fitting. The tempting refinement — omit when the SELECTED activity carries no
+`visualStart` — is rejected at the site rather than left unconsidered: it would make the bar's
+contents change as the selection moves, which ADR-0094 refused for its own remedy, and it is a new
+behaviour rather than a consequence of the collapse.
+
+The gate's ladder goes from four rungs to three, and its precedence case is **rewritten rather than
+dropped**: what that case pinned is that the ladder is ordered at all, which survives the loss of
+its permanent rung.
+
+### ADR-0134 D2 goes with it
+
+A typed `Start` in the Gantt grid pinned an `SNET` in Early mode and hand-placed in Visual
+(ADR-0134 D1/D2). The `SNET` branch is deleted, so a typed start and a dragged start now mean one
+thing — which is what ADR-0134 D1 asked of them in the first place: _"a typed date writes the
+constraint a drag writes."_ D2 was right for its world (a computed start can only be moved honestly
+by pinning it) and a placement column makes it unnecessary rather than wrong.
+
+D3 is **untouched and still the branch a reader expects to be `FNLT`**: a typed finish writes a
+duration and no constraint, exactly as a finish-edge drag does.
+
+`schedulingMode` leaves `CellWriteContext`, `useGanttGridEditing`'s props and the workspace
+toolbar's local — the last of which existed only because the same ternary had been written out four
+times and a component review flagged it. The narrowing was correct; it is gone because the question
+is.
+
+Its `it.each` over the two modes becomes an `it.each` over the two **date sources**, which is a
+weaker sweep and is labelled as one: `'early'` is now reachable there only through an analysis
+surface rather than a plan setting, and the case is kept because the two sources still read
+different columns.
