@@ -2,173 +2,175 @@
 
 **To be committed in its own commit, before any harness runs.** ADR-0128's ordering: a bar written
 after the measurement is a bar chosen to be met. ADR-0142 D4 is the other half — **an approved
-remedy is a claim that it will work, and approval does not make it one** — so the ghost overlay,
-the remaining-float derivation and the baseline default are judged here rather than assumed.
+remedy is a claim that it will work, and approval does not make it one** — which now applies to
+three product-owner answers as well as to my own proposals.
 
-**The assumption most likely to be wrong is that this epic is cheap on the canvas.** Seven
-consecutive epics in this repository have had a width or cost expectation contradicted by their own
-measurement, and every one was contradicted in the same direction. FC-5 is written so that a
-contradiction **removes a feature** rather than moving a bar.
+**Revised 2026-09-20** after CQ-3 through CQ-7 were answered, three against the stated defaults.
+**FC-5 and FC-8 are re-derived rather than amended** (the overlay model went from two members to
+three, and the third has no renderer today); **FC-7 is narrowed** (the constraint strip changes
+Pass 1 downstream, so "nothing moves" cannot cover the stripped population); **FC-9 and FC-10 are
+new**, one per answer that created a new blast radius.
 
-**Three predictions are written down to be falsified.** They are stated in the table under FC-1 and
-FC-5. If any is wrong it is recorded as wrong, in place, rather than quietly replaced.
+**The assumption most likely to be wrong is still that this epic is cheap on the canvas, and the
+answer to CQ-4 made it less likely to hold, not more.** Seven consecutive epics here have had a
+width or cost expectation contradicted by their own measurement, every one in the same direction.
+FC-5 is written so a contradiction **removes a feature** rather than moving a bar.
 
-**One prediction is deliberately absent, and its absence is the honest half.** Nothing here
-predicts how many of the 13 unpinned Playwright configs will fail on their first run with placement
-live. There is no basis for a number: ADR-0092 records that one journey ever ran in Visual mode and
-that it found a real defect the first time it did. FC-6 therefore measures rather than predicts, and
-its bar is about triage discipline rather than a count.
+**Four predictions are written down to be falsified** — in FC-1, FC-5 and FC-10. If any is wrong it
+is recorded as wrong, in place.
+
+**One prediction is deliberately absent, and its absence is the honest half.** Nothing here predicts
+how many of the 13 unpinned Playwright configs fail on their first run with placement live. There is
+no basis for a number: ADR-0092 records that one journey ever ran in Visual mode and that it found a
+real defect the first time it did. FC-6 measures rather than predicts.
 
 ---
 
-#### FC-1 — the deployed estate decides the baseline migration, not an assumption
+#### FC-1 — the deployed estate decides the baseline migration
 
-**Bar, three readings, taken through the ADR-0140 staff diagnostics panel on the deployed host
-(never `psql` — see §4.11 of the spec):**
+**Bar, three readings, through the ADR-0140 staff diagnostics panel on the deployed host** (never
+`psql` — spec §4.11):
 
 | Reading                                           | Prediction | What it decides                               |
 | ------------------------------------------------- | ---------- | --------------------------------------------- |
-| `plans.scheduling_mode = 'VISUAL'`                | **0**      | Whether any planner has ever chosen the mode. |
-| `activities.visual_start IS NOT NULL`             | **0**      | Whether any bar in the estate is hand-placed. |
+| plans with `scheduling_mode = 'VISUAL'`           | **0**      | Whether any planner ever chose the mode.      |
+| activities with `visual_start IS NOT NULL`        | **0**      | Whether any bar in the estate is hand-placed. |
 | baselines whose source plan carries any placement | **0**      | **The `date_basis` DEFAULT.**                 |
 
-**Baseline:** unmeasured. Nothing in this repository has ever counted any of the three.
+**Baseline:** unmeasured. Nothing in this repository has counted any of the three.
 
-**Judged by:** the three registry entries added at M0-T1, read from the staff console, output
-committed as `m0/estate-readings.md` with the date, the release and the row counts.
+**Judged by:** three registry entries added at M0-T1, read from the staff console, committed as
+`m0/estate-readings.md` with the date, the release and the counts.
 
-**What each outcome does, decided in advance so the result cannot be reinterpreted:**
+**Decided in advance, so the result cannot be reinterpreted:**
 
 - **All three zero** → `baselines.date_basis` ships `NOT NULL DEFAULT 'EARLY'`, on the
   `hours_per_day_minutes DEFAULT 1440` precedent: `'EARLY'` is then **true of every pre-existing
   row**, established by `baseline.repository.ts:207-208` being the only write path and carrying no
-  branch. The migration is a formality and M-A is small.
-- **Reading 3 non-zero** → the DEFAULT is **withdrawn**. `date_basis` becomes nullable with no
-  default and NULL is a permanent sentinel meaning _the basis is unknown_, per ADR-0126's rule and
-  `budgetedExpense`'s "0 is a claim". The comparison reports `NOT_ASSESSABLE` for those rows rather
-  than a number.
-- **Reading 2 non-zero, reading 3 zero** → the DEFAULT stands (no baseline is affected) **and** the
-  release note in §4.5b gains a named population.
+  branch on the mode.
+- **Reading 3 non-zero** → the DEFAULT is **withdrawn**; `date_basis` is nullable with no default
+  and NULL is a permanent sentinel (ADR-0126; `budgetedExpense`'s "0 is a claim"). The comparison
+  reports `NOT_ASSESSABLE` rather than a number.
+- **Reading 2 non-zero, reading 3 zero** → the DEFAULT stands **and** §4.5's release note gains a
+  named population.
 
-**Withdrawal clause:** none, and it cannot have one. This is a measurement whose two outcomes both
-have a defined design; there is nothing here to withdraw.
+**Withdrawal clause:** none, and it cannot have one — both outcomes have a designed response.
 
 **The trap this is written against:** taking reading 1 alone. A plan can be `VISUAL` with no
-placements (behaviourally identical to `EARLY`, by `compute.visual.spec.ts:71-80`), and
-`visual_start` is writable through the activity DTO **regardless of the plan's mode** — so the mode
-column is the weaker of the two questions and answering only it would be a confident wrong answer.
+placements (identical to `EARLY`), **and `visualStart` is accepted regardless of the plan's mode** —
+`activities.service.ts:388` and `:526-528` carry no mode check (verified). So reading 2 is the
+stronger question and answering only reading 1 would be a confident wrong answer.
 
 ---
 
 #### FC-2 — Pass 1 is byte-identical, and the proof is that nothing had to be edited
 
-**Bar, two clauses, both of which must hold:**
+**Bar, two clauses:**
 
 1. The ADR-0034 golden conformance suite passes with **zero** changes to any `early*`, `late*`,
    `totalFloat`, `freeFloat`, `isCritical` or `isNearCritical` value in any fixture.
 2. `compute.visual.spec.ts`'s `pureFields` assertions (`:55-64`, `:82-96`) and the whole existing
    `compute.spec.ts` pass **unedited**.
 
-**Baseline:** both suites green today.
+**Baseline:** both green today.
 
 **Judged by:** `scripts/e2e-local.sh api` plus the engine unit suites, at the end of M-D.
 
-**Clause 2 is the load-bearing one and it is about the diff, not the result.** ADR-0140's M-B
-acceptance condition is borrowed verbatim: _the assertions pass unedited, and editing one is the
-signal that the milestone did more than it says._ A suite adjusted to accommodate a change has
-stopped being an oracle for it.
+**Clause 2 is load-bearing and it is about the diff, not the result.** ADR-0140's acceptance
+condition, borrowed: _the assertions pass unedited, and editing one is the signal that the milestone
+did more than it says._ A suite adjusted to accommodate a change has stopped being an oracle for it.
 
-**Withdrawal clause:** none. If Pass 1 moves, the change is wrong and is redone. There is no
-version of this epic in which the CPM arithmetic changes.
+**This condition does NOT cover the constraint strip.** Stripping an `SNET` changes that plan's Pass
+1 legitimately (spec §4.5) — the fixtures here carry no stripped constraint, and FC-10 is where that
+population is judged. Conflating the two would make FC-2 unpassable for a correct implementation.
+
+**Withdrawal clause:** none. There is no version of this epic in which the CPM arithmetic changes
+for an unmodified network.
 
 ---
 
 #### FC-3 — the golden re-baseline is enumerated before it is taken
 
-**Bar:** the snapshot re-baseline at M-D adds **exactly** `remainingFloatMinutes` and
-`visualConflictReason` to every result row, and changes **nothing else** — no reordering, no
-reformatting, no incidental field.
+**Bar:** the M-D re-baseline adds **exactly** `remainingFloatMinutes` and `visualConflictReason` to
+every result row and changes **nothing else** — no reordering, no reformatting, no incidental field.
 
-**Baseline:** the committed golden snapshots as of M-D's first commit.
+**Baseline:** the committed snapshots as of M-D's first commit.
 
-**Judged by:** a written list of expected added lines, committed **before** the re-baseline is
-taken, then diffed against the actual change line by line. **Never `vitest -u` followed by a read.**
+**Judged by:** a written list of expected added lines, committed **before** the re-baseline is taken,
+then diffed line by line. **Never `vitest -u` followed by a read.**
 
-This is ADR-0106's procedure, adopted because that epic's first re-baseline since ADR-0078 S1 was
-audited against a written list and the list is what caught it being right. The failure mode being
-guarded is not a wrong value — it is a **correct value beside a silent second change**, which a
-`-u` run makes indistinguishable from the change you meant.
+ADR-0106's procedure. The failure guarded is not a wrong value — it is a **correct value beside a
+silent second change**, which `-u` makes indistinguishable from the change you meant.
 
 **Withdrawal clause:** none.
 
 ---
 
-#### FC-4 — remaining float is right on a calendar where the naive version is wrong
+#### FC-4 — remaining float is right where the naive version is wrong
 
-**Bar:** on an **eight-hour** plan calendar, an activity with total float `T` minutes and drift `d`
-minutes for which `round(T/f) − round(d/f) ≠ round((T−d)/f)`, the API reports
-`round((T−d)/f)`.
+**Bar:** on an **eight-hour** plan calendar, for an activity where
+`round(T/f) − round(d/f) ≠ round((T−d)/f)`, the API reports `round((T−d)/f)`.
 
 **Baseline:** no such quantity exists today.
 
-**Judged by:** an API e2e case with a fixture chosen so the two expressions **disagree**, verified
-red against a client-side subtraction. A fixture where they agree passes against both
-implementations and proves nothing — which is the shape ADR-0139 records, where the whole-day
-branches of two formatters are factor-insensitive and a test written with a whole-day duration
-passes identically against the defect and the fix.
+**Judged by:** an API e2e case whose fixture makes the two expressions **disagree**, verified red
+against a client-side subtraction. A fixture where they agree passes against both implementations
+and proves nothing — the ADR-0139 shape, where two formatters' whole-day branches are
+factor-insensitive and a whole-day fixture passes identically against the defect and the fix.
 
-**Why this is a condition and not a unit test:** finding C6 was derived by reading
-`schedule.repository.ts:750-773`, not observed. If the arithmetic turns out never to diverge for a
-reachable fixture, **that is a finding and is recorded** — the derivation moves server-side anyway
-on the one-derivation argument (§4.3 reason 2), but this document should not claim a correctness
-motive that no fixture can exhibit.
-
-**Withdrawal clause:** if no reachable fixture makes the two disagree, FC-4's correctness clause is
-**withdrawn in place** and §4.3's stated reason is narrowed to reasons 2 and 3. The design does not
-change; the justification does.
+**Withdrawal clause:** if no reachable fixture makes them disagree, FC-4's **correctness** clause is
+withdrawn in place and spec §4.3's justification narrows to reasons 2 and 3 (one derivation; the
+engine already owns both inputs). The design does not change; the stated motive does.
 
 ---
 
-#### FC-5 — the ghost layer does not spend the canvas's remaining headroom
+#### FC-5 — three ghost kinds do not spend the canvas's remaining headroom
 
-**Bar, two limbs, both on the product owner's hardware through the ADR-0128 staff panel:**
+**Re-derived for CQ-4's answer. The original condition was written for two overlays; the model has
+three, and the third is drawn for every activity when levelling has run.**
 
-1. **Week framing, 2,000 activities, both overlays on:** dropped frames ≤ **baseline + 2.00 pp**
-   (ADR-0127 D8's bar), and the reported run-to-run spread is **inside** 2.00 pp — a baseline that
-   moves by more than the bar cannot produce a verdict, and the honest answer is then
-   `INDETERMINATE`, not a pass.
-2. **Fit framing, 2,000 activities, both overlays on:** frames per second ≥ **30.0**, `docs/TECH_DEBT.md`
-   §9's floor.
+**Bar, two limbs, on the product owner's hardware through the ADR-0128 panel, with **all three**
+overlays on:**
 
-**Baseline:** `docs/TECH_DEBT.md` #75's 2026-09-10 readings — Week/2,000 at **60.0 fps, 0.00 pp
-dropped**; Fit/2,000 at **32.2 fps**, re-measured across five sittings against a 0.4 fps noise floor.
+1. **Week framing, 2,000 activities:** dropped frames ≤ **baseline + 2.00 pp** (ADR-0127 D8's bar),
+   **and** the reported run-to-run spread is **inside** 2.00 pp. A baseline that moves by more than
+   the bar cannot produce a verdict, and the honest answer is `INDETERMINATE`, not a pass.
+2. **Fit framing, 2,000 activities:** ≥ **30.0 fps**, `docs/TECH_DEBT.md` §9's floor.
 
-**Prediction, written to be falsified:** limb 1 passes (Week culls 2,160 bars to ~267, so doubling
-the drawn rects is ~267 extra hollow strokes) and **limb 2 fails** — Fit draws 1,792 bars against
-32.2 fps with **2.2 fps of headroom**, and a second outline per bar is not obviously affordable
-inside that.
+**Baseline:** #75's 2026-09-10 readings — Week/2,000 at **60.0 fps, 0.00 pp**; Fit/2,000 at
+**32.2 fps**, re-measured across five sittings against a **0.4 fps** noise floor.
 
-**Judged by:** a `ghost-overlay` scenario added to the ADR-0128 probe registry, run in one sitting
-with its spread reported, as ADR-0129 P3 was.
+**Prediction, written to be falsified:** limb 1 passes (Week culls 2,160 bars to ~267, so three
+overlays add ~800 hollow strokes); **limb 2 fails**, and **more surely than it would have with two**
+— Fit draws 1,792 bars with **2.2 fps of headroom**, and three outlines per bar is roughly 5,400
+extra strokes.
 
-**Withdrawal clause — and it is the only one in this document that can remove a feature.** If limb
-2 fails:
+**A scene must be measured in which the levelled overlay is non-empty.** `levelResources` is
+opt-in and off by default, so the naive fixture draws **two** ghosts and reports a number for a
+model the product does not have. The probe's fixture sets `levelResources` and its non-vacuity
+control asserts a non-zero count of levelled ghosts drawn while it was measured — ADR-0129 P3's
+rule (37 of 264 bars), and the ADR-0066 finding that a draw benchmark once measured the cull rather
+than the painter.
 
-1. **First remedy, and it is free:** withhold ghosts below a pixel-width floor, the ADR-0141 pitch
-   argument — a 1 px hollow outline beside a 1 px bar is not a picture, it is noise, so the ghost is
-   not merely cheap to omit at Fit but **wrong to draw**. Re-measure.
-2. **If that does not clear it:** the overlays are **withdrawn at framings below a measured
-   `pxPerDay` floor**, and the toggle shades with a reason rather than disappearing (ADR-0082) —
-   because a control that vanishes when you zoom out is indistinguishable from a bug.
-3. **What is explicitly not available:** raising the bar, changing the framing, or reporting a
-   figure from a headless container. ADR-0127 D8 records a container whose no-change baseline moved
-   0.56 → 1.85 pp and 0.93 → 10.00 pp between two runs an hour apart, and that environment is
-   disqualified for this question by name.
+**Judged by:** a `ghost-overlay` scenario in the ADR-0128 probe registry, one sitting, spread
+reported.
 
-**Do not judge this at Fit alone.** `docs/TECH_DEBT.md` #260 records that a Fit baseline of 98.33 pp
-leaves less headroom than the bar, so a dropped-frame delta at that framing is **arithmetically
-incapable of failing** — which is why limb 2 is an fps bar and limb 1 is a pp bar, and why they are
-at different framings.
+**Withdrawal ladder — the only one here that can remove a feature:**
+
+1. **Withhold ghosts below a pixel-width floor** (ADR-0141's pitch argument): a 1 px hollow outline
+   beside a 1 px bar is not a picture, so the ghost is not merely cheap to omit at Fit but **wrong
+   to draw**. Re-measure.
+2. **Cap the number of simultaneously-drawn overlays** below a measured `pxPerDay` floor, shading
+   the excess toggles with a reason (ADR-0082) rather than letting them silently do nothing.
+3. **Withdraw the overlays entirely below that floor**, toggles shaded with a reason — a control
+   that vanishes when you zoom out is indistinguishable from a bug.
+4. **Not available:** raising the bar, changing the framing, dropping the levelled member to make
+   the number fit, or reporting from a headless container (ADR-0127 D8 disqualified that
+   environment by name after its no-change baseline moved 0.93 → 10.00 pp in an hour).
+
+**Do not judge at Fit alone.** #260 records a Fit baseline of 98.33 pp leaving less headroom than
+the bar, so a pp delta there is **arithmetically incapable of failing** — which is why limb 2 is an
+fps bar at a different framing.
 
 ---
 
@@ -176,85 +178,193 @@ at different framings.
 
 **Bar, three clauses:**
 
-1. All **13** configs that pin `VITE_SCHEDULING_MODES: 'false'` today have the pin **removed**, and
-   every one of those suites is green with placement live, **before** the milestone that deletes the
-   flag opens.
-2. **Zero** configs are re-pinned, and zero specs are skipped, to achieve clause 1.
-3. Every spec that fails on its first unpinned run is **triaged and recorded** in `m-b/triage.md`,
-   classified as (a) a product defect this epic must fix, (b) a test asserting a surface no shipped
-   bundle produces, or (c) a fixture that needs a placement to exercise the same thing. Each gets a
-   one-line reason. A count with no classification does not satisfy this clause.
+1. All **13** configs pinning `VITE_SCHEDULING_MODES: 'false'` have the pin **removed**, and every
+   one of those suites is green with placement live, **before** the milestone that deletes the flag
+   opens.
+2. **Zero** configs are re-pinned and **zero** specs are skipped to achieve clause 1.
+3. Every spec failing its first unpinned run is **triaged and recorded** in `m-b/triage.md` as
+   (a) a product defect this epic must fix, (b) a test asserting a surface no shipped bundle
+   produces, or (c) a fixture needing a placement. Each gets a one-line reason. **A count with no
+   classification does not satisfy this clause.**
 
-**Baseline, derived rather than remembered:** `VITE_SCHEDULING_MODES` occurs **16 times across 15
-files** under `apps/web/*.config.ts`. **13 are live pins.** The three that are not:
-`playwright.library.config.ts:13` (prose beside its own pin at `:76`),
-`playwright.gantt-editing.config.ts:17-23` (records pinning **nothing**, deliberately) and
-`playwright.workspace-chrome.config.ts:8` (records leaving it **on**). The thirteen:
-`interchange:65`, `loe:63`, `authoring-flow:75`, `library:76`, `wbs:77`, `resource-view:81`,
-`search-nav:88`, `copy-paste:101`, `gantt:73`, `share:69`, `undo:61`, `authoring:62`,
-`multi-select:94`.
+**Baseline, derived rather than remembered:** 16 occurrences across 15 files under
+`apps/web/*.config.ts`; **13 are live pins**. The three that are not: `library:13` (prose beside its
+own pin at `:76`), `gantt-editing:17-23` (records pinning **nothing**, deliberately),
+`workspace-chrome:8` (records leaving it **on**). The thirteen: `interchange:65`, `loe:63`,
+`authoring-flow:75`, `library:76`, `wbs:77`, `resource-view:81`, `search-nav:88`, `copy-paste:101`,
+`gantt:73`, `share:69`, `undo:61`, `authoring:62`, `multi-select:94`.
 
-**Judged by:** `scripts/e2e-sweep.sh` over the full suite list (which ADR-0112 records as **derived**
-rather than hand-written, after it was found wrong in both directions), plus the committed triage.
+**Judged by:** `scripts/e2e-sweep.sh` over the **derived** suite list — ADR-0112 found that list
+wrong in both directions (naming a deleted suite, omitting seven), which is why it is derived and
+why a hand-typed subset is not evidence here — plus the committed triage.
 
-**Why clause 2 exists.** ADR-0084's batch 1 retired three flags and CI found two were pinned off by
-a whole Playwright config, stranding six editing specs; the recorded lesson is to convert the
-harness **before** the flag goes. Clause 2 is that lesson made unwaivable, because the cheap way out
-of a red suite at 2am is a pin, and a pin restores the condition the epic exists to delete while
-leaving the suite green.
+**Why clause 2 exists.** ADR-0084's batch 1 retired three flags; CI found two were pinned off by a
+whole Playwright config and six editing specs stranded. The cheap way out of a red suite is a pin,
+and a pin restores the condition the epic exists to delete while leaving the suite green.
 
-**Withdrawal clause:** none for clauses 1 and 2. For clause 3, a spec classified **(b)** may be
-**deleted** rather than fixed — ADR-0088's finding that the base journey's editing specs proved a
-behaviour "in a world no shipped bundle can produce" applies directly, and a test asserting the
-Early-mode surface after Early is deleted is that finding exactly.
+**Withdrawal clause:** none for clauses 1–2. A spec classified **(b)** may be **deleted** rather than
+fixed — ADR-0088's finding that the base journey proved a behaviour "in a world no shipped bundle can
+produce" is that case exactly.
 
 ---
 
-#### FC-7 — nothing moves on a plan that never had a placement
+#### FC-7 — nothing moves on a plan that never had a placement **and had no constraint stripped**
 
-**Bar:** for a seeded plan with `visual_start` null on every activity, **every** user-visible date
-is identical before and after the epic — canvas bars, Gantt grid cells, Gantt chart bars, the
-framed span, the printed programme, the exported PNG, the CSV, the guest share view, and the
-baseline variance figures.
+**Narrowed, deliberately, by CQ-7's answer.** The original bar said "a plan with `visual_start` null
+on every activity". That is no longer sufficient: the strip changes Pass 1 downstream (spec §4.5), so
+a plan with no placement but with stripped constraints legitimately reports different float. Leaving
+the wider bar would make this condition unpassable for a correct implementation — and the temptation
+would then be to reinterpret it, which is what conditions exist to prevent.
+
+**Bar:** for a seeded plan with `visual_start` null on every activity **and no `SNET` eligible for
+the strip**, every user-visible date is identical before and after the epic — canvas bars, Gantt
+grid cells, Gantt chart bars, framed span, printed programme, exported PNG, CSV, guest share view,
+baseline variance figures **and** float read-outs.
 
 **Baseline:** the same plan on the release preceding M-A.
 
-**Judged by:** a before/after comparison over the seed catalogue (ADR-0066), taken at M-F, committed
-as `m-f/no-placement-parity.md`.
+**Judged by:** a before/after comparison over the seed catalogue (ADR-0066), committed at M-F as
+`m-f/no-placement-parity.md`.
 
-**This is SC-3 and it is the migration's entire safety argument.** It is a product-level restatement
-of `compute.visual.spec.ts:71-80`, and it is asserted at the **product** rather than at the engine
-for the ADR-0066 reason: all 117 capability keys are proven at `computeSchedule` and none at the
-application, and the two defects that motivated that ADR were green at the engine and wrong in the
-product.
+**Asserted at the PRODUCT, not the engine**, for the ADR-0066 reason: all 117 capability keys are
+proven at `computeSchedule` and none at the application, and the two defects that motivated that ADR
+were green at the engine and wrong in the product.
 
 **Withdrawal clause:** none.
 
 ---
 
-#### FC-8 — the ghost is legible, and it is legible without colour
+#### FC-8 — the ghosts are legible, and distinguishable from **each other**, without colour
 
-**Bar, three clauses:**
+**Re-derived for three members.** The original clause 3 asked only that a ghost be distinguishable
+from the placed bar. With three kinds the harder question is whether they are distinguishable from
+**one another**, and a design that passes the original clause can fail this one completely.
 
-1. The ghost's stroke clears **3:1** against the canvas ground in the **canvas surface scope**
-   (ADR-0102), asserted by the existing contrast matrix with the new pair added **before** the CSS
-   is written.
-2. The ghost's token pair is present in `@theme inline` and resolves to a real value **in a
-   browser**, asserted by the reachability limb ADR-0100 M4 added — not by the matrix alone.
-3. Earliest and latest ghosts are distinguishable from each other, and from the placed bar, **with
-   colour removed** (WCAG 1.4.1), asserted by a screenshot taken under a greyscale filter.
+**Bar, four clauses:**
+
+1. Each ghost's stroke clears **3:1** against the canvas ground in the **canvas surface scope**
+   (ADR-0102), asserted by the contrast matrix with the new pairs added **before** the CSS is
+   written.
+2. Every new token pair is present in `@theme inline` and resolves to a real value **in a browser**,
+   asserted by the reachability limb ADR-0100 M4 added — not by the matrix alone.
+3. **Earliest, latest and levelled are distinguishable from each other, and all three from the
+   placed bar, with colour removed** (WCAG 1.4.1) — asserted by a greyscale screenshot of a scene
+   carrying all three simultaneously on the same activity.
+4. The levelled member is drawn in that scene — i.e. the fixture has `levelResources` on and at
+   least one delayed activity. A greyscale shot of two ghosts proves nothing about three.
 
 **Baseline:** no ghost token exists.
 
-**Judged by:** `token-contrast.test.ts` (clauses 1–2) and a `shoot.mjs` entry (clause 3).
+**Judged by:** `token-contrast.test.ts` (1–2) and a `shoot.mjs` entry (3–4).
 
-**Clause 2 is not redundant with clause 1 and the distinction has cost this repository twice.**
-ADR-0100 M4 found a token pair never aliased in `@theme inline` painting **no colour at all** in a
-real browser while the contrast gate stayed green, because the gate resolves `:root` names.
-ADR-0121 found the sibling failure one layer along: `stackSeries` emitted `var(--chart-n)`, and
-Canvas 2D's `fillStyle` setter **discards an unparseable value and keeps the previous colour**, with
-no throw and no visual error state — so the stack would have painted as one solid block with every
-unit test green. A canvas token must be a **resolved value**, and the resolution must happen against
-the **canvas root**.
+**Clause 2 is not redundant with clause 1, and the distinction has cost this repository twice.**
+ADR-0100 M4 found a pair never aliased in `@theme inline` painting **no colour at all** in a real
+browser while the contrast gate stayed green, because the gate resolves `:root` names. ADR-0121 found
+the sibling one layer along: `stackSeries` emitted `var(--chart-n)`, and Canvas 2D's `fillStyle`
+setter **discards an unparseable value and keeps the previous colour** — no throw, no visual error
+state — so the stack would have painted as one solid block with every unit test green.
 
-**Withdrawal clause:** none. A lens the reader cannot see is not a lens.
+**Withdrawal clause:** none for 1–2. If clause 3 cannot be met with three kinds, **the levelled
+member's visual language changes** (stroke rhythm, cap, weight) until it can — the member is not
+dropped, because CQ-4's answer is what put it here and a third kind that is indistinguishable is the
+1.4.1 failure rather than a styling preference.
+
+---
+
+#### FC-9 — a programme with no upstream placement produces byte-identical bounds
+
+**New, for CQ-5's answer.** FC-7's shape, one plan boundary out.
+
+**Bar, two clauses:**
+
+1. For a programme whose upstream closure carries **no** `visual_start` anywhere, every downstream
+   activity's derived `external_early_start` is **byte-identical** to the value the preceding release
+   produces, across all four edge types (`FS`, `SS`, `FF`, `SF`) and including the `missing: true`
+   path for an uncalculated predecessor.
+2. For a programme whose upstream predecessor **is** placed, the downstream bound moves by exactly
+   the placement's effect on that predecessor's effective dates — and **not** by its drift, which is
+   a different quantity.
+
+**Baseline:** the programme conformance scenarios as they stand before M-H.
+
+**Judged by:** the ADR-0045 programme conformance harness, run against both producers.
+
+**Both producers must be exercised, and this is the clause most likely to be skipped.**
+`cross-plan-dependency.repository.ts:189` and `conformance/cross-plan-adapter.ts:130-131` build the
+same projection from different sources (verified). A run that exercises only the adapter certifies a
+basis the product may not use, **green**. The harness must be shown to fail when either producer
+alone is switched.
+
+**The backward bound is out of scope and that is a designed asymmetry, not an omission.**
+`loadOutgoingWithSuccessorDates` reads the downstream successor's **late** dates (`:201-206`), and
+there is no placed-late: Pass 2 is forward-only and ADR-0033 D5 settled SQ-e. A condition asserting
+the backward bound changed would be asserting a thing that cannot exist.
+
+**Withdrawal clause:** none for clause 1. If clause 2's arithmetic turns out to be ambiguous for a
+given edge type, **that edge type's behaviour is specified in the ADR before M-H ships** rather than
+discovered by a planner.
+
+---
+
+#### FC-10 — the constraint strip is measured, bounded, recorded and reported
+
+**New, for CQ-7's answer — _"this is the one irreversible decision in the epic and it needs rails,
+not a warning."_** Four clauses: one gates whether it runs at all, one is the safety property, two
+are the rails.
+
+**Clause A — the population is measured before anything is stripped.**
+
+**Bar:** M0 reports, through the ADR-0140 panel, the count of activities with
+`constraint_type = 'SNET'` split three ways — **binding** (`early_start = constraint_date`),
+**inert** (`early_start > constraint_date`), **unknown** (`early_start IS NULL`) — plus, of the
+binding set, how many are covered by a post-ADR-0126 **FULL** baseline.
+
+**Prediction, written to be falsified:** the binding count is **under 200 activities in a single
+plan and a single organisation**, and **FULL-baseline coverage is zero**. ADR-0140's first press
+measured 164 activities in one plan, one organisation across the **whole** deployed estate, and
+ADR-0126 shipped recently enough that a FULL baseline over them is unlikely.
+
+**Clause B — the automatic strip is bounded by what was measured.**
+
+**Bar:** the migration runs automatically **only if** the binding population is **≤ 500 activities
+across ≤ 5 plans**. Above either, the strip does **not** ship as an unattended migration: it becomes
+a per-plan, planner-initiated action with the same conversion rule and the same record.
+
+**Why those numbers, derived rather than chosen:** 164 activities in one plan is the entire known
+estate, so 500/5 is roughly threefold headroom — generous enough not to fire on ordinary growth, and
+tight enough to **fail loudly** if the estate is materially larger than anybody believes (a second
+customer onboarded between now and M-I being the obvious way that happens). A bar with no failure
+mode is decoration.
+
+**Clause C — the bars do not move, proved on a real plan.**
+
+**Bar:** for a plan carrying binding `SNET`s, every activity's `visualEffectiveStart` and
+`visualEffectiveFinish` are **identical** before and after the strip; and the plan's downstream
+`early*`/`totalFloat` **do** change where an SNET was removed — asserted **positively**, not merely
+tolerated.
+
+**This is the condition that distinguishes the epic's intent from a silent regression.** Asserting
+only "bars do not move" would pass equally against a migration that did nothing at all; asserting
+only "float changed" would pass against one that moved every bar. Both halves, or neither means
+anything.
+
+**Judged by:** an API e2e over a seeded plan with one binding SNET, one inert SNET and one
+uncalculated activity, verified red against (i) a strip with no `visual_start` written and (ii) a
+strip that converts the inert one.
+
+**Clause D — the record exists and the planner is told.**
+
+**Bar:** every stripped constraint has a `placement_migration_log` row written **before** the delete,
+in the same transaction; and a plan with stripped constraints renders the dock notice stating the
+count, on first load, dismissible per user.
+
+**Why this cannot be left to the audit log:** `PATCH …/activities/:activityId` is
+`REASONS.PLAN_CONTENT` (`audit-coverage.structural.spec.ts:264`, verified) — permanently excluded
+under ADR-0073's content-edit rule. **Nothing in `audit_events` will ever record a stripped
+constraint.** That absence is the reason the record exists.
+
+**Withdrawal clause:** if clause A's measurement exceeds clause B's bound, the **unattended
+migration is withdrawn** and M-I ships the planner-initiated form instead. The conversion rule, the
+record and the notice are unchanged — what changes is who presses the button. If clause C cannot be
+made to pass, **the strip is withdrawn entirely** and CQ-7 returns to the product owner with the
+measurement, because a strip that moves bars is a worse product than the constraints it removes.
