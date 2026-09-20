@@ -131,3 +131,59 @@ because keeping it would have meant keeping a second key alive to satisfy it.
 The replacement count assertion is `getAllByText(/[Ff]easible window/)` with length **1** rather
 than an absence check on the old copy: a legend that lost the key altogether would satisfy "the old
 wording is gone" perfectly.
+
+---
+
+## 7. M-E-T3 — the levelled ghost layer (dark: no control sets it yet)
+
+`buildLevelledGhosts` plus a painter layer (2.65), with the scene field and a third dash. **No
+control writes the scene field yet**, so nothing draws: the lens registry entry, its context and
+its state are the next slice, and this one says so rather than reading as finished.
+
+**The three states are derived from `level.ts`'s exit paths, not from `goldens.ts`** — that is the
+one levelling golden in which every activity is a participant, so a fixture built from it cannot
+exhibit the state that matters most: _ran, not a participant, nothing wrong_. Both cited lines were
+re-read rather than trusted: `:186` (`if (finiteAsgs.length === 0) continue; // not a participant`)
+and `pinAtNetwork` (`leveledStart: r.earlyStart`).
+
+**The predicate is `leveledStart !== earlyStart`**, not `levelingDelayDays > 0`. At day granularity
+the two agree; the reason to prefer the dates is this epic's own rule — the ghost is a rect
+positioned **from those date strings**, and the delay is a separately rounded day quantity, so
+deciding whether to draw by it would be two derivations of one fact. It also collapses the draw
+predicate and the coincidence test into one rule, so there is no separate withholding rule to keep
+in step.
+
+**The dash is a third rhythm, not a third length.** `GHOST_DASH` is `[2,2]` and `COMPARE_DASH` is
+`[6,3]`, and that constant's own docblock records the two having been **pixel-identical once**. The
+levelled dash alternates (`[5,2,1,2]`), so it is a different shape class rather than a different
+size of the same one.
+
+**It culls by `visibleIds` first — correct here, and wrong one layer up.** A levelled ghost always
+belongs to a live activity, so an off-screen live bar means an irrelevant ghost. The comparison
+layer between them deliberately does not cull that way, because removed work has no live activity
+at all; copying the wrong neighbour is a defect that looks correct on every plan where nothing was
+deleted, which that layer's docblock records.
+
+### The sweep, including the mutation that did not discriminate
+
+| #   | mutation                                                    | result                   |
+| --- | ----------------------------------------------------------- | ------------------------ |
+| 1   | draw undelayed participants too (drop the coincidence test) | **1 failed** / 5         |
+| 2   | drop HALF the participant guard (`leveledStart` only)       | **0 failed** — see below |
+| 2b  | drop the participant guard entirely                         | **1 failed** / 5         |
+| 3   | ghost lands in lane 0 rather than its own                   | **1 failed** / 5         |
+
+**Mutation 2 does not discriminate, and it is not a coverage gap.** The non-participant fixture has
+**both** columns null — which is the only state `level.ts` produces, since it writes the overlay
+fields together — so the surviving half of the guard still catches it. Closing it would mean
+writing a case for a half-populated overlay the engine cannot emit, i.e. a test about an
+unreachable input. Recorded rather than papered over: the guard's two halves are there for the
+compiler's narrowing, and 2b is the mutation that names the real defect.
+
+### A third instrument correction
+
+The cull case first asserted that `setLineDash` was **not** called with the levelled dash, and
+failed against a correctly-culling painter: the dash is set **once outside the loop**, so it fires
+whenever the array is non-empty whether or not any ghost survives. It was measuring "the block ran",
+not "a ghost drew". It counts `strokeRect` now. That is the third instrument in this milestone that
+was wrong before the product was.

@@ -8,7 +8,7 @@ import {
   traceMilestoneDiamond,
 } from './layers/shapes';
 import { labelWidths } from './layers/text-measure';
-import type { GhostBar } from './lenses';
+import type { GhostBar, LevelledGhost } from './lenses';
 import { buildPaintFrame } from './paint-frame';
 import {
   arrowhead,
@@ -290,6 +290,16 @@ export interface TsldScene {
   /** The revision comparison's CHANGED LOGIC (ADR-0127) — the differentiating half: a re-sequence
    * is only visible as a re-sequence if the links are drawn. Absent ⇒ no pass (parity). */
   compareLinks?: readonly CompareLink[] | undefined;
+  /**
+   * The **levelled ghosts** (one-planning-surface M-E) — where the resource-levelling pass would
+   * put each bar it MOVED. A third ghost field rather than a widening of either neighbour, on the
+   * reasoning ADR-0127 used to keep those two apart: the three answer different questions, any two
+   * can be on at once, and a shared field would make a levelled date read as a baseline one.
+   *
+   * **A bound and a position are different objects** — the feasible window is where a bar MAY go
+   * and this is a rival place it COULD be, which is also why one is a view toggle and this is a
+   * lens. Absent ⇒ the lens is off / levelling never ran / nothing moved ⇒ no layer (parity). */
+  levelledGhosts?: readonly LevelledGhost[] | undefined;
   // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
   /** Ids of activities the engine flagged as over-allocated (`levelingWindowExceeded ||
    * selfOverAllocated`, ADR-0041), marked on the canvas with a distinct **mini-histogram badge** — a
@@ -440,6 +450,17 @@ const GHOST_DASH: readonly number[] = [2, 2];
  * needs no new token (the ADR-0100 M4 trap).
  */
 const COMPARE_DASH: readonly number[] = [6, 3];
+
+/**
+ * The levelled ghost's dash — a THIRD rhythm, deliberately distinct from both of its neighbours
+ * (one-planning-surface M-E).
+ *
+ * `GHOST_DASH` is [2,2] and `COMPARE_DASH` is [6,3], and that constant's own docblock records the
+ * two having been **pixel-identical once**, found by a ux review. A long-short rhythm is a third
+ * shape class rather than a third length of the same one: neither neighbour alternates, so this
+ * reads as different even at the moment a planner cannot see which is which.
+ */
+const LEVELLED_DASH: readonly number[] = [5, 2, 1, 2];
 
 /**
  * One frozen bar of the revision-comparison change picture (ADR-0127) — where a CHANGED activity
@@ -1452,6 +1473,66 @@ export function paintScene(
   // every gate here (`activityRect` makes no `ctx` calls). The frame's getter makes that a one-line
   // move later; this line keeps today's ordering byte-for-byte until someone measures it.
   const rects = frame.rects();
+
+  // Layer 2.65: the **LEVELLED GHOSTS** (one-planning-surface M-E) — where the resource-levelling
+  // pass would put each bar it MOVED, drawn as a dashed outline beneath the live bars.
+  //
+  // **A rival POSITION, not a bound**, which is what separates it from the feasible window one
+  // layer below: the window is where the bar MAY go, this is a place it COULD be. Drawing the two
+  // as peers was the rejected design.
+  //
+  // Culled by `visibleIds` FIRST, exactly as the baseline ghost layer is and unlike the comparison
+  // layer between them — and the difference is not stylistic. A levelled ghost always belongs to a
+  // live activity (the pass only overlays activities in the plan), so an off-screen live bar means
+  // an irrelevant ghost; the comparison layer cannot cull that way because REMOVED work has no
+  // live activity at all. Copying the wrong neighbour is a defect that looks correct on every plan
+  // where nothing was deleted, which that layer's docblock records.
+  //
+  // Absent ⇒ the lens is off, levelling never ran, or nothing moved ⇒ this block is skipped ⇒
+  // byte-for-byte parity.
+  if (scene.levelledGhosts && scene.levelledGhosts.length > 0) {
+    const viewport: Rect = { x: 0, y: 0, w: size.width, h: size.height };
+    ctx.strokeStyle = palette.edge;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(LEVELLED_DASH as number[]);
+    for (const ghost of scene.levelledGhosts) {
+      if (!visibleIds.has(ghost.id)) continue; // cull by count before any date math / allocation
+      const startDay = daysBetween(scene.dataDate, ghost.leveledStart);
+      const finishDay = daysBetween(scene.dataDate, ghost.leveledFinish);
+      const x1 = screenXOfDay(startDay, view);
+      const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
+      const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
+      const dimmed = scene.dimmedIds?.has(ghost.id) ?? false;
+      if (ghost.isMilestone) {
+        const cx = (x1 + x2) / 2;
+        const cy = top + BAR_HEIGHT / 2;
+        if (
+          !rectsIntersect(
+            {
+              x: cx - MILESTONE_RADIUS,
+              y: cy - MILESTONE_RADIUS,
+              w: MILESTONE_RADIUS * 2,
+              h: MILESTONE_RADIUS * 2,
+            },
+            viewport,
+          )
+        ) {
+          continue;
+        }
+        if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
+        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true); // closed — stroke-only
+        ctx.stroke();
+        if (dimmed) ctx.globalAlpha = 1;
+      } else {
+        const w = Math.max(2, x2 - x1);
+        if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+        if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
+        ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+        if (dimmed) ctx.globalAlpha = 1;
+      }
+    }
+    ctx.setLineDash([]);
+  }
 
   // Layer 2.7: the **FEASIBLE WINDOW** (one-planning-surface M-E, spec §4.8) — the span
   // `[earlyStart, lateFinish]` a bar may legally occupy, as ONE hollow bracket with a vertical cap

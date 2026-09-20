@@ -1057,6 +1057,78 @@ describe('paintScene — insight lenses', () => {
     expect(ctx.setLineDash).toHaveBeenCalledWith([2, 2]);
   });
 
+  it('draws the levelled ghosts on a THIRD dash, distinct from both neighbours', () => {
+    // `GHOST_DASH` is [2,2] and `COMPARE_DASH` is [6,3] — and that constant's docblock records the
+    // two having been pixel-identical once, found by a ux review. A long-short rhythm is a third
+    // shape class rather than a third length of the same one.
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      {
+        ...lensScene,
+        levelledGhosts: [
+          {
+            id: 'a',
+            leveledStart: '2026-01-06',
+            leveledFinish: '2026-01-08',
+            laneIndex: 0,
+            isMilestone: false,
+          },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const dashes = ctx.setLineDash.mock.calls.map((c) => JSON.stringify(c[0]));
+    expect(dashes).toContain(JSON.stringify([5, 2, 1, 2]));
+    expect(JSON.stringify([5, 2, 1, 2])).not.toBe(JSON.stringify([2, 2]));
+    expect(JSON.stringify([5, 2, 1, 2])).not.toBe(JSON.stringify([6, 3]));
+  });
+
+  it('is a no-op with no levelled ghosts — the parity contract', () => {
+    // Absent means the lens is off, levelling never ran, or nothing moved. FC-1 predicts the third
+    // of those is what most plans look like, so this is the COMMON path, not an edge case.
+    const withNone = mockCtx();
+    const withEmpty = mockCtx();
+    paintScene(withNone, lensScene, VIEW, SIZE, PALETTE);
+    paintScene(withEmpty, { ...lensScene, levelledGhosts: [] }, VIEW, SIZE, PALETTE);
+    expect(withEmpty.strokeRect.mock.calls).toEqual(withNone.strokeRect.mock.calls);
+    expect(withEmpty.setLineDash.mock.calls).toEqual(withNone.setLineDash.mock.calls);
+  });
+
+  it('culls a levelled ghost whose live bar is off-screen, like its baseline neighbour', () => {
+    // Cull by `visibleIds` FIRST — correct here and WRONG for the comparison layer between them,
+    // where removed work has no live activity at all. Copying the wrong neighbour is a defect that
+    // looks right on every plan where nothing was deleted.
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      {
+        ...lensScene,
+        levelledGhosts: [
+          {
+            id: 'not-in-the-scene',
+            leveledStart: '2026-01-06',
+            leveledFinish: '2026-01-08',
+            laneIndex: 0,
+            isMilestone: false,
+          },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // Measured on `strokeRect`, not on `setLineDash`: the dash is set ONCE outside the loop, so it
+    // fires whenever the array is non-empty whether or not any ghost survives the cull. The first
+    // version of this case asserted on the dash and failed against a correctly-culling painter —
+    // the instrument was measuring "the block ran", not "a ghost drew".
+    const baseline = mockCtx();
+    paintScene(baseline, lensScene, VIEW, SIZE, PALETTE);
+    expect(ctx.strokeRect.mock.calls.length).toBe(baseline.strokeRect.mock.calls.length);
+  });
+
   it('culls an off-screen ghost (no stroke for a ghost far outside the viewport)', () => {
     const ctx = mockCtx();
     const before = ((): number => {

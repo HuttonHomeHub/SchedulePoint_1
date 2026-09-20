@@ -389,6 +389,86 @@ export function buildBaselineGhosts(
   return ghosts;
 }
 
+/**
+ * **The levelled ghost** — where the resource-levelling pass would put this bar
+ * (one-planning-surface M-E, spec §4.8).
+ *
+ * A SEPARATE shape from {@link GhostBar} and {@link CompareGhost}, on the same reasoning ADR-0127
+ * used to keep those two apart: the three answer different questions (against the active baseline;
+ * against another revision; against what resources would force), any two can be on at once, and a
+ * shared field name would make a levelled date read as a baseline one at the call site.
+ *
+ * **A bound and a position are different objects**, which is why this is a lens and the feasible
+ * window is a toggle: the window is where the bar MAY go, this is a rival place it COULD be.
+ */
+export interface LevelledGhost {
+  id: string;
+  leveledStart: string;
+  leveledFinish: string;
+  laneIndex: number;
+  isMilestone: boolean;
+}
+
+/**
+ * The minimal activity shape the levelled ghost reads — the engine's levelling overlay, the lane,
+ * and whether the live bar is a milestone so the ghost matches its shape.
+ *
+ * **`isMilestone` is passed in rather than derived from `type` here**, exactly as
+ * {@link GhostLaneSource} passes it: the shared predicate lives in `features/activities`, and this
+ * module is a pure render leaf with no feature imports. Restating the two milestone labels instead
+ * would be a second derivation of a fact one helper already owns — and the first attempt at this
+ * function did exactly that, comparing against a `'MILESTONE'` label that does not exist in
+ * `ActivityType` at all.
+ */
+export interface LevellableActivity {
+  id: string;
+  laneIndex: number;
+  isMilestone: boolean;
+  earlyStart: string | null;
+  leveledStart: string | null;
+  leveledFinish: string | null;
+}
+
+/**
+ * Build the levelled ghosts — one per activity the levelling pass MOVED.
+ *
+ * **The draw predicate is `leveledStart !== earlyStart`, and it was chosen rather than discovered.**
+ * The obvious alternative is `levelingDelayDays > 0`, and at day granularity the two agree; the
+ * reason to prefer the date test is this epic's own rule. The ghost is a rect positioned **from date
+ * strings**, and `levelingDelayDays` is a **separately rounded** day quantity — deciding whether to
+ * draw a rect by a number rounded independently of the dates that position it is two derivations of
+ * one fact, which is exactly what the feasible window's single derivation removes one layer up.
+ *
+ * It also collapses two rules into one: the draw predicate **is** the coincidence test, so there is
+ * no separate withholding rule to keep in step. An UNDELAYED participant is not drawn because
+ * `pinAtNetwork` sets `leveledStart: r.earlyStart` (`level.ts:174`), so its ghost would sit exactly
+ * on the feasible window's **left cap** — not on the bar, which is the collision the previous
+ * withholding rule was aimed at and the wrong one.
+ *
+ * **Three states, derived from `level.ts`'s exit paths rather than from a golden fixture**:
+ *
+ * - the pass never ran (`plan.levelResources === false`) — the control is shaded with a reason and
+ *   this is never called;
+ * - it ran and this activity was **not a participant** (`level.ts:186` — no finite assignments, so
+ *   no overlay at all): `leveledStart` is null, no ghost, and **no shading** — nothing is wrong;
+ * - it ran and moved it: a ghost.
+ */
+export function buildLevelledGhosts(activities: readonly LevellableActivity[]): LevelledGhost[] {
+  const ghosts: LevelledGhost[] = [];
+  for (const a of activities) {
+    if (a.leveledStart === null || a.leveledFinish === null) continue; // not a participant
+    if (a.leveledStart === a.earlyStart) continue; // a participant levelling did not move
+    ghosts.push({
+      id: a.id,
+      leveledStart: a.leveledStart,
+      leveledFinish: a.leveledFinish,
+      laneIndex: a.laneIndex,
+      isMilestone: a.isMilestone,
+    });
+  }
+  return ghosts;
+}
+
 /** Narrowing helper for `TsldPanel` — `ActivitySummary` satisfies both matcher and colour shapes. */
 export type LensActivity = ActivitySummary;
 
