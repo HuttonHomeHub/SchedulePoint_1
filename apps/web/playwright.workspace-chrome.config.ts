@@ -6,12 +6,21 @@ import { defineConfig, devices } from '@playwright/test';
  * the placement rule the canvas previews.
  *
  * **`VITE_SCHEDULING_MODES` is left at its default (on), and that is why this config exists.**
- * (So is every other flag — see the `webServer` block.) Every
- * other flag-scoped config in this repository pins it OFF — fourteen of them, each for a good local
- * reason (a Visual placement changes what a bar's position means, which is a variable those suites
- * are controlling for). The consequence nobody had recorded is that **Visual mode has never been
- * driven by any journey**, so the one placement rule a planner exercises by dragging a bar was
- * covered only by unit tests over a mocked fetch. M2's whole subject is that rule.
+ * (So is every other flag — see the `webServer` block.)
+ *
+ * **When this was written, every other flag-scoped config in this repository pinned it OFF** — each
+ * for a good local reason (a Visual placement changes what a bar's position means, which is a
+ * variable those suites are controlling for). The consequence nobody had recorded is that **Visual
+ * mode had never been driven by any journey**, so the one placement rule a planner exercises by
+ * dragging a bar was covered only by unit tests over a mocked fetch. M2's whole subject is that rule.
+ *
+ * **That is no longer the estate's shape, and the change is smaller than it sounds.** The
+ * one-planning-surface epic's M-B-T1 removed all thirteen pins on 2026-09-20, so no config pins the
+ * flag today. But `docs/specs/one-planning-surface/m-b/triage.md` measured what the removal bought,
+ * and the answer for Visual mode is **nothing**: every plan those thirteen suites create is `EARLY`,
+ * so `barDateSourceFor` returns `'early'` and their bars are provably in the same pixels either side
+ * of the flag. **This is still the only journey in the repository that drives Visual mode** — the
+ * sentence above is now a fact about coverage rather than about pins, and it is just as true.
  *
  * The pen is on and **enforced at the API** (`PLAN_EDIT_LOCK_ENFORCED`), and the coalesced
  * auto-recalculation is live — the same combination `playwright.authoring-flow.config.ts` uses, and

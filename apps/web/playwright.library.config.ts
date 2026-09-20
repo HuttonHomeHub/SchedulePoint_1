@@ -10,8 +10,10 @@ import { defineConfig, devices } from '@playwright/test';
  * **No longer flag-on: it is the only library surface there is.** `VITE_LIBRARY_SCOPING` selected
  * these controls or a raw `<select>`, and ADR-0088 D3 retired the flag and deleted that arm — so
  * its pin went, and ONLY its pin. The remaining `env` keys below are other flags this journey
- * genuinely needs. `VITE_SCHEDULING_MODES` was among them, pinned off; it no longer is
- * (one-planning-surface M-B-T1).
+ * genuinely needs — and `VITE_SCHEDULING_MODES` is no longer among them: it was pinned off here and
+ * in twelve sibling configs, and the one-planning-surface epic's M-B-T1 removed all thirteen on
+ * 2026-09-20. This suite makes no diagram assertion at all, so the removal costs it nothing and buys
+ * it only the axe scan's reach over the mode chrome (`docs/specs/one-planning-surface/m-b/triage.md`).
  *
  * Serves the web bundle with the canvas-first plan-workspace layers this journey's plan steps build on (canvas authoring →
  * toolbar → workspace → editing surface + pen; mirrors the interchange/share suites' layering).

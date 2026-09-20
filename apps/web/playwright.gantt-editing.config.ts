@@ -14,13 +14,17 @@ import { defineConfig, devices } from '@playwright/test';
  * through the API trips a throttler that exists to deny abusive traffic and cannot tell a harness
  * from it.
  *
- * **It pins no `VITE_` flag off, deliberately.** The config this was copied from pins
- * `VITE_SCHEDULING_MODES: 'false'`, and inheriting that made `Clear visual placement` vanish — the
- * item is only registered when scheduling modes are on, so the journey was asserting against a
- * surface no shipped bundle produces. ADR-0088 D1 established that a published image carries every
- * flag at its default, and ADR-0088's own retrospective records the base suite proving role-only
- * editing "in a world no shipped bundle can produce" as worse than covering a rollback path. The
- * default surface IS the shipped surface, so that is what this drives.
+ * **It pins no `VITE_` flag off, deliberately — and as of 2026-09-20 neither does anything else.**
+ * The config this was copied from pinned `VITE_SCHEDULING_MODES: 'false'`, and inheriting that made
+ * `Clear visual placement` vanish — the item is only registered when scheduling modes are on, so the
+ * journey was asserting against a surface no shipped bundle produces. ADR-0088 D1 established that a
+ * published image carries every flag at its default, and ADR-0088's own retrospective records the
+ * base suite proving role-only editing "in a world no shipped bundle can produce" as worse than
+ * covering a rollback path. The default surface IS the shipped surface, so that is what this drives.
+ *
+ * The one-planning-surface epic's M-B-T1 removed the other thirteen pins, so this config's position
+ * stopped being the exception and became the rule. Kept rather than deleted, because it records WHY
+ * — and because the sentence above names the defect that reasoning caught, in this suite, once.
  */
 export default defineConfig({
   testDir: './e2e-gantt-editing',
