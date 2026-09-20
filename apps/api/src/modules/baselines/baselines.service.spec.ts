@@ -80,6 +80,8 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     // what this fixture's other fields describe — the shape frozen without logic,
     // constraints, calendars, WBS or progress.
     revisionSnapshotLevel: 'NONE',
+    // one-planning-surface M-A: the column exists and ships dark; M-C writes 'FULL'.
+    placementSnapshotLevel: 'NONE',
     // ADR-0125 mirrors: null = the rule this snapshot's criticality was computed under is
     // unknown, which is what a baseline captured before the freeze shipped should say.
     criticalPathDefinition: null,

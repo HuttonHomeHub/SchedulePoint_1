@@ -596,13 +596,13 @@ window already does and the asymmetry is a regression risk.
 
 **Every item is a proposal for `database-architect`.**
 
-| Change                                     | Table                         | Shape                                                                         |
-| ------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------------- |
-| Add placed dates **and the planner input** | `baseline_activities`         | `placed_start`, `placed_finish`, **`visual_start`** — `DATE NULL`, no DEFAULT |
-| Add the **snapshot level**                 | `baselines`                   | **`placement_snapshot_level ∈ {NONE, FULL} DEFAULT NONE`**                    |
-| Add remaining float                        | `activities`                  | `remaining_float INT NULL`, no index, no CHECK                                |
-| Add the strip record                       | new `placement_migration_log` | below                                                                         |
-| Drop the column **and** the enum           | `plans`                       | **ONE migration**, at M-J                                                     |
+| Change                                     | Table                      | Shape                                                                         |
+| ------------------------------------------ | -------------------------- | ----------------------------------------------------------------------------- |
+| Add placed dates **and the planner input** | `baseline_activities`      | `placed_start`, `placed_finish`, **`visual_start`** — `DATE NULL`, no DEFAULT |
+| Add the **snapshot level**                 | `baselines`                | **`placement_snapshot_level ∈ {NONE, FULL} DEFAULT NONE`**                    |
+| Add remaining float                        | `activities`               | `remaining_float INT NULL`, no index, no CHECK                                |
+| Add the strip record                       | new `placement_migrations` | below                                                                         |
+| Drop the column **and** the enum           | `plans`                    | **ONE migration**, at M-J                                                     |
 
 **Why a level rather than a two-valued basis** _(accepted from review)_: post-epic **every** capture
 writes both column sets, so the row is not one **or** the other; and only a level distinguishes "this
@@ -613,7 +613,7 @@ own argument (ADR-0126), and `DEFAULT NONE` is the literal truth of every existi
 input, and without it a comparison cannot distinguish "the planner moved it" from "the logic moved
 it" — the same question `placed_*` alone cannot answer.
 
-**`placement_migration_log`** _(substantially corrected from review)_:
+**`placement_migrations` _(named `placement_migration_log` in earlier drafts; renamed at M-A because `docs/DATABASE.md`'s "Tables: plural `snake_case`" rule holds for all 33 existing tables, and this repository already faced the identical choice for `audit_events` and chose the plural row-noun over the collective "log")_** _(substantially corrected from review; renamed at M-A)_:
 
 - **A primary key** — every sibling operational table has one.
 - **Real FKs for `plan_id` (Cascade) and `organization_id` (Restrict).** Non-FK is right for

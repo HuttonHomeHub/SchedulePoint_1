@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 31
-> models across 63 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 32
+> models across 66 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -427,6 +427,41 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
   `externalDrivenCount` (a read-time `COUNT` over the same plan scope), letting the
   web show a per-row "External" badge beside the `constraint_violated` "Conflict"
   badge. Storing these avoids a wide migration when features that read them land.
+- **`remaining_float` — the room a PLACED bar has left** (one-planning-surface §4.3 /
+  US-3; CQ-1 answered "persist"). `total_float` is measured from the pure-network
+  **early** finish; once a planner hand-places a bar, the float they can still spend is
+  what is left after the drift they have already spent, `total_float − visual_drift`.
+  After that epic the screen float **is** remaining float, because that is the number a
+  planner means. Engine-owned exactly like `total_float`/`visual_drift_days` — the
+  22nd column of the `unnest` batch in `schedule.repository.ts` `writeResults`, never
+  accepted from a write DTO, never touching `version`/`updated_at`/`updated_by`
+  (ADR-0022). Nullable/no default ⇒ every existing row reads NULL, "not yet
+  calculated", and fills in on the next recalculation.
+  - **Persisted rather than subtracted on read, and the read-time alternative does not
+    exist.** `total_float` and `visual_drift_days` are each **independently rounded**
+    day columns — both divided by `factorFor(activityId)` and `Math.round`ed in
+    `writeResults` — and **minutes are persisted for neither**, so a read-time
+    derivation could only ever compute `round(T/f) − round(d/f)`, which is not
+    `round((T−d)/f)` on any calendar where `f` is not 1440. ADR-0140's first press
+    measured **19 of 164** deployed activities on exactly such a calendar. Persisting
+    makes the engine round **once**, at the only point where both minute quantities
+    still exist.
+  - **No index, and CQ-1's own stated reason for persisting was false** — recorded
+    because it is the reason a reader would add one. That reason was "it lets the Gantt
+    sort server-side". It does not: the Gantt sorts **in the browser**
+    (`apps/web/src/features/gantt/layout/row-model.ts:154` compares `totalFloat` inside
+    a client comparator), and the activities list endpoint has **no sort parameter at
+    all** — its `PaginationQueryDto` carries only `limit` and `cursor`, and
+    `findManyActiveByPlan` orders by a fixed `(created_at, id)`. Both halves checked
+    rather than inherited. Index query patterns, not columns.
+  - **No CHECK — negative is the feature.** A bar placed past a "no later than" ceiling
+    has negative remaining float, and making that visible is what US-5 exists for;
+    `total_float` is unconstrained for the same reason and this mirrors it.
+  - **Day-denominated, with no `*_minutes` sibling**, and the asymmetry with the
+    `remaining_duration_days`/`_minutes` pair in the same DTO is deliberate: this is a
+    **float** — an engine output derived from two day-denominated float quantities and
+    read beside them — while the paired convention belongs to **durations**, which are
+    planner inputs needing sub-day precision (ADR-0070).
 - **`calendar_id`** is the activity's own working-time calendar (**M5, ADR-0037**):
   a nullable, **client-settable** UUID FK to `calendars` (`onDelete: Restrict`),
   mirroring `Plan.calendar` exactly. `null` means **inherit the plan default** —
@@ -925,6 +960,78 @@ describes** — its only `baseline_id`-leading index is the partial unique, so i
 one; that is a pre-existing finding, not something this change introduces, and it wants its own
 measured decision rather than an index smuggled in here.
 
+#### The placement snapshot — a baseline freezes where the work was PLACED
+
+ADR-0025's **fifth** amendment (one-planning-surface §4.9 / US-6), and the last of the five is the
+one that changes what `baseline_start` means to a reader without changing the column.
+
+That column **is** the captured **early** start — the pure-network date. The one-planning-surface
+epic deletes `plans.scheduling_mode` and makes **placed** dates the product's single answer to
+"when is this activity", everywhere: canvas, Gantt, print, export and across a plan boundary. A
+comparison that left the snapshot alone would therefore be measuring today's **placed** dates
+against a frozen **early** date and reporting the difference as **slippage** — a large, real-looking
+variance with nothing in the database able to disagree. That is ADR-0125's criticality finding, one
+basis along.
+
+Three nullable `date` columns on `baseline_activities` close it, and a fourth column on `baselines`
+says whether they were recorded at all:
+
+| Column                               | Frozen from                          | Means                                               |
+| ------------------------------------ | ------------------------------------ | --------------------------------------------------- |
+| `baseline_activities.placed_start`   | `activities.visual_effective_start`  | where the **bar sat** (engine output)               |
+| `baseline_activities.placed_finish`  | `activities.visual_effective_finish` | "                                                   |
+| `baseline_activities.visual_start`   | `activities.visual_start`            | what the **planner placed** (the one planner input) |
+| `baselines.placement_snapshot_level` | the capture path                     | `NONE` \| `FULL` — whether the three were recorded  |
+
+**`visual_start` is frozen too, and it is not redundant with the other two.** `placed_*` is an
+engine **output**; `visual_start` is the planner's **input**, and after this epic it is the only one
+— a drag writes it and nothing else. Without it a comparison can see that a bar moved and cannot say
+**why**: "the planner moved it" and "the logic moved an unplaced bar underneath" produce identical
+`placed_*` deltas, and telling those two apart is the reason a planner opens a comparison at all. It
+is `budgeted_expense`'s argument one class along — state the component, do not leave it to be
+recovered by subtraction.
+
+**A level, not a two-valued `date_basis`.** A basis says "these dates are early" **or** "these dates
+are placed", and after this epic **neither** is true of a capture: every post-epic capture writes
+**both** column sets, because `baseline_start` stays the pure-network date (float variance, DCMA and
+the whole ADR-0034 matrix depend on it) and the three columns land **beside** it rather than instead
+of it. So the row is not one or the other, and the question a reader has is not "which basis?" but
+"was the placement recorded at all?" — which only a level can answer. It is `revision_snapshot_level`'s
+argument verbatim, and `DEFAULT 'NONE'` is the literal truth of every existing row.
+
+**And no per-row test and no row count can substitute** — the same two traps as the two levels above
+it, and here the first one is the _common_ case. All three columns have a legitimate NULL under
+`FULL`: `visual_start` is NULL for any activity the planner never moved, which today is **every**
+activity on the deployed estate (FC-1 predicts zero placements anywhere), and `placed_*` is NULL for
+a plan never recalculated — exactly the NULL `baseline_start`/`baseline_finish` already carry beside
+them. A row count fails for the reason it fails one section up: the capture guards its `createMany`
+on `activities.length > 0`, so a `FULL` capture of an empty plan writes no rows.
+
+**No DEFAULT on the three, and no backfill is possible — ever.** A capture cannot be re-run, so the
+only value a backfill could write is _today's_ placement, which would state as history something the
+capture never saw. The `hours_per_day_minutes DEFAULT 1440` precedent licenses nothing here: that
+default was legal because 1440 was **true** of every pre-existing row, and none of these values is
+knowable for any row that exists. Same rule as `lane_index`, `percent_complete`, `budgeted_expense`
+and the criticality four — five migrations running.
+
+**No CHECK constraints, and the omission is deliberate.** The revision snapshot took four, because
+each mirrors a **live** constraint and "a frozen copy must not be able to hold a value its source
+would refuse". The live columns these three copy carry none. In particular nothing asserts
+`placed_finish >= placed_start`: a zero-length milestone makes them equal, and asserting an ordering
+the engine has never been asked to guarantee would let a future engine change **fail a capture**
+rather than record it — the second half of the same rule, which is that a frozen copy must never
+**refuse** a plan the product allows.
+
+**One migration, not two.** `PlacementSnapshotLevel` is a **new** enum created whole, and
+`CREATE TYPE` + immediate use in one transaction is legal; the two-migration rule (ADR-0053 M3) is
+about `ALTER TYPE … ADD VALUE` on an **existing** type. Re-proved rather than inherited, both ways
+round, against the PostgreSQL 16.13 this repository provisions — the positive case COMMITs, and
+`ALTER TYPE … ADD VALUE` + use raises **55P04**. The negative control is what makes the positive
+result mean something. Migration `20260920120000_baseline_placement_snapshot` carries both probes
+verbatim, and its whole application is proved against a **populated** database in
+`docs/specs/one-planning-surface/m-a/migration-proof.md` (ADR-0107: this class of defect is
+invisible on an empty table).
+
 ### PlanLock: the edit-lock lease
 
 The `plan_locks` table (ADR-0028) is the **single-editor "pen"** — the human-facing
@@ -1313,6 +1420,99 @@ IS NULL OR expires_at > now()`) **AND** the referenced plan is itself active. An
   equality, unit-tested like every sibling); asserting `plan:share` (Planner/Org-Admin)
   on create/list/revoke; returning the raw token **once** on create and **never** in the
   list; and the guest guard's uniform-404 resolution + live-plan re-check.
+
+### PlacementMigration: the record of a stripped constraint (one-planning-surface M-A/M-I)
+
+`placement_migrations` is the durable record of **one drag-created constraint being converted into
+a hand-placement** (one-planning-surface §4.6 / US-2 / US-9; CQ-7 and CQ-8 answered by the product
+owner 2026-09-20). Before that epic a drag in Early mode wrote a binding `SNET`; the collapse strips
+those once, on a four-class test, and where the constraint was **binding**
+(`early_start = constraint_date`) the activity's `visual_start` becomes the constraint's date and
+the constraint is cleared — so **the bar does not move** and the downstream float it was never
+genuinely owed comes back.
+
+**It exists because that edit is unauditable by construction.** `PATCH …/activities/:activityId` is
+classified `REASONS.PLAN_CONTENT` (`audit-coverage.structural.spec.ts:264`), permanently excluded
+from `audit_events` under ADR-0073's content-edit rule. **Nothing in the audit log will ever record
+a stripped constraint.** This table is the only record there will be, and its second job —
+diagnostic — is what survived FC-10 clause B's withdrawn bound: it is how anybody finds out the
+strip did something nobody predicted, because a migration with no record turns a surprising result
+into a **mystery instead of a diff**.
+
+- **Write-once: no `version`, no `created_at`/`updated_at`, no `deleted_at`/`delete_batch_id`.**
+  Soft delete is this schema's default for customer data, so the omission is **said** rather than
+  left to read as an oversight. The `perf_probe_results`/`mail_events` reasoning applies verbatim:
+  the producer writes each row exactly once inside the migration transaction and nothing edits one,
+  so `created_at` would equal `migrated_at` on every row and `version` would guard an edit that
+  cannot happen. Soft delete would be **worse than absent** — a record of an irreversible act that
+  the product can make disappear is not a record.
+- **`plan_id` FK is `ON DELETE CASCADE`**, and the shape is derived rather than preferred.
+  `hierarchy-expiry.structural.spec.ts`'s completeness census reads the **Prisma DMMF** and
+  considers only to-one relations whose `relationOnDelete` is `Restrict`. So `RESTRICT` here would
+  **require** `hierarchy-expiry.runner.ts` to delete this table before `plans` (and the census would
+  fail until it did); **no FK at all** would be structurally **invisible** to that census while
+  ADR-0096's expiry hard-deletes the plan out from under these rows, orphaning org-scoped customer
+  content forever with nothing failing anywhere; and **CASCADE** is the shape the census explicitly
+  excludes _because the database already handles it_ — the row dies with its plan and no
+  hand-maintained list grows (`plan_locks` is the shipped precedent). It is a deliberate departure
+  from `plan_shares`, whose plan FK is `RESTRICT` **because a share participates in the soft-delete
+  cascade and must come back with its plan**. This row has no soft delete to participate in.
+- **`activity_id` has no foreign key** — a plain correlation UUID on ADR-0025's
+  `source_activity_id` leg. The moment this record is most wanted is **after the activity is gone**
+  ("what happened to the bar that used to be here?"), so a reference that either blocked the delete
+  or rotted with it is the wrong shape. It stands on that leg **alone**: the RESTRICT-trap
+  justification is withdrawn — `docs/TECH_DEBT.md` #253 records that ADR-0126 breakage as **test
+  teardown**, since fixed by `clearBaselineTree`, never a production hazard. Carrying the stale
+  reason is what would lead a reader to extend non-FK to `plan_id`.
+- **`organization_id` FK is `RESTRICT`**, denormalised from the plan by the migration inside its own
+  transaction, never client input — the `PlanLock`/`PlanShare`/`Note` pattern, purely as the tenant
+  scope tag for the plan-scoped read. Inert in practice, because plan → org `RESTRICT` fires first.
+- **A denormalised `activity_code` and `activity_name`** — the `audit_events.subject_label` rule:
+  after a hard delete an id names nothing and the report could otherwise only say "N activities".
+  Shapes copied exactly from the live columns (code nullable, name not). A frozen copy, never
+  refreshed.
+- **`prior_visual_start` is expected to be NULL on every row, and a non-NULL value is a finding.**
+  The four-class test **excludes** an activity already carrying a `visual_start`, because
+  `visual_start` is accepted regardless of mode so a row can carry a stale placement **and** a
+  binding `SNET`, and the naive `WHERE` would overwrite the placement. This column records the value
+  the write was about to replace **whatever it was** — so if that exclusion ever fails, the
+  destroyed placement is in a row rather than gone. A reader who finds it always NULL and deletes it
+  as dead weight has removed the evidence for the one failure mode nobody could otherwise
+  reconstruct.
+- **`prior_constraint_type`/`prior_constraint_date` are `NOT NULL`**, structurally rather than
+  optimistically: a row exists **only because a constraint was removed**, so both are known at write
+  time — which is also what makes the pair CHECK its nullable siblings need
+  (`ck_baseline_activities_constraint_pair`) unnecessary here. The pair cannot be half-set.
+- **`migrated_at` takes `DEFAULT CURRENT_TIMESTAMP`, not a service clock.** Inside a transaction
+  that is the **transaction start** time, so every row of one batch shares one instant and the batch
+  is identifiable without a correlation column — measured: 454 rows, one distinct value. It is also
+  why the index carries `id`: `migrated_at` cannot order rows _within_ a batch.
+- **Indexes.** `(plan_id, id)` serves the report read (`GET …/plans/:planId/placement-migration`)
+  and the plan FK on its leftmost prefix. **The FK half is not discretionary**: `ON DELETE CASCADE`
+  has to _find_ the children, so without it every plan hard-delete sequentially scans this table —
+  the `idx_activities_parent_id_fk` shape that cost 3m47s for a single plan, landing inside the
+  ADR-0096 expiry which catches, logs `hierarchy_expiry.permanent_failure` and retries hourly
+  forever. `(organization_id)` backs the org FK and IDOR loads, full rather than partial because
+  every row is in the read set.
+- **No unique constraint anywhere, and the refusal is the point.** `(plan_id, activity_id)` would be
+  true today — a one-time migration strips an activity at most once — and a unique index does not
+  assert a fact, it **refuses a row**. On a table whose second job is telling us the strip did
+  something nobody predicted, refusing the second row turns that surprise into a failed migration
+  with no record of why. That is `csp_reports`' shape-CHECK lesson verbatim.
+- **Outside `RETENTION_TABLES`, with no window** (CQ-8). That set has never contained
+  organisation-scoped customer content, and `retention-boundary.structural.spec.ts:53-58` asserts it
+  **by equality** — so this is a decision written down rather than an omission. The Cascade FK
+  already gives the row the only lifecycle it should have.
+- **Non-scheduling.** The CPM engine never reads it.
+
+**Open, and named so it is not mistaken for settled** (see `docs/specs/one-planning-surface/m-a/`):
+the table records the **converted** rows only. The three left classes (inert, unclassified, already
+placed) are counted and reported by M-I from **live** rows, and a plan with **zero** log rows is
+therefore indistinguishable from a plan the migration never examined — the same "a row count cannot
+separate nothing-to-do from nobody-looked" trap the three baseline snapshot levels exist to close.
+That is acceptable while the strip is a **one-time** migration whose answer is global, and if M-I
+needs it per-plan the extension is an `outcome` discriminator with a constant `DEFAULT` that is true
+of every existing row — metadata-only, and honest.
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 

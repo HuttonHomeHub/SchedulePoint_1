@@ -72,6 +72,7 @@ function activityRow(): WithDayFactor<Activity> {
     visualEffectiveFinish: DAY,
     visualConflict: false,
     visualDriftDays: 0,
+    remainingFloat: 3,
     leveledStart: DAY,
     leveledFinish: DAY,
     levelingDelayMinutes: 480,
@@ -132,6 +133,10 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   'visualEffectiveFinish',
   'visualConflict',
   'visualDriftDays',
+  // one-planning-surface M-A. The column exists and NO DTO exposes it yet, so a guest receives
+  // nothing — deny-by-default, and the honest description of today's state rather than a decision
+  // about M-E's float read-out, which is that milestone's to make.
+  'remainingFloat',
   'levelingPriority',
   'leveledStart',
   'leveledFinish',

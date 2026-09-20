@@ -230,7 +230,7 @@ ones.**
   docblock says why: this is a **float**, following `totalFloat`/`freeFloat`; the paired convention
   belongs to **durations**, which are planner inputs needing sub-day precision (ADR-0070).
 
-##### Task M-A-T4 — `placement_migration_log`
+##### Task M-A-T4 — `placement_migrations` _(named `placement_migration_log` in this plan; renamed at M-A — see the note in the task body)_
 
 - **Description:** **a primary key**; `activity_id` **non-FK**; **`plan_id` FK Cascade**;
   **`organization_id` FK Restrict**; **denormalised activity code and name**;
@@ -246,6 +246,13 @@ ones.**
   teardown**, since fixed by `clearBaselineTree`; never a production hazard, and gone. **Carrying
   the stale reason is what would lead a reader to extend non-FK to `plan_id`.** The non-FK
   `activity_id` stands on ADR-0025's `source_activity_id` leg alone.
+- **Renamed at M-A: `placement_migration_log` → `placement_migrations`.** `docs/DATABASE.md`'s
+  naming rule is "**Tables:** plural `snake_case`", and all 33 existing tables comply — this would
+  have been the first exception, permanently. The house answer to the identical question already
+  exists one table along: faced with a "things that happened" table, this repository chose
+  `audit_events` (the plural row-noun) over `audit_log` (the collective). A row here **is** one
+  activity's placement migration. Recorded rather than done quietly, and cheap to revert while
+  nothing consumes the table.
 - **Testing:** **it does NOT join `RETENTION_TABLES` and takes no window** (CQ-8) — it is org-scoped
   customer content read by a member, which that set has never contained
   (`docs/DATABASE.md:1389-1396`), and `retention-boundary.structural.spec.ts:53-58` asserts the set

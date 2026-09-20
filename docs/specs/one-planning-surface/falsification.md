@@ -443,7 +443,8 @@ permission.
 
 **What survives the withdrawal, and why each is not safety work:**
 
-- **`placement_migration_log`** — its second job is **diagnostic**, and that job is worth **more** on
+- **`placement_migrations`** (named `placement_migration_log` when this was written; renamed at
+  M-A for the plural-table rule) — its second job is **diagnostic**, and that job is worth **more** on
   disposable data, not less: it is how anybody finds out the strip did something nobody predicted. A
   migration with no record turns a surprising result into a **mystery instead of a diff**. Its FKs,
   PK, denormalised label and `prior_visual_start` all stand.
@@ -465,7 +466,7 @@ activity **and one row carrying both a `visual_start` and a binding SNET** — v
 overwriting the already-placed row.
 
 **Clause D — the record exists and the planner is told.** Every stripped constraint has a
-`placement_migration_log` row — with its **prior `visual_start`** as well as its prior constraint —
+`placement_migrations` row — with its **prior `visual_start`** as well as its prior constraint —
 written **before** the delete, in the same transaction; and the plan renders the dock notice stating
 the count and **naming the consequence**.
 

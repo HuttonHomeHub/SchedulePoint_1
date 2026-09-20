@@ -197,6 +197,12 @@ model Organization {
   // never client input — the PlanLock/Note pattern), purely as the tenant scope tag for
   // scoped audit reads; the row itself is owned by its plan.
   planShares           PlanShare[]
+  // The durable record of drag-created constraints converted to hand-placements
+  // (one-planning-surface §4.6). organization_id is denormalised from the plan (copied by
+  // the migration inside its transaction, never client input — the PlanLock/PlanShare
+  // pattern), purely as the tenant scope tag for the plan-scoped report read; the row
+  // itself is owned by its plan and dies with it by ON DELETE CASCADE.
+  placementMigrations  PlacementMigration[]
 
   @@map("organizations")
 }
@@ -616,6 +622,59 @@ enum RevisionSnapshotLevel {
   FULL
 }
 
+// WHAT A BASELINE FROZE OF THE PLACEMENT — the one-planning-surface capture discriminator, and
+// the FIFTH amendment to ADR-0025's snapshot-copy model (after ADR-0042's cost baseline,
+// ADR-0071 M3's cost decomposition, ADR-0125's criticality rule and ADR-0126's revision snapshot).
+// Spec: docs/specs/one-planning-surface/feature-spec.md §4.9 / US-6; written by M-C, dark here.
+//
+//   NONE  the snapshot recorded the pure-network dates (`baseline_activities.baseline_start` /
+//         `.baseline_finish` ARE the captured early start/finish) and NOTHING about where the
+//         work was PLACED. This is the constant DEFAULT and the literal truth of every baseline
+//         captured before this column existed.
+//   FULL  the snapshot additionally recorded, for every activity active at capture:
+//           * placed_start / placed_finish  the engine's effective-Visual span (`activities
+//                                           .visual_effective_start` / `_finish`) — where the bar
+//                                           actually sat, which after this epic is the product's
+//                                           only answer to "when is this activity?"
+//           * visual_start                  the PLANNER'S OWN hand-placement, the one input that
+//                                           survives the collapse (ADR-0033's `visual_start`)
+//
+// WHY A LEVEL AND NOT A TWO-VALUED `date_basis`. A basis says these dates are early OR these
+// dates are placed, and after this epic NEITHER is true of a capture: EVERY post-epic capture
+// writes BOTH column sets, because `baseline_start` stays the pure-network early date (float
+// variance, DCMA and the whole ADR-0034 matrix depend on it) and the placed columns land BESIDE
+// it rather than instead of it. So the row is not one or the other, and the question a reader
+// actually has is not "which basis?" but "was the placement recorded at all?" — which only a
+// level can answer. The two-valued form is rejected in the spec's §4.13 alternatives table.
+//
+// AND NO PER-ROW TEST CAN ANSWER IT — `revision_snapshot_level`'s argument verbatim, one column
+// along. All three columns have a LEGITIMATE null under FULL: `visual_start` is null for any
+// activity the planner never moved (FC-1 predicts that is EVERY activity on the deployed estate
+// today, so the common case is the ambiguous one), and `placed_start`/`placed_finish` are null
+// for a plan never recalculated — exactly the nulls `baseline_start`/`baseline_finish` already
+// carry beside them. NOR CAN A ROW COUNT: `baseline.repository.ts` guards its `createMany` on
+// `input.activities.length > 0`, so a FULL capture of an empty plan writes no rows at all. This
+// column is the only thing that can answer the question, so the read branches on it and never on
+// a column's nullness or a list's length.
+//
+// THE PAIRING IS A SERVICE INVARIANT, NOT A CHECK — the columns it vouches for live in another
+// table and a CHECK sees one row of one table (the `cost_snapshot_level` / `revision_snapshot_
+// level` reasoning, unchanged). It is held inside the single capture transaction, which is why
+// the DEFAULT is the conservative value: a write path not yet taught the new pass reads as NONE,
+// never as recorded-but-empty. Fail-closedness lives at the TypeScript boundary — read it with an
+// exhaustive switch so a future third level is a compile error rather than a silently fabricated
+// comparison.
+//
+// `NONE` IS PERMANENT for any baseline already captured, and this is the reason the columns take
+// no DEFAULT. Nothing surviving records where a plan's bars sat at a past instant, and a capture
+// cannot be re-run — so a backfill could only stamp TODAY's placement as history, which is
+// precisely what ADR-0025's copy-not-reference rule exists to prevent. MUST stay in lock-step
+// with the `PlacementSnapshotLevel` union in @repo/types when the comparison surfaces it (M-C).
+enum PlacementSnapshotLevel {
+  NONE
+  FULL
+}
+
 model Client {
   id             String    @id @default(uuid(7)) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
@@ -876,41 +935,51 @@ model Plan {
   deletedAt                             DateTime?               @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId                         String?                 @map("delete_batch_id") @db.Uuid
 
-  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project           Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  calendar          Calendar?             @relation(fields: [calendarId], references: [id], onDelete: Restrict)
-  activities        Activity[]
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project             Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  calendar            Calendar?             @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  activities          Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
-  dependencies      ActivityDependency[]
+  dependencies        ActivityDependency[]
   // Live cross-plan (inter-project) edges incident on this plan (M2, ADR-0045). Two
   // named relations disambiguate the two plan FKs on CrossPlanDependency:
   // `crossPlanOutgoing` are the edges where this plan is the PREDECESSOR (feeds a
   // downstream plan), `crossPlanIncoming` where it is the SUCCESSOR (gated BY an
   // upstream plan — the edge's home per ADR-0045 CQ-2). Both FKs are RESTRICT: a
   // schedule edge is never cascade-deleted; soft-delete + restore is service-owned.
-  crossPlanOutgoing CrossPlanDependency[] @relation("CrossPlanDependencyPredecessorPlan")
-  crossPlanIncoming CrossPlanDependency[] @relation("CrossPlanDependencySuccessorPlan")
+  crossPlanOutgoing   CrossPlanDependency[] @relation("CrossPlanDependencyPredecessorPlan")
+  crossPlanIncoming   CrossPlanDependency[] @relation("CrossPlanDependencySuccessorPlan")
   // Plan-of-record snapshots captured from this plan (M7, ADR-0025). At most one is
   // active at a time (partial unique in the migration). FK is RESTRICT; baseline
   // soft-delete + cascade is service-owned (HierarchyLifecycleService).
-  baselines         Baseline[]
+  baselines           Baseline[]
   // The (optional) edit-lock row for this plan (ADR-0028). 1:1 — PlanLock's PK IS the
   // plan id, so presence = someone holds the pen, absence = free. FK is ON DELETE
   // CASCADE (the lock is ephemeral state owned by the plan, not a soft-deleted domain
   // record), so a plan hard-purge removes it and is never blocked by a stale lock.
-  planLock          PlanLock?
+  planLock            PlanLock?
   // Threaded notes (M1, ADR-0046). Both PLAN notes (parent = this plan) AND ACTIVITY
   // notes (parent = an activity IN this plan) carry this plan_id — the latter as a
   // DENORMALISED cascade key — so the plan-cascade sweep is ONE updateMany by plan_id
   // and no note is double-counted. FK is RESTRICT; note soft-delete/restore is
   // service-owned (HierarchyLifecycleService, Task 1.4).
-  notes             Note[]
+  notes               Note[]
   // External-Guest read-only share links for THIS plan (Stage F, ADR-0051). A plan may
   // have many independently-revocable links. FK is RESTRICT; the plan-cascade soft-delete
   // sweeps its live links into the plan's delete_batch_id (HierarchyLifecycleService,
   // F-M1 Task 4) so a deleted plan's links stop resolving. Read-only / non-scheduling —
   // the CPM engine never reads it.
-  planShares        PlanShare[]
+  planShares          PlanShare[]
+  // The record of this plan's one-time placement migration — one row per drag-created
+  // SNET constraint that was converted into a `visual_start` (one-planning-surface
+  // §4.6 / US-9). FK is ON DELETE **CASCADE**, unlike every soft-deleted sibling above:
+  // the row is write-once with no `deleted_at`, so it has no soft-delete cascade to join
+  // and nothing to restore, and cascade is the shape the DMMF completeness census in
+  // `hierarchy-expiry.structural.spec.ts` excludes because the database handles it. An
+  // EMPTY list is not "unmigrated" — it means nothing on this plan was converted, which
+  // is also true of every plan created after the migration ran. Non-scheduling: the CPM
+  // engine never reads it.
+  placementMigrations PlacementMigration[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -1210,6 +1279,54 @@ model Activity {
   visualEffectiveFinish DateTime? @map("visual_effective_finish") @db.Date
   visualConflict        Boolean   @default(false) @map("visual_conflict")
   visualDriftDays       Int?      @map("visual_drift_days")
+
+  // REMAINING FLOAT — the room a PLACED bar has left, in whole working days (one-planning-surface
+  // §4.3 / US-3, CQ-1 answered "persist"). `total_float` is measured from the pure-network EARLY
+  // finish; once a planner hand-places a bar, the float they can still spend is what is left after
+  // the drift they have already spent: `remaining_float = total_float - visual_drift`. Engine-owned
+  // exactly like `total_float`/`visual_drift_days` — written ONLY by the recalc's batched `unnest`
+  // UPDATE (schedule.repository `writeResults`, where it becomes the 22nd engine column), NEVER
+  // accepted from a write DTO, and NEVER touching version/updated_at/updated_by so a recalculation
+  // stays invisible to optimistic locking (ADR-0022).
+  //
+  // IT LIVES HERE, BESIDE `visual_drift_days`, AND NOT BESIDE `total_float`/`free_float`. It is an
+  // effective-Visual output — meaningless except against a placed finish — and its second input is
+  // the column immediately above it, which is also the hazard the next paragraph is about. Putting
+  // it in physical contact with that column is deliberate; its day-denominated UNIT still follows
+  // `total_float`/`free_float` (below).
+  //
+  // WHY IT IS PERSISTED RATHER THAN SUBTRACTED ON READ, AND THE ALTERNATIVE DOES NOT EXIST.
+  // `total_float` and `visual_drift_days` are each INDEPENDENTLY ROUNDED day columns (both divided
+  // by `factorFor(activityId)` and `Math.round`ed in `writeResults`), and MINUTES ARE PERSISTED FOR
+  // NEITHER — so a read-time derivation could only ever compute `round(T/f) - round(d/f)`, which is
+  // not `round((T-d)/f)` on any calendar where `f` is not 1440. ADR-0140's first press measured 19
+  // of 164 deployed activities on exactly such a calendar, so the disagreement is a real population
+  // rather than a theoretical one. Persisting makes the engine round ONCE, at the only point where
+  // both minute quantities still exist.
+  //
+  // NO INDEX, AND CQ-1's OWN STATED REASON FOR PERSISTING WAS FALSE — say so here, or the next
+  // reader adds one. That reason was "it lets the Gantt sort server-side". It does not: the Gantt
+  // sorts IN THE BROWSER (`apps/web/src/features/gantt/layout/row-model.ts:154` sorts `totalFloat`
+  // in a client comparator), and the activities list endpoint has NO sort parameter at all — its
+  // `PaginationQueryDto` carries only `limit` and `cursor`, and `findManyActiveByPlan` orders by a
+  // fixed `(created_at, id)`. So persisting buys NO sorting capability anyone uses, and no query
+  // predicate targets this column; it is read as part of the already plan-scoped activity load.
+  // Index query patterns, not columns (docs/DATABASE.md). The reasons that DO hold are the rounding
+  // above and the single derivation it guarantees.
+  //
+  // NO CHECK — NEGATIVE IS THE FEATURE, not an error to refuse. A bar placed past a "no later than"
+  // ceiling has negative remaining float and that is precisely what US-5 exists to make visible;
+  // `total_float` is unconstrained for the same reason, and this column mirrors it.
+  //
+  // DAY-DENOMINATED ONLY, with no `*Minutes` sibling, and the asymmetry with `remainingDuration
+  // Days`/`Minutes` in the same DTO is deliberate. This is a FLOAT — an engine OUTPUT derived from
+  // two day-denominated float quantities, compared against float thresholds and read beside them.
+  // The paired day/minute convention belongs to DURATIONS, which are planner INPUTS needing sub-day
+  // precision (ADR-0070).
+  //
+  // Nullable with no default ⇒ every existing row reads NULL ("not yet calculated"), so no backfill
+  // is needed and the byte-parity golden path is unchanged. DARK until M-D computes it.
+  remainingFloat Int? @map("remaining_float")
 
   // Resource-levelling OVERLAY — engine-owned (ADR-0041 §3, Q2). The opt-in second pass
   // (plans.level_resources) runs AFTER the pure CPM network pass and produces these
@@ -1881,6 +1998,29 @@ model Baseline {
   /// what it is rather than as something it is not.
   revisionSnapshotLevel RevisionSnapshotLevel @default(NONE) @map("revision_snapshot_level")
 
+  /// WHAT this baseline froze of the PLACEMENT — see the PlacementSnapshotLevel docblock, which
+  /// carries the reasoning and enumerates what FULL vouches for. NONE (the constant DEFAULT, and
+  /// the literal truth of every baseline captured before this column) = the pure-network dates
+  /// only; FULL = those plus `baseline_activities.placed_start`/`.placed_finish` (where the bar
+  /// actually sat) and `.visual_start` (what the planner placed).
+  ///
+  /// A CAPTURE-level fact like its three siblings above: one pass freezes the whole plan inside
+  /// one transaction, so every row of a baseline shares it — and the comparison needs the answer
+  /// BEFORE it looks at any row, because it decides whether a NULL `visual_start` means "never
+  /// hand-placed" or "unknown", and whether a NULL `placed_start` means "never calculated" or
+  /// "never recorded". NEVER infer it from a column's nullness or from a row count: all three
+  /// columns have a legitimate NULL under FULL, and on today's estate the ambiguous one is the
+  /// COMMON case (FC-1 predicts zero placements anywhere).
+  ///
+  /// Set by the capture path, then IMMUTABLE like every other snapshot column: a soft-delete /
+  /// restore stamps only `deletedAt`/`deleteBatchId` and never touches it. Constant DEFAULT ⇒
+  /// metadata-only ADD COLUMN, no rewrite, and every existing baseline is described as exactly
+  /// what it is rather than as something it is not.
+  ///
+  /// DARK until M-C writes it: this milestone lands the column, nothing sets it to FULL yet, and
+  /// NONE stays correct for every row in the meantime.
+  placementSnapshotLevel PlacementSnapshotLevel @default(NONE) @map("placement_snapshot_level")
+
   /// ADR-0125 / CQ-1 — the criticality RULE this snapshot's numbers were COMPUTED under.
   ///
   /// `baseline_activities.is_critical` and `.total_float` are the OUTPUT of a rule, not properties
@@ -2110,6 +2250,61 @@ model BaselineActivity {
   percentComplete Int?      @map("percent_complete")
   actualStart     DateTime? @map("actual_start") @db.Date
   actualFinish    DateTime? @map("actual_finish") @db.Date
+
+  /// THE FROZEN PLACEMENT (the one-planning-surface capture; the fifth amendment to ADR-0025).
+  /// Until these existed a baseline froze where the LOGIC put the work and nothing about where the
+  /// planner PUT it — so after the collapse, when placed dates become the product's single answer
+  /// to "when is this activity", a comparison would have been measuring today's placed dates
+  /// against a frozen EARLY date and reporting the difference as slippage.
+  ///
+  ///   * `placedStart` / `placedFinish` — the engine's effective-Visual span at capture, copied
+  ///     from `activities.visual_effective_start` / `_finish`. This is where the BAR SAT.
+  ///   * `visualStart` — the planner's own hand-placement, copied from `activities.visual_start`.
+  ///
+  /// WHY `visualStart` IS FROZEN TOO, AND IT IS NOT REDUNDANT WITH THE OTHER TWO. After this epic
+  /// `visual_start` is THE planner input — the only column a drag writes (a drag stops writing
+  /// constraints, spec §4.6/US-1) — and `placed_*` is an ENGINE OUTPUT derived from it plus the
+  /// network. Without it a comparison can see that a bar moved and cannot say WHY: "the planner
+  /// moved it" and "the logic moved it underneath an unplaced bar" produce identical `placed_*`
+  /// deltas and are the two answers a planner most needs told apart. It is the same question
+  /// `baseline_activities.budgetedExpense` exists to answer one class along — state the component,
+  /// do not leave it to be recovered by subtracting.
+  ///
+  /// ALL THREE ARE NULLABLE WITH NO DEFAULT, and — exactly as for the ten ADR-0126 shape columns
+  /// above — the null is NOT a per-row sentinel. Each has a legitimate null in a snapshot that
+  /// recorded them fully: `visualStart` is null for any activity the planner never moved (which
+  /// today is EVERY activity on the deployed estate — FC-1 predicts zero placements, so the
+  /// ambiguous case is the common one), and `placedStart`/`placedFinish` are null for a plan never
+  /// recalculated, precisely the null `baselineStart`/`baselineFinish` already carry beside them.
+  /// So a reader CANNOT test any of them for "was this recorded?" — the answer is
+  /// `baselines.placement_snapshot_level`, and it is the only answer.
+  ///
+  /// NO DEFAULT, AND NO BACKFILL IS POSSIBLE — EVER. A baseline is a historical record and a
+  /// capture cannot be re-run, so the only value a backfill could write is TODAY's placement,
+  /// which would state as history something the capture never saw. That is ADR-0025's
+  /// copy-not-reference rule and ADR-0126 CQ-1's permanence verbatim. The
+  /// `baselines.hours_per_day_minutes DEFAULT 1440` precedent licenses nothing here: that default
+  /// was legal because 1440 was TRUE of every pre-existing row, and none of these three values is
+  /// knowable for any row that exists. The value of these columns is entirely PROSPECTIVE and the
+  /// clock starts at this migration.
+  ///
+  /// `@db.Date` — calendar days, like `baselineStart`/`lateStart` above and like the live columns
+  /// they copy (ADR-0023's date-only CPM convention). NOT `@db.Timestamptz`.
+  ///
+  /// IMMUTABLE after capture. NO INDEX on any of them: they are read only alongside their own row
+  /// when a comparison loads a whole baseline through `(baseline_id, source_activity_id)`, and no
+  /// route filters, sorts or groups snapshot rows by a date — index query patterns, not columns
+  /// (docs/DATABASE.md). NO CHECK, and the omission is deliberate rather than an oversight: the
+  /// live columns they copy carry none either (`visual_effective_*` are engine-owned and
+  /// unconstrained), and a frozen copy must not be able to REFUSE a plan the product allows. In
+  /// particular nothing asserts `placed_finish >= placed_start` — a zero-length milestone makes
+  /// them equal, and asserting an ordering the engine has never been asked to guarantee would let
+  /// a future engine change fail a capture rather than record it.
+  ///
+  /// DARK until M-C writes them; every row reads NULL under a NONE-level baseline until then.
+  placedStart  DateTime? @map("placed_start") @db.Date
+  placedFinish DateTime? @map("placed_finish") @db.Date
+  visualStart  DateTime? @map("visual_start") @db.Date
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -2523,6 +2718,187 @@ model PlanShare {
   // indexed on its own for its FK + org-scoped audit reads.
   @@index([organizationId])
   @@map("plan_shares")
+}
+
+// ---------------------------------------------------------------------------
+// PlacementMigration — the durable record of ONE drag-created constraint being
+// converted into a hand-placement (one-planning-surface §4.6 / US-2 / US-9,
+// CQ-7 = "strip, on a four-class test"; FC-10 clauses B and D).
+//
+// WHY IT EXISTS. Before this epic a drag in Early mode wrote a binding
+// SNET (`start no earlier than`). The collapse strips those once: where the constraint was
+// BINDING (`early_start = constraint_date`) the row's `visual_start` becomes the
+// constraint's date and the constraint is cleared, so THE BAR DOES NOT MOVE and the
+// downstream float it was never genuinely owed comes back. That is an IRREVERSIBLE
+// edit to customer data, and it is UNAUDITABLE BY CONSTRUCTION: `PATCH …/activities/
+// :activityId` is classified `REASONS.PLAN_CONTENT` (audit-coverage.structural.spec
+// .ts:264), permanently excluded from `audit_events` under ADR-0073 — so nothing in
+// the audit log will ever record a stripped constraint. This table is the only record
+// there will be.
+//
+// ITS SECOND JOB IS DIAGNOSTIC, AND ON A DISPOSABLE ESTATE THAT JOB IS WORTH MORE,
+// NOT LESS. FC-10 clause B's unattended bound was withdrawn (product owner,
+// 2026-09-20: every plan on the deployed installation is a test plan). What survives
+// the withdrawal is this table, because it is how anybody finds out the strip did
+// something nobody predicted — a migration with no record turns a surprising result
+// into a MYSTERY INSTEAD OF A DIFF. Nothing here is safety work that the withdrawal
+// made redundant.
+//
+// WRITE-ONCE: NO `version`, NO `created_at`/`updated_at`, NO `deleted_at`/
+// `delete_batch_id`. Soft delete is this schema's default for customer data, so the
+// omission is stated rather than left to read as an oversight (docs/DATABASE.md
+// "Soft deletes"). The `perf_probe_results` / `mail_events` reasoning applies verbatim:
+// the producer writes each row exactly once inside the migration transaction and
+// nothing ever edits one, so `created_at` would equal `migrated_at` on every row and
+// `version` would guard a concurrent edit that cannot happen. Soft delete is worse than
+// absent here — a record of an irreversible act that the product can make disappear is
+// not a record. Rows die exactly once, with their plan, by the CASCADE below.
+//
+// ORG-SCOPED CUSTOMER CONTENT, READ BY A MEMBER — not operational telemetry, which is
+// why it carries an `organization_id` and sits in this section rather than beside
+// `csp_reports`. Its read is `GET …/plans/:planId/placement-migration` (M-I-T2), the
+// dock notice's source, and the reason this is not a write-only table.
+//
+// IT IS DELIBERATELY OUTSIDE `RETENTION_TABLES` AND TAKES NO WINDOW (CQ-8). That set
+// has never contained organisation-scoped customer content, and
+// `retention-boundary.structural.spec.ts:53-58` asserts it BY EQUALITY — so this is a
+// decision written down, not an omission. The Cascade FK already gives the row the only
+// lifecycle it should have: it lives exactly as long as the plan whose history it
+// describes, and the ADR-0096 expiry that hard-deletes that plan takes it too.
+//
+// NON-SCHEDULING — the CPM engine never reads it, so the ADR-0034 recalculation parity
+// gate is untouched by construction.
+//
+// DARK at M-A: the table exists and is described; M-I writes it and M-I-T2 reads it.
+// ---------------------------------------------------------------------------
+model PlacementMigration {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  // Denormalised tenant scope tag, copied from the plan (never client input) — the
+  // PlanLock/PlanShare/Note pattern. RESTRICT, matching every sibling; inert in
+  // practice because plan → org RESTRICT fires first.
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// The plan whose constraints were stripped. **ON DELETE CASCADE, and the choice is
+  /// derived rather than preferred — it is the one shape that keeps this table out of a
+  /// hand-maintained list.**
+  ///
+  /// `hierarchy-expiry.structural.spec.ts` derives its completeness census FROM THE
+  /// PRISMA DMMF, and it only looks at to-one relations whose `relationOnDelete` is
+  /// `Restrict`. So the three candidate shapes behave differently in a way that is not
+  /// obvious: a RESTRICT FK here would REQUIRE `hierarchy-expiry.runner.ts` to delete
+  /// this table before `plans` (the census would fail until it did — which is the census
+  /// working); NO FK AT ALL would be STRUCTURALLY INVISIBLE to that census while ADR-0096's
+  /// expiry hard-deletes the plan out from under these rows, orphaning org-scoped customer
+  /// content forever with nothing failing anywhere; and CASCADE is the shape the census
+  /// explicitly excludes BECAUSE THE DATABASE ALREADY HANDLES IT — the row dies with its
+  /// plan, and no hand-maintained list grows. `plan_locks` is the shipped precedent
+  /// (`hierarchy-expiry.runner.ts:170-171` names it as going by cascade).
+  ///
+  /// It is a deliberate DEPARTURE from `PlanShare`, whose own docblock explains why its
+  /// plan FK is RESTRICT where `PlanLock`'s is CASCADE: "a link is a preserved domain
+  /// record, a lock is not". The discriminator there is soft-delete participation — a
+  /// share must survive a plan's soft delete and come back with it, so a DB cascade would
+  /// destroy what the restore needs. THIS ROW HAS NO SOFT DELETE TO PARTICIPATE IN: it is
+  /// write-once, it is never restored, and it describes a one-time act on a plan. When the
+  /// plan is permanently gone there is nothing left for the record to be about.
+  planId String @map("plan_id") @db.Uuid
+
+  /// The activity whose constraint was stripped — a PLAIN CORRELATION UUID with NO
+  /// FOREIGN KEY, on ADR-0025's `source_activity_id` leg: a record that referenced a live
+  /// row would either block that row's deletion or rot with it, and **the moment this
+  /// record is most wanted is after the activity is gone** — "what happened to the bar
+  /// that used to be here?" is precisely the question a deleted activity raises.
+  ///
+  /// It stands on that leg ALONE. The RESTRICT-trap justification that used to accompany
+  /// it is WITHDRAWN: `docs/TECH_DEBT.md` #253 records the ADR-0126 breakage it came from
+  /// as TEST TEARDOWN, since fixed by `clearBaselineTree` — never a production hazard, and
+  /// gone. Carrying the stale reason is exactly what would lead a reader to extend non-FK
+  /// to `plan_id` above, which is the defect that docblock exists to prevent.
+  activityId String @map("activity_id") @db.Uuid
+
+  /// The activity's code and name AS THEY STOOD when the constraint was stripped —
+  /// denormalised on the `audit_events.subject_label` rule, because after a hard delete
+  /// an id names nothing and the report could otherwise only say "N activities". Shapes
+  /// copied EXACTLY from the live columns (`code` nullable, `name` not), like
+  /// `baseline_activities.code`/`.name`: a record of a value must be able to hold every
+  /// value its source could. They are a FROZEN COPY, never refreshed — a rename after the
+  /// migration does not reach back, exactly as ADR-0025 intends.
+  activityCode String? @map("activity_code")
+  activityName String  @map("activity_name")
+
+  /// What was there BEFORE the write — the whole point of the record, and the thing
+  /// nothing else in the product will remember.
+  ///
+  /// `priorConstraintType`/`priorConstraintDate` are NOT NULL, and that is structural
+  /// rather than optimistic: A ROW EXISTS ONLY BECAUSE A CONSTRAINT WAS REMOVED, so both
+  /// are known at write time. Being NOT NULL is also what makes the pair CHECK its
+  /// nullable siblings need (`ck_baseline_activities_constraint_pair`) unnecessary here —
+  /// the pair cannot be half-set. The enum rather than TEXT so the database refuses a
+  /// value the live column could not have held; the strip's `WHERE` names `SNET`
+  /// and only that (non-SNET constraints are never touched,
+  /// spec §4.6), but recording the type means a future widening says WHICH kind it took.
+  ///
+  /// `priorVisualStart` IS EXPECTED TO BE NULL ON EVERY ROW, AND A NON-NULL VALUE IS A
+  /// FINDING. The four-class test EXCLUDES any activity already carrying a `visual_start`
+  /// (spec §4.6 "Already placed" → leave, count, report), precisely because `visual_start`
+  /// is accepted regardless of mode (`activities.service.ts:388`, `:526-528`) so a row can
+  /// carry a stale placement AND a binding SNET, and the naive `WHERE` would overwrite the
+  /// placement. This column records the value the write was about to replace WHATEVER IT
+  /// WAS — so if that exclusion ever fails, the destroyed placement is in a row rather
+  /// than gone. It is the diagnostic half of this table doing its job, and a reader who
+  /// finds the column always NULL and deletes it as dead weight has removed the evidence
+  /// for the one failure mode nobody would otherwise be able to reconstruct.
+  ///
+  /// `@db.Date` — calendar days, copying the live `constraint_date`/`visual_start`
+  /// exactly (ADR-0023).
+  priorConstraintType ConstraintType @map("prior_constraint_type")
+  priorConstraintDate DateTime       @map("prior_constraint_date") @db.Date
+  priorVisualStart    DateTime?      @map("prior_visual_start") @db.Date
+
+  /// When the strip ran. `DEFAULT CURRENT_TIMESTAMP` deliberately, NOT a service clock:
+  /// inside a transaction that is the TRANSACTION START time, so every row written by one
+  /// batch shares one instant and the batch is identifiable without a correlation column.
+  /// (The `csp_reports` docblock records the opposite case — two clocks a millisecond
+  /// apart across two branches of one upsert — which is what makes stamping this from a
+  /// single database clock worth stating.) It is also why the index below carries `id`
+  /// rather than this column: `migrated_at` cannot order rows WITHIN a batch.
+  ///
+  /// An instant, so `@db.Timestamptz(3)` — not `@db.Date` like the three frozen values
+  /// above, which are calendar days because the schedule is.
+  migratedAt DateTime @default(now()) @map("migrated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // TWO indexes, and NO unique constraint anywhere.
+  //
+  //   * (plan_id, id) — the report's read (`GET …/plans/:planId/placement-migration`,
+  //     every row for one plan, deterministically ordered because `id` is UUID v7 and
+  //     `migrated_at` is one instant per batch) AND the plan FK on its leftmost prefix.
+  //     **The FK half is not discretionary**: ON DELETE CASCADE has to FIND the children,
+  //     so without it every plan hard-delete sequentially scans this table — the
+  //     `idx_activities_parent_id_fk` shape, which docs/DATABASE.md records costing 3m47s
+  //     for one plan, and which would land inside the ADR-0096 expiry that catches, logs
+  //     `hierarchy_expiry.permanent_failure` and retries hourly forever.
+  //   * (organization_id) — the org FK (RESTRICT) and org-scoped IDOR loads, like every
+  //     sibling.
+  //
+  // No partial index: there is no soft delete, no nullable leading column and no
+  // `delete_batch_id`, so every row is in the read set and nothing here needs a WHERE.
+  //
+  // **NO UNIQUE ON (plan_id, activity_id), AND THE REFUSAL IS THE POINT.** One activity
+  // is stripped at most once by a one-time migration, so a unique index would be TRUE
+  // today — and a unique index does not assert a fact, it REFUSES A ROW. On a table whose
+  // second job is telling us the strip did something nobody predicted, refusing the
+  // second row turns the surprise this table exists to capture into a failed migration
+  // with no record of why. That is `csp_reports`' shape-CHECK lesson verbatim (a refusal
+  // on that table was "a silent delete … on the one table whose purpose is to tell us
+  // about things we did not anticipate"), and it is why the only constraints here are the
+  // two foreign keys and the primary key.
+  @@index([planId, id])
+  @@index([organizationId])
+  @@map("placement_migrations")
 }
 
 // ---------------------------------------------------------------------------

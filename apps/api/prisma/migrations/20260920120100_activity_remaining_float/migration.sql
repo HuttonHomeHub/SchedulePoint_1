@@ -1,0 +1,78 @@
+-- REMAINING FLOAT — the room a PLACED bar has left, persisted as engine-owned CPM output.
+-- Spec: docs/specs/one-planning-surface/feature-spec.md §4.3 / US-3 (CQ-1 answered "persist" by the
+-- product owner, 2026-09-20). Milestone M-A-T3.
+--
+-- WHY. `total_float` is measured from the pure-network EARLY finish. Once a planner hand-places a
+-- bar, the float they can still spend is what is left after the drift they have already spent:
+-- `remaining_float = total_float - visual_drift`. After this epic the screen float IS remaining
+-- float, because that is the number a planner means when they ask how much room is left.
+--
+-- WHY IT IS PERSISTED RATHER THAN SUBTRACTED ON READ, AND THE DTO ALTERNATIVE DOES NOT EXIST.
+-- `total_float` and `visual_drift_days` are each INDEPENDENTLY ROUNDED day columns — both divided
+-- by `factorFor(activityId)` and `Math.round`ed inside `schedule.repository.ts` `writeResults` —
+-- and MINUTES ARE PERSISTED FOR NEITHER. So a read-time derivation could only ever compute
+-- `round(T/f) - round(d/f)`, which is not `round((T-d)/f)` on any calendar where `f` is not 1440.
+-- ADR-0140's first press measured 19 of 164 deployed activities on exactly such a calendar, so the
+-- disagreement is a real population rather than a theoretical one. Persisting makes the engine
+-- round ONCE, at the only point where both minute quantities still exist.
+--
+-- CQ-1's OWN STATED REASON FOR PERSISTING WAS FALSE, AND IT IS RECORDED HERE BECAUSE IT IS THE
+-- REASON A READER WOULD ADD AN INDEX. That reason was "it lets the Gantt sort server-side". It does
+-- not, and both halves were checked rather than inherited: the Gantt sorts IN THE BROWSER
+-- (`apps/web/src/features/gantt/layout/row-model.ts:154` compares `totalFloat` inside a client-side
+-- comparator), and the activities list endpoint HAS NO SORT PARAMETER AT ALL — its
+-- `PaginationQueryDto` carries only `limit` and `cursor`, and `activity.repository.ts`
+-- `findManyActiveByPlan` orders by a fixed `(created_at, id)`. So persisting buys NO sorting
+-- capability anyone uses. The reasons that DO hold are the single rounding above and the one
+-- derivation it guarantees.
+--
+-- NO INDEX. No query predicate targets this column: it is read as part of the already plan-scoped
+-- activity load, exactly like `total_float`, `free_float` and `visual_drift_days` beside it. Index
+-- query patterns, not columns (docs/DATABASE.md). An index here would only cost every recalculation
+-- an extra index entry per activity, on the batched write path this epic is trying not to slow.
+--
+-- NO CHECK — NEGATIVE IS THE FEATURE, not an error to refuse. A bar placed past a "no later than"
+-- ceiling has negative remaining float, and making that visible is exactly what US-5 exists for.
+-- `total_float` is deliberately unconstrained for the same reason (schema.prisma: "`total_float` is
+-- unconstrained (negative float is valid)"), and this column mirrors it. A `>= 0` CHECK would turn
+-- the feature into a failed recalculation.
+--
+-- DAY-DENOMINATED, WITH NO `*_minutes` SIBLING, and the asymmetry with the
+-- `remaining_duration_days`/`_minutes` pair in the same DTO is deliberate rather than an
+-- inconsistency. This is a FLOAT — an engine OUTPUT derived from two day-denominated float
+-- quantities, compared against float thresholds and read beside them. The paired day/minute
+-- convention belongs to DURATIONS, which are planner INPUTS needing sub-day precision (ADR-0070).
+--
+-- ENGINE-OWNED (ADR-0022). When M-D wires it, `remaining_float` becomes the TWENTY-SECOND column of
+-- the existing `unnest` batch in `schedule.repository.ts` `writeResults` — written only there,
+-- NEVER accepted from a write DTO, and NEVER touching version/updated_at/updated_by, so a
+-- recalculation stays invisible to optimistic locking. This migration adds the column and no
+-- writer; the docblock in schema.prisma carries the same contract.
+--
+-- BOOT SAFETY (ADR-0018 / ADR-0047). ADD COLUMN of a nullable column with no default is
+-- metadata-only: existing rows are neither read nor rewritten. OBSERVED rather than asserted, by
+-- querying `pg_attribute` after applying this file to a POPULATED PostgreSQL 16.13 database
+-- (ADR-0107's rule — this class of defect is invisible on an empty table): `remaining_float` reads
+-- `atthasmissing = f, attmissingval = NULL`, and the `activities` row count was unchanged across
+-- the apply.
+--
+-- NO BACKFILL, AND NONE IS POSSIBLE WITHOUT THE ENGINE. Every existing row reads NULL, which means
+-- "not yet calculated" — the same null `total_float` and `free_float` already carry on a plan that
+-- has never been recalculated, and the value appears on that plan's next recalculation. This is
+-- unlike the baseline columns one migration back, whose nulls are permanent.
+--
+-- PARITY. This migration adds a column and no writer, so nothing under src/modules/schedule/engine/
+-- is touched and `computeSchedule`'s signature, inputs and outputs are unchanged — the ADR-0034
+-- recalculation parity gate is untouched BY CONSTRUCTION. M-D changes that deliberately and carries
+-- its own enumerated re-baseline (FC-3).
+--
+-- DARK. Nothing computes or reads this column at this milestone.
+
+-- AddColumn: see the header. Nullable, no default, no index, no CHECK — each of those four is a
+-- decision with a reason above rather than an omission.
+ALTER TABLE "activities" ADD COLUMN "remaining_float" INTEGER;
+
+-- Down (forward-only in production, ADR-0018; documented for completeness). Safe in a way most of
+-- its siblings are not: the column is engine-owned output, so dropping it destroys nothing a
+-- recalculation could not reproduce.
+--   ALTER TABLE "activities" DROP COLUMN "remaining_float";

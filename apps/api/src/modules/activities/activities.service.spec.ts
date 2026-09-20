@@ -116,6 +116,8 @@ function activity(overrides: Partial<Activity> = {}): Activity {
     visualEffectiveFinish: null,
     visualConflict: false,
     visualDriftDays: null,
+    // one-planning-surface M-A: the column exists; M-D computes it. NULL = not yet calculated.
+    remainingFloat: null,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,
