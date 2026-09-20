@@ -255,6 +255,8 @@ describe('the printed change list', () => {
     comparison({
       changes: {
         cap: 2,
+        // See the panel fixture: null keeps these cases about the printed change list.
+        placementNotAssessableReason: null,
         classes: [
           {
             changeClass: 'RENAMED',
