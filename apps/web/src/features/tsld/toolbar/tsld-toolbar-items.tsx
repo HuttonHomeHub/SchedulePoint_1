@@ -335,6 +335,36 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     promotion: { icon: <Users className="size-4" />, order: 21 },
   },
   {
+    /**
+     * The levelled-placement ghosts (one-planning-surface M-E). `insight`, beside the other two
+     * overlays that draw a second position for a bar the planner can already see.
+     *
+     * **Only ONE of the lens's three states shades, and that is the decision rather than an
+     * omission.** `levelResources` off means the levelling pass never ran, so there is nothing to
+     * draw anywhere in the plan and the sentence names the setting that would change it. The other
+     * two — it ran and this activity had no finite assignments (`level.ts:186`), or it ran and
+     * left this one where the network put it (`pinAtNetwork`) — are **not refusals**: nothing is
+     * wrong, there is no setting to point at, and shading for them would tell a planner their
+     * working overlay is broken. What those two owe the reader is the M-E-T6 undrawn sentence, on
+     * the surface that can say which of them it is, not a shut control here.
+     *
+     * Not promoted onto the deck, for `compare-overlay`'s measured reason: one promoted toggle
+     * keeps the deck at two lines at 1920 and 1646, three take it to three at 1646 as well as 1440.
+     */
+    id: 'levelled-overlay',
+    group: 'insight',
+    label: 'Levelled placement',
+    enabled: CANVAS_LENSES_ENABLED,
+    checked: (ctx) => ctx.levelledOverlay,
+    toggle: (ctx) => ctx.toggleLevelledOverlay(),
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : !ctx.levelResources
+          ? LEVELLING_OFF_REASON
+          : undefined,
+  },
+  {
     id: 'over-allocation',
     group: 'insight',
     label: 'Flag over-allocated',
@@ -1005,6 +1035,17 @@ const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
  * plan that never levelled, or a levelled plan with no over-allocation, has none. Mirrors
  * Next-conflict's "No conflicts to review" empty state (ADR-0031 shade-don't-hide). */
 const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
+
+/**
+ * Disabled reason for the levelled-placement overlay when the plan's levelling pass is off
+ * (one-planning-surface M-E-T3, ADR-0041).
+ *
+ * Names the **plan setting**, because that is the thing a planner can change — and it is the only
+ * one of the lens's three states where there is a thing to change. Deliberately not "Nothing has
+ * been levelled", which would read the same to a planner whose levelling ran perfectly and simply
+ * moved nothing.
+ */
+const LEVELLING_OFF_REASON = 'Resource levelling is off for this plan';
 
 /**
  * **The collapsed band's trigger treatment** (ADR-0090 M3-T3): Row 1's popover triggers give up

@@ -116,6 +116,13 @@ export function makeTsldToolbarContext(
     compareOverlay: false,
     toggleCompareOverlay: vi.fn(),
     hasRevisionPair: false,
+    levelledOverlay: false,
+    toggleLevelledOverlay: vi.fn(),
+    // **`true`, which IS production's resting state** — `levelResources` is the plan's own switch
+    // and the fixture's job is to leave the lens offerable so a suite asserting its shaded state
+    // has to set this deliberately. The false value is the interesting one here, unlike its
+    // `compareOverlay` neighbour above, where the off value is the quiet one.
+    levelResources: true,
     toggleBaselineOverlay: vi.fn(),
     hasActiveBaseline: false,
     varianceLoading: false,

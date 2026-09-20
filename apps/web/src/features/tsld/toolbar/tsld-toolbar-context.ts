@@ -342,6 +342,22 @@ export interface TsldToolbarContext {
    * reason rather than hiding it: the control's whole subject is a comparison, so "choose two
    * revisions first" is the useful sentence and an absent control is not (ADR-0082). */
   hasRevisionPair: boolean;
+  /** Whether the levelled-placement overlay is on (one-planning-surface M-E). */
+  levelledOverlay: boolean;
+  /** Toggle it, gated by {@link levelResources} + a diagram to draw on. */
+  toggleLevelledOverlay: () => void;
+  /**
+   * The plan's `levelResources` switch (ADR-0041) — **the levelling pass's own opt-in**, not a
+   * property of any activity.
+   *
+   * Read by the levelled overlay's `reason`, and it is the only one of that lens's three states
+   * that shades: off means the pass never ran, so there is nothing anywhere in the plan to draw and
+   * the sentence names the setting a planner can change. The other two states — it ran and this
+   * activity had no finite assignments, or it ran and did not move this one — are **not** refusals
+   * and must never shade, because nothing is wrong and there is no setting to point at
+   * (`level.ts:186`, `pinAtNetwork`).
+   */
+  levelResources: boolean;
 
   // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
   // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain) and

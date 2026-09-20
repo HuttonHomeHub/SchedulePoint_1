@@ -278,6 +278,7 @@ export function useTsldToolbarContext({
     setColourMode,
     toggleBaselineOverlay,
     toggleCompareOverlay,
+    toggleLevelledOverlay,
     navState,
     toggleIsolate,
     setIsolateMode,
@@ -595,6 +596,13 @@ export function useTsldToolbarContext({
       compareOverlay: lensState.compareOverlay,
       toggleCompareOverlay,
       hasRevisionPair,
+      levelledOverlay: lensState.levelledOverlay,
+      toggleLevelledOverlay,
+      // Straight off the loaded plan, like every other plan-level scheduling option the toolbar
+      // gates on — not a derived "has any levelled activity" count. The distinction is the one
+      // M-E-T3 turns on: this says whether the PASS ran, which is what the shaded reason names; a
+      // count would fold in the two states that are not refusals and shade a lens that is working.
+      levelResources: plan.levelResources,
       hasActiveBaseline,
       varianceLoading,
       varianceError,
@@ -947,7 +955,9 @@ export function useTsldToolbarContext({
     setColourMode,
     toggleBaselineOverlay,
     toggleCompareOverlay,
+    toggleLevelledOverlay,
     hasRevisionPair,
+    plan.levelResources,
     hasActiveBaseline,
     varianceLoading,
     varianceError,

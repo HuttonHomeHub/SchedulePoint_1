@@ -193,6 +193,12 @@ export function useDiagramImage(args: {
         barFill: lenses.barFill,
         barInk: lenses.barInk,
         baselineGhosts: lenses.baselineGhosts,
+        // **Composed for the sibling's reason, and the reason applies at least as strongly.** The
+        // levelled-placement overlay (one-planning-surface M-E) says where the levelling pass moved
+        // work to — which is precisely the question a resourced programme is handed upward to
+        // answer. A deliverable that drew the network dates and silently dropped the levelled ones
+        // would show a picture the plan does not intend to execute.
+        levelledGhosts: lenses.levelledGhosts,
         // **Composed, not SCREEN_ONLY.** The comparison overlay is the one lens whose whole purpose
         // is to be handed to somebody who was not in the room — "here is what changed since last
         // month" — so an exported picture that silently drops it is the ADR-0103 defect exactly.

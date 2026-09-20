@@ -40,6 +40,10 @@ describe('useTsldCanvasUiState', () => {
       filterAttrs: new Set(),
       colourMode: 'criticality',
       baselineOverlay: false,
+      // Default OFF, unlike its `compareOverlay` neighbour. That one draws nothing until a pair is
+      // chosen, so its default is nearly free; this one draws the moment it is switched on for any
+      // levelled plan, so it is a real choice about the resting picture (M-E-T4).
+      levelledOverlay: false,
     });
 
     act(() => result.current.setFilterQuery('concrete'));

@@ -187,3 +187,91 @@ failed against a correctly-culling painter: the dash is set **once outside the l
 whenever the array is non-empty whether or not any ghost survives. It was measuring "the block ran",
 not "a ghost drew". It counts `strokeRect` now. That is the third instrument in this milestone that
 was wrong before the product was.
+
+---
+
+## 8. The lens control (M-E-T3's entry point, M-E-T4)
+
+ADR-0081's rule is that a milestone claiming user-facing capability **names its entry point**. The
+ghost layer landed dark in `ecbd3a0a` and said so in its own commit message; this is the slice that
+makes it reachable. The entry point is **`View ▾ ▸ Insight overlays ▸ Levelled placement`**, a
+`LENS_TOGGLES` member beside `Baseline overlay` and `Compare on diagram`.
+
+### The mechanism was reused, not invented
+
+M-E-T4's instruction is "use the existing `reason` field and ADR-0082 wiring; **do not invent the
+mechanism**", and there was a real temptation to: this lens's three states do not map onto a
+boolean the way its siblings' do. They map onto it fine once the states are separated properly —
+see below — and the whole control is one record in an existing array. Nothing in `Toolbar`,
+`Deck` or the popover changed.
+
+### Only ONE of the three states shades, and that is the decision
+
+| state                                                              | ghost | control                                      |
+| ------------------------------------------------------------------ | ----- | -------------------------------------------- |
+| `levelResources` off — the pass never ran                          | none  | **shaded, with a reason naming the setting** |
+| it ran; this activity had no finite assignments (`level.ts:186`)   | none  | **offered, unshaded**                        |
+| it ran; it left this one where the network put it (`pinAtNetwork`) | none  | **offered, unshaded**                        |
+| it ran and moved it                                                | drawn | offered, unshaded                            |
+
+**The plausible mistake is shading for rows 2 and 3, and it would read perfectly well in review.** A
+reviewer seeing a lens that lights and draws nothing reaches for a reason, and "Nothing has been
+levelled" is a sentence anybody would accept. It is wrong twice over: it tells a planner whose
+levelling ran correctly that their overlay is broken, and there is no setting for them to act on,
+so the sentence is a dead end rather than an explanation. What rows 2 and 3 owe the reader is
+**M-E-T6's undrawn sentence**, on the surface that can say which of them it is.
+
+That is why `levelResources` is a toolbar-context field rather than a derived "has any levelled
+activity" count. A count folds the three states into two and shades a working lens.
+
+### Two derivations of one fact, avoided
+
+The painter's gate and the control's gate read **different** things on purpose:
+
+- `TsldPanel` derives the ghosts from `leveledStart`/`leveledFinish` alone and **does not consult
+  `levelResources`**. With the pass off the engine writes null overlays, so `buildLevelledGhosts`
+  returns nothing anyway; gating on the flag as well would be a second answer to "is there anything
+  to draw?".
+- the toolbar reads `levelResources` and **only** `levelResources`, for a different job: naming the
+  setting in the shaded reason.
+
+### The export composes it
+
+`levelledGhosts` joins `getSceneLenses` and the export composer, for the reason ADR-0103 gives and
+ADR-0127 already applied to the comparison overlay: **the deliverable is the planner's picture**. A
+resourced programme's levelled dates are precisely what it is handed upward to answer, so an export
+that drew the network dates and silently dropped the levelled ones would show a picture the plan
+does not intend to execute. The derived scene-parity gate forced the decision rather than letting it
+be deferred — a new canvas scene key is either composed in the export or listed in `SCREEN_ONLY`
+with a reason, and there is no third option.
+
+### The sweep
+
+`levelled-lens.test.ts` crosses the two modules deliberately: `levelled-ghosts.test.ts` proves the
+draw predicate and `compare-overlay-refusal.test.ts`'s shape proves a refusal count, and **neither
+alone can state the thing that matters** — that the same inputs which produce no ghost also produce
+no refusal.
+
+| #   | mutation                                                     | result             |
+| --- | ------------------------------------------------------------ | ------------------ |
+| 1   | drop the `levelResources` branch (the refusal itself)        | **2 failed** / 4   |
+| 2a  | reason reports an empty result instead of naming the setting | **1 failed** / 4   |
+| 2b  | an honest rewording (`This plan does not level resources`)   | 4 passed — correct |
+| 3   | drop the not-a-participant guard                             | **1 failed** / 4   |
+| 4   | drop the did-not-move guard                                  | **1 failed** / 4   |
+
+**2b is a mutation run to check the gate does NOT fire**, which is the half usually left out. The
+copy assertion is `/level/i` rather than a tighter pattern tuned until it happened to reject one
+wording: it rejects a reason that stopped being about levelling and admits every honest rewording,
+and its docblock states plainly that it **cannot** tell "levelling is off" from "nothing has been
+levelled". That distinction is carried by cases 2–4, which prove the sentence cannot reach the
+planner in rows 2 and 3 at all.
+
+### The defaults test earned its keep
+
+`use-tsld-canvas-ui-state.test.ts` asserts the whole `lensState` object rather than the field under
+test, so adding a key fails it — which is the ADR-0073 C4 shape working: a new lens cannot be
+default-on by accident. `levelledOverlay` is **default off**, unlike `compareOverlay`, and the two
+are not the same decision: the comparison overlay draws nothing until a pair is chosen, so its
+default only decides whether choosing a pair shows the difference; this one draws the moment it is
+switched on for any levelled plan, on top of a diagram already carrying the feasible window.

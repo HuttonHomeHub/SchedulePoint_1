@@ -51,6 +51,7 @@ import {
 import { useCanvasSurface, useRegisterCanvasSurface } from '../render/canvas-surface';
 import {
   buildBaselineGhosts,
+  buildLevelledGhosts,
   buildColourInkMap,
   buildColourMap,
   isFilterActive,
@@ -1105,8 +1106,15 @@ export function TsldPanel({
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
   // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
   // so the scene carries no lens fields and the paint is byte-for-byte today's.
-  const { filterQuery, filterAttrs, colourMode, baselineOverlay, compareOverlay, searchCursorId } =
-    lensState;
+  const {
+    filterQuery,
+    filterAttrs,
+    colourMode,
+    baselineOverlay,
+    compareOverlay,
+    levelledOverlay,
+    searchCursorId,
+  } = lensState;
   // Bumps on a light/dark/system switch so the Colour-by fill + ink maps re-resolve their token colours
   // (the canvas paints concrete colours, not `var()`), matching the base painter's re-theme (C1/U3).
   const themeVersion = useThemeVersion();
@@ -1201,6 +1209,35 @@ export function TsldPanel({
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
   }, [baselineOverlay, varianceRows, activities]);
+  /**
+   * The levelled-placement ghosts (one-planning-surface M-E) — where the levelling pass moved a bar
+   * to, for the activities it MOVED and for nothing else.
+   *
+   * Read straight off the activities the panel already has: `leveledStart`/`leveledFinish` are
+   * engine-owned columns (ADR-0041) the schedule write persists, so there is no second query and no
+   * client re-derivation of levelling. The plan's `levelResources` switch is **not** consulted here
+   * — with the pass off the engine writes null overlays, so `buildLevelledGhosts` returns nothing
+   * anyway, and gating on the flag as well would be two answers to one question. The toolbar reads
+   * the switch for a different job: naming the setting in the shaded control's reason.
+   *
+   * Undefined rather than an empty array when there is nothing to draw, so the layer is skipped
+   * entirely and the paint is byte-for-byte today's — the parity contract every sibling lens keeps.
+   */
+  const levelledGhosts = useMemo(() => {
+    if (!CANVAS_LENSES_ENABLED || !levelledOverlay) return undefined;
+    const ghosts = buildLevelledGhosts(
+      activities.map((a) => ({
+        id: a.id,
+        laneIndex: a.laneIndex,
+        isMilestone: isMilestone(a.type),
+        earlyStart: a.earlyStart,
+        leveledStart: a.leveledStart,
+        leveledFinish: a.leveledFinish,
+      })),
+    );
+    return ghosts.length > 0 ? ghosts : undefined;
+  }, [levelledOverlay, activities]);
+
   /**
    * The revision-comparison change picture (ADR-0127), gated on the toggle AND on there being a
    * pair — the server sends nothing without one, but the guard is stated rather than relied on,
@@ -2912,6 +2949,7 @@ export function TsldPanel({
               barFill={barFill}
               barInk={barInk}
               baselineGhosts={baselineGhosts}
+              levelledGhosts={levelledGhosts}
               compareGhosts={compareGhostBars}
               compareLinks={compareLinkLines}
               flaggedIds={flaggedIds}
