@@ -33,7 +33,7 @@ function matchable(over: Partial<MatchableActivity> = {}): MatchableActivity {
     isCritical: false,
     constraintType: null,
     constraintViolated: false,
-    visualConflict: false,
+    visualConflictReason: null,
     levelingWindowExceeded: false,
     ...over,
   };
@@ -68,8 +68,16 @@ describe('matchesActivityFilter', () => {
     expect(matchesActivityFilter(matchable({ constraintType: null }), '', constraint)).toBe(false);
 
     const conflict = new Set<FilterAttr>(['conflict']);
-    expect(matchesActivityFilter(matchable({ visualConflict: true }), '', conflict)).toBe(true);
-    expect(matchesActivityFilter(matchable({ visualConflict: false }), '', conflict)).toBe(false);
+    expect(
+      matchesActivityFilter(
+        matchable({ visualConflictReason: 'EARLIER_THAN_LOGIC' }),
+        '',
+        conflict,
+      ),
+    ).toBe(true);
+    expect(matchesActivityFilter(matchable({ visualConflictReason: null }), '', conflict)).toBe(
+      false,
+    );
   });
 
   // ADR-0094 D2 / D-e. "Has conflict" used to mean `visualConflict` ALONE, while the Next-conflict
@@ -84,6 +92,13 @@ describe('matchesActivityFilter', () => {
     expect(matchesActivityFilter(matchable({ levelingWindowExceeded: true }), '', conflict)).toBe(
       true,
     );
+    // **BOTH sides of the placement conflict** (one-planning-surface M-D). This follows from
+    // `matchesAttr` running `CONFLICT_FLAGS.some(...)` rather than naming a field, so it is free —
+    // but it is the assertion that would go red if somebody "simplified" the predicate back to one
+    // placement test, which is how the filter and the count disagreed the first time.
+    expect(
+      matchesActivityFilter(matchable({ visualConflictReason: 'LATER_THAN_BOUND' }), '', conflict),
+    ).toBe(true);
     // And an activity with none of them still does not match.
     expect(matchesActivityFilter(matchable(), '', conflict)).toBe(false);
   });
@@ -94,14 +109,18 @@ describe('matchesActivityFilter', () => {
   // green for the wrong reason — the runtime simply ignored a property the shape never had. That is
   // exactly the "passes against the old code for the wrong reason" trap, so it is recorded rather
   // than shipped. The real guarantee is structural: the filter reads `CONFLICT_FLAGS`, and
-  // `conflicts.test.ts` pins that set to the three actionable keys.
+  // `conflicts.test.ts` pins that set to the four actionable keys.
 
   it('is the intersection of text AND every toggled attribute', () => {
     const attrs = new Set<FilterAttr>(['critical', 'conflict']);
-    const both = matchable({ isCritical: true, visualConflict: true, name: 'Pour concrete' });
+    const both = matchable({
+      isCritical: true,
+      visualConflictReason: 'EARLIER_THAN_LOGIC',
+      name: 'Pour concrete',
+    });
     expect(matchesActivityFilter(both, 'concrete', attrs)).toBe(true);
     // Text matches but an attribute fails → excluded.
-    expect(matchesActivityFilter({ ...both, visualConflict: false }, 'concrete', attrs)).toBe(
+    expect(matchesActivityFilter({ ...both, visualConflictReason: null }, 'concrete', attrs)).toBe(
       false,
     );
     // Attributes match but text fails → excluded.

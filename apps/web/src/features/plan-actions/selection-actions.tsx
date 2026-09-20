@@ -814,12 +814,24 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
              * planner's cursor, which is exactly what kept the count off the `next-conflict` label.
              * `icon` already takes a ctx form for precisely this kind of state.
              */
-            icon: (ctx: SelectionActionContext) =>
-              ctx.conflictKey === 'visualConflict' ? (
+            icon: (ctx: SelectionActionContext) => {
+              // **Asked of the remedy map, not of a key literal** (one-planning-surface M-D). This
+              // read `conflictKey === 'visualConflict'` until the placement conflict split in two,
+              // and a second hard-coded key beside a total `Record` is the drift that record exists
+              // to prevent: the alert belongs on whichever control the map NAMES as the remedy, so
+              // asking the map makes that true by construction rather than by two places agreeing.
+              //
+              // The consequence is the one worth having. `visualLaterThanBound`'s remedy is a ROUTE,
+              // rendered as its own button, so this item stays an ordinary `Eraser` — clearing the
+              // placement is still available to that planner, but two alert-flavoured controls would
+              // make neither of them the answer.
+              const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
+              return remedy?.kind === 'barAction' && remedy.itemId === 'clear-visual-placement' ? (
                 <TriangleAlert className="size-4" />
               ) : (
                 <Eraser className="size-4" />
-              ),
+              );
+            },
             penGated: true,
             // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
             // in — never re-derived here. Two independent copies of a four-condition ladder is how

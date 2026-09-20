@@ -51,14 +51,38 @@ export type ConflictRemedy =
  * has to be made rather than slipped past.
  */
 export const CONFLICT_REMEDIES: Readonly<Record<ConflictKey, ConflictRemedy>> = {
-  // The one type with a genuine one-click fix: the placement is the planner's own input, so
-  // withdrawing it resolves the clash outright. It is also the one fix the bar already offers to
-  // every activity, conflicting or not — a planner who changes their mind about a hand-placed bar
-  // wants it back on the computed date whether or not the placement clashed with anything.
-  visualConflict: {
+  // A genuine one-click fix: the placement is the planner's own input and it is EARLIER than logic
+  // allows, so withdrawing it resolves the clash outright. It is also the one fix the bar already
+  // offers to every activity, conflicting or not — a planner who changes their mind about a
+  // hand-placed bar wants it back on the computed date whether or not the placement clashed.
+  visualEarlierThanLogic: {
     kind: 'barAction',
     itemId: 'clear-visual-placement',
     label: 'Clear visual start',
+  },
+  // **The side the boolean never covered, and it does NOT get the same answer** (one-planning-surface
+  // M-D). It is tempting to give both placement conflicts the `barAction` above — the placement is
+  // the planner's own input either way, and clearing it does resolve the clash. That was rejected on
+  // what a `barAction` remedy actually does: it renders NOTHING, because it names an item the bar
+  // already carries. For a bar placed past a commitment somebody recorded, the thing the planner most
+  // likely does not know is that the bound EXISTS — so a remedy that renders nothing would leave the
+  // one fact worth surfacing invisible, and would look correct doing it.
+  //
+  // A route instead, and the cost of the choice is **zero** rather than a trade, for a reason that
+  // holds today rather than after M-F: a placement conflict requires a PLACEMENT, which requires
+  // Visual mode — and `clearVisualPlacementApplies` below is exactly `schedulingMode === 'VISUAL'`.
+  // So the withdraw-my-placement route is applicable in precisely the cases this remedy is needed
+  // in, by construction, and stays so when §4.12 makes that item unconditional. Routing here ADDS
+  // the second route rather than replacing the first, which is what stops this picking for them —
+  // the objection that gave `levelingWindowExceeded` a route and not a button.
+  //
+  // It shares `constraintViolated`'s destination and copy deliberately. They are different conflicts
+  // and the same errand: go and look at the constraint. Two labels for one destination would read as
+  // two places.
+  visualLaterThanBound: {
+    kind: 'openEditorAt',
+    at: 'constraint',
+    label: 'Review the constraint…',
   },
   // A route, not a fix — which constraint to relax, or by how much, is the planner's judgement, and
   // the copy says so. It read "Fix the constraint…" until the ux gate put the two routes side by

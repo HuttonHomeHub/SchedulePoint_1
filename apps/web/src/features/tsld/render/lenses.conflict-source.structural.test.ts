@@ -52,7 +52,11 @@ describe('the canvas filter has no second opinion about what a conflict is', () 
     // The four fields a hand-rolled version would reach for: the one it used to read, and the three
     // a well-meaning "just add the others here" edit would add.
     for (const field of [
-      'activity.visualConflict',
+      // The field the predicate would reach for TODAY. It was `activity.visualConflict` until
+      // one-planning-surface M-D made the placement conflict two-sided; naming the field that no
+      // longer exists would have left this entry unable to fail, which is the class of defect
+      // this file exists to catch, one level down.
+      'activity.visualConflictReason',
       'activity.constraintViolated',
       'activity.levelingWindowExceeded',
       'activity.totalFloat',
@@ -70,7 +74,7 @@ describe('the canvas filter has no second opinion about what a conflict is', () 
       isCritical: false,
       constraintType: null,
       constraintViolated: true,
-      visualConflict: false,
+      visualConflictReason: null,
       levelingWindowExceeded: false,
     };
     const conflict = new Set<FilterAttr>(['conflict']);

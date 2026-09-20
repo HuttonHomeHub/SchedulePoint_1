@@ -89,7 +89,7 @@ describe('the conflict remedy on the selection bar', () => {
     // The load-bearing negative, and the one the structural test cannot make. That remedy is a
     // `barAction` pointing at `clear-visual-placement`, which the bar already carries — rendering a
     // conflict-flavoured twin beside it would be ADR-0093's defect reproduced inside one surface.
-    render(<SelectionActionsBar context={ctx({ conflictKey: 'visualConflict' })} />);
+    render(<SelectionActionsBar context={ctx({ conflictKey: 'visualEarlierThanLogic' })} />);
     expect(remedy()).toBeNull();
     expect(
       within(bar()).getAllByRole('button', { name: 'Clear visual start' }),
@@ -103,7 +103,7 @@ describe('the conflict remedy on the selection bar', () => {
     // conflict had nine controls and no signal. The icon carries it — a per-context ORDER would
     // move controls under the cursor as the selection changes.
     const conflicted = render(
-      <SelectionActionsBar context={ctx({ conflictKey: 'visualConflict' })} />,
+      <SelectionActionsBar context={ctx({ conflictKey: 'visualEarlierThanLogic' })} />,
     );
     const withAlert = conflicted.container.querySelector(
       '[data-toolbar-item="clear-visual-placement"] .lucide-triangle-alert',
