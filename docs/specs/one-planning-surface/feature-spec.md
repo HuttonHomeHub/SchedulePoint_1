@@ -353,10 +353,15 @@ Unchanged: `visualConflict` stays boolean and gains
 `clampBackwardFinish`/`clampSecondaryBackwardFinish`. Not a second backward pass (SQ-e stands).
 `SNLT`/`FNLT` are covered for free by remaining float going negative; `MSO`/`MFO` need the flag.
 
-### 4.5 The float tail's datum — a live defect this epic must fix
+### 4.5 The float tail's datum — a live defect, filed as `docs/TECH_DEBT.md` #348
 
 **Found by the ui-architect review, independent of this epic, and it is on the window's critical
-path.** `paint.ts:1635` passes the **bar** rect with `activity.totalFloat`. Total float is measured
+path.** It is filed as **#348**, raised and verified 2026-09-20. **That row must not be closed by
+pointing at this epic**: the defect is true today on shipped code and stays open if the epic is
+abandoned. The fix lands here — inside the window's own derivation (§4.8) rather than beside it —
+and the row closes when it does.
+
+`paint.ts:1635` passes the **bar** rect with `activity.totalFloat`. Total float is measured
 from the **early** finish; from a **placed** finish the room left is `T − d`. **The tail overshoots
 by exactly the drift on every Visual plan with a placement.**
 
@@ -432,8 +437,62 @@ flowchart LR
     direction LR
     ES["earlyStart<br/>(= drift tail's left edge)"] --- BAR["placed bar"] --- LF["lateFinish<br/>(= CORRECTED float tail's right edge)"]
   end
-  LVG["Levelled ghost — a rival POSITION,<br/>drawn only when levelingDelay &gt; 0"]
+  LVG["Levelled ghost — a rival POSITION,<br/>drawn iff leveledStart !== earlyStart"]
 ```
+
+**The window REPLACES the tails — it does not sit beside them** _(product-owner decision,
+2026-09-20)_. The shipped `Float & drift` treatment **becomes** the feasible window; there is no
+separate tails treatment afterwards.
+
+**They are one fact drawn twice, and that is measurable rather than a matter of taste.** Both tails
+centre on the same band — `geometry.ts:152-164` and `:175-184` are each
+`y: bar.y + (bar.h - TAIL_HEIGHT) / 2` with `TAIL_HEIGHT = 6` (`:141`) — and their extremes are the
+window's: the drift tail's left edge is `placedStart − d = earlyStart`, and the **corrected** float
+tail's right edge is `placedFinish + (T − d) = (earlyFinish + d) + (T − d) = lateFinish`. So the two
+tails already span exactly `[earlyStart, lateFinish]` in exactly the band a bracket would occupy.
+Keeping both would be two treatments of one fact, which is the shape this spec rejects in four other
+places.
+
+**The right edge is derived from the same corrected quantity the tail uses — `remainingFloat` —
+never independently from `lateFinish`.** That is what makes the identity **structural rather than
+arithmetic**, and it **dissolves a rounding hazard** rather than leaving it untested: `totalFloat`
+and `visualDriftDays` are independently rounded day columns (`schedule.repository.ts:752`,
+`:770-773` — this spec's own C6), so two independent derivations could put a bracket cap and a tail
+end **a day apart** on a non-24-hour calendar. ADR-0140's first press measured **19 of 164** deployed
+activities on exactly such a calendar, so that population is real rather than theoretical. One
+derivation makes the disagreement **unreachable**; two would make it merely unobserved.
+
+**It also settles FC-5's prediction, which was conditional and is now sound.** That prediction —
+limb 2 passes because the window "replaces two tails with one bracket" — was true under this answer
+and **false under the alternative**, where the window would have been a third treatment added on top
+of two existing ones. Recorded as settled rather than left reading as though it had always held.
+
+**The toggle is renamed, not removed, and that owes its own task.** `Float & drift` is shipped and
+planners use it, so M-E-T2 states what the control is called afterwards, preserves its state rather
+than resetting it, and checks `TsldLegend.tsx`'s key and any journey locating that control **by its
+copy**.
+
+**Vertical geometry, stated once because three readings are currently live in this document.** The
+window takes the **tails band it inherits**: `y = bar.y + (bar.h − TAIL_HEIGHT) / 2`,
+`h = TAIL_HEIGHT = 6`, drawn as **one hollow rect from `earlyStart` to `lateFinish`** with a vertical
+cap at each end — and the **bar paints over its middle**, so the span reads as two tails flanking the
+bar with no special-casing. The two rejected readings, and why:
+
+- **Bar-coincident** is what both existing ghost layers do (`paint.ts:1340`, `:1400`). A bracket at
+  bar height in the same band as a baseline ghost re-creates the very collision `COMPARE_DASH`'s
+  docblock records — the one FC-8 exists to prevent.
+- **Lane-enclosing** (US-4's "with the placed bar inside it", read literally) collides with the
+  chrome: `LANE_HEIGHT` is 28 and `BAR_HEIGHT` 18 (`geometry.ts:35,37`), and since ADR-0109 D4 a 1 px
+  lane hairline is drawn at every lane boundary (`paint.ts:976-992`, `palette.laneRule`), so a
+  full-lane cap lands **on** that rule — two adjacent 1 px marks in the same ink family.
+
+**One case inverts the draw order, and it is reachable rather than hypothetical.** When remaining
+float is **negative** (US-5: a placement past a ceiling) the bar **overflows** its window and the
+right cap falls _inside_ the bar. M-E-T2's rule is "draw the window before the bars"; that cap is its
+**single exception** and draws after, or the one state the window exists to make obvious is the one
+state it hides. Stated here so it is designed rather than discovered — and note that today's
+`floatTailRect` returns `null` for `totalFloatDays <= 0` (`geometry.ts:157`), so this state currently
+draws **nothing at all**.
 
 **The window is a view TOGGLE; levelled is a LENS** _(from review, and the discriminator is already
 written down)_: `view-toggles.ts:22-32` says a lens exists because it needs data that can be loading
@@ -446,11 +505,27 @@ has the `reason` field and the ADR-0082 wiring — do not invent the mechanism**
 **The levelled lens has three states** (C12, from `level.ts`'s three exit paths — **not** from
 `goldens.ts`):
 
-| State                  | Test                                           | Treatment                                                                                                                                        |
-| ---------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Pass never ran         | `plan.levelResources === false`                | Control **shaded with a reason** naming the setting                                                                                              |
-| Ran; not a participant | `leveledStart === null` while `levelResources` | **Not applicable** — no ghost, no shading                                                                                                        |
-| Ran; participant       | `leveledStart !== null`                        | Ghost **iff `levelingDelay > 0`**; an undelayed one coincides with the window's **left edge** (`pinAtNetwork` sets `leveledStart: r.earlyStart`) |
+| State                  | Test                                           | Treatment                                                                                                                                                             |
+| ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pass never ran         | `plan.levelResources === false`                | Control **shaded with a reason** naming the setting                                                                                                                   |
+| Ran; not a participant | `leveledStart === null` while `levelResources` | **Not applicable** — no ghost, no shading                                                                                                                             |
+| Ran; participant       | `leveledStart !== null`                        | Ghost **iff `leveledStart !== earlyStart`** — see below; an undelayed one coincides with the window's **left cap** (`pinAtNetwork` sets `leveledStart: r.earlyStart`) |
+
+**The predicate is `leveledStart !== earlyStart`, not `levelingDelayDays > 0`** — chosen rather than
+discovered, because a test would otherwise find the disagreement. **The reviewer's framing needs one
+correction first:** it puts `levelingDelay` in working minutes, and the **wire** field is
+`levelingDelayDays`, documented as "the applied delay in **whole working days**"
+(`packages/types/src/index.ts:657`). The client never sees minutes, so the sub-day case the reviewer
+predicted cannot arise in the form described — at day granularity both predicates say _do not draw_,
+and they agree.
+
+**The real reason to prefer the date test is the one this epic keeps applying**: the ghost is a rect
+positioned **from date strings**, and `levelingDelayDays` is a **separately rounded** day quantity —
+the same C6 shape as `totalFloat`/`visualDriftDays` one field along. Deciding whether to draw a rect
+by a number that was rounded independently of the dates that position it is two derivations of one
+fact, which is exactly what §4.8's window/tails decision removes. And it collapses two rules into
+one: the draw predicate **is** the coincidence test, so there is no separate withholding rule to
+keep in step.
 
 **Ghost vocabulary.** The canvas already has **two** ghost layers this spec never mentioned —
 `baselineGhosts` (`paint.ts:1321-1372`, `GHOST_DASH [2,2]`) and `compareGhosts` (`:1374-1432`,
@@ -558,9 +633,36 @@ So the rollback is a **restore, not a redeploy**, and M-J-T2 says so.
 | **`GET …/plans/:planId/placement-migration`** | new                                                                                                             | No            |
 | `GET …/schedule/health-check`                 | **unchanged** — DCMA reads total float, correctly                                                               | No            |
 
-### 4.12–4.15
+### 4.12 Component changes
 
-Unchanged from the previous revision: the component inventory (§4.12), the programme's four-layer
+**Restored in full rather than deferred to a previous revision.** It previously read "unchanged from
+the previous revision" — and that revision's table describes the **rejected** design ("one layer,
+three members"; a toggle path of `Overlays ▸ Earliest / Latest / Levelled`). So the one artefact
+naming which files change either did not exist or, found in git, was **wrong**. Two of the files
+below are ones a reviewer grepped for across all three documents and could not find.
+
+| Component                                   | Change                                                                                                                                                                                                           |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/bar-dates.ts`                          | `barDateSourceFor` deleted; **prefer removing the `source` parameter** over a one-value union.                                                                                                                   |
+| `plan-workspace-toolbar.tsx:476-480`        | Both derivations deleted.                                                                                                                                                                                        |
+| `TsldPanel`                                 | Window layer + levelled lens mounted; `barDateSource` prop removed; the `=== 'visual'` guards at `:997`, `:2325` become unconditional.                                                                           |
+| `render/geometry.ts`                        | `floatTailRect`/`driftTailRect` **replaced** by one window derivation (§4.8); `TAIL_HEIGHT` retained as the band.                                                                                                |
+| `render/paint.ts`                           | The tails pass (`:1632-1643`) becomes the window pass, drawn **before** the bars — with the negative-remaining-float right cap as its single after-the-bar exception. **#348's fix lands here.**                 |
+| `render/view-toggles.ts`                    | `floatTails` renamed to the window toggle; **state preserved, not reset** (§4.8).                                                                                                                                |
+| **`components/TsldLegend.tsx`**             | **Newly inventoried.** The `lateOverlay` branch (`:129-143`) and its qualified ghost label die with the Late-start overlay; the window and levelled keys join the baseline-ghost key at `:139-145`.              |
+| **`toolbar/commands/use-diagram-image.ts`** | **Newly inventoried.** The export path — decided at §4.8 (the overlays reach the PNG/PDF), and previously decided but not inventoried. It also calls `barDateSourceFor` (`:142`), so it is on M-F-T1's path too. |
+| `features/tsld/toolbar`                     | Mode control deleted (re-check ADR-0119's `partitionBySegment` precondition); the two controls join the **existing `Insight overlays` group**.                                                                   |
+| `tsld-toolbar-items.tsx:209-247`            | Existing `reason` field + ADR-0082 wiring reused for the levelled lens — **not reinvented**.                                                                                                                     |
+| `PlanScheduleSettings`                      | Mode field deleted.                                                                                                                                                                                              |
+| `features/gantt`                            | **No change** (C1) beyond the Float column reading remaining float.                                                                                                                                              |
+| `lib/schedule-format.ts`                    | One labelled sibling to `formatFloat`; not a second copy.                                                                                                                                                        |
+| `conflict-remedy.ts`                        | New key + remedy (the total record forces it).                                                                                                                                                                   |
+| `clear-visual-placement`                    | Unconditional — dissolves #204(c)'s cause.                                                                                                                                                                       |
+| **new** `PlacementMigrationNotice`          | Dock strip (ADR-0092 outlet, 0 px of canvas).                                                                                                                                                                    |
+
+### 4.13–4.15
+
+Unchanged from the previous revision: the programme's four-layer
 projection and two producers (§4.14), and the alternatives table (§4.13) — with three rows added:
 **three peer ghosts** (withdrawn by the product owner in favour of one window plus one rival),
 **a two-valued `date_basis`** (rejected for a snapshot level), and **a non-FK `plan_id`** (rejected

@@ -189,6 +189,14 @@ the increments are noise dressed as attribution.
 two tails with one bracket and may be cheaper than today) and is **marginal** with the levelled
 ghost added. This inverts the previous revision's prediction, deliberately: the design changed.
 
+**That prediction was CONDITIONAL when written and is now SETTLED**, and the difference matters
+enough to record rather than leave it reading as though it had always held. Its "replaces two tails
+with one bracket" clause was true only if the window **replaced** the tails, and **false** under the
+alternative in which it sat beside them as a third treatment — under which limb 2 would have gained
+cost rather than shed it. The product owner decided **replace** (spec §4.8, 2026-09-20), so the
+clause now holds on a decision rather than on an assumption. **If that decision is ever revisited,
+this prediction is void and limb 2 must be re-predicted before it is re-measured.**
+
 **Non-vacuity, strengthened.** The previous control asked only for a **non-zero** count of levelled
 ghosts, which a one-ghost scene satisfies. **Require a stated proportion of levelling-delayed
 activities in the fixture, and name the seed-catalogue plan: `plan:capability-levelling`.** A

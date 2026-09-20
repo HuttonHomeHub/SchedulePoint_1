@@ -323,18 +323,20 @@ reason** when `levelResources` is off, asserts **editing is still available**, a
 > the corrected float tail's right edge is latest. **A bound and a position are different objects**,
 > which is why levelled stays separate.
 
-#### Feature: the float tail's datum — a prerequisite, not a follow-up
+#### Feature: the float tail's datum — now inside the window's derivation
 
-##### Task M-E-T0 — fix the float tail, and file the row
+##### Task M-E-T0 — fix the float tail (`docs/TECH_DEBT.md` #348)
 
 - **Description:** `paint.ts:1635` passes the **bar** rect with `activity.totalFloat`. Total float is
   measured from the **early** finish; from a **placed** finish the room left is `T − d`. **The tail
   overshoots by exactly the drift on every Visual plan with a placement.**
 - **Complexity:** S · **Dependencies:** M-D-T2 (remaining float is the corrected length)
-- **Risks:** **it cannot be left open while the window ships** — the window's right edge is
-  `lateFinish` and an overshooting tail would visibly disagree with it. · Its provenance is
-  ADR-0054 §4, not this epic → **it gets its own `docs/TECH_DEBT.md` row**, which this task closes,
-  so the history is not absorbed.
+- **Risks:** **the fix now lands inside the window's own derivation, not beside it** — the product
+  owner's decision that the window **replaces** the tails (§4.8) means there is no separate tail
+  left to correct; the corrected quantity **is** the window's right edge.
+- **The row stays its own.** #348 was raised and verified 2026-09-20 and **must not be closed by
+  pointing at this epic**: the defect is true today on shipped code and stays open if the epic is
+  abandoned. This task closes it by fixing it, which is a different thing.
 - **Testing:** a paint case verified red against the current datum.
 
 #### Feature: the window
@@ -350,11 +352,27 @@ reason** when `levelResources` is off, asserts **editing is still available**, a
 > **Testing requirements:** FC-8 all five clauses; the counting-stub gates (ADR-0054's
 > shape-not-milliseconds pattern); the golden paint log re-baselined against a written list.
 
-##### Task M-E-T1 — the bracket, and **read what the export does today**
+##### Task M-E-T1 — the bracket **replaces** the tails, and **read what the export does today**
 
-- **Description:** one `windowRect`-style derivation beside the existing tails; one painter in the
-  ADR-0078 layer model, drawn **before** the bars.
+- **Description:** one window derivation **replacing** `floatTailRect`/`driftTailRect` — not beside
+  them (§4.8, product-owner decision). One hollow rect `[earlyStart, lateFinish]` at the inherited
+  tails band (`y = bar.y + (bar.h − TAIL_HEIGHT) / 2`, `h = TAIL_HEIGHT = 6`,
+  `geometry.ts:141,152-164,175-184`) with a cap at each end; one painter in the ADR-0078 layer
+  model, drawn **before** the bars, so the bar occludes the middle and the span reads as two
+  flanking tails with no special-casing.
 - **Complexity:** M
+- **Risks:** **the right edge must derive from `remainingFloat`, never independently from
+  `lateFinish`.** `totalFloat` and `visualDriftDays` are independently rounded day columns
+  (`schedule.repository.ts:752`, `:770-773`), so two derivations could put a cap and a tail end a
+  day apart on a non-24-hour calendar — a population ADR-0140 measured at **19 of 164** deployed
+  activities. One derivation makes that unreachable rather than untested.
+  · **The negative-remaining-float case inverts the draw order.** When the bar overflows its window
+  (US-5), the right cap falls _inside_ the bar and must draw **after** it — the single exception to
+  "before the bars", stated so it is designed rather than discovered. Today `floatTailRect` returns
+  `null` for `totalFloatDays <= 0` (`geometry.ts:157`), so that state draws **nothing at all**.
+  · Bar-coincident and lane-enclosing geometries are both **rejected** with reasons in §4.8 — the
+  first re-creates the `COMPARE_DASH` collision, the second lands a cap on ADR-0109 D4's lane
+  hairline (`LANE_HEIGHT` 28 vs `BAR_HEIGHT` 18, `geometry.ts:35,37`; `paint.ts:976-992`).
 - **Risks:** **the export/print question must be answered by reading, not assumed** → this task
   **reads and reports** whether the existing float/drift tails reach the exported PNG and the
   printed programme. The decision is that the window **does** reach them (ADR-0103: the exported
@@ -362,14 +380,20 @@ reason** when `levelResources` is off, asserts **editing is still available**, a
   two thirds of the window already does and the asymmetry is a **regression risk**, not a gap.
   `scene-parity.structural.test.ts` forces an answer at implementation time; this gives it one.
 
-##### Task M-E-T2 — the toggle, in the existing group
+##### Task M-E-T2 — the toggle is a **rename**, not a new control
 
-- **Description:** `Feasible window` joins `floatTails` as a **view toggle** in the existing
-  `Insight overlays` group — **not a new "Overlays" group beside it**.
-- **Complexity:** S
-- **Risks:** **inventing the mechanism** → `view-toggles.ts:22-32` already states the discriminator
-  (a lens exists because its data can be absent; float/drift "are already on every activity, so the
-  control can never be unavailable"). `early*`/`late*` are the same. Do not build a second one.
+- **Description:** the shipped **`Float & drift`** toggle **becomes** the feasible window — same
+  `view-toggles.ts` member (`floatTails`), renamed, staying a **view toggle** in the existing
+  `Insight overlays` group. **Not a new "Overlays" group beside it, and not a second control.**
+- **Complexity:** S _(was S for a new toggle; it is S for a rename with three consumers)_
+- **Risks:** **`Float & drift` is shipped and planners use it**, so this task states what the control
+  is **called** afterwards and **preserves its state rather than resetting it** — a planner who had
+  it on keeps it on. · **Two consumers locate it by copy and must move with it**: `TsldLegend.tsx`'s
+  key, and any journey locating the control by its label. Grep by copy before renaming, not after.
+  · **Inventing the mechanism** → `view-toggles.ts:22-32` already states the discriminator (a lens
+  exists because its data can be absent; float/drift "are already on every activity, so the control
+  can never be unavailable"). `early*`/`late*` are the same. Do not build a second one.
+- **Testing:** a unit case pinning that the persisted toggle state survives the rename.
 
 #### Feature: the levelled lens
 
@@ -378,7 +402,15 @@ reason** when `levelResources` is off, asserts **editing is still available**, a
 - **Description:**
   - `plan.levelResources === false` → **lens shaded with a reason** naming the plan setting;
   - `levelResources` true, `leveledStart === null` → **not applicable**: no ghost, **no shading**;
-  - participant → ghost **iff `levelingDelay > 0`**.
+  - participant → ghost **iff `leveledStart !== earlyStart`**.
+- **The predicate is chosen, not discovered.** `leveledStart !== earlyStart`, **not**
+  `levelingDelayDays > 0`. The wire field is `levelingDelayDays` in **whole working days**
+  (`packages/types/src/index.ts:657`) — the client never sees minutes, so the sub-day disagreement
+  raised in review cannot arise in the form described, and at day granularity the two predicates
+  agree. The reason to prefer the date test is this epic's own rule: the ghost is a rect positioned
+  **from date strings**, and `levelingDelayDays` is a **separately rounded** day quantity (the C6
+  shape one field along), so using it to decide whether to draw would be two derivations of one
+  fact. It also collapses the draw predicate and the coincidence test into **one rule**.
 - **Complexity:** M · **Dependencies:** M-E-T1
 - **Risks:** **the previous plan's semantics were false in both directions** and came from
   `goldens.ts:628-635`, the one levelling golden where every activity is a participant — ADR-0076
