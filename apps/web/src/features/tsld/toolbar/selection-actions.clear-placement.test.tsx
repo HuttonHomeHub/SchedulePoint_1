@@ -37,6 +37,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canWriteNotes: true,
     onNotes: vi.fn(),
     isSummary: false,
+    // This whole suite is about a control that only exists for a PLACED activity (M-F-T6).
+    hasPlacement: true,
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
@@ -120,27 +122,32 @@ describe('Clear visual start on the selection bar', () => {
     expect(clearButton()).toHaveAccessibleDescription('Start editing to clear the placement.');
   });
   /**
-   * **The omission case is INVERTED, not deleted** (one-planning-surface M-F-T6).
+   * **The omission case MOVED from the plan to the activity** (one-planning-surface M-F-T6), and
+   * both halves are asserted because either alone is satisfied by the wrong thing.
    *
    * It used to assert that `Clear visual start` is omitted outside Visual mode — ADR-0082's *omit*
-   * clause rather than its shade clause, because the action did not apply to a plan scheduled Early
-   * at all. The collapse removes the condition: there is one planning surface, every plan can carry
-   * a placement, and so every plan can clear one.
+   * clause, because a plan scheduled Early had no hand-placed start anywhere in it. The collapse
+   * removes that condition and the predicate follows the subject down a level: an activity nobody
+   * has PLACED has no placement to clear.
    *
-   * Flipping it rather than deleting it is deliberate, and it is the ADR-0093 lesson. A suite that
-   * merely dropped this case would still pass if the item were deleted from the registry outright,
-   * and could not then tell "the mode gate is gone" from "the capability is gone". This asserts the
-   * capability, which is the fact M-F-T6 is claiming.
+   * **The pair is the point** (ADR-0093). A suite asserting only the absence would pass equally if
+   * the item had been deleted from the registry outright — "correctly omitted" and "the capability
+   * is gone" are the same green — and one asserting only the presence would pass against the
+   * unconditional version this milestone measured at 36 px of diagram at 1646.
    *
-   * The shade case above is untouched and still holds: a plan whose pen the reader does not hold
-   * shades this control with a reason. Only the plan-level applicability went.
-   *
-   * **Verified red**: restoring `isVisible: (ctx) => ctx.clearPlacementApplies` to the registry
-   * entry (with the field re-added to the context) fails this case on the control being absent.
+   * The shade cases above are untouched and still hold: a reader who does not hold the pen sees the
+   * control on a placed activity, shaded, with a reason.
    */
-  it('is offered on every plan, because every plan is a planning surface', () => {
+  it('is offered when the selected activity carries a placement', () => {
     render(<SelectionActionsBar context={ctx()} />);
     expect(screen.getByRole('button', { name: /Clear visual start/i })).toBeInTheDocument();
+  });
+
+  it('is omitted when the selected activity has no placement to clear', () => {
+    render(<SelectionActionsBar context={ctx({ hasPlacement: false })} />);
+    expect(screen.queryByRole('button', { name: /Clear visual start/i })).toBeNull();
+    // The pinned positive — without it this passes against a bar that rendered nothing at all.
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });
 
   /**

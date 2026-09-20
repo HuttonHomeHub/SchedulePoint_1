@@ -58,6 +58,7 @@ function ctx(over: Partial<SelectionCanvasContext> | null = {}): SelectionBarCon
     canWriteNotes: true,
     onNotes: vi.fn(),
     isSummary: false,
+    hasPlacement: false,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
     conflictKey: null,

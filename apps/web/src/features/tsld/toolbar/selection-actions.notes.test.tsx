@@ -27,6 +27,7 @@ function ctx(overrides: Partial<SelectionBarContext> = {}): SelectionBarContext 
     canReportProgress: true,
     canWriteNotes: true,
     isSummary: false,
+    hasPlacement: false,
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).

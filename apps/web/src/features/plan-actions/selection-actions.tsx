@@ -78,6 +78,8 @@ export interface SelectionActionContext {
    * the server would 422.
    */
   isSummary: boolean;
+  /** Whether the selected activity carries a hand-placed `visualStart` there is anything to clear. */
+  hasPlacement: boolean;
   /**
    * The conflict the selected activity leads with, or `null` when it is not flagged (ADR-0094 M4).
    *
@@ -776,18 +778,41 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             showLabel: 'always' as const,
             order: 6.5,
             label: 'Clear visual start',
-            // **No `isVisible` and no `lostReason` any more** (M-F-T6), and both deletions are the
-            // same fact. foot-row-and-deck M1 omitted this control outside Visual mode on ADR-0082's
-            // discriminator — the action did not APPLY to a plan scheduled Early — and it carried a
-            // `lostReason` because `docs/TECH_DEBT.md` #204(c) measured the one way it could vanish
-            // under a reader's focus ring: a second Planner flipping `schedulingMode` while holding
-            // no pen. The collapse removes the condition rather than the handling of it. Every plan
-            // is a planning surface, so this applies everywhere and can no longer be taken away.
+            // **The predicate moved from the PLAN to the ACTIVITY** (M-F-T6), and the measurement
+            // is what moved it.
             //
-            // The 146 px it costs the bar is therefore permanent, and that is a real loss recorded
-            // rather than waved through: `m0-candidates.spec.ts` measured the bar wrapping at
-            // 819.4 px against 775.6 px available with this control PRESENT, so the wrap this width
-            // contributes to is now unconditional too.
+            // foot-row-and-deck M1 omitted this control outside Visual mode on ADR-0082's
+            // discriminator — the action did not APPLY to a plan scheduled Early, because such a
+            // plan had no hand-placed start anywhere in it. The collapse removes that condition:
+            // every plan can hold a placement. The first version of this change therefore made the
+            // item unconditional, and **`e2e-workspace-chrome/dock.spec.ts` went red on its
+            // equality**, which is precisely what that gate's docblock says the equality is for
+            // ("if a future milestone genuinely needs to spend canvas on a selection, this number
+            // is the conversation").
+            //
+            // Measured (`measure-toolbar/m-f-foot-row.spec.ts`, 2026-09-20): this control is
+            // **146 px** of a bar summing **989 px**, against 1038 px of room at 1920, **958 at
+            // 1646** and **752 at 1440** — so unconditionally it costs the diagram **0 / 36 / 76
+            // px**. The 1646 figure is the product owner's own screen.
+            //
+            // So the honest successor to the plan-level predicate is the activity-level one: an
+            // activity nobody has PLACED has no placement to clear, which is ADR-0082's omit clause
+            // stated about the object rather than about the plan. The row grows only when a placed
+            // activity is selected — exactly when this control is wanted.
+            //
+            // **`conflict-remedy.ts` rejected this refinement at T6 and its stated reason was
+            // wrong**, which is recorded there rather than quietly reversed: it cited ADR-0094
+            // refusing a per-context ORDER (because re-ordering moves controls under a planner's
+            // cursor) and applied it to per-context VISIBILITY, which this bar already does three
+            // times over — `isSummary` gates Dissolve, Duplicate and Duplicate band, with the
+            // `lostReason` machinery built for exactly that.
+            isVisible: (ctx: SelectionActionContext) => ctx.hasPlacement,
+            // The ADR-0135 handoff sentence. A peer holding the pen can clear this activity's
+            // placement, so the control really can leave under a reader's focus ring — the same
+            // hazard `docs/TECH_DEBT.md` #204(c) measured, now produced by an activity write rather
+            // than a plan one. Present tense, true before and after, which is what makes a static
+            // string honest here.
+            lostReason: 'This activity no longer has a hand-placed start to clear.',
             /**
              * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
              *

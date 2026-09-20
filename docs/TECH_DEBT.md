@@ -11027,3 +11027,47 @@ the scan for somebody to fix deliberately.
 
 **Trigger:** the next retirement blocked by a comment, or the next epic touching
 `scripts/check-flags.mjs`.
+
+### 355. Five `measure-toolbar` harnesses no longer reach their subject after the mode collapse
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found while running
+`measure:toolbar` during one-planning-surface M-F-T5) · **Size:** S · **Owner:** web
+
+One-planning-surface M-F-T5 deleted the `Early | Visual` pair from the plan header's mode cluster,
+which took the container from two named segments to one — so ADR-0119's ux rule (a compound name is
+right for a container of two groups and wrong for one) renamed the toolbar `Plan mode and view` →
+`Plan view`. Five harnesses locate it by the old name and now fail at their fixture:
+
+| file                              | subject                                     | state after the collapse                 |
+| --------------------------------- | ------------------------------------------- | ---------------------------------------- |
+| `m0-header-and-treatment.spec.ts` | header merge budget, bands, label treatment | locator only — subject intact            |
+| `m0-merged-row.spec.ts`           | the merged row, priced from ink             | locator only — subject intact            |
+| `m1-merged-probe.spec.ts`         | the merged row, shrink-to-fit               | locator only — subject intact            |
+| `m1-result.spec.ts`               | the object bar on one line at 1646          | locator, **and** an Early-mode assertion |
+| `m0-mode-divider.spec.ts`         | the divider BETWEEN the two mode segments   | **subject gone** — there is one segment  |
+
+**Nothing is gated on them and nothing in CI runs them**, so this is dormant rather than red:
+`measure:toolbar` is a manual script, not a `test:e2e:*` suite, and `check:e2e-roster` does not see
+it. It matters because a harness that throws at its fixture is indistinguishable from one that has
+nothing to say, and the next person to reach for a header measurement will find four of them broken
+for a reason that has nothing to do with the question they are asking.
+
+**The two halves want different answers, which is why this is a row rather than a sweep.** For the
+four whose subject is intact, repointing the locator is mechanical and produces the number for
+today's header — which is what a re-run is for — and it is ADR-0091 M7's own standing rule (locate a
+toolbar by role and name, and re-check the name after any label change) being applied a milestone
+late. For `m0-mode-divider` the subject is gone, and the ADR-0084 D5 rule says a harness goes with
+its subject; the precedent is `tech-debt-204c-mode-flip-focus.spec.ts`, deleted in the same
+milestone because converting it would have made it produce a **different** reading from the one its
+spec records.
+
+**Deliberately not fixed in M-F**, and the reason is proportion rather than tidiness: repairing five
+ungated historical harnesses inside a milestone whose own journeys were still being converted is how
+a milestone stops being reviewable, and `m1-result`'s Early-mode assertion is a judgement about what
+that file still claims rather than a locator edit.
+
+**Remedy:** repoint the four, delete `m0-mode-divider.spec.ts` with a line in
+`docs/specs/mode-divider/` (or wherever its reading is recorded) saying the divider it measured no
+longer exists, and re-read `m1-result.spec.ts:150` before touching it.
+
+**Trigger:** the next epic that needs a header or command-surface measurement.

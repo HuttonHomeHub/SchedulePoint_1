@@ -105,37 +105,36 @@ test('Delete asks before removing, and removes on confirm', async ({ page }) => 
     .toBeLessThan(before);
 });
 
-test('Clear visual start is offered on every plan, and the bar is there to hold it', async ({
+test('Clear visual start is absent for an unplaced activity, and the bar is not', async ({
   page,
 }) => {
   test.setTimeout(120_000);
   await ganttPlanWithSelection(page, Date.now());
   const bar = page.getByRole('toolbar', { name: /Actions for/ });
 
-  // **This case has now been reversed twice, and both reversals are the product changing rather
-  // than the test being wrong.** It first required the control to be present, `toBeDisabled()` and
-  // carrying a linked reason — ADR-0082's SHADE branch. The foot-row-and-deck epic flipped it to
-  // ABSENT, on ADR-0082's OMIT branch: outside Visual mode the action did not APPLY, because a plan
-  // scheduled Early had no hand-placed start anywhere in it, and the control was holding 146 px of
-  // a row whose wrap cost the diagram 36 px at 1646 to say nothing.
+  // **This case has been reversed three times, and the third reversal returns it to its original
+  // assertion for a different reason — which is why the history is kept rather than tidied.**
   //
-  // **One-planning-surface M-F-T6 removes the condition, not the handling of it.** There is one
-  // planning surface, so every plan can carry a placement and every plan can clear one — the
-  // omission had a subject and no longer does.
+  // 1. It first required the control to be PRESENT, `toBeDisabled()` and carrying a linked reason:
+  //    ADR-0082's SHADE branch.
+  // 2. The foot-row-and-deck epic flipped it to ABSENT on ADR-0082's OMIT branch, because outside
+  //    Visual mode the action did not APPLY — a plan scheduled Early had no hand-placed start
+  //    anywhere in it — and the control was holding 146 px of a row whose wrap cost the diagram
+  //    36 px at 1646.
+  // 3. One-planning-surface M-F-T6 removed that condition and, for one commit, made the control
+  //    unconditional. `e2e-workspace-chrome/dock.spec.ts` went red on its 0 px equality, and
+  //    `measure-toolbar/m-f-foot-row.spec.ts` put a number on it: **0 px at 1920, 36 at 1646, 76 at
+  //    1440**. So the predicate moved down a level rather than away — from "this plan is a planning
+  //    surface" to "this ACTIVITY carries a placement".
   //
-  // The shade branch is untouched and still has to hold: the Late-start overlay and a Viewer's role
-  // both shut this control with a reason. `selection-actions.clear-placement.test.tsx` covers those
-  // directly, where all the gate rungs can be constructed.
-  //
-  // **It was NOT in M-F-T4b's measured scope, and that is recorded rather than smoothed over.**
-  // That task counted four tests, all of them reached through the two `useVisualMode` helpers. This
-  // one is in the same suite, reaches nothing through a helper, and breaks LOUDLY — it asserts an
-  // absence that became a presence — which is why it is the kind of fallout a count of callers
-  // cannot find and a test run can.
-  await expect(bar.getByRole('button', { name: 'Clear visual start' })).toBeVisible();
+  // The observation is therefore what it was in (2) and the reason is not. This fixture seeds
+  // activities and places none of them, so there is nothing to clear.
+  await expect(bar.getByRole('button', { name: 'Clear visual start' })).toHaveCount(0);
 
-  // **The pinned positive stays**, for the reason it was added: an assertion about this one control
-  // says nothing if the bar never rendered or the selection was lost (ADR-0093).
+  // **The pinned positive**, and it is why this is two assertions rather than one. `toHaveCount(0)`
+  // passes just as well if the bar never rendered, if the selection was lost, or if the control was
+  // deleted outright — a green result that cannot tell "correctly omitted" from "gone" is the
+  // ADR-0093 defect this repository keeps re-filing.
   await expect(bar.getByRole('button', { name: 'Edit' })).toBeVisible();
 });
 

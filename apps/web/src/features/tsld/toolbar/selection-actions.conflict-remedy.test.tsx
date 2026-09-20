@@ -41,6 +41,10 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canWriteNotes: true,
     onNotes: vi.fn(),
     isSummary: false,
+    // A placement conflict presupposes a PLACEMENT, so the bar's clear action is present here by
+    // construction (M-F-T6). Setting this false would make the remedy cases assert against a bar
+    // that cannot hold the control they are about.
+    hasPlacement: true,
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).

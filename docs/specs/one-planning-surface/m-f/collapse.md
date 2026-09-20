@@ -336,3 +336,84 @@ own subject. The docblock is reworded (the literal was incidental) and the blind
 `docs/TECH_DEBT.md` **#354** with a named remedy, rather than fixed here — `check-flags.mjs` is a
 shared gate, and ADR-0105 makes that a full-spec trigger that ADR-0136 records being violated once
 already.
+
+---
+
+## The journeys, and what running them found
+
+`prepush` was green — 6,489 unit tests, every gate — and the journeys then found four things, three
+of them in the product rather than in the tests. This is the section ADR-0081 exists for.
+
+### 1. `Clear visual start` unconditional costs the diagram 36 px, and the gate said so
+
+T6 made the control unconditional and wrote down that its 146 px were "a real loss recorded rather
+than waved through". `e2e-workspace-chrome/dock.spec.ts` went red on ADR-0092's **0 px** equality —
+which is exactly what that gate's own docblock says the equality is for: _"if a future milestone
+genuinely needs to spend canvas on a selection, this number is the conversation."_
+
+**So the conversation was held with numbers** (`measure-toolbar/m-f-foot-row.spec.ts`, 2026-09-20),
+because the previous seven times this surface's width was argued about the arithmetic was
+contradicted by its own measurement:
+
+| viewport | bar content | room given | canvas cost |
+| -------- | ----------- | ---------- | ----------- |
+| 1920     | 989 px      | 1038 px    | **0 px**    |
+| 1646     | 989 px      | 958 px     | **36 px**   |
+| 1440     | 989 px      | 752 px     | **76 px**   |
+
+1646 is the product owner's own screen. The control itself is **146 px** — the second-widest of the
+eleven, after `Zoom to selection`'s 152.
+
+**The predicate moved down a level rather than away**: from "this plan is a planning surface" to
+"this ACTIVITY carries a placement" (`hasPlacement`, derived from `visualStart` — the planner's
+input, never `visualEffectiveStart`, which the engine writes for every activity of every plan and
+would report every bar as placed). That is ADR-0082's omit clause stated about the object, and the
+row now grows only when a placed activity is selected, which is exactly when the control is wanted.
+
+**T6's stated reason for rejecting this refinement was wrong, and the correction is in
+`conflict-remedy.ts` rather than deleted.** It cited ADR-0094 refusing a per-context **order** and
+applied it to per-context **visibility** — two different things, and this bar already varies its
+contents with the selection three times over (`isSummary` gates Dissolve, Duplicate and Duplicate
+band, with `lostReason` built for exactly that). It also deferred the question to "whoever measures
+the row", and this milestone then measured it.
+
+`object-actions-reach.spec.ts`'s case has now been **reversed three times** — present-and-shaded,
+absent (plan scheduled Early), and absent again (activity not placed) — and the third reversal
+returns it to the second's assertion for a different reason. The history is kept in the file.
+
+### 2. A move no longer moves `earlyStart`, and a journey was asserting that it does
+
+`bar-drag.spec.ts`'s "the move is stored" case polled `earlyStart` and expected it to change. Before
+the collapse a move in Early mode wrote an `SNET`, and a constraint moves the early dates; a move
+now writes a **placement**, which deliberately does not — Pass 1 is the network's own answer and
+goes on computing it. The case ran green for the right reason and red for the right reason on the
+same day. It now polls `visualEffectiveStart` (the engine's output, which is what the bar draws) and
+**additionally asserts `earlyStart` is unchanged** — the epic's central claim, asserted end to end
+for the first time rather than only in prose.
+
+The sibling "a summary refuses to move" case had the inverse problem and was **silently weakened by
+the same change**: it asserted only that `earlyStart` did not move, which a product that happily
+placed a WBS summary would satisfy. It now asserts `visualStart` is null too.
+
+### 3. The header row's wrap boundary moved, and the gate lost its falsifying width
+
+Deleting the `Early | Visual` pair took **221 px** out of the plan header
+(`e2e-workspace-fit/pen-status.spec.ts` measured 1267 px of content before; swept now at **1046**),
+so the row went from two lines at 1280 to one. That case's own docblock says the two-line width has
+to exist or the assertion "would only ever prove the row fits, which is half a claim" — so the width
+is **replaced rather than dropped**, found by sweeping twelve widths
+(`measure-toolbar/m-f-header-wrap.spec.ts`) rather than by arithmetic: one line down to a **1120 px**
+container, two at **1068**, and 1024's container is 992. 1280 stays in the sweep at its new
+expectation, because it is there as the tightest arithmetic of the set.
+
+### 4. Two instrument defects, both mine
+
+`peer-unmount-focus.spec.ts` fetched `…/plans/:planId/activities/:activityId`, which 404s:
+`activities.controller.ts` is org-scoped (`organizations/:orgSlug/activities`). And the mode
+toolbar's accessible name had to come down with the segment — `Plan mode and view` → **`Plan view`**
+— because ADR-0119's ux finding is that a compound name is right for a container of two groups and
+wrong for one; leaving it would reintroduce the self-contradiction from the other end, a container
+promising a mode that is not in it. Two journeys located the toolbar by that name.
+
+**Suites run green after the fixes:** `api` (686), `workspace-chrome` (14), `gantt-editing` (30),
+`float-paths` (1), `workspace-fit` (16).

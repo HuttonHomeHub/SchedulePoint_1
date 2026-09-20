@@ -185,20 +185,20 @@ test('a peer retypes the activity and the bar catches the focus it drops', async
       if (!lock.ok) {
         return { ok: false, stage: 'lock', status: lock.status, body: await lock.text() };
       }
-      const get = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities/${activityId}`, {
+      // **Org-scoped, not plan-nested** — `activities.controller.ts` is
+      // `organizations/:orgSlug/activities`; the plan-nested spelling 404s, which is how the
+      // first run of this conversion failed.
+      const get = await fetch(`/api/v1/organizations/${org}/activities/${activityId}`, {
         credentials: 'include',
       });
       if (!get.ok) return { ok: false, stage: 'get', status: get.status, body: await get.text() };
       const activity = (await get.json()) as { data: { version: number } };
-      const patch = await fetch(
-        `/api/v1/organizations/${org}/plans/${id}/activities/${activityId}`,
-        {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'WBS_SUMMARY', version: activity.data.version }),
-        },
-      );
+      const patch = await fetch(`/api/v1/organizations/${org}/activities/${activityId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'WBS_SUMMARY', version: activity.data.version }),
+      });
       return { ok: patch.ok, stage: 'patch', status: patch.status, body: await patch.text() };
     },
     { org: orgSlug, id: planId, activityId: seededId },
@@ -220,14 +220,14 @@ test('a peer retypes the activity and the bar catches the focus it drops', async
 
   // Guard 3 — ask the server, not the page under test.
   const serverType = await b.evaluate(
-    async ({ org, id, activityId }: { org: string; id: string; activityId: string }) => {
-      const res = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities/${activityId}`, {
+    async ({ org, activityId }: { org: string; activityId: string }) => {
+      const res = await fetch(`/api/v1/organizations/${org}/activities/${activityId}`, {
         credentials: 'include',
       });
       const json = (await res.json()) as { data: { type: string } };
       return json.data.type;
     },
-    { org: orgSlug, id: planId, activityId: seededId },
+    { org: orgSlug, activityId: seededId },
   );
   expect(serverType, 'the peer PATCH did not change the activity').toBe('WBS_SUMMARY');
 

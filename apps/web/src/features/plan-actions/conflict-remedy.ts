@@ -132,12 +132,21 @@ export interface ClearVisualPlacementInput {
  * **Its 146 px come back to the selection bar unconditionally**, which is a real cost on a row
  * five epics have spent fitting, and it is stated rather than absorbed.
  *
- * **The tempting refinement is rejected here rather than left unconsidered**: omitting when the
- * SELECTED activity carries no `visualStart` would keep the row narrow most of the time and make
- * the bar's contents change as the selection moves, which ADR-0094 refused for its own remedy
- * ("a per-context order would re-run the ladder as the selection changes"). It is also a new
- * behaviour rather than a consequence of the collapse, so it belongs to whoever measures the row
- * rather than to this milestone.
+ * **This paragraph rejected the activity-level refinement, and the rejection was wrong** — kept in
+ * its corrected form rather than deleted, because the mistake is the instructive half.
+ *
+ * It said that omitting the control when the SELECTED activity carries no `visualStart` would make
+ * "the bar's contents change as the selection moves, which ADR-0094 refused". ADR-0094 refused a
+ * per-context **order** — re-ordering moves controls under a planner's cursor — and this bar
+ * already changes its **contents** with the selection three times over (`isSummary` gates Dissolve,
+ * Duplicate and Duplicate band, and `lostReason` exists for exactly that). Two different things,
+ * conflated, and the conflation was used to decline a refinement.
+ *
+ * It also said the refinement "belongs to whoever measures the row rather than to this milestone".
+ * The row was then measured in this milestone (`measure-toolbar/m-f-foot-row.spec.ts`): 146 px of a
+ * 989 px bar against 958 px of room at 1646, costing the diagram **36 px** there and **76 px** at
+ * 1440. So the refinement shipped — `isVisible: (ctx) => ctx.hasPlacement` — and the condition that
+ * forced it is recorded at the registry entry.
  */
 
 /**

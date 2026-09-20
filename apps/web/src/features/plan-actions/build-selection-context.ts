@@ -86,8 +86,13 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     scheduleRefusal: input.scheduleRefusal,
     canReportProgress: input.canReportProgress,
     canWriteNotes: input.canWriteNotes,
-    // A fact about the activity, not a policy a host could reasonably differ on.
+    // Facts about the activity, not policies a host could reasonably differ on.
     isSummary: activity.type === 'WBS_SUMMARY',
+    // **`visualStart`, the planner's INPUT — never `visualEffectiveStart`, the engine's output**
+    // (`packages/types`). The engine writes an effective start for every activity of every plan,
+    // so reading it here would report every bar as placed and the control would be back to
+    // unconditional with an explanation that sounds convincing.
+    hasPlacement: activity.visualStart !== null,
     onOpenLogic: () => input.onOpenLogic(activity),
     onEdit: () => input.onEdit(activity),
     onDelete: () => input.onDelete(activity),

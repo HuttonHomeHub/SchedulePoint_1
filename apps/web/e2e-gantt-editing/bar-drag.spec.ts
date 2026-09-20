@@ -37,6 +37,7 @@ interface ActivityRow {
   name: string;
   earlyStart: string | null;
   visualStart: string | null;
+  visualEffectiveStart: string | null;
   constraintType: string | null;
   constraintDate: string | null;
 }
@@ -89,18 +90,37 @@ test('Alt+ArrowRight moves a bar and the move is stored', async ({ page }) => {
   await showGantt(page);
 
   const before = byName(await readActivities(page, orgSlug), 'Seeded 0');
-  expect(before.earlyStart).not.toBeNull();
+  expect(before.visualEffectiveStart).not.toBeNull();
 
   await ganttRow(page, 'Seeded 0').click();
   await page.keyboard.press('Alt+ArrowRight');
 
   // Asserted at the API. The bar visibly moving proves the ghost, not the write — and the ghost is
   // the half that cannot be wrong in a way anybody would notice later.
+  //
+  // **It reads `visualEffectiveStart`, and it read `earlyStart` until the collapse**
+  // (one-planning-surface M-F-T4b). The old assertion was not a fixture detail: before the collapse
+  // a move in Early mode wrote an `SNET`, and a constraint moves the EARLY dates. A move now writes
+  // a placement, and a placement deliberately does NOT move `earlyStart` — Pass 1 is the network's
+  // own answer and goes on computing it. So this ran green against the product for the right reason
+  // and red against it for the right reason too, on the same day; what changed is which column
+  // records a planner's move.
+  //
+  // `visualEffectiveStart` rather than `visualStart` because this case is about the bar MOVING —
+  // the engine's output, which is what the diagram and the grid draw. The next case asserts the
+  // input, and that the write left no constraint behind.
   await expect
-    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').earlyStart, {
-      timeout: 20_000,
-    })
-    .not.toBe(before.earlyStart);
+    .poll(
+      async () => byName(await readActivities(page, orgSlug), 'Seeded 0').visualEffectiveStart,
+      { timeout: 20_000 },
+    )
+    .not.toBe(before.visualEffectiveStart);
+
+  // And Pass 1 is untouched, which is the claim the epic makes everywhere and asserts almost
+  // nowhere end to end: the network's own earliest start is not a planner's placement.
+  expect(byName(await readActivities(page, orgSlug), 'Seeded 0').earlyStart).toBe(
+    before.earlyStart,
+  );
 });
 
 /**
@@ -173,7 +193,13 @@ test('a summary refuses to move', async ({ page }) => {
   // refusal is asserted by the unit suite; this proves the WRITE did not happen, which is the half
   // only a real server can show.
   await page.waitForTimeout(1_500);
-  expect(byName(await readActivities(page, orgSlug), 'Seeded 0').earlyStart).toBe(summaryStart);
+  const after = byName(await readActivities(page, orgSlug), 'Seeded 0');
+  expect(after.earlyStart).toBe(summaryStart);
+  // **And no placement**, which this case did not need until the collapse: a move now writes
+  // `visualStart`, and a placement does not move `earlyStart`, so the assertion above would pass
+  // against a product that had happily placed a WBS summary. The hole opened the day the write
+  // changed column, in a case that goes on looking correct.
+  expect(after.visualStart).toBeNull();
 });
 
 test('a bar carries a pointer resize handle a planner can actually reach', async ({ page }) => {
