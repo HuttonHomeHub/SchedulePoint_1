@@ -228,32 +228,34 @@ beforeEach(() => {
 });
 
 describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
-  it('pins an SNET on every moved row in EARLY mode', async () => {
-    await moveMany()([ACTIVITY, OTHER], { dayDelta: 3, laneDelta: 0 });
-    const sent = h.batchPlacements.mock.calls[0]?.[0] as {
-      placements: { id: string; constraintType?: string | null; visualStart?: string | null }[];
-    };
-    expect(sent.placements).toHaveLength(2);
-    for (const p of sent.placements) {
-      expect(p.constraintType).toBe('SNET');
-      // `visualStart` rides along at its ORIGINAL value — the batch DTO takes complete rows, so an
-      // omitted field is a validation error rather than "leave it alone". What matters is that
-      // EARLY does not *shift* it: doing so would drag the Visual placement of every moved bar
-      // behind a mode that is not currently drawing from it, and nobody would see it until the
-      // plan was switched to Visual. This assertion was `toBeUndefined()` first, which was a guess.
-      expect(p.visualStart).toBe('2026-02-02');
-    }
-  });
-
   /**
-   * VISUAL does not merely *omit* the constraint — it sends `constraintType: null`, clearing any
-   * SNET an earlier EARLY-mode drag pinned. That is the load-bearing half: a bar carrying a stale
-   * SNET while the plan schedules visually is pinned by a constraint nobody can see on a surface
-   * that does not show constraints. Asserted as `null` after the first version of this test guessed
-   * `undefined` and went red — read the behaviour, do not remember it (ADR-0076).
+   * **The `EARLY` case is DELETED** (M-F-T3). It asserted `constraintType: 'SNET'` on every moved
+   * row, which is exactly what a bulk drag no longer does: twelve bars used to be pinned by a
+   * gesture nobody read as a commitment.
+   *
+   * Its better half is preserved and inverted below — that a move must not disturb a row's own
+   * constraint — and is asserted where it can actually discriminate, in
+   * `features/tsld/model/bulk-move.test.ts`, against a fixture carrying a non-null one.
    */
-  it('writes visualStart and CLEARS the constraint in VISUAL mode', async () => {
-    h.visual = true;
+  /**
+   * **This docblock claimed the move CLEARS a constraint, and that was never true** — corrected at
+   * M-F-T3 rather than carried.
+   *
+   * `movedPlacement` spreads the row's current placement, so `constraintType` arrives at whatever
+   * the row already had; the batch DTO takes complete rows, so it is present rather than omitted,
+   * which is the fact the original author was reaching for. The fixture's constraint is `null`, so
+   * this case asserts `null` on a row that was already `null` — it passes, and it has never been
+   * able to tell "carried through" from "cleared".
+   *
+   * The claim mattered: "a bar carrying a stale SNET while the plan schedules visually is pinned by
+   * a constraint nobody can see" describes a real hazard, and the reassurance that a move fixed it
+   * was false. What the product actually guarantees is the opposite and is better — a move does not
+   * touch a commitment at all — and it is asserted against a non-null fixture in
+   * `features/tsld/model/bulk-move.test.ts`, which is where it can discriminate.
+   *
+   * Kept here as the seam check it really is: the batch carries a placement and a complete row.
+   */
+  it('writes visualStart and sends a COMPLETE row, constraint field included', async () => {
     await moveMany()([ACTIVITY, OTHER], { dayDelta: 3, laneDelta: 0 });
     const sent = h.batchPlacements.mock.calls[0]?.[0] as {
       placements: { id: string; constraintType?: string | null; visualStart?: string | null }[];

@@ -346,50 +346,19 @@ describe('onTsldResize (ADR-0052 M2)', () => {
 });
 
 describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
-  it('EARLY: ONE full-definition PATCH imposing SNET-at-new-start + the new duration', async () => {
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-
-    let outcome;
-    await act(async () => {
-      // Drag the start to day 6 (2026-01-07); finish pinned → duration 8.
-      outcome = await result.current.onTsldResize({
-        activityId: 'a1',
-        durationDays: 8,
-        startDay: 6,
-      });
-    });
-
-    expect(outcome).toEqual({ applied: true, conflict: null });
-    expect(h.updateMutateAsync).toHaveBeenCalledTimes(1);
-    // The two intended changes ride ONE call (the spike-verified combined PATCH): the SNET pin at
-    // the new start — mirroring the reposition payload — plus the recomputed duration…
-    expect(h.updateMutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        activityId: 'a1',
-        version: 3,
-        constraintType: 'SNET',
-        constraintDate: '2026-01-07',
-        durationDays: 8,
-      }),
-    );
-    // …with every other definition field resent verbatim (never silently cleared).
-    expect(h.updateMutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        durationType: 'FIXED_UNITS',
-        percentCompleteType: 'PHYSICAL',
-        accrualType: 'START',
-        calendarId: 'cal-9',
-        levelingPriority: 7,
-      }),
-    );
-    // The visualStart seam is never touched in EARLY mode.
-    expect(h.setVisualStartMutateAsync).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it('VISUAL: ONE minimal visualStart + durationDays PATCH (no definition resend, no SNET)', async () => {
-    h.schedulingModes = true;
-    h.planMode = 'VISUAL';
+  /**
+   * **The `EARLY` start-edge case is DELETED, not rewritten** (M-F-T3).
+   *
+   * It asserted one full-definition PATCH imposing an SNET at the new start plus the duration,
+   * with fifteen other fields resent verbatim so none was silently cleared. All of that went with
+   * the mode: a start-edge drag now hand-places, in one minimal PATCH touching two columns, so
+   * there is no definition to resend and nothing to clear.
+   *
+   * Its surviving subject is the negative half of the case below — `updateMutateAsync` is NOT
+   * called — which used to read "the visualStart seam is never touched in EARLY mode" and now
+   * reads the other way round. That inversion is the collapse in one assertion.
+   */
+  it('ONE minimal visualStart + durationDays PATCH — no definition resend, no SNET', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     let outcome;
@@ -408,7 +377,8 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
       durationDays: 8,
       version: 3,
     });
-    // The full-definition path is NOT used — a Visual placement never writes a constraint.
+    // The full-definition path is NOT used — a placement never writes a constraint, and this is
+    // the assertion the deleted EARLY case's mirror image became.
     expect(h.updateMutateAsync).not.toHaveBeenCalled();
     expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
   });
@@ -460,7 +430,10 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
 
   it('409 (stale version): resolves applied:false with the conflict message — no record, no recalc', async () => {
     h.undoRedo = true;
-    h.updateMutateAsync.mockRejectedValue(
+    // **The placement seam, because that is the one a start-edge drag uses** (M-F-T3). It rejected
+    // `updateMutateAsync` until the collapse; left there the mock would resolve happily, the drag
+    // would succeed, and this case would assert a conflict path it never entered.
+    h.setVisualStartMutateAsync.mockRejectedValue(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
     );
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });

@@ -14,7 +14,6 @@ export {
   type CloneCreateBody,
   type CloneDisposition,
   type CloneFieldDecision,
-  type CloneMode,
   type ClonePlacement,
 } from './model/clone-projection';
 export {

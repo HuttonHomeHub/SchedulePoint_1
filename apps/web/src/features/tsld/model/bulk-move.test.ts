@@ -4,12 +4,18 @@ import { describe, expect, it } from 'vitest';
 import { bulkMoveSnapshots, isLaneOnly, isNoOp, movedPlacement } from './bulk-move';
 
 /**
- * The mode-aware row builder (`docs/specs/canvas-multi-select/` M4-T2).
+ * The bulk row builder (`docs/specs/canvas-multi-select/` M4-T2), collapsed to one behaviour by
+ * M-F-T3.
  *
- * The two assertions that matter are the ones a reviewer cannot make by reading: **EARLY pins an
- * SNET and VISUAL does not**, and **a lane-only move leaves every date field untouched**. Getting
- * the first wrong pins twelve constraints a planner never asked for; getting the second wrong sends
- * a layout nudge through the recalculating endpoint and recomputes the plan for a vertical drag.
+ * **The two `EARLY` cases are DELETED rather than rewritten**, and their subject survives as the
+ * negative half of the case below: a move must write a placement and **leave every constraint
+ * alone**. That was the point of "EARLY pins an SNET and VISUAL does not" — getting it wrong pins
+ * twelve constraints a planner never asked for — and after the collapse the only wrong answer left
+ * is writing one at all, so that is what is asserted.
+ *
+ * The other assertion a reviewer cannot make by reading is unchanged: **a lane-only move leaves
+ * every date field untouched**, because getting it wrong sends a layout nudge through the
+ * recalculating endpoint and recomputes the plan for a vertical drag.
  */
 const activity = (over: Partial<ActivitySummary> = {}): ActivitySummary =>
   ({
@@ -24,62 +30,61 @@ const activity = (over: Partial<ActivitySummary> = {}): ActivitySummary =>
   }) as unknown as ActivitySummary;
 
 describe('movedPlacement', () => {
-  it('EARLY pins an SNET at the dropped day', () => {
-    expect(movedPlacement(activity(), { dayDelta: 3, laneDelta: 0 }, 'early')).toEqual({
-      id: 'a',
-      constraintType: 'SNET',
-      constraintDate: '2026-01-08',
-      visualStart: null,
-      laneIndex: 2,
-    });
-  });
-
-  it('EARLY shifts an EXISTING SNET rather than re-deriving from the computed start', () => {
-    // Re-deriving would silently discard a pin the planner set and re-pin from wherever the engine
-    // last put the bar — a different date whenever the plan has moved since.
-    const row = activity({ constraintType: 'SNET', constraintDate: '2026-02-01' });
-    expect(movedPlacement(row, { dayDelta: 2, laneDelta: 0 }, 'early').constraintDate).toBe(
-      '2026-02-03',
-    );
-  });
-
-  it('VISUAL writes visualStart and pins NOTHING', () => {
-    const result = movedPlacement(activity(), { dayDelta: 3, laneDelta: 0 }, 'visual');
+  it('writes visualStart and pins NOTHING', () => {
+    const result = movedPlacement(activity(), { dayDelta: 3, laneDelta: 0 });
     expect(result.visualStart).toBe('2026-01-08');
     expect(result.constraintType).toBeNull();
     expect(result.constraintDate).toBeNull();
   });
 
-  it('VISUAL seeds from the drawn bar when visualStart is not set yet', () => {
+  it('carries an EXISTING constraint through untouched, rather than overwriting it', () => {
+    /**
+     * **The inherited half of the two deleted `EARLY` cases, and the one that now matters.**
+     *
+     * Before the collapse this builder re-pinned an SNET at the dropped day, which by design
+     * overwrote whatever was there — so a bulk drag replaced twelve commitments somebody had
+     * recorded on purpose. A row still carries its constraint fields, because the endpoint takes
+     * complete placements and an omitted field there is a validation error rather than a silent
+     * "leave it alone"; what changed is that they arrive **unchanged**.
+     *
+     * A non-SNET constraint is used deliberately: an `FNET` could never have been produced by the
+     * old pinning rule, so a version that still wrote one would have to clobber this and fail,
+     * where a fixture using SNET could pass by coincidence.
+     */
+    const pinned = activity({ constraintType: 'FNET', constraintDate: '2026-02-01' });
+    const result = movedPlacement(pinned, { dayDelta: 2, laneDelta: 0 });
+    expect(result.constraintType).toBe('FNET');
+    expect(result.constraintDate).toBe('2026-02-01');
+    expect(result.visualStart).toBe('2026-01-07');
+  });
+
+  it('seeds from the drawn bar when visualStart is not set yet', () => {
     // The bar a planner drags is drawn from the computed early start until `visualStart` exists, so
     // a first drag that started from null would otherwise jump to an unrelated date.
     expect(
-      movedPlacement(activity({ visualStart: null }), { dayDelta: 1, laneDelta: 0 }, 'visual')
-        .visualStart,
+      movedPlacement(activity({ visualStart: null }), { dayDelta: 1, laneDelta: 0 }).visualStart,
     ).toBe('2026-01-06');
   });
 
-  it('a lane-only move leaves every date field exactly as it was, in BOTH modes', () => {
+  it('a lane-only move leaves every date field exactly as it was', () => {
     const pinned = activity({ constraintType: 'FNET', constraintDate: '2026-03-01' });
-    for (const mode of ['early', 'visual'] as const) {
-      expect(movedPlacement(pinned, { dayDelta: 0, laneDelta: 1 }, mode)).toEqual({
-        id: 'a',
-        constraintType: 'FNET',
-        constraintDate: '2026-03-01',
-        visualStart: null,
-        laneIndex: 3,
-      });
-    }
+    expect(movedPlacement(pinned, { dayDelta: 0, laneDelta: 1 })).toEqual({
+      id: 'a',
+      constraintType: 'FNET',
+      constraintDate: '2026-03-01',
+      visualStart: null,
+      laneIndex: 3,
+    });
   });
 
   it('clamps the lane at zero rather than sending a negative one', () => {
     expect(
-      movedPlacement(activity({ laneIndex: 1 }), { dayDelta: 0, laneDelta: -5 }, 'early').laneIndex,
+      movedPlacement(activity({ laneIndex: 1 }), { dayDelta: 0, laneDelta: -5 }).laneIndex,
     ).toBe(0);
   });
 
   it('always sends a COMPLETE row — nulls included, never omitted', () => {
-    const keys = Object.keys(movedPlacement(activity(), { dayDelta: 1, laneDelta: 1 }, 'early'));
+    const keys = Object.keys(movedPlacement(activity(), { dayDelta: 1, laneDelta: 1 }));
     expect(keys.sort()).toEqual([
       'constraintDate',
       'constraintType',
@@ -109,10 +114,9 @@ describe('bulkMoveSnapshots', () => {
     const { before, after, versions } = bulkMoveSnapshots({
       activities: rows,
       delta: { dayDelta: 1, laneDelta: 0 },
-      mode: 'early',
     });
-    expect(before.map((p) => p.constraintDate)).toEqual([null, null]);
-    expect(after.map((p) => p.constraintDate)).toEqual(['2026-01-06', '2026-01-06']);
+    expect(before.map((p) => p.visualStart)).toEqual([null, null]);
+    expect(after.map((p) => p.visualStart)).toEqual(['2026-01-06', '2026-01-06']);
     expect(versions.get('a')).toBe(1);
     expect(versions.get('b')).toBe(7);
   });

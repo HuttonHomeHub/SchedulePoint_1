@@ -13,7 +13,7 @@ import { ApiFetchError } from '@/lib/api/client';
  * every schedule affordance (TSLD canvas, activities table, create button, recalc,
  * dependency editor) while the Contributor **progress** path stays enabled; that a
  * would-be editor without the pen gets the read-only hint; and the reposition seam
- * (`useRepositionLane` for a lane-only move vs `useUpdateActivity` for a day change),
+ * (`useRepositionLane` for a lane-only move vs `useSetActivityVisualStart` for a day change),
  * including a 423 dropping to a no-op via `pen.onWriteRejected`.
  *
  * Everything below the route is mocked to prop-capturing stand-ins; the real code
@@ -28,6 +28,11 @@ const h = vi.hoisted(() => ({
   tsld: { props: null as Record<string, unknown> | null },
   repositionLane: vi.fn(),
   updateActivity: vi.fn(),
+  // Resolves a row rather than `undefined`: the undo command built from a placement reads
+  // `saved.version` eagerly, where the deleted EARLY command carried the whole `before`/`after`
+  // pair and never touched it. A bare `vi.fn()` here throws inside the model, which reads as a
+  // product defect and is a mock that does not answer.
+  setVisualStart: vi.fn(() => Promise.resolve({ version: 4 })),
   batchPositions: vi.fn(),
   createDependency: vi.fn(),
   createPlaced: vi.fn(),
@@ -134,7 +139,10 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   useCreatePlacedActivity: () => ({ mutateAsync: h.createPlaced }),
   useUpdateActivity: () => ({ mutateAsync: h.updateActivity }),
   useRepositionLane: () => ({ mutateAsync: h.repositionLane }),
-  useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
+  // **Captured rather than anonymous since M-F-T3**: a day change now writes a placement through
+  // this seam, so an untracked `vi.fn()` here would make the two reposition cases below assert
+  // against a mutation nothing calls — green, and about nothing.
+  useSetActivityVisualStart: () => ({ mutateAsync: h.setVisualStart }),
   useBatchPositions: () => ({ mutateAsync: h.batchPositions }),
   useBatchPlacements: () => ({ mutateAsync: vi.fn(() => Promise.resolve([])) }),
   useDeleteActivity: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
@@ -352,14 +360,19 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
     expect(outcome).toEqual({ applied: true, conflict: null });
   });
 
-  it('a day change uses useUpdateActivity then recalculates', async () => {
+  it('a day change hand-places through the placement seam, then recalculates', async () => {
     h.pen = pen({ penManaged: true, holdsPen: true });
     renderScreen();
     const onReposition = h.tsld.props?.onReposition as (i: unknown) => Promise<unknown>;
     const outcome = await onReposition({ activityId: 'a1', startDay: 5 });
-    expect(h.updateActivity).toHaveBeenCalledWith(
-      expect.objectContaining({ activityId: 'a1', version: 3, constraintType: 'SNET' }),
+    // **A placement, not an SNET** (M-F-T3). This asserted `constraintType: 'SNET'` through
+    // `useUpdateActivity` until the collapse — a full-definition PATCH that overwrote whatever
+    // constraint the row carried. The negative half is what keeps the change honest: the
+    // definition seam is not touched at all, so nothing else on the row can be disturbed.
+    expect(h.setVisualStart).toHaveBeenCalledWith(
+      expect.objectContaining({ activityId: 'a1', version: 3, visualStart: expect.any(String) }),
     );
+    expect(h.updateActivity).not.toHaveBeenCalled();
     expect(h.repositionLane).not.toHaveBeenCalled();
     expect(h.recalculate).toHaveBeenCalledTimes(1);
     expect(outcome).toEqual({ applied: true, conflict: null });
@@ -404,7 +417,7 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
       i: unknown,
     ) => Promise<{ applied: boolean; conflict: string | null }>;
     const outcome = await onReposition({ activityId: 'a1', startDay: 5 });
-    expect(h.updateActivity).toHaveBeenCalledTimes(1);
+    expect(h.setVisualStart).toHaveBeenCalledTimes(1);
     expect(outcome.applied).toBe(true); // the move persisted…
     expect(outcome.conflict).toMatch(/couldn.t recalculate/i); // …dates stay stale until next recalc
   });

@@ -21,7 +21,6 @@ const PLACEMENT: ClonePlacement = {
   laneIndex: 7,
   parentId: null,
   offsetDays: 0,
-  mode: 'EARLY',
   anchorDate: null,
 };
 

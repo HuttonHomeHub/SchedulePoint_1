@@ -122,7 +122,6 @@ function input(over: Partial<PlanCloneInput> = {}): PlanCloneInput {
     archivedCalendarIds: new Set(),
     offsetDays: 0,
     laneOffset: 1,
-    mode: 'EARLY',
     ...over,
   };
 }
@@ -267,10 +266,18 @@ describe('planClone — placement', () => {
       ),
     );
     expect(creates[0]?.body.laneIndex).toBe(14);
-    expect(creates[0]?.body).toMatchObject({
-      constraintType: 'SNET',
-      constraintDate: '2026-01-12',
-    });
+    /**
+     * **A placement, never a pin** (M-F-T3). This asserted `constraintType: 'SNET'` at the shifted
+     * anchor until the collapse, and the pin was conditional on the SOURCE carrying no constraint
+     * of its own — so a pasted fragnet was pinned or not depending on a property of the row it was
+     * copied from. Both the pin and that asymmetry went with the mode.
+     *
+     * The negative half is asserted too, because "writes a placement" passes equally against a
+     * version that writes a placement AND a constraint, which is the shape the old rule would
+     * decay into if somebody restored half of it.
+     */
+    expect(creates[0]?.body).toMatchObject({ visualStart: '2026-01-12' });
+    expect(creates[0]?.body).not.toHaveProperty('constraintType');
   });
 
   it('pins nothing when the source has never been scheduled', () => {
@@ -294,7 +301,6 @@ describe('planClone — placement', () => {
             activity({ id: 'a', name: 'A', earlyStart: '2026-01-05', visualStart: '2026-02-01' }),
           ],
           usedNames: new Set(['A']),
-          mode: 'VISUAL',
           offsetDays: 1,
         }),
       ),

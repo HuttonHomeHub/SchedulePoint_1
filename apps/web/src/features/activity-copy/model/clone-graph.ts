@@ -9,7 +9,6 @@ import {
   shiftIsoDay,
   type ClonePlacement,
   type CloneCreateBody,
-  type CloneMode,
 } from './clone-projection';
 
 /**
@@ -182,7 +181,6 @@ export interface PlanCloneInput {
   readonly offsetDays: number;
   /** Lanes every clone shifts down by. The caller derives it (usually `maxLaneIndex + 1`). */
   readonly laneOffset: number;
-  readonly mode: CloneMode;
   /**
    * The parent for members whose own parent is **outside** the set.
    *
@@ -249,7 +247,6 @@ export function planClone(input: PlanCloneInput): ClonePlanResult {
             ? input.destinationParentId
             : source.parentId,
       offsetDays: input.offsetDays,
-      mode: input.mode,
       anchorDate: anchorOf(source, input.offsetDays),
     };
 

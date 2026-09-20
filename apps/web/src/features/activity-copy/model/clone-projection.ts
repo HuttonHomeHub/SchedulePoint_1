@@ -150,7 +150,7 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
   },
   visualStart: {
     disposition: 'transformed',
-    reason: 'In VISUAL mode the placement IS the decision the paste is making (ADR-0033).',
+    reason: 'The placement IS the decision a paste is making — it is where the clone lands.',
   },
 
   // ---- History — a copy never claims it ------------------------------------------------------
@@ -265,12 +265,6 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
   },
 };
 
-/**
- * The plan's scheduling mode (ADR-0033), named as a type because two modules branch on it and a
- * repeated string union is how the two eventually stop agreeing.
- */
-export type CloneMode = 'EARLY' | 'VISUAL';
-
 /** Where the paste puts one clone, and how far in time it moves. */
 export interface ClonePlacement {
   /** The lane the clone lands in. */
@@ -282,11 +276,6 @@ export interface ClonePlacement {
    * Calendar days, matching the canvas x-axis, not working days.
    */
   readonly offsetDays: number;
-  /**
-   * The plan's scheduling mode. EARLY pins the clone with an `SNET`; VISUAL writes a `visualStart`
-   * and pins nothing — the ADR-0033 split, applied here rather than re-decided per call site.
-   */
-  readonly mode: CloneMode;
   /**
    * The clone's anchor date (`YYYY-MM-DD`), already offset — the source's early start for a
    * duplicate in place. Null when the source has never been scheduled, in which case the clone is
@@ -366,15 +355,19 @@ export function projectClone(
           secondaryConstraintType: source.secondaryConstraintType,
           secondaryConstraintDate: shift(source.secondaryConstraintDate),
         }),
-    // The placement pin. EARLY pins an SNET at the anchor; VISUAL writes a visualStart and pins
-    // nothing — one mode-aware rule rather than a decision repeated at each call site (ADR-0033).
-    ...(placement.anchorDate === null
-      ? {}
-      : placement.mode === 'VISUAL'
-        ? { visualStart: placement.anchorDate }
-        : source.constraintType === null
-          ? { constraintType: 'SNET' as const, constraintDate: placement.anchorDate }
-          : {}),
+    /**
+     * **Where the clone lands: a placement, and never a pin** (M-F-T3).
+     *
+     * The `EARLY` half of this wrote an `SNET` at the anchor — and only when the source carried
+     * no constraint of its own, so a pasted fragnet was pinned or not depending on a property of
+     * the row it was copied from. That asymmetry went with the mode. A paste now says where the
+     * clone goes and says nothing about what it is committed to, which is the same separation the
+     * drag and the draw make one file over.
+     *
+     * The source's own constraints are still carried and date-shifted by the spread above — a
+     * copy keeps the commitments it was made from.
+     */
+    ...(placement.anchorDate === null ? {} : { visualStart: placement.anchorDate }),
     ...(source.budgetedExpense === null ? {} : { budgetedExpense: source.budgetedExpense }),
   };
 }
