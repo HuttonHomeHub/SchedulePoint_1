@@ -469,12 +469,22 @@ const SNET_UNCLASSIFIED: DiagnosticEntry = {
  * looked", which is exactly what the level column exists to say. So this counts the binding set
  * against the ONE historic copy that exists anywhere in the system.
  *
- * **Neither this entry nor D-E uses `EXISTS`, and that is gate S-4 rather than preference.** The
- * natural shape is a semi-join, and its `SELECT 1` is not an aliased `count(...)`, so the gate
- * refuses it — correctly, even though an `EXISTS` projection is discarded and cannot reach the row
- * shape. Widening a boundary gate to admit a form this file happens to want is the wrong way round,
- * so both are written as joins with `count(DISTINCT ...)`, which is also why the distinct matters:
- * a plan with several FULL baselines produces one row per covering capture.
+ * **Neither this entry nor D-E uses `EXISTS`, and that is gate S-4 rather than preference — but
+ * the gate cost nothing, which was not the prediction.** The natural shape is a semi-join, and its
+ * `SELECT 1` is not an aliased `count(...)`, so the gate refuses it; widening a boundary gate to
+ * admit a form one file happens to want is the wrong way round, so both are joins with
+ * `count(DISTINCT ...)` (the distinct matters because a plan with several FULL baselines produces
+ * one row per covering capture).
+ *
+ * The join was then assumed to be the price. It is not. Measured on a 102,000-activity estate
+ * (`docs/specs/one-planning-surface/m0/measurements.md`), D-E's join runs at **128 ms** and the
+ * refused `EXISTS` form at **221-246 ms** — the gate's shape is 1.7-1.9x FASTER. The arithmetic
+ * behind the assumption was correct as far as it went: `EXPLAIN` confirms the join materialises
+ * 204,000 rows and spills to temp where a semi-join would stop at the first match. The correlated
+ * subquery is simply re-planned per outer row while the join gets one memoised nested loop.
+ *
+ * Said here because the tempting future change is to widen S-4 and restore the `EXISTS`, and that
+ * trade is now known to be negative in both directions at once.
  *
  * The join is `baseline_activities.source_activity_id = activities.id`: a PLAIN correlation UUID
  * with no foreign key (ADR-0025), which is why this is an `EXISTS` over a non-FK column rather than
