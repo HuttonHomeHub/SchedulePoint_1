@@ -32,6 +32,8 @@ export const DIAGNOSTIC_IDS = [
   'snet-inert',
   'snet-unclassified',
   'snet-full-baseline-coverage',
+  'visual-conflict-earlier-than-logic',
+  'visual-conflict-later-than-bound',
 ] as const;
 
 export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
@@ -525,6 +527,88 @@ const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
   `,
 };
 
+/**
+ * **D-J, D-K — the conflicted placements, split by the engine's own REASON.**
+ *
+ * `visual_conflict` says a placement disagrees with the schedule; it does not say which way, and
+ * the two directions are different facts with different remedies (ADR-0033 stay-and-flag, M-D):
+ *
+ * - **`EARLIER_THAN_LOGIC`** — the bar sits before its earliest feasible start. Its predecessors
+ *   cannot deliver it that early, so the remedy is to move the bar or change the logic.
+ * - **`LATER_THAN_BOUND`** — the bar sits past a commitment somebody recorded. The remedy is to
+ *   move the bar or renegotiate the commitment.
+ *
+ * M-D's whole subject is that those had been one boolean, and a reader given a single conflicted
+ * count could not tell "planners are optimistic" from "planners are late" — opposite programmes
+ * with opposite conversations. So the split is the reading, and a combined total would be the
+ * conflation this epic removed.
+ *
+ * **The two are disjoint by a database CHECK rather than by this query's `WHERE`.**
+ * `ck_activities_visual_conflict_matches_reason` refuses a row where `visual_conflict` and
+ * `visual_conflict_reason IS NOT NULL` disagree, and the reason is a two-value enum — so the union
+ * of these numerators is exactly the conflicted set, with no third bucket possible. That is a
+ * stronger guarantee than the SNET trio above, whose disjointness is arithmetic in the `WHERE`
+ * clauses and is asserted in the repository spec because nothing structural holds it.
+ *
+ * **Denominator: the PLACED population, not every activity.** A conflict is a property of a
+ * placement — an activity with no `visual_start` has nothing to conflict with, and M-D's own
+ * contract records `visual_conflict_reason` reading null for an unplaced activity and for a plan
+ * that has never been calculated. Counting these out of every activity would report a rate that
+ * falls purely because somebody added unplaced work, which is the "17 of 1,284" failure the shape
+ * of this registry exists to prevent, one denominator along. It is D-D's numerator, deliberately:
+ * the two are read together, D-D sizing how much has been placed and these sizing how much of that
+ * the engine disagrees with.
+ *
+ * **Why the reading is wanted before M-F.** Until the collapse, a conflicted placement is visible
+ * only on a plan in Visual mode; afterwards every plan renders on the placed basis, so each of
+ * these rows becomes a flag a planner meets whether or not they ever chose that mode. The count is
+ * how many people that is, and it is unobtainable from this container (ADR-0128's finding, one
+ * tier along) — only an operator press on the deployed host can answer it.
+ *
+ * **Not costed here, and that is stated rather than implied.** Both are single-table scans of
+ * `activities` with a join to `plans`, the same shape as D-D which measured cheaply; neither
+ * introduces the join product that made D-I's cost estate-dependent. If a press gets slow, these
+ * are not the first entries to suspect — `inherited-day-factor` is, at a measured 240–245 ms.
+ */
+const VISUAL_CONFLICT_DENOMINATOR = Prisma.sql`
+  SELECT count(*) AS examined
+  FROM activities a
+  JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+  WHERE a.deleted_at IS NULL AND a.visual_start IS NOT NULL
+`;
+
+const VISUAL_CONFLICT_EARLIER: DiagnosticEntry = {
+  id: 'visual-conflict-earlier-than-logic',
+  label: 'Placements the engine says are earlier than their logic allows',
+  nature: 'prospective',
+  denominator: VISUAL_CONFLICT_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.visual_conflict_reason = 'EARLIER_THAN_LOGIC'
+  `,
+};
+
+const VISUAL_CONFLICT_LATER: DiagnosticEntry = {
+  id: 'visual-conflict-later-than-bound',
+  label: 'Placements the engine says are past a recorded bound',
+  nature: 'prospective',
+  denominator: VISUAL_CONFLICT_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.visual_conflict_reason = 'LATER_THAN_BOUND'
+  `,
+};
+
 /** The registry, in the order the panel renders it. D-A first, per CQ-1. */
 export const DIAGNOSTICS = [
   DAY_FACTOR_DIVERGENCE,
@@ -537,4 +621,6 @@ export const DIAGNOSTICS = [
   SNET_INERT,
   SNET_UNCLASSIFIED,
   SNET_FULL_BASELINE_COVERAGE,
+  VISUAL_CONFLICT_EARLIER,
+  VISUAL_CONFLICT_LATER,
 ] as const;

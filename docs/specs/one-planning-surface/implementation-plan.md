@@ -571,6 +571,31 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
   placed plans** until it refreshes. ADR-0047 recreates `web` and `api` independently, so the window
   is real. It goes in the ADR's consequences and in `docs/API.md`.
 
+##### Task M-F-T4b — convert the four `e2e-gantt-editing` mode tests _(added by FC-6 clause 5)_
+
+- **Description:** `bar-drag.spec.ts` and `grid-edit.spec.ts` each carry a private `useVisualMode`
+  helper that PATCHes `{ schedulingMode: 'VISUAL' }` through a browser `fetch`, plus an EARLY-mode
+  sibling asserting the contrasting behaviour. **M-F-T4's own 422 is what breaks them**, so this is
+  a conversion M-F owns rather than fallout it discovers.
+- **Measured, not estimated** — the two halves fail differently and only one of them fails loudly:
+  - **`grid-edit.spec.ts:480` and `bar-drag.spec.ts:157` break outright.** They are the only two
+    callers of the helper (`:175` and `:72` are the definitions), and it throws on a non-`ok`
+    response.
+  - **`grid-edit.spec.ts:437` and `bar-drag.spec.ts:138` become WRONG, which is worse.** They assert
+    that a typed date pins an SNET and that a keyboard move writes a constraint — EARLY-mode
+    behaviour M-F-T3 deliberately replaces with a placement. They will not break; they will pass
+    until somebody reads them.
+- **The conversion is the epic's own thesis**: there is one surface, so each PAIR collapses into one
+  test asserting the placement is written and **no constraint** is. That is the surviving half of
+  each pair, and also the half that matters.
+- **Complexity:** S · **Dependencies:** M-F-T3, M-F-T4
+- **Risks:** deleting the EARLY sibling without reading it would lose the "and NO constraint"
+  assertion, which is the only end-to-end proof that the collapse did not quietly leave the SNET
+  write in place. Keep the assertion, drop the mode.
+- **Testing:** `scripts/e2e-local.sh web:gantt-editing` green after the conversion, and both helpers
+  deleted rather than pointed elsewhere — a helper surviving with no caller is how the next reader
+  concludes the mode still exists.
+
 ##### Task M-F-T5 — the flag and the segmented control _(unchanged)_
 
 - **Risks:** `SCHEDULING_MODES_ENABLED` is **derived** (`&& CANVAS_AUTHORING_ENABLED`). · The mode

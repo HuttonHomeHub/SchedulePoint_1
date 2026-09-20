@@ -107,11 +107,53 @@ Per-suite, in the terms clause 4 asks for:
 | `wbs`            | No                             | Band grouping, mode-independent. No whole-page axe scan.                         |
 
 **The consequence for this epic, stated so it cannot be mistaken for a closed question.** Visual-mode
-behaviour is exercised end to end by exactly one suite in this repository — `e2e-workspace-chrome`,
-and ADR-0092 records that it is the first that ever ran in Visual mode and found a real defect the
-first time it did. Removing thirteen pins did not change that number. The coverage this epic needs
-comes from M-B-T3's seeded placements and from the journeys M-F will own, not from here.
+behaviour is exercised end to end by **three** suites in this repository, not one:
+
+| suite                  | how it reaches Visual mode                                              |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `e2e-workspace-chrome` | the `Visual mode` toggle, through the UI (`support.ts` `useVisualMode`) |
+| `e2e-gantt-editing`    | `bar-drag.spec.ts:72` — a browser `fetch` PATCHing `schedulingMode`     |
+| `e2e-gantt-editing`    | `grid-edit.spec.ts:175` — the same helper, copied                       |
+
+**This paragraph said "exactly one" until the clause-5 review, and the error was ADR-0076's shape
+exactly.** The sentence reads as a structural finding and names no command, and the command that
+would have established it — a repo-wide grep for `schedulingMode` and `'VISUAL'` — was never run;
+clause 4(c)'s grep was scoped to the thirteen directories, where the answer is genuinely zero. The
+two `gantt-editing` specs reach Visual mode by a **direct API PATCH rather than an env pin**, so
+every instrument this milestone used looked straight past them. Both files say so in their own
+docblocks (`bar-drag.spec.ts:26-29`, `grid-edit.spec.ts:433-435`), and `falsification.md`'s
+committed baseline already named `gantt-editing` among the non-pin docblocks.
+
+**It matters because M-F-T4 breaks them.** That task removes `schedulingMode` from `UpdatePlanDto`,
+and its own testing note specifies that the removed field must yield **422** — which is precisely
+what `useVisualMode`'s PATCH will then receive, so the helper throws. Measured exactly rather than
+estimated:
+
+- **2 tests break outright** — `grid-edit.spec.ts:480` and `bar-drag.spec.ts:157`, the only two
+  callers of that helper (`:175` and `:72` are the definitions).
+- **2 more assert behaviour M-F deliberately changes** — `grid-edit.spec.ts:437` and
+  `bar-drag.spec.ts:138`, the EARLY-mode siblings asserting that a typed date pins an SNET and a
+  keyboard move writes a constraint. M-F-T3 makes both write a placement, so they do not break;
+  they become **wrong**, which is worse.
+
+So four tests are in scope and the two halves fail differently. **The review reported "four tests
+break"**, which is right about the population and wrong about the mechanism — it counted each
+file's helper definition as a call site. Recorded rather than repeated: an uncounted count inside a
+review whose own subject is unverified claims is the same defect one level up.
+
+The coverage this epic needs still comes from M-B-T3's seeded placements and from the journeys M-F
+will own. What changed is that M-F now owns a **conversion**, not just new work.
 
 ## Clause 5 — review
 
-`test-engineer` reviews this file before M-F opens. Not yet run.
+**Run 2026-09-20 (`test-engineer`). Clause 5 is discharged.**
+
+It re-derived clauses 1–3 independently and they hold: the 13 suites create only `EARLY` plans
+(`schema.prisma:803` default, `create-plan.dto.ts:45` optional, and the plan-creation dialog has no
+mode field at all), the pin count and its mechanics match the committed baseline, no pin survives
+anywhere in all 49 Playwright configs, and no covert off-pin exists through `.env` — an empty
+`VITE_SCHEDULING_MODES=` reaches `flagDefaultOn('')`, which returns `true`.
+
+**One blocking finding**, folded above: the "exactly one suite" claim. Two non-blocking notes are
+taken as read — M-B-T1 shipped as one combined commit where the plan said one per suite, and the
+reviewer did not execute the 13 suites, which is a stated scope limit rather than a gap.

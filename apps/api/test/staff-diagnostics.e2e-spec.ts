@@ -555,6 +555,24 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       affectedOrganizations: 1,
     });
 
+    /**
+     * **D-J / D-K — the conflict split, and what is asserted here is the DENOMINATOR.**
+     *
+     * The affected counts are zero on this estate, and saying so is worth little on its own: a
+     * query with a mis-typed enum literal reports zero just as cheerfully. What discriminates is
+     * the population each is measured against, which is the decision these entries make — a
+     * conflict is a property of a PLACEMENT, so the denominator is the placed set (3, the
+     * `affected` figure above) and not every activity (9, the `examined` one). Counting out of
+     * every activity would report a rate that falls purely because somebody added unplaced work.
+     *
+     * So this case pins the two entries to a number that is on this very page under a different
+     * name, and a query that quietly widened its denominator would fail here rather than merely
+     * look smaller.
+     */
+    for (const id of ['visual-conflict-earlier-than-logic', 'visual-conflict-later-than-bound']) {
+      expect(byId.get(id), id).toMatchObject({ examined: 3, affected: 0, affectedPlans: 0 });
+    }
+
     // D-D2 — two of the three, and the gap is the point. `Placed` is still in `EARLY` (the schema
     // default) while `Already visual` is not, and `visualStart` is accepted regardless of mode. So
     // the two on the EARLY plan are the bars that move on the day the mode collapses, for a
@@ -660,6 +678,8 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       'snet-inert',
       'snet-unclassified',
       'snet-full-baseline-coverage',
+      'visual-conflict-earlier-than-logic',
+      'visual-conflict-later-than-bound',
     ]);
     for (const row of byId.values()) {
       expect(row).toMatchObject({ examined: 0, affected: 0, affectedPlans: 0 });
