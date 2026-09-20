@@ -10617,6 +10617,39 @@ Neither is a defect in the shipped code. The action is to re-take the web number
 finish, and to decide whether a floor with a quarter of a point of headroom is still a ratchet or
 has become a tripwire.
 
+### 348. The float tail is drawn from the placed bar at total float, so it overshoots the late finish by the drift
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (ui-architect review of the one-planning-surface overlay design; independently confirmed by reading) · **Size:** S · **Owner:** web
+
+`paint.ts:1635` passes the **bar** rect to `floatTailRect(rect, activity.totalFloat, view)`, and
+`geometry.ts:152-164` extends the tail right from `bar.x + bar.w` by `totalFloatDays × pxPerDay`.
+Total float is measured from the activity's **early** finish. In Visual mode the bar is at
+`visualEffective*`, so its finish is the early finish **plus the drift** — and the room remaining
+to the late finish is therefore `T − d`, not `T`. The tail overshoots by exactly the drift.
+
+**The two tails prove it between them**, which is why this needs no instrumentation to establish:
+the line immediately below draws `driftTailRect(rect, activity.visualDriftDays, view)` extending
+**left from the same rect's start**, and a drift tail is meaningful only from a hand-placed
+position. So the same `rect` is simultaneously being treated as the placed bar by one call and as
+the early bar by its neighbour, one line apart.
+
+**Why it has gone unnoticed, and why that is about to change.** It is only visible on a plan in
+Visual mode with a non-zero drift and positive float, and `VITE_SCHEDULING_MODES` is pinned off in
+13 of the repository's Playwright configs — the coverage inversion `docs/specs/one-planning-surface/`
+FC-6 exists to remove. The one-planning-surface epic makes the placed basis universal, so this
+stops being a mode-specific defect and becomes the ordinary case.
+
+**Fix.** Either pass the early-finish-derived rect to `floatTailRect`, or subtract the drift from
+the length. The second is preferable once `remainingFloat` exists (that epic's M-D), because the
+quantity the tail should be drawing then has a name and a server-side derivation rounded once —
+`docs/specs/one-planning-surface/feature-spec.md` §4.3 — rather than being re-derived at the
+painter from two independently-rounded day values.
+
+**Do not close this by pointing at that epic.** The epic's M-E-T0 carries the fix because the
+feasible-window overlay's right edge is the late finish and an overshooting tail would visibly
+disagree with it; but the defect is true today, on shipped code, independent of whether that epic
+proceeds. If the epic is abandoned this row stays open.
+
 ### 341. A loading skeleton's column widths do not match the settled table's
 
 **Status:** open
