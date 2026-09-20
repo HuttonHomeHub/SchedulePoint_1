@@ -139,7 +139,10 @@ export function useDiagramImage(args: {
       // currently serves only cast-based test doubles; it is kept because a second host would
       // otherwise ship a silent throw in the one path nobody watches (2026-08-28 component review).
       const lenses = canvasControlRef.current?.getSceneLenses?.() ?? {};
-      const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
+      // No mode to consult since the collapse (M-F-T1) — the deliverable draws bars where they are
+      // placed, exactly as the screen does. The plan is still read here for its name and its data
+      // date; only the mode question is gone.
+      const source = barDateSourceFor(lateOverlayActive);
       // The band comes from the SAME derivation the live canvas uses (ADR-0063 §M5), so the export
       // cannot disagree with the screen about the band's height or about which activities the
       // scene still paints. With the band on, summaries live in the band and not in the diagram —

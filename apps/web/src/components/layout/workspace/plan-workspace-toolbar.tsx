@@ -475,9 +475,19 @@ export function ToolbarPlanWorkspace({
    */
   const schedulingMode: 'EARLY' | 'VISUAL' = plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY';
 
-  const barDateSource = SCHEDULING_MODES_ENABLED
-    ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
-    : 'early';
+  /**
+   * **Unconditional since the collapse** (M-F-T1): a bar is drawn where it is PLACED, on every
+   * plan, and there is no mode left to consult. The flag gate went with the parameter — gating the
+   * collapse on a `VITE_` constant would buy nothing an operator can use (ADR-0088 D1: it is
+   * inlined at build time and every published image carries the default) while maintaining a
+   * second product whose bars sit somewhere else.
+   *
+   * It now reads `lateOverlayActive` rather than the raw toggle, which is the value the print path
+   * beside it already uses. The two agreed by accident while this resolved to `'early'` whenever
+   * the flag was off; post-collapse they would not, and a second reading of "is the overlay on" is
+   * exactly what the hoist above exists to prevent.
+   */
+  const barDateSource = barDateSourceFor(lateOverlayActive);
 
   /**
    * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in
