@@ -10933,3 +10933,49 @@ change with a design question in it, not a mechanical substitution.
 
 **Trigger:** the next screen added to or removed from the roster, or the next epic that touches
 `composition.spec.ts`.
+
+### 353. `react-hooks/exhaustive-deps` is a warning, so four real staleness defects shipped under a green `lint`
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found while composing an extra
+clause into `rowTextById` during one-planning-surface M-E-T5) · **Size:** M · **Owner:** web
+
+`packages/config/eslint/react.js` spreads `reactHooks.configs.recommended.rules`, in which
+`exhaustive-deps` is `warn`. `pnpm lint` does not fail on warnings, and `scripts/prepush.sh`
+prints only a gate's verdict — so `apps/web` has carried **six warnings** (four
+`exhaustive-deps`, two `incompatible-library`) while every run printed `ok lint`. Errors: 0.
+
+**This is not a style question; three of the four were live, user-visible staleness.** Each was
+found by reading the warning the gate had been printing all along:
+
+| Site                               | Missing dependency         | What went stale                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TsldPanel.tsx` `rowTextById`      | `compareClauseById`        | **fixed** — toggling the comparison overlay changed nothing else this memo reads, so every listbox row went on speaking `(earlier revision …)` after it was switched off. The canvas is `aria-hidden`; that text is a screen-reader user's only route to the picture (ADR-0127 D6). |
+| `use-diagram-image.ts`             | `comparedWithPlanName`     | **fixed** — the exported picture's title named the PREVIOUSLY compared plan, which is the exact false statement that field's own docblock exists to prevent.                                                                                                                        |
+| `TsldPanel.tsx` `selectionCtx`     | `canWriteNotes`, `onNotes` | **fixed** — a role change revoking note-writing left the selection bar offering the old answer.                                                                                                                                                                                     |
+| `plan-workspace-toolbar.tsx:788`   | `model`                    | open — needs reading before it is either fixed or given a written reason.                                                                                                                                                                                                           |
+| `use-pen-lock-view.ts:202`         | `view`                     | open — the pen view is the input ADR-0133 D6 records putting a per-second tick into the workspace root, so this one wants care.                                                                                                                                                     |
+| `use-tsld-toolbar-context.tsx:875` | `dependencies`             | open — the toolbar context's own memo, where a stale edge set decides what the logic commands act on.                                                                                                                                                                               |
+
+The three fixed ones were in the files that milestone was already editing. The other three are
+**not** — fixing them in a lens milestone would be the scope creep ADR-0105 guards, and two of them
+have a real design question in them rather than a missing line.
+
+**The row is the SEVERITY, not the six sites.** Raising `exhaustive-deps` to `error` is a
+shared-gate change (ADR-0105's trigger), and it cannot simply be flipped: the two
+`incompatible-library` warnings are a different rule with a different answer, and a suppression
+written to get a red gate green is worse than the warning — the register records that shape under
+`docs/TECH_DEBT.md` #85, where two `react-hooks/refs` suppressions were held open deliberately with
+a standing instruction attached. What this needs is a pass that reads each remaining site, fixes or
+justifies it **in writing at the call site**, and only then arms the severity, so the gate is armed
+against a clean tree (ADR-0058 — a gate that fails on day one gets deleted rather than fixed).
+
+**The transferable finding is about `prepush.sh`, and it is wider than this rule.** A gate whose
+pass/fail is binary makes a warning indistinguishable from silence: the instrument named these four
+defects on the day each shipped, in a line nobody sees, because the runner prints `ok` and sends the
+output to a log. ADR-0124 gave that script a third result state for an **advisory gate**; there is
+no equivalent for a **passing gate with findings**. Whether that is worth building is a question for
+the same pass, and it is the half most likely to prevent a recurrence: the severity fixes one rule,
+the reporting fixes the class.
+
+**Trigger:** the next epic touching `packages/config/eslint/`, or the next `exhaustive-deps` warning
+added to the estate — which nobody will see, which is the point.

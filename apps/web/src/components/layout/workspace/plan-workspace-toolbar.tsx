@@ -938,6 +938,10 @@ export function ToolbarPlanWorkspace({
       dependencies={model.dependencies.data ?? []}
       compareGhosts={compareGhosts}
       compareLinks={compareLinks}
+      // Which of the levelled lens's two empty states the reader is in (M-E-T6). Off the loaded
+      // plan, the same value the toolbar's shaded reason reads — so the control and the sentence
+      // it does NOT cover cannot disagree about whether levelling ran.
+      levelResources={plan.levelResources}
       compareGhostsUndrawable={compareGhostsUndrawable}
       compareLinksUndrawable={compareLinksUndrawable}
       // The reason follows the COMPARISON, not the picker: `comparePlanId` is the request and this

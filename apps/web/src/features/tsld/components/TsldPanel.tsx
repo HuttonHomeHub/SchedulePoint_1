@@ -45,6 +45,8 @@ import {
   composeListboxRowText,
   describeActivity,
   lagPhrase,
+  levelledOverlaySummary,
+  placementClause,
   summarizeLogic,
   wbsGroupClause,
 } from '../render/a11y';
@@ -74,7 +76,12 @@ import {
 import type { ResourceStripSnapshot } from '../render/resource-strip';
 import { drawnSpanPlacement, rollForwardToWorkingDay } from '../render/snap';
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
-import { toRenderActivities, toRenderEdges, type BarDateSource } from '../render/to-render-model';
+import {
+  toRenderActivities,
+  toRenderEdges,
+  windowFloatFor,
+  type BarDateSource,
+} from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
 import {
   SelectionActionsBar,
@@ -259,6 +266,18 @@ export interface TsldPanelProps {
   compareLinks?: readonly CompareLink[] | undefined;
   /** Changed activities the old side never recorded a position for. Stated, never folded into zero. */
   compareGhostsUndrawable?: number | undefined;
+  /**
+   * The plan's `levelResources` switch (ADR-0041), for the levelled lens's empty-state sentence
+   * (M-E-T6) — which of "levelling is off" and "levelling moved nothing" the reader is looking at.
+   *
+   * **Optional, and absent means the host cannot know — never `false`.** A default of `false` would
+   * have this panel state something about the plan on a host that was never told it, which is the
+   * `budgetedExpense` rule ("0 is a claim") one layer up. The only such host today is the guest
+   * share view, where the scope is `SCHEDULE_READ` (ADR-0051) and carries no plan settings — and
+   * where the lens is unreachable anyway, because that host mounts no toolbar to toggle it. Absent,
+   * the lens simply says nothing rather than guessing.
+   */
+  levelResources?: boolean | undefined;
   /** Changed links with an endpoint no longer in the plan. Same rule: counted, never guessed. */
   compareLinksUndrawable?: number | undefined;
   /**
@@ -545,6 +564,7 @@ export function TsldPanel({
   compareGhosts,
   compareLinks,
   compareGhostsUndrawable = 0,
+  levelResources,
   compareLinksUndrawable = 0,
   compareUndrawableReason = 'NOT_RECORDED',
   hasRevisionPair = false,
@@ -1239,6 +1259,32 @@ export function TsldPanel({
   }, [levelledOverlay, activities]);
 
   /**
+   * What the levelled lens is showing, or why it is showing nothing (M-E-T6).
+   *
+   * Gated on the TOGGLE and not on the ghosts, which is the whole point: a summary derived from
+   * `levelledGhosts` alone would be `null` in exactly the state that needs a sentence. FC-1
+   * predicts this is the common case on the day it ships.
+   */
+  const levelledSummary = useMemo(
+    () =>
+      CANVAS_LENSES_ENABLED && levelledOverlay && levelResources !== undefined
+        ? levelledOverlaySummary(levelledGhosts?.length ?? 0, { levelResources })
+        : null,
+    [levelledOverlay, levelledGhosts, levelResources],
+  );
+
+  /**
+   * The spoken twin of the levelled layer. Built by walking `levelledGhosts` — what is DRAWN —
+   * rather than re-testing the overlay columns, so the picture and its description cannot disagree
+   * about whether a row has a ghost. The same rule `baselineClauseById` and `compareClauseById`
+   * already follow, and the reason all three are maps rather than inline tests.
+   */
+  const levelledStartById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (!levelledGhosts) return undefined;
+    return new Map(levelledGhosts.map((g) => [g.id, g.leveledStart]));
+  }, [levelledGhosts]);
+
+  /**
    * The revision-comparison change picture (ADR-0127), gated on the toggle AND on there being a
    * pair — the server sends nothing without one, but the guard is stated rather than relied on,
    * because a stale query result outliving a cleared pair is exactly how an overlay comes to
@@ -1379,6 +1425,20 @@ export function TsldPanel({
           baseline: baselineClauseById?.get(a.id),
           wbsGroup: wbsGroupClauseById?.get(a.id),
           compare: compareClauseById?.get(a.id),
+          // The two M-E overlays, in ONE member (see `placementClause`). Composed from the row
+          // itself rather than from a precomputed map, unlike its four neighbours: those are gated
+          // on data the panel fetches separately (variance rows, comparison ghosts), so building
+          // the map IS the gate. Here both inputs are already on the activity, and the gates are a
+          // view toggle and one lookup — so a map would be a second copy of "which rows have a
+          // window" with nothing forcing the two to agree.
+          placement: placementClause({
+            windowShown: viewToggles.floatTails === true,
+            // `windowFloatFor`, never the conditional restated — the painter reads the same
+            // function, so the bracket and the sentence cannot describe different floats.
+            remainingFloatDays: windowFloatFor(a, barDateSource),
+            driftDays: a.visualDriftDays,
+            levelledStart: levelledStartById?.get(a.id) ?? null,
+          }),
         }),
       );
     }
@@ -1392,6 +1452,21 @@ export function TsldPanel({
     flaggedIds,
     baselineClauseById,
     wbsGroupClauseById,
+    viewToggles.floatTails,
+    barDateSource,
+    levelledStartById,
+    // **Omitted until 2026-09-20, and the omission was a live defect.** Toggling the comparison
+    // overlay changes `compareClauseById` and nothing else this memo reads, so the map never
+    // recomputed: every row went on speaking `(earlier revision …)` after the overlay was switched
+    // off, and said nothing after it was switched on. The canvas is `aria-hidden`, so this text is
+    // the ONLY route a screen-reader user has to the picture — which is the whole reason
+    // `compareClause` exists (ADR-0127 D6's gap, found by the M8 accessibility review). A stale
+    // description is worse than the absent one that review closed: absence is legible, and a
+    // confident wrong sentence is not.
+    //
+    // `react-hooks/exhaustive-deps` named it, at `warn`, from the day it shipped — so `pnpm lint`
+    // printed `ok` over it and `prepush.sh` printed only the verdict. `docs/TECH_DEBT.md` #353.
+    compareClauseById,
   ]);
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
@@ -1615,6 +1690,11 @@ export function TsldPanel({
       onProgress,
       onClearVisualPlacement,
       onOpenEditorAt,
+      // The same omission as `rowTextById`'s above, found the same way and fixed in the same pass:
+      // a role change that revokes note-writing, or a host that swaps its notes handler, left the
+      // selection bar offering the old answer.
+      canWriteNotes,
+      onNotes,
     ],
   );
 
@@ -3061,6 +3141,27 @@ export function TsldPanel({
                   ? ` Today is ${formatCalendarDate(todayIso)}.`
                   : ''}
               </p>
+            ) : null}
+            {levelledSummary !== null && levelledSummary.undrawnLabel !== '' ? (
+              /*
+                **The lens is on and drew nothing, said visibly** (M-E-T6). Its neighbour below
+                renders the same way for the comparison overlay and for the same reason — a diagram
+                has no "showing N of M", so a picture with nothing in it is indistinguishable from a
+                feature that does not work. Here it is not the exceptional case: resource levelling
+                is opt-in and off by default, so this is what the lens says on nearly every plan
+                until somebody turns levelling on.
+
+                Rendered only when there is something to say, so a lens that DID draw carries no
+                chrome. `bottom-1` rather than `top-1`, because the comparison overlay's strip owns
+                the top corner and both can be on at once.
+              */
+              <p className="text-muted-foreground pointer-events-none absolute right-2 bottom-1 z-10 text-xs">
+                {levelledSummary.undrawnLabel}
+              </p>
+            ) : null}
+            {levelledSummary !== null ? (
+              /* The spoken twin, inside the diagram region for ADR-0122 D2's reason. */
+              <p className="sr-only">{levelledSummary.heading}</p>
             ) : null}
             {compareSummary !== null && compareSummary.undrawn > 0 ? (
               /*

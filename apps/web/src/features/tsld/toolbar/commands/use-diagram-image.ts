@@ -257,6 +257,15 @@ export function useDiagramImage(args: {
       plan.plannedStart,
       plan.schedulingMode,
       plan.name,
+      // **The other plan's name, and omitting it was a live defect of exactly the kind this
+      // callback's own docblock warns about.** It exists so the picture's title names BOTH plans
+      // when a cross-plan comparison is on screen — because "a title naming one plan over ghosts
+      // drawn from another states something untrue to the one reader an export exists for". Left
+      // out of the array, the callback closed over the name from the render that created it, so
+      // switching the compared plan and exporting produced a title naming the PREVIOUS one: the
+      // same false statement, arrived at from the other direction. `react-hooks/exhaustive-deps`
+      // named it, at `warn`, from the day it shipped (`docs/TECH_DEBT.md` #353).
+      comparedWithPlanName,
       // The calendar the shading is built from. Omitting it would close over a stale one, so a
       // planner who changed the plan's calendar and exported without a remount would get a
       // picture shaded to the previous week — silently, and only in the deliverable.

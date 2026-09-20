@@ -12,6 +12,8 @@ import {
   composeListboxRowText,
   describeActivity,
   lagPhrase,
+  levelledOverlaySummary,
+  placementClause,
   summarizeLogic,
   wbsGroupClause,
 } from './a11y';
@@ -632,5 +634,123 @@ describe('the per-row compare clause', () => {
   it('states a single-day span once rather than as a range to itself', () => {
     const clause = compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-05' });
     expect(clause).not.toContain(' to ');
+  });
+});
+
+describe('the placement clause — one member for two overlays', () => {
+  const base = {
+    windowShown: true,
+    remainingFloatDays: null,
+    driftDays: null,
+    levelledStart: null,
+  } as const;
+
+  it('says nothing when neither overlay has anything to describe', () => {
+    expect(placementClause(base)).toBe('');
+  });
+
+  it('withholds the window when the toggle is off, even with float to report', () => {
+    // The clause describes what is DRAWN. A sentence about a bracket nobody can see is worse than
+    // silence: it is the row's budget spent on a picture that is not there.
+    expect(placementClause({ ...base, windowShown: false, remainingFloatDays: 4 })).toBe('');
+  });
+
+  it('states the float as an OFFSET, never as a span', () => {
+    const clause = placementClause({ ...base, remainingFloatDays: 4 });
+    expect(clause).toBe(' (4 working days of float)');
+    // The row's Tier-1 sentence has just read the dates. A span would make the listener do the
+    // arithmetic against numbers they were given a moment ago.
+    expect(clause).not.toContain(' to ');
+  });
+
+  it('distinguishes no float from float it cannot report', () => {
+    // `no float` is a fact about a bar with none; the empty string is the absence of an answer.
+    // Collapsing them would tell a reader on an uncalculated plan that their activity is critical.
+    expect(placementClause({ ...base, remainingFloatDays: 0 })).toBe(' (no float)');
+    expect(placementClause({ ...base, remainingFloatDays: null })).toBe('');
+  });
+
+  it('names negative float as a breached bound rather than as negative days', () => {
+    expect(placementClause({ ...base, remainingFloatDays: -2 })).toBe(
+      ' (2 working days past its bound)',
+    );
+  });
+
+  it('reads the drift in the direction the left cap is drawn', () => {
+    // `visualDriftDays` is the signed offset of the placement FROM the early start, and the painter
+    // puts the left cap at `bar.x - drift * pxPerDay`. So a positive drift is room to move earlier,
+    // and a negative one is the EARLIER_THAN_LOGIC conflict, where the cap lands inside the bar.
+    expect(placementClause({ ...base, remainingFloatDays: 3, driftDays: 2 })).toBe(
+      ' (3 working days of float, could start 2 working days earlier)',
+    );
+    expect(placementClause({ ...base, remainingFloatDays: 3, driftDays: -2 })).toBe(
+      ' (3 working days of float, placed 2 working days before its logic)',
+    );
+  });
+
+  it('says nothing about zero drift, because the picture says nothing there either', () => {
+    expect(placementClause({ ...base, remainingFloatDays: 3, driftDays: 0 })).toBe(
+      ' (3 working days of float)',
+    );
+  });
+
+  it('states the levelled ghost as a DATE, not an offset', () => {
+    // The tempting field is `levelingDelayDays` — engine-owned, already in working days, on the
+    // same row — and it is measured from the EARLY start while the bar is drawn at the PLACED one.
+    // It would be right on every plan in the estate today and wrong on exactly the plans this epic
+    // exists to create.
+    const clause = placementClause({ ...base, levelledStart: '2026-03-12' });
+    expect(clause).toContain('levelled to');
+    expect(clause).not.toMatch(/\d+ working days? (later|earlier)/);
+  });
+
+  it('joins both overlays inside ONE parenthesis, because the row is a budget', () => {
+    expect(
+      placementClause({
+        windowShown: true,
+        remainingFloatDays: 1,
+        driftDays: 1,
+        levelledStart: '2026-03-12',
+      }),
+    ).toMatch(/^ \([^()]*\)$/);
+  });
+
+  it('speaks a single day in the singular', () => {
+    expect(placementClause({ ...base, remainingFloatDays: 1 })).toContain('1 working day of');
+  });
+});
+
+describe('the levelled overlay summary — the empty state is the common one', () => {
+  it('counts what it drew', () => {
+    expect(levelledOverlaySummary(3, { levelResources: true })?.heading).toContain('3 activities');
+    expect(levelledOverlaySummary(1, { levelResources: true })?.heading).toContain('1 activity');
+  });
+
+  it('withholds the visible strip when the lens DID draw', () => {
+    // A complete picture carries no chrome: the strip exists to report an absence.
+    expect(levelledOverlaySummary(2, { levelResources: true })?.undrawnLabel).toBe('');
+  });
+
+  it('separates "levelling is off" from "levelling moved nothing"', () => {
+    /**
+     * The whole of T6. These are different facts — one names a setting a planner can change, the
+     * other reports a result — and the control's shaded reason covers only the first, because the
+     * second is not a refusal (M-E-T3). So this sentence is the only place it is ever said, and a
+     * single sentence for both cases would make a switched-off feature indistinguishable from a
+     * satisfied one (ADR-0073 C1's finding, applied to a diagram).
+     */
+    const off = levelledOverlaySummary(0, { levelResources: false });
+    const ran = levelledOverlaySummary(0, { levelResources: true });
+    expect(off?.undrawnLabel).not.toBe(ran?.undrawnLabel);
+    expect(off?.undrawnLabel).toMatch(/off for this plan/);
+    expect(ran?.undrawnLabel).toMatch(/did not move/);
+  });
+
+  it('always has something visible to say when it drew nothing', () => {
+    // FC-1 predicts this is the state on nearly every plan on the day it ships. A lens that lights
+    // and draws nothing with no sentence is the lit-but-inert dead end, not an edge case.
+    for (const levelResources of [true, false]) {
+      expect(levelledOverlaySummary(0, { levelResources })?.undrawnLabel).not.toBe('');
+    }
   });
 });

@@ -275,3 +275,91 @@ default-on by accident. `levelledOverlay` is **default off**, unlike `compareOve
 are not the same decision: the comparison overlay draws nothing until a pair is chosen, so its
 default only decides whether choosing a pair shows the difference; this one draws the moment it is
 switched on for any levelled plan, on top of a diagram already carrying the feasible window.
+
+---
+
+## 9. The accessible channel and the empty state (M-E-T5, M-E-T6)
+
+### One member, because the row is a budget
+
+Both overlays reach the parallel listbox through **one** `ListboxRowParts` member, composed by one
+function. Two members would have been the natural shape — two toggles, two marks — and would have
+spent the row's budget twice on one subject: where this bar may sit. `baselineGhostClause`'s own
+docblock already records that budget as the reason it states the finish variance alone and not
+every variance column; this is the same rule applied before the second member existed rather than
+after.
+
+### It states offsets, and the two halves reach that differently
+
+The window's caps are positioned by the painter from `remainingFloat` and `visualDriftDays`
+multiplied out from the bar's own edges, so **those two numbers are the offsets the picture draws**
+— reading them is one derivation, not a second one. Zero drift says nothing, because the picture
+says nothing there either.
+
+The levelled half states the ghost's **start date** instead. The tempting field is
+`levelingDelayDays`: engine-owned, already whole working days, on the same row — and it is
+`leveledStart − earlyStart`, while the bar is drawn at the **placed** start. On an unplaced activity
+the two coincide, which is every plan in the estate today (FC-1); on a placed one — the case this
+epic exists to create — it would report an offset from a position the reader cannot see. Computing
+the true offset needs a working-day walk a pure render leaf has no business doing, so the honest
+short answer is a date, which is exact in every case and is not a span.
+
+### `windowFloatFor` — the #348 rule, extracted rather than restated
+
+The clause first read `barDateSource === 'visual' ? a.remainingFloat : a.totalFloat`, which is the
+painter's rule copied. That is **two derivations of one fact, and it is precisely how #348
+arrived**: the window was drawn from `remainingFloat` while the projection handed the painter
+`totalFloat`, and the bracket was short by the drift on every placed activity. Caught while writing
+it, not by a gate. The conditional is now `windowFloatFor` in `to-render-model.ts`, called by both —
+one conditional, trivially easy to get right twice, which is exactly what makes a second copy a
+question of when rather than whether.
+
+### The empty state is the COMMON state
+
+`levelledOverlaySummary` says what the levelled lens is showing, **including when it is showing
+nothing**. That is not an edge case: FC-1 predicts zero visual placements across the estate and
+resource levelling is opt-in and off by default (ADR-0041's parity gate), so on the day this ships
+the lens lights and draws nothing on very nearly every plan there is.
+
+**Two empty states, never collapsed into one.** "Levelling never ran" and "levelling ran and moved
+nothing" are different facts — the first names a setting a planner can change, the second reports a
+result — which is ADR-0073 C1's finding applied to a diagram. The control's shaded reason covers
+only the first, because the other two states are **not refusals** (§8), so this sentence is the only
+place the second is ever said. It renders **visibly** as well as `sr-only`: a diagram has no
+"showing N of M", and the epic already fixed that inversion once, for the comparison overlay, after
+a ux review found the count reaching screen-reader users and nobody else.
+
+`levelResources` reaches the panel as an **optional** prop, and its absence means "this host cannot
+know" — never `false`. A default would have the panel state something about the plan on a host that
+was never told it (the `budgetedExpense` "0 is a claim" rule). The only such host is the guest share
+view, whose `SCHEDULE_READ` scope carries no plan settings and which mounts no toolbar to reach the
+lens at all.
+
+### The sweep
+
+| #   | mutation                                                | result            |
+| --- | ------------------------------------------------------- | ----------------- |
+| N1  | draw the window clause regardless of the toggle         | **1 failed** / 65 |
+| N2  | zero float collapses to silence                         | **1 failed** / 65 |
+| N3  | negative float reported as negative days _of float_     | **1 failed** / 65 |
+| N4  | drift sign inverted                                     | **1 failed** / 65 |
+| N5  | the two overlays in two parentheses (the budget defect) | **2 failed** / 65 |
+| N6  | the two empty states collapse into one sentence         | **1 failed** / 65 |
+| N7  | no visible strip when the lens drew nothing             | **2 failed** / 65 |
+
+### What the lint gate had been saying all along
+
+Composing an extra clause into `rowTextById` meant reading its dependency array, and
+`compareClauseById` was **missing from it** — so toggling the comparison overlay left every listbox
+row speaking the previous state, in the one channel a screen-reader user has to the picture. Two
+more were in the same file and a third in the export composer, where a stale `comparedWithPlanName`
+titled the deliverable with the previously compared plan — the exact false statement that field
+exists to prevent.
+
+**`react-hooks/exhaustive-deps` had named all four, at `warn`, from the day each shipped.** `pnpm
+lint` does not fail on warnings and `prepush.sh` prints only a verdict, so every run printed `ok`
+over six warnings. The three in files this milestone was already editing are fixed here; the
+severity question and the remaining three are `docs/TECH_DEBT.md` #353, because raising a shared
+lint rule is an ADR-0105 trigger and two of the three have a design question in them rather than a
+missing line. The transferable half is wider than the rule: **a gate whose pass/fail is binary makes
+a warning indistinguishable from silence.**

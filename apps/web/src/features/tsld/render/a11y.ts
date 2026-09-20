@@ -289,6 +289,9 @@ export interface ListboxRowParts {
   wbsGroup?: string | undefined;
   /** {@link compareClause} for this row, when the comparison overlay draws it a ghost. */
   compare?: string | undefined;
+  /** {@link placementClause} for this row — the feasible window and the levelled ghost, in ONE
+   * member, because the row's length is a budget and both describe one subject. */
+  placement?: string | undefined;
 }
 
 /**
@@ -313,6 +316,113 @@ export function compareClause(ghost: { fromStart: string; fromFinish: string }):
 }
 
 /**
+ * What the **levelled-placement lens** is showing — including, and especially, when it is showing
+ * nothing (M-E-T6).
+ *
+ * **The undrawn case is the COMMON one, not an edge case.** FC-1 predicts zero visual placements
+ * across the estate, and resource levelling is opt-in and off by default (ADR-0041's parity gate),
+ * so on the day this ships the lens lights and draws nothing on very nearly every plan there is. A
+ * control that lights and does nothing is the lit-but-inert dead end this register has recorded
+ * five times; the difference between that and a working feature is one sentence.
+ *
+ * **Two empty states, never collapsed into one**, which is ADR-0073 C1's finding applied to a
+ * diagram: "levelling never ran" and "levelling ran and moved nothing" are different facts, the
+ * first naming a setting a planner can change and the second reporting a result. A reader given
+ * one sentence for both cannot tell a switched-off feature from a satisfied one. The control's
+ * shaded reason covers only the first (M-E-T3), because the other two states are not refusals —
+ * so this sentence is the ONLY place the second is ever said.
+ *
+ * Returns the sentences and not the markup: the caller decides where they live, and both the
+ * visible strip and the `sr-only` summary render from this one result, so the picture cannot be
+ * explained two ways.
+ */
+export function levelledOverlaySummary(
+  drawn: number,
+  opts: { levelResources: boolean },
+): { readonly heading: string; readonly undrawnLabel: string } | null {
+  if (drawn > 0) {
+    return {
+      heading: `Levelled placement: ${String(drawn)} ${drawn === 1 ? 'activity' : 'activities'} moved by resource levelling.`,
+      // Nothing is withheld — every activity levelling moved has a ghost, because the layer walks
+      // the same array this count comes from.
+      undrawnLabel: '',
+    };
+  }
+  const why = opts.levelResources
+    ? 'resource levelling did not move any activity'
+    : 'resource levelling is off for this plan';
+  return {
+    heading: `Levelled placement: nothing to show — ${why}.`,
+    undrawnLabel: `Levelled placement: ${why}.`,
+  };
+}
+
+/**
+ * The spoken equivalent of the **two M-E placement overlays** — the feasible window and the levelled
+ * ghost (WCAG 1.4.1: a bracket and a dashed outline reach a sighted planner and nobody else).
+ *
+ * **ONE member of {@link ListboxRowParts}, composed here, rather than one per overlay.** The row is
+ * read on every arrow keystroke, and `baselineGhostClause`'s own docblock already records that
+ * budget as the reason it states the finish variance alone and not every variance column. Two
+ * members would have been the natural shape — they are two toggles drawing two marks — and would
+ * have spent the budget twice on one subject: where this bar may sit.
+ *
+ * **It states OFFSETS, not spans, and the two halves reach that answer differently.**
+ *
+ * The window's caps are positioned by the painter from `remainingFloat` and `visualDriftDays`
+ * multiplied out from the bar's own edges (`feasibleWindowRect`), so those two numbers ARE the
+ * offsets the picture draws — reading them here is one derivation, not a second one. A span would
+ * also make the listener do the arithmetic against dates the row's Tier-1 sentence has just read
+ * them.
+ *
+ * The levelled half states the ghost's **start date** instead, and that is a deliberate departure
+ * with a reason. The tempting field is `levelingDelayDays`, which is engine-owned, already in
+ * whole working days, and sitting on the same row — and it is `leveledStart - earlyStart`, while
+ * the bar is drawn at the PLACED start. On an unplaced activity the two coincide, which is every
+ * plan in the estate today (FC-1); on a placed one — the case this whole epic exists to create —
+ * it would report an offset from a position the reader cannot see. Computing the true offset needs
+ * a working-day walk this render leaf has no business doing, so the honest short answer is the
+ * date. One date is not a span, and it is exact in every case.
+ *
+ * Returns `''` when there is nothing to say, which is the same test each painter applies: absence
+ * is not narrated.
+ */
+export function placementClause(input: {
+  /** On iff the `floatTails` view toggle is on — the window is not described when it is not drawn. */
+  windowShown: boolean;
+  remainingFloatDays: number | null;
+  driftDays: number | null;
+  /** The levelled ghost's start, or null when the lens is off or drew this row no ghost. */
+  levelledStart: string | null;
+}): string {
+  const parts: string[] = [];
+  if (input.windowShown && input.remainingFloatDays !== null) {
+    const float = input.remainingFloatDays;
+    parts.push(
+      float > 0
+        ? `${workingDays(float)} of float`
+        : float === 0
+          ? 'no float'
+          : `${workingDays(-float)} past its bound`,
+    );
+    // The left cap. Zero drift puts it on the bar's own start, which the sentence has already read,
+    // so it says nothing — the picture says nothing there either.
+    const drift = input.driftDays ?? 0;
+    if (drift > 0) parts.push(`could start ${workingDays(drift)} earlier`);
+    else if (drift < 0) parts.push(`placed ${workingDays(-drift)} before its logic`);
+  }
+  if (input.levelledStart !== null) {
+    parts.push(`levelled to ${formatCalendarDate(input.levelledStart)}`);
+  }
+  return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+}
+
+/** `1 working day` / `3 working days` — the plural rule the baseline clause already speaks. */
+function workingDays(n: number): string {
+  return `${n} working ${n === 1 ? 'day' : 'days'}`;
+}
+
+/**
  * Compose one listbox row's text. The **only** producer of it: both the rendered `<li>` and the
  * sentence `select()` announces go through here.
  *
@@ -325,7 +435,7 @@ export function composeListboxRowText(parts: ListboxRowParts): string {
   const reasons = parts.dimReasons ?? [];
   const dim = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
   const overAllocated = parts.overAllocated === true ? ' (over-allocated)' : '';
-  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}`;
+  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}${parts.placement ?? ''}`;
 }
 
 /**

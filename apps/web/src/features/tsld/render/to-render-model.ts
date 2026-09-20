@@ -80,7 +80,7 @@ export function toRenderActivities(
     //
     // The two lines are deliberately parallel to the `visualDriftDays` gate above: they are the two
     // halves of one window, and M-F collapses both when the mode goes.
-    remainingFloat: source === 'visual' ? a.remainingFloat : a.totalFloat,
+    remainingFloat: windowFloatFor(a, source),
   }));
 }
 
@@ -96,4 +96,22 @@ export function toRenderEdges(dependencies: readonly DependencySummary[]): Rende
     lagDays: d.lagDays,
     lagCalendar: d.lagCalendar,
   }));
+}
+
+/**
+ * The feasible window's right-edge float, for one activity on one bar basis.
+ *
+ * **Exported so the accessible clause reads the same rule the painter does** (M-E-T5). It is one
+ * conditional and the temptation to restate it at the second call site is real — which is exactly
+ * how the defect this rule fixes arrived in the first place: the window was drawn from
+ * `remainingFloat` while the projection above handed the painter `totalFloat`, and the bracket was
+ * short by the drift on every placed activity. Two copies of a rule that is trivially easy to get
+ * right both ways is how a picture and its description come to disagree about the same bar, and
+ * only a reader who compared them would ever see it.
+ */
+export function windowFloatFor(
+  a: Pick<ActivitySummary, 'remainingFloat' | 'totalFloat'>,
+  source: BarDateSource,
+): number | null {
+  return source === 'visual' ? a.remainingFloat : a.totalFloat;
 }
