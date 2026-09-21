@@ -11143,3 +11143,58 @@ as a decision rather than a change, which is why no remedy is written here as an
 
 **Trigger:** the next change to the export surface, or `#356`'s decision — whose answer probably
 settles this one too.
+
+### 358. A rule cited nine times, which the file citing it most already breaks
+
+**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-I,
+incidentally — the milestone was verifying its own premise) · **Size:** M · **Owner:** web
+
+Nine comments across seven files state, as a rule with a citation, that **`features/tsld` imports no
+other feature (ADR-0026 D8)**. It is false, and false most conspicuously in the file that states it:
+
+```
+apps/web/src/features/tsld/components/TsldPanel.tsx:106  import … from '@/features/activities';
+apps/web/src/features/tsld/components/TsldPanel.tsx:107  import … from '@/features/plan-actions/build-selection-context';
+apps/web/src/features/tsld/components/TsldPanel.tsx:108  import … from '@/features/wbs';
+```
+
+`TsldPanel.tsx:329` asserts the rule 221 lines below those three imports. `TsldCanvas.tsx:414` is
+sharper still: it explains that a derivation lives in `features/wbs` **"because the tsld feature
+imports no other feature"** — and `TsldPanel` imports exactly that module.
+
+**It is not a cosmetic inconsistency, because the rule has been shaping designs.** Things are passed
+in as props, and derivations are placed in other features, _because_ of it —
+`use-plan-workspace-model.ts:729`, `activity-crud-dialogs.tsx:28`, `wbs-groups.ts:159` and
+`wbs-groups.test.ts:163` each cite it as the reason for a structural choice. A reader deciding where
+to put the next thing gets a rule that the code does not follow, so either the designs are paying a
+cost for nothing or three imports are violations nobody has noticed. **Which of those it is cannot
+be answered from the comments**, which is the finding.
+
+**What was checked:** `grep -rn "imports no other feature" apps/web/src docs/` (nine sites, listed
+above), the import block at `TsldPanel.tsx:106-108`, and **ADR-0026 §8 itself**, which is the one
+thing none of the nine comments' authors appears to have re-read.
+
+**The rule is real, and reading it removed the ambiguity rather than confirming it.** §8 is headed
+_"Module structure & composition (no sideways feature imports)"_ and says, in as many words:
+_"`features/tsld` depends only on **shared layers and `@repo/types`** — it imports **no** other
+feature. This honours ADR-0004's `features → shared`, no `feature → feature` rule."_ It is stated
+twice over, in two ADRs. **So the three imports are violations, not a rule that was quietly
+narrowed** — which is the answer this row was first filed as being unable to give.
+
+(The citation form `D8` is itself slightly wrong: ADR-0026's decisions are numbered `§1`–`§9c`, and
+§8 is plainly the referent. That is a footnote, not the finding, and the first draft of this row
+made it the finding — asserting the citation "does not resolve" **without opening the ADR**, which
+is the ADR-0076 Class 3 failure committed inside a row about unverified claims. Corrected in place.)
+
+**Not fixed here, deliberately.** Unpicking three imports means deciding where
+`ACTIVITY_TYPE_LABELS`, `buildSelectionBarContext` and the WBS band derivations should live and
+threading them through as props or shared modules — a design change to the canvas's public surface,
+which is an ADR-0105 full-spec trigger rather than a drive-by edit inside a milestone about
+migrating constraints. M-I therefore did **not** add a fourth violation: `TsldPanel`'s new
+`placementMigrationNotice` prop takes a **rendered node** rather than importing the component, which
+obeys §8 as written, and its docblock gives the reason that is true independently of the rule (the
+panel has no org slug and no session, so it could not fetch the report even if it wanted to).
+
+**Trigger:** the next epic that touches the `features/tsld` boundary. It is worth doing then rather
+than opportunistically, because the cheap half — correcting nine comments to match the code — is the
+**wrong** half: it would record the violation as the rule.

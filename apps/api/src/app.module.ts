@@ -31,6 +31,7 @@ import { MembersModule } from './modules/members/members.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { OverviewModule } from './modules/overview/overview.module';
+import { PlacementMigrationModule } from './modules/placement-migration/placement-migration.module';
 import { PlanLockModule } from './modules/plan-lock/plan-lock.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -128,6 +129,7 @@ function isPrettyLoggingAvailable(): boolean {
     ResourcesModule,
     BaselinesModule,
     PlanLockModule,
+    PlacementMigrationModule,
     OverviewModule,
     RecycleBinModule,
     InterchangeModule,

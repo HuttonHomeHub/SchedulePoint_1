@@ -1,7 +1,7 @@
 import type { CanvasModeStatement } from '../components/CanvasModeBand';
 
 /** Which of the canvas dock's mutually-exclusive strips is showing, or none. */
-export type DockStrip = 'conflict' | 'mode' | 'empty' | null;
+export type DockStrip = 'conflict' | 'mode' | 'empty' | 'placement-migration' | null;
 
 /** What the precedence is decided from. Booleans, so the rule has no opinion about their sources. */
 export interface DockStripInput {
@@ -15,6 +15,12 @@ export interface DockStripInput {
   readonly mode: string;
   /** `CANVAS_AUTHORING_FLOW_ENABLED` — passed in so the rule stays testable in both states. */
   readonly authoringFlowEnabled: boolean;
+  /**
+   * Whether the one-time placement migration (one-planning-surface M-I) has something to say about
+   * this plan AND this reader has not already dismissed it. One boolean rather than a count and a
+   * flag, because this function decides precedence and has no business knowing how many.
+   */
+  readonly hasPlacementMigrationNotice: boolean;
 }
 
 /**
@@ -55,5 +61,21 @@ export function resolveDockStrip(input: DockStripInput): DockStrip {
   ) {
     return 'empty';
   }
+  /**
+   * **Last, and the ordering is the decision.** Every strip above this one is about what the
+   * planner is doing *now* — a write that just failed, a tool they just armed, a plan with nothing
+   * in it yet. This one is about something that happened before they arrived, on a deploy, once.
+   * A historical notice that outranked a live one would cover the sentence explaining the thing
+   * under the reader's cursor.
+   *
+   * It also sits below `empty` rather than above it, on the same test: a migrated plan has
+   * activities by construction (the migration converted constraints that were on them), so the two
+   * can only co-occur if every activity was deleted afterwards — and for that reader "this plan is
+   * empty" is the more useful sentence.
+   *
+   * Unlike its three neighbours it is **dismissible and does not return**, which is why it can
+   * afford to lose every contest: it waits, and a planner who never arms a tool sees it at once.
+   */
+  if (input.hasPlacementMigrationNotice) return 'placement-migration';
   return null;
 }

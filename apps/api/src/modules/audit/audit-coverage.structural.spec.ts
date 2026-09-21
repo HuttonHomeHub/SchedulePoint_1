@@ -235,6 +235,12 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'GET /api/v1/organizations/:orgSlug/plans/:planId/interchange/export/:format': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/notes': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/notes/activity-counts': REASONS.READ,
+  // The one-time placement migration's own report (one-planning-surface M-I). An ordinary READ
+  // and not an AUDIT_READ: the rows are a record of a schema migration's effect on one plan, not
+  // of anybody's actions, so "who looked at whose history" — the distinction AUDIT_READ exists to
+  // keep alive — has no subject here. It reads activity codes, names and dates that every member
+  // already sees on the activities table.
+  'GET /api/v1/organizations/:orgSlug/plans/:planId/placement-migration': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/earned-value': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/health-check': REASONS.READ,
   // The M6 what-if COMPUTES twice and persists nothing — durability test not met, same as the

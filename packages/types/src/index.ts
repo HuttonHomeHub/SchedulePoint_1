@@ -6,9 +6,17 @@
  * the frontend and backend need to agree on (DTO shapes, API response
  * envelopes, shared enums).
  *
- * Application domain models are NOT defined yet — this repository is at the
- * foundation stage. Add contracts here as features are designed, and keep
- * them the single source of truth for cross-boundary shapes.
+ * Add contracts here as features are designed, and keep them the single source
+ * of truth for cross-boundary shapes.
+ *
+ * **This paragraph read "Application domain models are NOT defined yet — this
+ * repository is at the foundation stage" until one-planning-surface M-I**, above
+ * 209 exports across 3,400-odd lines covering plans, activities, calendars,
+ * resources, baselines and the rest. It is the `account-chip.tsx` shape
+ * (ADR-0097 Landing F): not a document describing the code wrongly, but the
+ * code describing itself wrongly, in the header a reader meets before anything
+ * else. Corrected where it was found rather than filed, because the cost of
+ * filing it is that the next reader is told the same thing.
  */
 
 /** Standard envelope for successful API responses. */
@@ -3444,4 +3452,68 @@ export interface RevisionCompare {
    * {@link ghostsUndrawable} is: a diagram has no "showing N of M".
    */
   readonly linksUndrawable?: number | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// The placement migration report (one-planning-surface M-I).
+// ---------------------------------------------------------------------------
+
+/**
+ * One constraint the placement migration removed, and what was there before it.
+ *
+ * **Every field here is a FROZEN COPY taken at migration time** — `activityCode` and `activityName`
+ * are not refreshed by a later rename, and the activity id carries no foreign key
+ * (`schema.prisma`'s `PlacementMigration.activityId`, on ADR-0025's `source_activity_id` leg). That
+ * is deliberate: the moment this record is most wanted is after the activity is gone, and "what
+ * happened to the bar that used to be here?" is precisely the question a deleted activity raises.
+ *
+ * `priorVisualStart` is expected to be `null` on every row and **a non-null value is a finding**:
+ * the migration excludes any activity already carrying a `visualStart`, so a row that recorded one
+ * means that exclusion failed and a hand-placement was overwritten.
+ */
+export interface PlacementMigrationRow {
+  readonly id: string;
+  readonly activityId: string;
+  /** The activity's code as it stood when the constraint was stripped (`null` if it had none). */
+  readonly activityCode: string | null;
+  /** The activity's name as it stood when the constraint was stripped. */
+  readonly activityName: string;
+  /**
+   * The constraint that was removed — `SNET` for every row the strip writes, because its `WHERE`
+   * names that one kind and no other.
+   *
+   * **The closed union rather than `string`**, and it is recorded stored-enum-side rather than
+   * display-side: `CONSTRAINT_TYPE_LABELS.SNET` is `'Start no earlier than'` and a renderer wanting
+   * words should go through that map, as every other constraint read-out does.
+   */
+  readonly priorConstraintType: ConstraintType;
+  /** Its date, `YYYY-MM-DD`. This is the value the activity's `visualStart` now carries. */
+  readonly priorConstraintDate: string;
+  /** The `visualStart` the write replaced. Expected `null`; a value here is a finding. */
+  readonly priorVisualStart: string | null;
+  /** When the strip ran, as an ISO instant. One instant per migration batch. */
+  readonly migratedAt: string;
+}
+
+/**
+ * What the placement migration did to one plan.
+ *
+ * **It reports only what it CHANGED, and the omission is a decision rather than an oversight.** The
+ * migration also leaves three classes of start-no-earlier-than constraint alone — inert, unclassified and
+ * already-placed (`docs/specs/one-planning-surface/feature-spec.md` §4.6) — and those are not here,
+ * because nothing happened to them. A constraint the migration left in place is still a constraint
+ * doing its job, so there is no change to tell a planner about; ADR-0082's "omit when the action
+ * does not apply to the object" one layer over. Their estate-wide classification is the ADR-0140
+ * staff diagnostics' subject (`snet-inert`, `snet-unclassified`), which already exists and is
+ * addressed to the operator rather than the planner.
+ *
+ * `count` is redundant with `rows.length` **today** and is sent anyway, because the read is
+ * uncapped today and the first cap added would silently make the length a different quantity.
+ */
+export interface PlacementMigrationReport {
+  readonly planId: string;
+  /** How many constraints the migration converted to placements on this plan. */
+  readonly count: number;
+  /** One row per converted constraint, oldest first. Empty when the plan had none. */
+  readonly rows: readonly PlacementMigrationRow[];
 }

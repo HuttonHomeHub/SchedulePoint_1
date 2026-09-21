@@ -22,8 +22,30 @@ Each of the 20 statements was warmed once, then run five times under
 40 plans (half `EARLY`, half `VISUAL` — so the mode clause has a population either side),
 **102,000 activities**, 400 baselines (360 `FULL`, 40 `NONE`), 20,000 `baseline_activities`.
 Every 5th activity carries a `visual_start`; every 7th carries an `SNET` whose `early_start` is
-arranged to land in each of the four classes. The 102,000 figure matches the scale ADR-0140's own
-M0 used, so the two sets of numbers are comparable.
+arranged to land in each of the four classes.
+
+> **Correction, 2026-09-21 — that sentence was false when it was written, and the readings below
+> were taken against the fixture it describes wrongly.** The `dilute.sql` binding branch was
+> `g % 7 = 0 AND g % 4 = 0`, which is identically the file's own `early_start IS NULL` branch
+> (`g % 28 = 0`), so **every intended binding row classified UNCLASSIFIED and the binding population
+> was zero** — as was the fourth class, which is a subset of it. Measured on the shipped file:
+> binding 0, inert 3,643, unclassified 10,928. Found by the `database-architect` review of M-I's
+> strip migration, which needed a non-empty binding population and could not get one.
+>
+> **What this does and does not invalidate.** `snet-binding`'s 13.20 ms below is the cost of
+> **proving an absence**, which for a scan is the conservative case — so the diagnostic verdict
+> stands and the entry is not slower than reported. What it is not is the number this table's own
+> description implies. More importantly, **nothing in this epic had ever been measured against a
+> non-empty binding population** until M-I; reusing this fixture to cost the strip would have
+> measured the cost of converting nothing, which is ADR-0066's "the benchmark measured the cull
+> rather than the painter" one epic along.
+>
+> `dilute.sql` is corrected in place (the null branch moves to `g % 33`, the class selector cuts
+> from `(g / 7) % 4`), and now yields binding 3,532 / inert 3,532 / unclassified 7,507 with 706 of
+> the binding rows already carrying a placement. The readings below are **not** re-taken: they are a
+> record of what was measured on the day, and re-running them under a different fixture would
+> produce a different table wearing the same date. The 102,000 figure matches the scale ADR-0140's own
+> M0 used, so the two sets of numbers are comparable.
 
 ## Results
 

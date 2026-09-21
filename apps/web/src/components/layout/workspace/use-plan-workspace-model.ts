@@ -1022,9 +1022,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
   );
-  // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
-  // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
-  // EARLY mode) the schedule mode is always EARLY, so today's SNET path is byte-for-byte unchanged.
+  // A day-drag hand-places `visualStart` (no constraint of any kind), then the effective-Visual
+  // recalc pins the bar and pushes its unplaced successors.
+  //
+  // **The second half of this comment described a branch M-F-T3 deleted**, and called the EARLY
+  // `SNET` path "byte-for-byte unchanged" — in a function that has had one branch since the
+  // collapse. It is corrected at one-planning-surface M-I rather than in M-F because M-I is the
+  // milestone that strips the rows that path left behind, and a reader arriving at the strip would
+  // otherwise find the product's own drag handler claiming it still writes them. The sibling
+  // docblock inside `onTsldResize`'s `else` WAS updated by M-F and its parent was not, which is
+  // the one-neighbour-and-not-the-other shape rather than an oversight about the code itself.
   const onTsldReposition = async ({
     activityId,
     startDay,
@@ -1130,11 +1137,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // path uses — carried as the FULL definition round-trip (`activityDefinitionInput`) so
   // durationType / EV / accrual / constraints are resent verbatim, never silently cleared; it does
   // NOT touch the primary constraint or lane. **Start edge** (`startDay` present): move the start,
-  // keep the finish — mode-aware (ADR-0052 §3): EARLY imposes an SNET at the new start (the same
-  // constraint expression a reposition writes) PLUS the new duration in the one full-definition
-  // PATCH; VISUAL hand-places `visualStart` + the new duration through the minimal
-  // `setVisualStart` PATCH (the reposition-in-VISUAL seam — no constraint write, no definition
-  // resend). Optimistic-lock 409 and pen-loss 423 reuse the exact reposition contract; the
+  // keep the finish by hand-placing `visualStart` + the new duration through the minimal
+  // `setVisualStart` PATCH — no constraint write, no definition resend, the same seam a reposition
+  // drop uses. (This read "mode-aware (ADR-0052 §3): EARLY imposes an SNET at the new start …"
+  // until one-planning-surface M-I; M-F-T3 deleted that half, and the `else` below carries its own
+  // docblock saying so — see the note above `onTsldReposition` for why the correction lands here.) Optimistic-lock 409 and pen-loss 423 reuse the exact reposition contract; the
   // follow-up recalc is the coalesced auto-recalc (or the inline recalc when authoring is off).
   const resizeConflict =
     'This plan changed since you opened it — your resize wasn’t applied. Refresh to see the latest.';

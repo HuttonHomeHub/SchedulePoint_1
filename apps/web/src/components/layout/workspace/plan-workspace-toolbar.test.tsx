@@ -20,10 +20,41 @@ const h = vi.hoisted<{
   plannedStart: string | null;
   // The last props the (stubbed) TsldPanel received, so the strip forwarding can be asserted (B7).
   tsldProps: { current: Record<string, unknown> | null };
+  // How many constraints the one-time placement migration converted on this plan (M-I). The hook
+  // is mocked rather than the fetch, because the subject here is the HOST's wiring and not the
+  // query's.
+  migrationCount: number;
 }>(() => ({
   role: 'PLANNER',
   plannedStart: '2026-01-01',
   tsldProps: { current: null },
+  migrationCount: 0,
+}));
+
+vi.mock('@/features/placement-migration/api/use-placement-migration', () => ({
+  usePlacementMigration: () => ({
+    data:
+      h.migrationCount === 0
+        ? { planId: 'plan-1', count: 0, rows: [] }
+        : {
+            planId: 'plan-1',
+            count: h.migrationCount,
+            rows: [
+              {
+                id: 'row-1',
+                activityId: 'act-1',
+                activityCode: 'A100',
+                activityName: 'Pour slab',
+                priorConstraintType: 'SNET',
+                priorConstraintDate: '2026-03-04',
+                priorVisualStart: null,
+                migratedAt: '2026-09-21T09:00:00.000Z',
+              },
+            ],
+          },
+    isPending: false,
+    isError: false,
+  }),
 }));
 
 vi.mock('@/config/env', async (importOriginal) => ({
@@ -242,6 +273,7 @@ beforeEach(() => {
   h.role = 'PLANNER';
   h.plannedStart = '2026-01-01';
   h.tsldProps.current = null;
+  h.migrationCount = 0;
 });
 
 /**
@@ -500,5 +532,43 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     // the wiring. Presence is exactly the distinction #103 is about: absent means the host never
     // offers the prop, present-but-undefined means it offers it and there is nothing to undo yet.
     expect(props).toHaveProperty('onUndoLastEdit');
+  });
+});
+
+/**
+ * **The placement-migration notice reaches the canvas, or it reaches nobody** (M-I-T2).
+ *
+ * This is the ADR-0081 seam, asserted at the only place it can be: the host builds the strip and
+ * `TsldPanel` decides whether the dock shows it, so a notice wired into one and not the other is
+ * invisible to both files' own suites. That exact shape has shipped here three times — ADR-0080's
+ * `bulk` into one layout and not the one its flag selects, Graphite M6's drawer with no entry
+ * point, ADR-0062 M6's hidden form — and each time the unit tests were green.
+ *
+ * What this pair cannot see is whether the strip is VISIBLE, because jsdom has no layout. The
+ * precedence half — that the notice yields to a conflict, an armed tool and the empty-plan
+ * notice — is asserted as a value in `features/tsld/model/dock-strip.test.ts`, which is where the
+ * decision lives.
+ */
+describe('the placement-migration notice (one-planning-surface M-I)', () => {
+  it('passes the notice to the canvas when the migration changed something here', async () => {
+    h.migrationCount = 3;
+    renderScreen();
+
+    await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
+    expect(h.tsldProps.current?.placementMigrationNotice).not.toBeNull();
+  });
+
+  /**
+   * Nothing converted means nothing to say. Asserted as its own case rather than trusted, because
+   * a host that passed a truthy node unconditionally would make the dock's lowest rung permanent —
+   * and `resolveDockStrip` keys on the node's presence, so the strip would render empty rather
+   * than fail loudly.
+   */
+  it('passes nothing when the migration changed nothing here', async () => {
+    h.migrationCount = 0;
+    renderScreen();
+
+    await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
+    expect(h.tsldProps.current?.placementMigrationNotice).toBeNull();
   });
 });

@@ -64,6 +64,7 @@ import {
 } from '@/config/env';
 import { useUpdateActivityParents } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
+import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
 import {
   FloatPathsPanel,
@@ -75,6 +76,9 @@ import type { GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
+import { usePlacementMigration } from '@/features/placement-migration/api/use-placement-migration';
+import { PlacementMigrationNotice } from '@/features/placement-migration/components/PlacementMigrationNotice';
+import { dismiss, isDismissed } from '@/features/placement-migration/model/dismissal';
 import {
   buildSelectionBarContext,
   type SelectionContextInput,
@@ -741,6 +745,61 @@ export function ToolbarPlanWorkspace({
   // The on-demand metric-12 what-if (health M6): a mutation, so nothing but the row's button can
   // fire the two engine passes; the result merges over the placeholder inside the panel.
   const criticalPathTest = useCriticalPathTest(model.orgSlug, model.planId);
+
+  /**
+   * What the one-time placement migration changed on this plan (one-planning-surface M-I).
+   *
+   * **The host owns all three parts** — the query, the account the dismissal is keyed to, and the
+   * rendered strip — because `TsldPanel` has no org slug and no session, and takes the finished
+   * node. It decides only precedence.
+   *
+   * **The dismissal is DERIVED, not synchronised, and the state holds the KEY rather than a
+   * boolean.** The obvious shape — an effect that reads `localStorage` into a boolean — is a
+   * `setState` inside an effect (which `react-hooks` refuses here, and rightly: it is a cascading
+   * render for a value that was already available), and it has a second defect the lint rule does
+   * not see. A bare boolean does not reset when the planner switches plans, so dismissing the
+   * notice on one plan would hide it on the next one they opened — and the toolbar does not
+   * remount on a plan change, so nothing would clear it. Storing the key that was dismissed makes
+   * both problems go away at once: it is self-invalidating.
+   */
+  const session = useSession();
+  const migrationUserId = session.data?.user.id ?? null;
+  const placementMigration = usePlacementMigration(model.orgSlug, model.planId);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  // `planId` is read out of `model` first so the memo depends on the id rather than on the whole
+  // model object — `react-hooks/exhaustive-deps` cannot see through a member expression and would
+  // otherwise demand `model`, which changes on every plan mutation and would re-read the store on
+  // each one.
+  const migrationPlanId = model.planId;
+  // **The key is never null, and that is a fix rather than a tidy-up.** It was
+  // `migrationUserId === null ? null : …`, which made `dismissedKey !== migrationKey` compare
+  // `null !== null` before the session resolved — so the notice was suppressed in that window, and
+  // permanently on any render where the session is absent. Caught by the host wiring test, which
+  // renders without a session and therefore hit the case head-on. An `'anon'` segment keeps the
+  // comparison honest (the initial `null` can never equal it) while the `localStorage` write below
+  // stays guarded on a real user id, so nothing is ever persisted under a fake one.
+  const migrationKey = `${migrationUserId ?? 'anon'}:${migrationPlanId}`;
+  const storedDismissal = useMemo(
+    () =>
+      migrationUserId === null
+        ? false
+        : isDismissed(window.localStorage, migrationUserId, migrationPlanId),
+    [migrationUserId, migrationPlanId],
+  );
+  const migrationCount = placementMigration.data?.count ?? 0;
+  const placementMigrationNotice =
+    migrationCount > 0 && !storedDismissal && dismissedKey !== migrationKey ? (
+      <PlacementMigrationNotice
+        count={migrationCount}
+        rows={placementMigration.data?.rows ?? []}
+        onDismiss={() => {
+          setDismissedKey(migrationKey);
+          if (migrationUserId !== null) {
+            dismiss(window.localStorage, migrationUserId, model.planId);
+          }
+        }}
+      />
+    ) : null;
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -951,6 +1010,7 @@ export function ToolbarPlanWorkspace({
           : 'NOT_RECORDED'
       }
       hasRevisionPair={hasRevisionPair}
+      placementMigrationNotice={placementMigrationNotice}
       dataDate={plan.plannedStart}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}

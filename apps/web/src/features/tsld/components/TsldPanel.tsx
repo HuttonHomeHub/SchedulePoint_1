@@ -338,6 +338,21 @@ export interface TsldPanelProps {
    */
   onUndoLastEdit?: (() => void) | undefined;
   /**
+   * The one-time placement migration's notice for this plan (one-planning-surface M-I), already
+   * rendered by the host — `null`/absent when the migration changed nothing here or the reader has
+   * dismissed it.
+   *
+   * **A node rather than data, and the host owns the query, the dismissal and the account it is
+   * keyed to.** This panel has no org slug and no session, so it could not fetch the report even
+   * if it wanted to; taking the rendered strip is the same shape as {@link onEditActivity}'s
+   * host-owned dialog. The panel's only job is **precedence** — it decides whether this strip is
+   * the one the dock shows, which is a question only it can answer because only it knows what else
+   * is competing for the row.
+   *
+   * It is the dock's LOWEST rung — see `resolveDockStrip`, the one place the ordering is decided.
+   */
+  placementMigrationNotice?: React.ReactNode | null | undefined;
+  /**
    * The plan's auto-recalculation coalescer's hold seam (ADR-0064 T7), supplied by the host that
    * owns it. While a two-click pick is open the panel takes a hold, so a coalesced recalculation
    * cannot move the bars between the planner's two clicks. Absent ⇒ today's cadence exactly.
@@ -571,6 +586,7 @@ export function TsldPanel({
   onLag,
   onLink,
   onUndoLastEdit,
+  placementMigrationNotice,
   recalcHold,
   dropLinkPickSignal = 0,
   recalcPending = false,
@@ -1613,6 +1629,7 @@ export function TsldPanel({
     activityCount: activities.length,
     mode,
     authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
+    hasPlacementMigrationNotice: placementMigrationNotice != null,
   });
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
@@ -2946,6 +2963,13 @@ export function TsldPanel({
             )}
           </NoticeStrip>
         ) : null}
+
+        {/* What the one-time placement migration changed on this plan (one-planning-surface M-I).
+            The dock's LOWEST rung — see `resolveDockStrip` for why a notice about something that
+            happened on a deploy yields to every strip about what the planner is doing now. It is
+            the only dock strip that is DISMISSIBLE and does not return, which is what makes losing
+            every contest affordable: it waits. */}
+        {dockStrip === 'placement-migration' ? placementMigrationNotice : null}
       </CanvasDock>
 
       {/* **The diagram's surface scope** (ADR-0097 Landing E). Inside it every semantic token name

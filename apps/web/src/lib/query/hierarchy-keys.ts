@@ -61,6 +61,21 @@ export const planKeys = {
     [...planKeys.all(orgSlug), 'detail', planId] as const,
 };
 
+/**
+ * The one-time placement migration's report for a plan (one-planning-surface M-I).
+ *
+ * **Its own namespace rather than a member of `planKeys`, and that is about invalidation.** Every
+ * write to a plan sweeps `planKeys.all`, and this answer can never change as the result of one:
+ * the rows are written by a schema migration inside `prisma migrate deploy` and by nothing else,
+ * so the only event that could alter them is a deploy, which takes the tab with it. Under
+ * `planKeys` it would be refetched on every plan edit for ever, to be told the same thing.
+ */
+export const placementMigrationKeys = {
+  all: (orgSlug: string) => ['placement-migration', orgSlug] as const,
+  forPlan: (orgSlug: string, planId: string) =>
+    [...placementMigrationKeys.all(orgSlug), 'plan', planId] as const,
+};
+
 export const activityKeys = {
   all: (orgSlug: string) => ['activities', orgSlug] as const,
   listByPlan: (orgSlug: string, planId: string) =>

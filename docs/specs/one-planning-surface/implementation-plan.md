@@ -667,15 +667,34 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
 
 - **Description:** convert **binding** rows only. **Leave, count and report: inert, unclassified,
   and — new — any row already carrying a `visual_start`.**
-- **Complexity:** L · **Dependencies:** M-A-T4, FC-10 clause B's verdict
+- **Complexity:** L · **Dependencies:** M-A-T4
 - **Risks:** **the naive `WHERE` destroys an existing placement.** `visual_start` is accepted
   regardless of mode (`activities.service.ts:388`, `:526-528`), so a row can carry a stale placement
-  **and** a binding SNET. Excluded — and **FC-10 clause B's bound is read against the population
-  after that exclusion**. · **Prisma does not chunk an `{ in: [...] }` list** — ADR-0096 hit a
-  bind-parameter error at 16,384 ids that its catch block reported as retryable → batch explicitly.
+  **and** a binding SNET. Excluded — **measured at 706 destroyed placements on a 102,000-activity
+  estate when the clause is removed**, which is the negative control the e2e uses.
   · Touching a non-`SNET` kind → the `WHERE` names the kind and a test asserts the others untouched.
-- **Development steps:** apply FC-10 clause B; write the record (including **`prior_visual_start`**)
-  then convert, one transaction, batched; reuse M0's cross-entry exhaustiveness assertion.
+- **Development steps:** write the record (including **`prior_visual_start`**) then convert, in
+  **one raw-SQL statement**, inside `prisma migrate deploy`.
+
+> **Three instructions in this task were stale and are struck, 2026-09-21** (the `database-architect`
+> design review; §19's re-verify-the-problem rule applied to a task's **remedy**, which is
+> ADR-0142 D4's shape):
+>
+> - **"Dependencies: FC-10 clause B's verdict"** — clause B is **WITHDRAWN**
+>   (`falsification.md`), so there is no verdict to apply and nothing to wait for. Its exclusion
+>   survives the withdrawal, which is why the risk above still names it.
+> - **"Prisma does not chunk an `{ in: [...] }` list → batch explicitly"** — a risk of the
+>   **application-runner** design, which is not what shipped. A set-based SQL statement has no
+>   `{ in: [...] }` list, so ADR-0096's 16,384-id bind-parameter failure cannot arise here at all.
+> - **"batched"** — not merely unnecessary but **worse**: batching reintroduces the possibility of
+>   the recorded set and the converted set differing. One statement makes them the same set _by
+>   construction_ (the ADR-0065 one-implementation argument), and satisfies FC-10 clause D's
+>   "written **before** the delete, in the same transaction" absolutely rather than by ordering.
+> - **"reuse M0's cross-entry exhaustiveness assertion"** — that assertion partitions the SNET
+>   population **by effect** (`binding + inert + unclassified === examined`), and an already-placed
+>   row is _also_ binding, so it is **structurally blind** to the fourth class and cannot catch the
+>   destruction path. M-I needs its own: `converted + already_placed === binding`. Reuse the idea,
+>   not the assertion.
 
 ##### Task M-I-T2 — the report
 

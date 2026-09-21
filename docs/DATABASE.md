@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 32
-> models across 67 committed migrations — is the single source of truth for the data model.
+> models across 68 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1575,6 +1575,25 @@ into a **mystery instead of a diff**.
   organisation-scoped customer content, and `retention-boundary.structural.spec.ts:53-58` asserts it
   **by equality** — so this is a decision written down rather than an omission. The Cascade FK
   already gives the row the only lifecycle it should have.
+- **The `id` is generated as a UUID v7 in SQL, not `gen_random_uuid()`** (M-I-T1). The column has
+  no database default — Prisma's `@default(uuid(7))` is application-side — and the producer is a
+  raw-SQL migration, so it must supply one. A v4 would make two shipped claims false: the report
+  repository orders on `id` because _"`id` is UUID v7, so it is monotonic by creation"_, and the
+  DTO says **"Oldest first"**. `migrated_at` cannot substitute, because it is the **transaction
+  start** instant and is therefore identical for every row in the batch — which is deliberate (it
+  is how a batch is identified) and is why **the two clocks must not be unified**: the id takes
+  `clock_timestamp()` per row, `migrated_at` takes `now()` once.
+- **The strip bumps `activities.version`, departing from every sibling data migration** (M-I-T1),
+  and the departure is recorded here because a reader comparing migrations will notice it. The
+  convention — no `version`, no `updated_at`, no `updated_by` — comes from ADR-0022 and exists so an
+  **engine** write stays invisible to optimistic locking. The strip writes a **planner-owned input**
+  and wants the opposite: `updateBody` resends `constraintType`/`constraintDate` on every definition
+  save seeded from the row the dialog opened with, and `useBatchPlacements` additionally resends
+  `visualStart`, so without the bump a tab left open across the deploy would silently re-write the
+  stripped constraint — and through the batch route would clear the placement the migration just
+  wrote. `updated_at`/`updated_by` are still left alone, and for a reason of their own: stamping
+  them would put every affected plan at the top of the overview's _Recently changed_ feed
+  (ADR-0098), attributed to `UNKNOWN`, displacing real human work on the day of the deploy.
 - **Non-scheduling.** The CPM engine never reads it.
 
 **Open, and named so it is not mistaken for settled** (see `docs/specs/one-planning-surface/m-a/`):
