@@ -57,6 +57,32 @@ export const DIAGNOSTIC_NATURES = ['retrospective', 'prospective'] as const;
 export type DiagnosticNature = (typeof DIAGNOSTIC_NATURES)[number];
 
 /**
+ * **What one row of the examined population IS, because the sentence names it out loud.**
+ *
+ * `diagnosticSentence` reads "17 of 1,284 **activities**, across 3 plans…", and that noun was a
+ * hard-coded literal until `docs/TECH_DEBT.md` #362 — so `visual-placement-plans`, whose
+ * denominator is `FROM plans`, printed its plan count as a count of activities. The sentence was
+ * wrong about the one thing it exists to supply: what the denominator is a denominator OF.
+ *
+ * **A closed union rather than a `{ one, many }` pair on the entry, which is a deviation from
+ * #362's own prescribed remedy and is recorded rather than done quietly** (ADR-0142 D4 — an
+ * approved remedy is a claim that it will work). A string pair is exactly the shape the M4 UX
+ * review's `description: string` suggestion was refused for: gate S-1 would have to admit a
+ * non-numeric property that the "closed vocabulary" gate below it could no longer check, because
+ * there would be no vocabulary to point at. A literal union keeps both gates' reach — widening the
+ * row means widening a vocabulary somebody has to write down — and the plural forms live with the
+ * single renderer that speaks them.
+ *
+ * It carries no installation data, exactly like `label` and `nature`: it is a property of the
+ * QUESTION. Three members because the registry has three grains, counted from the denominators
+ * rather than assumed — nine entries ask about activities, `visual-placement-plans` about plans,
+ * and `baselines-over-placed-plans` about baselines.
+ */
+export const DIAGNOSTIC_UNITS = ['activity', 'plan', 'baseline'] as const;
+
+export type DiagnosticUnit = (typeof DIAGNOSTIC_UNITS)[number];
+
+/**
  * One named question.
  *
  * `denominator` counts the population the question is *about*; `numerator` counts the subset that
@@ -69,6 +95,8 @@ export interface DiagnosticEntry {
   readonly label: string;
   /** Whether a non-zero count describes work that is wrong NOW, or work that once was. */
   readonly nature: DiagnosticNature;
+  /** What one examined row is — the noun the sentence gives `examined` and `affected`. */
+  readonly unit: DiagnosticUnit;
   /** `SELECT count(*) AS examined FROM …` */
   readonly denominator: Prisma.Sql;
   /** `SELECT count(*) AS affected, count(DISTINCT …) AS affected_plans, … FROM …` */
@@ -105,6 +133,7 @@ const DAY_FACTOR_DIVERGENCE: DiagnosticEntry = {
   id: 'day-factor-divergence',
   label: 'Day factor divergence (driving resource)',
   nature: 'retrospective',
+  unit: 'activity',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -186,6 +215,7 @@ const INHERITED_DAY_FACTOR: DiagnosticEntry = {
   id: 'inherited-day-factor',
   label: 'Day factor divergence (inherited plan calendar)',
   nature: 'retrospective',
+  unit: 'activity',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -233,6 +263,7 @@ const VISUAL_PLACEMENT_PLANS: DiagnosticEntry = {
   id: 'visual-placement-plans',
   label: 'Plans carrying a hand-placed activity',
   nature: 'prospective',
+  unit: 'plan',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM plans p
@@ -260,6 +291,7 @@ const VISUAL_PLACEMENT_ACTIVITIES: DiagnosticEntry = {
   id: 'visual-placement-activities',
   label: 'Activities hand-placed (visual_start set)',
   nature: 'prospective',
+  unit: 'activity',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -320,6 +352,7 @@ const BASELINES_OVER_PLACED_PLANS: DiagnosticEntry = {
   id: 'baselines-over-placed-plans',
   label: 'Baselines captured over a plan carrying a placement',
   nature: 'prospective',
+  unit: 'baseline',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM baselines b
@@ -399,6 +432,7 @@ const SNET_BINDING: DiagnosticEntry = {
   id: 'snet-binding',
   label: 'SNETs that currently place their activity',
   nature: 'prospective',
+  unit: 'activity',
   denominator: SNET_DENOMINATOR,
   numerator: Prisma.sql`
     SELECT count(*) AS affected,
@@ -417,6 +451,7 @@ const SNET_INERT: DiagnosticEntry = {
   id: 'snet-inert',
   label: 'SNETs logic has already overtaken',
   nature: 'prospective',
+  unit: 'activity',
   denominator: SNET_DENOMINATOR,
   numerator: Prisma.sql`
     SELECT count(*) AS affected,
@@ -435,6 +470,7 @@ const SNET_UNCLASSIFIED: DiagnosticEntry = {
   id: 'snet-unclassified',
   label: 'SNETs with no readable effect (unscheduled, or schedule predates the constraint)',
   nature: 'prospective',
+  unit: 'activity',
   denominator: SNET_DENOMINATOR,
   numerator: Prisma.sql`
     SELECT count(*) AS affected,
@@ -488,6 +524,7 @@ const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
   id: 'snet-full-baseline-coverage',
   label: 'Binding SNETs a FULL baseline could restore',
   nature: 'prospective',
+  unit: 'activity',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -579,6 +616,7 @@ const VISUAL_CONFLICT_EARLIER: DiagnosticEntry = {
   id: 'visual-conflict-earlier-than-logic',
   label: 'Placements the engine says are earlier than their logic allows',
   nature: 'prospective',
+  unit: 'activity',
   denominator: VISUAL_CONFLICT_DENOMINATOR,
   numerator: Prisma.sql`
     SELECT count(*) AS affected,
@@ -595,6 +633,7 @@ const VISUAL_CONFLICT_LATER: DiagnosticEntry = {
   id: 'visual-conflict-later-than-bound',
   label: 'Placements the engine says are past a recorded bound',
   nature: 'prospective',
+  unit: 'activity',
   denominator: VISUAL_CONFLICT_DENOMINATOR,
   numerator: Prisma.sql`
     SELECT count(*) AS affected,

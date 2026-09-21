@@ -1212,6 +1212,14 @@ were examined, how many answer it, and how many plans and organisations those ro
 plan, client, project or activity is ever named, at any size**, and nothing is re-identifiable from
 "17 of 1,284 across 3 plans".
 
+Beside those counts the row carries the **registry's own literals** — `id`, `label`, `nature` and
+`unit` — each a member of a closed union the registry exports, each a fact about the QUESTION and
+never about the installation. `unit` says what one examined row IS (`activity`, `plan` or
+`baseline`): the sentence names that noun out loud, and until `docs/TECH_DEBT.md` #362 it was a
+hard-coded literal, so the two entries that do not count activities reported their counts as counts
+of activities. A closed union rather than free text is what keeps the structural gate able to tell a
+registry literal from a value somebody interpolated.
+
 It **narrows ADR-0086 D6** rather than sitting outside it — the SQL reads `activities`, `plans`,
 `calendars`, `resource_assignments` and `resources` — and the narrowing rests on three clauses, of
 which the second is load-bearing for anyone reading this file while deciding what to add next:

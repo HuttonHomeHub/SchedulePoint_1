@@ -3,14 +3,17 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   DIAGNOSTIC_IDS,
   DIAGNOSTIC_NATURES,
+  DIAGNOSTIC_UNITS,
   type DiagnosticId,
   type DiagnosticNature,
+  type DiagnosticUnit,
 } from '../staff-diagnostics.registry';
 
 /**
  * One named question's answer, and **the shape is the boundary** (ADR-0140 D2, clause 3).
  *
- * Every property is a `number` except the two registry literals, and that is not a style rule: it
+ * Every property is a `number` except the registry's own literals, and that is not a style rule:
+ * it
  * is what bounds the disclosure. The query's reach is the whole estate; what crosses the process
  * boundary is a handful of integers, from which nothing is re-identifiable — "17 of 1,284 across 3
  * plans" names no plan, no client, no activity and no date.
@@ -54,6 +57,16 @@ export class StaffDiagnosticRowDto {
       'never data: it is a property of the question, not of this installation.',
   })
   nature!: DiagnosticNature;
+
+  @ApiProperty({
+    enum: DIAGNOSTIC_UNITS,
+    description:
+      'What ONE examined row is — the noun `examined` and `affected` are counts of. Nine entries ' +
+      'ask about activities, one about plans and one about baselines, so a fixed noun in the ' +
+      'sentence was wrong for two of them (`docs/TECH_DEBT.md` #362). A registry literal from a ' +
+      'closed union, never data: it is a property of the question, not of this installation.',
+  })
+  unit!: DiagnosticUnit;
 
   @ApiProperty({ description: 'How many of those rows answer the question.' })
   affected!: number;

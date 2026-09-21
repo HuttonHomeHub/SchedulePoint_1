@@ -33,6 +33,7 @@ const result: StaffDiagnostics = {
       id: 'day-factor-divergence',
       label: 'Day factor divergence (driving resource)',
       nature: 'retrospective',
+      unit: 'activity',
       examined: 1284,
       affected: 17,
       affectedPlans: 3,

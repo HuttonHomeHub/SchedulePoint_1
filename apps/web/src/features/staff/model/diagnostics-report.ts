@@ -1,4 +1,8 @@
-import type { StaffDiagnosticRow, StaffDiagnostics } from '../api/staff-diagnostics';
+import type {
+  DiagnosticUnit,
+  StaffDiagnosticRow,
+  StaffDiagnostics,
+} from '../api/staff-diagnostics';
 
 /**
  * What one diagnostic says on screen, in words.
@@ -9,23 +13,54 @@ import type { StaffDiagnosticRow, StaffDiagnostics } from '../api/staff-diagnost
  * it is "no work of this shape exists on this installation" against "none of it is affected", and a
  * reader acting on the first would go looking for a defect in a population that does not exist.
  *
+ * **The noun comes from the row's `unit`, never from a literal here** (`docs/TECH_DEBT.md` #362).
+ * It was hard-coded to "activities", so the two diagnostics that do not count activities — one
+ * counting plans, one counting baselines — reported their counts as counts of activities on the one
+ * screen whose whole purpose is to give a count its denominator correctly. The registry entry knows
+ * what it asked about; this function did not, and said so anyway.
+ *
  * Pure and exported so the copy is assertable from literals rather than only by driving a panel —
  * the `formatProbeReport` precedent, and what stops the screen and the pasted block disagreeing
  * about the same reading.
  */
 export function diagnosticSentence(row: StaffDiagnosticRow): string {
+  const { one, many } = UNIT_NOUNS[row.unit];
   if (row.examined === 0) {
     return 'No work of this shape exists on this installation, so there was nothing to examine.';
   }
   if (row.affected === 0) {
-    return `None of the ${count(row.examined, 'activity', 'activities')} examined is affected.`;
+    return `None of the ${count(row.examined, one, many)} examined is affected.`;
   }
+  // **The distribution clause is withheld when the unit IS a plan, and the test is the UNIT rather
+  // than `affected === affectedPlans`.** For `visual-placement-plans` that equality is structural —
+  // the registry says so in its own words — so "1 of 4 plans, across 1 plan" offers two numbers
+  // that can never differ, which reads as information and is not. A value test would instead
+  // withhold it from an ACTIVITY diagnostic whose rows happened to land one per plan, hiding a real
+  // fact exactly when it is most surprising: an absence a reader cannot tell from a fact, which is
+  // the ADR-0073 C3.1 rule. The count is still printed by {@link diagnosticBreakdown}.
+  const spread = row.unit === 'plan' ? '' : `across ${count(row.affectedPlans, 'plan', 'plans')} `;
   return (
-    `${String(row.affected)} of ${count(row.examined, 'activity', 'activities')}, ` +
-    `across ${count(row.affectedPlans, 'plan', 'plans')} ` +
+    `${String(row.affected)} of ${count(row.examined, one, many)}, ` +
+    spread +
     `in ${count(row.affectedOrganizations, 'organisation', 'organisations')}.`
   );
 }
+
+/**
+ * The noun each unit is counted in — **total over the vocabulary, so the compiler asks the
+ * question** the day a fourth grain joins the registry (`docs/TECH_DEBT.md` #362).
+ *
+ * The plurals live here rather than on the wire because this module is the single renderer of these
+ * sentences, for the screen and the pasted block alike; its own docblocks say so. The server sends
+ * a closed literal instead of a `{ one, many }` pair so that gate S-1's exception list stays backed
+ * by a vocabulary somebody had to write down — see the registry's `DIAGNOSTIC_UNITS` for why that
+ * deviates from #362's prescribed remedy.
+ */
+const UNIT_NOUNS: Record<DiagnosticUnit, { one: string; many: string }> = {
+  activity: { one: 'activity', many: 'activities' },
+  plan: { one: 'plan', many: 'plans' },
+  baseline: { one: 'baseline', many: 'baselines' },
+};
 
 /**
  * The whole panel's one-line status, for the polite region `Panel` owns.
