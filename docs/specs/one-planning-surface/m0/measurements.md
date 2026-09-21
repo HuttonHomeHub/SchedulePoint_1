@@ -8,11 +8,19 @@
 
 ## What was measured, and how
 
-The SQL was **extracted from the shipped registry, never retyped** — `dump-sql.mts` imports
+The SQL was **extracted from the shipped registry, never retyped** — a throwaway script imports
 `DIAGNOSTICS` and prints each entry's `denominator.sql` and `numerator.sql`. That is the ADR-0140
 M4 lesson: that epic's own D-B shipped uncosted because a planning document described the query as
 joining tables the shipped version did not, and the difference was invisible to anybody costing
 from the document.
+
+> **This named a file, `dump-sql.mts`, that has never existed in this repository** —
+> `git log --all --diff-filter=A -- '*dump-sql*'` returns nothing and `git ls-files` has no match.
+> The method was right and was followed; what was wrong is that the paragraph described the
+> instrument as a committed artefact, so the measurement could not be reproduced the documented
+> way. That is the very lesson it cites, one level up: a document describing a tool that is not
+> there. The M-J re-run wrote its own and it worked, which is the cheap outcome; the expensive one
+> would have been a reader concluding the numbers were unreproducible.
 
 Each of the 20 statements was warmed once, then run five times under
 `EXPLAIN (ANALYZE, BUFFERS)`; the table gives the **median** and the max of the five.
@@ -145,6 +153,88 @@ placements today — the sparsest possible case, where the shipped shape is righ
 surface makes placement universal. So this is not a trigger that may never fire: it is one this
 programme is actively driving towards, and M-J should re-run this harness rather than inherit its
 verdict.
+
+### M-J re-ran it, and the trigger above is WITHDRAWN — it saturates before the crossover
+
+**The re-run is the finding.** Swept at eight placement densities over the same 102,000-activity /
+40-plan / 400-baseline fixture, five runs each under `EXPLAIN (ANALYZE, TIMING OFF)`, median ms:
+
+| activities placed | refused `EXISTS` | shipped **join** |
+| ----------------- | ---------------: | ---------------: |
+| 1 % (1,078)       |              268 |           **82** |
+| 2 % (2,023)       |              580 |           **87** |
+| 3 % (2,999)       |               59 |          **111** |
+| 5 % (5,147)       |               31 |          **118** |
+| 25 % (25,423)     |               23 |          **196** |
+| 50 % (50,848)     |              2.4 |          **314** |
+| 90 % (91,836)     |              1.8 |      **420–523** |
+| 100 % (102,000)   |              2.5 |          **425** |
+
+**The trigger as written cannot fire usefully.** At **1 %** density all 40 plans already carry a
+placement — and there the join still wins by 3×. Measured against the trigger's literal wording
+("all 40 plans, one placed activity each"): `EXISTS` 355–402 ms, join 139–162 ms. It saturates long
+before the crossover and would send a reader to swap to the **wrong** shape.
+
+**The quantity that decides is the (baselines × placed activities) product**, not "plans carrying a
+placement". ~1 M pairs is where ADR-0140's 500 ms bar is reached; the crossover in this fixture is
+between **2 % and 3 %** of activities placed. At 90 % the join materialises **918,360** joined rows
+and spills to temp (`temp read=4510 written=4532`), measuring 457/470/480/488/523 ms across one
+five-run set — **one run over the bar**, and 559 ms with `BUFFERS` on.
+
+**Swapping to `EXISTS` is not the answer either**, which is what makes this a shape change rather
+than a flip: at 2 % it measures **580 ms**, also over the bar, because proving absence means
+exhausting a plan. Its cost is also **unstable across sessions on identical data** (2.4 ms at 50 %
+in one sweep, ~300 ms in another after the heap had been rewritten), because it depends on where
+placed rows sit in index order rather than on density.
+
+**A third shape is flat — and it does NOT ship**, for a reason found by building it. A `DISTINCT`
+pre-pass over the placed plan ids, joined to the baselines, returns byte-identical numbers
+(400 / 40 / 1):
+
+```sql
+WITH placed AS (SELECT DISTINCT a.plan_id FROM activities a
+                WHERE a.deleted_at IS NULL AND a.visual_start IS NOT NULL)
+SELECT count(*) AS affected, count(DISTINCT b.plan_id) AS affected_plans,
+       count(DISTINCT p.organization_id) AS affected_organizations
+FROM baselines b JOIN plans p ON p.id = b.plan_id AND p.deleted_at IS NULL
+JOIN placed pl ON pl.plan_id = b.plan_id
+WHERE b.deleted_at IS NULL;
+```
+
+Measured **37–48 ms at 2 %, 50 % and 100 %** — flat, against the join's 87 → 314 → 425 and the
+refused `EXISTS`'s 580 → 300 → 2.0. **It is flat because it never materialises the pairs**: the
+placed plans collapse to at most one row per plan before anything is joined to a baseline, so the
+product the other two shapes pay for does not exist.
+
+> **It fails gate S-4, and the review that proposed it reported the opposite.** The claim was that
+> it "projects only aliased `count(...)`, so gate S-4 is satisfied without widening" — true of the
+> **outermost** `SELECT` and not of the CTE, which projects `a.plan_id`. S-4 reads the `SELECT` list
+> of **every** statement in the registry file, by design: `$queryRaw`'s row type is an unchecked
+> cast, so a column added to any projection is invisible to the compiler and this is the only thing
+> that sees it. The shape was built and the gate refused it, in one run —
+> `only aliased count() expressions may be projected: expected [ 'DISTINCT a.plan_id' ] to deeply
+equal []`. ADR-0076 Class 2, caught by running rather than by reading, in a claim about a gate.
+>
+> **Shipping it therefore means widening S-4 to inspect only the outermost projection**, which
+> weakens a rule whose entire value is that it is syntactic and requires no reasoning about which
+> intermediates are safe. That is an ADR-0140-level decision and an ADR-0105 shared-gate trigger —
+> so the join is **kept**, the measurement is recorded, and the remedy is named for whoever reaches
+> the trigger. Nothing is on fire: the deployed host holds 164 activities.
+
+**The replacement trigger names the product, and a number:**
+
+> **Re-open the shape if `baselines × placed activities` approaches 1 M pairs** — or, operationally,
+> if the diagnostic's own measured cost approaches ADR-0140's 500 ms bar on a real estate. Both the
+> join and the `EXISTS` shape were rejected on measurement; the pre-pass is flat across the whole
+> sweep, so the honest trigger is the bar itself rather than a proxy for it.
+
+**`snet-full-baseline-coverage` — the other join-shaped entry — is unaffected**, and that was
+checked rather than assumed: its product is bounded by `baseline_activities` rows matching binding
+SNETs, and M-I drives that population to near zero by converting them.
+
+**Nothing was on fire.** The deployed host holds 164 activities. The point is that the epic must not
+merge quoting M0's verdict forward, which is what the mandatory re-run exists to prevent — and this
+is the first time it has been run.
 
 ### What the correction is really about
 

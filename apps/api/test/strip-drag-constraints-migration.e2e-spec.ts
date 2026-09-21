@@ -8,7 +8,13 @@ import { clearDomainData } from './audit-reset';
 
 /**
  * **The placement strip, against a real populated database** (one-planning-surface M-I-T1,
- * FC-10 clauses C and D).
+ * FC-10 clause **D**).
+ *
+ * **It claimed clause C too until the M-J gate pass, and could not have discharged it** — see the
+ * paragraph below about writing `early_start` directly. That clause is about what the ENGINE
+ * produces either side of the strip, and nothing here calls it; the claim and its refutation sat a
+ * hundred lines apart in this one docblock. Clause C is `strip-bars-do-not-move.e2e-spec.ts`,
+ * which seeds through the public API and recalculates on both sides.
  *
  * **This is the proof the API e2e suite structurally cannot be** — the ADR-0107 hazard, one
  * migration along. CI provisions the database pristine, so `migrate deploy` runs this migration

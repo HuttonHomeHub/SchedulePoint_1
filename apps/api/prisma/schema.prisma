@@ -2847,7 +2847,7 @@ model PlanShare {
 //
 // IT IS DELIBERATELY OUTSIDE `RETENTION_TABLES` AND TAKES NO WINDOW (CQ-8). That set
 // has never contained organisation-scoped customer content, and
-// `retention-boundary.structural.spec.ts:53-58` asserts it BY EQUALITY — so this is a
+// `retention-boundary.structural.spec.ts:55-57` asserts it BY EQUALITY — so this is a
 // decision written down, not an omission. The Cascade FK already gives the row the only
 // lifecycle it should have: it lives exactly as long as the plan whose history it
 // describes, and the ADR-0096 expiry that hard-deletes that plan takes it too.

@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 32 Prisma models across 68 migrations, 1288 web
 > source files with 44 Playwright suites beside the base journey, and
-> 147 ADRs.
+> 148 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5262,8 +5262,8 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   **The decisions.** `schedulingMode` is deleted from the DTOs, `@repo/types` and `apps/api/src`; a
   caller naming it gets a **422 and not a silent drop**, because a silently-ignored field would let
   an old client go on "setting the mode" for ever, succeeding, and changing nothing. `computeSchedule`'s
-  network pass is **byte-identical** — the golden suite and `pureFields` pass **unedited**, which is
-  the acceptance condition and not a remark — and the parity claim is stated in four parts with its
+  network pass is **byte-identical**, and the acceptance condition is checkable rather than a
+  remark: `compute.spec.ts` — the Pass-1 golden suite — is **untouched by the epic's whole diff** — and the parity claim is stated in four parts with its
   second part **withdrawn rather than stretched**, because Pass 2's outputs change deliberately for
   the four shapes D0 repairs. Screen float becomes `remainingFloat` (`totalFloat − visualDriftDays`,
   subtracted in minutes and rounded **once** on the server, never derived client-side: the

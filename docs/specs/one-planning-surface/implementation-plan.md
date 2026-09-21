@@ -255,7 +255,7 @@ ones.**
   nothing consumes the table.
 - **Testing:** **it does NOT join `RETENTION_TABLES` and takes no window** (CQ-8) — it is org-scoped
   customer content read by a member, which that set has never contained
-  (`docs/DATABASE.md:1389-1396`), and `retention-boundary.structural.spec.ts:53-58` asserts the set
+  (`docs/DATABASE.md:1389-1396`), and `retention-boundary.structural.spec.ts:55-57` asserts the set
   **by equality**, so this is a decision written down rather than an omission. The Cascade FK
   already gives the right lifecycle.
 
@@ -748,6 +748,18 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
 - **Testing:** the ADR-0107 proof shape — **replay all migrations, populate, apply, assert** — plus
   a **negative control** issuing `DROP TYPE` first and asserting the failure **names the
   constraint**. SC-1's grep becomes satisfiable here and nowhere earlier.
+- **RETIRE `placement-on-early-plan` IN THE SAME COMMIT** (added at M-J-T1). That diagnostic's
+  numerator reads `p.scheduling_mode = 'EARLY'`, and it is the **last reader of the column anywhere
+  in the codebase** — so dropping the column without removing the entry does not degrade the
+  reading, it **breaks the whole diagnostics route** at runtime, on a surface whose own bar is "no
+  query whose cost is unknown ships" (ADR-0140). Checked rather than assumed:
+  `grep -rn "scheduling_mode" apps/api/src` returns that entry and nothing else.
+  Its premise had already lapsed at M-F — "the population whose bars MOVE on the day the mode is
+  collapsed", on a day that has passed — so M-J-T1 re-natured it `retrospective` and kept it for one
+  release only because **FC-1's estate readings are still owed** and it is one of the readings that
+  condition names. If those readings have been taken by then, it simply goes; if they have not,
+  they are unobtainable afterwards, and that is a consequence of the drop rather than a reason to
+  defer it.
 
 ##### Task M-J-T3 — close the documents _(unchanged; plus the float-tail row from M-E-T0)_
 

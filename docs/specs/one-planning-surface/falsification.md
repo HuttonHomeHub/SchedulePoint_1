@@ -125,8 +125,16 @@ verified-red step**, while every sibling (FC-4, FC-9, FC-10) has one.
    `compute.spec.ts` pass **unedited**.
 3. **The guard is demonstrated to work.** During the engine milestone, a throwaway mutation lets a
    Pass-2 value perturb a Pass-1 field; the run is confirmed **red**; the mutation is reverted and
-   the output committed as `m-d/fc2-red-run.md`. A gate that has never failed is a gate nobody has
-   tested.
+   the output committed as [`m-d/fc2-red-run.md`](./m-d/fc2-red-run.md). A gate that has never
+   failed is a gate nobody has tested.
+
+   > **MET at M-J, not at M-D** — the file this clause names by path did not exist, and its absence
+   > was checkable from the day M-D landed. **And the run changed what this condition means.** The
+   > mutation (`earlyStart: activity.visualStart ?? earlyStartDate`) takes `compute.visual.spec.ts`
+   > red on six cases and leaves **`compute.spec.ts` and all 118 conformance cases GREEN** — not one
+   > of their fixtures carries a `visualStart`, so clause 1's corpus is **structurally blind** to
+   > it. Clause 2's `pureFields` is the only thing in the repository that catches this, which makes
+   > the scope note below the load-bearing half of the condition rather than a caution.
 
 **Scope, stated because it is narrower than it reads:** clauses 1–2 cover the **existing** corpus.
 The new `MSO`/`MFO` fixture (M-D-T3) and FC-11's progress/LOE/summary fixture are **not** covered by
@@ -464,6 +472,28 @@ passes against one that moved every bar.
 activity **and one row carrying both a `visual_start` and a binding SNET** — verified red against
 (i) a strip writing no `visual_start`, (ii) a strip converting the inert row, and (iii) a strip
 overwriting the already-placed row.
+
+> **MET at M-J, by a SECOND file** — `apps/api/test/strip-bars-do-not-move.e2e-spec.ts`.
+>
+> **The clause was undischarged and one document both claimed and denied it.**
+> `strip-drag-constraints-migration.e2e-spec.ts` names "FC-10 clauses C and D" in its docblock and
+> then says, correctly, that it writes `early_start` and friends directly because _"a recalculation
+> here would be a second subject"_ — right for **that** file's subject, which is what the migration
+> READS. This clause is about what the ENGINE produces either side of the strip, and nothing in the
+> epic called it. Found by the M-J-T1 database review; the sibling's docblock is corrected to claim
+> clause D alone.
+>
+> **The first version of the new case failed against a correct migration, and the reason is the
+> useful part.** It asserted a successor's `totalFloat` rose on a plan where the constrained chain
+> WAS the longest path — and total float is measured against the **project finish**, which is
+> itself the maximum of every early finish, so stripping the constraint pulled the finish in with
+> it and the chain stayed critical at zero float in both states. The float that "comes back" is
+> only observable where something else holds the finish still. The fixture now hangs the
+> constrained branch off a 20-day independent spine, and asserts that the spine holds the finish
+> **before** measuring anything, so that arrangement cannot rot silently.
+>
+> Verified red against three mutations of the shipped SQL, each recorded in the file with the
+> assertion it hit.
 
 **Clause D — the record exists and the planner is told.** Every stripped constraint has a
 `placement_migrations` row — with its **prior `visual_start`** as well as its prior constraint —

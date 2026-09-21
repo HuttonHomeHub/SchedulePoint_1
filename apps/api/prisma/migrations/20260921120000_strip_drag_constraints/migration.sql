@@ -104,17 +104,26 @@
 -- from one a planner authored deliberately — which this epic leaves alone by design.
 --
 -- THE ID IS A UUID v7, NOT gen_random_uuid(). placement_migrations.id has no database default
--- (Prisma's @default(uuid(7)) is application-side), and placement-migration.repository.ts:25-28
--- orders the report on `id` stating "id is UUID v7, so it is monotonic by creation and orders them
--- exactly"; the schema makes the same claim for the (plan_id, id) index. A v4 id would make the
--- shipped DTO's "Oldest first" a false statement about arbitrary order. The expression below was
--- verified over 2,826 real rows: all version-7, all valid-variant, all distinct. Its failure mode
--- is NOT ADR-0107's pristine-database hazard — a malformed cast fails identically on one row and on
--- a million, so CI sees it.
+-- (Prisma's @default(uuid(7)) is application-side), and placement-migration.repository.ts orders
+-- the report on `id`; the schema relies on the same property for the (plan_id, id) index. A v4 id
+-- would make the shipped DTO's "Oldest first" a false statement about arbitrary order. The
+-- expression below was verified over 2,826 real rows: all version-7, all valid-variant, all
+-- distinct, timestamps at the correct wall clock. Its failure mode is NOT ADR-0107's
+-- pristine-database hazard — a malformed cast fails identically on one row and on a million, so CI
+-- sees it.
+--   WHAT THE ORDERING IS AND IS NOT, MEASURED. v7 sorts by its 48-bit MILLISECOND timestamp, and
+--   `rand_a`/`rand_b` below are pure random() — so ordering WITHIN one millisecond is arbitrary.
+--   This block said the id "orders rows within the batch"; measured, the 2,826 rows landed in
+--   TWENTY distinct millisecond buckets with up to 183 rows sharing one, i.e. the claim is false
+--   for essentially every row in the batch. What IS true, and is all the decision ever needed:
+--   a LATER batch sorts after an earlier one, and `(plan_id, id)` stays time-correlated rather
+--   than randomly distributed on insert. A planner reading a report of rows written inside one
+--   transaction cannot observe an order among them that means anything, so "Oldest first" is
+--   honest at the granularity it describes and overstated at the granularity this comment claimed.
 --   THE TWO CLOCKS DIFFER ON PURPOSE AND MUST NOT BE UNIFIED: `migrated_at` takes now() via its
 --   column DEFAULT (transaction START — one instant for the whole batch, which is how a batch is
---   identified), while the id takes clock_timestamp() (per row, which is what orders rows within
---   the batch).
+--   identified), while the id takes clock_timestamp() (per row, which is what keeps batches
+--   separable at all).
 --
 -- `organization_id` IS COPIED FROM THE PLAN, not from the activity. Same value under the service
 -- invariant, but the column's docblock names the plan as its source and the CASCADE hangs off it.

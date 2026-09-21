@@ -70,8 +70,10 @@ the same release, so the two halves can fail separately.
 
 ### D2 — Pass 1 is untouched, and it is not "Early mode"
 
-`computeSchedule`'s network pass is byte-identical for every input: the golden suite and
-`pureFields` pass **unedited**, which is the acceptance condition rather than a remark. It still
+`computeSchedule`'s network pass is byte-identical for every input, and the acceptance condition is
+checkable rather than a remark: **`compute.spec.ts` — the Pass-1 golden suite — is untouched by the
+epic's whole diff**, and `compute.visual.spec.ts`'s `pureFields` helper and its existing assertions
+are unedited (the only change to that file is _added_ cases). It still
 owns the float, the criticality, the late dates, the drift a placement is measured against, every
 DCMA metric and the whole ADR-0034 conformance matrix.
 

@@ -24,8 +24,14 @@
 --   * `docs/DATABASE.md` ("Data types & conventions") says enums are Postgres enums via Prisma, and
 --     all TWENTY-FIVE enumerated domains that existed before this one are. The count deliberately
 --     EXCLUDES this column: a precedent that counts itself is not a precedent. There is NOT ONE
---     `TEXT` + `CHECK … IN (…)` column to copy — checked rather than assumed,
---     `grep -n "CHECK" prisma/migrations/*/migration.sql | grep " IN ("` returns nothing.
+--     `TEXT` + `CHECK … IN (…)` column to copy — checked rather than assumed, with COMMENTS
+--     STRIPPED FIRST:
+--     `sed 's/--.*//' prisma/migrations/*/migration.sql | grep "CHECK" | grep " IN ("` returns
+--     nothing. The un-stripped form was cited here until the M-J gate pass, and by then it
+--     returned TWO matches — these very two lines. The substantive claim was and is true; the
+--     command given as evidence for it had stopped discriminating, because writing the evidence
+--     down is what made the corpus contain it. Fifth instance of a scan matching its own prose in
+--     this repository, and the first in a forward-only file.
 --   * The decisive argument is the TYPE, not the storage. The engine's `VisualConflictReason` is a
 --     closed union chosen so "a reader handling one case is forced by the compiler to decide about
 --     the other" (engine/types.ts). A `TEXT` column makes Prisma's generated field `string | null`,

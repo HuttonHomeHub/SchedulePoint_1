@@ -24,9 +24,20 @@ blocked on four findings, and **two of them were defects in work already written
 2. **The id must be a UUID v7 generated in SQL.** `placement_migrations.id` has no database
    default, so the migration supplies one, and the obvious `gen_random_uuid()` would have made two
    **already-shipped** claims false: the repository orders the report on `id` _because_ it is
-   monotonic by creation, and the DTO says "Oldest first". `migrated_at` cannot substitute — it is
-   the transaction-start instant and is identical for every row in the batch, which is deliberate
-   and is how a batch is identified.
+   time-correlated, and the DTO says "Oldest first". `migrated_at` cannot substitute — it is the
+   transaction-start instant and is identical for every row in the batch, which is deliberate and is
+   how a batch is identified.
+
+   > **The strength of that ordering was overstated in three places and is narrowed at the M-J gate
+   > pass.** v7 sorts by a 48-bit **millisecond** timestamp and the rest is `random()`, so ordering
+   > within one millisecond is arbitrary — measured, the 2,826 rows landed in **twenty** distinct
+   > millisecond buckets with up to **183 rows sharing one**, which is essentially every row in the
+   > batch. "Monotonic by creation and orders them exactly" is therefore false at the resolution the
+   > sentence implied. **The decision is unchanged and needs none of it**: what it requires is that a
+   > later batch sorts after an earlier one and that `(plan_id, id)` stays time-correlated rather
+   > than randomly distributed on insert, both of which hold. A planner cannot observe an order among
+   > rows written inside one transaction that means anything anyway.
+
 3. **The notice copy stated as present fact something false when read.** It said the successors
    "may now show more float". They do not: the migration writes `visual_start` and clears the
    constraint, and **cannot** touch `early_start`, `total_float` or `is_critical` — the engine is
@@ -142,10 +153,15 @@ with strips that a real browser drives every CI run.
 Against a real PostgreSQL 16.13 with all prior migrations replayed — **re-derived at the M-J gate
 pass**, not inherited from the design review:
 
-| Estate                                        | Converted | Wall clock                 |
-| --------------------------------------------- | --------: | -------------------------- |
-| 102,000 activities (622× the deployed estate) |     2,826 | **116–143 ms** (four runs) |
-| 164 activities (the deployed host)            |         4 | **5.4 ms**                 |
+| Estate                                            | Converted | Wall clock                 |
+| ------------------------------------------------- | --------: | -------------------------- |
+| 102,000 activities (622× the deployed estate)     |     2,826 | **116–143 ms** (four runs) |
+| 164 activities (**sized like** the deployed host) |         4 | **5.4 ms**                 |
+
+> **The second row is a synthetic estate sized like the deployed host, not the deployed host.** It
+> read "164 activities (the deployed host)" in a document that says four sections down that FC-1's
+> deployed readings **have never been taken** — two claims that cannot both be true, sixty lines
+> apart. The migration's own header words it correctly. Nothing measured changes; the label does.
 
 **It DOES sequentially scan `activities`, and that is the correct plan.** `Seq Scan on activities`
 feeds a nested loop from a `Seq Scan on plans` (40 rows), then `Index Scan using activities_pkey`

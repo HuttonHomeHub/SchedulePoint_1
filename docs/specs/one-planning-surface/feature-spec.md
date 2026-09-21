@@ -627,7 +627,7 @@ it" — the same question `placed_*` alone cannot answer.
 - **`prior_visual_start`** alongside the prior constraint.
 - **It does NOT join `RETENTION_TABLES` and has no window** — it is **org-scoped customer content
   read by a member**, which that set has never contained (`docs/DATABASE.md:1389-1396`), and
-  `retention-boundary.structural.spec.ts:53-58` asserts the set **by equality**, so this is a
+  `retention-boundary.structural.spec.ts:55-57` asserts the set **by equality**, so this is a
   decision to write down rather than an omission. The Cascade FK already gives it the right
   lifecycle.
 
@@ -665,13 +665,29 @@ So the rollback is a **restore, not a redeploy**, and M-J-T2 says so.
 | `GET …/plans/:planId`                         | `schedulingMode` removed — **a stale bundle silently renders Early**                                            | **Yes**       |
 | `PATCH`/`POST …/plans`                        | removed → **422**                                                                                               | **Yes**       |
 | `GET …/activities`                            | `+ remainingFloat`, `+ visualConflictReason`                                                                    | No            |
-| `GET …/baselines/:id`                         | `+ placedStart`, `+ placedFinish`, `+ visualStart`, `+ placementSnapshotLevel`                                  | No            |
-| `GET …/baselines/:id/variance`                | live side reads placed; carries the level                                                                       | Behaviourally |
+| `GET …/baselines/:id`                         | ~~`+ placedStart`, `+ placedFinish`, `+ visualStart`, `+ placementSnapshotLevel`~~ **NOT BUILT** (#359)         | No            |
+| `GET …/baselines/:id/variance`                | ~~live side reads placed; carries the level~~ **NOT BUILT** (#359)                                              | Behaviourally |
 | **`POST …/schedule/recalculate`**             | **the cross-plan derivation runs here too** whenever `countActiveForPlan > 0` (`schedule.service.ts:1425-1432`) | Behaviourally |
 | **`POST …/schedule/recalculate-programme`**   | the upstream basis moves                                                                                        | Behaviourally |
 | `POST …/export/:format`                       | one aggregate placement finding                                                                                 | No            |
 | **`GET …/plans/:planId/placement-migration`** | new                                                                                                             | No            |
 | `GET …/schedule/health-check`                 | **unchanged** — DCMA reads total float, correctly                                                               | No            |
+
+**Two rows of this table were specified and not built, and they are one piece of work**
+(`docs/TECH_DEBT.md` #359, raised at M-J). M-C froze `placed_start` / `placed_finish` /
+`visual_start` on `baseline_activities` **for this** and nothing reads them; the variance read still
+builds its live side from `earlyStart`/`earlyFinish`.
+
+It is **live-wrong after M-I** rather than merely incomplete: the strip moves a converted activity's
+`early_start` earlier while its drawn span stays put, so variance reports it as ahead of baseline
+when the bar has not moved — the "basis change presented as slippage" risk `m-c/placement-snapshot.md`
+§3 records as not closed by that milestone, in its mirror form. Deferred rather than folded into the
+gate pass because the honest fix is **placed-vs-placed gated on the level** (moving only the live
+side compares a frozen network date against a live placed one, which is worse than what ships), and
+that changes `BaselineVarianceRow`'s public contract and the Gantt's variance bar — an ADR-0105
+full-spec trigger.
+
+**Struck here rather than deleted**, so the table cannot be read as a record of what shipped.
 
 ### 4.12 Component changes
 

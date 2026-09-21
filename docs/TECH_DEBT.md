@@ -11198,3 +11198,56 @@ panel has no org slug and no session, so it could not fetch the report even if i
 **Trigger:** the next epic that touches the `features/tsld` boundary. It is worth doing then rather
 than opportunistically, because the cheap half — correcting nine comments to match the code — is the
 **wrong** half: it would record the violation as the rule.
+
+### 359. Baseline variance compares a frozen network date against a live placed one
+
+**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-J) ·
+**Size:** M · **Owner:** api + web
+
+Two rows of the epic's own §4.11 API table were specified and never built, and they are **one piece
+of work rather than two**:
+
+| Row                            | Specified                                                                      | Built |
+| ------------------------------ | ------------------------------------------------------------------------------ | ----- |
+| `GET …/baselines/:id`          | `+ placedStart`, `+ placedFinish`, `+ visualStart`, `+ placementSnapshotLevel` | no    |
+| `GET …/baselines/:id/variance` | live side reads placed; carries the level                                      | no    |
+
+M-C froze the three placement columns on `baseline_activities` **for this** — its own record says
+so in as many words: _"after M-F the placed span is what every view draws, so a variance read needs
+it frozen"_. `baseline.repository.ts:264-266` writes them; **nothing in `apps/api/src` reads them**,
+and `BaselineActivitySnapshotResponseDto` does not carry them.
+
+**It is live-wrong after M-I rather than merely incomplete, and the migrated population is exactly
+the one that exhibits it.** `baselines.service.ts:421` builds the live side from
+`earlyStart`/`earlyFinish`. The strip converts a **binding** constraint — one that was holding an
+activity later than logic wanted — into a placement, so afterwards that activity's `early_start`
+moves **earlier** while its drawn span stays where it was. Variance therefore reports the activity
+as having moved **ahead of baseline** when the bar has not moved at all. That is the "a basis change
+presented as slippage" risk `m-c/placement-snapshot.md` §3 records as **not closed by that
+milestone and not claimed to be** — in its mirror form, and it is worse than a stale number because
+the Gantt draws the baseline variance bar from it, so the picture agrees with the wrong figure.
+
+**The fix is placed-vs-placed, gated on the level, and it is not a one-line swap.** Moving only the
+live side to the placed span would compare a frozen **network** date against a live **placed** one,
+which is worse than what ships. The honest shape is:
+
+- both sides placed where `placementSnapshotLevel` is `FULL`;
+- both sides on today's network basis where it is `NONE` — **every baseline captured before M-C**,
+  permanently, because a backfill would state as history a placement that baseline never saw;
+- the level carried on the response so a reader can tell which question was answered, since the same
+  plan reports different numbers depending on which baseline is active.
+
+**Not fixed in M-J, deliberately.** It changes `BaselineVarianceRow`'s public contract and the
+Gantt's variance bar, which is an ADR-0105 full-spec trigger rather than a fold-in inside a gate
+pass — and smuggling it into an epic's last milestone is exactly what that rule exists to stop. The
+spec's §4.11 is amended in place to say the two rows are unbuilt rather than left reading as
+delivered.
+
+**What was checked:** `baselines.service.ts:402-427` (the live projection), `variance.ts:67`
+(`computeVariance`'s two inputs), `dto/baseline-response.dto.ts:85-143` (the snapshot DTO's field
+list), `baseline.repository.ts:264-266` (the columns are written), and
+`grep -rn "placedStart" apps/api/src` (no reader).
+
+**Trigger:** the next epic that touches baselines, Earned Value or the Gantt's variance bar —
+whichever comes first. Until then a planner comparing a migrated plan against a pre-migration
+baseline should read the variance as a statement about the **network**, which is what it is.

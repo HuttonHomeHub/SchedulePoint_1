@@ -294,11 +294,26 @@ const VISUAL_PLACEMENT_ACTIVITIES: DiagnosticEntry = {
  * collapse. It is also the population the strip must not silently overwrite — an activity here can
  * carry a binding constraint AND a prior placement, and only one of the two survives a naive
  * conversion.
+ *
+ * **ITS PREMISE HAS LAPSED, AND THE ENTRY IS KEPT FOR ONE RELEASE RATHER THAN CORRECTED** (M-J).
+ * "The day the mode is collapsed" has passed: `schedulingMode` is gone from `apps/api/src` and
+ * `@repo/types`, `barDateSourceFor` no longer takes one, and **every** bar now draws from the
+ * placed basis. So this no longer counts a population that is about to change appearance — that
+ * change has happened — and it converges on D-D, under a label naming a concept the product does
+ * not have. Its `nature` moves to `retrospective` accordingly: the panel renders `prospective` as
+ * _"Live: this sizes work that is wrong now"_, and a placement on a plan whose frozen
+ * `scheduling_mode` happens to read `EARLY` is now entirely ordinary.
+ *
+ * **It is kept because FC-1's estate readings are still owed** and this is one of the readings that
+ * condition names; deleting it before they are taken would remove the only pre-collapse figure for
+ * this population, permanently. **It RETIRES with the column at M-J-T2** — it is the last reader of
+ * `plans.scheduling_mode` in the codebase, so dropping that column without removing this entry
+ * breaks the diagnostics route outright. That is a hard coupling, not a tidy-up.
  */
 const PLACEMENT_ON_EARLY_PLAN: DiagnosticEntry = {
   id: 'placement-on-early-plan',
   label: 'Hand-placed activities on a plan still in Early mode',
-  nature: 'prospective',
+  nature: 'retrospective',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -328,6 +343,34 @@ const PLACEMENT_ON_EARLY_PLAN: DiagnosticEntry = {
  * Counted at BASELINE grain, so `affected` exceeds `affected_plans` wherever a plan has been
  * baselined more than once — which is the normal case and is the number that matters, because each
  * capture is separately comparable.
+ *
+ * **THE JOIN IS KEPT, ON A SWEEP RATHER THAN ON ONE DENSITY — AND ITS ESCALATION TRIGGER IS
+ * REPLACED** (M-J; `m0/measurements.md`, "M-J re-ran it"). This numerator materialises one row per
+ * (baseline × placed activity) pair, so its cost is a **product** that degrades exactly as the
+ * estate fills with placements, which is what this epic exists to do. Swept at eight densities on a
+ * 102,000-activity / 400-baseline fixture it runs 82 → 314 → 425 ms and touches ADR-0140's 500 ms
+ * bar at 90 % (457–523 ms across five runs, 918,360 joined rows, spilling to temp).
+ *
+ * **The trigger recorded at M0 measured the wrong quantity and is withdrawn.** It said to re-open
+ * the shape "when a substantial majority of plans carry at least one placement" — and at **1 %**
+ * density all 40 plans already carry one, where the join still wins by 3× (`EXISTS` 355–402 ms
+ * against 139–162 ms). It saturates long before the crossover and would have sent a reader to the
+ * slower shape. The quantity that decides is the **(baselines × placed activities) product**: ~1 M
+ * pairs is where the bar is reached, and the crossover in that fixture is between 2 % and 3 %.
+ *
+ * **Neither obvious alternative is the answer, which is why this is not a drive-by fix.** A
+ * correlated `EXISTS` measures **580 ms at 2 %** — also over the bar, because proving absence means
+ * exhausting a plan — and its cost is unstable across sessions on identical data, depending on
+ * where placed rows sit in index order. A `DISTINCT` pre-pass over the placed plan ids IS flat
+ * (**37–48 ms at 2 %, 50 % and 100 %**, byte-identical numbers), and it **fails gate S-4**: that
+ * gate reads the `SELECT` list of EVERY statement in the file, and the CTE projects `a.plan_id`.
+ * A review reported the pre-pass as S-4-compliant; it was built and the gate refused it.
+ *
+ * So shipping it means widening S-4 to inspect only the outermost projection — weakening a rule
+ * whose whole value is that it is syntactic and needs no reasoning — which is an ADR-0140-level
+ * decision and an ADR-0105 shared-gate trigger, not a fold-in inside a gate pass. **Recorded rather
+ * than done**: the deployed host holds 164 activities, so nothing is on fire, and the measurement
+ * is on the page for whoever reaches the trigger.
  */
 const BASELINES_OVER_PLACED_PLANS: DiagnosticEntry = {
   id: 'baselines-over-placed-plans',
@@ -565,10 +608,21 @@ const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
  * how many people that is, and it is unobtainable from this container (ADR-0128's finding, one
  * tier along) — only an operator press on the deployed host can answer it.
  *
- * **Not costed here, and that is stated rather than implied.** Both are single-table scans of
- * `activities` with a join to `plans`, the same shape as D-D which measured cheaply; neither
- * introduces the join product that made D-I's cost estate-dependent. If a press gets slow, these
- * are not the first entries to suspect — `inherited-day-factor` is, at a measured 240–245 ms.
+ * **COSTED AT M-J, and the argument above held.** They shipped uncosted at M-E with the reasoning
+ * below stated honestly rather than implied — but ADR-0140's bar is "no query whose cost is
+ * unknown ships", and an argument is not a measurement. Measured on the 102,000-activity diluted
+ * estate, `EXPLAIN (ANALYZE, TIMING OFF)`, median of five:
+ *
+ * | Statement                                  | ms       |
+ * | ------------------------------------------ | -------- |
+ * | shared denominator (the placed population) | 37.8     |
+ * | `EARLIER_THAN_LOGIC` numerator             | 41.6     |
+ * | `LATER_THAN_BOUND` numerator               | 40.2     |
+ *
+ * Comfortably inside the 500 ms bar, and flat rather than estate-dependent: both are single-table
+ * scans of `activities` with a join to `plans`, the same shape as D-D, and neither introduces the
+ * join product that makes D-I's cost grow with placement density. If a press gets slow these are
+ * still not the first entries to suspect — `inherited-day-factor` is, at a measured 240–245 ms.
  */
 const VISUAL_CONFLICT_DENOMINATOR = Prisma.sql`
   SELECT count(*) AS examined

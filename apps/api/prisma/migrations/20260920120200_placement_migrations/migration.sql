@@ -69,7 +69,7 @@
 --
 -- IT IS DELIBERATELY OUTSIDE `RETENTION_TABLES` AND TAKES NO WINDOW (CQ-8). That set has never
 -- contained organisation-scoped customer content (docs/DATABASE.md "Operational telemetry"), and
--- `retention-boundary.structural.spec.ts:53-58` asserts it BY EQUALITY — so a fourth member is a
+-- `retention-boundary.structural.spec.ts:55-57` asserts it BY EQUALITY — so a fourth member is a
 -- decision somebody has to make deliberately, and this is that decision written down rather than an
 -- omission. The Cascade FK already gives the row the only lifecycle it should have: it lives
 -- exactly as long as the plan whose history it describes, and the ADR-0096 expiry that hard-deletes

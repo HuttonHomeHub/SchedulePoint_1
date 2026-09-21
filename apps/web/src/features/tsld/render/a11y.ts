@@ -103,6 +103,14 @@ export function describeActivity(
    * **The caller passes the source.** Defaulting it here would be a second place that decides the
    * basis, which is the defect this fix removes.
    *
+   * **And there is deliberately NO fallback to `earlyStart` when the placed date is null**, though
+   * that state is reachable: `visual_effective_start` was added with no backfill, so a plan whose
+   * last recalculation predates 2026-07-14 has early dates and no placed ones. Such a bar is **not
+   * drawn at all** — `to-render-model.ts` passes `barDatesFor`'s answer straight through and
+   * `activityRect` returns null for a null start — so "not yet scheduled" is what the picture
+   * shows. A fallback here would describe a bar that is not there, which is the disagreement this
+   * whole fix removes, pointing the other way.
+   *
    * Found independently by the accessibility and UX reviews of M-J-T1. The epic's own widened-hazard
    * census (`m-f/no-placement-parity.md` §5) found the two sibling instances — the CSV export and
    * the guest share view — and structurally could not find this one: its method was "every file that

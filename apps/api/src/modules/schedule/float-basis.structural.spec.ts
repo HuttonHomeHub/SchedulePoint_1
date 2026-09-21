@@ -27,6 +27,10 @@ import { describe, expect, it } from 'vitest';
  * that is all of them today). The defect would surface months later on the first placed programme,
  * as a DCMA grade that moved when no logic changed.
  *
+ * **All four entries are correct today, which is the point of adding them rather than a reason not
+ * to.** A gate whose roster is narrower than its own stated reasons is not protecting the files it
+ * names in prose; it is protecting the two somebody happened to list.
+ *
  * A **grep, deliberately** — not a type. The two fields have the same type, so nothing a compiler
  * can see distinguishes them; what distinguishes them is which question the module is answering,
  * which is exactly the kind of claim only a structural test can hold.
@@ -50,6 +54,18 @@ const GUARDED: ReadonlyArray<{ readonly path: string; readonly why: string }> = 
   {
     path: 'modules/schedule/engine/float-paths.ts',
     why: 'float paths rank by network slack; drift would reorder the chains',
+  },
+  // **The docblock named three reasons and this list held two**, which is the gate's own stated
+  // failure mode (a global swap that "finishes the job") left half-open in the file written to
+  // catch it — the third reason had no entry at all. Added at the M-J gate pass, with the two
+  // siblings the same reasoning reaches:
+  {
+    path: 'modules/baselines/variance.ts',
+    why: 'baseline float variance compares against a captured float; remainingFloat was frozen by no baseline before M-C',
+  },
+  {
+    path: 'modules/schedule/criticality-rule.ts',
+    why: 'criticality is a network property — a bar becomes critical because of the logic, never because somebody spent its slack',
   },
 ];
 

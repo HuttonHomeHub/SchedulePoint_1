@@ -1572,7 +1572,7 @@ into a **mystery instead of a diff**.
   something nobody predicted, refusing the second row turns that surprise into a failed migration
   with no record of why. That is `csp_reports`' shape-CHECK lesson verbatim.
 - **Outside `RETENTION_TABLES`, with no window** (CQ-8). That set has never contained
-  organisation-scoped customer content, and `retention-boundary.structural.spec.ts:53-58` asserts it
+  organisation-scoped customer content, and `retention-boundary.structural.spec.ts:55-57` asserts it
   **by equality** — so this is a decision written down rather than an omission. The Cascade FK
   already gives the row the only lifecycle it should have.
 - **The `id` is generated as a UUID v7 in SQL, not `gen_random_uuid()`** (M-I-T1). The column has

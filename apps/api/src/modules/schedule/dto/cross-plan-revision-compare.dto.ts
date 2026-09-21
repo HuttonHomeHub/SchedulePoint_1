@@ -276,8 +276,9 @@ export class CrossPlanChangeReportDto implements CrossPlanChangeReport {
     nullable: true,
     enum: REVISION_NOT_ASSESSABLE_REASONS,
     description:
-      'Whether the two sides’ PLACEMENTS can be compared at all — null when both recorded one, a ' +
-      'reason when they did not. NOT trivially null on this route: a cross-plan comparison matches ' +
+      'Whether the two sides’ PLACEMENTS COULD be compared — null when both recorded one, a ' +
+      'reason when they did not. **No placement comparison is implemented yet**, so null means ' +
+      '“nothing prevents one”, never “one was done”. NOT trivially null on this route: a cross-plan comparison matches ' +
       'two plans on the activity code, but either side may still be one of that plan’s baselines, ' +
       'so a snapshot captured before placements were frozen reaches this route exactly as it ' +
       'reaches the plan-nested one.',
