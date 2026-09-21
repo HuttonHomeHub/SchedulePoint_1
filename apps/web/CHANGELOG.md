@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.140.1
+
+### Patch Changes
+
+- [#656](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/656) [`c9d5788`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c9d578839859a4241971dc922c7b5764266ba5a2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Auto-arrange now packs the lanes the diagram actually paints. The summaries the WBS band draws are
+  packed after the scene and appended above it, so the rows they used to occupy inside the diagram are
+  gone: measured on a 144-bar imported programme, the drawn extent falls from 27 lanes to 12 — 420 px
+  of blank rows scattered through the picture. Turning the band off still leaves a valid layout,
+  because the summaries keep real lanes rather than stale ones.
+
 ## 0.140.0
 
 ### Minor Changes
