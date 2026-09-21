@@ -189,3 +189,39 @@ that `packLanes`' objective can hurt as well as help, which is the premise of Pa
 _"Lane count is therefore identical with the hint or without it, by construction"_
 (`pack-lanes.ts:45-48`) — **verified on all five measured configurations**, to the lane. The one
 claim this epic depends on most is the one that reproduced exactly.
+
+---
+
+## M0-T6 — does the Gantt share the bar glyph?
+
+**No. Established by reading, not assumed.**
+
+| what           | TSLD                                                                     | Gantt                                                                         |
+| -------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| bar geometry   | `render/geometry.ts` (`activityRect`, `BAR_HEIGHT` 18, `LANE_HEIGHT` 28) | `features/gantt/layout/bar-geometry.ts` (`BarGeometry`, `MIN_BAR_WIDTH_PX` 2) |
+| row/lane pitch | `LANE_HEIGHT = 28` (`geometry.ts:40`)                                    | `GANTT_ROW_HEIGHT = 28` (`GanttPanel.tsx:81`), pinned to `--row-h`            |
+| print          | the shared scene (ADR-0103)                                              | `PRINT_ROW_HEIGHT = 20` (`GanttPrintSurface.tsx:51`)                          |
+| painter        | Canvas 2D (`render/paint.ts`)                                            | virtualized DOM rows (ADR-0059)                                               |
+
+`grep -rn "BAR_HEIGHT\|LANE_HEIGHT" apps/web/src/features/gantt/` returns **nothing**. What the two
+share is the **time axis and nothing else** — `daysBetween`, `addCalendarDays`, `pxPerDayForPreset`
+and the `isMilestone` predicate — which is ADR-0059's "the time axis is shared, not reimplemented"
+rule holding exactly as written.
+
+**Consequence for Part B: the Gantt is outside the blast radius, structurally.** Changing
+`BAR_HEIGHT` or `LANE_HEIGHT` cannot reach it, so the Gantt's journeys are **not** in M5's
+regression set on glyph grounds. (They remain in it on the ordinary grounds that any change to
+`render/` can reach `render-model`, which `bar-geometry.ts` imports for two functions.)
+
+### A hypothesis I formed and the code disproved
+
+Both pitches are **28**, so the obvious reading is that `LANE_HEIGHT` is an unpinned third
+declaration of `--row-h` — i.e. that Part B moving the lane pitch would silently diverge the
+diagram from the product's rhythm with nothing failing. **`globals.css:936` says the opposite in as
+many words:** _"`--row-h` is 28 px (CQ-B) and governs the GANTT, and only the Gantt"_, with the one
+duplication (`GANTT_ROW_HEIGHT`) deliberate and pinned. The equality is two independent decisions
+that landed on one number, and it is documented as such.
+
+So there is no gate to add here and no drift to report — recorded because the hypothesis was
+plausible enough that acting on it without reading would have produced a gate asserting a
+relationship the product explicitly does not have.
