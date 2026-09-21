@@ -65,6 +65,28 @@ export interface FixtureResult {
   asArrived: Stats;
   packedNoHint: Stats;
   packedWithHint: Stats;
+  /** Lever 1: the shipped packing, lanes re-indexed. Same lane COUNT, by construction. */
+  reordered: Stats;
+  /**
+   * Lever 2a: pack only what the scene paints when the WBS band is on, i.e. drop the summaries the
+   * band draws. `null` where the fixture has no band-drawn summaries to drop.
+   */
+  sceneOnly: Stats | null;
+  /** Lever 2a + lever 1. */
+  sceneOnlyReordered: Stats | null;
+  /**
+   * Lever 2b: pack the scene's activities into lanes `0..N-1`, then append the band summaries into
+   * fresh lanes above. Band-on the planner sees a compact N; band-off the layout is still valid.
+   */
+  sceneFirst: Stats | null;
+  /**
+   * **How many of the shipped packing's lanes hold NOTHING but band-drawn summaries.**
+   *
+   * This is what decides whether lever 2 is "wasted capacity" or a visible defect. A lane's index
+   * fixes its y, so a lane whose every occupant has been lifted into the band renders as an EMPTY
+   * ROW in the diagram — vertical space spent on nothing, scattered through the plan.
+   */
+  bandOnlyLanes: number | null;
 }
 
 function statsFor(
@@ -102,25 +124,172 @@ function applied(
   return laneOf;
 }
 
-function measure(
-  fixture: string,
-  items: PackItem[],
-  links: { from: string; to: string }[],
-): FixtureResult {
+/**
+ * **Lever 1 — reorder the lanes after packing, at zero lane cost.**
+ *
+ * `packLanes` decides how MANY lanes there are and WHICH activities share one. It does not decide
+ * which **index** each lane gets, and permuting indices changes every link's travel while leaving
+ * the packing valid and the count untouched — lanes are independent time-partitions, so relabelling
+ * them cannot create an overlap.
+ *
+ * The `predecessorsOf` hint structurally cannot reach this. It is greedy: items are placed in start
+ * order and each choice is final, so an early placement it would want back is unrecoverable. A
+ * global reordering afterwards undoes exactly that.
+ *
+ * The objective is `sum over links of |index(pred lane) - index(succ lane)|`, which is a **minimum
+ * linear arrangement** over a graph whose nodes are lanes and whose edge weights are link counts.
+ * That is NP-hard in general; here N is 12-41, so a barycentre pass plus an exhaustive
+ * pairwise-swap local search is cheap and good. **It is NOT proven optimal**, so every gain it
+ * reports is a LOWER bound on what is available.
+ *
+ * Deterministic by construction — fixed start order, fixed tie-breaks, no randomness. ADR-0065's
+ * argument about a route that varies between frames applies with more force to a lane that varies
+ * between presses of the same button.
+ */
+function reorderLanes(
+  laneOf: ReadonlyMap<string, number>,
+  links: readonly { from: string; to: string }[],
+): Map<string, number> {
+  const lanes = [...new Set(laneOf.values())].sort((a, b) => a - b);
+  const n = lanes.length;
+  const indexOfLane = new Map(lanes.map((l, i) => [l, i]));
+  // w[i][j] — how many links run between lane i and lane j.
+  const w: number[][] = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
+  for (const link of links) {
+    const a = laneOf.get(link.from);
+    const b = laneOf.get(link.to);
+    if (a === undefined || b === undefined || a === b) continue;
+    const i = indexOfLane.get(a)!;
+    const j = indexOfLane.get(b)!;
+    w[i]![j]! += 1;
+    w[j]![i]! += 1;
+  }
+
+  // `order[p]` is the lane-node sitting at position p. Start from today's order.
+  let order = Array.from({ length: n }, (_, i) => i);
+  const cost = (o: readonly number[]): number => {
+    const pos = new Map(o.map((node, p) => [node, p]));
+    let total = 0;
+    for (let i = 0; i < n; i += 1)
+      for (let j = i + 1; j < n; j += 1) total += w[i]![j]! * Math.abs(pos.get(i)! - pos.get(j)!);
+    return total;
+  };
+
+  // Barycentre sweeps: move each node toward the weighted mean position of its neighbours. Ties
+  // break on the node's current position, then its id, so the pass is a total order.
+  for (let sweep = 0; sweep < 8; sweep += 1) {
+    const pos = new Map(order.map((node, p) => [node, p]));
+    const bary = order.map((node) => {
+      let sum = 0;
+      let weight = 0;
+      for (let k = 0; k < n; k += 1) {
+        if (w[node]![k]! === 0) continue;
+        sum += w[node]![k]! * pos.get(k)!;
+        weight += w[node]![k]!;
+      }
+      return { node, key: weight === 0 ? pos.get(node)! : sum / weight, at: pos.get(node)! };
+    });
+    bary.sort((a, b) => a.key - b.key || a.at - b.at || a.node - b.node);
+    const next = bary.map((b) => b.node);
+    if (cost(next) < cost(order)) order = next;
+    else break;
+  }
+
+  // Exhaustive pairwise-swap local search until no swap improves. n <= 41, so a sweep is <= 820
+  // evaluations — trivial, and it is what turns a plausible heuristic into a defensible bound.
+  for (let guard = 0; guard < 200; guard += 1) {
+    let improved = false;
+    let best = cost(order);
+    for (let i = 0; i < n; i += 1) {
+      for (let j = i + 1; j < n; j += 1) {
+        const candidate = [...order];
+        [candidate[i], candidate[j]] = [candidate[j]!, candidate[i]!];
+        const c = cost(candidate);
+        if (c < best) {
+          best = c;
+          order = candidate;
+          improved = true;
+        }
+      }
+    }
+    if (!improved) break;
+  }
+
+  const positionOfNode = new Map(order.map((node, p) => [node, p]));
+  const out = new Map<string, number>();
+  for (const [id, lane] of laneOf) out.set(id, positionOfNode.get(indexOfLane.get(lane)!)!);
+  return out;
+}
+
+function predecessorMap(links: readonly { from: string; to: string }[]): Map<string, string[]> {
   const predecessorsOf = new Map<string, string[]>();
   for (const l of links) {
     const existing = predecessorsOf.get(l.to);
     if (existing) existing.push(l.from);
     else predecessorsOf.set(l.to, [l.from]);
   }
+  return predecessorsOf;
+}
+
+/** The shipped packing: `packLanes` with the hint, over the items given. */
+function packed(items: readonly PackItem[], links: readonly { from: string; to: string }[]) {
+  return applied(items, packLanes([...items], predecessorMap(links)));
+}
+
+function measure(
+  fixture: string,
+  items: PackItem[],
+  links: { from: string; to: string }[],
+  /** Ids the WBS band draws, which therefore leave the scene (`wbs-band-source.ts:78`). */
+  bandDrawn: ReadonlySet<string> = new Set(),
+): FixtureResult {
   const arrived = new Map(items.map((i) => [i.id, i.laneIndex]));
+  const withHint = packed(items, links);
+
+  let sceneOnly: Stats | null = null;
+  let sceneOnlyReordered: Stats | null = null;
+  let sceneFirst: Stats | null = null;
+  let bandOnlyLanes: number | null = null;
+  if (bandDrawn.size > 0) {
+    const sceneItems = items.filter((i) => !bandDrawn.has(i.id));
+    const sceneLanes = packed(sceneItems, links);
+    sceneOnly = statsFor(sceneLanes, links);
+    sceneOnlyReordered = statsFor(reorderLanes(sceneLanes, links), links);
+
+    // Lever 2b: the band's summaries are packed into fresh lanes ABOVE the scene's, so a planner
+    // who turns the band off still meets a layout with no same-lane time overlap. Without this the
+    // dropped summaries keep whatever stale lane they had, which `lane-overlap.ts` exists to detect.
+    const base = Math.max(-1, ...sceneLanes.values()) + 1;
+    const bandItems = items.filter((i) => bandDrawn.has(i.id));
+    const bandLanes = packed(bandItems, links);
+    const combined = new Map(sceneLanes);
+    for (const [id, lane] of bandLanes) combined.set(id, base + lane);
+    sceneFirst = statsFor(combined, links);
+
+    // A lane whose every occupant is band-drawn paints nothing when the band is on.
+    const occupants = new Map<number, string[]>();
+    for (const [id, lane] of withHint) {
+      const list = occupants.get(lane) ?? [];
+      list.push(id);
+      occupants.set(lane, list);
+    }
+    bandOnlyLanes = [...occupants.values()].filter((ids) =>
+      ids.every((id) => bandDrawn.has(id)),
+    ).length;
+  }
+
   return {
     fixture,
     activities: items.length,
     links: links.length,
     asArrived: statsFor(arrived, links),
     packedNoHint: statsFor(applied(items, packLanes(items)), links),
-    packedWithHint: statsFor(applied(items, packLanes(items, predecessorsOf)), links),
+    packedWithHint: statsFor(withHint, links),
+    reordered: statsFor(reorderLanes(withHint, links), links),
+    sceneOnly,
+    sceneOnlyReordered,
+    sceneFirst,
+    bandOnlyLanes,
   };
 }
 
@@ -213,11 +382,39 @@ function unit300(path: string): FixtureResult[] {
         laneIndex: i,
       }));
   const links = dependencies.map((d) => ({ from: d.predecessorKey, to: d.successorKey }));
+
+  /**
+   * The summaries the ADR-0063 band actually DRAWS, and therefore lifts out of the scene
+   * (`wbs-band-source.ts:78`). **Not every summary** — the band caps its stacked depth at
+   * `WBS_BAND_MAX_DEPTH = 2` (`render/wbs-band.ts:20,31-33`), and that file records a shipped
+   * defect from lifting them all out unconditionally: a depth-3 summary vanished from both
+   * surfaces at once, invisible and unselectable.
+   *
+   * Depth here is the activity's depth in the `parentKey` tree, which **approximates** the band's
+   * own group depth rather than reproducing it — `wbsBandGroups` is a feature-tier derivation this
+   * pure harness does not import. Measured on this fixture all 18 summaries sit at depth 0-2, so
+   * the approximation and the real rule agree here; on an unusual tree they could differ by a level.
+   */
+  const parentOf = new Map(activities.map((a) => [a.key, a.parentKey]));
+  const depthOf = (key: string): number => {
+    let d = 0;
+    let at = parentOf.get(key) ?? null;
+    while (at !== null && d < 50) {
+      d += 1;
+      at = parentOf.get(at) ?? null;
+    }
+    return d;
+  };
+  const bandDrawn = new Set(
+    activities.filter((a) => a.type === 'WBS_SUMMARY' && depthOf(a.key) <= 2).map((a) => a.key),
+  );
+
   return [
     measure(
       'Unit 300 (ASAP layout, all bars)',
       build(() => true),
       links,
+      bandDrawn,
     ),
     // **The 18 WBS summaries, isolated.** A summary spans its whole subtree, so it holds a lane for
     // most of the programme and can only push the lane count up. Whether the 2026-07-31 measurement
@@ -247,7 +444,13 @@ function scale(count: number): FixtureResult {
   const links = scene.edges
     .filter((e) => known.has(e.predecessorId) && known.has(e.successorId))
     .map((e) => ({ from: e.predecessorId, to: e.successorId }));
-  return measure(`scale-${String(count)} (${scene.summary})`, items, links);
+  // The scale scene carries no parent tree, so the band's depth cap cannot be applied: EVERY
+  // summary is treated as band-drawn. That is an UPPER bound on lever 2 for these fixtures, and
+  // the Unit 300 rows are the ones to read for a realistic figure.
+  const bandDrawn = new Set(
+    scene.activities.filter((a) => a.type === 'WBS_SUMMARY').map((a) => a.id),
+  );
+  return measure(`scale-${String(count)} (${scene.summary})`, items, links, bandDrawn);
 }
 
 export function probe(xerPath: string): FixtureResult[] {

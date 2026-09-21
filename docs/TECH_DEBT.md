@@ -6672,6 +6672,51 @@ is most likely to need.
 `check:e2e-roster` both refuse a suite that is not declared in `ci.yml`, `package.json` and the
 rosters, and it takes a shard slot. Budget for that rather than discovering it.
 
+### 364. Auto-arrange packs lanes for bars the WBS band has taken out of the scene
+
+**Status:** open · **Verified:** 2026-09-21 (measured: 13 of 27 lanes on the Unit 300 fixture hold
+nothing but band-drawn summaries — `docs/specs/diagram-legibility/cheap-levers.md`) · **Raised:**
+2026-09-21 · **Size:** S · **Owner:** web
+
+`computeArrangeChanges` (`TsldPanel.tsx:2213-2233`) packs **every** activity carrying an
+`earlyStart`. `deriveWbsBandSource` (`wbs-band-source.ts:78`) then removes from the scene exactly
+the summaries the band draws. **Nothing connects the two**, so the packer reserves rows for bars the
+scene declines to paint — and a lane's index fixes its y, so those rows are not spare capacity, they
+are blank gaps scattered through the diagram.
+
+**Measured on `p6_torture_test_v1.xer` (144 bars, 188 links):** the shipped packing produces 27
+lanes, 13 of which are band-only — **364 px of empty rows** at `LANE_HEIGHT` 28, with the band on.
+Packing only what the scene paints gives **12 lanes**, and improves link travel as well (mean
+1.78 → 1.59, links over five lanes 14 → 11). The synthetic fixtures agree in direction: 17 of 41
+band-only at scale-500, 10 of 41 at scale-2000.
+
+**The fix is one argument, and the parity argument is free.** `TsldPanel.tsx:1098` already derives
+the band source in the same component, so `computeArrangeChanges` can pack
+`bandSource.sceneActivities` rather than `activities`. With the band **off** that field is the input
+array **by identity** — the module's own docblock states it — so the band-off path is byte-identical
+rather than merely equivalent.
+
+**It is not a one-liner, and the reason is recorded rather than discovered later.** Dropping a
+summary from the pack leaves it at whatever lane it already had, so a planner who arranges band-on
+and then turns the band **off** can meet same-lane time overlap — the condition
+`render/lane-overlap.ts` exists to detect (#24c). Two answers were measured:
+
+- **2a — do not pack them.** 12 lanes. Leaves the band-off hazard.
+- **2b — pack the scene into `0..N-1`, append the band summaries above.** No hazard, and **30 lanes
+  against the shipped 27**, because the summaries stop sharing rows with tasks.
+
+Same travel either way. **Which one is a product decision**, not an implementation detail.
+
+**And the depth cap is load-bearing.** The rule is "the summaries the band DRAWS", never
+"summaries": `isWithinBandDepth` caps at `WBS_BAND_MAX_DEPTH = 2` (`render/wbs-band.ts:20,31-33`),
+and `wbs-band-source.ts:65-72` records a shipped defect from lifting them all out unconditionally —
+a depth-3 summary vanished from both surfaces at once, invisible and unselectable. All 18 of Unit
+300's summaries sit at depth 0–2, so that distinction does not move these numbers; it moves the
+implementation.
+
+**Measured, not photographed.** The 13 is lane-occupancy arithmetic over the real packer's output.
+A screenshot of the gaps is owed before anyone calls this cosmetic or calls it severe.
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this

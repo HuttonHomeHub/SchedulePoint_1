@@ -65,15 +65,31 @@ try {
       `          from the file's own durations and relationships, NOT a CPM result.\n`,
   );
   for (const r of results) {
+    const base = r.packedWithHint;
+    const vs = (label, s) =>
+      s === null
+        ? `    ${label.padEnd(22)} —`
+        : `${row(label, s)}\n      vs shipped:  lanes ${pct(base.lanes, s.lanes)}   ` +
+          `mean ${pct(base.meanDelta, s.meanDelta)}   >5 ${pct(base.overFive, s.overFive)}`;
     console.log(
       `  ── ${r.fixture} ──\n` +
         `     ${String(r.activities)} activities, ${String(r.links)} links\n` +
         `${row('as arrived', r.asArrived)}\n` +
         `${row('packed, no hint', r.packedNoHint)}\n` +
-        `${row('packed + hint', r.packedWithHint)}\n` +
+        `${row('packed + hint *', r.packedWithHint)}   <- what the product does today\n` +
         `     hint vs no hint:  lanes ${pct(r.packedNoHint.lanes, r.packedWithHint.lanes)}   ` +
         `mean ${pct(r.packedNoHint.meanDelta, r.packedWithHint.meanDelta)}   ` +
-        `>5 ${pct(r.packedNoHint.overFive, r.packedWithHint.overFive)}\n`,
+        `>5 ${pct(r.packedNoHint.overFive, r.packedWithHint.overFive)}\n` +
+        `\n     LEVER 1 — reorder lane indices (zero lane cost):\n${vs('reordered', r.reordered)}\n` +
+        `\n     LEVER 2 — do not pack the summaries the WBS band draws:\n` +
+        (r.bandOnlyLanes === null
+          ? ''
+          : `     of the ${String(base.lanes)} shipped lanes, ${String(r.bandOnlyLanes)} hold NOTHING but ` +
+            `band-drawn summaries\n     and therefore render EMPTY when the band is on ` +
+            `(${String(r.bandOnlyLanes * 28)} px of blank rows at LANE_HEIGHT 28)\n`) +
+        `${vs('2a scene only', r.sceneOnly)}\n` +
+        `${vs('2b scene first', r.sceneFirst)}\n` +
+        `\n     BOTH:\n${vs('2a + reordered', r.sceneOnlyReordered)}\n`,
     );
   }
 
