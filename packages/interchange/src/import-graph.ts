@@ -172,6 +172,25 @@ export const importActivitySchema = z
     scheduleAsLateAsPossible: z.boolean().default(false),
     /** Progress, or null when the activity is un-progressed (NOT_STARTED with no actuals). */
     progress: importProgressSchema.nullable(),
+    /**
+     * The planner's **hand-placement** — where somebody dragged this bar (one-planning-surface).
+     *
+     * **No parser writes it and no emitter reads it**, and unlike `ResourceAssignment.lagMinutes`
+     * that is not a gap awaiting a real file. A hand-placement is a SchedulePoint concept: P6 and
+     * MSPDI carry constraints and computed dates, never "a human put it here", so there is no
+     * candidate column to discover and nothing for an importer to have missed. It is here so the
+     * **exporter** can count what the file will not carry, which is the only way the drop can be
+     * reported truthfully rather than as a standing guess.
+     *
+     * That asymmetry is why the two directions differ: export reports a drop **only when there is
+     * something to lose**, and import reports nothing at all, because it knows with certainty that
+     * nothing was lost. The `lagMinutes` importer reports unconditionally for the opposite reason —
+     * it cannot know.
+     *
+     * Absent on every import. It is deliberately **not** on the canonical model: a slot there would
+     * reserve space for something that can never arrive.
+     */
+    visualStart: isoDateSchema.nullish(),
   })
   .strict();
 export type ImportActivity = z.infer<typeof importActivitySchema>;

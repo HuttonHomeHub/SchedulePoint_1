@@ -194,6 +194,34 @@ export function mapExportGraphToCanonical(graph: ExportGraph): ExportMapResult {
     progress: activity.progress,
   }));
 
+  // The hand-placement (one-planning-surface) reaches the export graph and stops there: **no
+  // interchange format encodes one**, so the receiving tool reads every activity at its computed
+  // dates. Reported **only when there is something to lose** — a programme nobody has hand-placed
+  // loses nothing, and a standing finding on every export would train a reader to skip the section
+  // that matters (the `lagMinutes` rule below, and the same reasoning).
+  //
+  // Unlike that one it is deliberately absent from the canonical model. `lagMinutes` has a slot
+  // there because a real P6 export may yet be read carrying one under a column name this repository
+  // does not know (ADR-0071 §5); a placement is a SchedulePoint concept with no candidate column to
+  // discover, so a canonical slot would reserve space for something that can never arrive.
+  //
+  // ONE producer. Neither `export-xer.ts` nor `export-mspdi.ts` repeats it — two copies would drift,
+  // and the drift would be invisible because each looks right alone (ADR-0065). A structural test
+  // pins that neither serialiser so much as mentions the field.
+  const placedActivities = graph.activities.filter(
+    (activity) => activity.visualStart !== null && activity.visualStart !== undefined,
+  );
+  if (placedActivities.length > 0) {
+    findings.push({
+      kind: 'drop',
+      entity: 'activity',
+      sourceRef: null,
+      detail: `${String(placedActivities.length)} activity(ies) carry a hand-placed start, which is not written to the exported file`,
+      reason:
+        'no interchange format encodes a hand-placement; the receiving tool will read every activity at its computed dates (one-planning-surface)',
+    });
+  }
+
   const relationships: CanonicalRelationship[] = graph.dependencies.map((dependency) => ({
     id: dependency.key,
     predecessorId: dependency.predecessorKey,
