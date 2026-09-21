@@ -254,8 +254,26 @@ Full detail in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Summary:
    looking for a failure: `docker-publish.yml`'s **own** run list shows only
    manual `workflow_dispatch` runs, because reusable-workflow calls appear as
    jobs of the **caller's** run; and the same `GITHUB_TOKEN` rule is why the
-   "Version Packages" PR never has any checks. Neither is a fault. (Read this
+   "Version Packages" PR's checks never **run**. Neither is a fault. (Read this
    before concluding a release didn't publish — that mistake has been made.)
+
+   **This said the PR "never has any checks" until 2026-09-21, and that is not what
+   a reader sees.** Measured on PR #657's head: all three workflows are `completed`
+   with conclusion **`action_required`** — created and blocked pending workflow
+   approval, not absent — so the PR reports `mergeable_state: unstable` rather than
+   `clean`. The practical consequence is the one the old wording described (nothing
+   ran, nothing gates), but a reader checking for "no checks" finds three and
+   reasonably stops. Merge it anyway: `main` carries no branch protection (§8), the
+   diff is a generated version bump and two changelogs, and its content was already
+   validated on the PR that produced the changeset.
+
+   **And `changeset-release/main` is REUSED across releases**, so the GitHub API
+   lists a previous release's runs against the current Version Packages PR — #657
+   carried a `PR title` run with conclusion `failure` from an iteration five hours
+   earlier, on a different SHA. §19.9's "read the runs for the PR's **current
+   head**" is what excludes it; a roster read without that clause reports a red
+   check on a PR that has none.
+
 4. Deployment promotes those immutable images through environments — automatic
    where an operator has enabled the Watchtower `autodeploy` profile (ADR-0047),
    manual otherwise.
