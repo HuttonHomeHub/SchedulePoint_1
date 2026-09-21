@@ -47,8 +47,11 @@ import { readFileSync } from 'node:fs';
 
 import { importXer } from '@repo/interchange';
 import { packLanes, type PackItem } from '@repo/layout';
+import type { ActivitySummary, DependencySummary } from '@repo/types';
 
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
+import { computeLaneArrangement } from '../src/features/tsld/model/arrange-lanes';
+import { addCalendarDays } from '../src/features/tsld/render/working-time';
 
 export interface Stats {
   lanes: number;
@@ -251,6 +254,69 @@ function packed(items: readonly PackItem[], links: readonly { from: string; to: 
   return applied(items, packLanes([...items], predecessorMap(links)));
 }
 
+/**
+ * **The probe's 2b above is a MODEL of the shipped rule; this asserts it is the same rule.**
+ *
+ * ADR-0124's finding was a measurement taken with a *copy* of an instrument, which measures the
+ * copy — and `sceneFirst` was written before `computeLaneArrangement` existed, so leaving the two
+ * unconnected would mean the numbers in `cheap-levers.md` describe a packing nothing ships. The
+ * pack items carry day offsets and the shipped rule takes activities with ISO dates, so the items
+ * are mapped back onto an arbitrary epoch — the arithmetic is offset-invariant.
+ *
+ * It THROWS rather than reporting, because a disagreement means every figure printed below it is
+ * about something other than the product.
+ */
+function assertShippedRuleAgrees(
+  items: readonly PackItem[],
+  links: readonly { from: string; to: string }[],
+  bandDrawn: ReadonlySet<string>,
+  expected: ReadonlyMap<string, number>,
+): void {
+  const EPOCH = '2026-01-01';
+  const activities = items.map(
+    (i) =>
+      ({
+        id: i.id,
+        laneIndex: i.laneIndex,
+        type: bandDrawn.has(i.id) ? 'WBS_SUMMARY' : 'TASK',
+        earlyStart: addCalendarDays(EPOCH, i.startDay),
+        earlyFinish: addCalendarDays(EPOCH, i.endDay),
+      }) as unknown as ActivitySummary,
+  );
+  const dependencies = links.map(
+    (l) =>
+      ({
+        id: `${l.from}->${l.to}`,
+        predecessor: { id: l.from },
+        successor: { id: l.to },
+      }) as unknown as DependencySummary,
+  );
+  const shipped = applied(
+    items,
+    computeLaneArrangement({
+      activities,
+      sceneActivities: activities.filter((a) => !bandDrawn.has(a.id)),
+      dependencies,
+      dataDate: EPOCH,
+    }),
+  );
+
+  for (const [id, lane] of expected) {
+    const got = shipped.get(id);
+    if (got !== lane) {
+      throw new Error(
+        `The shipped rule disagrees with this probe's model of lever 2b: "${id}" lands in lane ` +
+          `${String(got)}, the model says ${String(lane)}. Every figure below would be fiction.`,
+      );
+    }
+  }
+  if (shipped.size !== expected.size) {
+    throw new Error(
+      `The shipped rule placed ${String(shipped.size)} activities, the model ${String(expected.size)}.`,
+    );
+  }
+}
+
 function measure(
   fixture: string,
   items: PackItem[],
@@ -282,6 +348,7 @@ function measure(
     const combined = new Map(sceneLanes);
     for (const [id, lane] of bandLanes) combined.set(id, base + lane);
     sceneFirst = statsFor(combined, links);
+    assertShippedRuleAgrees(items, links, bandDrawn, combined);
 
     // A lane whose every occupant is band-drawn paints nothing when the band is on.
     const occupants = new Map<number, string[]>();

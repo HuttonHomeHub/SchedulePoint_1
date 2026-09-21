@@ -1,4 +1,3 @@
-import { packLanes } from '@repo/layout';
 import type {
   ActivitySummary,
   ActivityType,
@@ -24,6 +23,7 @@ import {
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
+import { computeLaneArrangement } from '../model/arrange-lanes';
 import {
   addAll,
   type CanvasSelection,
@@ -2201,37 +2201,22 @@ export function TsldPanel({
   };
 
   // Auto-arrange (M4 4.3): pack the drawn (dated) activities into the fewest non-overlapping lanes.
-  // Pure `packLanes` computes the minimal set of moves; undated activities have no x-span → keep
-  // their lane. (Returns [] when the plan isn't schedulable — a dead case, since the toolbar only
-  // renders when editing is enabled, which already requires a data date.)
+  // The rule lives in `model/arrange-lanes` — pure, and testable without driving the `View ▾` menu
+  // to reach the band toggle its answer depends on. (Returns [] when the plan isn't schedulable —
+  // a dead case here, since the toolbar only renders when editing is enabled, which already
+  // requires a data date.)
   //
-  // The plan's logic goes in as a hint so the packer, choosing among lanes that are already free,
-  // puts an activity near its predecessors rather than in whichever lane happened to free up first.
-  // It cannot change the lane COUNT (see `packLanes`) — only how far a link has to travel, which on
-  // an imported programme is the difference between a readable diagram and one whose lines leave the
-  // top of the viewport and come back lower down.
-  const computeArrangeChanges = (): { id: string; laneIndex: number }[] => {
-    if (dataDate === null) return [];
-    const packItems = activities.flatMap((a) =>
-      a.earlyStart === null
-        ? []
-        : [
-            {
-              id: a.id,
-              startDay: daysBetween(dataDate, a.earlyStart),
-              endDay: daysBetween(dataDate, a.earlyFinish ?? a.earlyStart),
-              laneIndex: a.laneIndex,
-            },
-          ],
-    );
-    const predecessorsOf = new Map<string, string[]>();
-    for (const dependency of dependencies) {
-      const existing = predecessorsOf.get(dependency.successor.id);
-      if (existing) existing.push(dependency.predecessor.id);
-      else predecessorsOf.set(dependency.successor.id, [dependency.predecessor.id]);
-    }
-    return packLanes(packItems, predecessorsOf);
-  };
+  // `wbsBand.sceneActivities` is what the canvas paints, and it is what gets packed into the low
+  // lanes: the summaries the band draws are appended above it rather than threaded through it
+  // (`docs/TECH_DEBT.md` #364). Band off, that field is `activities` by identity, so this is the
+  // pre-#364 pack unchanged.
+  const computeArrangeChanges = (): { id: string; laneIndex: number }[] =>
+    computeLaneArrangement({
+      activities,
+      sceneActivities: wbsBand.sceneActivities,
+      dependencies,
+      dataDate,
+    });
 
   // Toolbar click: compute the pack up front so an already-tidy diagram reports "nothing to move"
   // immediately (no pointless confirm round-trip, and no dialog that could dead-end) — only open

@@ -3,7 +3,9 @@
 - **Epic:** [`./feature-spec.md`](./feature-spec.md) · **M2's verdict:** [`./m2-verdict.md`](./m2-verdict.md)
 - **Taken:** 2026-09-21, against `81d7e5d0` (the released tree, `api-v0.72.0` / `web-v0.140.0`)
 - **Harness:** `apps/web/scripts/measure-lane-travel.mjs` + `lane-travel-probe.ts`
-- **Status:** measurement only. **Neither lever is built.**
+- **Status:** measurement only when written. **Lever 2b was built the same day**
+  (`docs/TECH_DEBT.md` #364 → the Closed-numbers ledger; `docs/DECISIONS.md`, 2026-09-21).
+  **Lever 1 is not built.**
 
 Product-owner decision, 2026-09-21: M3 (the lane budget) and Part B both **hold** until the released
 version has been used; measure both of these first. Neither was in the spec — both fell out of M0-T3.
@@ -104,6 +106,13 @@ framing of this as a genuine product decision was written before the extent was 
 
 **Measured, not photographed.** The 13 and the 420 px are lane-occupancy arithmetic over the real
 packer's output; nobody has yet taken a screenshot of the gaps.
+
+**And this file's 2b was a MODEL of a rule that did not exist yet.** `sceneFirst` was written
+here before `computeLaneArrangement` did, so these figures could have described a packing nothing
+ships — ADR-0124's finding, that a measurement taken with a copy of an instrument measures the
+copy. The probe now calls the shipped rule on every fixture carrying a band and **throws** on any
+disagreement; it was verified by mutating the shipped `base` and watching it name the activity and
+both lanes. The tables above are therefore about the product, not about this script.
 
 ## Finding 2 — `bandIds` is depth-capped, and getting that wrong has shipped before
 
