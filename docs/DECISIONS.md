@@ -10,6 +10,39 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-21 — The screenshot fixture could not exhibit the defect it was built to show
+
+**What was decided.** `seedDense` (`apps/web/scripts/shoot.mjs`) ties each phase's **first** task back
+to the previous phase, so the seven phases start at different dates.
+
+**Why.** The entry below closes `docs/TECH_DEBT.md` #364 and records that nobody had photographed the
+gaps. Photographing them produced two pixel-identical pictures, and the reason had nothing to do with
+the fix. Every phase's task 0 had no predecessor, so all seven started on the data date, all seven
+summaries rolled up to the same start, and `packLanes` sorts by `(startDay, endDay, id)` — so the long
+summaries sorted **last among the day-0 starters** and were already placed above every task. Confirmed
+in `psql` rather than inferred: both runs put the 8 summaries in lanes 7–14 and the tasks in 0–6,
+byte-identical. The fixture had accidentally produced the fix's own answer.
+
+**That is the finding, not the fixture bug.** #364's cost depends on **where** the band-only lanes
+land, which is a property of the plan: on the imported Unit 300 programme they are scattered (highest
+drawn bar in lane 26, 13 of 27 lanes band-only, 420 px); on a plan whose phases all start together
+they are at the end and cost nothing. `cheap-levers.md` said that had to be measured rather than
+assumed, and this is the same statement arriving from the other side.
+
+**Consequences.** Staggered, the fixture exhibits it and the before/after is photographed: **drawn
+extent 4 lanes → 2** (56 px), and the empty band-only row that sat _between_ two rows of work is gone,
+along with the long vertical link that reached down past it. Measured in `psql` on both runs, not read
+off the images. A real programme's phases stagger, so the fixture is also more representative than it
+was — the concurrency the shot exists to show is preserved, because the cross-phase links still feed
+each phase from the middle of the last.
+
+**The general shape.** A fixture is an instrument, and an instrument that cannot exhibit the defect
+reports a green picture indistinguishable from a fixed one. This one would have been read as "the fix
+does nothing" — or, had the images been taken only after, as "the fix works". Neither would have been
+supported by anything on screen.
+
+---
+
 ## 2026-09-21 — Auto-arrange packs what the scene paints, and appends the band's summaries
 
 **What was decided.** `computeArrangeChanges` stops packing every activity. The rule moves to a pure

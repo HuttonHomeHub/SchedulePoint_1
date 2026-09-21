@@ -519,10 +519,22 @@ async function seedDense(page, slug) {
     // **The cross-phase logic, which is what makes a link travel.** Each phase feeds the next from
     // its middle, and two long-range links reach from the first phase to the last — the shape a
     // planner sees as a line crossing most of the diagram.
+    //
+    // **Each phase's FIRST task is also tied back, and that is what makes this fixture able to
+    // exhibit anything about lane packing.** Without it every phase's task 0 has no predecessor,
+    // so all seven start on the data date, every phase summary rolls up to the same start, and the
+    // packer's `(startDay, endDay)` sort puts the long summaries last — i.e. exactly where
+    // `docs/TECH_DEBT.md` #364's fix puts them, by accident. The first version of this seeder did
+    // that, and the before/after screenshots of that row's fix were pixel-identical for a reason
+    // that had nothing to do with the fix. Real phases stagger; this one now does too.
     for (let i = 1; i < chains.length; i += 1) {
       await post(`/plans/${plan.id}/dependencies`, {
         predecessorId: chains[i - 1][3].id,
         successorId: chains[i][1].id,
+      });
+      await post(`/plans/${plan.id}/dependencies`, {
+        predecessorId: chains[i - 1][2].id,
+        successorId: chains[i][0].id,
       });
     }
     await post(`/plans/${plan.id}/dependencies`, {

@@ -104,8 +104,15 @@ shipped 27, or 84 px — bought against a correctness hazard, which is not a rea
 framing of this as a genuine product decision was written before the extent was measured and is
 **withdrawn**: the measurement removed the choice.
 
-**Measured, not photographed.** The 13 and the 420 px are lane-occupancy arithmetic over the real
-packer's output; nobody has yet taken a screenshot of the gaps.
+**Measured, not photographed — then photographed, and the first attempt failed for a reason worth
+keeping.** The 13 and the 420 px are lane-occupancy arithmetic over the real packer's output. The
+before/after pictures taken after the fix landed were **pixel-identical**, because the screenshot
+fixture's seven phases all started on the data date, so their summaries sorted last among the
+day-0 starters and were already above every task — the fixture had produced the fix's own answer
+by accident. Staggered, it exhibits it: **drawn extent 4 lanes → 2**, with the blank band-only row
+that sat between two rows of work gone (`docs/DECISIONS.md`, 2026-09-21). That is the section
+above restated from the other side: **where** the band-only lanes land is a property of the plan,
+which is exactly why it had to be measured on a real imported programme.
 
 **And this file's 2b was a MODEL of a rule that did not exist yet.** `sceneFirst` was written
 here before `computeLaneArrangement` did, so these figures could have described a packing nothing
