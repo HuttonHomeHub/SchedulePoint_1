@@ -92,3 +92,100 @@ Those are the repository's only two exercises of this code, and **zero is the si
 `originY` at which the defect is invisible**. The unit suite's VHV case additionally asserts the
 route's _shape_ (`routed[2].y === routed[3].y`) and never the leg's value, so even a non-zero
 `originY` would not have caught it without a value assertion.
+
+---
+
+## M0-T3 — FC-3's baseline: the link-travel distribution on a packed plan
+
+**The fixture claim this epic was built on is wrong, and correcting it made the measurement
+better.** The spec (§0.1, CQ-4), the implementation plan (M0-T3 risks) and
+[`./m0-conditions.md`](./m0-conditions.md) all state that the "Unit 300" file is **not in this
+repository**. It is: `packages/engine-conformance/fixtures/p6_torture_test_v1.xer`, whose
+`PROJECT` row reads `Unit 300 Amine Regeneration Package - Construction & Commissioning` and whose
+`TEST_MATRIX.md:4` names it `TT-300 — Unit 300 Amine Regeneration Package`. Its row counts are
+**18 PROJWBS / 126 TASK / 188 TASKPRED** — the "18-node / 126-activity" programme of
+`docs/DECISIONS.md:3111` and the "126-activity / 188-link" one of `pack-lanes.ts:45-48`, on three
+independent counts.
+
+The likely origin of the error is `docs/TECH_DEBT.md` **#77** (ledgered 2026-08-01, _"the demo Unit
+300 file was a lossy rendering of the fixture"_) — a separate demo file, since removed, confused
+with the fixture it was rendered from. **All three documents are corrected in place rather than
+stepped over** (ADR-0071).
+
+So FC-3's comparison is **direct rather than a proxy**. What CQ-4 says remains true and is narrower
+than those documents claimed: nobody has established that the 2026-09-21 screenshot is a picture of
+this plan, and the product owner cannot supply the one they saw.
+
+- **Harness:** `apps/web/scripts/measure-lane-travel.mjs` + `apps/web/scripts/lane-travel-probe.ts`
+- **Command:** `node scripts/measure-lane-travel.mjs` (from `apps/web`)
+- **Commit:** `94fdd430e961d5cee0a7962d7c8a604be881dbcf`
+
+### The numbers
+
+| fixture                                 | state                     |  lanes | mean \|Δlane\| | >5-lane links |
+| --------------------------------------- | ------------------------- | -----: | -------------: | ------------: |
+| **Unit 300**, 126 bars, 188 links       | as arrived (source order) |    126 |          12.96 |            73 |
+|                                         | packed, no hint           | **12** |           1.97 |            16 |
+|                                         | packed + hint             | **12** |       **1.59** |        **11** |
+| Unit 300, 144 bars (summaries included) | packed + hint             |     27 |           1.78 |            14 |
+| scale-500, 540 bars, 800 links          | as arrived (band deal)    |     32 |           0.14 |             0 |
+|                                         | packed, no hint           |     41 |           4.71 |           272 |
+|                                         | packed + hint             |     41 |           0.43 |            30 |
+| scale-2000, 2,160 bars, 3,200 links     | as arrived (band deal)    |     50 |           0.26 |             8 |
+|                                         | packed, no hint           |     41 |           3.92 |           983 |
+|                                         | packed + hint             |     41 |           0.65 |           144 |
+
+### Finding 1 — the 2026-07-31 figures EXCLUDED WBS summaries, and nothing records that
+
+Re-derived with all 144 bars the lane count is **27**; excluding the 18 `WBS_SUMMARY` activities it
+is **12**, against the docblock's **13**, and the activity count is then exactly the **126** every
+prior document quotes. A summary spans its whole subtree, so it holds a lane for most of the
+programme and can only push the count up — the hypothesis was stated, tested by isolating them, and
+confirmed, rather than reasoned to.
+
+That property is **load-bearing and undocumented**: `computeArrangeChanges` (`TsldPanel.tsx:2213`)
+packs **every** activity with an `earlyStart`, summaries included, so **the shipped Auto-arrange
+produces the 27-lane answer and not the 12-lane one**. Every figure this epic inherited describes a
+packing the product does not perform.
+
+### Finding 2 — the docblock's ">5-lane links halved" does not reproduce; the mean does
+
+| statistic         | docblock (2026-07-31)    | re-derived (126 bars) | verdict                |
+| ----------------- | ------------------------ | --------------------- | ---------------------- |
+| mean, as arrived  | 13.0                     | **12.96**             | matches                |
+| mean, no hint     | 2.3                      | 1.97                  | close                  |
+| mean, with hint   | 1.83                     | 1.59                  | close                  |
+| lanes             | 13                       | **12**                | close                  |
+| >5-lane reduction | "halves" (15 → 8, −47 %) | 16 → 11, **−31.3 %**  | **does not reproduce** |
+
+The mean is robust to the layout; the lane count and the >5 count are not, which is what an ASAP
+layout that ignores this file's eight calendars (8 h days, a 6-day 10 h week, 24-hour continuous, a
+night shift, a turnaround window, a weather window) would predict. The residual gaps are attributed
+to that, **not** claimed to be defects in the packer.
+
+**Consequence for FC-3, stated rather than quietly applied.** Its thresholds (≥ 20 % mean, ≥ 30 %
+
+> 5-links) were derived from −21.8 % and −47 %. Re-derived on the fixture that is actually here the
+> free remedy delivers **−19.7 % and −31.3 %**, so thresholds derived the same way would be ~20 % and
+> ~31 %. **FC-3 stands unchanged, and it stands by luck rather than by design** — the number it was
+> derived from was overstated by half, and the threshold it produced happens to be right anyway.
+> Changing a committed condition after measuring it is the failure the conditions-first commit exists
+> to prevent, so this is recorded and FC-3 is **not** edited.
+
+### Finding 3 — on a plan that arrives sensibly, packing makes link travel much WORSE
+
+On both scale fixtures the arrival state beats the packed one: mean 0.14 → 4.71 (no hint) and 0.26
+→ 3.92, with >5-lane links going 0 → 272 and 8 → 983. The hint recovers most but not all of it
+(0.43 and 0.65, still 3× and 2.5× the arrival state).
+
+The scale generator deals its bands into 50 lanes so a chain already shares a lane; packing by time
+scatters it. **The packer's benefit is entirely relative to a bad starting state** — which an
+import's source order certainly is (12.96) and a hand-built plan need not be. Recorded with its
+caveat: the band deal is synthetic and no planner produces it. It is the clearest available evidence
+that `packLanes`' objective can hurt as well as help, which is the premise of Part A's M3.
+
+### Finding 4 — the packer's central claim holds
+
+_"Lane count is therefore identical with the hint or without it, by construction"_
+(`pack-lanes.ts:45-48`) — **verified on all five measured configurations**, to the lane. The one
+claim this epic depends on most is the one that reproduced exactly.

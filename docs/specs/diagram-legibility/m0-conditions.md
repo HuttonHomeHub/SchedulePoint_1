@@ -33,8 +33,10 @@ hypothesis, which is one of the four and was suggested by a reader rather than m
 `packages/engine-conformance/fixtures/p6_torture_test_v1.xer`. **Every harness in this milestone
 states in its own output that none of the three is the plan from the product owner's screenshot.**
 That sentence is not a courtesy: the current remedy's quoted figures (2.34 → 1.83, 15 → 8) were
-measured on an "Unit 300" import that is **not in this repository**, and re-quoting them as if they
-described a fixture here is exactly the drift ADR-0076 Class 2 records.
+**CORRECTED 2026-09-21 (M0-T3): the Unit 300 file IS in this repository** — `packages/engine-conformance/fixtures/p6_torture_test_v1.xer` (18 PROJWBS / 126 TASK / 188 TASKPRED; its `PROJECT` row names it). The claim below that it is absent is wrong and is kept rather than deleted, because CQ-4's default was argued from it. See `m0-measurement.md` M0-T3. Two further corrections there: the 2026-07-31 figures EXCLUDED the 18 WBS summaries, which the shipped `Auto-arrange` does not do, and the "halves the >5-lane links" claim re-derives at −31.3 % rather than −47 %.
+
+> measured on an "Unit 300" import that is **not in this repository**, and re-quoting them as if they
+> described a fixture here is exactly the drift ADR-0076 Class 2 records.
 
 **CQ-3 — the lane budget — remains deferred by construction.** Nobody has the curve. M0-T4 produces
 it; M3-G is the gate that stops until the product owner picks a point on it. **Default if declined:

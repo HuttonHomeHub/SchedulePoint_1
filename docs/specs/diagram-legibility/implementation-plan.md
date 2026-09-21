@@ -120,6 +120,8 @@ the conditions that can withdraw its milestones already committed.
   3. Print the fixture, the activity/link counts, and an explicit note that **none of the three is
      the plan from the product owner's screenshot** (CQ-4).
 
+> **CORRECTED 2026-09-21 (M0-T3).** The claim above that the "Unit 300" file is not in this repository is **wrong**. It is `packages/engine-conformance/fixtures/p6_torture_test_v1.xer` — 18 PROJWBS / 126 TASK / 188 TASKPRED, and its `PROJECT` row names it. The sentence is kept rather than deleted because CQ-4's default was argued from it. Two further corrections are in `m0-measurement.md` M0-T3: the 2026-07-31 figures **excluded the 18 WBS summaries**, which the shipped `Auto-arrange` does not do, so every inherited figure describes a packing the product does not perform; and "halves the >5-lane links" re-derives at **−31.3 %**, not −47 %.
+
 ##### M0-T4 — The lane/travel/height curve (the input to CQ-3)
 
 - **Description:** a throwaway budgeted variant of `packLanes`, run across a **sweep** of budgets,
