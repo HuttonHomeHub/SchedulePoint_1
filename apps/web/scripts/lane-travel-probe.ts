@@ -87,6 +87,21 @@ export interface FixtureResult {
    * ROW in the diagram — vertical space spent on nothing, scattered through the plan.
    */
   bandOnlyLanes: number | null;
+  /**
+   * **The number that decides whether #364 costs anything visible.**
+   *
+   * `TsldPanel.tsx:1120` hands the canvas `wbsBand.sceneActivities`, so `worldExtent`
+   * (`geometry.ts:658-674`) sees only the bars the scene paints, and it reports their **max lane**
+   * rather than a count. If the band-only lanes all sat at the END of the packing, the drawn extent
+   * would already be compact and those empty lanes would cost nothing at all. Scattered through it,
+   * they inflate the extent by every index they occupy below the highest drawn bar.
+   *
+   * `shippedDrawnMaxLane` is the max lane among NON-band-drawn activities in today's packing;
+   * `leverDrawnMaxLane` is the same after lever 2. The difference is the real saving, and it is
+   * what separates a defect from a tidy-up.
+   */
+  shippedDrawnMaxLane: number | null;
+  leverDrawnMaxLane: number | null;
 }
 
 function statsFor(
@@ -250,6 +265,8 @@ function measure(
   let sceneOnlyReordered: Stats | null = null;
   let sceneFirst: Stats | null = null;
   let bandOnlyLanes: number | null = null;
+  let shippedDrawnMaxLane: number | null = null;
+  let leverDrawnMaxLane: number | null = null;
   if (bandDrawn.size > 0) {
     const sceneItems = items.filter((i) => !bandDrawn.has(i.id));
     const sceneLanes = packed(sceneItems, links);
@@ -276,6 +293,12 @@ function measure(
     bandOnlyLanes = [...occupants.values()].filter((ids) =>
       ids.every((id) => bandDrawn.has(id)),
     ).length;
+
+    shippedDrawnMaxLane = Math.max(
+      -1,
+      ...[...withHint.entries()].filter(([id]) => !bandDrawn.has(id)).map(([, lane]) => lane),
+    );
+    leverDrawnMaxLane = Math.max(-1, ...sceneLanes.values());
   }
 
   return {
@@ -290,6 +313,8 @@ function measure(
     sceneOnlyReordered,
     sceneFirst,
     bandOnlyLanes,
+    shippedDrawnMaxLane,
+    leverDrawnMaxLane,
   };
 }
 

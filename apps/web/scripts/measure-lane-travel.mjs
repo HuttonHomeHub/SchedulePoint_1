@@ -86,7 +86,10 @@ try {
           ? ''
           : `     of the ${String(base.lanes)} shipped lanes, ${String(r.bandOnlyLanes)} hold NOTHING but ` +
             `band-drawn summaries\n     and therefore render EMPTY when the band is on ` +
-            `(${String(r.bandOnlyLanes * 28)} px of blank rows at LANE_HEIGHT 28)\n`) +
+            `(${String(r.bandOnlyLanes * 28)} px of blank rows at LANE_HEIGHT 28)\n` +
+            `     DRAWN EXTENT band-on (worldExtent sees sceneActivities only, and reports a MAX):\n` +
+            `       shipped ${String(r.shippedDrawnMaxLane + 1)} lanes  ->  lever 2 ${String(r.leverDrawnMaxLane + 1)} lanes  ` +
+            `= ${String((r.shippedDrawnMaxLane - r.leverDrawnMaxLane) * 28)} px saved\n`) +
         `${vs('2a scene only', r.sceneOnly)}\n` +
         `${vs('2b scene first', r.sceneFirst)}\n` +
         `\n     BOTH:\n${vs('2a + reordered', r.sceneOnlyReordered)}\n`,

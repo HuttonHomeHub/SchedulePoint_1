@@ -74,8 +74,36 @@ scale-2000.
 that field is the input array **by identity** (the module's own docblock says so), which makes the
 flag-off path byte-identical rather than merely equivalent.
 
-**Measured, not photographed.** The 13 is lane-occupancy arithmetic over the real packer's output;
-nobody has yet taken a screenshot of the gaps.
+### The number that decides whether it costs anything, and it was not safe to assume
+
+`TsldPanel.tsx:1120` hands the canvas `wbsBand.sceneActivities`, and `worldExtent`
+(`geometry.ts:658-674`) reports the **max lane** among what it is given — not a count. **So if the
+band-only lanes all sat at the END of the packing, the drawn extent would already be compact and the
+empty lanes would cost nothing at all.** That had to be measured rather than reasoned about.
+
+They do not. The highest drawn bar on Unit 300 sits in lane 26, so the gaps are scattered through
+the diagram and every one of them inflates the extent:
+
+| fixture    | drawn extent band-on, shipped | after lever 2 |      saved |
+| ---------- | ----------------------------: | ------------: | ---------: |
+| Unit 300   |                      27 lanes |            12 | **420 px** |
+| scale-500  |                      31 lanes |            18 |     364 px |
+| scale-2000 |                      33 lanes |            18 |     420 px |
+
+### That also settles 2a vs 2b, and the answer is 2b
+
+Because `worldExtent` reads **only the scene's activities** and reports a **max**, appending the
+band's summaries into lanes above the scene's is invisible band-on: 2a and 2b produce the **same
+12-lane drawn extent**. So 2b's extra rows cost nothing where the planner is looking, and it removes
+the band-off overlap hazard outright.
+
+**2b is therefore not a trade at all.** Its only cost is the band-off total — 30 lanes against the
+shipped 27, or 84 px — bought against a correctness hazard, which is not a real contest. Finding 3's
+framing of this as a genuine product decision was written before the extent was measured and is
+**withdrawn**: the measurement removed the choice.
+
+**Measured, not photographed.** The 13 and the 420 px are lane-occupancy arithmetic over the real
+packer's output; nobody has yet taken a screenshot of the gaps.
 
 ## Finding 2 — `bandIds` is depth-capped, and getting that wrong has shipped before
 

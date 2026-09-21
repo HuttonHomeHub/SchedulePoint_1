@@ -6705,7 +6705,17 @@ and then turns the band **off** can meet same-lane time overlap — the conditio
 - **2b — pack the scene into `0..N-1`, append the band summaries above.** No hazard, and **30 lanes
   against the shipped 27**, because the summaries stop sharing rows with tasks.
 
-Same travel either way. **Which one is a product decision**, not an implementation detail.
+Same travel either way — and **the measurement removed the choice.** `TsldPanel.tsx:1120` hands the
+canvas `wbsBand.sceneActivities`, and `worldExtent` (`geometry.ts:658-674`) reports the **max lane**
+among what it is given, not a count. So the summaries 2b appends **above** the scene are invisible
+band-on: 2a and 2b give the **same 12-lane drawn extent**. 2b's extra rows cost nothing where the
+planner looks and it removes the hazard, so **2b it is**. Its only cost is the band-off total, 30
+lanes against 27, i.e. 84 px, bought against a correctness hazard.
+
+**That had to be measured, not assumed:** had the band-only lanes sat at the END of the packing, the
+drawn extent would already have been compact and this row would be a tidy-up rather than a defect.
+The highest drawn bar on Unit 300 is in lane 26, so they are scattered — **27 drawn lanes become 12,
+saving 420 px** (scale-500 31 → 18, scale-2000 33 → 18).
 
 **And the depth cap is load-bearing.** The rule is "the summaries the band DRAWS", never
 "summaries": `isWithinBandDepth` caps at `WBS_BAND_MAX_DEPTH = 2` (`render/wbs-band.ts:20,31-33`),
