@@ -1196,7 +1196,9 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
    ~1036×600. The direction is consistent on every machine and the magnitude tracks bars drawn
    and device pixels, which is what every sitting has found.
 
-   **(d) #260 is re-confirmed on a second machine.** `revision-diff` at Fit: baseline **99.63 pp**
+   **(d) #260 is re-confirmed on a second machine. — ITS LAST SENTENCE IS WITHDRAWN; see item
+   8(c), which measured this framing UNSATURATED at 74.44 pp on the machine class that produced
+   the original exhibit.** `revision-diff` at Fit: baseline **99.63 pp**
    (spread 1.11), treatment 99.63 pp at 20.6 fps, delta +0.00 pp — **0.37 pp of headroom against
    a 2.00 pp bar**, so that comparison is arithmetically incapable of failing. #260's exhibit
    measured 98.33 pp on different hardware. **The ceiling is a property of the framing, not of
@@ -1213,6 +1215,62 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
    `attention held throughout` says nothing about the power source — so if this run was on
    battery, the Fit figure is not the machine's ceiling. #283's trigger ("capture it the next
    time two readings disagree") has arguably now fired twice.
+
+8. **Item 8 — a SIXTH sitting, 2026-09-21 (product owner, `web` 0.139.0, `api` 0.71.0), back on
+   the Dell. It reproduces items 5/6 exactly, and it WITHDRAWS 7(d).**
+
+   Intel Arc Pro Graphics (0x00007D55), 22 threads, DPR 1, **1912×948 CSS**, Edge 153, idle
+   interval 16.70 ms, attention held throughout, no motion preference. GPU, thread count and DPR
+   match items 5/6; the probe reports **~32 GiB** where item 7 describes that machine as 64 GB,
+   which is recorded as reported rather than resolved — it bears on nothing below.
+
+   **(a) The 2026-09-10 Fit figure REPRODUCES, at the identical viewport.**
+
+   | scenario        | framing | scale | on screen | result                               |
+   | --------------- | ------- | ----- | --------- | ------------------------------------ |
+   | `canvas-draw`   | Week    | 500   | 243 bars  | **60.0 fps, 0.00 pp** — PASS (45)    |
+   | `canvas-draw`   | Week    | 2000  | 267 bars  | **60.0 fps, 0.00 pp** — PASS (30)    |
+   | `canvas-draw`   | Fit     | 500   | 540 bars  | 60.0 fps, 0.00 pp — ungraded         |
+   | `canvas-draw`   | Fit     | 2000  | 1658 bars | **34.6 fps, 73.15 pp**, p95 33.50 ms |
+   | `revision-diff` | Week    | 2000  | 264 bars  | **delta +0.00 pp**, 60.0 fps — PASS  |
+
+   Fit/2000 at **34.6 fps** against 2026-09-10's **34.8 and 35.2** at the same 1912×948 — eleven
+   days and a browser major version apart, **0.6 fps across all three**. Week is untouched at both
+   scales: 60.0 fps, zero dropped frames, worst p95 16.80 ms.
+
+   **So the 23.3 fps reading of 2026-09-08 remains the one figure in this row that nothing has
+   reproduced**, and item 6's conclusion — that it is between-sitting machine state rather than
+   canvas size — is strengthened by a third and fourth concordant reading at that viewport.
+
+   **(b) `revision-diff` at Week independently confirms ADR-0129 P3 for the third time**: baseline
+   0.00 pp, run-to-run spread 0.00 pp, treatment 0.00 pp at 60.0 fps, delta +0.00 pp, with the
+   overlay drawing 37/264 bars and 49/372 links while it was measured.
+
+   **(c) 7(d) IS WITHDRAWN: the Fit dropped-frame ceiling is NOT a property of the framing.**
+   `revision-diff` at Fit measured **baseline 74.44 pp, spread 4.44** — against 98.33 pp (#260's
+   exhibit) and 99.63 pp (item 7(d), Surface Pro). That is **25.56 pp of headroom**, so this
+   comparison was arithmetically capable of failing, which no previous Fit reading was. 7(d)
+   concluded _"the ceiling is a property of the framing, not of one machine"_ and generalised from
+   two saturated readings; a third, **on the same machine class that produced the first**, is not
+   saturated. The ceiling is a property of machine **state** — which is #283's subject, not the
+   framing's.
+
+   **(d) And with headroom, the Fit delta carries information for the first time: +4.81 pp.**
+   Treatment 79.26 pp at 33.3 fps. That is **above ADR-0127's 2.00 pp bar and below this machine's
+   own 4.44 pp spread on that framing**, so it is INDETERMINATE in ADR-0128's sense — and ungraded
+   by policy regardless, because the probe never grades Fit.
+
+   ADR-0127 D8b flipped the overlay default on with the halves stated as _"free at Week, unknown at
+   Fit"_. Fit is now measured with room to answer, and the honest reading is that **the overlay
+   costs something at Fit of about the size of the noise**. Two things this does NOT license: it is
+   not "the overlay is free at Fit", and it is not a regression claim — no prior Fit reading of this
+   scenario had the headroom to produce a comparable number.
+
+   **(e) #283's trigger has now fired on ONE machine, which is the strongest case yet.** 7(f) said
+   it had "arguably now fired twice", and both of those disagreements spanned different hardware,
+   where the machine could carry the explanation. 74.44 pp against 99.63 pp cannot: same GPU, same
+   thread count, same DPR. Power state is the leading unrecorded variable and the probe still does
+   not capture it.
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
@@ -11287,3 +11345,35 @@ never appears) rather than at an assertion. Before diagnosing the screen, count 
 
 **Not to be answered by raising the limit again** — that is the fourth time, and it treats the
 symptom each time while leaving the next suite to rediscover it from scratch.
+
+### 362. The staff diagnostics sentence names "activities" for a diagnostic counted in plans
+
+**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (found by reading the product
+owner's pasted diagnostics output against the registry, not by any gate) · **Size:** XS ·
+**Owner:** web
+
+`diagnosticSentence` (`apps/web/src/features/staff/model/diagnostics-report.ts:21,:24`) hard-codes
+the numerator's unit as `'activity' / 'activities'`. That is right for ten of the eleven entries.
+It is wrong for `visual-placement-plans`, whose denominator is `plans` — so on a real installation
+the panel prints:
+
+> Plans carrying a hand-placed activity … **4 of 4 activities, across 4 plans in 1 organisation.**
+
+Two faults in one sentence: it names the wrong unit for its own denominator, and it then re-states
+those same four things as "4 plans", so a reader is told about eight things where four exist.
+
+**The data layer is not at fault and must not be "fixed".** The registry's own docblock
+(`staff-diagnostics.registry.ts:228-230`) anticipates `affected === affected_plans` for this entry
+and records it as the fixed row shape doing its job — gate S-5 exists to stop the shape bending per
+entry. The defect is entirely in the sentence, which has no way to know what it is counting.
+
+**Fix:** give `DiagnosticEntry` a unit (a two-word `unit: { one, many }`, defaulting to activity)
+and read it in `diagnosticSentence`; the no-affected branch at `:21` needs it too, and the three
+`diagnostics-report.test.ts` expectations at `:37,:55` pin the activity wording and would need a
+plan-grained sibling. A `label`-sniffing heuristic is the wrong shape — it would read a display
+string to decide a fact the registry already knows.
+
+**Why it stayed invisible:** ten of eleven entries are activity-grained, so every fixture, every
+unit expectation and every screenshot of this panel reads correctly. The one entry that does not is
+also the one whose redundancy is documented as intentional, so a reader who checks the registry
+finds a docblock telling them the equal numbers are fine — and stops.
