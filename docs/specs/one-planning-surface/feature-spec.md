@@ -1,6 +1,6 @@
 # Feature Spec: One planning surface — Visual is the plan; the feasible window and the levelled ghost are overlays
 
-- **Status:** Draft
+- **Status:** Approved
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-20 · **Revised twice**: after the product owner answered §6, and after four
   specialist reviews (two blocking) plus a product-owner decision on the overlay shape.
@@ -15,8 +15,8 @@
 
 ## 0. Corrections — the record of what this spec got wrong
 
-`docs/PROCESS.md`: _"The brief is not evidence either."_ **Fourteen decision-bearing claims have
-been corrected across three drafts and two review rounds. C11 is the one that changes what the epic
+`docs/PROCESS.md`: _"The brief is not evidence either."_ **Sixteen decision-bearing claims have been
+corrected across three drafts and three review rounds. C11 is the one that changes what the epic
 is.**
 
 | #       | Claimed                                                                                                                                                                                                              | Verified                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Consequence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -35,6 +35,8 @@ is.**
 | **C12** | `leveledStart === null` ⇔ the pass never ran; an undelayed ghost coincides with the **bar**.                                                                                                                         | **Both false.** `level.ts:186` — `if (finiteAsgs.length === 0) continue; // not a participant → no overlay` — so a levelled plan can leave every `leveledStart` null. And `pinAtNetwork` sets `leveledStart: r.earlyStart` (`:174`), so an undelayed participant's ghost coincides with **earliest**. **Both errors came from deriving semantics from `goldens.ts:628-635`, the one levelling golden, where every activity is a participant** — ADR-0076 Class 2, committed in the milestone that quotes it.                                                                                                                                                                                                                                                                                        | Three states, not two; the discriminator is `plan.levelResources`; the withholding rule was aimed at the wrong collision. §4.8.                                                                                                                                                                                                                                                                                                                                                                                         |
 | **C13** | _(This revision's instruction: "add the `visual_start` + `EARLY` reading.")_                                                                                                                                         | **Already shipped.** `placement-on-early-plan` is at `staff-diagnostics.registry.ts:29`, `:296-297`, `:520`. M0-T1 shipped **eight** new entries (ten total), not seven.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | The task would have been a duplicate, and **what caught it was re-reading the registry, not a gate**: the closed `DIAGNOSTIC_IDS` union catches a duplicate **id**, not a second entry asking the same question under a different id — which is what "add this reading" would have produced. _(An earlier draft of this row credited the union; a safety net described as wider than it is will be relied on.)_ Second time in this epic that re-verifying a problem statement removed work (C1 was the first).         |
 | **C14** | _(ui-architect, on the levelled-ghost predicate: "`levelingDelay` is in working minutes while the ghost draws from date strings, so a sub-day delay gives `levelingDelay > 0` with `leveledStart === earlyStart`.")_ | **The framing is wrong by one layer.** It reads `level.ts`'s **internal** minutes without checking the wire: the client field is **`levelingDelayDays`**, documented as "the applied delay in **whole working days**" (`packages/types/src/index.ts:657`). The client never sees minutes, so the sub-day disagreement cannot arise in the form described — at day granularity **both predicates agree** and both say _do not draw_.                                                                                                                                                                                                                                                                                                                                                                 | The predicate choice **stands and its reason is stronger than the one offered**: the ghost is a rect positioned **from date strings**, and `levelingDelayDays` is a **separately rounded** day quantity (C6's shape one field along), so gating on it would be two derivations of one fact. Recorded because **the next reader meeting `levelingDelay` will make the same assumption** — the reviewer corrected itself in writing, and a self-correction that stays in a review thread is one the table cannot pass on. |
+| **C15** | _(FC-1's heading, repeated to the product owner several times: "the deployed estate **decides the baseline default and the strip's bound**.")_                                                                       | **Both halves false, and FC-1's own body already said so.** `placement_snapshot_level` ships `DEFAULT NONE` **regardless of the readings** — the literal truth of every existing row either way, settled independently by `database-architect`'s S2 — and the strip's bound is now **withdrawn** (FC-10 clause B). The readings gate **one** decision: whether M-C-T2's test gets a fixture or a hypothetical.                                                                                                                                                                                                                                                                                                                                                                                      | **A claim inherited from a heading rather than read from the body.** A heading is what a reader skims, so a wrong one is **repeated rather than caught** — which is how it reached the product owner several times unchallenged. Heading corrected; the class is ADR-0076's, one layer above the prose it summarises.                                                                                                                                                                                                   |
+| **C16** | _(This revision's seeding instruction, implicitly: these shapes need seeding.)_                                                                                                                                      | **Four of the six already exist in the ADR-0066 catalogue** — `plan:capability-progress` (started/complete/suspended, `TEST_PLAYBOOK.md:79`), `plan:capability-types-and-wbs` (`W1` summary over children, `G1`/`G2` LOEs, `:87`), `plan:capability-levelling` (`:94`) and `plan:capability-constraints` (`:65`). And the `SeedSpec` model **already carries `visualStart`** (`packages/seed/src/spec.ts:309-310`) — only its value is always null (`pairwise/cases.ts:322`).                                                                                                                                                                                                                                                                                                                       | **Extend the catalogue; do not build a parallel one** (M-B-T3). **Third time in this epic that re-verifying removed work** (C1, C13). `TEST_PLAYBOOK.md:87`'s "what wrong looks like" is **the C11 defect verbatim** — "a summary at the data date with zero length; an LOE as a zero-duration task. **Both shipped**" — so those plans exist and it is the **claim** that needs widening to the placed basis, not the plan.                                                                                            |
 
 ---
 
@@ -408,7 +410,29 @@ the point — the strip **restores float that was never genuinely constrained** 
 puts the stripped population outside FC-7, and means a migrated plan shows float variance against a
 pre-migration baseline that M-C-T2 must not present as slippage.
 
-**Rails.** Unauditable by construction (`REASONS.PLAN_CONTENT`, verified) → a durable record.
+**The deployed estate is disposable TODAY, and that fact has an expiry** _(product owner,
+2026-09-20)_. **Every plan on the deployed installation is a test plan**, and the product owner does
+not mind if this epic alters or destroys them. Two decisions rest on it and **only** on it:
+
+- **FC-10 clause B's unattended bound is withdrawn** — it existed to protect planner work from an
+  irreversible migration, and there is none to protect.
+- **The strip needs no per-plan opt-in.**
+
+**The expiry is a trigger, not a date.** The strip is a **one-time migration that runs when M-I
+deploys**, so the question is not "is this still true?" but **"had a real customer arrived before
+M-I shipped?"** — the same trigger ADR-0085 and ADR-0137 both name. **If M-I ships after one exists,
+the premise has lapsed and the bound is owed again.** Written here rather than relied on as
+remembered, because a fact that licenses an irreversible act and expires silently is the worst
+shape a fact can have.
+
+**What does NOT rest on it**, and is therefore unaffected: the binding/inert/unclassified/
+already-placed classification (about converting **correctly**), the durable record (**diagnostic** —
+see below), and the after-the-fact report.
+
+**Rails.** Unauditable by construction (`REASONS.PLAN_CONTENT`, verified) → a durable record —
+**and on disposable data its diagnostic job is worth more, not less: it is how anybody finds out the
+strip did something nobody predicted. A migration with no record turns a surprising result into a
+mystery instead of a diff.**
 The only historic copy is a post-ADR-0126 **FULL** baseline (`schema.prisma:584-585`), a minority,
 **not assumed** — M0 measures it. Gated by FC-10. Reported after the fact.
 
@@ -572,13 +596,13 @@ window already does and the asymmetry is a regression risk.
 
 **Every item is a proposal for `database-architect`.**
 
-| Change                                     | Table                         | Shape                                                                         |
-| ------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------------- |
-| Add placed dates **and the planner input** | `baseline_activities`         | `placed_start`, `placed_finish`, **`visual_start`** — `DATE NULL`, no DEFAULT |
-| Add the **snapshot level**                 | `baselines`                   | **`placement_snapshot_level ∈ {NONE, FULL} DEFAULT NONE`**                    |
-| Add remaining float                        | `activities`                  | `remaining_float INT NULL`, no index, no CHECK                                |
-| Add the strip record                       | new `placement_migration_log` | below                                                                         |
-| Drop the column **and** the enum           | `plans`                       | **ONE migration**, at M-J                                                     |
+| Change                                     | Table                      | Shape                                                                         |
+| ------------------------------------------ | -------------------------- | ----------------------------------------------------------------------------- |
+| Add placed dates **and the planner input** | `baseline_activities`      | `placed_start`, `placed_finish`, **`visual_start`** — `DATE NULL`, no DEFAULT |
+| Add the **snapshot level**                 | `baselines`                | **`placement_snapshot_level ∈ {NONE, FULL} DEFAULT NONE`**                    |
+| Add remaining float                        | `activities`               | `remaining_float INT NULL`, no index, no CHECK                                |
+| Add the strip record                       | new `placement_migrations` | below                                                                         |
+| Drop the column **and** the enum           | `plans`                    | **ONE migration**, at M-J                                                     |
 
 **Why a level rather than a two-valued basis** _(accepted from review)_: post-epic **every** capture
 writes both column sets, so the row is not one **or** the other; and only a level distinguishes "this
@@ -589,7 +613,7 @@ own argument (ADR-0126), and `DEFAULT NONE` is the literal truth of every existi
 input, and without it a comparison cannot distinguish "the planner moved it" from "the logic moved
 it" — the same question `placed_*` alone cannot answer.
 
-**`placement_migration_log`** _(substantially corrected from review)_:
+**`placement_migrations` _(named `placement_migration_log` in earlier drafts; renamed at M-A because `docs/DATABASE.md`'s "Tables: plural `snake_case`" rule holds for all 33 existing tables, and this repository already faced the identical choice for `audit_events` and chose the plural row-noun over the collective "log")_** _(substantially corrected from review; renamed at M-A)_:
 
 - **A primary key** — every sibling operational table has one.
 - **Real FKs for `plan_id` (Cascade) and `organization_id` (Restrict).** Non-FK is right for
@@ -603,7 +627,7 @@ it" — the same question `placed_*` alone cannot answer.
 - **`prior_visual_start`** alongside the prior constraint.
 - **It does NOT join `RETENTION_TABLES` and has no window** — it is **org-scoped customer content
   read by a member**, which that set has never contained (`docs/DATABASE.md:1389-1396`), and
-  `retention-boundary.structural.spec.ts:53-58` asserts the set **by equality**, so this is a
+  `retention-boundary.structural.spec.ts:55-57` asserts the set **by equality**, so this is a
   decision to write down rather than an omission. The Cascade FK already gives it the right
   lifecycle.
 
@@ -641,13 +665,29 @@ So the rollback is a **restore, not a redeploy**, and M-J-T2 says so.
 | `GET …/plans/:planId`                         | `schedulingMode` removed — **a stale bundle silently renders Early**                                            | **Yes**       |
 | `PATCH`/`POST …/plans`                        | removed → **422**                                                                                               | **Yes**       |
 | `GET …/activities`                            | `+ remainingFloat`, `+ visualConflictReason`                                                                    | No            |
-| `GET …/baselines/:id`                         | `+ placedStart`, `+ placedFinish`, `+ visualStart`, `+ placementSnapshotLevel`                                  | No            |
-| `GET …/baselines/:id/variance`                | live side reads placed; carries the level                                                                       | Behaviourally |
+| `GET …/baselines/:id`                         | ~~`+ placedStart`, `+ placedFinish`, `+ visualStart`, `+ placementSnapshotLevel`~~ **NOT BUILT** (#359)         | No            |
+| `GET …/baselines/:id/variance`                | ~~live side reads placed; carries the level~~ **NOT BUILT** (#359)                                              | Behaviourally |
 | **`POST …/schedule/recalculate`**             | **the cross-plan derivation runs here too** whenever `countActiveForPlan > 0` (`schedule.service.ts:1425-1432`) | Behaviourally |
 | **`POST …/schedule/recalculate-programme`**   | the upstream basis moves                                                                                        | Behaviourally |
 | `POST …/export/:format`                       | one aggregate placement finding                                                                                 | No            |
 | **`GET …/plans/:planId/placement-migration`** | new                                                                                                             | No            |
 | `GET …/schedule/health-check`                 | **unchanged** — DCMA reads total float, correctly                                                               | No            |
+
+**Two rows of this table were specified and not built, and they are one piece of work**
+(`docs/TECH_DEBT.md` #359, raised at M-J). M-C froze `placed_start` / `placed_finish` /
+`visual_start` on `baseline_activities` **for this** and nothing reads them; the variance read still
+builds its live side from `earlyStart`/`earlyFinish`.
+
+It is **live-wrong after M-I** rather than merely incomplete: the strip moves a converted activity's
+`early_start` earlier while its drawn span stays put, so variance reports it as ahead of baseline
+when the bar has not moved — the "basis change presented as slippage" risk `m-c/placement-snapshot.md`
+§3 records as not closed by that milestone, in its mirror form. Deferred rather than folded into the
+gate pass because the honest fix is **placed-vs-placed gated on the level** (moving only the live
+side compares a frozen network date against a live placed one, which is worse than what ships), and
+that changes `BaselineVarianceRow`'s public contract and the Gantt's variance bar — an ADR-0105
+full-spec trigger.
+
+**Struck here rather than deleted**, so the table cannot be read as a record of what shipped.
 
 ### 4.12 Component changes
 

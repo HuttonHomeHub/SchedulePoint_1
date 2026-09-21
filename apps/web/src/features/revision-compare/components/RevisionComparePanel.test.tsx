@@ -517,6 +517,10 @@ describe('the Changes view', () => {
     ...comparison(),
     changes: {
       cap: 200,
+      // one-planning-surface M-C. Null = both sides froze a placement, which is what a fixture
+      // built to exercise the CHANGE LIST should say: a reason here would make every case below
+      // also a case about an unrecorded placement.
+      placementNotAssessableReason: null,
       classes: [
         {
           changeClass: 'RENAMED',
@@ -563,6 +567,7 @@ describe('the Changes view', () => {
       ...base,
       changes: {
         cap: base.changes?.cap ?? 200,
+        placementNotAssessableReason: base.changes?.placementNotAssessableReason ?? null,
         classes: [
           {
             ...renamed!,

@@ -25,7 +25,6 @@ vi.mock('@/config/env', async (importOriginal) => {
   return {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
-    SCHEDULING_MODES_ENABLED: false,
     NOTES_ENABLED: false,
     get UNDO_REDO_ENABLED() {
       return h.undoRedo;
@@ -132,7 +131,9 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
+  visualConflictReason: null,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,

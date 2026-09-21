@@ -36,12 +36,12 @@ function ctx(): SelectionBarContext {
     onResources: vi.fn(),
     onProgress: vi.fn(),
     isSummary: false,
+    hasPlacement: false,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
-    clearPlacementApplies: true,
     onClearVisualPlacement: vi.fn(),
     onOpenEditorAt: vi.fn(),
     onDissolve: vi.fn(),

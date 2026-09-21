@@ -305,6 +305,23 @@ export interface ClassifyOptions {
    */
   readonly bothSnapshotted: boolean;
   /**
+   * Whether both sides recorded the PLACEMENT — `baselines.placement_snapshot_level === 'FULL'` on
+   * every frozen side (the live side always has its own). False for any baseline captured before
+   * one-planning-surface M-C, and **permanently** so for those rows, for the same reason its
+   * sibling above is: a backfill would state as history a placement that baseline never saw.
+   *
+   * A SECOND flag rather than a widening of `bothSnapshotted`, because the two levels are written
+   * by different milestones and a baseline can carry either without the other. Folding them would
+   * make a shape-complete baseline report its logic as unrecorded, or a placement-complete one
+   * report its placement as recorded when it is not — one wrong in each direction, both silent.
+   *
+   * Like its sibling, this is the ONLY thing entitled to decide whether the placement columns mean
+   * anything. Do not replace it with a test of the columns themselves: all three have a legitimate
+   * null on a fully recorded side (nothing hand-placed, nothing yet calculated), so such a test
+   * reads "unplaced" as "never recorded" and back again.
+   */
+  readonly bothPlacementSnapshotted: boolean;
+  /**
    * Whether the two sides were matched ON the activity code — true for a cross-plan comparison and
    * false for a plan's own revisions, which are matched on id.
    *
@@ -342,6 +359,7 @@ export function classifyRevisionChanges(
     fromScheduled,
     toScheduled,
     bothSnapshotted,
+    bothPlacementSnapshotted,
     codeIsTheCorrelationKey,
     includeProgress,
     calendarName,
@@ -454,7 +472,14 @@ export function classifyRevisionChanges(
     ...PAID_CHANGE_CLASSES.filter((c) => c !== 'PROGRESSED' || includeProgress).map(assess),
   ];
 
-  return { classes, cap };
+  return {
+    classes,
+    cap,
+    // Reported, never omitted, and never coalesced. Unconditional on whether either side holds a
+    // placement — see the field's docblock: a reason that appears only when there is something to
+    // compare cannot distinguish "nobody looked" from "we looked and there was nothing".
+    placementNotAssessableReason: bothPlacementSnapshotted ? null : 'NOT_SNAPSHOTTED',
+  };
 }
 
 /**

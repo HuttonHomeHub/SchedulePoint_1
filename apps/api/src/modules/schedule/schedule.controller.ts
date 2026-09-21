@@ -76,7 +76,16 @@ export class ScheduleController {
 
   @Post('recalculate')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Recalculate a plan’s CPM schedule (Planner or Org Admin).' })
+  @ApiOperation({
+    summary: 'Recalculate a plan’s CPM schedule (Planner or Org Admin).',
+    description:
+      'Since one-planning-surface M-H, a cross-plan interface into this plan is derived from the ' +
+      'upstream predecessor’s PLACED dates (its effective-Visual span) rather than its computed ' +
+      'earliest — a programme interfaces on where the upstream work is planned to happen. This ' +
+      'route is affected as well as recalculate-programme, because the cross-plan derivation runs ' +
+      'inside ordinary recalculation whenever the plan has any active cross-plan edge. A plan with ' +
+      'no cross-plan edges is unaffected.',
+  })
   @ApiOkResponse({ type: PlanScheduleSummaryDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
@@ -108,7 +117,10 @@ export class ScheduleController {
       'deadlock-free topological order), so the target’s derived inter-project bounds are fresh. The pure ' +
       'engine is untouched. A plan with no cross-plan edges recalculates just itself (a single-plan recalc). ' +
       'Default fail-fast policy (CQ-3): if any plan in the closure is edited by someone else, a pre-flight ' +
-      'check throws 423 with the blocked-plan list and writes nothing.',
+      'check throws 423 with the blocked-plan list and writes nothing. ' +
+      'Since one-planning-surface M-H each downstream bound is derived from its upstream ' +
+      'predecessor’s PLACED dates (its effective-Visual span) rather than its computed earliest, ' +
+      'so an upstream bar a planner has hand-placed moves the interface.',
   })
   @ApiOkResponse({ type: ProgrammeScheduleResultDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })

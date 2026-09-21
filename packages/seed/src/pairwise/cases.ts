@@ -86,7 +86,6 @@ function caseSpec(caseId: string, row: DimensionAssignment): SeedSpec {
       currencyCode: 'GBP',
       options: {
         ...DEFAULT_SEED_PLAN_OPTIONS,
-        schedulingMode: row.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
         progressRecalcMode:
           row.progressRecalcMode === 'PROGRESS_OVERRIDE'
             ? 'PROGRESS_OVERRIDE'

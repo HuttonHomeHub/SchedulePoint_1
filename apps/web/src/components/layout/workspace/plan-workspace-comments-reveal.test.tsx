@@ -17,7 +17,6 @@ const h = vi.hoisted(() => ({ role: 'PLANNER' }));
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
-  SCHEDULING_MODES_ENABLED: false,
   NOTES_ENABLED: true,
   TOOLBAR_QUICK_WINS_ENABLED: true,
   // This suite asserts the Comments-reveal path; the programme section (now default-on) mounts its
@@ -136,7 +135,12 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
 }));
 vi.mock('@/features/tsld', () => ({
   TsldPanel: () => <div data-testid="tsld-panel" />,
-  barDateSourceFor: () => 'early',
+  // **`'visual'`, because that is what the real function now returns for every plan** (M-F-T1).
+  // Left at `'early'` this mock would describe a world no shipped bundle can produce — the shape
+  // ADR-0088 records the base journey's editing specs having been in for months. The value is
+  // still mocked rather than real because these suites are about the host, not the resolver;
+  // `lib/bar-dates.test.ts` covers the rule itself, which until M-F nothing did.
+  barDateSourceFor: () => 'visual',
   useCoalescedLagNudge: () => vi.fn(),
   useNow: () => 0,
   todayDayFraction: () => undefined,

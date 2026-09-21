@@ -6,7 +6,6 @@ export {
   lagDragCommand,
   visualResizeCommand,
   relaneCommand,
-  repositionCommand,
   updateCommand,
   createActivityCommand,
   createLoeSpanCommand,

@@ -7,8 +7,12 @@ import { expect, type Locator, type Page } from '@playwright/test';
  * `e2e-authoring-flow/support.ts` rather than importing it: a Playwright `testDir` is its own
  * compilation root, and a shared helper file whose fixture names two suites both mutate is how two
  * serial suites start failing each other on a shared database. What is NOT copied is the part that
- * matters here — this suite runs with `VITE_SCHEDULING_MODES` at its default, so it has Visual mode
- * and the placement helpers below, which no other journey can reach.
+ * matters here — the placement helpers below, which no other journey can reach.
+ *
+ * **`useVisualMode` used to live here** and clicked the `Visual mode` toggle. The one-planning-
+ * surface epic deleted the toggle (M-F-T5), so every plan this suite creates IS a planning surface
+ * and every caller simply dropped the line. Recorded rather than silently removed: a reader who
+ * finds a placement assertion with no mode setup should know the setup is gone, not missing.
  */
 
 /** Sign up + create an organisation; returns the org slug. */
@@ -260,15 +264,6 @@ export async function selectedActivityId(page: Page): Promise<string | null> {
   if (active === null) return null;
   const match = /-opt-([0-9a-f-]{36})$/.exec(active);
   return match?.[1] ?? null;
-}
-
-/** Switch the plan to Visual scheduling mode (ADR-0033), and confirm it took. */
-export async function useVisualMode(page: Page): Promise<void> {
-  const visual = page.getByRole('button', { name: 'Visual mode' });
-  await expect(visual).toBeVisible();
-  if ((await visual.getAttribute('aria-pressed')) === 'true') return;
-  await visual.click();
-  await expect(visual).toHaveAttribute('aria-pressed', 'true');
 }
 
 /** Zoom the time axis out `times` steps, so a whole week of scene fits inside the canvas. */
@@ -571,4 +566,42 @@ export async function placeOnDay(
     `could not drop ${activity.name} on day ${String(targetDay)} in ${String(attempts)} drags ` +
       `(reached ${String(final)}): ${trace.join('; ')}`,
   );
+}
+
+/**
+ * Set the plan's `levelResources` switch (ADR-0041) through the API, and return its new version.
+ *
+ * Through the API rather than through the settings screen on purpose: the claim under test is what
+ * the **levelled lens** does with the answer, and driving a settings dialog to get there would make
+ * a failure in that dialog read as a failure of the lens. The plan's own settings surface has its
+ * own coverage.
+ */
+export async function setLevelResources(page: Page, orgSlug: string, on: boolean): Promise<number> {
+  const planId = openPlanId(page);
+  return page.evaluate(
+    async ({ org, id, levelResources }: { org: string; id: string; levelResources: boolean }) => {
+      const read = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        credentials: 'include',
+      });
+      if (!read.ok) throw new Error(`plan read ${String(read.status)}: ${await read.text()}`);
+      const { data: plan } = (await read.json()) as { data: { version: number } };
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ levelResources, version: plan.version }),
+      });
+      if (!response.ok) {
+        throw new Error(`plan patch ${String(response.status)}: ${await response.text()}`);
+      }
+      const { data } = (await response.json()) as { data: { version: number } };
+      return data.version;
+    },
+    { org: orgSlug, id: planId, levelResources: on },
+  );
+}
+
+/** Open `View ▾`. Its toggles are native checkboxes in labels, so they take the `checkbox` role. */
+export async function openViewMenu(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'View', exact: true }).click();
 }

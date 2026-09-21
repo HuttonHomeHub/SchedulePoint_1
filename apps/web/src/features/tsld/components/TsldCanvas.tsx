@@ -23,7 +23,7 @@ import {
 import { axisMarkers, clampMarkLeft } from '../render/axis-markers';
 import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
-import type { GhostBar } from '../render/lenses';
+import type { GhostBar, LevelledGhost } from '../render/lenses';
 import { linkLegality } from '../render/link-legality';
 import { buildMinimapBitmap, sceneWindowRect, type MinimapMapping } from '../render/minimap';
 import {
@@ -171,6 +171,7 @@ export interface TsldCanvasHandle {
     | 'barInk'
     | 'flaggedIds'
     | 'baselineGhosts'
+    | 'levelledGhosts'
     | 'compareGhosts'
     | 'compareLinks'
     | 'dimmedIds'
@@ -364,6 +365,10 @@ export interface TsldCanvasProps {
   barInk?: ReadonlyMap<string, string> | undefined;
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay). */
   baselineGhosts?: readonly GhostBar[] | undefined;
+  /** Levelled-placement ghosts (one-planning-surface M-E): where the levelling pass moved a bar to,
+   * for the activities it MOVED. Absent ⇒ the overlay is off / levelling moved nothing ⇒ no layer
+   * (parity). */
+  levelledGhosts?: readonly LevelledGhost[] | undefined;
   /** The revision-comparison change picture (ADR-0127): where the CHANGED bars were on the old side
    * of the selected pair, including work no longer in the plan. Absent ⇒ the overlay is off / no
    * pair selected ⇒ no layer (parity). */
@@ -804,6 +809,7 @@ export function TsldCanvas({
   barFill,
   barInk,
   baselineGhosts,
+  levelledGhosts,
   compareGhosts,
   compareLinks,
   flaggedIds,
@@ -1003,6 +1009,7 @@ export function TsldCanvas({
     barFill,
     barInk,
     baselineGhosts,
+    levelledGhosts,
     compareGhosts,
     compareLinks,
     flaggedIds,
@@ -1127,6 +1134,7 @@ export function TsldCanvas({
       barFill,
       barInk,
       baselineGhosts,
+      levelledGhosts,
       compareGhosts,
       compareLinks,
       flaggedIds,
@@ -1173,6 +1181,7 @@ export function TsldCanvas({
     barFill,
     barInk,
     baselineGhosts,
+    levelledGhosts,
     compareGhosts,
     compareLinks,
     flaggedIds,
@@ -1352,6 +1361,7 @@ export function TsldCanvas({
           barInk,
           flaggedIds,
           baselineGhosts,
+          levelledGhosts,
           compareGhosts,
           compareLinks,
           dimmedIds,
@@ -1361,6 +1371,7 @@ export function TsldCanvas({
           barInk,
           flaggedIds,
           baselineGhosts,
+          levelledGhosts,
           compareGhosts,
           compareLinks,
           dimmedIds,

@@ -53,10 +53,10 @@ const rowContext = (): SelectionBarContext => ({
   canWriteNotes: true,
   onNotes: vi.fn(),
   isSummary: false,
+  hasPlacement: false,
   conflictKey: null,
   clearPlacement: { enabled: false, reason: 'Nothing to clear' },
   // Visible unless a case says otherwise — the fixtures' status quo (M1).
-  clearPlacementApplies: true,
   onOpenLogic: vi.fn(),
   onEdit: vi.fn(),
   onDelete: vi.fn(),

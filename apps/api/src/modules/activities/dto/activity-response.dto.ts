@@ -8,7 +8,7 @@ import {
   PercentCompleteType,
   type Activity,
 } from '@prisma/client';
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, VisualConflictReason } from '@repo/types';
 
 import { formatCalendarDate } from '../../../common/validation/calendar-date';
 import { minutesToDays, type WithDayFactor } from '../day-factor';
@@ -336,9 +336,25 @@ export class ActivityResponseDto implements ActivitySummary {
   visualEffectiveFinish!: string | null;
 
   @ApiProperty({
-    description: 'True when the placement is before the earliest feasible start (engine-owned).',
+    description:
+      'True when the placement conflicts with something (engine-owned). DERIVED — the engine ' +
+      'computes it as `visualConflictReason !== null`, and a database CHECK refuses a row where ' +
+      'the two disagree. Read `visualConflictReason` wherever the reason matters.',
   })
   visualConflict!: boolean;
+
+  @ApiProperty({
+    nullable: true,
+    enum: ['EARLIER_THAN_LOGIC', 'LATER_THAN_BOUND'],
+    description:
+      'Why the placement conflicts, or null when it does not (engine-owned). ' +
+      '`EARLIER_THAN_LOGIC` — placed before the earliest feasible start. `LATER_THAN_BOUND` — ' +
+      'placed past an explicit upper bound (SNLT, FNLT, MSO or MFO alike). A placement past the ' +
+      "activity's own float with NO constraint gets no reason: there is no bound to breach, and " +
+      'remainingFloat going negative is the whole story. Null also reads for an unplaced activity ' +
+      'and for a plan never calculated — see plan.scheduleComputedAt to separate those.',
+  })
+  visualConflictReason!: VisualConflictReason | null;
 
   @ApiProperty({
     nullable: true,
@@ -346,6 +362,20 @@ export class ActivityResponseDto implements ActivitySummary {
     description: 'Working-day drift of the placement from early start (signed, engine-owned).',
   })
   visualDriftDays!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Working-day float a placement has NOT spent: total float minus the drift (signed, ' +
+      'engine-owned). Null until the plan is first calculated. Equal to totalFloat wherever ' +
+      'nothing is placed. NEGATIVE is meaningful, not an error — it means the bar was placed ' +
+      'past what its own float allows. Do NOT derive this by subtracting visualDriftDays from ' +
+      'totalFloat: both are already rounded to days, and the difference of two roundings is not ' +
+      'the rounding of the difference wherever the drift is not a whole multiple of the ' +
+      "activity's hours-per-day (ADR-0068) — which a sub-day duration (ADR-0070) makes ordinary.",
+  })
+  remainingFloat!: number | null;
 
   @ApiProperty({
     nullable: true,
@@ -477,7 +507,9 @@ export class ActivityResponseDto implements ActivitySummary {
       visualEffectiveStart: day(entity.visualEffectiveStart),
       visualEffectiveFinish: day(entity.visualEffectiveFinish),
       visualConflict: entity.visualConflict,
+      visualConflictReason: entity.visualConflictReason,
       visualDriftDays: entity.visualDriftDays,
+      remainingFloat: entity.remainingFloat,
       // Resource-levelling overlay (ADR-0041) — client-settable priority + engine-owned overlay.
       levelingPriority: entity.levelingPriority,
       leveledStart: day(entity.leveledStart),

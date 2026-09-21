@@ -16,6 +16,11 @@ const h = vi.hoisted(() => ({
   record: vi.fn(),
   clear: vi.fn(),
   updateMutateAsync: vi.fn(),
+  // **Captured and resolving a row** (M-F-T3). It was an anonymous `vi.fn()` returning `undefined`
+  // while a reposition went through the definition seam; a day change now writes a placement, and
+  // the command built from one reads `saved.version` eagerly — so an untracked stub both throws
+  // inside the model and leaves these cases asserting a mutation nothing calls.
+  setVisualStartMutateAsync: vi.fn(),
   relaneMutateAsync: vi.fn(),
   recalcMutateAsync: vi.fn(),
   notify: vi.fn(),
@@ -26,7 +31,6 @@ vi.mock('@/config/env', async (importOriginal) => {
   return {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
-    SCHEDULING_MODES_ENABLED: false,
     NOTES_ENABLED: false,
     get UNDO_REDO_ENABLED() {
       return h.undoRedo;
@@ -134,7 +138,9 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
+  visualConflictReason: null,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,
@@ -178,7 +184,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn().mockResolvedValue(ACTIVITY) }),
   useUpdateActivity: () => ({ mutateAsync: h.updateMutateAsync }),
   useRepositionLane: () => ({ mutateAsync: h.relaneMutateAsync }),
-  useSetActivityVisualStart: () => ({ mutateAsync: vi.fn() }),
+  useSetActivityVisualStart: () => ({ mutateAsync: h.setVisualStartMutateAsync }),
   useBatchPositions: () => ({ mutateAsync: vi.fn().mockResolvedValue([ACTIVITY]) }),
   useBatchPlacements: () => ({ mutateAsync: vi.fn(() => Promise.resolve([])) }),
   useDeleteActivity: () => ({ mutateAsync: vi.fn() }),
@@ -216,12 +222,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, version: 4 });
+  h.setVisualStartMutateAsync.mockResolvedValue({ ...ACTIVITY, version: 4 });
   h.relaneMutateAsync.mockResolvedValue({ ...ACTIVITY, laneIndex: 2, version: 4 });
   h.recalcMutateAsync.mockResolvedValue(undefined);
 });
 
 describe('usePlanWorkspaceModel undo/redo recording seam', () => {
-  it('flag ON: a day reposition issues its update AND records exactly one command', async () => {
+  it('flag ON: a day reposition issues its placement AND records exactly one command', async () => {
     h.undoRedo = true;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
@@ -229,7 +236,11 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
       await result.current.onTsldReposition({ activityId: 'a1', startDay: 4 });
     });
 
-    expect(h.updateMutateAsync).toHaveBeenCalledTimes(1); // the edit itself still fired
+    // **The placement seam, not the definition one** (M-F-T3): a day reposition hand-places and
+    // writes no constraint, so a full-definition PATCH is not merely unnecessary here — its
+    // absence is what guarantees nothing else on the row was disturbed.
+    expect(h.setVisualStartMutateAsync).toHaveBeenCalledTimes(1); // the edit itself still fired
+    expect(h.updateMutateAsync).not.toHaveBeenCalled();
     expect(h.record).toHaveBeenCalledTimes(1); // exactly one command — not the recalc
     const command = h.record.mock.calls[0]![0];
     expect(command).toMatchObject({ label: expect.any(String) });
@@ -237,7 +248,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     expect(typeof command.redo).toBe('function');
   });
 
-  it('flag OFF: the same reposition issues its update but records nothing', async () => {
+  it('flag OFF: the same reposition issues its placement but records nothing', async () => {
     h.undoRedo = false;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
@@ -245,7 +256,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
       await result.current.onTsldReposition({ activityId: 'a1', startDay: 4 });
     });
 
-    expect(h.updateMutateAsync).toHaveBeenCalledTimes(1); // behaviour unchanged
+    expect(h.setVisualStartMutateAsync).toHaveBeenCalledTimes(1); // behaviour unchanged
     expect(h.record).not.toHaveBeenCalled();
   });
 

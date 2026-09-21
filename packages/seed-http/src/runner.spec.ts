@@ -276,6 +276,30 @@ describe('the payload contracts the real API enforces', () => {
     expect(body.physicalPercentComplete).toBe(25);
   });
 
+  /**
+   * The one-planning-surface epic's M-B-T3 found `SeedSpec.visualStart` carried since the field was
+   * added, and every capability plan defaulting it to `null` — with nothing in this file ever putting
+   * it on the wire even when a builder set one. A placement plan built against the old runner would
+   * have created every activity correctly and silently left every one of them unplaced: FC-1's own
+   * "zero placements in the estate" prediction would have held for the catalogue by construction.
+   */
+  it('sends visualStart on the activity create when the spec sets one, and omits it otherwise', async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    globalThis.fetch = recordingFetch(calls);
+    await seedPlan(
+      new SeedClient({ baseUrl: 'http://x' }),
+      target,
+      minimalSpec({
+        activities: [{ ...activity('A1'), visualStart: '2026-03-16' }, activity('A2')],
+      }),
+    );
+    const creates = calls.filter((c) => c.url.endsWith('/activities'));
+    const placed = creates.find((c) => c.body.name === 'A1');
+    const unplaced = creates.find((c) => c.body.name === 'A2');
+    expect(placed?.body.visualStart).toBe('2026-03-16');
+    expect(unplaced?.body).not.toHaveProperty('visualStart');
+  });
+
   it('sends the working week as Monday-indexed shift rows, windows and all', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;

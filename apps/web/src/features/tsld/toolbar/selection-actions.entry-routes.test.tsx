@@ -47,12 +47,14 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     onResources: spies.onResources,
     onProgress: spies.onProgress,
     isSummary: false,
+    // The order assertion below names `Clear placement`, which exists only for a placed activity
+    // (M-F-T6) — so the fixture is one.
+    hasPlacement: true,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
-    clearPlacementApplies: true,
     onClearVisualPlacement: vi.fn(),
     onOpenEditorAt: vi.fn(),
     onDissolve: spies.onDissolve,

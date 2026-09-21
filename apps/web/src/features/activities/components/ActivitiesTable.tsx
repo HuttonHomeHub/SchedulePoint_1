@@ -40,7 +40,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 import {
   criticality,
   formatDayVariance,
-  formatFloat,
+  formatRemainingFloat,
   type FinishVariance,
   type VarianceField,
 } from '@/lib/schedule-format';
@@ -755,9 +755,13 @@ export function ActivitiesTable({
     scheduleColumn('Late start', (a) => a.lateStart, 'lg'),
     scheduleColumn('Late finish', (a) => a.lateFinish, 'lg'),
     {
-      header: 'Float',
+      // **`Float left`, reading `remainingFloat`** (M-E-T7) — the slack left from where the bar is
+      // drawn, which is the float a planner spends. Labelled in the same commit as the field for
+      // the reason the Gantt's twin records: the number is plausible under either meaning, so a
+      // bare `Float` heading changing origin is invisible to the reader it misleads.
+      header: 'Float left',
       cellClassName: 'py-2 pr-4 whitespace-nowrap tabular-nums text-muted-foreground',
-      cell: (activity) => formatFloat(activity.totalFloat),
+      cell: (activity) => formatRemainingFloat(activity.remainingFloat),
     },
     {
       header: 'Critical path',

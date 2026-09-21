@@ -16,8 +16,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   undoRedo: false,
   authoring: false,
-  schedulingModes: false,
-  planMode: 'EARLY',
   record: vi.fn(),
   updateMutateAsync: vi.fn(),
   setVisualStartMutateAsync: vi.fn(),
@@ -32,9 +30,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     get CANVAS_AUTHORING_ENABLED() {
       return h.authoring;
-    },
-    get SCHEDULING_MODES_ENABLED() {
-      return h.schedulingModes;
     },
     NOTES_ENABLED: false,
     get UNDO_REDO_ENABLED() {
@@ -73,8 +68,7 @@ vi.mock('@/features/plan-lock', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/features/plans', () => ({
-  usePlan: () =>
-    query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01', schedulingMode: h.planMode }),
+  usePlan: () => query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01' }),
 }));
 vi.mock('@/features/projects', () => ({ useProject: () => query({ clientId: 'c1' }) }));
 vi.mock('@/features/clients', () => ({ useClient: () => query({ id: 'c1' }) }));
@@ -146,7 +140,9 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
+  visualConflictReason: null,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: 7,
   leveledStart: null,
   leveledFinish: null,
@@ -197,8 +193,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
   h.authoring = false;
-  h.schedulingModes = false;
-  h.planMode = 'EARLY';
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, durationDays: 8, version: 4 });
   h.setVisualStartMutateAsync.mockResolvedValue({
     ...ACTIVITY,
@@ -344,50 +338,19 @@ describe('onTsldResize (ADR-0052 M2)', () => {
 });
 
 describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
-  it('EARLY: ONE full-definition PATCH imposing SNET-at-new-start + the new duration', async () => {
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-
-    let outcome;
-    await act(async () => {
-      // Drag the start to day 6 (2026-01-07); finish pinned → duration 8.
-      outcome = await result.current.onTsldResize({
-        activityId: 'a1',
-        durationDays: 8,
-        startDay: 6,
-      });
-    });
-
-    expect(outcome).toEqual({ applied: true, conflict: null });
-    expect(h.updateMutateAsync).toHaveBeenCalledTimes(1);
-    // The two intended changes ride ONE call (the spike-verified combined PATCH): the SNET pin at
-    // the new start — mirroring the reposition payload — plus the recomputed duration…
-    expect(h.updateMutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        activityId: 'a1',
-        version: 3,
-        constraintType: 'SNET',
-        constraintDate: '2026-01-07',
-        durationDays: 8,
-      }),
-    );
-    // …with every other definition field resent verbatim (never silently cleared).
-    expect(h.updateMutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        durationType: 'FIXED_UNITS',
-        percentCompleteType: 'PHYSICAL',
-        accrualType: 'START',
-        calendarId: 'cal-9',
-        levelingPriority: 7,
-      }),
-    );
-    // The visualStart seam is never touched in EARLY mode.
-    expect(h.setVisualStartMutateAsync).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
-  });
-
-  it('VISUAL: ONE minimal visualStart + durationDays PATCH (no definition resend, no SNET)', async () => {
-    h.schedulingModes = true;
-    h.planMode = 'VISUAL';
+  /**
+   * **The `EARLY` start-edge case is DELETED, not rewritten** (M-F-T3).
+   *
+   * It asserted one full-definition PATCH imposing an SNET at the new start plus the duration,
+   * with fifteen other fields resent verbatim so none was silently cleared. All of that went with
+   * the mode: a start-edge drag now hand-places, in one minimal PATCH touching two columns, so
+   * there is no definition to resend and nothing to clear.
+   *
+   * Its surviving subject is the negative half of the case below — `updateMutateAsync` is NOT
+   * called — which used to read "the visualStart seam is never touched in EARLY mode" and now
+   * reads the other way round. That inversion is the collapse in one assertion.
+   */
+  it('ONE minimal visualStart + durationDays PATCH — no definition resend, no SNET', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     let outcome;
@@ -406,28 +369,29 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
       durationDays: 8,
       version: 3,
     });
-    // The full-definition path is NOT used — a Visual placement never writes a constraint.
+    // The full-definition path is NOT used — a placement never writes a constraint, and this is
+    // the assertion the deleted EARLY case's mirror image became.
     expect(h.updateMutateAsync).not.toHaveBeenCalled();
     expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('records the mode-matching coalescable command on the SHARED resize:{id} key', async () => {
+  /**
+   * **One run, where there were two** (one-planning-surface M-F-T5).
+   *
+   * This case used to render the hook twice — once with `schedulingMode: 'EARLY'`, once with
+   * `'VISUAL'` — and assert that both recorded the same label and the same coalescing key. The
+   * point was that an undo entry does not change shape with the mode. There is one mode now, so
+   * the second run was a re-run of the first: two identical renders agreeing with each other,
+   * which is a test that can no longer discriminate.
+   *
+   * The surviving assertion is the one that was ever load-bearing — the SHARED `resize:{id}` key,
+   * which is what lets a drag's many frames coalesce into one undo entry.
+   */
+  it('records a coalescable command on the shared resize:{id} key', async () => {
     h.undoRedo = true;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
-    });
-    expect(h.record).toHaveBeenCalledTimes(1);
-    const early = h.record.mock.calls[0]![0];
-    expect(early.label).toBe('Resize “Excavate”');
-    expect(early.coalescing?.key).toBe('resize:a1');
-
-    h.record.mockClear();
-    h.schedulingModes = true;
-    h.planMode = 'VISUAL';
-    const visual = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await visual.result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
     });
     expect(h.record).toHaveBeenCalledTimes(1);
     const command = h.record.mock.calls[0]![0];
@@ -435,10 +399,8 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
     expect(command.coalescing?.key).toBe('resize:a1');
   });
 
-  it('VISUAL undo restores the prior visualStart AND duration through the same seam', async () => {
+  it('undo restores the prior visualStart AND duration through the same seam', async () => {
     h.undoRedo = true;
-    h.schedulingModes = true;
-    h.planMode = 'VISUAL';
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.onTsldResize({ activityId: 'a1', durationDays: 8, startDay: 6 });
@@ -458,7 +420,10 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
 
   it('409 (stale version): resolves applied:false with the conflict message — no record, no recalc', async () => {
     h.undoRedo = true;
-    h.updateMutateAsync.mockRejectedValue(
+    // **The placement seam, because that is the one a start-edge drag uses** (M-F-T3). It rejected
+    // `updateMutateAsync` until the collapse; left there the mock would resolve happily, the drag
+    // would succeed, and this case would assert a conflict path it never entered.
+    h.setVisualStartMutateAsync.mockRejectedValue(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
     );
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });

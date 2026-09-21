@@ -46,17 +46,6 @@ export interface SelectionContextInput {
   /** `reason` is required and present exactly when `enabled` is false — `BulkActionGate` never
    * invents one, so a host that cannot offer this must say why. */
   clearPlacement?: { enabled: boolean; reason: string | null } | undefined;
-  /**
-   * Whether `Clear visual start` **applies to this plan at all** — `clearVisualPlacementApplies`.
-   *
-   * **Defaults to `true`, and the direction of that default is the decision.** A host that forgets
-   * to wire it gets exactly today's behaviour (the control renders, shaded, with its reason), which
-   * is a no-op rather than a regression. Defaulting to `false` would mean a host that wires
-   * `clearPlacement` enabled but forgets this one renders a capability with **no entry point** —
-   * ADR-0081's defect, and one this repository has now recorded five times. Forgetting must fail
-   * towards the status quo, never towards a vanished control.
-   */
-  clearPlacementApplies?: boolean | undefined;
   onOpenLogic: (activity: ActivitySummary) => void;
   onEdit: (activity: ActivitySummary) => void;
   onDelete: (activity: ActivitySummary) => void;
@@ -97,8 +86,13 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     scheduleRefusal: input.scheduleRefusal,
     canReportProgress: input.canReportProgress,
     canWriteNotes: input.canWriteNotes,
-    // A fact about the activity, not a policy a host could reasonably differ on.
+    // Facts about the activity, not policies a host could reasonably differ on.
     isSummary: activity.type === 'WBS_SUMMARY',
+    // **`visualStart`, the planner's INPUT — never `visualEffectiveStart`, the engine's output**
+    // (`packages/types`). The engine writes an effective start for every activity of every plan,
+    // so reading it here would report every bar as placed and the control would be back to
+    // unconditional with an explanation that sounds convincing.
+    hasPlacement: activity.visualStart !== null,
     onOpenLogic: () => input.onOpenLogic(activity),
     onEdit: () => input.onEdit(activity),
     onDelete: () => input.onDelete(activity),
@@ -117,7 +111,6 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
       enabled: false,
       reason: 'Clearing a placement is unavailable here',
     },
-    clearPlacementApplies: input.clearPlacementApplies ?? true,
     onClearVisualPlacement: () => input.onClearVisualPlacement?.(activity),
     onOpenEditorAt: (at) => input.onOpenEditorAt?.(activity, at),
   };

@@ -50,7 +50,9 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
+    remainingFloat: null,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,
@@ -81,7 +83,76 @@ describe('toRenderActivities', () => {
       isNearCritical: false,
       // The render model carries only the engine-owned conflict cue, not the source dates.
       visualConflict: false,
+      visualConflictReason: null,
       visualDriftDays: null,
+    });
+  });
+
+  it('carries the conflict REASON across the seam, on the same gate as the boolean', () => {
+    /**
+     * The painter needs the reason to decide which EDGE it marks (`LATER_THAN_BOUND` is a breach of
+     * the placed finish), and it had only the boolean until the M-J gate pass — so both reasons drew
+     * their triangle at the start. A render model that carried one without the other would force
+     * that guess back on the painter, which is why the seam is asserted here rather than only in
+     * `paint.test.ts`: neither suite crosses the other's defect.
+     *
+     * The gate is the boolean's own, for the boolean's own reason: on the Late overlay the bar is
+     * not drawn where it was placed, so a conflict cue about that placement would name a breach the
+     * picture is not showing.
+     */
+    const conflicted = activity({
+      visualStart: '2026-01-09',
+      visualEffectiveStart: '2026-01-09',
+      visualEffectiveFinish: '2026-01-11',
+      visualConflict: true,
+      visualConflictReason: 'LATER_THAN_BOUND',
+    });
+    expect(toRenderActivities([conflicted], 'visual')[0]?.visualConflictReason).toBe(
+      'LATER_THAN_BOUND',
+    );
+    expect(toRenderActivities([conflicted], 'late')[0]?.visualConflictReason).toBeNull();
+    expect(toRenderActivities([conflicted], 'early')[0]?.visualConflictReason).toBeNull();
+  });
+
+  /**
+   * **The window's right edge, and the half of `docs/TECH_DEBT.md` #348 that lives HERE.**
+   *
+   * `feasible-window.test.ts` asserts what the geometry does with the number it is handed; this
+   * asserts which number it is handed, and they are different defects. The mutation sweep found
+   * that out the useful way round: swapping this projection back to `totalFloat` — the shipped
+   * defect, verbatim — passed every geometry and painter case, because neither crosses this seam.
+   */
+  describe("the window's datum is the basis the bar is drawn on", () => {
+    const placed = () =>
+      activity({
+        visualStart: '2026-01-09',
+        visualEffectiveStart: '2026-01-09',
+        visualEffectiveFinish: '2026-01-11',
+        totalFloat: 10,
+        visualDriftDays: 8,
+        remainingFloat: 2,
+      });
+
+    it('uses remainingFloat on the placed basis — never totalFloat', () => {
+      // From a PLACED finish the room left is `T − d`. Using `totalFloat` here overshoots the late
+      // finish by exactly the drift, which is #348 on every Visual plan with a placement.
+      expect(toRenderActivities([placed()], 'visual')[0]?.remainingFloat).toBe(2);
+    });
+
+    it('uses totalFloat on the early basis, which is not the same number', () => {
+      // The mirror, and it is a correctness case rather than symmetry for its own sake: a plan
+      // switched back to Early mode while still holding placements — which the product permits —
+      // draws its bars at the EARLY dates, where the room left IS the whole total float. Handing
+      // it `remainingFloat` there would draw a window short by the drift.
+      expect(toRenderActivities([placed()], 'early')[0]?.remainingFloat).toBe(10);
+    });
+
+    it('carries a null through rather than substituting a number for it', () => {
+      // Null means the plan has never been calculated, and the window's answer to that is to draw
+      // nothing. A `?? 0` here would bracket every bar on an uncalculated plan at zero width.
+      const uncalculated = activity({ totalFloat: null, remainingFloat: null });
+      expect(toRenderActivities([uncalculated], 'visual')[0]?.remainingFloat).toBeNull();
+      expect(toRenderActivities([uncalculated], 'early')[0]?.remainingFloat).toBeNull();
     });
   });
 

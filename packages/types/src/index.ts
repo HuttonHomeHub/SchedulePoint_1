@@ -6,9 +6,17 @@
  * the frontend and backend need to agree on (DTO shapes, API response
  * envelopes, shared enums).
  *
- * Application domain models are NOT defined yet — this repository is at the
- * foundation stage. Add contracts here as features are designed, and keep
- * them the single source of truth for cross-boundary shapes.
+ * Add contracts here as features are designed, and keep them the single source
+ * of truth for cross-boundary shapes.
+ *
+ * **This paragraph read "Application domain models are NOT defined yet — this
+ * repository is at the foundation stage" until one-planning-surface M-I**, above
+ * 209 exports across 3,400-odd lines covering plans, activities, calendars,
+ * resources, baselines and the rest. It is the `account-chip.tsx` shape
+ * (ADR-0097 Landing F): not a document describing the code wrongly, but the
+ * code describing itself wrongly, in the header a reader meets before anything
+ * else. Corrected where it was found rather than filed, because the cost of
+ * filing it is that the next reader is told the same thing.
  */
 
 /** Standard envelope for successful API responses. */
@@ -151,12 +159,22 @@ export interface OrgMemberSummary {
 export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 
 /**
- * A plan's **scheduling mode** (ADR-0033). `EARLY` renders each activity at its
- * computed earliest dates (classic CPM). `VISUAL` honours the planner's hand-placed
- * `Activity.visualStart` (bars stay where dropped; the engine pushes unplaced
- * successors and flags conflicts). Mirrors the API's Prisma `SchedulingMode` enum.
+ * **`SchedulingMode` is gone from the public contract** (one-planning-surface M-F-T4). ADR-0033
+ * split a plan into `EARLY` (draw each activity at its computed earliest dates) and `VISUAL`
+ * (honour the planner's hand-placed `Activity.visualStart`); there is one planning surface now, so
+ * a bar is always drawn where it is placed and the discriminator has nothing left to discriminate.
+ *
+ * The Prisma column and its enum SURVIVE until the epic's migration milestone — a datamodel without
+ * a field the database still has makes `prisma migrate diff --exit-code` exit 2 — so do not read
+ * this absence as "the column is dropped".
  */
-export type SchedulingMode = 'EARLY' | 'VISUAL';
+
+/**
+ * Why a hand-placed bar conflicts (one-planning-surface M-D). Mirrors the Postgres enum of the same
+ * name; **`null` is the third state and lives in the field's nullability**, never as a label — a
+ * sentinel would have to be asserted onto every pre-existing row (ADR-0126's `lane_index` trap).
+ */
+export type VisualConflictReason = 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND';
 
 /**
  * A plan's **out-of-sequence recalc mode** (M2, ADR-0035 §1). Governs how an in-progress activity's
@@ -259,11 +277,6 @@ export interface PlanSummary {
   name: string;
   description: string | null;
   status: PlanStatus;
-  /**
-   * The scheduling mode (ADR-0033): `EARLY` (computed-earliest) or `VISUAL` (hand-placed).
-   * Defaults to `EARLY` (behaviour-preserving).
-   */
-  schedulingMode: SchedulingMode;
   /**
    * The out-of-sequence recalc mode (M2, ADR-0035 §1). Defaults to `RETAINED_LOGIC` (the P6 default,
    * behaviour-preserving); governs how a progressed activity's remaining work treats predecessor logic.
@@ -640,10 +653,45 @@ export interface ActivitySummary {
    */
   visualEffectiveStart: string | null;
   visualEffectiveFinish: string | null;
-  /** Engine-owned (ADR-0033): true when the placement is earlier than the logic-earliest feasible start. */
+  /**
+   * Engine-owned (ADR-0033, widened by one-planning-surface M-D): true when the placement conflicts
+   * with something. **Derived** — the engine computes it as `visualConflictReason !== null`, and
+   * `ck_activities_visual_conflict_matches_reason` refuses a row where the two disagree. Kept
+   * because it is shipped and read; prefer the reason wherever the sentence matters.
+   */
   visualConflict: boolean;
+  /**
+   * Engine-owned (one-planning-surface M-D): **why** the placement conflicts, or null when it does
+   * not. Null also reads for an unplaced activity and for a plan that has never been calculated —
+   * the same conflation `visualDriftDays` and `leveledStart` already carry, and
+   * `plan.scheduleComputedAt` is the fact at the grain that can separate them.
+   *
+   * - `EARLIER_THAN_LOGIC` — placed before the earliest feasible start. The only case the boolean
+   *   ever covered on its own.
+   * - `LATER_THAN_BOUND` — placed past an explicit upper bound (`SNLT`, `FNLT`, `MSO` or `MFO`
+   *   alike). **A placement past an activity's own float with no constraint gets no reason**: there
+   *   is no bound to breach, and `remainingFloat` going negative is the whole story.
+   *
+   * The two are not interchangeable to a reader. Negative remaining float means either that a
+   * planner overran their own slack, which is theirs to spend, or that they overran a commitment
+   * somebody recorded — same sign, different sentence.
+   */
+  visualConflictReason: VisualConflictReason | null;
   /** Engine-owned (ADR-0033): working-day offset of the placement from the early start (signed), or null. */
   visualDriftDays: number | null;
+  /**
+   * Engine-owned (one-planning-surface M-D): the working-day float a placement has NOT spent —
+   * `totalFloat - visualDriftDays`, **subtracted in minutes and rounded once**. Null until the plan
+   * is first calculated; equal to `totalFloat` wherever nothing is placed.
+   *
+   * **Negative is meaningful**, not an error state: the bar sits past what its own float allows.
+   *
+   * **Never derive this client-side from the two day columns.** The difference of two roundings is
+   * not the rounding of the difference wherever the drift is not a whole multiple of the activity's
+   * hours-per-day (ADR-0068), which a sub-day duration (ADR-0070) makes ordinary — and minutes are
+   * persisted for neither input, so no client can compute the right answer at all.
+   */
+  remainingFloat: number | null;
   // Resource-levelling overlay — engine-owned (ADR-0041 §3/§6 / Q2). The opt-in second levelling pass
   // (plan `levelResources`) runs AFTER the pure CPM network pass and produces these additive positions;
   // the pure early/late/float/critical are NOT recomputed on the leveled dates (network float stays
@@ -2767,7 +2815,6 @@ export interface ScheduleHealthReport {
   dataDate: string;
   /** When the persisted schedule was computed; null = never calculated. */
   computedAt: string | null;
-  schedulingMode: 'EARLY' | 'VISUAL';
   /** Active non-summary activities — the §3.1 denominator convention, made visible. */
   activityCount: number;
   relationshipCount: number;
@@ -3088,6 +3135,27 @@ export interface RevisionChangeReport {
   /** Every class, assessed or not — total over the union, so a class is never simply missing. */
   readonly classes: readonly RevisionClassAssessment[];
   readonly cap: number;
+  /**
+   * **Whether the two sides' PLACEMENTS can be compared at all** — null when both recorded one, a
+   * reason when they did not (one-planning-surface M-C).
+   *
+   * A baseline froze where the NETWORK said work could go and never where a planner had put it,
+   * until `placed_start`/`placed_finish`/`visual_start` were frozen beside the early columns. Every
+   * baseline captured before that is `placement_snapshot_level: 'NONE'` and **permanently** so: a
+   * backfill would state as history a placement that baseline never saw.
+   *
+   * **It is reported whether or not either plan happens to hold a placement**, which is the same
+   * rule the three `*_snapshot_level` columns are written under and is deliberate. Making it
+   * conditional on there being something to compare is how a NULL meaning "nobody looked" becomes
+   * indistinguishable from one meaning "we looked and there was nothing" — the exact absence this
+   * field exists to remove, and the likelier slip here than elsewhere, because an unplaced plan's
+   * placement columns are all null and read as nothing worth reporting.
+   *
+   * It is a nullable REASON and deliberately not a three-valued verdict. A verdict invites the
+   * `?? 'MATCH'` that the criticality mirrors exist to forbid; absence of a reason is the only
+   * thing that can mean "comparable", and it cannot be defaulted into existence.
+   */
+  readonly placementNotAssessableReason: RevisionNotAssessableReason | null;
 }
 
 /**
@@ -3255,6 +3323,14 @@ export interface CrossPlanClassAssessment extends Omit<RevisionClassAssessment, 
 export interface CrossPlanChangeReport {
   readonly classes: readonly CrossPlanClassAssessment[];
   readonly cap: number;
+  /**
+   * The same question as {@link RevisionChangeReport.placementNotAssessableReason}, and it is NOT
+   * trivially null here. A cross-plan comparison matches two **plans** on the activity code, but
+   * either side may still be one of that plan's baselines — so a pre-M-C snapshot reaches this
+   * route exactly as it reaches the plan-nested one, and reporting nothing would tell a reader the
+   * placements agreed when nobody recorded one of them.
+   */
+  readonly placementNotAssessableReason: RevisionNotAssessableReason | null;
 }
 
 export interface CrossPlanCriticalPathDelta extends Omit<
@@ -3376,4 +3452,68 @@ export interface RevisionCompare {
    * {@link ghostsUndrawable} is: a diagram has no "showing N of M".
    */
   readonly linksUndrawable?: number | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// The placement migration report (one-planning-surface M-I).
+// ---------------------------------------------------------------------------
+
+/**
+ * One constraint the placement migration removed, and what was there before it.
+ *
+ * **Every field here is a FROZEN COPY taken at migration time** — `activityCode` and `activityName`
+ * are not refreshed by a later rename, and the activity id carries no foreign key
+ * (`schema.prisma`'s `PlacementMigration.activityId`, on ADR-0025's `source_activity_id` leg). That
+ * is deliberate: the moment this record is most wanted is after the activity is gone, and "what
+ * happened to the bar that used to be here?" is precisely the question a deleted activity raises.
+ *
+ * `priorVisualStart` is expected to be `null` on every row and **a non-null value is a finding**:
+ * the migration excludes any activity already carrying a `visualStart`, so a row that recorded one
+ * means that exclusion failed and a hand-placement was overwritten.
+ */
+export interface PlacementMigrationRow {
+  readonly id: string;
+  readonly activityId: string;
+  /** The activity's code as it stood when the constraint was stripped (`null` if it had none). */
+  readonly activityCode: string | null;
+  /** The activity's name as it stood when the constraint was stripped. */
+  readonly activityName: string;
+  /**
+   * The constraint that was removed — `SNET` for every row the strip writes, because its `WHERE`
+   * names that one kind and no other.
+   *
+   * **The closed union rather than `string`**, and it is recorded stored-enum-side rather than
+   * display-side: `CONSTRAINT_TYPE_LABELS.SNET` is `'Start no earlier than'` and a renderer wanting
+   * words should go through that map, as every other constraint read-out does.
+   */
+  readonly priorConstraintType: ConstraintType;
+  /** Its date, `YYYY-MM-DD`. This is the value the activity's `visualStart` now carries. */
+  readonly priorConstraintDate: string;
+  /** The `visualStart` the write replaced. Expected `null`; a value here is a finding. */
+  readonly priorVisualStart: string | null;
+  /** When the strip ran, as an ISO instant. One instant per migration batch. */
+  readonly migratedAt: string;
+}
+
+/**
+ * What the placement migration did to one plan.
+ *
+ * **It reports only what it CHANGED, and the omission is a decision rather than an oversight.** The
+ * migration also leaves three classes of start-no-earlier-than constraint alone — inert, unclassified and
+ * already-placed (`docs/specs/one-planning-surface/feature-spec.md` §4.6) — and those are not here,
+ * because nothing happened to them. A constraint the migration left in place is still a constraint
+ * doing its job, so there is no change to tell a planner about; ADR-0082's "omit when the action
+ * does not apply to the object" one layer over. Their estate-wide classification is the ADR-0140
+ * staff diagnostics' subject (`snet-inert`, `snet-unclassified`), which already exists and is
+ * addressed to the operator rather than the planner.
+ *
+ * `count` is redundant with `rows.length` **today** and is sent anyway, because the read is
+ * uncapped today and the first cap added would silently make the length a different quantity.
+ */
+export interface PlacementMigrationReport {
+  readonly planId: string;
+  /** How many constraints the migration converted to placements on this plan. */
+  readonly count: number;
+  /** One row per converted constraint, oldest first. Empty when the plan had none. */
+  readonly rows: readonly PlacementMigrationRow[];
 }

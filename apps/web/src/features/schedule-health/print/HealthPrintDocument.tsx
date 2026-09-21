@@ -44,8 +44,8 @@ export function ScheduleHealthPrintDocument({
           {report.computedAt === null
             ? 'never calculated'
             : `calculated ${report.computedAt.slice(0, 10)}`}{' '}
-          · {report.schedulingMode === 'EARLY' ? 'Early' : 'Visual'} scheduling · baseline:{' '}
-          {report.baseline?.name ?? 'none'} · printed {printedAt.toISOString().slice(0, 10)}
+          · baseline: {report.baseline?.name ?? 'none'} · printed{' '}
+          {printedAt.toISOString().slice(0, 10)}
           {/* "printed" is a separate fact from "calculated": several metrics read current
               definition rows, so two prints under one computedAt can honestly differ, and a page
               with no print date cannot say which came first (M5 ux finding). */}

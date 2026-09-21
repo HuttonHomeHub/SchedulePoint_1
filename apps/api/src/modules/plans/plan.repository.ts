@@ -6,7 +6,6 @@ import {
   type Plan,
   type PlanStatus,
   type ProgressRecalcMode,
-  type SchedulingMode,
   type TotalFloatMode,
 } from '@prisma/client';
 
@@ -17,8 +16,6 @@ export interface PlanPatch {
   name?: string;
   description?: string | null;
   status?: PlanStatus;
-  /** Scheduling mode (ADR-0033): EARLY or VISUAL. */
-  schedulingMode?: SchedulingMode;
   /** Out-of-sequence recalc mode (M2, ADR-0035): RETAINED_LOGIC / PROGRESS_OVERRIDE / ACTUAL_DATES. */
   progressRecalcMode?: ProgressRecalcMode;
   /** Expected-finish scheduling option (M4, ADR-0035 §9). */

@@ -4,7 +4,6 @@ import {
   EacMethod,
   PlanStatus,
   ProgressRecalcMode,
-  SchedulingMode,
   TotalFloatMode,
   type Plan,
 } from '@prisma/client';
@@ -28,12 +27,6 @@ export class PlanResponseDto implements PlanSummary {
 
   @ApiProperty({ enum: PlanStatus })
   status!: PlanStatus;
-
-  @ApiProperty({
-    enum: SchedulingMode,
-    description: 'Scheduling mode (ADR-0033): EARLY (computed-earliest) or VISUAL (hand-placed).',
-  })
-  schedulingMode!: SchedulingMode;
 
   @ApiProperty({
     enum: ProgressRecalcMode,
@@ -141,7 +134,6 @@ export class PlanResponseDto implements PlanSummary {
       name: entity.name,
       description: entity.description,
       status: entity.status,
-      schedulingMode: entity.schedulingMode,
       progressRecalcMode: entity.progressRecalcMode,
       useExpectedFinishDates: entity.useExpectedFinishDates,
       criticalPathDefinition: entity.criticalPathDefinition,

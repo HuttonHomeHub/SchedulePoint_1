@@ -102,10 +102,20 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
     },
   },
   {
+    // **`Float left`, reading `remainingFloat`** (M-E-T7). The bars in this grid are drawn on the
+    // chosen basis, so the float that matches the picture is the slack left from where the bar IS
+    // — not from where the network would have put it. The label changes in the same commit as the
+    // field: a column headed `Float` that quietly starts measuring from a different origin is
+    // unnoticeable, because the number is plausible either way. Total float is still exact and
+    // still labelled as total on the editor's context strip.
+    //
+    // The `key` stays `totalFloat` so the persisted column choice in a planner's URL survives
+    // (`gantt-view-state.ts`) — renaming it would silently drop the column for anyone holding a
+    // bookmark, which is a worse trade than a key that no longer matches its label.
     key: 'totalFloat',
-    label: 'Float',
+    label: 'Float left',
     align: 'right',
-    value: (a) => (a.totalFloat === null ? '—' : `${a.totalFloat}d`),
+    value: (a) => (a.remainingFloat === null ? '—' : `${a.remainingFloat}d`),
   },
   {
     key: 'predecessors',

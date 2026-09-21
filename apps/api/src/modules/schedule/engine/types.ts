@@ -249,6 +249,12 @@ export interface EngineEdgeResult {
  * the plan calendar; it may be negative when a constraint cannot be satisfied (surfaced, not an
  * error). The service maps these minute quantities back to the day-denominated public API.
  */
+/**
+ * Why a placement conflicts (M-D). A closed union rather than a boolean pair, so a reader handling
+ * one case is forced by the compiler to decide about the other.
+ */
+export type VisualConflictReason = 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND' | null;
+
 export interface EngineResult {
   activityId: string;
   earlyStartOffset: number;
@@ -316,6 +322,43 @@ export interface EngineResult {
   visualEffectiveFinish: string;
   visualConflict: boolean;
   visualDriftMinutes: number | null;
+  /**
+   * **The float a hand-placed bar has left** (M-D; `docs/specs/one-planning-surface/` §4.3).
+   *
+   * `totalFloat` is measured from the pure-network EARLY finish. Once a planner places a bar, part
+   * of that room is already spent on the drift, so what remains is `totalFloat − drift`. Working
+   * **minutes** here, like `totalFloat` and `visualDriftMinutes`, and day-denominated exactly once
+   * at the write boundary on the activity's own calendar (ADR-0068 §4, ADR-0139).
+   *
+   * **The single rounding is the whole point.** A client subtracting the two day-denominated
+   * columns computes `round(T/f) − round(d/f)`, which is not `round((T − d)/f)` — on an eight-hour
+   * calendar those disagree by a whole day at ordinary values. Minutes are persisted for **neither**
+   * input, so a read-time derivation could only ever be the wrong one; that is why this is computed
+   * here and stored rather than derived on the way out.
+   *
+   * Never null: an unplaced activity has spent no drift, so its remaining float is its total float.
+   * That identity is asserted rather than assumed — it is also the shape a vacuous test would have.
+   */
+  remainingFloatMinutes: number;
+  /**
+   * **Why the placement conflicts** (M-D; `docs/specs/one-planning-surface/m-d/upper-bound.md`).
+   *
+   * `EARLIER_THAN_LOGIC` — the placement is before the earliest feasible start. The shipped case.
+   * `LATER_THAN_BOUND` — the placement breaches an explicit upper-bound constraint: `SNLT`, `FNLT`,
+   * `MSO` or `MFO`. `null` — no placement, or one that breaches nothing.
+   *
+   * **Why the field exists is not what the spec said.** §4.4 argued that `MSO`/`MFO` need a flag
+   * because remaining float does not cover them. Measured, it does: a mandatory pin collapses total
+   * float to zero, so any drift takes the remainder negative, exactly as it does for `SNLT`/`FNLT`.
+   * All four breaches are already visible in the number. What the number cannot say is WHICH of two
+   * different things happened — a planner overran their own slack, which is theirs to spend, or they
+   * overran a commitment somebody recorded. Same sign, different sentence.
+   *
+   * **A placement past an activity's own float with no constraint gets no reason**, and that is the
+   * discriminator rather than an omission: there is no bound to breach, the negative number is the
+   * whole story, and flagging it would fire on every deliberate over-placement.
+   */
+  visualConflictReason: VisualConflictReason;
   /**
    * Resource-levelling overlay (ADR-0041 §3, Q2) — **additive**: produced by the opt-in
    * {@link levelSchedule} second pass and merged onto the network result; the pure

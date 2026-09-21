@@ -1,4 +1,4 @@
-import type { ActivitySummary, SchedulingMode } from '@repo/types';
+import type { ActivitySummary } from '@repo/types';
 
 /**
  * **Which persisted dates draw a bar — for every view, resolved in one place.**
@@ -21,22 +21,38 @@ import type { ActivitySummary, SchedulingMode } from '@repo/types';
  */
 
 /**
- * `early` is classic CPM (the earliest dates) and the default; `visual` reads the engine's
- * effective-Visual dates (VISUAL mode); `late` reads the late dates (the read-only Late-Start
- * overlay, ADR-0033 M4).
+ * `visual` reads the engine's effective-Visual dates and is **the planning surface's only basis**
+ * since the mode collapsed (M-F); `late` reads the late dates (the read-only Late-Start overlay,
+ * ADR-0033 M4); `early` is classic CPM and survives for the **analyses**, which measure the
+ * network rather than the plan as placed.
  */
 export type BarDateSource = 'early' | 'visual' | 'late';
 
 /**
- * Pick the source for the active view (ADR-0033): the read-only **Late overlay** wins for display
- * when on, else the plan's **scheduling mode** decides.
+ * Pick the source for the active view: the read-only **Late overlay** wins for display when on,
+ * and otherwise a bar is drawn where it is PLACED.
  *
- * Callers gate on `VITE_SCHEDULING_MODES`; flag-off the mode is always `EARLY` and the overlay is
- * never on, so this yields `early` — today's behaviour, unchanged.
+ * **There is no longer a mode to consult, and the parameter went with it** (M-F-T1). The plan's
+ * `schedulingMode` decided this until the collapse; a caller that still held one would be asking a
+ * question the product has stopped having an answer to, so the compiler removes the question rather
+ * than the callers agreeing to stop asking.
+ *
+ * **What this does NOT mean is worth stating, because it is the epic's most likely
+ * misunderstanding.** Returning `'visual'` unconditionally is not "Pass 1 is gone". Pass 1 is the
+ * float, the criticality, the Late dates, the drift a placement is measured against, every DCMA
+ * metric and the whole ADR-0034 conformance matrix; it runs on every recalculation exactly as
+ * before. What collapsed is which of two already-computed columns a BAR is drawn from — and the
+ * engine has always written both, for every plan, with no mode input of its own
+ * (`compute.ts` results loop; `computeSchedule` takes no `schedulingMode` at all).
+ *
+ * On an activity nobody has placed, `visualEffectiveStart` equals `earlyStart`, so the great
+ * majority of the estate draws in identical pixels. The population that moves is exactly the one
+ * the `placement-on-early-plan` diagnostic was built to size: a bar carrying a placement made
+ * while the plan was `VISUAL`, on a plan later switched back, which today renders at its early
+ * dates and will render where it was placed.
  */
-export function barDateSourceFor(mode: SchedulingMode, lateOverlay: boolean): BarDateSource {
-  if (lateOverlay) return 'late';
-  return mode === 'VISUAL' ? 'visual' : 'early';
+export function barDateSourceFor(lateOverlay: boolean): BarDateSource {
+  return lateOverlay ? 'late' : 'visual';
 }
 
 /** The start/finish a bar draws at under `source`. Either may be null before a recalculation. */
@@ -51,7 +67,8 @@ export interface BarDates {
  * `visualEffectiveStart` is **not** `visualStart`: the first is where the engine says the bar
  * renders after the effective-Visual pass, the second is the planner's placement input
  * (`packages/types`). Reading the input would redraw a bar at a placement the engine has already
- * pushed, which is the same class of wrong as reading the early dates in VISUAL mode.
+ * pushed — and since the collapse that is no longer an alternative anybody could reach by accident
+ * for some plans only: it would be wrong for every plan in the product.
  */
 export function barDatesFor(
   activity: Pick<

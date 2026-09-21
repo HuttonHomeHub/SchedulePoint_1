@@ -62,6 +62,10 @@ export function toRenderActivities(
     // The conflict cue + drift are meaningful only in VISUAL mode — the engine computes them for
     // every plan, so gate them to the visual source here (EARLY/late bars never show the cue).
     visualConflict: source === 'visual' ? a.visualConflict : false,
+    // The reason travels with the boolean, on the same gate — the painter needs it to decide which
+    // EDGE it marks, and a render model carrying one without the other would force the painter to
+    // guess (it guessed `rect.x` for both until the M-J gate pass).
+    visualConflictReason: source === 'visual' ? a.visualConflictReason : null,
     visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
     laneOverlap: overlapping.has(a.id),
     constraint: activeConstraintAnchor(a),
@@ -69,9 +73,18 @@ export function toRenderActivities(
     // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,
     // so the canvas and the table can never disagree on how complete an activity is.
     percentComplete: a.percentComplete,
-    // Engine-owned total float, for the GPM float tail (ADR-0054 §4). Carried straight through —
-    // the canvas never computes float, it only draws what the engine decided.
+    // Engine-owned total float. Carried straight through — the canvas never computes float, it
+    // only draws what the engine decided.
     totalFloat: a.totalFloat,
+    // **The feasible window's right edge, and it is gated on the SAME basis the bar is drawn on**
+    // (one-planning-surface M-E). `remainingFloat` is the room left from the PLACED finish; from
+    // the EARLY finish the room is the whole `totalFloat`. So a plan switched back to Early mode
+    // while still holding placements — which the product permits — would otherwise get a window
+    // measured from one basis and drawn on another, short by exactly the drift.
+    //
+    // The two lines are deliberately parallel to the `visualDriftDays` gate above: they are the two
+    // halves of one window, and M-F collapses both when the mode goes.
+    remainingFloat: windowFloatFor(a, source),
   }));
 }
 
@@ -87,4 +100,25 @@ export function toRenderEdges(dependencies: readonly DependencySummary[]): Rende
     lagDays: d.lagDays,
     lagCalendar: d.lagCalendar,
   }));
+}
+
+/**
+ * The feasible window's right-edge float, for one activity on one bar basis.
+ *
+ * **A named rule with ONE caller, which is deliberate.** It was extracted for a second consumer —
+ * the accessible clause M-E-T5 wrote — and that consumer was deleted at M-E's journey, once
+ * driving the real product showed the Tier-1 sentence already carried every fact the window draws.
+ * The extraction is kept rather than inlined because the rule is subtle and this repository has
+ * already shipped it wrong once: `#348` was the window drawn from `remainingFloat` while the
+ * projection handed the painter `totalFloat`, leaving the bracket short by the drift on every
+ * placed activity. A name at the call site is what stops the next reader "simplifying" the
+ * conditional back to one branch.
+ *
+ * Exported for its unit suite, and because a rule worth naming is worth being able to test.
+ */
+export function windowFloatFor(
+  a: Pick<ActivitySummary, 'remainingFloat' | 'totalFloat'>,
+  source: BarDateSource,
+): number | null {
+  return source === 'visual' ? a.remainingFloat : a.totalFloat;
 }

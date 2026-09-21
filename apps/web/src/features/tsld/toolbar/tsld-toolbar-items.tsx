@@ -4,7 +4,6 @@
 import { DEPENDENCY_TYPES, type DependencyType } from '@repo/types';
 import {
   AlignVerticalSpaceAround,
-  ArrowLeftToLine,
   BookOpen,
   CalendarDays,
   ChartArea,
@@ -19,7 +18,6 @@ import {
   FileText,
   FileType,
   Filter,
-  Hand,
   ImageDown,
   Info,
   Layers,
@@ -96,7 +94,6 @@ import {
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
-  SCHEDULING_MODES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
   UNDO_REDO_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
@@ -335,6 +332,36 @@ export const LENS_TOGGLES: readonly LensToggle[] = [
     promotion: { icon: <Users className="size-4" />, order: 21 },
   },
   {
+    /**
+     * The levelled-placement ghosts (one-planning-surface M-E). `insight`, beside the other two
+     * overlays that draw a second position for a bar the planner can already see.
+     *
+     * **Only ONE of the lens's three states shades, and that is the decision rather than an
+     * omission.** `levelResources` off means the levelling pass never ran, so there is nothing to
+     * draw anywhere in the plan and the sentence names the setting that would change it. The other
+     * two — it ran and this activity had no finite assignments (`level.ts:186`), or it ran and
+     * left this one where the network put it (`pinAtNetwork`) — are **not refusals**: nothing is
+     * wrong, there is no setting to point at, and shading for them would tell a planner their
+     * working overlay is broken. What those two owe the reader is the M-E-T6 undrawn sentence, on
+     * the surface that can say which of them it is, not a shut control here.
+     *
+     * Not promoted onto the deck, for `compare-overlay`'s measured reason: one promoted toggle
+     * keeps the deck at two lines at 1920 and 1646, three take it to three at 1646 as well as 1440.
+     */
+    id: 'levelled-overlay',
+    group: 'insight',
+    label: 'Levelled placement',
+    enabled: CANVAS_LENSES_ENABLED,
+    checked: (ctx) => ctx.levelledOverlay,
+    toggle: (ctx) => ctx.toggleLevelledOverlay(),
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : !ctx.levelResources
+          ? LEVELLING_OFF_REASON
+          : undefined,
+  },
+  {
     id: 'over-allocation',
     group: 'insight',
     label: 'Flag over-allocated',
@@ -462,9 +489,28 @@ const VIEW_TOGGLE_META: Record<
   nonWorking: { group: 'markers', label: 'Non-working' },
   labels: { group: 'markers', label: 'Labels' },
   dates: { group: 'insight', label: 'Dates', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
-  floatTails: { group: 'insight', label: 'Float & drift', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  // **Renamed, not replaced** (one-planning-surface M-E): the float and drift tails were one fact
+  // drawn twice and became one bracket, so the control describes the same overlay under a name
+  // that matches the picture. The KEY stays `floatTails` because renaming it would touch three
+  // consumers and the whole `TsldViewToggles` contract to say nothing new.
+  //
+  // **NOT because it preserves a planner's state — there is none to preserve.** The plan's risk
+  // note said so and it is false: `use-tsld-canvas-ui-state.ts` holds these in
+  // `useState(DEFAULT_VIEW_TOGGLES)` and calls them "never persisted" in its own docblock, so the
+  // toggle already resets on every mount under either name. The first version of this comment
+  // repeated the plan's sentence; it is corrected here rather than left to be cited later.
+  floatTails: {
+    group: 'insight',
+    label: 'Feasible window',
+    enabled: CANVAS_LIVE_FEEDBACK_ENABLED,
+  },
   linkSlack: { group: 'insight', label: 'Link slack', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
-  lateOverlay: { group: 'insight', label: 'Late-start overlay', enabled: SCHEDULING_MODES_ENABLED },
+  // **The overlay survives the mode** (one-planning-surface M-F-T5). It was gated on
+  // `VITE_SCHEDULING_MODES` because ADR-0033 shipped it beside the Early/Visual selector, but it
+  // reads the LATE dates and has never consulted `schedulingMode` — so deleting the mode leaves it
+  // with nothing to be gated on. Ungating it is what stops the collapse taking a working read-only
+  // lens away as collateral.
+  lateOverlay: { group: 'insight', label: 'Late-start overlay' },
 };
 
 function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof TsldViewToggles> {
@@ -556,11 +602,12 @@ function GoToTodayControl({
   const { open, openPanel, close, panel } = usePopoverPanel({ triggerRef: primaryRef });
 
   const primaryDisabled = !(ctx.hasDiagram && ctx.canvasActive);
-  // **Only a state the reader can change.** `SCHEDULING_MODES_ENABLED` is deliberately NOT folded in
-  // here: a flag being off is not something a planner can act on, and shading the caret for it would
-  // print "Set the plan's start date first" to somebody whose plan already has a start date — a
-  // sentence that is simply false. The flag decides whether this control has a caret at all, one
-  // level up (see the registry entry); ADR-0082's discriminator, applied where it belongs.
+  // **Only a state the reader can change** — ADR-0082's discriminator. This comment used to explain
+  // why `SCHEDULING_MODES_ENABLED` was deliberately not folded in here (a flag being off is not
+  // something a planner can act on, and shading the caret for it would print "Set the plan's start
+  // date first" to somebody whose plan already has a start date). The flag is gone with the mode
+  // (one-planning-surface M-F-T5); the rule it was an instance of is not, so it is restated rather
+  // than deleted with its example.
   const caretDisabled = ctx.plannedStart === null;
   const primaryReason = canvasViewportReason(ctx, 'Add an activity to go to today');
 
@@ -991,6 +1038,17 @@ const LENS_NO_DIAGRAM_REASON = 'Add an activity first';
  * plan that never levelled, or a levelled plan with no over-allocation, has none. Mirrors
  * Next-conflict's "No conflicts to review" empty state (ADR-0031 shade-don't-hide). */
 const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
+
+/**
+ * Disabled reason for the levelled-placement overlay when the plan's levelling pass is off
+ * (one-planning-surface M-E-T3, ADR-0041).
+ *
+ * Names the **plan setting**, because that is the thing a planner can change — and it is the only
+ * one of the lens's three states where there is a thing to change. Deliberately not "Nothing has
+ * been levelled", which would read the same to a planner whose levelling ran perfectly and simply
+ * moved nothing.
+ */
+const LEVELLING_OFF_REASON = 'Resource levelling is off for this plan';
 
 /**
  * **The collapsed band's trigger treatment** (ADR-0090 M3-T3): Row 1's popover triggers give up
@@ -2423,24 +2481,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           //
           // `showLabel` is gone with the merge: a `render` item owns its own chrome, and this one
           // compacts from `api.layout` exactly as its `View ▾` and `Summary ▾` neighbours do.
-          ...(SCHEDULING_MODES_ENABLED
-            ? {
-                tier: 1 as const,
-                order: -2,
-                render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
-                  <GoToTodayControl ctx={ctx} api={api} />
-                ),
-              }
-            : {
-                // **No date capability in this build ⇒ no caret**, rather than a caret shaded with a
-                // reason that would be untrue. This is byte-for-byte the plain command `today` was
-                // before the merge, which is also what keeps the flag-off surface unchanged.
-                showLabel: { atLeast: 'comfortable' } as const,
-                isEnabled: (ctx: TsldToolbarContext) => ctx.hasDiagram && ctx.canvasActive,
-                disabledReason: (ctx: TsldToolbarContext) =>
-                  canvasViewportReason(ctx, 'Add an activity to go to today'),
-                onActivate: (ctx: TsldToolbarContext) => ctx.goToDate(ctx.todayIso),
-              }),
+          // **Go-to-date outlives the mode it shipped beside** (one-planning-surface M-F-T5).
+          // `VITE_SCHEDULING_MODES` gated the caret because ADR-0033 delivered the date control in the
+          // same milestone as the Early/Visual selector; the control itself is display-only and reads
+          // no mode. The flag-off arm went with the flag — and it was the arm that rendered NO caret,
+          // so keeping it would have been keeping the surface without the capability.
+          tier: 1 as const,
+          order: -2,
+          render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
+            <GoToTodayControl ctx={ctx} api={api} />
+          ),
         }
       : placeholderItem(todayShape),
 
@@ -2465,56 +2515,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           <ViewTogglesPanel ctx={ctx} />
         </ToolbarPopover>
       ),
-    },
-    // Scheduling-mode selector (ADR-0033 M3, flag-on only): the Early | Visual segment, immediately
-    // after View in the Lens group. Two-row rule (ADR-0031 amendment): shown **always** (flag-on) and
-    // shaded — not hidden — for a read-only viewer (null setter), since the mode changes how the
-    // diagram reads and must be legible to everyone; only writers can operate it. Tier 1 so the labels
-    // render (a tier-2 label-less segment paints blank — ux review).
-    {
-      id: 'mode-early',
-      group: 'lens',
-      row: 'mode',
-      tier: 1,
-      // `showLabel: 'always'` is the row's rule and the RAIL overrides it (Graphite M5): a vertical
-      // 48 px toolbar has no room for a word, so these four render icon-only there with the label as
-      // the accessible name. The comment said "stays labelled at every width" until the M10 gate pass
-      // read it beside the rail it now lives in — true when written, false since the mode cluster
-      // moved, and the kind of stale claim ADR-0076 exists to catch. The declaration is kept rather
-      // than dropped: it is still the rule for any host that has a row (TECH_DEBT #61).
-      showLabel: 'always',
-      order: 1,
-      segment: 'scheduling-mode',
-      label: 'Early mode',
-      icon: <ArrowLeftToLine className="size-4" aria-hidden="true" />,
-      isVisible: () => SCHEDULING_MODES_ENABLED,
-      isEnabled: (ctx) => ctx.setSchedulingMode !== null,
-      disabledReason: (ctx) =>
-        ctx.setSchedulingMode === null
-          ? (ctx.scheduleRefusal('change the scheduling mode') ?? undefined)
-          : undefined,
-      isActive: (ctx) => ctx.schedulingMode === 'EARLY',
-      onActivate: (ctx) => ctx.setSchedulingMode?.('EARLY'),
-    },
-    {
-      id: 'mode-visual',
-      group: 'lens',
-      row: 'mode',
-      tier: 1,
-      // Icon-only on the rail; see `mode-early` above (TECH_DEBT #61).
-      showLabel: 'always',
-      order: 2,
-      segment: 'scheduling-mode',
-      label: 'Visual mode',
-      icon: <Hand className="size-4" aria-hidden="true" />,
-      isVisible: () => SCHEDULING_MODES_ENABLED,
-      isEnabled: (ctx) => ctx.setSchedulingMode !== null,
-      disabledReason: (ctx) =>
-        ctx.setSchedulingMode === null
-          ? (ctx.scheduleRefusal('change the scheduling mode') ?? undefined)
-          : undefined,
-      isActive: (ctx) => ctx.schedulingMode === 'VISUAL',
-      onActivate: (ctx) => ctx.setSchedulingMode?.('VISUAL'),
     },
     // View-mode switch — the slot ADR-0031 §296 reserved, now filled (ADR-0059 §3). It follows the
     // `mode-early`/`mode-visual` idiom: a segment is TWO registry items whose `isActive` reads the

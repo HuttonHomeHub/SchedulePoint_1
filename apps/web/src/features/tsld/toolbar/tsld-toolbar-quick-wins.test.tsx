@@ -19,7 +19,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: true,
   NOTES_ENABLED: true,
   UNDO_REDO_ENABLED: false,
   TOOLBAR_QUICK_WINS_ENABLED: true,
@@ -161,9 +160,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
   // cases looks identical to a capability that was dropped.
 
   it('has no axe violations with the quick-wins live', async () => {
-    const { container } = renderRows(
-      ctx({ schedulingMode: 'VISUAL', selectedActivityId: 'a1', selectedActivity: SELECTED }),
-    );
+    const { container } = renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED }));
     expect((await axe(container)).violations).toEqual([]);
   });
 });

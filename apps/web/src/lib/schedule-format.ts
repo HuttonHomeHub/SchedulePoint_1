@@ -31,6 +31,33 @@ export function formatFloat(totalFloat: number | null): string {
 }
 
 /**
+ * **The float a planner acts on: what this activity has LEFT from where its bar is drawn**
+ * (one-planning-surface M-E-T7).
+ *
+ * The ONE formatter for it, read by all three planner-facing read-outs — the canvas bar sentence,
+ * the Gantt grid and the activities table — so they cannot come to show different numbers under
+ * the same word. It is deliberately a sibling of {@link formatFloat} rather than a parameter on
+ * it: they take different fields and mean different things, and a boolean flag on one function is
+ * how a caller ends up passing the wrong one and looking correct.
+ *
+ * **Total float and remaining float are both real, and the difference is the planner's own
+ * spending.** `remainingFloat` is `totalFloat - visualDriftDays` (ADR-0033, M-D) — the slack a
+ * placement has not yet used. On an activity nobody has placed the two are equal, which is every
+ * plan in the estate today (FC-1), so this changes no number on any existing screen; it changes
+ * which question the number answers the moment somebody places a bar.
+ *
+ * **Every caller of this renames its label in the same commit, and that is not tidiness.** A
+ * column headed `Float` that quietly starts measuring from a different origin is the defect class
+ * this register files most often — the reader has no way to notice, because the number is
+ * plausible either way. Total float keeps the bare word nowhere: where it is still the right
+ * quantity (DCMA, baseline float variance, float paths, the editor's context strip) it is labelled
+ * as total, and a structural test pins those three analyses to it.
+ */
+export function formatRemainingFloat(remainingFloat: number | null): string {
+  return formatFloat(remainingFloat);
+}
+
+/**
  * How an activity's finish compares to the active baseline (M7, ADR-0025). `tone`
  * drives an optional visual accent but is **never the only signal** — `text` always
  * carries the meaning (WCAG 2.2). `behind` = later than baseline, `ahead` = earlier,

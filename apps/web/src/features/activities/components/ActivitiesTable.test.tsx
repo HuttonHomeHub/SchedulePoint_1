@@ -63,7 +63,9 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
+  visualConflictReason: null,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,
@@ -261,6 +263,10 @@ describe('ActivitiesTable', () => {
         lateStart: '2026-01-01',
         lateFinish: '2026-01-05',
         totalFloat: 0,
+        // The pair the engine writes together (M-E-T7). The `Float left` column reads
+        // `remainingFloat`; a fixture setting only `totalFloat` describes a row no recalculation
+        // produces, and would have made this case assert an em dash.
+        remainingFloat: 0,
         freeFloat: null,
         isCritical: true,
         isNearCritical: false,
@@ -283,12 +289,14 @@ describe('ActivitiesTable', () => {
       },
     ]);
     expect(screen.getAllByText('01 Jan 2026').length).toBeGreaterThan(0); // early/late start
-    expect(screen.getByText('0 d')).toBeInTheDocument(); // total float
+    expect(screen.getByText('0 d')).toBeInTheDocument(); // float left
     expect(screen.getByText('Critical')).toBeInTheDocument();
   });
 
   it('badges a near-critical activity and shows a negative float as a lead', () => {
-    renderTable(false, [{ ...ACTIVITY, totalFloat: -2, isCritical: false, isNearCritical: true }]);
+    renderTable(false, [
+      { ...ACTIVITY, totalFloat: -2, remainingFloat: -2, isCritical: false, isNearCritical: true },
+    ]);
     expect(screen.getByText('Near-critical')).toBeInTheDocument();
     expect(screen.getByText('−2 d')).toBeInTheDocument();
   });

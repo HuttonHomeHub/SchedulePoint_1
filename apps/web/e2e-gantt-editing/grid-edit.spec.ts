@@ -171,31 +171,6 @@ function durationCell(page: Page) {
   return ganttRow(page, 'Seeded 0').getByRole('gridcell').nth(2);
 }
 
-/** Put the plan into VISUAL mode through the API, then reload so the client sees it. */
-async function useVisualMode(page: Page, orgSlug: string): Promise<void> {
-  const planId = openPlanId(page);
-  const failure = await page.evaluate(
-    async ({ org, id }: { org: string; id: string }) => {
-      const read = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
-        credentials: 'include',
-      });
-      if (!read.ok) return `plan read: ${read.status}`;
-      const plan = (await read.json()) as { data: { version: number } };
-      const patched = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ schedulingMode: 'VISUAL', version: plan.data.version }),
-      });
-      if (!patched.ok) return `mode patch: ${patched.status} ${await patched.text()}`;
-      return null;
-    },
-    { org: orgSlug, id: planId },
-  );
-  if (failure !== null) throw new Error(failure);
-  await syncClient(page);
-}
-
 /** The stored constraint and placement — the fields a typed date is actually about. */
 async function readSchedulingFields(
   page: Page,
@@ -430,11 +405,25 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
  * `useUpdateActivityFields` with the pen enforced and an optimistic `version`, neither of which a
  * mocked fetch can refuse.
  *
- * The Visual case matters disproportionately. `bar-drag.spec.ts:157` is one of only a handful of
- * journeys in this repository that runs in Visual mode at all, and ADR-0092 records that gap being
- * the exact place a defect was hiding — a control whose own toggle did nothing, for months.
+ * **The paragraph here about the Visual case is gone with the mode** (M-F-T4b). It said the Visual
+ * half mattered disproportionately because so few journeys ran in that mode at all, citing
+ * ADR-0092's finding that the gap was exactly where a defect was hiding. There is one planning
+ * surface now, so every journey in this suite runs on it and the scarcity argument has no subject.
  */
-test('a start date typed in EARLY mode pins the activity as an SNET', async ({ page }) => {
+/**
+ * **One test, where there were two** (one-planning-surface M-F-T4b).
+ *
+ * The pair asserted ADR-0134's contrast: a typed start pinned an SNET in EARLY, and placed the bar
+ * writing NO constraint in VISUAL. The collapse removes the EARLY behaviour, so that half would
+ * have gone on passing against a product that no longer does what it says — the failure mode this
+ * conversion exists to avoid, since a wrong test does not go red.
+ *
+ * What survives is **the negative half**: a typed start writes a placement and no constraint. A
+ * placement is advisory and a constraint is not, so if this ever starts writing one, a planner's
+ * typed date has silently become a pin — invisible on screen, and found when somebody asks why the
+ * plan is full of constraints nobody set.
+ */
+test('a start date typed places the bar and writes NO constraint', async ({ page }) => {
   test.setTimeout(180_000);
   const orgSlug = await onboard(page, Date.now());
   await createClient(page, 'Northgate');
@@ -468,50 +457,14 @@ test('a start date typed in EARLY mode pins the activity as an SNET', async ({ p
   await field.press('Enter');
 
   await expect
-    .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).constraintType, {
-      timeout: 20_000,
-    })
-    .toBe('SNET');
-  const after = await readSchedulingFields(page, orgSlug, 'Seeded 0');
-  // The DATE, not just the type — a constraint at the wrong day would satisfy the assertion above.
-  expect(after.constraintDate).toContain(target);
-});
-
-test('a start date typed in VISUAL mode places the bar and writes NO constraint', async ({
-  page,
-}) => {
-  test.setTimeout(180_000);
-  const orgSlug = await onboard(page, Date.now());
-  await createClient(page, 'Northgate');
-  await createProject(page, 'Riverside');
-  await createPlan(page, 'Programme');
-  await startEditing(page);
-  await seedActivities(page, orgSlug, 3);
-  await recalculate(page);
-  await useVisualMode(page, orgSlug);
-  await showGantt(page);
-
-  const before = await readSchedulingFields(page, orgSlug, 'Seeded 0');
-  const target = plusDays(before.earlyStart!, 1);
-
-  await startCell(page).dblclick();
-  const field = page.getByRole('textbox', { name: /Start, Seeded 0/ });
-  await expect(field).toBeVisible();
-  await field.fill(asDisplayed(target));
-  await field.press('Enter');
-
-  await expect
     .poll(async () => (await readSchedulingFields(page, orgSlug, 'Seeded 0')).visualStart, {
       timeout: 20_000,
     })
     .toContain(target);
-  // **The half that makes this a different decision rather than the same one.** A placement is
-  // advisory; a constraint is not. If this ever starts writing one, the two modes have collapsed
-  // into each other and a planner's hand-placed bar has silently become a pin.
   expect((await readSchedulingFields(page, orgSlug, 'Seeded 0')).constraintType).toBeNull();
 });
 
-test('a finish date typed in EARLY mode writes a duration and pins nothing', async ({ page }) => {
+test('a finish date typed writes a duration and pins nothing', async ({ page }) => {
   test.setTimeout(180_000);
   const orgSlug = await onboard(page, Date.now());
   await createClient(page, 'Northgate');

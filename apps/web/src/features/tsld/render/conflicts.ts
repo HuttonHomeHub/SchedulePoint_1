@@ -7,6 +7,8 @@
  * announces the reason.
  */
 
+import type { VisualConflictReason } from '@repo/types';
+
 import { compareByTimeThenLane } from './ordering';
 
 /**
@@ -21,7 +23,15 @@ import { compareByTimeThenLane } from './ordering';
  */
 export interface ConflictFlagFields {
   constraintViolated: boolean;
-  visualConflict: boolean;
+  /**
+   * **The reason, not the boolean** (one-planning-surface M-D). `visualConflict` was here until the
+   * placement conflict became two-sided; it is now DERIVED by the engine as
+   * `visualConflictReason !== null`, so reading it would be reading a projection of this field and
+   * would make the two sides indistinguishable at exactly the point they stop being the same
+   * conversation. Dropping it also honours this interface's own rule, stated above: a predicate
+   * takes the fields predicates read, and nothing else.
+   */
+  visualConflictReason: VisualConflictReason | null;
   levelingWindowExceeded: boolean;
 }
 
@@ -43,7 +53,11 @@ export interface ConflictableActivity extends ConflictFlagFields {
  * drift-by-omission this epic exists to remove. Closed, adding a flag is a **typecheck failure at
  * the map** rather than a conflict that lands on screen with no remedy behind it.
  */
-export type ConflictKey = 'constraintViolated' | 'visualConflict' | 'levelingWindowExceeded';
+export type ConflictKey =
+  | 'constraintViolated'
+  | 'visualEarlierThanLogic'
+  | 'visualLaterThanBound'
+  | 'levelingWindowExceeded';
 
 /** One conflict flag: a stable key, a human reason label, and the predicate over an already-shipped
  * engine flag. Single source, so the set + copy can't drift across the app. */
@@ -57,9 +71,20 @@ export interface ConflictFlag {
  * The *Next conflict* flag set, in the order reasons are listed for a multi-flag activity.
  * **Near-critical is deliberately excluded** — it is a lens/insight, not a conflict.
  *
- * - `constraintViolated`     — a mandatory constraint broke logic (ADR-0035 §7)
- * - `visualConflict`         — a Visual-Planning placement conflicts with logic (ADR-0033)
- * - `levelingWindowExceeded` — resource levelling pushed it past its window (ADR-0041 §3)
+ * - `constraintViolated`      — a mandatory constraint broke logic (ADR-0035 §7)
+ * - `visualEarlierThanLogic`  — placed before the earliest feasible start (ADR-0033)
+ * - `visualLaterThanBound`    — placed past an explicit upper bound (one-planning-surface M-D)
+ * - `levelingWindowExceeded`  — resource levelling pushed it past its window (ADR-0041 §3)
+ *
+ * **The placement conflict is TWO members, not one, and that is the point of splitting it.** The
+ * shipped `visualConflict` boolean fired for the first case alone — `placed < logicEarliest`, its
+ * only meaning since it shipped — so a bar placed PAST an `SNLT`, `FNLT`, `MSO` or `MFO` ceiling was
+ * not a conflict at all. M-D made the engine two-sided; keeping ONE key here would have carried that
+ * fix to the count and then thrown it away at the remedy, because the two sides do not have the same
+ * answer. A planner who has overrun **their own slack** should withdraw the placement; a planner who
+ * has overrun **a commitment somebody recorded** may not even know the bound exists, and the useful
+ * act is to go and look at it. Same flag, same sign on the float, different sentence — which is the
+ * whole reason `visualConflictReason` was persisted rather than derived on the client.
  *
  * **It held five until ADR-0094, and both departures were the same argument.** A counted conflict is
  * something a planner can *act on*; a fact they cannot act on is noise that teaches them to stop
@@ -84,10 +109,18 @@ export const CONFLICT_FLAGS: readonly ConflictFlag[] = [
     label: 'constraint conflict',
     matches: (a) => a.constraintViolated,
   },
+  // The two placement members are MUTUALLY EXCLUSIVE by construction — the engine returns one
+  // reason, not a set — so their order decides display order only, never which of the two an
+  // activity leads with. Earliest-first reads as a timeline.
   {
-    key: 'visualConflict',
-    label: 'visual placement conflict',
-    matches: (a) => a.visualConflict,
+    key: 'visualEarlierThanLogic',
+    label: 'placed before its earliest start',
+    matches: (a) => a.visualConflictReason === 'EARLIER_THAN_LOGIC',
+  },
+  {
+    key: 'visualLaterThanBound',
+    label: 'placed past a constraint',
+    matches: (a) => a.visualConflictReason === 'LATER_THAN_BOUND',
   },
   {
     key: 'levelingWindowExceeded',

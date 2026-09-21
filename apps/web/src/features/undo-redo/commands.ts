@@ -183,31 +183,6 @@ function definitionSnapshotCommand(params: {
 }
 
 /**
- * Reverse a canvas **reposition** — a day move (optionally + a lane change): the EARLY-mode PATCH that
- * writes an SNET-at-new-start constraint (ADR-0023) plus the new lane. The inverse restores the whole
- * pre-edit definition (the prior constraint) and lane; redo re-applies the dropped placement. (A pure
- * lane move goes through {@link relaneCommand}; a VISUAL-mode `visualStart` drop is an M2 command.)
- */
-export function repositionCommand(params: {
-  update: UpdateActivityFn;
-  before: ActivitySummary;
-  after: ActivitySummary;
-  label?: string;
-}): Command {
-  return definitionSnapshotCommand({
-    // Name the entity so the toolbar accessible name + the "Undid …" announcement read concretely
-    // ("Undid move “Excavate”"), mirroring the app's `Activity “${name}” …` toast convention (S1).
-    label: params.label ?? `Move “${params.before.name}”`,
-    update: params.update,
-    before: params.before,
-    after: params.after,
-    // A pointer drag / key-repeat nudge of one bar in time is a single gesture — coalesce its
-    // intermediate day-moves into one undo step (keyed per activity; ADR-0048 M2.3).
-    coalesceKey: `reposition:${params.before.id}`,
-  });
-}
-
-/**
  * Reverse a canvas **lane move** — the layout-only `{ laneIndex, version }` PATCH (no constraint, no
  * recalc). The inverse moves the bar back to its previous lane; redo moves it to the new one. Version
  * threaded from each response, starting from the post-edit `version`.
@@ -254,7 +229,7 @@ export function relaneCommand(params: {
  * only intended change is `durationDays`. The inverse restores the whole pre-edit definition (so
  * whatever the write touched is reliably reversed); redo re-applies the resized one. Coalesces per
  * activity (`resize:{id}`) so a drag / held-`Shift+←/→` burst collapses to ONE undo step, exactly
- * like {@link repositionCommand}'s day-move coalescing.
+ * like {@link visualStartCommand}'s day-move coalescing.
  */
 export function durationResizeCommand(params: {
   update: UpdateActivityFn;
@@ -275,7 +250,7 @@ export function durationResizeCommand(params: {
 /**
  * Reverse a **definition edit** from the activity form (rename / duration / constraint / …). Restores
  * the full pre-edit definition on undo and the post-edit definition on redo — the same mechanism as
- * {@link repositionCommand}, differing only in the default label.
+ * {@link durationResizeCommand}, differing only in the default label and in coalescing nothing.
  */
 export function updateCommand(params: {
   update: UpdateActivityFn;
@@ -284,7 +259,7 @@ export function updateCommand(params: {
   label?: string;
 }): Command {
   return definitionSnapshotCommand({
-    // Name the entity ("Edit “Excavate”"), like {@link repositionCommand} (S1).
+    // Name the entity ("Edit “Excavate”"), like {@link durationResizeCommand} (S1).
     label: params.label ?? `Edit “${params.before.name}”`,
     update: params.update,
     before: params.before,
@@ -603,8 +578,14 @@ export interface VisualPlacement {
 
 /**
  * Reverse a Visual-Planning **`visualStart` set** (ADR-0033 M3): undo restores the prior placement,
- * redo re-applies the dropped one. Coalescable like {@link repositionCommand} — a Visual-mode drag /
- * nudge burst on one bar collapses to a single undo step. Version threaded from each response.
+ * redo re-applies the dropped one. Coalescable — a drag / nudge burst on one bar collapses to a
+ * single undo step. Version threaded from each response.
+ *
+ * **This is the ONLY inverse a canvas move has since the collapse** (one-planning-surface M-F-T3).
+ * Its predecessor, `repositionCommand`, reversed the full-definition PATCH an EARLY-mode drop sent —
+ * the one that imposed an `SNET` at the drop and overwrote whatever constraint the row carried. It
+ * outlived that write by an epic, unreachable and still exported, and is deleted at the M-J gate
+ * pass.
  */
 export function visualStartCommand(params: {
   setVisualStart: SetVisualStartFn;

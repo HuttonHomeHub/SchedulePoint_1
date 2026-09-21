@@ -15,7 +15,6 @@ import {
   SEED_PROGRESS_RECALC_MODES,
   SEED_RESOURCE_CURVE_TYPES,
   SEED_RESOURCE_KINDS,
-  SEED_SCHEDULING_MODES,
   SEED_TOTAL_FLOAT_MODES,
 } from './spec.js';
 
@@ -95,7 +94,6 @@ describe('the seed vocabulary matches the application schema', () => {
   });
 
   it('covers every plan-level scheduling option enum', () => {
-    expect([...SEED_SCHEDULING_MODES].sort()).toEqual(['EARLY', 'VISUAL']);
     expect([...SEED_PROGRESS_RECALC_MODES].sort()).toEqual([
       'ACTUAL_DATES',
       'PROGRESS_OVERRIDE',

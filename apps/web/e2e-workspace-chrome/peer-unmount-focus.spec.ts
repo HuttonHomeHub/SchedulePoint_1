@@ -10,7 +10,6 @@ import {
   recalculate,
   seedActivities,
   selectedActivityId,
-  useVisualMode,
 } from './support';
 
 /**
@@ -23,11 +22,24 @@ import {
  * blur rule the whole mechanism rests on is untestable at that tier. Here there are two real
  * sessions, a real API with the pen enforced, and a real browser.
  *
- * **What makes the case reachable is an API fact, not a UI one.** `PATCH …/plans/:planId` is
- * "Planner or Org Admin; optimistic locking" and `assertHoldsPen` appears nowhere in
- * `apps/api/src/modules/plans/`, so a second Planner can flip `schedulingMode` while the first
- * holds the pen and changes nothing about that pen. `Clear visual start`'s `isVisible` is literally
- * `schedulingMode === 'VISUAL'`, so the reader's next refetch takes it away.
+ * **The reachable case changed with the product, and the shape did not** (one-planning-surface
+ * M-F-T4b). It used to be a peer flipping `schedulingMode` — `PATCH …/plans/:planId` is not
+ * pen-gated, so a second Planner could do it while the reader held the pen, and `Clear visual
+ * start`'s `isVisible` was literally `schedulingMode === 'VISUAL'`. The collapse removes that
+ * condition: there is one planning surface, every plan can carry a placement, and that control can
+ * no longer be taken away by anybody.
+ *
+ * **Nothing plan-level replaces it, which is worth saying plainly** — after the collapse there is
+ * no field a peer can write on `PATCH …/plans/:planId` that removes a registry item. So the fixture
+ * inverts: the **peer** holds the pen and changes the selected activity's `type` to `WBS_SUMMARY`,
+ * and the reader — who is only reading, which needs no pen (ADR-0063 M4b) — is standing on
+ * `Duplicate`, whose `isVisible` is `!ctx.isSummary`. Same hook, same three guards, one control
+ * disappearing from under a focus ring because somebody else wrote.
+ *
+ * The reader is deliberately NOT holding the pen now, and that is a consequence rather than a
+ * convenience: an activity write asserts `assertHoldsPen`, so the peer must hold it, so the reader
+ * must not. `Duplicate` is therefore shaded with its pen reason throughout — and still focusable,
+ * which is ADR-0082's whole point and is what keeps this case constructible at all.
  *
  * ## Three guards, before any reading is believed
  *
@@ -39,9 +51,9 @@ import {
  * 2. The reader's client really **re-asked** the server — counted, not inferred. "The screen did
  *    not change" cannot tell a product defect from an instrument that did nothing, and two earlier
  *    probe versions reported exactly that.
- * 3. The **server** says the plan is `EARLY`. Asserting the reader's own DOM here would assert the
- *    thing under test; asserting it after a reload is worse, because a reload drops the pen and the
- *    control would vanish for two reasons at once.
+ * 3. The **server** says the activity is a `WBS_SUMMARY`. Asserting the reader's own DOM here would
+ *    assert the thing under test, and asserting it after a reload is worse — a reload re-reads
+ *    everything, so the control would vanish for two reasons at once.
  *
  * **The 31-second wait is the mechanism, not padding.** `createQueryClient` sets
  * `staleTime: 30_000` with `refetchOnWindowFocus: true`, so a focus event fired inside that window
@@ -49,11 +61,20 @@ import {
  * at a plan, and coming back to the tab is the commonest trigger there is.
  *
  * **The wake is simulated and that is stated rather than glossed.** `@tanstack/query-core` listens
- * for `visibilitychange` on **`window`** and calls `onFocus()` unconditionally — there is no
- * transition tracking. Headless Chromium fires no `visibilitychange` on `bringToFront` at all
- * (measured), so no amount of page shuffling produces a real background→foreground transition. The
- * event the library listens to is therefore dispatched explicitly, on `window`. What this
- * establishes is what the product does when its focus manager wakes.
+ * for `visibilitychange` on **`window`** (`focusManager.js:11-13`) and treats anything that is not
+ * `"hidden"` as focused (`focusManager.js:56-59`) — there is no transition tracking. Headless
+ * Chromium fires no `visibilitychange` on `bringToFront` at all (measured), so no amount of page
+ * shuffling produces a real background→foreground transition. The event the library listens to is
+ * therefore dispatched explicitly, on `window`. What this establishes is what the product does when
+ * its focus manager wakes.
+ *
+ * **Those two citations moved here from `measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts`,
+ * which is deleted** (one-planning-surface M-F-T4b). That harness was `#204(c)`'s M0 evidence and
+ * its whole mechanism was a peer flipping `schedulingMode`; with the mode gone it could not be
+ * re-run, and converting it would have made it produce a different reading from the one
+ * `docs/specs/unmount-focus-handoff/` records — a measurement file that no longer reproduces its
+ * own recorded measurement is worse than none. The knowledge it carried is the wake mechanism, and
+ * that lives here, where it is still load-bearing.
  */
 
 const PEER_PASSWORD = 'correct-horse-battery';
@@ -63,16 +84,14 @@ function selectionBar(page: Page) {
   return page.getByRole('toolbar', { name: /^Actions for / });
 }
 
-test('a peer flips the scheduling mode and the bar catches the focus it drops', async ({
-  browser,
-}) => {
+test('a peer retypes the activity and the bar catches the focus it drops', async ({ browser }) => {
   test.setTimeout(180_000);
 
   const stamp = Date.now();
   const ctxA = await browser.newContext({ viewport: { width: 1646, height: 1097 } });
   const a = await ctxA.newPage();
 
-  // --- A: the reader, who will be holding the pen and standing on the control ------------------
+  // --- A: the reader, who holds no pen and is standing on the control --------------------------
   const orgSlug = `chrome-co-${stamp}`;
   await a.goto('/sign-up');
   await a.getByLabel('Full name').fill('Chrome Tester');
@@ -98,13 +117,16 @@ test('a peer flips the scheduling mode and the bar catches the focus it drops', 
   await newPlan(a, `Peer unmount ${stamp}`);
   const planId = openPlanId(a);
   await ensurePen(a);
-  await seedActivities(a, orgSlug, [{ name: 'Excavate', laneIndex: 0, durationDays: 5 }]);
-  // `recalculate` reloads, which fires the holder's `pagehide` pen release — so the pen is re-taken
-  // afterwards. Without the recalculation the canvas has no bar to select and the probe would fail
-  // at its fixture rather than at its subject.
+  const seeded = await seedActivities(a, orgSlug, [
+    { name: 'Excavate', laneIndex: 0, durationDays: 5 },
+  ]);
+  // Without the recalculation the canvas has no bar to select and the probe would fail at its
+  // fixture rather than at its subject.
+  // `recalculate` reloads, which fires the holder's `pagehide` pen release — and this journey
+  // WANTS the pen released, because the peer needs it to write an activity. The reader is only
+  // reading, which has never needed a pen (ADR-0063 M4b).
   await recalculate(a, orgSlug);
-  await ensurePen(a);
-  await useVisualMode(a);
+  const seededId = seeded[0]!.id;
 
   // --- B: a second Planner, who never opens the plan -------------------------------------------
   const ctxB = await browser.newContext();
@@ -129,9 +151,12 @@ test('a peer flips the scheduling mode and the bar catches the focus it drops', 
   await a.keyboard.press('ArrowDown');
   await expect.poll(async () => selectedActivityId(a)).not.toBeNull();
 
-  const clear = a.getByRole('button', { name: 'Clear visual start' });
-  await expect(clear).toBeVisible();
-  await clear.focus();
+  // **Shaded, because the reader holds no pen — and focusable anyway**, which is ADR-0082's ruling
+  // and the only reason this case can be built at all. A primitive that skipped `aria-disabled`
+  // items would make the reason unreachable by keyboard AND make this journey impossible.
+  const duplicate = a.getByRole('button', { name: 'Duplicate', exact: true });
+  await expect(duplicate).toBeVisible();
+  await duplicate.focus();
 
   // Guard 1. **The accessible name, not `aria-label`** — this control carries `showLabel: 'always'`,
   // so `ToolbarButton` names it from its text and there is no `aria-label` to read. The first run
@@ -144,33 +169,48 @@ test('a peer flips the scheduling mode and the bar catches the focus it drops', 
         return (el.getAttribute('aria-label') ?? el.textContent ?? '').trim();
       }),
     )
-    .toContain('Clear visual start');
+    .toContain('Duplicate');
 
-  // --- B: flip the plan to Early, over the public API, holding no pen ---------------------------
+  // --- B: take the pen, then retype the activity, over the public API ---------------------------
+  //
+  // **The lock acquisition is part of the subject, not setup noise.** An activity write asserts
+  // `assertHoldsPen` (ADR-0028), which is exactly why the reader above holds no pen: the two cannot
+  // both be true, and the case only exists because one person's write removes another's control.
   const flip = await b.evaluate(
-    async ({ org, id }: { org: string; id: string }) => {
-      const get = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+    async ({ org, id, activityId }: { org: string; id: string; activityId: string }) => {
+      const lock = await fetch(`/api/v1/organizations/${org}/plans/${id}/edit-lock`, {
+        method: 'POST',
         credentials: 'include',
       });
-      if (!get.ok) return { ok: false, stage: 'get', status: get.status, body: '' };
-      const plan = (await get.json()) as { data: { version: number } };
-      const patch = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+      if (!lock.ok) {
+        return { ok: false, stage: 'lock', status: lock.status, body: await lock.text() };
+      }
+      // **Org-scoped, not plan-nested** — `activities.controller.ts` is
+      // `organizations/:orgSlug/activities`; the plan-nested spelling 404s, which is how the
+      // first run of this conversion failed.
+      const get = await fetch(`/api/v1/organizations/${org}/activities/${activityId}`, {
+        credentials: 'include',
+      });
+      if (!get.ok) return { ok: false, stage: 'get', status: get.status, body: await get.text() };
+      const activity = (await get.json()) as { data: { version: number } };
+      const patch = await fetch(`/api/v1/organizations/${org}/activities/${activityId}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schedulingMode: 'EARLY', version: plan.data.version }),
+        body: JSON.stringify({ type: 'WBS_SUMMARY', version: activity.data.version }),
       });
       return { ok: patch.ok, stage: 'patch', status: patch.status, body: await patch.text() };
     },
-    { org: orgSlug, id: planId },
+    { org: orgSlug, id: planId, activityId: seededId },
   );
-  expect(flip.ok, `peer PATCH failed: ${JSON.stringify(flip)}`).toBe(true);
+  expect(flip.ok, `peer write failed: ${JSON.stringify(flip)}`).toBe(true);
 
-  // Guard 2 — count A's plan reads from here on.
+  // Guard 2 — count A's ACTIVITY reads from here on. The subject moved from a plan field to an
+  // activity field, so counting plan reads would count a request that says nothing about it.
   let planRequests = 0;
-  const planUrl = `/api/v1/organizations/${orgSlug}/plans/${planId}`;
+  const activitiesUrl = `/api/v1/organizations/${orgSlug}/plans/${planId}/activities`;
   a.on('request', (req) => {
-    if (req.method() === 'GET' && new URL(req.url()).pathname === planUrl) planRequests += 1;
+    if (req.method() === 'GET' && new URL(req.url()).pathname === activitiesUrl) planRequests += 1;
   });
 
   await a.waitForTimeout(31_000);
@@ -179,21 +219,21 @@ test('a peer flips the scheduling mode and the bar catches the focus it drops', 
   });
 
   // Guard 3 — ask the server, not the page under test.
-  const serverMode = await b.evaluate(
-    async ({ org, id }: { org: string; id: string }) => {
-      const res = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+  const serverType = await b.evaluate(
+    async ({ org, activityId }: { org: string; activityId: string }) => {
+      const res = await fetch(`/api/v1/organizations/${org}/activities/${activityId}`, {
         credentials: 'include',
       });
-      const json = (await res.json()) as { data: { schedulingMode: string } };
-      return json.data.schedulingMode;
+      const json = (await res.json()) as { data: { type: string } };
+      return json.data.type;
     },
-    { org: orgSlug, id: planId },
+    { org: orgSlug, activityId: seededId },
   );
-  expect(serverMode, 'the peer PATCH did not change the plan').toBe('EARLY');
+  expect(serverType, 'the peer PATCH did not change the activity').toBe('WBS_SUMMARY');
 
   // The control really goes, and the BAR really stays — the two together are what make this the
   // per-item case rather than `SelectionActionsBar`'s whole-bar cleanup.
-  await expect(clear).toHaveCount(0);
+  await expect(duplicate).toHaveCount(0);
   await expect(selectionBar(a)).toBeVisible();
   expect(
     planRequests,
@@ -221,8 +261,8 @@ test('a peer flips the scheduling mode and the bar catches the focus it drops', 
   // And the reader is told what left and why. The sentence is the item's own `lostReason`, which is
   // a statement about the CONDITION and is therefore still true now that the condition has changed.
   await expect(a.getByTestId('announcer')).toContainText(
-    'Clear visual start is no longer available. This action applies only while the plan is ' +
-      'scheduled in Visual mode. Focus moved to Actions for',
+    'Duplicate is no longer available. This action does not apply to a WBS summary. ' +
+      'Focus moved to Actions for',
   );
 
   // **The scan's target is asserted to match something first** — the ADR-0099 M5 correction, where

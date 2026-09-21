@@ -14,13 +14,19 @@ import { defineConfig, devices } from '@playwright/test';
  * through the API trips a throttler that exists to deny abusive traffic and cannot tell a harness
  * from it.
  *
- * **It pins no `VITE_` flag off, deliberately.** The config this was copied from pins
- * `VITE_SCHEDULING_MODES: 'false'`, and inheriting that made `Clear visual placement` vanish — the
- * item is only registered when scheduling modes are on, so the journey was asserting against a
- * surface no shipped bundle produces. ADR-0088 D1 established that a published image carries every
- * flag at its default, and ADR-0088's own retrospective records the base suite proving role-only
- * editing "in a world no shipped bundle can produce" as worse than covering a rollback path. The
- * default surface IS the shipped surface, so that is what this drives.
+ * **It pins no `VITE_` flag off, deliberately — and as of 2026-09-20 neither does anything else.**
+ * The config this was copied from pinned the scheduling-modes flag off, and inheriting that made
+ * `Clear visual placement` vanish — the item was only registered when scheduling modes were on, so
+ * the journey was asserting against a surface no shipped bundle produces. (The pin is spelled out in
+ * prose rather than as `VITE_…: 'false'`, because `check-flags.mjs` reads these configs as raw text
+ * and cannot tell a pin from a comment describing one — `docs/TECH_DEBT.md` #354.) ADR-0088 D1 established that a
+ * published image carries every flag at its default, and ADR-0088's own retrospective records the
+ * base suite proving role-only editing "in a world no shipped bundle can produce" as worse than
+ * covering a rollback path. The default surface IS the shipped surface, so that is what this drives.
+ *
+ * The one-planning-surface epic's M-B-T1 removed the other thirteen pins, so this config's position
+ * stopped being the exception and became the rule. Kept rather than deleted, because it records WHY
+ * — and because the sentence above names the defect that reasoning caught, in this suite, once.
  */
 export default defineConfig({
   testDir: './e2e-gantt-editing',
@@ -74,9 +80,18 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // The Gantt ON, plus every layer the canvas-first plan workspace builds on. Scheduling
-            // modes is pinned OFF (mirroring the LOE / resource-view / interchange / share / library
-            // suites) to keep this journey asserting the plain authoring surface it was written for.
+            // The Gantt ON, plus every layer the canvas-first plan workspace builds on.
+            //
+            // **This comment said "Scheduling modes is pinned OFF (mirroring the LOE /
+            // resource-view / interchange / share / library suites)" and that was FALSE** — the
+            // `env` block three lines below has never contained the flag. It was copied with the
+            // config it was derived from, while the docblock above deliberately removed the pin
+            // and explains why: inheriting it made `Clear visual placement` vanish, leaving the
+            // journey asserting against a surface no shipped bundle produces. So the file said
+            // both things at once, and the false half was the one a reader met first.
+            //
+            // That decision is this milestone's whole argument, reached here first and left
+            // contradicted by a copied line.
             env: {
               VITE_GANTT_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',

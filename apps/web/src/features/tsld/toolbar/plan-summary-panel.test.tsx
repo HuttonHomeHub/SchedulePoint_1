@@ -36,20 +36,21 @@ describe('PlanSummaryPanel', () => {
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
-  it('shows the scheduling mode only when a label is given', () => {
-    const { rerender } = renderPanel();
+  /**
+   * **The Mode row is gone, and this case is its headstone** (one-planning-surface M-F-T5).
+   *
+   * It used to assert that "Mode" appears only when a `schedulingModeLabel` is passed — the prop
+   * that carried "Early" or "Visual". With one planning surface the row could only ever print one
+   * word, which is a fact about the product rather than about this plan, so the prop and the row
+   * went together.
+   *
+   * Asserting the ABSENCE rather than deleting the case: a suite that merely dropped it would say
+   * nothing if the row came back, and this list is exactly where a future "show the mode" reflex
+   * would put one.
+   */
+  it('does not print a Mode row — there is one planning surface', () => {
+    renderPanel();
     expect(screen.queryByText('Mode')).not.toBeInTheDocument();
-    rerender(
-      <PlanSummaryPanel
-        statusLabel="Active"
-        dataDate="2026-01-01"
-        schedulingModeLabel="Visual"
-        orgSlug="acme"
-        planId="p1"
-      />,
-    );
-    expect(screen.getByText('Mode')).toBeInTheDocument();
-    expect(screen.getByText('Visual')).toBeInTheDocument();
   });
 
   /**

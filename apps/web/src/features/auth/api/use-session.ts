@@ -10,6 +10,7 @@ import {
 import type { SignInValues, SignUpValues } from '../schemas/auth-schemas';
 
 import { forgetAllForUser } from '@/features/overview/model/recent-plans';
+import { forgetDismissalsForUser } from '@/features/placement-migration/model/dismissal';
 import { forgetLastActiveOrg } from '@/lib/active-org';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
@@ -434,6 +435,11 @@ export function useSignOut() {
         // keyed by user nor swept — so on a shared machine the next person in was silently
         // redirected to the previous person's organisation (`docs/TECH_DEBT.md` #171).
         forgetLastActiveOrg(window.localStorage, userId);
+        // The placement-migration notice's per-plan dismissals (one-planning-surface M-I) are the
+        // third per-user thing in `localStorage`, and they join the sweep in the commit that adds
+        // them rather than in a later one that notices. #171 is what the other two cost by being
+        // added first and swept afterwards.
+        forgetDismissalsForUser(window.localStorage, userId);
       }
       queryClient.setQueryData(sessionKeys.session, null);
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });

@@ -17,6 +17,7 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     activityCount: 3,
     mode: 'select',
     authoringFlowEnabled: true,
+    hasPlacementMigrationNotice: false,
     ...overrides,
   };
 }
@@ -77,5 +78,40 @@ describe('resolveDockStrip', () => {
    */
   it('does not show the band for a mode that has no statement', () => {
     expect(resolveDockStrip(input({ mode: 'linking', modeStatement: null }))).toBeNull();
+  });
+
+  /**
+   * The migration notice is the lowest rung, and each case below names what it expects to have
+   * LOST to — asserting "the notice is absent" on its own cannot tell "something outranked it"
+   * from "it is broken", which is the whole reason this function is a value rather than a guard.
+   */
+  describe('the placement-migration notice', () => {
+    it('shows on an otherwise settled canvas', () => {
+      expect(resolveDockStrip(input({ hasPlacementMigrationNotice: true }))).toBe(
+        'placement-migration',
+      );
+    });
+
+    it('loses to a conflict — a failed write outranks a historical fact', () => {
+      expect(
+        resolveDockStrip(input({ hasPlacementMigrationNotice: true, hasConflict: true })),
+      ).toBe('conflict');
+    });
+
+    it('loses to an armed tool — what the next click does outranks what a deploy did', () => {
+      expect(
+        resolveDockStrip(input({ hasPlacementMigrationNotice: true, modeStatement: ARMED })),
+      ).toBe('mode');
+    });
+
+    it('loses to the empty-plan notice, which is the more useful sentence for that reader', () => {
+      expect(resolveDockStrip(input({ hasPlacementMigrationNotice: true, activityCount: 0 }))).toBe(
+        'empty',
+      );
+    });
+
+    it('is absent when the migration changed nothing here', () => {
+      expect(resolveDockStrip(input({ hasPlacementMigrationNotice: false }))).toBeNull();
+    });
   });
 });

@@ -10,13 +10,17 @@ import { useAnnounce } from '@/components/ui/announcer';
  *
  * ## The defect, measured rather than reasoned
  *
- * `docs/TECH_DEBT.md` #204(c). A toolbar item can leave because of a **peer's** write — the
- * canonical case is `Clear visual start`, whose `isVisible` is literally
- * `schedulingMode === 'VISUAL'`, and `schedulingMode` is a plan-level setting another Planner can
- * change while holding no pen. The reader's next refetch unmounts the control under whatever focus
- * is on it, and focus lands on `<body>`: WCAG 2.2 §2.4.3, level A, and on the plan workspace it
- * also silently disables every keyboard accelerator, which are React handlers on the workspace
- * root.
+ * `docs/TECH_DEBT.md` #204(c). A toolbar item can leave because of a **peer's** write: the reader's
+ * next refetch unmounts the control under whatever focus is on it, and focus lands on `<body>` —
+ * WCAG 2.2 §2.4.3, level A, and on the plan workspace it also silently disables every keyboard
+ * accelerator, which are React handlers on the workspace root.
+ *
+ * **The canonical case named here was `Clear visual start`, whose `isVisible` was literally
+ * `schedulingMode === 'VISUAL'` — a plan-level setting a peer could change holding no pen.**
+ * One-planning-surface M-F removed the mode, so that route is closed and nothing plan-level
+ * replaces it; the reachable case is now a peer holding the pen retyping the selected activity,
+ * which takes `Duplicate` (`isVisible: !ctx.isSummary`) away. The hook is unchanged: what moved is
+ * which write produces the condition, not the condition.
  *
  * Both halves are observations, not inferences (`docs/specs/unmount-focus-handoff/m0-measurement.md`):
  * the two-context probe reports `focusAfter: BODY` with the **bar still present**, and a separate

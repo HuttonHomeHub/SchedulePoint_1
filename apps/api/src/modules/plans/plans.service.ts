@@ -104,7 +104,6 @@ export class PlansService {
         name: dto.name,
         description: dto.description ?? null,
         ...(dto.status ? { status: dto.status } : {}),
-        ...(dto.schedulingMode ? { schedulingMode: dto.schedulingMode } : {}),
         // Required (ADR-0033 M1): the DTO guarantees a valid calendar date.
         plannedStart: parseCalendarDate(dto.plannedStart),
         ...(standard ? { calendarId: standard.id } : {}),
@@ -146,7 +145,6 @@ export class PlansService {
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.description !== undefined) patch.description = dto.description;
     if (dto.status !== undefined) patch.status = dto.status;
-    if (dto.schedulingMode !== undefined) patch.schedulingMode = dto.schedulingMode;
     if (dto.progressRecalcMode !== undefined) patch.progressRecalcMode = dto.progressRecalcMode;
     if (dto.useExpectedFinishDates !== undefined) {
       patch.useExpectedFinishDates = dto.useExpectedFinishDates;

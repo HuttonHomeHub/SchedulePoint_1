@@ -12,7 +12,7 @@ function row(over: Partial<SearchableActivity> & { id: string }): SearchableActi
     isCritical: false,
     constraintType: null,
     constraintViolated: false,
-    visualConflict: false,
+    visualConflictReason: null,
     levelingWindowExceeded: false,
     earlyStart: '2026-01-01',
     laneIndex: 0,
@@ -71,7 +71,7 @@ describe('orderedMatches', () => {
       row({ id: 'a', name: 'Piling', isCritical: true }),
       row({ id: 'b', name: 'Excavate' }),
       row({ id: 'c', name: 'Pile cap', code: 'P-1' }),
-      row({ id: 'd', name: 'Steel', visualConflict: true }),
+      row({ id: 'd', name: 'Steel', visualConflictReason: 'EARLIER_THAN_LOGIC' }),
     ];
     for (const [query, attrs] of [
       ['pil', NO_ATTRS],

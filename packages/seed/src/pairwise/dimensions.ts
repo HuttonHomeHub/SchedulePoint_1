@@ -172,7 +172,10 @@ export const DIMENSIONS: readonly Dimension[] = [
   { id: 'maxUnitsPerHour', scope: 'resource', values: [{ id: 'null' }, { id: 'set' }] },
 
   // ── Plan ────────────────────────────────────────────────────────────────────────────────────
-  { id: 'schedulingMode', scope: 'plan', values: [{ id: 'EARLY' }, { id: 'VISUAL' }] },
+  // **`schedulingMode` was a dimension here and is not one any more** (one-planning-surface
+  // M-F-T4). It carried EARLY | VISUAL; the collapse leaves one planning surface, and a dimension
+  // with a single value is not a dimension — `pairwise.spec.ts` asserts `> 1` reachable values,
+  // so leaving it with one would have failed loudly rather than shrunk the array quietly.
   {
     id: 'progressRecalcMode',
     scope: 'plan',

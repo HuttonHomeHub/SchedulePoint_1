@@ -427,7 +427,13 @@ describe.skipIf(!hasDatabase)('Audit coverage — mutation producers (e2e)', () 
           plannedStart: '2026-03-01',
           // Resent unchanged, exactly as the settings dialog does — which is why the producer
           // diffs by VALUE. A presence check would record two changes here.
-          schedulingMode: plan.body.data.schedulingMode as string,
+          //
+          // **This was `schedulingMode` until the collapse** (one-planning-surface M-F-T4), which
+          // took that field out of `UpdatePlanDto` and therefore out of the governance set. The
+          // case needs SOME unchanged governance field resent beside the changed one, or it stops
+          // testing the diff-by-value rule and starts testing nothing; `totalFloatMode` is the
+          // nearest sibling and is resent by the same dialog for the same reason.
+          totalFloatMode: plan.body.data.totalFloatMode as string,
           name: 'Baseline',
           version: plan.body.data.version as number,
         })

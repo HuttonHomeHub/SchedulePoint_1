@@ -44,7 +44,6 @@ vi.mock('@/config/env', async (importOriginal) => {
   return {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
-    SCHEDULING_MODES_ENABLED: false,
     NOTES_ENABLED: false,
     UNDO_REDO_ENABLED: true,
     ACTIVITY_COPY_PASTE_ENABLED: true,
@@ -161,7 +160,9 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
+  visualConflictReason: null,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,

@@ -45,12 +45,15 @@ import {
   composeListboxRowText,
   describeActivity,
   lagPhrase,
+  levelledGhostClause,
+  levelledOverlaySummary,
   summarizeLogic,
   wbsGroupClause,
 } from '../render/a11y';
 import { useCanvasSurface, useRegisterCanvasSurface } from '../render/canvas-surface';
 import {
   buildBaselineGhosts,
+  buildLevelledGhosts,
   buildColourInkMap,
   buildColourMap,
   isFilterActive,
@@ -132,9 +135,14 @@ export interface TsldCreateOutcome {
 }
 
 /**
- * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to
- * an SNET constraint + recalc; `laneIndex` (present iff the lane changed) is layout only (no
- * recalc). The route issues the minimal PATCH for whichever axes are present. **At least one axis
+ * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to a
+ * hand-placed `visualStart` + recalc; `laneIndex` (present iff the lane changed) is layout only (no
+ * recalc).
+
+ * **It wrote an `SNET` constraint until the collapse** (one-planning-surface M-F-T3), and this
+ * block still said so at the M-J gate pass. A drop is a placement, not a commitment somebody
+ * recorded, and the difference is what the whole epic is about — so a docblock describing the
+ * drop as a constraint is the most misleading sentence a reader of this file could meet. The route issues the minimal PATCH for whichever axes are present. **At least one axis
  * is always present** — the gesture machine emits a `reposition` only when a whole cell changed,
  * and the route treats the all-absent case as a no-op — though the type can't enforce that.
  */
@@ -164,8 +172,9 @@ export type TsldRepositionOutcome = TsldEditOutcome;
  * `PATCH durationDays` carrying the FULL definition round-trip (like a reposition) + the
  * coalesced recalc; start day and lane are untouched. Start edge (`startDay` present): the
  * finish stays pinned (`durationDays` = finish − newStart + 1) and the route maps it
- * **mode-aware** (ADR-0052 §3): EARLY → `PATCH {constraintType: SNET, constraintDate,
- * durationDays}`, VISUAL → `PATCH {visualStart, durationDays}`.
+ * to `PATCH {visualStart, durationDays}`. **There is no longer a mode to be aware of**
+ * (one-planning-surface M-F): ADR-0052 §3's `EARLY` branch, which imposed an `SNET` at the new
+ * start, went with the mode it belonged to.
  */
 export interface TsldResizeInput {
   activityId: string;
@@ -258,6 +267,18 @@ export interface TsldPanelProps {
   compareLinks?: readonly CompareLink[] | undefined;
   /** Changed activities the old side never recorded a position for. Stated, never folded into zero. */
   compareGhostsUndrawable?: number | undefined;
+  /**
+   * The plan's `levelResources` switch (ADR-0041), for the levelled lens's empty-state sentence
+   * (M-E-T6) — which of "levelling is off" and "levelling moved nothing" the reader is looking at.
+   *
+   * **Optional, and absent means the host cannot know — never `false`.** A default of `false` would
+   * have this panel state something about the plan on a host that was never told it, which is the
+   * `budgetedExpense` rule ("0 is a claim") one layer up. The only such host today is the guest
+   * share view, where the scope is `SCHEDULE_READ` (ADR-0051) and carries no plan settings — and
+   * where the lens is unreachable anyway, because that host mounts no toolbar to toggle it. Absent,
+   * the lens simply says nothing rather than guessing.
+   */
+  levelResources?: boolean | undefined;
   /** Changed links with an endpoint no longer in the plan. Same rule: counted, never guessed. */
   compareLinksUndrawable?: number | undefined;
   /**
@@ -285,11 +306,12 @@ export interface TsldPanelProps {
    * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
   onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
-  /** Route-composed reposition handler (SNET PATCH + recalc). Resolves with a conflict message
+  /** Route-composed reposition handler (the minimal `visualStart` PATCH + recalc). Resolves with a
+   * conflict message
    * when the move was refused (stale version) or dates couldn't recalc; rejects on real error. */
   onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
   /** Route-composed bar-end resize handler (ADR-0052 M2 finish edge, M3 start edge): the
-   * full-definition `PATCH durationDays` (+ SNET/`visualStart` for a start drag, mode-aware) +
+   * full-definition `PATCH durationDays` (+ `visualStart` for a start drag) +
    * recalc. Only reachable under `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the bar-end
    * resize handles + the `Shift+←/→` duration nudge. Resolves with a conflict message when
    * refused (stale version); rejects on real error. */
@@ -322,6 +344,21 @@ export interface TsldPanelProps {
    * anything is worse than none.
    */
   onUndoLastEdit?: (() => void) | undefined;
+  /**
+   * The one-time placement migration's notice for this plan (one-planning-surface M-I), already
+   * rendered by the host — `null`/absent when the migration changed nothing here or the reader has
+   * dismissed it.
+   *
+   * **A node rather than data, and the host owns the query, the dismissal and the account it is
+   * keyed to.** This panel has no org slug and no session, so it could not fetch the report even
+   * if it wanted to; taking the rendered strip is the same shape as {@link onEditActivity}'s
+   * host-owned dialog. The panel's only job is **precedence** — it decides whether this strip is
+   * the one the dock shows, which is a question only it can answer because only it knows what else
+   * is competing for the row.
+   *
+   * It is the dock's LOWEST rung — see `resolveDockStrip`, the one place the ordering is decided.
+   */
+  placementMigrationNotice?: React.ReactNode | null | undefined;
   /**
    * The plan's auto-recalculation coalescer's hold seam (ADR-0064 T7), supplied by the host that
    * owns it. While a two-click pick is open the panel takes a hold, so a coalesced recalculation
@@ -462,8 +499,6 @@ export interface TsldPanelProps {
    * a write.
    */
   clearPlacement?: { enabled: boolean; reason: string | null };
-  /** Whether `Clear visual start` applies at all — omitted rather than shaded when false (M1). */
-  clearPlacementApplies?: boolean;
   /** Withdraw the selected activity's hand-placed `visualStart` (ADR-0094 M4). */
   onClearVisualPlacement?: (activity: ActivitySummary) => void;
   /** Open the activity editor where a conflict lives — `constraint` → Scheduling, `resources` →
@@ -534,7 +569,7 @@ interface PendingCreate {
  * **M2 (flagged):** when editing is enabled (`canEdit` + `onCreate` + `VITE_TSLD_EDITING`),
  * a toolbar adds an **Add activity** tool — drag on the timeline to draw a task, then name it
  * in an inline popover — and in **Select** mode a writer drags a bar's body sideways to move it
- * in time (an SNET reposition) or drags from a bar's **edge handle** to another bar to draw a
+ * in time (a hand-placement) or drags from a bar's **edge handle** to another bar to draw a
  * dependency (modifier picks the type). Edits show an instant optimistic preview; the route owns
  * the write + authoritative recalc, and a stale-version / cycle / duplicate conflict surfaces as
  * a non-destructive banner. With editing off the surface is byte-for-byte the M1 read-only diagram.
@@ -544,6 +579,7 @@ export function TsldPanel({
   compareGhosts,
   compareLinks,
   compareGhostsUndrawable = 0,
+  levelResources,
   compareLinksUndrawable = 0,
   compareUndrawableReason = 'NOT_RECORDED',
   hasRevisionPair = false,
@@ -557,6 +593,7 @@ export function TsldPanel({
   onLag,
   onLink,
   onUndoLastEdit,
+  placementMigrationNotice,
   recalcHold,
   dropLinkPickSignal = 0,
   recalcPending = false,
@@ -586,7 +623,6 @@ export function TsldPanel({
   canvasUi,
   barDateSource = 'early',
   clearPlacement,
-  clearPlacementApplies,
   onClearVisualPlacement,
   onOpenEditorAt,
   varianceRows,
@@ -1105,8 +1141,15 @@ export function TsldPanel({
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
   // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
   // so the scene carries no lens fields and the paint is byte-for-byte today's.
-  const { filterQuery, filterAttrs, colourMode, baselineOverlay, compareOverlay, searchCursorId } =
-    lensState;
+  const {
+    filterQuery,
+    filterAttrs,
+    colourMode,
+    baselineOverlay,
+    compareOverlay,
+    levelledOverlay,
+    searchCursorId,
+  } = lensState;
   // Bumps on a light/dark/system switch so the Colour-by fill + ink maps re-resolve their token colours
   // (the canvas paints concrete colours, not `var()`), matching the base painter's re-theme (C1/U3).
   const themeVersion = useThemeVersion();
@@ -1201,6 +1244,61 @@ export function TsldPanel({
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
   }, [baselineOverlay, varianceRows, activities]);
+  /**
+   * The levelled-placement ghosts (one-planning-surface M-E) — where the levelling pass moved a bar
+   * to, for the activities it MOVED and for nothing else.
+   *
+   * Read straight off the activities the panel already has: `leveledStart`/`leveledFinish` are
+   * engine-owned columns (ADR-0041) the schedule write persists, so there is no second query and no
+   * client re-derivation of levelling. The plan's `levelResources` switch is **not** consulted here
+   * — with the pass off the engine writes null overlays, so `buildLevelledGhosts` returns nothing
+   * anyway, and gating on the flag as well would be two answers to one question. The toolbar reads
+   * the switch for a different job: naming the setting in the shaded control's reason.
+   *
+   * Undefined rather than an empty array when there is nothing to draw, so the layer is skipped
+   * entirely and the paint is byte-for-byte today's — the parity contract every sibling lens keeps.
+   */
+  const levelledGhosts = useMemo(() => {
+    if (!CANVAS_LENSES_ENABLED || !levelledOverlay) return undefined;
+    const ghosts = buildLevelledGhosts(
+      activities.map((a) => ({
+        id: a.id,
+        laneIndex: a.laneIndex,
+        isMilestone: isMilestone(a.type),
+        earlyStart: a.earlyStart,
+        leveledStart: a.leveledStart,
+        leveledFinish: a.leveledFinish,
+      })),
+    );
+    return ghosts.length > 0 ? ghosts : undefined;
+  }, [levelledOverlay, activities]);
+
+  /**
+   * What the levelled lens is showing, or why it is showing nothing (M-E-T6).
+   *
+   * Gated on the TOGGLE and not on the ghosts, which is the whole point: a summary derived from
+   * `levelledGhosts` alone would be `null` in exactly the state that needs a sentence. FC-1
+   * predicts this is the common case on the day it ships.
+   */
+  const levelledSummary = useMemo(
+    () =>
+      CANVAS_LENSES_ENABLED && levelledOverlay && levelResources !== undefined
+        ? levelledOverlaySummary(levelledGhosts?.length ?? 0, { levelResources })
+        : null,
+    [levelledOverlay, levelledGhosts, levelResources],
+  );
+
+  /**
+   * The spoken twin of the levelled layer. Built by walking `levelledGhosts` — what is DRAWN —
+   * rather than re-testing the overlay columns, so the picture and its description cannot disagree
+   * about whether a row has a ghost. The same rule `baselineClauseById` and `compareClauseById`
+   * already follow, and the reason all three are maps rather than inline tests.
+   */
+  const levelledStartById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (!levelledGhosts) return undefined;
+    return new Map(levelledGhosts.map((g) => [g.id, g.leveledStart]));
+  }, [levelledGhosts]);
+
   /**
    * The revision-comparison change picture (ADR-0127), gated on the toggle AND on there being a
    * pair — the server sends nothing without one, but the guard is stated rather than relied on,
@@ -1342,6 +1440,12 @@ export function TsldPanel({
           baseline: baselineClauseById?.get(a.id),
           wbsGroup: wbsGroupClauseById?.get(a.id),
           compare: compareClauseById?.get(a.id),
+          // **The levelled ghost, and only that.** The feasible window needs no clause of its
+          // own: the Tier-1 sentence already states the remaining float, the positive drift and
+          // the negative-drift conflict, which are exactly the two facts the bracket's caps draw.
+          // Established by reading the finished row in a browser rather than by reasoning about
+          // two functions separately (`m-e/window.md` §11).
+          levelled: levelledGhostClause(levelledStartById?.get(a.id) ?? null),
         }),
       );
     }
@@ -1355,6 +1459,19 @@ export function TsldPanel({
     flaggedIds,
     baselineClauseById,
     wbsGroupClauseById,
+    levelledStartById,
+    // **Omitted until 2026-09-20, and the omission was a live defect.** Toggling the comparison
+    // overlay changes `compareClauseById` and nothing else this memo reads, so the map never
+    // recomputed: every row went on speaking `(earlier revision …)` after the overlay was switched
+    // off, and said nothing after it was switched on. The canvas is `aria-hidden`, so this text is
+    // the ONLY route a screen-reader user has to the picture — which is the whole reason
+    // `compareClause` exists (ADR-0127 D6's gap, found by the M8 accessibility review). A stale
+    // description is worse than the absent one that review closed: absence is legible, and a
+    // confident wrong sentence is not.
+    //
+    // `react-hooks/exhaustive-deps` named it, at `warn`, from the day it shipped — so `pnpm lint`
+    // printed `ok` over it and `prepush.sh` printed only the verdict. `docs/TECH_DEBT.md` #353.
+    compareClauseById,
   ]);
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
@@ -1519,6 +1636,7 @@ export function TsldPanel({
     activityCount: activities.length,
     mode,
     authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
+    hasPlacementMigrationNotice: placementMigrationNotice != null,
   });
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
@@ -1545,7 +1663,6 @@ export function TsldPanel({
         canReportProgress,
         canWriteNotes,
         clearPlacement,
-        clearPlacementApplies,
         onOpenLogic: (a) => onOpenLogic?.(a),
         onNotes,
         onEdit: (a) => onEditActivity?.(a),
@@ -1567,7 +1684,6 @@ export function TsldPanel({
       scheduleRefusal,
       canReportProgress,
       clearPlacement,
-      clearPlacementApplies,
       onOpenLogic,
       onEditActivity,
       onDeleteActivity,
@@ -1578,6 +1694,11 @@ export function TsldPanel({
       onProgress,
       onClearVisualPlacement,
       onOpenEditorAt,
+      // The same omission as `rowTextById`'s above, found the same way and fixed in the same pass:
+      // a role change that revokes note-writing, or a host that swaps its notes handler, left the
+      // selection bar offering the old answer.
+      canWriteNotes,
+      onNotes,
     ],
   );
 
@@ -2004,7 +2125,7 @@ export function TsldPanel({
       return;
     }
     // Alt+arrows nudge the focused activity — vertical = lane (no recalc), horizontal = start day
-    // (an SNET constraint, recalcs). The keyboard equivalent of a free-2D drag, coalesced so a held
+    // (a hand-placed `visualStart`, recalcs). The keyboard equivalent of a free-2D drag, coalesced so a held
     // key is one net write (WCAG 2.1.1; no pointer-only capability). Behind the edit flag.
     if (
       editingEnabled &&
@@ -2355,7 +2476,7 @@ export function TsldPanel({
           if (outcome.conflict) showConflict(outcome.conflict);
           // Announce "Moved" only when the move actually landed, so it never contradicts a
           // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed and,
-          // for any time change (SNET + recalc), that the dates will update — matching the keyboard
+          // for any time change (placement + recalc), that the dates will update — matching the keyboard
           // nudge's wording so the same operation reads the same to AT users.
           if (outcome.applied) {
             const timeChanged = intent.startDay !== undefined;
@@ -2396,8 +2517,9 @@ export function TsldPanel({
     if (intent.kind === 'resize') {
       // Bar-end resize (ADR-0052 M2 finish edge, M3 start edge) — the reposition contract. A
       // finish drag pins the start (the ghost's right edge tracks the new duration); a start drag
-      // pins the finish (the ghost's left edge tracks the new start; the route maps it mode-aware,
-      // ADR-0052 §3). The route owns the PATCH + recalc; a stale-version refusal banners.
+      // pins the finish (the ghost's left edge tracks the new start, which the route hand-places as
+      // a `visualStart` — ADR-0052 §3's mode-aware fork went with the mode at M-F). The route owns
+      // the PATCH + recalc; a stale-version refusal banners.
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedResize) return;
       clearConflict();
@@ -2849,6 +2971,13 @@ export function TsldPanel({
             )}
           </NoticeStrip>
         ) : null}
+
+        {/* What the one-time placement migration changed on this plan (one-planning-surface M-I).
+            The dock's LOWEST rung — see `resolveDockStrip` for why a notice about something that
+            happened on a deploy yields to every strip about what the planner is doing now. It is
+            the only dock strip that is DISMISSIBLE and does not return, which is what makes losing
+            every contest affordable: it waits. */}
+        {dockStrip === 'placement-migration' ? placementMigrationNotice : null}
       </CanvasDock>
 
       {/* **The diagram's surface scope** (ADR-0097 Landing E). Inside it every semantic token name
@@ -2912,6 +3041,7 @@ export function TsldPanel({
               barFill={barFill}
               barInk={barInk}
               baselineGhosts={baselineGhosts}
+              levelledGhosts={levelledGhosts}
               compareGhosts={compareGhostBars}
               compareLinks={compareLinkLines}
               flaggedIds={flaggedIds}
@@ -3023,6 +3153,40 @@ export function TsldPanel({
                   ? ` Today is ${formatCalendarDate(todayIso)}.`
                   : ''}
               </p>
+            ) : null}
+            {levelledSummary !== null && levelledSummary.undrawnLabel !== '' ? (
+              /*
+                **The lens is on and drew nothing, said visibly** (M-E-T6). Its neighbour below
+                renders the same way for the comparison overlay and for the same reason — a diagram
+                has no "showing N of M", so a picture with nothing in it is indistinguishable from a
+                feature that does not work. Here it is not the exceptional case: resource levelling
+                is opt-in and off by default, so this is what the lens says on nearly every plan
+                until somebody turns levelling on.
+
+                Rendered only when there is something to say, so a lens that DID draw carries no
+                chrome. `bottom-1` rather than `top-1`, because the comparison overlay's strip owns
+                the top corner and both can be on at once.
+              */
+              <p
+                aria-hidden
+                className="text-muted-foreground pointer-events-none absolute right-2 bottom-1 z-10 text-xs"
+              >
+                {levelledSummary.undrawnLabel}
+              </p>
+            ) : null}
+            {levelledSummary !== null ? (
+              /*
+                The spoken twin, inside the diagram region for ADR-0122 D2's reason — and the ONLY
+                spoken copy, which is why the visible strip above is `aria-hidden`.
+
+                The journey caught them both rendering: a screen-reader user heard "Levelled
+                placement: resource levelling did not move any activity" and then "Levelled
+                placement: nothing to show — resource levelling did not move any activity", which
+                is the same fact twice in the channel least able to skim past it. The precedent is
+                already in this file — `searchStatus`'s chip is `aria-hidden` so the announcement
+                is heard once, from one place — and the fuller sentence is the one worth keeping.
+              */
+              <p className="sr-only">{levelledSummary.heading}</p>
             ) : null}
             {compareSummary !== null && compareSummary.undrawn > 0 ? (
               /*

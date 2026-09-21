@@ -41,10 +41,13 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canWriteNotes: true,
     onNotes: vi.fn(),
     isSummary: false,
+    // A placement conflict presupposes a PLACEMENT, so the bar's clear action is present here by
+    // construction (M-F-T6). Setting this false would make the remedy cases assert against a bar
+    // that cannot hold the control they are about.
+    hasPlacement: true,
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
-    clearPlacementApplies: true,
     onClearVisualPlacement: spies.onClearVisualPlacement,
     onOpenEditorAt: spies.onOpenEditorAt,
     onOpenLogic: spies.onOpenLogic,
@@ -89,7 +92,7 @@ describe('the conflict remedy on the selection bar', () => {
     // The load-bearing negative, and the one the structural test cannot make. That remedy is a
     // `barAction` pointing at `clear-visual-placement`, which the bar already carries — rendering a
     // conflict-flavoured twin beside it would be ADR-0093's defect reproduced inside one surface.
-    render(<SelectionActionsBar context={ctx({ conflictKey: 'visualConflict' })} />);
+    render(<SelectionActionsBar context={ctx({ conflictKey: 'visualEarlierThanLogic' })} />);
     expect(remedy()).toBeNull();
     expect(
       within(bar()).getAllByRole('button', { name: 'Clear visual start' }),
@@ -103,7 +106,7 @@ describe('the conflict remedy on the selection bar', () => {
     // conflict had nine controls and no signal. The icon carries it — a per-context ORDER would
     // move controls under the cursor as the selection changes.
     const conflicted = render(
-      <SelectionActionsBar context={ctx({ conflictKey: 'visualConflict' })} />,
+      <SelectionActionsBar context={ctx({ conflictKey: 'visualEarlierThanLogic' })} />,
     );
     const withAlert = conflicted.container.querySelector(
       '[data-toolbar-item="clear-visual-placement"] .lucide-triangle-alert',

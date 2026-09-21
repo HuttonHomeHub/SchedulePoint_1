@@ -30,12 +30,25 @@ SELECT
   ('00000000-0000-4000-8001-' || lpad(((g % 40) + 1)::text, 12, '0'))::uuid,
   'A' || g,
   'TASK'::"ActivityType",
-  (CASE WHEN g % 28 = 0 THEN NULL ELSE DATE '2026-02-01' + (g % 30) END),
+  -- CORRECTED 2026-09-21 (one-planning-surface M-I, found by the database-architect review of the
+  -- strip migration). The NULL branch was `g % 28 = 0` and the binding branch was
+  -- `g % 7 = 0 AND g % 4 = 0`, which is ALSO `g % 28 = 0` — so every row this fixture intended to
+  -- be BINDING had a null `early_start` and classified UNCLASSIFIED instead. Measured on the old
+  -- file: binding 0, inert 3,643, unclassified 10,928. The fourth class (binding AND already
+  -- placed) was likewise empty, because it is a subset of binding.
+  --
+  -- Two changes: the null branch moves to a modulus coprime with neither 7 nor 4 in a way that
+  -- overlaps the binding class (33), and the class selector is cut from `(g / 7) % 4` rather than
+  -- `g % 4`, so which class a constrained row lands in no longer correlates with `g % 28`. About
+  -- 110 intended-binding rows (g ≡ 0 mod 924) still fall into the null branch and classify
+  -- unclassified, which is why binding measures 3,532 rather than 3,642 — stated rather than
+  -- tuned away, because the fixture's job is to populate all four classes and not to hit a number.
+  (CASE WHEN g % 33 = 0 THEN NULL ELSE DATE '2026-02-01' + (g % 30) END),
   (CASE WHEN g % 5 = 0 THEN DATE '2026-03-01' + (g % 20) ELSE NULL END),
   (CASE WHEN g % 7 = 0 THEN 'SNET'::"ConstraintType" ELSE NULL END),
   (CASE WHEN g % 7 <> 0 THEN NULL
-        WHEN g % 4 = 0 THEN DATE '2026-02-01' + (g % 30)        -- binding: equal
-        WHEN g % 4 = 1 THEN DATE '2026-01-01'                    -- inert: earlier
+        WHEN (g / 7) % 4 = 0 THEN DATE '2026-02-01' + (g % 30)   -- binding: equal
+        WHEN (g / 7) % 4 = 1 THEN DATE '2026-01-01'              -- inert: earlier
         ELSE DATE '2026-09-01' END),                             -- unclassified: later
   now()
 FROM generate_series(1, 102000) g;

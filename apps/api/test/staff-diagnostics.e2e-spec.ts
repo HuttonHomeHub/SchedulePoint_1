@@ -449,10 +449,16 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       .patch(`${org}/activities/${visualA}`)
       .send({ visualStart: '2026-04-01', version: 1 })
       .expect(200);
-    await actor.agent
-      .patch(`${org}/plans/${visual}`)
-      .send({ schedulingMode: 'VISUAL', version: 2 })
-      .expect(200);
+    // **Written straight to the column, and that is the only way left** (one-planning-surface
+    // M-F-T4). `schedulingMode` is gone from `UpdatePlanDto`, so a PATCH naming it now yields 422 —
+    // the fixture cannot ask the API for this state because the product no longer offers it.
+    //
+    // Departing from this suite's own "built through the public REST API throughout" rule is the
+    // point rather than a corner cut: D-D2 exists to SIZE a population the product can no longer
+    // create, on plans written before the collapse, and a diagnostic about legacy rows is tested
+    // against legacy rows or against nothing. The column survives until the epic's migration
+    // milestone, which is what keeps this reachable at all.
+    await prisma.plan.update({ where: { id: visual }, data: { schedulingMode: 'VISUAL' } });
 
     // --- Plan 2: the three readable SNET classes ----------------------------------------------
     const constrained = await planOn(actor, allDay, 'Constrained');
@@ -476,6 +482,27 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       constraintType: 'SNET',
       constraintDate: '2026-01-05',
     });
+    // **Binding AND already hand-placed — the FOURTH class** (one-planning-surface §4.6), added
+    // 2026-09-21 because M-I's strip excludes it and nothing here could exhibit it.
+    //
+    // It is not a variant of `Binding`: `visual_start` is accepted regardless of mode, so a row can
+    // carry a stale placement AND a binding SNET, and the naive conversion overwrites the
+    // placement. **The M0 exhaustiveness assertion below is structurally blind to this row** — it
+    // partitions the SNET population by EFFECT, and an already-placed row is also binding, so it
+    // counts here as binding and the arithmetic still balances. That is correct for that assertion
+    // and is exactly why the strip needs its own (`converted + already_placed === binding`).
+    //
+    // The placement is patched BEFORE the recalculation so `early_start` is Pass 1's answer to the
+    // constraint, not to the placement — which is what makes the row binding at all.
+    const bindingPlaced = await activityOn(actor, constrained, {
+      name: 'Binding and placed',
+      constraintType: 'SNET',
+      constraintDate: '2026-02-01',
+    });
+    await actor.agent
+      .patch(`${org}/activities/${bindingPlaced}`)
+      .send({ visualStart: '2026-05-04', version: 1 })
+      .expect(200);
     await recalculate(actor, constrained);
     await actor.agent.post(`${org}/plans/${constrained}/baselines`).send({ name: 'Over SNETs' });
     // AFTER the recalculation, and deliberately without another: this is the whole point of the
@@ -497,6 +524,30 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       constraintType: 'SNET',
       constraintDate: '2026-03-01',
     });
+    // --- Plan 4: a baseline over a plan with NO placement — the negative witness for D-E -------
+    //
+    // Added 2026-09-21 alongside M-I's fourth-class row, because that row silently cost an existing
+    // assertion its discriminator. Before it, `baselines-over-placed-plans` read 1 of 2: the
+    // `Placed` capture counted and the `Over SNETs` one did not, so a query that had dropped its
+    // placement predicate would have reported 2 and failed. The fourth-class row puts a placement
+    // on `Constrained`, so `Over SNETs` legitimately started counting too — and with the WHOLE
+    // population qualifying, the assertion could no longer tell a working predicate from a missing
+    // one. Restoring the negative is the fix; relaxing the expected number to 2 would have been a
+    // green test that proves nothing.
+    //
+    // **It needs its own plan, and finding that out is the useful part.** The first attempt put the
+    // baseline on `Never touched`, which cannot carry one — a capture needs a computed schedule
+    // (ADR-0025) and that plan's whole purpose is never to have been scheduled. The request failed
+    // silently, because it was written without an `.expect()`, and the only thing that noticed was
+    // the count this baseline exists to move. Hence the `.expect(201)` below: a fixture that
+    // half-applies is worse than one that is absent, because the suite goes green around it.
+    const unplaced = await planOn(actor, allDay, 'No placements');
+    await activityOn(actor, unplaced, { name: 'Plain work' });
+    await recalculate(actor, unplaced);
+    await actor.agent
+      .post(`${org}/plans/${unplaced}/baselines`)
+      .send({ name: 'Over nothing' })
+      .expect(201);
   }
 
   async function readDiagnostics(
@@ -540,38 +591,73 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
 
     const byId = await readDiagnostics(staff);
 
-    // Three plans exist; one carries placements. The plan-grain and activity-grain questions are
-    // separate entries precisely because these two numbers diverge, and the fixture makes them.
+    // The plan-grain and activity-grain questions are separate entries precisely because these two
+    // numbers diverge, and the fixture makes them: four activities carry a placement across three
+    // plans, out of eleven activities in five. (Three and three until M-I added the fourth-class row — a binding SNET on an activity
+    // that ALSO carries a placement — which lands on the `Constrained` plan and so moves both the
+    // activity count and the plan count. Updated rather than worked around: it is a real placement
+    // on a real plan and both entries are right to see it.)
     expect(byId.get('visual-placement-plans')).toMatchObject({
-      examined: 4,
-      affected: 2,
-      affectedPlans: 2,
+      examined: 5,
+      affected: 3,
+      affectedPlans: 3,
       affectedOrganizations: 1,
     });
     expect(byId.get('visual-placement-activities')).toMatchObject({
-      examined: 9,
+      examined: 11,
+      affected: 4,
+      affectedPlans: 3,
+      affectedOrganizations: 1,
+    });
+
+    /**
+     * **D-J / D-K — the conflict split, and what is asserted here is the DENOMINATOR.**
+     *
+     * The affected counts are zero on this estate, and saying so is worth little on its own: a
+     * query with a mis-typed enum literal reports zero just as cheerfully. What discriminates is
+     * the population each is measured against, which is the decision these entries make — a
+     * conflict is a property of a PLACEMENT, so the denominator is the placed set (4, the
+     * `affected` figure above) and not every activity (11, the `examined` one). Counting out of
+     * every activity would report a rate that falls purely because somebody added unplaced work.
+     *
+     * The placed set grew by one at M-I (the fourth-class row), and `affected` stays **zero** —
+     * which is worth stating rather than assuming: that row is placed at 2026-05-04 against a
+     * binding SNET at 2026-02-01, and an SNET is a LOWER bound, so placing later than it breaches
+     * nothing in either direction. A fixture whose new row had been a conflict would have made
+     * these two assertions pass for a different reason.
+     *
+     * So this case pins the two entries to a number that is on this very page under a different
+     * name, and a query that quietly widened its denominator would fail here rather than merely
+     * look smaller.
+     */
+    for (const id of ['visual-conflict-earlier-than-logic', 'visual-conflict-later-than-bound']) {
+      expect(byId.get(id), id).toMatchObject({ examined: 4, affected: 0, affectedPlans: 0 });
+    }
+
+    // D-D2 — three of the four, and the gap is the point. `Placed` and `Constrained` are still in
+    // `EARLY` (the schema default) while `Already visual` is not, and `visualStart` is accepted
+    // regardless of mode. So the three on EARLY plans are the bars that move on the day the mode
+    // collapses, for a planner who did nothing; the fourth already renders where it sits.
+    //
+    // It was two of three until M-I's fourth-class row, which is a placement on the EARLY
+    // `Constrained` plan and therefore belongs in exactly this population. `affectedPlans` moving
+    // 1 → 2 with it is the load-bearing half: a query that had lost its plan grouping would have
+    // reported 1 either way, and this fixture could not have caught it before.
+    expect(byId.get('placement-on-early-plan')).toMatchObject({
+      examined: 11,
       affected: 3,
       affectedPlans: 2,
       affectedOrganizations: 1,
     });
 
-    // D-D2 — two of the three, and the gap is the point. `Placed` is still in `EARLY` (the schema
-    // default) while `Already visual` is not, and `visualStart` is accepted regardless of mode. So
-    // the two on the EARLY plan are the bars that move on the day the mode collapses, for a
-    // planner who did nothing; the third already renders where it sits.
-    expect(byId.get('placement-on-early-plan')).toMatchObject({
-      examined: 9,
-      affected: 2,
-      affectedPlans: 1,
-      affectedOrganizations: 1,
-    });
-
-    // Two baselines, over different plans. Counting both would mean the placement predicate was
-    // dropped; counting neither would mean the join lost its rows.
+    // Two of THREE baselines, and the third is what makes this an assertion rather than a tally:
+    // `Over nothing` sits on a plan with no placement, so counting it would mean the placement
+    // predicate was dropped, and counting neither of the other two would mean the join lost its
+    // rows. Both directions are live.
     expect(byId.get('baselines-over-placed-plans')).toMatchObject({
-      examined: 2,
-      affected: 1,
-      affectedPlans: 1,
+      examined: 3,
+      affected: 2,
+      affectedPlans: 2,
       affectedOrganizations: 1,
     });
   });
@@ -587,11 +673,14 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     const inert = byId.get('snet-inert');
     const unclassified = byId.get('snet-unclassified');
 
-    expect(binding).toMatchObject({ examined: 4, affected: 1, affectedPlans: 1 });
-    expect(inert).toMatchObject({ examined: 4, affected: 1, affectedPlans: 1 });
+    // Five SNETs, not four, since the fourth-class row joined the fixture (M-I). It counts as
+    // BINDING here, which is the point: these three entries classify by EFFECT, and "is it already
+    // placed?" is a different question that this partition deliberately does not ask.
+    expect(binding).toMatchObject({ examined: 5, affected: 2, affectedPlans: 1 });
+    expect(inert).toMatchObject({ examined: 5, affected: 1, affectedPlans: 1 });
     // Two rows, in two plans: the never-scheduled one and the one whose schedule predates its
     // constraint. `affectedPlans: 2` is what separates them from a single-cause miscount.
-    expect(unclassified).toMatchObject({ examined: 4, affected: 2, affectedPlans: 2 });
+    expect(unclassified).toMatchObject({ examined: 5, affected: 2, affectedPlans: 2 });
 
     // **The cheapest possible guard against a mis-written WHERE**, and the reason the three share
     // one denominator. A class that overlapped another, or a fourth state nobody had noticed,
@@ -611,11 +700,17 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
 
     // The denominator is the BINDING set, not every SNET — the only class a strip would touch.
     // The `Constrained` baseline covers it, and the `Placed` one is over a different plan, so a
-    // query that lost its `b.plan_id = a.plan_id` clause would still report 1 here and be wrong
-    // for the wrong reason. That is what the second baseline is for.
+    // query that lost its `b.plan_id = a.plan_id` clause would report MORE than the binding set
+    // here and be wrong for the wrong reason. That is what the second baseline is for.
+    //
+    // Two rather than one since M-I added the fourth-class row: it is binding, so it joins the
+    // denominator, and the same `Over SNETs` capture covers it. Worth noting what that means for
+    // this entry's purpose — it sizes how much of an irreversible migration would be recoverable,
+    // and the row it just gained is the one the migration DOES NOT TOUCH. The entry is not wrong;
+    // it answers "could a FULL baseline restore this?", not "will the strip take it?"
     expect(byId.get('snet-full-baseline-coverage')).toMatchObject({
-      examined: 1,
-      affected: 1,
+      examined: 2,
+      affected: 2,
       affectedPlans: 1,
       affectedOrganizations: 1,
     });
@@ -660,6 +755,8 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       'snet-inert',
       'snet-unclassified',
       'snet-full-baseline-coverage',
+      'visual-conflict-earlier-than-logic',
+      'visual-conflict-later-than-bound',
     ]);
     for (const row of byId.values()) {
       expect(row).toMatchObject({ examined: 0, affected: 0, affectedPlans: 0 });

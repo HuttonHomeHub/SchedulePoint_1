@@ -60,11 +60,11 @@ import {
   FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   PROGRAMME_SCHEDULING_ENABLED,
-  SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import { useUpdateActivityParents } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
+import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
 import {
   FloatPathsPanel,
@@ -76,6 +76,9 @@ import type { GanttBarDrag } from '@/features/gantt/model/bar-drag';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
+import { usePlacementMigration } from '@/features/placement-migration/api/use-placement-migration';
+import { PlacementMigrationNotice } from '@/features/placement-migration/components/PlacementMigrationNotice';
+import { dismiss, isDismissed } from '@/features/placement-migration/model/dismissal';
 import {
   buildSelectionBarContext,
   type SelectionContextInput,
@@ -108,10 +111,7 @@ import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildColourLegend } from '@/features/tsld/render/lenses';
 import { lensLegendVarPalette } from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
-import {
-  clearVisualPlacementApplies,
-  clearVisualPlacementGate,
-} from '@/features/tsld/toolbar/conflict-remedy';
+import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
@@ -150,7 +150,6 @@ const MD_QUERY = '(min-width: 48rem)';
  * silently reinstating the undifferentiated group.
  */
 export const PLAN_MODE_SEGMENT_LABELS = {
-  'scheduling-mode': 'Scheduling mode',
   'view-mode': 'Plan view',
 } as const;
 
@@ -461,23 +460,30 @@ export function ToolbarPlanWorkspace({
   // Hoisted above the toolbar context because the PRINT path needs both, and re-deriving them
   // there would be the second derivation `host-parity.structural.test.ts` exists to prevent —
   // on the one artefact where a disagreement is least visible and most costly.
-  const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
-  /**
-   * The plan's scheduling mode, narrowed **once**.
-   *
-   * This ternary was written out four times in this file — twice for `clearVisualPlacementGate` and
-   * twice more for `clearVisualPlacementApplies` when the foot-row-and-deck epic added it. The
-   * predicate's own docblock says `schedulingMode` "is read in one place", and that was true inside
-   * `conflict-remedy.ts` and false here: the gate and the applicability check are the two halves of
-   * one decision, and four hand-copied narrowings are how two halves come to disagree. This
-   * repository files that shape as a defect often enough (ADR-0073 C4, ADR-0094 M0) that a
-   * component review flagged it on sight.
+  // **Ungated with the mode** (one-planning-surface M-F-T5): the Late-start overlay reads the LATE
+  // dates, has never consulted `schedulingMode`, and only carried `SCHEDULING_MODES_ENABLED &&`
+  // because ADR-0033 shipped the two together.
+  const lateOverlayActive = canvasUi.viewToggles.lateOverlay;
+  /*
+   * **The `schedulingMode` local is DELETED** (M-F-T6), and its story is worth one line: it existed
+   * because the same ternary had been written out four times in this file, which a component review
+   * flagged on sight as the shape this repository files as a defect (ADR-0073 C4, ADR-0094 M0). The
+   * narrowing was correct and it is gone because the question is, along with all four readers.
    */
-  const schedulingMode: 'EARLY' | 'VISUAL' = plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY';
 
-  const barDateSource = SCHEDULING_MODES_ENABLED
-    ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
-    : 'early';
+  /**
+   * **Unconditional since the collapse** (M-F-T1): a bar is drawn where it is PLACED, on every
+   * plan, and there is no mode left to consult. The flag gate went with the parameter — gating the
+   * collapse on a `VITE_` constant would buy nothing an operator can use (ADR-0088 D1: it is
+   * inlined at build time and every published image carries the default) while maintaining a
+   * second product whose bars sit somewhere else.
+   *
+   * It now reads `lateOverlayActive` rather than the raw toggle, which is the value the print path
+   * beside it already uses. The two agreed by accident while this resolved to `'early'` whenever
+   * the flag was off; post-collapse they would not, and a second reading of "is the overlay on" is
+   * exactly what the hoist above exists to prevent.
+   */
+  const barDateSource = barDateSourceFor(lateOverlayActive);
 
   /**
    * The Duration column's day↔minute factor, per activity (ADR-0068), resolved HERE rather than in
@@ -739,6 +745,84 @@ export function ToolbarPlanWorkspace({
   // The on-demand metric-12 what-if (health M6): a mutation, so nothing but the row's button can
   // fire the two engine passes; the result merges over the placeholder inside the panel.
   const criticalPathTest = useCriticalPathTest(model.orgSlug, model.planId);
+
+  /**
+   * What the one-time placement migration changed on this plan (one-planning-surface M-I).
+   *
+   * **The host owns all three parts** — the query, the account the dismissal is keyed to, and the
+   * rendered strip — because `TsldPanel` has no org slug and no session, and takes the finished
+   * node. It decides only precedence.
+   *
+   * **The dismissal is DERIVED, not synchronised, and the state holds the KEY rather than a
+   * boolean.** The obvious shape — an effect that reads `localStorage` into a boolean — is a
+   * `setState` inside an effect (which `react-hooks` refuses here, and rightly: it is a cascading
+   * render for a value that was already available), and it has a second defect the lint rule does
+   * not see. A bare boolean does not reset when the planner switches plans, so dismissing the
+   * notice on one plan would hide it on the next one they opened — and the toolbar does not
+   * remount on a plan change, so nothing would clear it. Storing the key that was dismissed makes
+   * both problems go away at once: it is self-invalidating.
+   */
+  /**
+   * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
+   * listbox (ADR-0026 D7).
+   *
+   * **One callback rather than one per view**, because its caller is the placement-migration
+   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
+   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
+   * reason that one states.
+   *
+   * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
+   * order is a tie-break that never fires rather than a precedence.
+   */
+  const focusPlanSurface = useCallback(() => {
+    const grid = document.querySelector('[role="treegrid"]');
+    if (grid) {
+      const stop = grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]');
+      (stop ?? (grid as HTMLElement)).focus();
+      return;
+    }
+    document.querySelector<HTMLElement>('[role="listbox"]')?.focus();
+  }, []);
+
+  const session = useSession();
+  const migrationUserId = session.data?.user.id ?? null;
+  const placementMigration = usePlacementMigration(model.orgSlug, model.planId);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  // `planId` is read out of `model` first so the memo depends on the id rather than on the whole
+  // model object — `react-hooks/exhaustive-deps` cannot see through a member expression and would
+  // otherwise demand `model`, which changes on every plan mutation and would re-read the store on
+  // each one.
+  const migrationPlanId = model.planId;
+  // **The key is never null, and that is a fix rather than a tidy-up.** It was
+  // `migrationUserId === null ? null : …`, which made `dismissedKey !== migrationKey` compare
+  // `null !== null` before the session resolved — so the notice was suppressed in that window, and
+  // permanently on any render where the session is absent. Caught by the host wiring test, which
+  // renders without a session and therefore hit the case head-on. An `'anon'` segment keeps the
+  // comparison honest (the initial `null` can never equal it) while the `localStorage` write below
+  // stays guarded on a real user id, so nothing is ever persisted under a fake one.
+  const migrationKey = `${migrationUserId ?? 'anon'}:${migrationPlanId}`;
+  const storedDismissal = useMemo(
+    () =>
+      migrationUserId === null
+        ? false
+        : isDismissed(window.localStorage, migrationUserId, migrationPlanId),
+    [migrationUserId, migrationPlanId],
+  );
+  const migrationCount = placementMigration.data?.count ?? 0;
+  const placementMigrationNotice =
+    migrationCount > 0 && !storedDismissal && dismissedKey !== migrationKey ? (
+      <PlacementMigrationNotice
+        count={migrationCount}
+        rows={placementMigration.data?.rows ?? []}
+        restoreFocus={focusPlanSurface}
+        onDismiss={() => {
+          setDismissedKey(migrationKey);
+          if (migrationUserId !== null) {
+            dismiss(window.localStorage, migrationUserId, model.planId);
+          }
+        }}
+      />
+    ) : null;
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -882,10 +966,6 @@ export function ToolbarPlanWorkspace({
     // from the rows rather than a plan flag, so it cannot disagree with what the grid is showing.
     hasComputedSchedule: (model.activities.data ?? []).some((a) => a.earlyStart !== null),
     barDateSource,
-    // The SAME value the canvas is handed (`:1013`), from the one place `schedulingMode` is read.
-    // A typed date means different things in the two modes (ADR-0134 D1/D2), and the two surfaces
-    // reading it separately is how they would come to disagree about what a planner just did.
-    schedulingMode,
     hoursPerDayFor,
     updateFields: updateActivityFields.mutateAsync,
     announce: ganttAnnounce,
@@ -938,6 +1018,10 @@ export function ToolbarPlanWorkspace({
       dependencies={model.dependencies.data ?? []}
       compareGhosts={compareGhosts}
       compareLinks={compareLinks}
+      // Which of the levelled lens's two empty states the reader is in (M-E-T6). Off the loaded
+      // plan, the same value the toolbar's shaded reason reads — so the control and the sentence
+      // it does NOT cover cannot disagree about whether levelling ran.
+      levelResources={plan.levelResources}
       compareGhostsUndrawable={compareGhostsUndrawable}
       compareLinksUndrawable={compareLinksUndrawable}
       // The reason follows the COMPARISON, not the picker: `comparePlanId` is the request and this
@@ -949,6 +1033,7 @@ export function ToolbarPlanWorkspace({
           : 'NOT_RECORDED'
       }
       hasRevisionPair={hasRevisionPair}
+      placementMigrationNotice={placementMigrationNotice}
       dataDate={plan.plannedStart}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
@@ -1011,21 +1096,16 @@ export function ToolbarPlanWorkspace({
       onNotes={model.revealActivityNotes}
       // The conflict remedies (ADR-0094 M4), and the `clear-visual-placement` action M4-T1 moved off
       // the command surface onto the selection bar. The gate is computed HERE because it reads the
-      // plan's `schedulingMode` and the Late-start overlay, neither of which `TsldPanel` owns — and
+      // Late-start overlay, which `TsldPanel` does not own — it also read the plan's
+      // `schedulingMode` until the collapse (M-F-T6) — and
       // it is the SHARED `clearVisualPlacementGate`, so the bar and any future caller cannot drift
       // about what "you cannot clear this" means. `hasSelection` is `true` by construction: this bar
       // renders only for a selection (the ADR-0090 M2-T1 argument).
       clearPlacement={clearVisualPlacementGate({
-        schedulingMode,
         canEditSchedule: model.canEditSchedule,
         lateOverlayActive,
         hasSelection: true,
         scheduleRefusal: model.scheduleRefusal,
-      })}
-      clearPlacementApplies={clearVisualPlacementApplies({
-        // Omit rather than shade outside Visual mode (ADR-0082) — the same predicate the gate above
-        // consults, so `schedulingMode` is still read in one place.
-        schedulingMode,
       })}
       onClearVisualPlacement={(a) => void model.clearVisualPlacement(a.id, a.version)}
       onOpenEditorAt={model.onOpenActivityEditorAt}
@@ -1157,14 +1237,10 @@ export function ToolbarPlanWorkspace({
     canReportProgress: model.canProgress,
     canWriteNotes: model.canWriteNotes,
     clearPlacement: clearVisualPlacementGate({
-      schedulingMode,
       canEditSchedule: model.canEditSchedule,
       lateOverlayActive,
       hasSelection: true,
       scheduleRefusal: model.scheduleRefusal,
-    }),
-    clearPlacementApplies: clearVisualPlacementApplies({
-      schedulingMode,
     }),
     onOpenLogic: model.onOpenLogic,
     onEdit: model.onEditActivity,
@@ -1341,6 +1417,26 @@ export function ToolbarPlanWorkspace({
         */}
         <CanvasDock>
           <SelectionActionsBar context={ganttSelectionCtx} restoreFocus={focusGanttGrid} />
+          {/*
+            The placement-migration notice (one-planning-surface M-I), in the Gantt **as well as**
+            the diagram — and it is here because the first version of M-I passed it to `TsldPanel`
+            alone, which is verbatim the one-host-and-not-its-neighbour shape this register records
+            at ADR-0080 (`bulk` wired into one layout and not the one its flag selects), ADR-0064 §7
+            and ADR-0067 M4. Found by reading this file rather than by anything failing.
+
+            A planner who works in the Gantt would otherwise never be told that the constraints on
+            their plan had been converted — and the Gantt is where the consequence is most visible,
+            because its Float column shows the number that moves.
+
+            It needs no precedence decision here, unlike the canvas: this view has exactly one other
+            strip, and the dock's standing rule is at most one TRANSIENT strip **plus** one
+            selection bar, which these two are. The `resolveDockStrip` ladder exists because the
+            canvas has four transient strips competing for one row; the Gantt has none.
+
+            Dismissal is per plan per user rather than per view, so dismissing it here dismisses it
+            on the diagram too — which is right: it is one fact about one plan, not two notices.
+          */}
+          {placementMigrationNotice}
         </CanvasDock>
       </>
     ) : (
@@ -1805,15 +1901,18 @@ export function ToolbarPlanWorkspace({
                   <Toolbar
                     items={rows.mode}
                     context={ctx}
-                    // **"Plan mode and view", not "Plan mode"** (ADR-0119, ux gate). A region named
-                    // `Plan mode` containing a group named `Plan view` contradicts itself, and an AT
-                    // user heard "Plan mode, toolbar → Plan view, group" — the container denying its
-                    // own child. A compound name is **wrong for a group and right for a container of
-                    // two groups**: the group could not say where one switch ended, which is why
-                    // `Scheduling and view` had to go; this names two things that really are two.
-                    label="Plan mode and view"
+                    // **"Plan view", down from "Plan mode and view"** (one-planning-surface
+                    // M-F-T5). ADR-0119's ux gate established the rule: a compound name is wrong for
+                    // a group and right for a **container of two groups** — `Plan mode` wrapping a
+                    // group named `Plan view` had an AT user hearing the container deny its own
+                    // child. The scheduling-mode segment is gone, so this container now holds one
+                    // group, and keeping the compound name would reintroduce that contradiction
+                    // from the other end: a container promising a mode that is not in it.
+                    label="Plan view"
                     authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                    // Two named sub-groups — see the map's docblock.
+                    // One named sub-group now — see the map's docblock. ADR-0119's precondition is
+                    // all-or-nothing rather than plural, and it records the one-segment case
+                    // explicitly, so the partition still holds with `view-mode` alone.
                     //
                     // **`groupLabels` is defence in depth, not decoration** (accessibility gate).
                     // The partition is all-or-nothing, so an item arriving without a `segment` makes
@@ -1822,7 +1921,7 @@ export function ToolbarPlanWorkspace({
                     // the collision `Toolbar.tsx:44-46` records a UX review rejecting once already.
                     // It costs nothing while the structural gate holds and only matters the one day
                     // it does not.
-                    groupLabels={{ lens: 'Scheduling mode and view' }}
+                    groupLabels={{ lens: 'Plan view' }}
                     segmentLabels={PLAN_MODE_SEGMENT_LABELS}
                   />
                 </div>

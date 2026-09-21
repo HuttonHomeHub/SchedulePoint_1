@@ -52,7 +52,16 @@ progressed plan in the estate would move its bars at M-F.
 
 ---
 
-#### FC-1 — the deployed estate decides the baseline default and the strip's bound
+#### FC-1 — the deployed estate sizes the strip, and decides one test's fixture
+
+> **The heading previously read "decides the baseline default and the strip's bound", and its own
+> body contradicts both halves.** `placement_snapshot_level` ships `DEFAULT NONE` **regardless of
+> the readings** — it is the literal truth of every existing row either way, and
+> `database-architect`'s S2 settled it independently — so all the reading decides is whether
+> M-C-T2's test gets a **fixture or a hypothetical**. And the strip's bound is **withdrawn**
+> (FC-10 clause B). A heading is what a reader skims, so a wrong one is repeated rather than
+> caught: this one was relayed to the product owner several times. Recorded as **C15** in the
+> spec's §0.
 
 **Bar:** the readings below, through the ADR-0140 staff diagnostics panel on the deployed host
 (never `psql`). **M0-T1 has shipped** with **eight** new entries (ten total), so this reads what
@@ -116,8 +125,16 @@ verified-red step**, while every sibling (FC-4, FC-9, FC-10) has one.
    `compute.spec.ts` pass **unedited**.
 3. **The guard is demonstrated to work.** During the engine milestone, a throwaway mutation lets a
    Pass-2 value perturb a Pass-1 field; the run is confirmed **red**; the mutation is reverted and
-   the output committed as `m-d/fc2-red-run.md`. A gate that has never failed is a gate nobody has
-   tested.
+   the output committed as [`m-d/fc2-red-run.md`](./m-d/fc2-red-run.md). A gate that has never
+   failed is a gate nobody has tested.
+
+   > **MET at M-J, not at M-D** — the file this clause names by path did not exist, and its absence
+   > was checkable from the day M-D landed. **And the run changed what this condition means.** The
+   > mutation (`earlyStart: activity.visualStart ?? earlyStartDate`) takes `compute.visual.spec.ts`
+   > red on six cases and leaves **`compute.spec.ts` and all 118 conformance cases GREEN** — not one
+   > of their fixtures carries a `visualStart`, so clause 1's corpus is **structurally blind** to
+   > it. Clause 2's `pureFields` is the only thing in the repository that catches this, which makes
+   > the scope note below the load-bearing half of the condition rather than a caution.
 
 **Scope, stated because it is narrower than it reads:** clauses 1–2 cover the **existing** corpus.
 The new `MSO`/`MFO` fixture (M-D-T3) and FC-11's progress/LOE/summary fixture are **not** covered by
@@ -412,16 +429,38 @@ plan's own earlier three-class version.
 **Prediction, to be falsified:** binding is **under 200 activities in one plan and one
 organisation**; FULL-baseline coverage is **zero**.
 
-**Clause B — the bound, read against the population AFTER the placement exclusion.** The strip runs
-unattended **only if** the binding population, **excluding rows with `visual_start IS NOT NULL`**,
-is **≤ 500 activities across ≤ 5 plans**. Above either, it becomes planner-initiated with the same
-rule and record.
+**Clause B — the unattended bound is WITHDRAWN** _(product-owner decision, 2026-09-20)_.
 
-**The exclusion is load-bearing and is a gap closed.** `visual_start` is accepted regardless of mode,
-so a row can carry a stale placement **and** a binding SNET — and the naive `WHERE` would **destroy
-the placement**. Those rows are left, counted and reported, the treatment the other undecidable
-classes get. Measuring the bound before the exclusion would size a population the strip does not
-touch.
+It previously read: the strip runs unattended only if the binding population, excluding rows with
+`visual_start IS NOT NULL`, is ≤ 500 activities across ≤ 5 plans; above either it becomes
+planner-initiated.
+
+**Its premise was that the estate contains work somebody would mind losing, and the product owner
+has stated it does not** — every plan on the deployed installation is a test plan, and they do not
+mind if this epic alters or destroys them. A bound whose only purpose is protecting planner work
+protects nothing here, and a gate that cannot fail is decoration (ADR-0058).
+
+**The expiry is a trigger, not a date, and it is checkable.** The strip is a **one-time migration
+that runs when M-I deploys**. **If M-I ships after a real customer exists, the premise lapses and
+the bound is owed again** — the same trigger ADR-0085 and ADR-0137 both name, which is what makes
+it a condition somebody can test rather than a memory somebody must keep.
+
+**M0's `snet-binding` reading is no longer a gate; keep taking it as an input.** It still sizes what
+the migration will do and still feeds the M-I-T2 notice's count — it has simply stopped being a
+permission.
+
+**What survives the withdrawal, and why each is not safety work:**
+
+- **`placement_migrations`** (named `placement_migration_log` when this was written; renamed at
+  M-A for the plural-table rule) — its second job is **diagnostic**, and that job is worth **more** on
+  disposable data, not less: it is how anybody finds out the strip did something nobody predicted. A
+  migration with no record turns a surprising result into a **mystery instead of a diff**. Its FKs,
+  PK, denormalised label and `prior_visual_start` all stand.
+- **The "already placed" exclusion** (`visual_start IS NOT NULL`) — **about converting correctly, not
+  about safety.** `visual_start` is accepted regardless of mode, so a row can carry a stale placement
+  **and** a binding SNET, and only one of the two survives a naive conversion **whatever the data is
+  worth**. Those rows are left, counted and reported.
+- **The after-the-fact report** — the same argument as the log.
 
 **Clause C — the bars do not move, proved on a real plan.** For a plan carrying binding `SNET`s,
 every `visualEffectiveStart`/`Finish` is **identical** before and after; and the plan's downstream
@@ -434,8 +473,30 @@ activity **and one row carrying both a `visual_start` and a binding SNET** — v
 (i) a strip writing no `visual_start`, (ii) a strip converting the inert row, and (iii) a strip
 overwriting the already-placed row.
 
+> **MET at M-J, by a SECOND file** — `apps/api/test/strip-bars-do-not-move.e2e-spec.ts`.
+>
+> **The clause was undischarged and one document both claimed and denied it.**
+> `strip-drag-constraints-migration.e2e-spec.ts` names "FC-10 clauses C and D" in its docblock and
+> then says, correctly, that it writes `early_start` and friends directly because _"a recalculation
+> here would be a second subject"_ — right for **that** file's subject, which is what the migration
+> READS. This clause is about what the ENGINE produces either side of the strip, and nothing in the
+> epic called it. Found by the M-J-T1 database review; the sibling's docblock is corrected to claim
+> clause D alone.
+>
+> **The first version of the new case failed against a correct migration, and the reason is the
+> useful part.** It asserted a successor's `totalFloat` rose on a plan where the constrained chain
+> WAS the longest path — and total float is measured against the **project finish**, which is
+> itself the maximum of every early finish, so stripping the constraint pulled the finish in with
+> it and the chain stayed critical at zero float in both states. The float that "comes back" is
+> only observable where something else holds the finish still. The fixture now hangs the
+> constrained branch off a 20-day independent spine, and asserts that the spine holds the finish
+> **before** measuring anything, so that arrangement cannot rot silently.
+>
+> Verified red against three mutations of the shipped SQL, each recorded in the file with the
+> assertion it hit.
+
 **Clause D — the record exists and the planner is told.** Every stripped constraint has a
-`placement_migration_log` row — with its **prior `visual_start`** as well as its prior constraint —
+`placement_migrations` row — with its **prior `visual_start`** as well as its prior constraint —
 written **before** the delete, in the same transaction; and the plan renders the dock notice stating
 the count and **naming the consequence**.
 

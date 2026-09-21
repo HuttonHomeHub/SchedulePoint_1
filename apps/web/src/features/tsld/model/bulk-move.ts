@@ -6,15 +6,15 @@ import type { ActivityPlacement } from '@/features/undo-redo';
  * Turning a plural drag into the rows the batch endpoint takes
  * (`docs/specs/canvas-multi-select/` M4-T2).
  *
- * Pure, and **mode-aware in one place**. The single-bar drag already branches on the plan's
- * scheduling mode (ADR-0033): in EARLY a move pins an `SNET` constraint, in VISUAL it writes
- * `visualStart`. Doing that branch again, inline, for the bulk path is how the two come to disagree
- * — and the disagreement would be invisible, because each looks right on its own and only a planner
- * who moved one bar and then twelve would ever see that the twelve were pinned differently.
+ * Pure, and since the collapse (M-F-T3) it has **one behaviour rather than two**: a move writes
+ * `visualStart`, on every plan.
+ *
+ * This file used to carry a `BulkMoveMode` mirroring the single-bar drag's `EARLY` branch, where a
+ * move pinned an `SNET` constraint at the dropped day. That branch is gone from both paths in the
+ * same commit, and deleting the **parameter** rather than defaulting it is what stops one of them
+ * keeping the old behaviour by omission — which is the disagreement the mode-aware-in-one-place
+ * rule existed to prevent, arriving by the other door.
  */
-
-/** Which field a move writes, from the plan's scheduling mode. */
-export type BulkMoveMode = 'early' | 'visual';
 
 /** A day + lane delta, as the drag produced it. */
 export interface BulkMoveDelta {
@@ -55,11 +55,7 @@ export function currentPlacement(activity: ActivitySummary): ActivityPlacement {
  * A **lane-only** move (`dayDelta === 0`) leaves every date field exactly as it was, which is what
  * makes {@link isLaneOnly} able to route it to the cheaper positions endpoint.
  */
-export function movedPlacement(
-  activity: ActivitySummary,
-  delta: BulkMoveDelta,
-  mode: BulkMoveMode,
-): ActivityPlacement {
+export function movedPlacement(activity: ActivitySummary, delta: BulkMoveDelta): ActivityPlacement {
   const current = currentPlacement(activity);
   // `null` here means "leave the lane alone" (the one field where null is not a clear), so a row
   // that arrived without one is passed through rather than being given lane 0 by arithmetic.
@@ -67,31 +63,24 @@ export function movedPlacement(
     current.laneIndex === null ? null : Math.max(0, current.laneIndex + delta.laneDelta);
   if (delta.dayDelta === 0) return { ...current, laneIndex };
 
-  if (mode === 'visual') {
-    // The bar a planner sees in Visual mode is drawn from `visualStart` when it is set and from the
-    // computed early start when it is not — so a first drag has to seed it from where the bar is,
-    // not from a null.
-    const from = current.visualStart ?? activity.earlyStart;
-    return {
-      ...current,
-      laneIndex,
-      visualStart: from ? shiftIso(from, delta.dayDelta) : current.visualStart,
-    };
-  }
-
-  // EARLY: the move pins a Start-No-Earlier-Than at the dropped day, exactly as the single-bar drag
-  // does. At twelve bars this stops being a side effect and becomes a plan-shaping decision, which
-  // is why the bar states it BEFORE the drag rather than reporting it afterwards.
-  const from =
-    current.constraintType === 'SNET' && current.constraintDate
-      ? current.constraintDate
-      : activity.earlyStart;
-  if (!from) return { ...current, laneIndex };
+  // A move writes the placement and **nothing else**. The bar a planner sees is drawn from
+  // `visualStart` when it is set and from the computed early start when it is not — so a first
+  // drag seeds it from where the bar IS, rather than from a null.
+  //
+  // **The SNET branch is deleted rather than made conditional** (M-F-T3). Pinning a constraint was
+  // never what a planner asked for by dragging; it was how an `EARLY` plan could be made to
+  // remember a position at all, and a placement now does that directly. A constraint is a
+  // commitment somebody records on purpose, and the editor is where it is recorded.
+  //
+  // `constraintType`/`constraintDate` still ride along in the row because the endpoint takes
+  // complete placements — an omitted field there is a validation error, never a silent "leave it
+  // alone" — so a bulk move now provably carries every existing constraint through UNCHANGED,
+  // where before it overwrote twelve of them.
+  const from = current.visualStart ?? activity.earlyStart;
   return {
     ...current,
     laneIndex,
-    constraintType: 'SNET',
-    constraintDate: shiftIso(from, delta.dayDelta),
+    visualStart: from ? shiftIso(from, delta.dayDelta) : current.visualStart,
   };
 }
 
@@ -115,14 +104,13 @@ export function isNoOp(delta: BulkMoveDelta): boolean {
 export function bulkMoveSnapshots(params: {
   activities: readonly ActivitySummary[];
   delta: BulkMoveDelta;
-  mode: BulkMoveMode;
 }): {
   before: ActivityPlacement[];
   after: ActivityPlacement[];
   versions: Map<string, number>;
 } {
   const before = params.activities.map(currentPlacement);
-  const after = params.activities.map((a) => movedPlacement(a, params.delta, params.mode));
+  const after = params.activities.map((a) => movedPlacement(a, params.delta));
   const versions = new Map(params.activities.map((a) => [a.id, a.version] as const));
   return { before, after, versions };
 }

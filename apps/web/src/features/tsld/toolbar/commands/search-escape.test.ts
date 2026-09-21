@@ -34,7 +34,7 @@ function activity(over: Partial<SearchableActivity> & { id: string }): Searchabl
     isCritical: false,
     constraintType: null,
     constraintViolated: false,
-    visualConflict: false,
+    visualConflictReason: null,
     levelingWindowExceeded: false,
     earlyStart: null,
     laneIndex: 0,

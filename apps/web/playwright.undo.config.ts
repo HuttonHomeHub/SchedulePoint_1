@@ -51,14 +51,19 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             // Undo/redo ON, plus every layer it builds on (canvas authoring → toolbar → workspace →
-            // editing surface + pen). Scheduling modes is pinned OFF (like the authoring suite) to keep
-            // the journey asserting the plain authoring + undo surface; its own surface is unit-covered.
+            // editing surface + pen).
+            //
+            // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). It
+            // was, "to keep the journey asserting the plain authoring + undo surface; its own
+            // surface is unit-covered" — a reason that was locally sound and collectively produced
+            // the coverage inversion that epic exists to remove: thirteen configs pinning off the
+            // surface the collapse makes universal, so almost nothing drove it end to end. The flag
+            // now takes its default, which is what a shipped bundle carries (ADR-0088 D1).
             env: {
               VITE_UNDO_REDO: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_SCHEDULING_MODES: 'false',
             },
           },
         ],

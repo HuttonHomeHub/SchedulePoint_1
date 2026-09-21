@@ -83,6 +83,28 @@ export interface CaptureActivityRow {
   percentComplete: number;
   actualStart: Date | null;
   actualFinish: Date | null;
+  /**
+   * **The frozen PLACEMENT** — where the work landed on the planning surface, as distinct from the
+   * shape above (how the plan was built) and the early/late columns (what the network permits).
+   * One-planning-surface M-C; the columns shipped dark at M-A.
+   *
+   * `placedStart`/`placedFinish` are the engine's effective-Visual span, and `visualStart` is the
+   * planner's own hand-placement. **The third is not redundant with the first two**, because they
+   * answer different questions and only one of them survives the comparison: after M-F the placed
+   * span is what every view draws, so a variance read needs it frozen — but "did a planner put this
+   * here, or did the engine?" is answerable only from `visualStart`, and an activity the planner
+   * never moved has a placed span identical to its early span.
+   *
+   * **Required here, nullable in the column, exactly as the shape block above is.** The column is
+   * nullable because a baseline captured before M-A has no value and never will; this interface
+   * describes a capture happening NOW, which always has one — even when that one is `null`, which
+   * is itself a fact (nothing placed, or nothing yet calculated). Optional fields would let a
+   * future capture path omit one silently and write a NULL a reader cannot tell from "never
+   * recorded", which is the absence `placement_snapshot_level` exists to remove.
+   */
+  placedStart: Date | null;
+  placedFinish: Date | null;
+  visualStart: Date | null;
 }
 
 /**
@@ -184,6 +206,15 @@ export class BaselineRepository {
         // not the plan happens to contain any logic to freeze. Making it conditional on
         // `dependencies.length` is the trap the sibling comment above describes, one column along.
         revisionSnapshotLevel: 'FULL',
+        // One-planning-surface M-C. Written unconditionally, for the third time and the same
+        // reason: this capture reads and freezes the placement of every activity, so it IS full —
+        // whether or not the plan happens to have a single hand-placed bar, and whether or not it
+        // has ever been recalculated. Making it conditional on "did we find any placement" is the
+        // trap both comments above describe, one column along, and it is the likelier slip here
+        // because an unplaced plan's placement columns are ALL null, which looks like nothing to
+        // record. Zero placements on a FULL baseline means "there genuinely were none"; the same
+        // nulls on a NONE baseline mean nobody looked. Only this column separates them.
+        placementSnapshotLevel: 'FULL',
         criticalPathDefinition: input.criticalityRule?.criticalPathDefinition ?? null,
         criticalFloatThresholdMinutes: input.criticalityRule?.criticalFloatThresholdMinutes ?? null,
         totalFloatMode: input.criticalityRule?.totalFloatMode ?? null,
@@ -228,6 +259,11 @@ export class BaselineRepository {
           percentComplete: a.percentComplete,
           actualStart: a.actualStart,
           actualFinish: a.actualFinish,
+          // The frozen PLACEMENT (M-C). Copied field for field like the shape above — a snapshot
+          // that derived a placement would be recording a rule rather than a fact.
+          placedStart: a.placedStart,
+          placedFinish: a.placedFinish,
+          visualStart: a.visualStart,
           createdBy: input.actorId,
           updatedBy: input.actorId,
         })),
@@ -318,6 +354,14 @@ export class BaselineRepository {
         percentComplete: true,
         actualStart: true,
         actualFinish: true,
+        // The PLACEMENT inputs (M-C) — where the work landed, read in the same locked transaction
+        // as the dates and the shape so all three describe one moment. `visualEffectiveStart` /
+        // `visualEffectiveFinish` are renamed to `placedStart` / `placedFinish` in the map below:
+        // the live columns are named for the engine pass that writes them, the frozen ones for what
+        // they hold, and after M-F "effective-Visual" stops being a distinction the product makes.
+        visualEffectiveStart: true,
+        visualEffectiveFinish: true,
+        visualStart: true,
         assignments: {
           where: { deletedAt: null, resource: { deletedAt: null } },
           select: {
@@ -332,19 +376,23 @@ export class BaselineRepository {
         },
       },
     });
-    return rows.map(({ budgetedExpense, assignments, ...rest }) => ({
-      ...rest,
-      budgetedCost: computeBudgetedCost(budgetedExpense, assignments),
-      budgetedExpense: Number(budgetedExpense ?? 0n),
-      assignments: assignments.map((a) => ({
-        sourceAssignmentId: a.id,
-        sourceResourceId: a.resourceId,
-        // The SAME expression computeBudgetedCost sums, deliberately — two spellings of one number
-        // is how a decomposition stops adding up to its own total.
-        budgetedCost: assignmentBudgetedCost(a),
-        lagMinutes: a.lagMinutes,
-      })),
-    }));
+    return rows.map(
+      ({ budgetedExpense, assignments, visualEffectiveStart, visualEffectiveFinish, ...rest }) => ({
+        ...rest,
+        placedStart: visualEffectiveStart,
+        placedFinish: visualEffectiveFinish,
+        budgetedCost: computeBudgetedCost(budgetedExpense, assignments),
+        budgetedExpense: Number(budgetedExpense ?? 0n),
+        assignments: assignments.map((a) => ({
+          sourceAssignmentId: a.id,
+          sourceResourceId: a.resourceId,
+          // The SAME expression computeBudgetedCost sums, deliberately — two spellings of one number
+          // is how a decomposition stops adding up to its own total.
+          budgetedCost: assignmentBudgetedCost(a),
+          lagMinutes: a.lagMinutes,
+        })),
+      }),
+    );
   }
 
   /**

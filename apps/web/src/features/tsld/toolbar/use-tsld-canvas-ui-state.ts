@@ -73,6 +73,8 @@ export interface TsldCanvasUiState {
   toggleBaselineOverlay: () => void;
   /** Toggle the revision-comparison change picture (ADR-0127). */
   toggleCompareOverlay: () => void;
+  /** Toggle the levelled-placement ghosts (one-planning-surface M-E). */
+  toggleLevelledOverlay: () => void;
   /**
    * The **canvas navigation & authoring** view state (spec `docs/specs/canvas-nav/`, behind
    * `VITE_CANVAS_NAV`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor,
@@ -142,6 +144,18 @@ export interface LensState {
    */
   compareOverlay: boolean;
   /**
+   * The levelled-placement overlay (one-planning-surface M-E) — a ghost where the levelling pass
+   * moved an activity to, drawn for the activities it MOVED and for nothing else.
+   *
+   * Session-local and **default off**, unlike its `compareOverlay` sibling. The two are not the same
+   * shape of decision: the comparison overlay draws nothing until a pair is chosen, so its default
+   * decides only whether choosing a pair shows the difference. This one draws the moment it is
+   * switched on for any plan whose levelling ran, on top of a diagram already carrying the feasible
+   * window — so its default is a real choice about the resting picture, and the resting picture
+   * stays what it is today.
+   */
+  levelledOverlay: boolean;
+  /**
    * The last search match the planner jumped to (`VITE_CANVAS_SEARCH_NAV`), or null before the first
    * Enter. It lives here rather than beside `conflictCursorId` in `NavState` because it is **reset by
    * the two filter setters below** — a cursor into a match set the planner has just changed is not a
@@ -164,6 +178,7 @@ const DEFAULT_LENS_STATE: LensState = {
   colourMode: 'criticality',
   baselineOverlay: false,
   compareOverlay: true,
+  levelledOverlay: false,
   searchCursorId: null,
 };
 
@@ -228,6 +243,10 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   );
   const toggleCompareOverlay = useCallback(
     (): void => setLensState((s) => ({ ...s, compareOverlay: !s.compareOverlay })),
+    [],
+  );
+  const toggleLevelledOverlay = useCallback(
+    (): void => setLensState((s) => ({ ...s, levelledOverlay: !s.levelledOverlay })),
     [],
   );
   const toggleIsolate = useCallback(
@@ -299,6 +318,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setColourMode,
       toggleBaselineOverlay,
       toggleCompareOverlay,
+      toggleLevelledOverlay,
       navState,
       toggleIsolate,
       setIsolateMode,
@@ -326,6 +346,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setColourMode,
       toggleBaselineOverlay,
       toggleCompareOverlay,
+      toggleLevelledOverlay,
       navState,
       toggleIsolate,
       setIsolateMode,

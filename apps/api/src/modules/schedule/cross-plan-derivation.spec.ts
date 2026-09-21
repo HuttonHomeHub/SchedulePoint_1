@@ -12,8 +12,8 @@ const incoming = (over: Partial<IncomingCrossPlanEdge> = {}): IncomingCrossPlanE
   successorActivityId: 'A',
   type: 'FS',
   lagDays: 0,
-  predecessorEarlyStart: '2026-01-08',
-  predecessorEarlyFinish: '2026-01-10',
+  predecessorPlacedStart: '2026-01-08',
+  predecessorPlacedFinish: '2026-01-10',
   ...over,
 });
 
@@ -148,9 +148,9 @@ describe('deriveExternalInstants — multi-upstream fold (latest forward / earli
   it('takes the LATEST of several incoming forward bounds', () => {
     const { derived } = deriveExternalInstants({
       incoming: [
-        incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-05' }),
-        incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-20' }),
-        incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-12' }),
+        incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-05' }),
+        incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-20' }),
+        incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-12' }),
       ],
       outgoing: [],
       m1: EMPTY_M1,
@@ -175,7 +175,7 @@ describe('deriveExternalInstants — multi-upstream fold (latest forward / earli
 
   it('folds incoming and outgoing for the same activity into one entry', () => {
     const { derived } = deriveExternalInstants({
-      incoming: [incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-10' })],
+      incoming: [incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-10' })],
       outgoing: [outgoing({ type: 'FS', successorLateStart: '2026-02-10' })],
       m1: EMPTY_M1,
       durationDaysByActivity: durations({ A: 3 }),
@@ -190,7 +190,7 @@ describe('deriveExternalInstants — multi-upstream fold (latest forward / earli
 describe('deriveExternalInstants — compose with the M1 hand-entered column', () => {
   it('forward: later-of the derived bound and the M1 column — M1 later wins (§30.1)', () => {
     const { derived } = deriveExternalInstants({
-      incoming: [incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-10' })],
+      incoming: [incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-10' })],
       outgoing: [],
       m1: m1({ A: { externalEarlyStart: '2026-01-15', externalLateFinish: null } }),
       durationDaysByActivity: durations({ A: 3 }),
@@ -200,7 +200,7 @@ describe('deriveExternalInstants — compose with the M1 hand-entered column', (
 
   it('forward: later-of — the derived bound later wins', () => {
     const { derived } = deriveExternalInstants({
-      incoming: [incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-20' })],
+      incoming: [incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-20' })],
       outgoing: [],
       m1: m1({ A: { externalEarlyStart: '2026-01-15', externalLateFinish: null } }),
       durationDaysByActivity: durations({ A: 3 }),
@@ -230,7 +230,7 @@ describe('deriveExternalInstants — compose with the M1 hand-entered column', (
 
   it('an activity with only an incoming edge still reproduces its M1 late-finish column', () => {
     const { derived } = deriveExternalInstants({
-      incoming: [incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-10' })],
+      incoming: [incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-10' })],
       outgoing: [],
       m1: m1({ A: { externalEarlyStart: null, externalLateFinish: '2026-03-01' } }),
       durationDaysByActivity: durations({ A: 3 }),
@@ -247,7 +247,7 @@ describe('deriveExternalInstants — missing upstream (N32)', () => {
   it('a null upstream early finish (FS) contributes no bound and is counted', () => {
     const { derived, upstreamMissingCount } = deriveExternalInstants({
       incoming: [
-        incoming({ type: 'FS', predecessorEarlyStart: null, predecessorEarlyFinish: null }),
+        incoming({ type: 'FS', predecessorPlacedStart: null, predecessorPlacedFinish: null }),
       ],
       outgoing: [],
       m1: EMPTY_M1,
@@ -260,7 +260,7 @@ describe('deriveExternalInstants — missing upstream (N32)', () => {
 
   it('a missing upstream still lets the M1 column stand', () => {
     const { derived, upstreamMissingCount } = deriveExternalInstants({
-      incoming: [incoming({ type: 'FS', predecessorEarlyFinish: null })],
+      incoming: [incoming({ type: 'FS', predecessorPlacedFinish: null })],
       outgoing: [],
       m1: m1({ A: { externalEarlyStart: '2026-01-15', externalLateFinish: null } }),
       durationDaysByActivity: durations({ A: 3 }),
@@ -272,9 +272,9 @@ describe('deriveExternalInstants — missing upstream (N32)', () => {
   it('counts one per missing edge and still folds the present ones', () => {
     const { derived, upstreamMissingCount } = deriveExternalInstants({
       incoming: [
-        incoming({ type: 'FS', predecessorEarlyFinish: null }),
-        incoming({ type: 'FS', predecessorEarlyFinish: '2026-01-18' }),
-        incoming({ type: 'SS', predecessorEarlyStart: null }),
+        incoming({ type: 'FS', predecessorPlacedFinish: null }),
+        incoming({ type: 'FS', predecessorPlacedFinish: '2026-01-18' }),
+        incoming({ type: 'SS', predecessorPlacedStart: null }),
       ],
       outgoing: [],
       m1: EMPTY_M1,
@@ -288,7 +288,11 @@ describe('deriveExternalInstants — missing upstream (N32)', () => {
     const { upstreamMissingCount } = deriveExternalInstants({
       // SS needs the early START; a null early start is missing even though the finish is present.
       incoming: [
-        incoming({ type: 'SS', predecessorEarlyStart: null, predecessorEarlyFinish: '2026-01-10' }),
+        incoming({
+          type: 'SS',
+          predecessorPlacedStart: null,
+          predecessorPlacedFinish: '2026-01-10',
+        }),
       ],
       outgoing: [],
       m1: EMPTY_M1,
@@ -328,8 +332,8 @@ describe('deriveExternalInstants — shape & edge cases', () => {
   it('produces one entry per DISTINCT linked activity (keyed correctly)', () => {
     const { derived } = deriveExternalInstants({
       incoming: [
-        incoming({ successorActivityId: 'A', predecessorEarlyFinish: '2026-01-10' }),
-        incoming({ successorActivityId: 'B', predecessorEarlyFinish: '2026-01-20' }),
+        incoming({ successorActivityId: 'A', predecessorPlacedFinish: '2026-01-10' }),
+        incoming({ successorActivityId: 'B', predecessorPlacedFinish: '2026-01-20' }),
       ],
       outgoing: [outgoing({ predecessorActivityId: 'C', successorLateStart: '2026-02-10' })],
       m1: EMPTY_M1,
@@ -343,7 +347,7 @@ describe('deriveExternalInstants — shape & edge cases', () => {
 
   it('a missing duration entry defaults to 0 days (FF collapses to the finish bound)', () => {
     const { derived } = deriveExternalInstants({
-      incoming: [incoming({ type: 'FF', lagDays: 0, predecessorEarlyFinish: '2026-01-10' })],
+      incoming: [incoming({ type: 'FF', lagDays: 0, predecessorPlacedFinish: '2026-01-10' })],
       outgoing: [],
       m1: EMPTY_M1,
       durationDaysByActivity: NO_DURATIONS, // no entry for A → duration 0
@@ -354,7 +358,7 @@ describe('deriveExternalInstants — shape & edge cases', () => {
 
   it('crosses a month boundary correctly (UTC day arithmetic)', () => {
     const { derived } = deriveExternalInstants({
-      incoming: [incoming({ type: 'FS', lagDays: 5, predecessorEarlyFinish: '2026-01-30' })],
+      incoming: [incoming({ type: 'FS', lagDays: 5, predecessorPlacedFinish: '2026-01-30' })],
       outgoing: [],
       m1: EMPTY_M1,
       durationDaysByActivity: durations({ A: 3 }),

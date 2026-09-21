@@ -1,5 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import { formatFinishVariance } from '@/lib/schedule-format';
@@ -10,9 +11,32 @@ import { formatFinishVariance } from '@/lib/schedule-format';
  * summary (Tier 2), and chain navigation — is exhaustively unit-testable with no DOM/React.
  */
 
-/** Pluralise a whole-day count: `1 day`, `3 days`. */
-function days(n: number): string {
-  return `${n} ${n === 1 ? 'day' : 'days'} float`;
+/**
+ * Pluralise a whole-day count of float: `1 day float left`, `3 days float left`.
+ *
+ * **`left` is the label, and it is load-bearing** (M-E-T7). This sentence used to read
+ * `3 days float` over `totalFloat`, and now reads over `remainingFloat` — the slack left from
+ * where the bar is DRAWN rather than from where the network would put it. On an unplaced activity
+ * the two are equal, so the word is the only thing that tells a reader which question the number
+ * answered; without it the sentence would silently change meaning the first time somebody places
+ * a bar, which is exactly the defect class this register files most often.
+ */
+function floatDays(n: number): string {
+  return `${n} ${n === 1 ? 'day' : 'days'} float left`;
+}
+
+/**
+ * Pluralise a whole-day count that is **not** float: `1 day`, `3 days`.
+ *
+ * **Split out of {@link floatDays} because sharing it had shipped a broken sentence.** The drift
+ * clause below read `days(...)`, which appended the word *float*, so a bar placed later than its
+ * earliest start announced `drift 2 days float later than its earliest start` — a sentence that
+ * names the wrong quantity and does not parse. It shipped that way and M-E-T7 made it worse before
+ * anybody noticed, because **nothing in the estate asserts that sentence at all**: it was found by
+ * reading the function after a journey failed on a different line.
+ */
+function plainDays(n: number): string {
+  return `${n} ${n === 1 ? 'day' : 'days'}`;
 }
 
 /**
@@ -50,36 +74,98 @@ export function activityBarLabel(a: {
  * uncomputed (null). A zero-duration milestone carries no duration clause; an unscheduled activity
  * says its duration and that it is not scheduled, nothing more.
  */
-export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: boolean }): string {
+export function describeActivity(
+  a: ActivitySummary,
+  opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource },
+): string {
   const name = activityLabel(a);
   const duration =
     a.durationDays > 0
       ? `, ${a.durationDays} working ${a.durationDays === 1 ? 'day' : 'days'}`
       : '';
-  if (a.earlyStart === null) return `${name}${duration}, not yet scheduled`;
+  /**
+   * **The spoken dates are the DRAWN dates, through the one shared resolver** — and they were the
+   * network's until the M-J gate pass (one-planning-surface), which is a WCAG 1.1.1/1.3.1 failure
+   * on the only route ADR-0026 D7 gives an AT user to a bar.
+   *
+   * Since M-F every bar draws from `visualEffective*` (`barDateSourceFor` returns `'visual'` unless
+   * the read-only Late overlay is on), so for any activity carrying a placement the canvas showed
+   * one span and this sentence announced another. `floatPart` three lines below was moved to the
+   * placed basis at M-E-T7, with a comment explaining why; the dates above it were not — the
+   * one-neighbour-and-not-the-other shape, inside the epic's own file.
+   *
+   * **It resolves through `barDatesFor` rather than reading `visualEffective*` here**, so a second
+   * opinion about where a bar is cannot exist: the painter, the Gantt, the print document and this
+   * sentence all ask the same function (the ADR-0065 one-implementation argument). That also makes
+   * the Late overlay correct for free — while it is on, the bar draws at late dates and so does
+   * this.
+   *
+   * **The caller passes the source.** Defaulting it here would be a second place that decides the
+   * basis, which is the defect this fix removes.
+   *
+   * **And there is deliberately NO fallback to `earlyStart` when the placed date is null**, though
+   * that state is reachable: `visual_effective_start` was added with no backfill, so a plan whose
+   * last recalculation predates 2026-07-14 has early dates and no placed ones. Such a bar is **not
+   * drawn at all** — `to-render-model.ts` passes `barDatesFor`'s answer straight through and
+   * `activityRect` returns null for a null start — so "not yet scheduled" is what the picture
+   * shows. A fallback here would describe a bar that is not there, which is the disagreement this
+   * whole fix removes, pointing the other way.
+   *
+   * Found independently by the accessibility and UX reviews of M-J-T1. The epic's own widened-hazard
+   * census (`m-f/no-placement-parity.md` §5) found the two sibling instances — the CSV export and
+   * the guest share view — and structurally could not find this one: its method was "every file that
+   * lost a `schedulingMode` reference", and this file never held one to lose.
+   */
+  const drawn = barDatesFor(a, opts?.barDateSource ?? 'visual');
+  if (drawn.start === null) return `${name}${duration}, not yet scheduled`;
   const dates =
-    a.earlyFinish && a.earlyFinish !== a.earlyStart
-      ? `${formatCalendarDate(a.earlyStart)} to ${formatCalendarDate(a.earlyFinish)}`
-      : formatCalendarDate(a.earlyStart);
+    drawn.finish && drawn.finish !== drawn.start
+      ? `${formatCalendarDate(drawn.start)} to ${formatCalendarDate(drawn.finish)}`
+      : formatCalendarDate(drawn.start);
+  // **`remainingFloat`, not `totalFloat`** (M-E-T7). Criticality still comes from the engine's own
+  // flags, which are pure-network facts and stay so: an activity is critical because of the
+  // network, not because a planner spent its slack. Only the NUMBER moves to the placed basis, and
+  // `floatDays()` labels it.
   const floatPart = a.isCritical
     ? ', critical'
-    : a.totalFloat === null
+    : a.remainingFloat === null
       ? ''
       : a.isNearCritical
-        ? `, near-critical, ${days(a.totalFloat)}`
-        : `, ${days(a.totalFloat)}`;
+        ? `, near-critical, ${floatDays(a.remainingFloat)}`
+        : `, ${floatDays(a.remainingFloat)}`;
   // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
   const constraint = formatConstraint(a);
   const constraintPart = constraint ? `, ${constraint.full}` : '';
-  // Visual-Planning conflict cue (ADR-0033): the spoken equivalent of the warning triangle drawn on a
-  // bar placed earlier than its earliest feasible start (WCAG 1.1.1). Kept a *separate* read-out from
-  // float (SQ-c), since float is a pure-network fact and drift is a placement fact.
+  /**
+   * The spoken equivalent of the warning triangle drawn on a conflicting bar (WCAG 1.1.1). Kept a
+   * *separate* read-out from float (SQ-c), since float is a pure-network fact and drift is a
+   * placement fact.
+   *
+   * **It branches on the REASON, not the boolean** — and it did not until the M-J gate pass, where
+   * the accessibility and UX reviews reached the same finding independently. M-D split the flag into
+   * two reasons and `visualConflictReason`'s own docblock says to "prefer the reason wherever the
+   * sentence matters"; this sentence kept gating on `visualConflict`, which is now true for both,
+   * and hard-coded "before its earliest feasible start".
+   *
+   * **For `LATER_THAN_BOUND` that was backwards, not merely vague.** Drift is
+   * `placed − earliest` (`engine/compute.ts:348`), so it is NEGATIVE for an early placement and
+   * POSITIVE for one past a ceiling — and `Math.abs()` erased the sign before the word "before" was
+   * applied to it. A bar placed five days PAST a "no later than" date was announced as placed five
+   * days BEFORE its earliest start, in the same breath as a constraint clause naming the date it had
+   * overrun. The one case M-D exists to detect was the one case this described wrongly.
+   *
+   * The late sentence needs no number: `constraintPart` immediately before it names the bound, and
+   * the drift is measured from the earliest start, which is not what was breached. It is written to
+   * stand alone anyway, so it stays true if a future reason fires without a constraint clause.
+   */
   const conflictPart =
-    a.visualConflict && a.visualDriftDays !== null
-      ? `, conflict: placed ${Math.abs(a.visualDriftDays)} working ${
-          Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
-        } before its earliest feasible start`
-      : '';
+    a.visualConflictReason === 'LATER_THAN_BOUND'
+      ? ', conflict: placed past the constraint on it'
+      : a.visualConflict && a.visualDriftDays !== null
+        ? `, conflict: placed ${Math.abs(a.visualDriftDays)} working ${
+            Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
+          } before its earliest feasible start`
+        : '';
   // Same-lane time-overlap cue (TECH_DEBT #24c): the spoken equivalent of the stacked-squares badge
   // on a bar a manual lane drop left overlapping another in its lane (WCAG 1.1.1). Derived (not a
   // persisted field), so the caller passes it — computed at the mapping seam (`laneOverlapIds`).
@@ -92,7 +178,7 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
   // float is a pure-network fact, drift is a placement fact.
   const driftPart =
     !a.visualConflict && a.visualDriftDays !== null && a.visualDriftDays > 0
-      ? `, drift ${days(a.visualDriftDays)} later than its earliest start`
+      ? `, drift ${plainDays(a.visualDriftDays)} later than its earliest start`
       : '';
   return `${name}${duration}, ${dates}, lane ${a.laneIndex + 1}${floatPart}${constraintPart}${conflictPart}${driftPart}${overlapPart}`;
 }
@@ -289,6 +375,8 @@ export interface ListboxRowParts {
   wbsGroup?: string | undefined;
   /** {@link compareClause} for this row, when the comparison overlay draws it a ghost. */
   compare?: string | undefined;
+  /** {@link levelledGhostClause} for this row, when the levelled lens draws it a ghost. */
+  levelled?: string | undefined;
 }
 
 /**
@@ -313,6 +401,81 @@ export function compareClause(ghost: { fromStart: string; fromFinish: string }):
 }
 
 /**
+ * What the **levelled-placement lens** is showing — including, and especially, when it is showing
+ * nothing (M-E-T6).
+ *
+ * **The undrawn case is the COMMON one, not an edge case.** FC-1 predicts zero visual placements
+ * across the estate, and resource levelling is opt-in and off by default (ADR-0041's parity gate),
+ * so on the day this ships the lens lights and draws nothing on very nearly every plan there is. A
+ * control that lights and does nothing is the lit-but-inert dead end this register has recorded
+ * five times; the difference between that and a working feature is one sentence.
+ *
+ * **Two empty states, never collapsed into one**, which is ADR-0073 C1's finding applied to a
+ * diagram: "levelling never ran" and "levelling ran and moved nothing" are different facts, the
+ * first naming a setting a planner can change and the second reporting a result. A reader given
+ * one sentence for both cannot tell a switched-off feature from a satisfied one. The control's
+ * shaded reason covers only the first (M-E-T3), because the other two states are not refusals —
+ * so this sentence is the ONLY place the second is ever said.
+ *
+ * Returns the sentences and not the markup: the caller decides where they live, and both the
+ * visible strip and the `sr-only` summary render from this one result, so the picture cannot be
+ * explained two ways.
+ */
+export function levelledOverlaySummary(
+  drawn: number,
+  opts: { levelResources: boolean },
+): { readonly heading: string; readonly undrawnLabel: string } | null {
+  if (drawn > 0) {
+    return {
+      heading: `Levelled placement: ${String(drawn)} ${drawn === 1 ? 'activity' : 'activities'} moved by resource levelling.`,
+      // Nothing is withheld — every activity levelling moved has a ghost, because the layer walks
+      // the same array this count comes from.
+      undrawnLabel: '',
+    };
+  }
+  const why = opts.levelResources
+    ? 'resource levelling did not move any activity'
+    : 'resource levelling is off for this plan';
+  return {
+    heading: `Levelled placement: nothing to show — ${why}.`,
+    undrawnLabel: `Levelled placement: ${why}.`,
+  };
+}
+
+/**
+ * The spoken equivalent of a **levelled-placement ghost** (WCAG 1.4.1 — the ghost is a dashed
+ * outline and nothing else): where resource levelling moved this activity to.
+ *
+ * The third sibling of {@link baselineGhostClause} and {@link compareClause}, and it exists for
+ * their identical reason: the canvas is `aria-hidden`, so an outline saying "levelling would put
+ * this here" reaches a sighted planner and nobody else.
+ *
+ * **It states the ghost's START DATE rather than an offset, which is a deliberate departure from
+ * both siblings.** The tempting field is `levelingDelayDays` — engine-owned, already in whole
+ * working days, sitting on the same row — and it is `leveledStart - earlyStart`, while the bar is
+ * drawn at the PLACED start. On an unplaced activity the two coincide, which is every plan in the
+ * estate today (FC-1); on a placed one — the case this epic exists to create — it would report an
+ * offset from a position the reader cannot see. Computing the true offset needs a working-day walk
+ * a pure render leaf has no business doing, so the honest short answer is the date, which is exact
+ * in every case.
+ *
+ * **This is the ONLY clause the two M-E overlays need, and that was found by driving the product.**
+ * It began as one member describing both — the feasible window and this ghost — on the reasoning
+ * that the row's length is a budget and both describe where a bar may sit. The journey's first run
+ * printed the row, and the window's half was redundant to the last word: the Tier-1 sentence
+ * already states the remaining float (M-E-T7), already names a positive drift, and already names
+ * the negative-drift conflict. The window DRAWS two facts the sentence carries; it does not add a
+ * third. Two unit suites cannot see that, because each is right about its own function — only a
+ * reader looking at the finished sentence can (ADR-0081, `m-e/window.md` §11).
+ *
+ * Returns `''` where the overlay draws no ghost for the row — absence is not narrated — which is
+ * the same test the painter applies, because both walk the same gated array.
+ */
+export function levelledGhostClause(leveledStart: string | null): string {
+  return leveledStart === null ? '' : ` (levelled to ${formatCalendarDate(leveledStart)})`;
+}
+
+/**
  * Compose one listbox row's text. The **only** producer of it: both the rendered `<li>` and the
  * sentence `select()` announces go through here.
  *
@@ -325,7 +488,7 @@ export function composeListboxRowText(parts: ListboxRowParts): string {
   const reasons = parts.dimReasons ?? [];
   const dim = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
   const overAllocated = parts.overAllocated === true ? ' (over-allocated)' : '';
-  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}`;
+  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}${parts.levelled ?? ''}`;
 }
 
 /**
@@ -379,9 +542,13 @@ export function summarizeLogic(
       .filter((x): x is { d: DependencySummary; gap: number } => (x.gap ?? 0) > 0)
       .map(({ d, gap }) => {
         const other = d.successor.id === id ? d.predecessor.name : d.successor.name;
-        // Deliberately not the `days()` helper: that one says "float", and a tie's gap is not
+        // Deliberately not the float helper: that one says "float", and a tie's gap is not
         // float — it is the room in this one relationship, which is exactly the distinction the
         // canvas chip makes by sitting on the link rather than on the bar.
+        //
+        // **This site avoided the trap and the drift clause above did not**, under the same shared
+        // helper, which is why `plainDays` now exists: the correct reasoning was written down here
+        // and never applied one function over.
         return `${other} ${gap} ${gap === 1 ? 'day' : 'days'}`;
       });
     if (waits.length > 0) text += `; slack to ${waits.join(', ')}`;

@@ -51,14 +51,39 @@ export type ConflictRemedy =
  * has to be made rather than slipped past.
  */
 export const CONFLICT_REMEDIES: Readonly<Record<ConflictKey, ConflictRemedy>> = {
-  // The one type with a genuine one-click fix: the placement is the planner's own input, so
-  // withdrawing it resolves the clash outright. It is also the one fix the bar already offers to
-  // every activity, conflicting or not — a planner who changes their mind about a hand-placed bar
-  // wants it back on the computed date whether or not the placement clashed with anything.
-  visualConflict: {
+  // A genuine one-click fix: the placement is the planner's own input and it is EARLIER than logic
+  // allows, so withdrawing it resolves the clash outright. It is also the one fix the bar already
+  // offers to every activity, conflicting or not — a planner who changes their mind about a
+  // hand-placed bar wants it back on the computed date whether or not the placement clashed.
+  visualEarlierThanLogic: {
     kind: 'barAction',
     itemId: 'clear-visual-placement',
     label: 'Clear visual start',
+  },
+  // **The side the boolean never covered, and it does NOT get the same answer** (one-planning-surface
+  // M-D). It is tempting to give both placement conflicts the `barAction` above — the placement is
+  // the planner's own input either way, and clearing it does resolve the clash. That was rejected on
+  // what a `barAction` remedy actually does: it renders NOTHING, because it names an item the bar
+  // already carries. For a bar placed past a commitment somebody recorded, the thing the planner most
+  // likely does not know is that the bound EXISTS — so a remedy that renders nothing would leave the
+  // one fact worth surfacing invisible, and would look correct doing it.
+  //
+  // A route instead, and the cost of the choice is **zero** rather than a trade: a placement
+  // conflict requires a PLACEMENT, so the withdraw-my-placement control is applicable in precisely
+  // the cases this remedy is needed in, by construction. That used to be argued through the mode —
+  // a placement required Visual mode, and `clearVisualPlacementApplies` was exactly
+  // `schedulingMode === 'VISUAL'` — and M-F-T6 made the item unconditional, which is the stronger
+  // version of the same statement rather than a change to it. Routing here ADDS the second route
+  // rather than replacing the first, which is what stops this picking for them — the objection that
+  // gave `levelingWindowExceeded` a route and not a button.
+  //
+  // It shares `constraintViolated`'s destination and copy deliberately. They are different conflicts
+  // and the same errand: go and look at the constraint. Two labels for one destination would read as
+  // two places.
+  visualLaterThanBound: {
+    kind: 'openEditorAt',
+    at: 'constraint',
+    label: 'Review the constraint…',
   },
   // A route, not a fix — which constraint to relax, or by how much, is the planner's judgement, and
   // the copy says so. It read "Fix the constraint…" until the ux gate put the two routes side by
@@ -87,7 +112,6 @@ export function leadingConflictKey(activity: ConflictFlagFields): ConflictKey | 
 
 /** The inputs `clearVisualPlacementGate` needs. Named so both call sites pass the same thing. */
 export interface ClearVisualPlacementInput {
-  schedulingMode: 'EARLY' | 'VISUAL';
   canEditSchedule: boolean;
   lateOverlayActive: boolean;
   hasSelection: boolean;
@@ -96,23 +120,34 @@ export interface ClearVisualPlacementInput {
 }
 
 /**
- * Whether this action **exists for this plan at all** — as opposed to existing and being shut.
+ * **`clearVisualPlacementApplies` is DELETED** (M-F-T6), and what it decided is worth recording
+ * because the reasoning was right and its premise is gone.
  *
- * ADR-0082 draws that line and it is not a shade of the same thing: *omit* when the action does not
- * apply to the object, *shade with a reason* when it is shut by a state the reader can change or by
- * their role. A plan in Early mode has no hand-placed `visualStart` to clear, so there is nothing
- * here to refuse — and the control was holding 146 px of a row that wraps, to say so.
+ * ADR-0115 omitted this action outside Visual mode on ADR-0082's discriminator — *omit* when the
+ * action does not apply to the object, *shade with a reason* when it is shut by something the
+ * reader can change — because an Early plan had no hand-placed start to clear, so there was
+ * nothing to refuse, and the control was holding 146 px of a row that wraps to say so. After the
+ * collapse every plan can hold a placement, so it applies to every plan, always.
  *
- * **It is a separate predicate rather than a third field on the gate's return**, because
- * `BulkActionGate` is shared with the plural bar where `applicable` would be meaningless for `link`
- * and `remove`. The gate calls it, so `schedulingMode` is still read in exactly one place — which
- * is the property the gate's own docblock was extracted to protect.
+ * **Its 146 px come back to the selection bar unconditionally**, which is a real cost on a row
+ * five epics have spent fitting, and it is stated rather than absorbed.
+ *
+ * **This paragraph rejected the activity-level refinement, and the rejection was wrong** — kept in
+ * its corrected form rather than deleted, because the mistake is the instructive half.
+ *
+ * It said that omitting the control when the SELECTED activity carries no `visualStart` would make
+ * "the bar's contents change as the selection moves, which ADR-0094 refused". ADR-0094 refused a
+ * per-context **order** — re-ordering moves controls under a planner's cursor — and this bar
+ * already changes its **contents** with the selection three times over (`isSummary` gates Dissolve,
+ * Duplicate and Duplicate band, and `lostReason` exists for exactly that). Two different things,
+ * conflated, and the conflation was used to decline a refinement.
+ *
+ * It also said the refinement "belongs to whoever measures the row rather than to this milestone".
+ * The row was then measured in this milestone (`measure-toolbar/m-f-foot-row.spec.ts`): 146 px of a
+ * 989 px bar against 958 px of room at 1646, costing the diagram **36 px** there and **76 px** at
+ * 1440. So the refinement shipped — `isVisible: (ctx) => ctx.hasPlacement` — and the condition that
+ * forced it is recorded at the registry entry.
  */
-export function clearVisualPlacementApplies(
-  input: Pick<ClearVisualPlacementInput, 'schedulingMode'>,
-): boolean {
-  return input.schedulingMode === 'VISUAL';
-}
 
 /**
  * Whether clearing a hand-placed `visualStart` is actionable, and why not when it is not.
@@ -128,9 +163,6 @@ export function clearVisualPlacementGate(input: ClearVisualPlacementInput): {
   enabled: boolean;
   reason: string | null;
 } {
-  if (!clearVisualPlacementApplies(input)) {
-    return { enabled: false, reason: 'Only available in Visual mode' };
-  }
   if (!input.canEditSchedule) {
     return { enabled: false, reason: input.scheduleRefusal('clear the placement') };
   }

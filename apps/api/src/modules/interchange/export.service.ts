@@ -216,6 +216,11 @@ export class ExportService {
         secondaryConstraintDate: dateOrNull(a.secondaryConstraintDate),
         scheduleAsLateAsPossible: a.scheduleAsLateAsPossible,
         progress: this.toExportProgress(a),
+        // The planner's hand-placement. It reaches the graph so the pure mapper can COUNT what the
+        // file will not carry — no serialiser reads it (one-planning-surface M-G). Without this the
+        // drop report could not be truthful about whether anything was lost, which is the half a
+        // bare "not supported" comment would have skipped.
+        visualStart: dateOrNull(a.visualStart),
       })),
       dependencies: dependencyRows.map((d: ExportEdge) => ({
         key: d.id,

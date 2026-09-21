@@ -22,7 +22,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     get CANVAS_AUTHORING_ENABLED() {
       return h.authoring;
     },
-    SCHEDULING_MODES_ENABLED: false,
     NOTES_ENABLED: false,
     UNDO_REDO_ENABLED: false,
   };

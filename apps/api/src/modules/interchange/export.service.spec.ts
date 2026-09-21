@@ -48,6 +48,7 @@ function activityRow(overrides: Partial<Record<string, unknown>> = {}): Record<s
     parentId: null,
     constraintType: null,
     constraintDate: null,
+    visualStart: null,
     secondaryConstraintType: null,
     secondaryConstraintDate: null,
     scheduleAsLateAsPossible: false,
@@ -166,6 +167,71 @@ describe('ExportService.exportPlan', () => {
     const reimport = importSchedule({ content: bytes, filename: 'empty.xer' });
     expect(reimport.ok).toBe(true);
     if (reimport.ok) expect(reimport.graph.activities).toHaveLength(0);
+  });
+
+  /**
+   * **The seam the pure package structurally cannot test** (one-planning-surface M-G).
+   *
+   * `packages/interchange` proves the mapper counts placements and that neither serialiser writes
+   * one — but every one of those tests builds its graph from a fixture. If THIS service simply did
+   * not copy `visual_start` off the row, every one of them would stay green while the export
+   * reported nothing on a plan full of hand-placed bars: a drop report that is silent precisely
+   * when there is something to report.
+   *
+   * So it asserts the finding end to end, from a database row through the real graph assembly and
+   * the real mapper, and the negative beside it — because a service that hard-coded the finding
+   * would pass the positive alone.
+   */
+  it('carries a hand-placement off the row, so the export reports the drop (M-G)', async () => {
+    activities.findAllActiveByPlan.mockResolvedValue([
+      activityRow({ visualStart: new Date(Date.UTC(2026, 1, 9)) }),
+      activityRow({ id: 'act-2', code: 'A1010', name: 'Design' }),
+    ]);
+
+    const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    const placed = report.drops.filter((d) => d.detail.includes('hand-placed start'));
+    expect(placed).toHaveLength(1);
+    // ONE of the two rows carries it — so the count proves the field was READ, not merely that the
+    // finding fires whenever any activity exists.
+    expect(placed[0]?.detail).toMatch(/^1 activity\(ies\) carry a hand-placed start/);
+  });
+
+  /**
+   * **The parity limb, and it is the one that would catch a serialiser inventing a column.** The
+   * model-level equality is proved in `packages/interchange`; this proves it survives the real
+   * emitter, from real rows, for the file a planner actually hands over. A placement may change the
+   * REPORT and may not change one byte of the programme.
+   *
+   * The two exports differ in `visual_start` and nothing else, so any difference in the output is
+   * attributable.
+   */
+  it('a placement changes the report and not one exported byte (M-G)', async () => {
+    activities.findAllActiveByPlan.mockResolvedValue([activityRow()]);
+    const plain = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+
+    activities.findAllActiveByPlan.mockResolvedValue([
+      activityRow({ visualStart: new Date(Date.UTC(2026, 1, 9)) }),
+    ]);
+    const placed = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+
+    expect(Buffer.from(placed.bytes).equals(Buffer.from(plain.bytes))).toBe(true);
+    // Not vacuous: the run that produced those identical bytes DID report the placement.
+    expect(placed.report.drops.filter((d) => d.detail.includes('hand-placed start'))).toHaveLength(
+      1,
+    );
+    expect(plain.report.drops.filter((d) => d.detail.includes('hand-placed start'))).toHaveLength(
+      0,
+    );
+  });
+
+  it('reports no placement drop for a plan nobody has hand-placed (M-G)', async () => {
+    activities.findAllActiveByPlan.mockResolvedValue([
+      activityRow(),
+      activityRow({ id: 'act-2', code: 'A1010' }),
+    ]);
+
+    const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    expect(report.drops.filter((d) => d.detail.includes('hand-placed start'))).toHaveLength(0);
   });
 
   it('exports constraints, progress and resources (M4c) rather than dropping them', async () => {

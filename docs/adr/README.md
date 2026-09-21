@@ -171,3 +171,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0145](0145-a-screen-is-assembled-from-the-archetypes.md)                                       | A screen is assembled from the archetypes, and a metric names what it measures  | Accepted           |
 | [0146](0146-a-page-has-one-measure-and-a-column-has-a-reason.md)                                | A page has one measure, a column has a reason, and a fact belongs under its row | Accepted           |
 | [0147](0147-the-register-a-reader-is-briefed-from-is-gated-too.md)                              | The register a reader is briefed from is gated too                              | Accepted           |
+| [0148](0148-visual-is-the-plan.md)                                                              | Visual is the plan; the feasible window and the levelled ghost are overlays     | Accepted           |

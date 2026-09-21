@@ -47,7 +47,6 @@ function fullReport(overrides: Partial<ScheduleHealthReport> = {}): ScheduleHeal
     planName: 'Plan',
     dataDate: '2026-01-01',
     computedAt: '2026-01-01T08:00:00.000Z',
-    schedulingMode: 'EARLY',
     activityCount: 10,
     relationshipCount: 12,
     baseline: null,
@@ -95,19 +94,23 @@ describe('ScheduleHealthPanel', () => {
     expect(props.onRetry).toHaveBeenCalled();
   });
 
-  it('states its own provenance on screen — computed-at, scheduling mode and baseline', () => {
+  it('states its own provenance on screen — computed-at, data date and baseline', () => {
     // The spec's D9: computedAt is on the face of EVERY rendering, screen and paper. The M5 ux
     // review found the printout more honest than the live panel.
     renderPanel({
       report: fullReport({
-        schedulingMode: 'VISUAL',
         baseline: { id: 'b1', name: 'BL-June', capturedAt: '2026-06-01T00:00:00.000Z' },
       }),
     });
     const provenance = screen.getByText(/Calculated 2026-01-01/);
     expect(provenance).toHaveTextContent('data date 2026-01-01');
-    expect(provenance).toHaveTextContent('Visual scheduling');
     expect(provenance).toHaveTextContent('baseline: BL-June');
+    // **The scheduling mode has left the provenance line** (one-planning-surface M-F-T4): the
+    // report printed "Early scheduling" or "Visual scheduling" beside the data date, and with one
+    // planning surface that clause could only ever print one word — a fact about the product, not
+    // about this plan, which is not what a provenance line is for. Asserted as an absence so the
+    // next reader adding a clause here has to mean it.
+    expect(provenance).not.toHaveTextContent('scheduling');
   });
 
   it('a NOT_ASSESSABLE row without the capability explains the ROLE route, never silence (ADR-0082)', () => {

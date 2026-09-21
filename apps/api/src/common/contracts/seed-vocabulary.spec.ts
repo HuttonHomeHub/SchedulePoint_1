@@ -13,7 +13,6 @@ import {
   ProgressRecalcMode,
   ResourceCurveType,
   ResourceKind,
-  SchedulingMode,
   TotalFloatMode,
 } from '@prisma/client';
 import {
@@ -31,7 +30,6 @@ import {
   SEED_PROGRESS_RECALC_MODES,
   SEED_RESOURCE_CURVE_TYPES,
   SEED_RESOURCE_KINDS,
-  SEED_SCHEDULING_MODES,
   SEED_TOTAL_FLOAT_MODES,
 } from '@repo/seed';
 import { describe, expect, it } from 'vitest';
@@ -65,7 +63,10 @@ describe('the @repo/seed vocabulary is in lock-step with the Prisma schema', () 
     ['PercentCompleteType', SEED_PERCENT_COMPLETE_TYPES, PercentCompleteType],
     ['AccrualType', SEED_ACCRUAL_TYPES, AccrualType],
     ['CalendarScope', SEED_CALENDAR_SCOPES, CalendarScope],
-    ['SchedulingMode', SEED_SCHEDULING_MODES, SchedulingMode],
+    // **`SchedulingMode` is no longer paired here** (one-planning-surface M-F-T4). The seed
+    // catalogue stopped carrying the vocabulary when the plan option went; the Prisma enum
+    // survives until the epic's migration milestone, so the two sides are legitimately
+    // asymmetric for one epic and there is nothing for this gate to compare.
     ['ProgressRecalcMode', SEED_PROGRESS_RECALC_MODES, ProgressRecalcMode],
     ['CriticalPathDefinition', SEED_CRITICAL_PATH_DEFINITIONS, CriticalPathDefinition],
     ['TotalFloatMode', SEED_TOTAL_FLOAT_MODES, TotalFloatMode],

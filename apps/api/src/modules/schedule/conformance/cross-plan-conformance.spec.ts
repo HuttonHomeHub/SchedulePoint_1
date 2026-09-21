@@ -77,6 +77,11 @@ describe('F7 tier-2 — cross-plan differential (ADR-0035 §30.7/§30.8)', () =>
         earlyFinish: '2026-01-04',
         lateStart: '2025-12-26',
         lateFinish: '2026-01-04',
+        // The forward bound reads the PLACED span since one-planning-surface M-H. This stale
+        // snapshot carries no placement, so the two agree — which is what makes the fixture still
+        // describe the case §30.7 tracks (a superseded upstream) rather than a placement case.
+        placedStart: '2025-12-26',
+        placedFinish: '2026-01-04',
       },
     ],
   ]);
@@ -263,8 +268,8 @@ describe('F7 negatives — N30–N33 (ADR-0035 §30.5–§30.6)', () => {
           successorActivityId: 'CONS_ERECT',
           type: 'FS',
           lagDays: 2,
-          predecessorEarlyStart: null,
-          predecessorEarlyFinish: null,
+          predecessorPlacedStart: null,
+          predecessorPlacedFinish: null,
         },
       ],
       outgoing: [],

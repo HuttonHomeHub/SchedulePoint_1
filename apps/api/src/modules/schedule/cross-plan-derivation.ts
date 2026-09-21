@@ -22,7 +22,7 @@ export type CrossPlanEdgeType = 'FS' | 'SS' | 'FF' | 'SF';
 
 /**
  * A cross-plan edge whose SUCCESSOR is in the plan being scheduled (its incoming links), carrying the
- * PREDECESSOR's persisted early dates. Drives the forward (external early start) bound (§30.1).
+ * PREDECESSOR's persisted **placed** dates. Drives the forward (external early start) bound (§30.1).
  */
 export interface IncomingCrossPlanEdge {
   /** The successor activity (in this plan) whose external early start this edge derives. */
@@ -30,9 +30,21 @@ export interface IncomingCrossPlanEdge {
   type: CrossPlanEdgeType;
   /** The edge's typed lag, in whole working days (a lead is negative). */
   lagDays: number;
-  /** The upstream predecessor's persisted early start / finish (`YYYY-MM-DD`), or null if never calculated. */
-  predecessorEarlyStart: string | null;
-  predecessorEarlyFinish: string | null;
+  /**
+   * The upstream predecessor's persisted **placed** start / finish (`YYYY-MM-DD`) — the
+   * effective-Visual columns, since one-planning-surface M-H. Null where the bound cannot be
+   * derived, which the caller counts as an N32 warning rather than treating as a missing edge.
+   *
+   * **Null has two causes and only one of them is "never calculated."** The columns were added by
+   * `20260714120000_add_scheduling_modes_columns` **with no backfill**, so a plan whose last
+   * recalculation predates 2026-07-14 has `early_start` set and `visual_effective_start` null — and
+   * a cross-plan bound that used to derive now reports as missing. It degrades gracefully (a
+   * counted warning, never a wrong bound) and is almost certainly an empty population on this
+   * estate, but a reader debugging an unexpected N32 should recalculate the upstream plan before
+   * looking anywhere else.
+   */
+  predecessorPlacedStart: string | null;
+  predecessorPlacedFinish: string | null;
 }
 
 /**
@@ -125,25 +137,25 @@ function forwardBound(
 ): { date: string | null; missing: boolean } {
   switch (edge.type) {
     case 'FS':
-      return edge.predecessorEarlyFinish === null
+      return edge.predecessorPlacedFinish === null
         ? { date: null, missing: true }
-        : { date: addDays(edge.predecessorEarlyFinish, edge.lagDays), missing: false };
+        : { date: addDays(edge.predecessorPlacedFinish, edge.lagDays), missing: false };
     case 'SS':
-      return edge.predecessorEarlyStart === null
+      return edge.predecessorPlacedStart === null
         ? { date: null, missing: true }
-        : { date: addDays(edge.predecessorEarlyStart, edge.lagDays), missing: false };
+        : { date: addDays(edge.predecessorPlacedStart, edge.lagDays), missing: false };
     case 'FF':
-      return edge.predecessorEarlyFinish === null
+      return edge.predecessorPlacedFinish === null
         ? { date: null, missing: true }
         : {
-            date: addDays(edge.predecessorEarlyFinish, edge.lagDays - successorDurationDays),
+            date: addDays(edge.predecessorPlacedFinish, edge.lagDays - successorDurationDays),
             missing: false,
           };
     case 'SF':
-      return edge.predecessorEarlyStart === null
+      return edge.predecessorPlacedStart === null
         ? { date: null, missing: true }
         : {
-            date: addDays(edge.predecessorEarlyStart, edge.lagDays - successorDurationDays),
+            date: addDays(edge.predecessorPlacedStart, edge.lagDays - successorDurationDays),
             missing: false,
           };
   }

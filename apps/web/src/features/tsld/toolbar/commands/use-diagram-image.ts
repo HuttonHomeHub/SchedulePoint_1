@@ -139,7 +139,10 @@ export function useDiagramImage(args: {
       // currently serves only cast-based test doubles; it is kept because a second host would
       // otherwise ship a silent throw in the one path nobody watches (2026-08-28 component review).
       const lenses = canvasControlRef.current?.getSceneLenses?.() ?? {};
-      const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
+      // No mode to consult since the collapse (M-F-T1) — the deliverable draws bars where they are
+      // placed, exactly as the screen does. The plan is still read here for its name and its data
+      // date; only the mode question is gone.
+      const source = barDateSourceFor(lateOverlayActive);
       // The band comes from the SAME derivation the live canvas uses (ADR-0063 §M5), so the export
       // cannot disagree with the screen about the band's height or about which activities the
       // scene still paints. With the band on, summaries live in the band and not in the diagram —
@@ -193,6 +196,12 @@ export function useDiagramImage(args: {
         barFill: lenses.barFill,
         barInk: lenses.barInk,
         baselineGhosts: lenses.baselineGhosts,
+        // **Composed for the sibling's reason, and the reason applies at least as strongly.** The
+        // levelled-placement overlay (one-planning-surface M-E) says where the levelling pass moved
+        // work to — which is precisely the question a resourced programme is handed upward to
+        // answer. A deliverable that drew the network dates and silently dropped the levelled ones
+        // would show a picture the plan does not intend to execute.
+        levelledGhosts: lenses.levelledGhosts,
         // **Composed, not SCREEN_ONLY.** The comparison overlay is the one lens whose whole purpose
         // is to be handed to somebody who was not in the room — "here is what changed since last
         // month" — so an exported picture that silently drops it is the ADR-0103 defect exactly.
@@ -249,8 +258,16 @@ export function useDiagramImage(args: {
     },
     [
       plan.plannedStart,
-      plan.schedulingMode,
       plan.name,
+      // **The other plan's name, and omitting it was a live defect of exactly the kind this
+      // callback's own docblock warns about.** It exists so the picture's title names BOTH plans
+      // when a cross-plan comparison is on screen — because "a title naming one plan over ghosts
+      // drawn from another states something untrue to the one reader an export exists for". Left
+      // out of the array, the callback closed over the name from the render that created it, so
+      // switching the compared plan and exporting produced a title naming the PREVIOUS one: the
+      // same false statement, arrived at from the other direction. `react-hooks/exhaustive-deps`
+      // named it, at `warn`, from the day it shipped (`docs/TECH_DEBT.md` #353).
+      comparedWithPlanName,
       // The calendar the shading is built from. Omitting it would close over a stale one, so a
       // planner who changed the plan's calendar and exported without a remount would get a
       // picture shaded to the previous week — silently, and only in the deliverable.

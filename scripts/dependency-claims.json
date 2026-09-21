@@ -1037,10 +1037,7 @@
       "path": "build/modern/focusManager.js",
       "lines": "11-13",
       "anchor": "window.addEventListener(\"visibilitychange\", listener, false);",
-      "citedBy": [
-        "apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts",
-        "docs/TECH_DEBT.md"
-      ]
+      "citedBy": ["apps/web/e2e-workspace-chrome/peer-unmount-focus.spec.ts", "docs/TECH_DEBT.md"]
     },
     {
       "ref": "focusManager.js:56-59",
@@ -1048,10 +1045,7 @@
       "path": "build/modern/focusManager.js",
       "lines": "50-53",
       "anchor": "return globalThis.document?.visibilityState !== \"hidden\";",
-      "citedBy": [
-        "apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts",
-        "docs/TECH_DEBT.md"
-      ]
+      "citedBy": ["apps/web/e2e-workspace-chrome/peer-unmount-focus.spec.ts", "docs/TECH_DEBT.md"]
     },
     {
       "ref": "router.d.ts:98-113",

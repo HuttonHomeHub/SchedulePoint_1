@@ -367,7 +367,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     // the shared-shape pattern working as intended: the two branches cannot drift, including in
     // where they sit. The paragraph is updated with the assertion because a stale explanation is
     // the half a reader would otherwise trust.
-    renderRows(ctx({ schedulingMode: 'VISUAL', selectedActivity: undefined }));
+    renderRows(ctx({ selectedActivity: undefined }));
     const btn = screen.getByRole('button', { name: 'Next conflict' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
     expect(btn).toHaveAccessibleDescription('Coming soon');

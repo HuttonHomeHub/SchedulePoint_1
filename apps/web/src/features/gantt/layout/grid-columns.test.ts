@@ -23,8 +23,12 @@ describe('GANTT_COLUMNS', () => {
 
   // Float of zero is a fact (critical), not an absence — it must not read the same as "unknown".
   it('distinguishes zero float from unknown float', () => {
-    expect(column('totalFloat').value(anActivity({ totalFloat: 0 }))).toBe('0d');
-    expect(column('totalFloat').value(anActivity({ totalFloat: null }))).toBe('—');
+    // **`remainingFloat`, because the column is `Float left`** (M-E-T7) — the slack left from where
+    // the bar is drawn, which is what a grid beside a chart of those bars should report. The `key`
+    // is still `totalFloat` so a planner's persisted column choice survives, which is why this
+    // case looks up one name and asserts on the other.
+    expect(column('totalFloat').value(anActivity({ remainingFloat: 0 }))).toBe('0d');
+    expect(column('totalFloat').value(anActivity({ remainingFloat: null }))).toBe('—');
   });
 });
 

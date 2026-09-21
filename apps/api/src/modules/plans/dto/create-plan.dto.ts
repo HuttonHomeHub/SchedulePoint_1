@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PlanStatus, SchedulingMode } from '@prisma/client';
+import { PlanStatus } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
@@ -34,15 +34,6 @@ export class CreatePlanDto {
   @IsOptional()
   @IsEnum(PlanStatus)
   status?: PlanStatus;
-
-  @ApiPropertyOptional({
-    enum: SchedulingMode,
-    default: SchedulingMode.EARLY,
-    description: 'Scheduling mode (ADR-0033); defaults to EARLY.',
-  })
-  @IsOptional()
-  @IsEnum(SchedulingMode)
-  schedulingMode?: SchedulingMode;
 
   @ApiProperty({
     format: 'date',

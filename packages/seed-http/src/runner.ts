@@ -188,7 +188,6 @@ export async function seedPlan(
         name: spec.plan.name,
         ...(spec.plan.description === null ? {} : { description: spec.plan.description }),
         plannedStart: spec.plan.dataDate,
-        schedulingMode: spec.plan.options.schedulingMode,
         // NOT `calendarId`: `CreatePlanDto` does not accept one — the plan's default calendar is set
         // by the update below, alongside the scheduling options. Sending it here is a 422.
       });
@@ -277,6 +276,13 @@ export async function seedPlan(
                   secondaryConstraintType: activity.secondaryConstraintType,
                   secondaryConstraintDate: activity.secondaryConstraintDate,
                 }),
+            // Visual-Planning placement (ADR-0033) — accepted at CREATE regardless of the plan's
+            // mode (`activities.service.ts:388`, no mode check). `SeedSpec` has carried this field
+            // since it was added; nothing sent it until the one-planning-surface epic's M-B-T3 found
+            // every builder defaulting it to null and nothing here forwarding it even when a builder
+            // did not. Omitted here, FC-1's own "zero placements in the estate" prediction would have
+            // been true of the catalogue by construction, not by measurement.
+            ...(activity.visualStart === null ? {} : { visualStart: activity.visualStart }),
             ...(activity.levelingPriority === null
               ? {}
               : { levelingPriority: activity.levelingPriority }),

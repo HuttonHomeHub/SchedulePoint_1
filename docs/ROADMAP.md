@@ -304,6 +304,24 @@ keep `main` releasable.
   dependencies — not `plans.updated_at`, which does not move when an activity is edited, so the
   naive ordering ranks a plan somebody worked in all morning below one whose name was corrected last
   week **and every row still looks correct**.
+- **A plan has one planning surface** (ADR-0148, amending ADR-0033/0041/0052/0054/0126/0134). A plan
+  used to be in one of two **scheduling modes**, and the mode decided where every bar was drawn.
+  Dragging a bar on an `Early` plan did not move it — it wrote an invisible _start no earlier than_
+  constraint at the drop date, and in doing so **replaced whatever constraint that activity already
+  carried**. A planner who had recorded a real commitment lost it by nudging the bar, twelve at a
+  time on a bulk drag, silently. There is now one surface: a bar is drawn where it is **placed**, on
+  every plan, and the earliest, latest and levelled positions are read-only **overlays** on that one
+  picture. The float on screen is the float **left from where the bar is**, labelled as such, rather
+  than the float the network would have had.
+  The estate's existing drag-created constraints are converted, once, on a **four-class** test — only
+  the ones genuinely holding a bar where it sits. **The bars do not move; the float downstream
+  does**, and that is the point: a constraint binds successors and a placement does not, so float
+  that was never really constrained comes back. Every conversion is recorded and the plan says so the
+  first time it is opened, because the act cannot be undone and the audit log permanently cannot
+  carry it. Two flanking marks on a selected bar become **one feasible window** showing where that
+  activity may sit, and a placement that has overrun a deadline is now told apart from one placed
+  earlier than logic allows — the diagram had been reporting the first as the second, in words and
+  in the warning mark, pointing at the wrong end of the bar.
 - **A page has one measure, a column has a reason, and a fact belongs under its row** (ADR-0146).
   The product owner looked at the ADR-0145 result and said the pages were too narrow, too empty and
   too thin on information — _"this isn't a mobile app its a desktop app"_. Eleven screens shared a

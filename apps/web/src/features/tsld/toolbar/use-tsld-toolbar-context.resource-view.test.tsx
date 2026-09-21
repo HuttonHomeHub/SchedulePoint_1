@@ -23,7 +23,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
-  useSetPlanSchedulingMode: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculateCommand: () => ({ isPending: false, run: vi.fn() }),
@@ -128,7 +127,6 @@ function makeCanvasUi(): TsldCanvasUiState {
 const PLAN = {
   status: 'ACTIVE',
   plannedStart: '2026-01-01',
-  schedulingMode: 'EARLY',
   version: 1,
 } as unknown as LoadedPlan;
 

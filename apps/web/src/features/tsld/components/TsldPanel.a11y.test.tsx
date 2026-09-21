@@ -69,10 +69,22 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    /**
+     * **Matched to `earlyStart`/`earlyFinish` above, because that is what the engine writes for an
+     * activity nobody has placed** — and this said `null` opposite non-null early dates, which is a
+     * row the product cannot produce.
+     *
+     * It became load-bearing at the M-J gate pass, when the Tier-1 sentence moved to the DRAWN
+     * dates: the canvas has drawn from `visualEffective*` since M-F and this fixture's bars would
+     * therefore not be drawn at all, so every assertion about float, lanes and overlap resolved
+     * "not yet scheduled". The sentence is right and the fixture was wrong.
+     */
+    visualEffectiveStart: '2026-01-01',
+    visualEffectiveFinish: '2026-01-03',
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
+    remainingFloat: null,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,
@@ -98,10 +110,11 @@ const B = activity({
   laneIndex: 1,
   isNearCritical: true,
   visualStart: null,
-  visualEffectiveStart: null,
-  visualEffectiveFinish: null,
   visualConflict: false,
   visualDriftDays: null,
+  // Matched to `totalFloat` below, because the engine writes the pair together and the Tier-1
+  // sentence reads the placed basis (M-E-T7).
+  remainingFloat: 2,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,
@@ -168,7 +181,7 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
     const { listbox } = renderPanel();
     fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // → B (near-critical, 2 days float)
     expect(announceSpy).toHaveBeenCalledWith(
-      expect.stringContaining('near-critical, 2 days float'),
+      expect.stringContaining('near-critical, 2 days float left'),
     );
   });
 

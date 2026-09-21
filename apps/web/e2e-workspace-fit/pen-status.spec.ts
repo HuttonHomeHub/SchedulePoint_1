@@ -213,7 +213,7 @@ test.describe('the merged header row', () => {
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
     await ensurePen(page);
-    await expect(page.getByRole('toolbar', { name: 'Plan mode and view' })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Plan view' })).toBeVisible();
   });
 
   test.afterAll(async () => {
@@ -242,14 +242,25 @@ test.describe('the merged header row', () => {
     // **1440 became ONE line at the console epic's M5, and that is a measurement rather than a
     // relaxation.** The pen's verb left this row for the command deck, and the row's content went
     // from wrapping at 1440 to **1267 px against a 1408 px container** — measured at all four
-    // judged widths, where the content figure is invariant and only the container moves. 1280's
-    // container is 1248, still 19 px short, so it stays at two lines and this case keeps a width
-    // where the row is known to wrap. Without that the assertion would only ever prove the row
-    // fits, which is half a claim.
+    // judged widths, where the content figure is invariant and only the container moves.
+    //
+    // **1280 became one line at one-planning-surface M-F-T5, and 1024 is its replacement.** That
+    // milestone deleted the `Early | Visual` pair from the mode cluster, so the row's content fell
+    // **1267 → 1046 px** — a 221 px gain, and it moved the wrap boundary below 1280's 1248 px
+    // container. Swept rather than inferred (`measure-toolbar/m-f-header-wrap.spec.ts`, twelve
+    // widths): one line down to a **1120 px** container and two at **1068**, so the boundary sits
+    // between them. 1024's container is 992 px, comfortably short.
+    //
+    // The falsifying width is replaced rather than dropped, for the reason the paragraph above
+    // gives: a sweep of widths where the row always fits would only ever prove the row fits, which
+    // is half a claim. 1280 stays in the sweep at its new expectation — it is here on the
+    // accessibility review's recommendation as the tightest arithmetic of the set, and that is a
+    // reason to keep measuring it rather than a reason to expect two lines.
     for (const [width, expected] of [
       [1646, 1],
       [1440, 1],
-      [1280, 2],
+      [1280, 1],
+      [1024, 2],
     ] as const) {
       await page.setViewportSize({ width, height: 1000 });
       await page.waitForTimeout(400);
@@ -266,10 +277,12 @@ test.describe('the merged header row', () => {
       const box = await name.boundingBox();
       expect(box?.width ?? 0, `plan name width at ${width}`).toBeGreaterThan(80);
 
-      // The four modes stay on one line inside the row: a mode cluster that folds turns one clean
-      // row into two ragged ones, which is the hazard ADR-0109 D1 left behind when it replaced
-      // demotion with wrapping.
-      const modes = page.getByRole('toolbar', { name: 'Plan mode and view' });
+      // The mode cluster stays on one line inside the row: a cluster that folds turns one clean row
+      // into two ragged ones, which is the hazard ADR-0109 D1 left behind when it replaced demotion
+      // with wrapping. It held FOUR items until one-planning-surface M-F-T5 deleted the
+      // Early | Visual pair; two is a weaker exercise of the same rule, and it is the only one the
+      // product still offers.
+      const modes = page.getByRole('toolbar', { name: 'Plan view' });
       const modeBox = await modes.boundingBox();
       const firstMode = await modes.getByRole('button').first().boundingBox();
       expect(
@@ -278,24 +291,30 @@ test.describe('the merged header row', () => {
       ).toBe(1);
 
       /**
-       * **The two switches are named, at both line counts** (`docs/TECH_DEBT.md` #201).
+       * **The switch is named, at both line counts** (`docs/TECH_DEBT.md` #201).
        *
-       * The row holds two independent two-way switches and the seven-group taxonomy put all four
+       * The row held TWO independent two-way switches and the seven-group taxonomy put all four
        * items in one `lens` group — one region, one name, four identical gaps — so nothing said
        * where one switch ended. `segmentLabels` splits it, and the split is **all-or-nothing**: an
        * item added later without a `segment` makes the whole group fall back to one region, silently
        * and correctly. `plan-mode-segments.structural.test.ts` fails CI on that; this is the half a
-       * structural test cannot reach, which is that the names survive a real render at a width where
+       * structural test cannot reach, which is that the name survives a real render at a width where
        * the row has wrapped.
+       *
+       * **One-planning-surface M-F-T5 deleted the `scheduling-mode` segment**, so the container now
+       * holds one group and the partition is exercised in its one-segment form — the case ADR-0119
+       * records rather than an erosion of its precondition. The container's own name came down with
+       * it, from `Plan mode and view` to `Plan view`: a compound name is right for a container of
+       * two groups and wrong for one, which is the same ux finding running the other way.
        *
        * Located by role and name inside the toolbar, never by copy — ADR-0091 M7's standing rule
        * after three journeys broke on a label change.
        */
-      await expect(modes.getByRole('group', { name: 'Scheduling mode' })).toBeVisible();
       await expect(modes.getByRole('group', { name: 'Plan view' })).toBeVisible();
-      // The compound name it replaces is gone rather than left beside the new ones — three names for
-      // one row would be invisible on screen and audible to nobody but a screen-reader user.
+      // Both superseded compound names are gone rather than left beside the survivor — three names
+      // for one row would be invisible on screen and audible to nobody but a screen-reader user.
       await expect(modes.getByRole('group', { name: 'Scheduling and view' })).toHaveCount(0);
+      await expect(modes.getByRole('group', { name: 'Scheduling mode' })).toHaveCount(0);
     }
   });
 

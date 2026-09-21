@@ -1,8 +1,8 @@
 # Implementation Plan: One planning surface
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved** (ADR-0148)
 - **Falsification conditions:** [`./falsification.md`](./falsification.md)
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** _(to be assigned)_
 - **Revised twice.** After §6 was answered (three answers against the stated defaults), and after
   four specialist reviews — two blocking — plus a product-owner decision on the overlay shape.
@@ -230,7 +230,7 @@ ones.**
   docblock says why: this is a **float**, following `totalFloat`/`freeFloat`; the paired convention
   belongs to **durations**, which are planner inputs needing sub-day precision (ADR-0070).
 
-##### Task M-A-T4 — `placement_migration_log`
+##### Task M-A-T4 — `placement_migrations` _(named `placement_migration_log` in this plan; renamed at M-A — see the note in the task body)_
 
 - **Description:** **a primary key**; `activity_id` **non-FK**; **`plan_id` FK Cascade**;
   **`organization_id` FK Restrict**; **denormalised activity code and name**;
@@ -246,20 +246,36 @@ ones.**
   teardown**, since fixed by `clearBaselineTree`; never a production hazard, and gone. **Carrying
   the stale reason is what would lead a reader to extend non-FK to `plan_id`.** The non-FK
   `activity_id` stands on ADR-0025's `source_activity_id` leg alone.
+- **Renamed at M-A: `placement_migration_log` → `placement_migrations`.** `docs/DATABASE.md`'s
+  naming rule is "**Tables:** plural `snake_case`", and all 33 existing tables comply — this would
+  have been the first exception, permanently. The house answer to the identical question already
+  exists one table along: faced with a "things that happened" table, this repository chose
+  `audit_events` (the plural row-noun) over `audit_log` (the collective). A row here **is** one
+  activity's placement migration. Recorded rather than done quietly, and cheap to revert while
+  nothing consumes the table.
 - **Testing:** **it does NOT join `RETENTION_TABLES` and takes no window** (CQ-8) — it is org-scoped
   customer content read by a member, which that set has never contained
-  (`docs/DATABASE.md:1389-1396`), and `retention-boundary.structural.spec.ts:53-58` asserts the set
+  (`docs/DATABASE.md:1389-1396`), and `retention-boundary.structural.spec.ts:55-57` asserts the set
   **by equality**, so this is a decision written down rather than an omission. The Cascade FK
   already gives the right lifecycle.
 
-##### Task M-A-T5 — draft ADR-01NN
+##### Task M-A-T5 — draft ADR-01NN · **landed at M-J as ADR-0148**
 
 - **Description:** spec §4.16's outline, **twelve decisions** (D0 Pass-2 branches and D11 the log's
   lifecycle are new). Filed at the next free number, **checked at filing** (ADR-0079 took `0079`
-  rather than the `0078` its plan named).
+  rather than the `0078` its plan named); `0148` was free and was taken.
 - **Complexity:** M
-- **Testing:** `check:adr-coverage`, `check:adr-register` — **and the `CLAUDE.md` §16 entry in the
-  same commit** (ADR-0147). Spec header → `Approved` (ADR-0131).
+- **Testing:** `check:adr-coverage` — **and the `CLAUDE.md` §16 entry in the same commit**
+  (ADR-0147). Spec header → `Approved` (ADR-0131).
+- **`check:adr-register` does not exist**, and this line named it until M-J. ADR-0147 folded that
+  limb into `check:adr-coverage`, which now checks the ADR index and §16 in both directions; a
+  testing line naming a script nobody can run is a gate that reads as covered and is not.
+- **It was scheduled in M-A and written in M-J, and nothing noticed for eight milestones.** Both
+  gates that would have caught it pass **because** the ADR was missing: `check:adr-coverage`
+  validates the ADRs that exist rather than the ones a plan promises, and ADR-0131's refusal only
+  bites a `Draft` spec **cited by an ADR** — so the absent ADR suppressed the check on its own
+  spec's `Draft` header. Found by the M-J-T1 database review. ADR-0133's "specified and not built"
+  at whole-artefact scale, and the epic's own records already carry three smaller instances.
 
 ---
 
@@ -282,6 +298,57 @@ ones.**
   identically. **`test-engineer` reviews the triage itself** before M-F opens.
 
 ##### Task M-B-T2 — rewrite the three flag docblocks _(unchanged)_
+
+#### Feature: seed an estate these conditions can actually fail against
+
+> **New** _(product-owner decision, 2026-09-20)_. **FC-1 predicts every reading is zero**, and if
+> that holds, several conditions **cannot discriminate**: FC-7's "nothing moves where nothing was
+> placed" is vacuous when nothing was ever placed, and the collapse's central behaviour would ship
+> without once running against **real persisted rows**. That is the ADR-0093 vacuity shape at estate
+> scale — a green result that cannot tell "correct" from "there was nothing to test" — and it is
+> exactly what the ADR-0066 catalogue exists to prevent: plans built through the **public REST API**,
+> so the write path, the DTOs and the guards are exercised and not just `computeSchedule`.
+>
+> **Seeded into TEST databases, never the product owner's host** — so the deployed estate stays
+> representative of a **fresh** installation, which is what makes FC-1's readings meaningful.
+> **Nothing in this task may write to their installation.**
+
+##### Task M-B-T3 — extend the seed catalogue
+
+- **Description:** **extend `packages/seed` and `docs/TEST_PLAYBOOK.md`; do not build a parallel
+  estate.** Checked before writing this task, and **four of the six shapes already exist** (spec
+  C16):
+
+  | Shape                                                                                                  | Status                                                          |
+  | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+  | Started / complete / suspended                                                                         | **exists** — `plan:capability-progress` (`TEST_PLAYBOOK.md:79`) |
+  | LOE + WBS summary over a multi-day child                                                               | **exists** — `plan:capability-types-and-wbs` (`:87`)            |
+  | Levelled plan with delayed participants                                                                | **exists** — `plan:capability-levelling` (`:94`)                |
+  | Every constraint type, one activity each                                                               | **exists** — `plan:capability-constraints` (`:65`)              |
+  | **Placements** (differing from logic-earliest; coinciding with it; on a plan switched back to `EARLY`) | **ABSENT** — no playbook row claims one                         |
+  | **The four SNET classes, classified**; **negative remaining float**; **negative drift**                | **ABSENT**                                                      |
+
+- **The model already supports it.** `SeedSpec` carries `visualStart`
+  (`packages/seed/src/spec.ts:309-310`, "the advisory hand-placement read in VISUAL mode") and every
+  builder defaults it to `null` (`pairwise/cases.ts:322`). **So the gap is a documented plan and its
+  playbook rows, not a mechanism** — which is why this is an extension and not a new harness.
+- **Complexity:** M · **Dependencies:** none (parallel with M-A)
+- **Risks:** **duplicating a shape that already exists** — third time this epic would have carried a
+  task describing work already done (C1, C13, C16) → the table above is the check, and
+  `pnpm check:playbook` gates that every row resolves **in both directions**. · **Seeding by direct
+  SQL** would reproduce the exact defect ADR-0066 was written about: two defects green at the engine
+  and wrong in the product because nothing drove the write path. **Public API only.** · A shape
+  seeded but not _claimed_ is invisible to the catalogue → every new plan gets its playbook row with
+  its "what wrong looks like".
+- **One existing row needs widening rather than a new plan**, and it is the sharpest thing this
+  check turned up: `TEST_PLAYBOOK.md:87`'s "what wrong looks like" for `plan:capability-types-and-wbs`
+  is **the C11 defect verbatim** — _"a summary at the data date with zero length (`parentId` not
+  reaching the engine); an LOE as a zero-duration task (the importer's coercion). **Both shipped**"_
+  — but it claims that only for the **early** basis. FC-7 Part B needs the same plans read through
+  the **placed** basis, so the row's claim widens; the plan does not change.
+- **Testing:** `pnpm check:playbook` green in both directions; each new plan's row states what wrong
+  looks like; FC-5's levelling proportion, FC-7 Part A/B, FC-8 clause 4 and FC-11 all name the plan
+  they run against.
 
 ---
 
@@ -513,6 +580,31 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
   placed plans** until it refreshes. ADR-0047 recreates `web` and `api` independently, so the window
   is real. It goes in the ADR's consequences and in `docs/API.md`.
 
+##### Task M-F-T4b — convert the four `e2e-gantt-editing` mode tests _(added by FC-6 clause 5)_
+
+- **Description:** `bar-drag.spec.ts` and `grid-edit.spec.ts` each carry a private `useVisualMode`
+  helper that PATCHes `{ schedulingMode: 'VISUAL' }` through a browser `fetch`, plus an EARLY-mode
+  sibling asserting the contrasting behaviour. **M-F-T4's own 422 is what breaks them**, so this is
+  a conversion M-F owns rather than fallout it discovers.
+- **Measured, not estimated** — the two halves fail differently and only one of them fails loudly:
+  - **`grid-edit.spec.ts:480` and `bar-drag.spec.ts:157` break outright.** They are the only two
+    callers of the helper (`:175` and `:72` are the definitions), and it throws on a non-`ok`
+    response.
+  - **`grid-edit.spec.ts:437` and `bar-drag.spec.ts:138` become WRONG, which is worse.** They assert
+    that a typed date pins an SNET and that a keyboard move writes a constraint — EARLY-mode
+    behaviour M-F-T3 deliberately replaces with a placement. They will not break; they will pass
+    until somebody reads them.
+- **The conversion is the epic's own thesis**: there is one surface, so each PAIR collapses into one
+  test asserting the placement is written and **no constraint** is. That is the surviving half of
+  each pair, and also the half that matters.
+- **Complexity:** S · **Dependencies:** M-F-T3, M-F-T4
+- **Risks:** deleting the EARLY sibling without reading it would lose the "and NO constraint"
+  assertion, which is the only end-to-end proof that the collapse did not quietly leave the SNET
+  write in place. Keep the assertion, drop the mode.
+- **Testing:** `scripts/e2e-local.sh web:gantt-editing` green after the conversion, and both helpers
+  deleted rather than pointed elsewhere — a helper surviving with no caller is how the next reader
+  concludes the mode still exists.
+
 ##### Task M-F-T5 — the flag and the segmented control _(unchanged)_
 
 - **Risks:** `SCHEDULING_MODES_ENABLED` is **derived** (`&& CANVAS_AUTHORING_ENABLED`). · The mode
@@ -584,15 +676,34 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
 
 - **Description:** convert **binding** rows only. **Leave, count and report: inert, unclassified,
   and — new — any row already carrying a `visual_start`.**
-- **Complexity:** L · **Dependencies:** M-A-T4, FC-10 clause B's verdict
+- **Complexity:** L · **Dependencies:** M-A-T4
 - **Risks:** **the naive `WHERE` destroys an existing placement.** `visual_start` is accepted
   regardless of mode (`activities.service.ts:388`, `:526-528`), so a row can carry a stale placement
-  **and** a binding SNET. Excluded — and **FC-10 clause B's bound is read against the population
-  after that exclusion**. · **Prisma does not chunk an `{ in: [...] }` list** — ADR-0096 hit a
-  bind-parameter error at 16,384 ids that its catch block reported as retryable → batch explicitly.
+  **and** a binding SNET. Excluded — **measured at 706 destroyed placements on a 102,000-activity
+  estate when the clause is removed**, which is the negative control the e2e uses.
   · Touching a non-`SNET` kind → the `WHERE` names the kind and a test asserts the others untouched.
-- **Development steps:** apply FC-10 clause B; write the record (including **`prior_visual_start`**)
-  then convert, one transaction, batched; reuse M0's cross-entry exhaustiveness assertion.
+- **Development steps:** write the record (including **`prior_visual_start`**) then convert, in
+  **one raw-SQL statement**, inside `prisma migrate deploy`.
+
+> **Three instructions in this task were stale and are struck, 2026-09-21** (the `database-architect`
+> design review; §19's re-verify-the-problem rule applied to a task's **remedy**, which is
+> ADR-0142 D4's shape):
+>
+> - **"Dependencies: FC-10 clause B's verdict"** — clause B is **WITHDRAWN**
+>   (`falsification.md`), so there is no verdict to apply and nothing to wait for. Its exclusion
+>   survives the withdrawal, which is why the risk above still names it.
+> - **"Prisma does not chunk an `{ in: [...] }` list → batch explicitly"** — a risk of the
+>   **application-runner** design, which is not what shipped. A set-based SQL statement has no
+>   `{ in: [...] }` list, so ADR-0096's 16,384-id bind-parameter failure cannot arise here at all.
+> - **"batched"** — not merely unnecessary but **worse**: batching reintroduces the possibility of
+>   the recorded set and the converted set differing. One statement makes them the same set _by
+>   construction_ (the ADR-0065 one-implementation argument), and satisfies FC-10 clause D's
+>   "written **before** the delete, in the same transaction" absolutely rather than by ordering.
+> - **"reuse M0's cross-entry exhaustiveness assertion"** — that assertion partitions the SNET
+>   population **by effect** (`binding + inert + unclassified === examined`), and an already-placed
+>   row is _also_ binding, so it is **structurally blind** to the fourth class and cannot catch the
+>   destruction path. M-I needs its own: `converted + already_placed === binding`. Reuse the idea,
+>   not the assertion.
 
 ##### Task M-I-T2 — the report
 
@@ -637,6 +748,18 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
 - **Testing:** the ADR-0107 proof shape — **replay all migrations, populate, apply, assert** — plus
   a **negative control** issuing `DROP TYPE` first and asserting the failure **names the
   constraint**. SC-1's grep becomes satisfiable here and nowhere earlier.
+- **RETIRE `placement-on-early-plan` IN THE SAME COMMIT** (added at M-J-T1). That diagnostic's
+  numerator reads `p.scheduling_mode = 'EARLY'`, and it is the **last reader of the column anywhere
+  in the codebase** — so dropping the column without removing the entry does not degrade the
+  reading, it **breaks the whole diagnostics route** at runtime, on a surface whose own bar is "no
+  query whose cost is unknown ships" (ADR-0140). Checked rather than assumed:
+  `grep -rn "scheduling_mode" apps/api/src` returns that entry and nothing else.
+  Its premise had already lapsed at M-F — "the population whose bars MOVE on the day the mode is
+  collapsed", on a day that has passed — so M-J-T1 re-natured it `retrospective` and kept it for one
+  release only because **FC-1's estate readings are still owed** and it is one of the readings that
+  condition names. If those readings have been taken by then, it simply goes; if they have not,
+  they are unobtainable afterwards, and that is a consequence of the drop rather than a reason to
+  defer it.
 
 ##### Task M-J-T3 — close the documents _(unchanged; plus the float-tail row from M-E-T0)_
 

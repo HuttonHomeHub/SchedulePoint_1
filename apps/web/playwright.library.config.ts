@@ -9,9 +9,11 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * **No longer flag-on: it is the only library surface there is.** `VITE_LIBRARY_SCOPING` selected
  * these controls or a raw `<select>`, and ADR-0088 D3 retired the flag and deleted that arm — so
- * its pin went, and ONLY its pin. The six remaining `env` keys below are other flags this journey
- * genuinely needs, including `VITE_SCHEDULING_MODES: 'false'`, which is pinned OFF deliberately:
- * deleting the block wholesale would have silently armed scheduling modes here.
+ * its pin went, and ONLY its pin. The remaining `env` keys below are other flags this journey
+ * genuinely needs — and `VITE_SCHEDULING_MODES` is no longer among them: it was pinned off here and
+ * in twelve sibling configs, and the one-planning-surface epic's M-B-T1 removed all thirteen on
+ * 2026-09-20. This suite makes no diagram assertion at all, so the removal costs it nothing and buys
+ * it only the axe scan's reach over the mode chrome (`docs/specs/one-planning-surface/m-b/triage.md`).
  *
  * Serves the web bundle with the canvas-first plan-workspace layers this journey's plan steps build on (canvas authoring →
  * toolbar → workspace → editing surface + pen; mirrors the interchange/share suites' layering).
@@ -65,15 +67,17 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             // Library scoping ON, plus every layer the canvas-first plan workspace (and its Row 2 ·
-            // Do Calendar… item) builds on. Scheduling modes is pinned OFF (mirroring the LOE /
-            // resource-view / interchange / share suites) to keep this journey asserting the plain
-            // authoring surface it was written for.
+            // Do Calendar… item) builds on.
+            // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
+            // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
+            // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
+            // times, each citing its neighbours as precedent. The flag now takes its default, which is
+            // what every shipped bundle carries (ADR-0088 D1).
             env: {
               VITE_RESOURCES: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               VITE_TSLD_EDITING: 'true',
               VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_SCHEDULING_MODES: 'false',
             },
           },
         ],

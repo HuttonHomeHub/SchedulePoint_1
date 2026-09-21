@@ -14,7 +14,6 @@ import {
   recalculate,
   requirePlacement,
   seedActivities,
-  useVisualMode,
   zoomOut,
 } from './support';
 
@@ -33,10 +32,12 @@ import {
  * whatever body the client hands it, so "the raw dropped day is what gets persisted" is only
  * checkable against a real server. These cases read the API back.
  *
- * **This suite is also the first journey in the repository to run in Visual mode at all.** The other
- * fourteen canvas configs pin `VITE_SCHEDULING_MODES` off, each for a good local reason; the
- * unrecorded consequence was that the one placement rule a planner exercises by dragging a bar had
- * no end-to-end coverage. See `playwright.workspace-chrome.config.ts`.
+ * **This suite was the first journey in the repository to run in Visual mode at all**, back when
+ * that was a mode: fourteen canvas configs pinned `VITE_SCHEDULING_MODES` off, each for a good
+ * local reason, and the unrecorded consequence was that the one placement rule a planner exercises
+ * by dragging a bar had no end-to-end coverage. The one-planning-surface epic removed the mode, so
+ * every journey now drives a planning surface — and this one keeps the placement assertions,
+ * because breadth of coverage is not the same thing as depth of it.
  */
 test.describe.configure({ mode: 'serial' });
 
@@ -55,7 +56,6 @@ test.describe('Visual placement rolls forward, on the server', () => {
     if (!pour) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
     await ensurePen(page);
-    await useVisualMode(page);
 
     // Unconstrained, so it starts at the data date — Monday 5 January 2026.
     const before = requirePlacement(await placements(page, orgSlug), 'Pour slab');
@@ -108,12 +108,11 @@ test.describe('Visual placement rolls forward, on the server', () => {
     await seedActivities(page, orgSlug, [{ name: 'Strip out', laneIndex: 0 }]);
     await recalculate(page, orgSlug);
     await ensurePen(page); // the helper reloads, and a reload drops the pen (ADR-0028)
-    await useVisualMode(page);
 
     // ADR-0081: a milestone that removes a capability names where it is no longer reachable. The
-    // control was a Row 1 toggle gated on Visual mode + the pen — so this asserts its absence in the
+    // control was a Row 1 toggle gated on the mode and the pen — so this asserts its absence in the
     // one state it used to be live in, which is the only state where "it is gone" is a claim rather
-    // than a tautology.
+    // than a tautology. (That mode is itself gone now; the pen half of the state still holds.)
     //
     // **The overflow-opening loop that used to precede this is deleted with the `⋯` itself**
     // (ADR-0109 D1). It existed because a control could pass an inline check by having merely

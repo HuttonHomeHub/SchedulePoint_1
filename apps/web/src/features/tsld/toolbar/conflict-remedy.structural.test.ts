@@ -50,10 +50,61 @@ describe('the remedy map and the conflict set describe the same thing', () => {
   });
 });
 
+describe('the two sides of a placement conflict are answered differently', () => {
+  /**
+   * **The assertion that makes the key split worth having** (one-planning-surface M-D).
+   *
+   * Everything above would pass with both placement keys mapped to the same remedy — the map would
+   * be total, every label non-empty, every `barAction` id real. It would also make the split
+   * pointless: the engine would report which side, the count would carry it, and the thing a
+   * planner presses would throw it away. That is the shape this repository keeps recording — a fix
+   * carried to within one step of the surface and dropped there.
+   *
+   * It is also the assertion a later "simplify these two identical-looking entries" edit trips over,
+   * which is the point. The argument for the difference is in `conflict-remedy.ts` beside the entry;
+   * this is what stops it being quietly reversed.
+   */
+  it('answers the earlier side with the bar action and the later side with a route', () => {
+    const earlier = CONFLICT_REMEDIES.visualEarlierThanLogic;
+    const later = CONFLICT_REMEDIES.visualLaterThanBound;
+
+    // Earlier than logic: the placement is the planner's own input and withdrawing it resolves the
+    // clash, so the remedy NAMES the bar's existing item rather than rendering a twin (ADR-0093).
+    expect(earlier.kind).toBe('barAction');
+
+    // Later than a bound: a route, because a `barAction` renders nothing, and the fact this planner
+    // most likely does not have is that the bound EXISTS. Clearing the placement stays available —
+    // `clear-visual-placement` is unconditional in Visual mode — so this ADDS a route rather than
+    // replacing one.
+    expect(later.kind).toBe('openEditorAt');
+    expect(later).toMatchObject({ at: 'constraint' });
+  });
+
+  it('leads with the side the engine reported, not with whichever comes first', () => {
+    // The two are mutually exclusive by construction (the engine returns one reason), so this is
+    // really a check that neither predicate has been written to match the other's value — the
+    // copy-paste slip that would make every placement conflict report the same side.
+    expect(leadingConflictKey({ ...CLEAN, visualConflictReason: 'EARLIER_THAN_LOGIC' })).toBe(
+      'visualEarlierThanLogic',
+    );
+    expect(leadingConflictKey({ ...CLEAN, visualConflictReason: 'LATER_THAN_BOUND' })).toBe(
+      'visualLaterThanBound',
+    );
+    expect(leadingConflictKey({ ...CLEAN, visualConflictReason: null })).toBeNull();
+  });
+});
+
+/** An activity carrying no flag at all — the base every case above flips one field of. */
+const CLEAN = {
+  constraintViolated: false,
+  visualConflictReason: null,
+  levelingWindowExceeded: false,
+} as const;
+
 describe('leadingConflictKey', () => {
   const clean = {
     constraintViolated: false,
-    visualConflict: false,
+    visualConflictReason: null,
     levelingWindowExceeded: false,
   };
 
@@ -62,7 +113,12 @@ describe('leadingConflictKey', () => {
   });
 
   it('returns the flag an activity carries', () => {
-    expect(leadingConflictKey({ ...clean, visualConflict: true })).toBe('visualConflict');
+    expect(leadingConflictKey({ ...clean, visualConflictReason: 'EARLIER_THAN_LOGIC' })).toBe(
+      'visualEarlierThanLogic',
+    );
+    expect(leadingConflictKey({ ...clean, visualConflictReason: 'LATER_THAN_BOUND' })).toBe(
+      'visualLaterThanBound',
+    );
     expect(leadingConflictKey({ ...clean, levelingWindowExceeded: true })).toBe(
       'levelingWindowExceeded',
     );

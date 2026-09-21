@@ -15,7 +15,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: true,
   GUEST_SHARE_LINKS_ENABLED: true,
 }));
 

@@ -15,7 +15,6 @@ import {
   dependencyEditCommand,
   lagDragCommand,
   relaneCommand,
-  repositionCommand,
   updateCommand,
   visualResizeCommand,
   visualStartCommand,
@@ -75,7 +74,9 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
+    remainingFloat: null,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,
@@ -149,58 +150,6 @@ describe('activityDefinitionInput', () => {
     expect(input.constraintDate).toBe('');
     expect(input.levelingPriority).toBeUndefined();
     expect(input.budgetedExpense).toBeUndefined();
-  });
-});
-
-describe('repositionCommand', () => {
-  it('redo re-applies the dropped placement; undo restores the pre-edit constraint + lane', async () => {
-    const before = activity({
-      constraintType: null,
-      constraintDate: null,
-      laneIndex: 0,
-      version: 4,
-    });
-    // The reposition wrote an SNET-at-new-start and moved a lane; the server echoed version 5.
-    const after = activity({
-      constraintType: 'SNET',
-      constraintDate: '2026-03-10',
-      laneIndex: 2,
-      version: 5,
-    });
-    const update = fakeUpdate();
-    const command = repositionCommand({ update, before, after });
-
-    await command.redo();
-    expect(update).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        activityId: 'a1',
-        version: 5, // starts from the post-edit version
-        constraintType: 'SNET',
-        constraintDate: '2026-03-10',
-        laneIndex: 2,
-      }),
-    );
-
-    await command.undo();
-    expect(update).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        activityId: 'a1',
-        version: 101, // threaded from the redo response (100 + 1)
-        constraintType: '', // the prior "none" restored
-        constraintDate: '',
-        laneIndex: 0,
-      }),
-    );
-  });
-
-  it('defaults its label but accepts an override', () => {
-    const update = fakeUpdate();
-    expect(repositionCommand({ update, before: activity(), after: activity() }).label).toBe(
-      'Move “Excavate”',
-    );
-    expect(
-      repositionCommand({ update, before: activity(), after: activity(), label: 'Nudge' }).label,
-    ).toBe('Nudge');
   });
 });
 

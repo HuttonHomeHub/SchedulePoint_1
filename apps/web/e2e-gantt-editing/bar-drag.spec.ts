@@ -10,25 +10,22 @@ import {
   seedActivities,
   showGantt,
   startEditing,
-  syncClient,
 } from '../e2e-gantt/support';
 import { recalculate } from '../e2e-support/toolbar';
 
 /**
- * **M3 — a bar moved from the Gantt, checked at the API in BOTH scheduling modes.**
+ * **M3 — a bar moved from the Gantt, checked at the API.**
  *
- * The two modes write different things for the same gesture (ADR-0033): EARLY writes a **constraint**
- * and lets the network re-flow around it; VISUAL writes a **`visualStart`** placement and no
- * constraint at all. A drag that wrote the wrong one would look identical on screen — the bar lands
- * where it was dropped either way — and would be discovered only when somebody asked why a plan had
- * grown forty constraints nobody set.
+ * A move writes a **`visualStart`** placement and **no constraint at all**. Which of the two it
+ * writes is invisible on screen — the bar lands where it was dropped either way — so a drag that
+ * quietly wrote a constraint would be discovered only when somebody asked why a plan had grown
+ * forty constraints nobody set. That is what this suite is for, and it is the reason the negative
+ * half of the assertion is the load-bearing half.
  *
- * This is only the **second** journey in the repository to run in Visual mode; ADR-0092's is the
- * first, and its retrospective records the consequence of that gap — the one placement rule a
- * planner exercises by dragging a bar had no end-to-end cover at all, and that is exactly where its
- * defect was. Every other canvas config pins `VITE_SCHEDULING_MODES` off, each for a good local
- * reason, and this config pins nothing (ADR-0088 D1: a published image carries every flag at its
- * default, so the default surface is the shipped surface).
+ * **This docblock described two modes until one-planning-surface M-F-T4b.** ADR-0033 split a plan
+ * into EARLY (a move writes a constraint and the network re-flows around it) and VISUAL (a move
+ * writes a placement); the epic collapsed the two, so the paragraph naming the contrast, and the
+ * `useVisualMode` helper that set up half of it, went with the behaviour they described.
  *
  * The keyboard path is driven too, not just the pointer. A pointer-only capability is a WCAG 2.1.1
  * failure, and ADR-0064's gate pass found four controls silent while their keyboard siblings
@@ -40,6 +37,7 @@ interface ActivityRow {
   name: string;
   earlyStart: string | null;
   visualStart: string | null;
+  visualEffectiveStart: string | null;
   constraintType: string | null;
   constraintDate: string | null;
 }
@@ -68,35 +66,6 @@ const byName = (rows: ActivityRow[], name: string): ActivityRow => {
   return row;
 };
 
-/** Put the plan into VISUAL mode through the API, then reload so the client sees it. */
-async function useVisualMode(page: Page, orgSlug: string): Promise<void> {
-  const planId = openPlanId(page);
-  const failure = await page.evaluate(
-    async ({ org, id }: { org: string; id: string }) => {
-      const read = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
-        credentials: 'include',
-      });
-      if (!read.ok) return `plan read: ${read.status}`;
-      const plan = (await read.json()) as { data: { version: number } };
-      const patched = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ schedulingMode: 'VISUAL', version: plan.data.version }),
-      });
-      if (!patched.ok) return `mode patch: ${patched.status} ${await patched.text()}`;
-      return null;
-    },
-    { org: orgSlug, id: planId },
-  );
-  if (failure !== null) throw new Error(failure);
-
-  // Out-of-band, so the client is still holding the EARLY plan. `syncClient` is this pattern with
-  // a name (`docs/TECH_DEBT.md` #183) — three copies of it existed in this suite before the
-  // workspace redesign found a fourth place that needed it and none of them was reusable.
-  await syncClient(page);
-}
-
 async function ganttPlan(page: Page, count = 3): Promise<string> {
   const orgSlug = await onboard(page, Date.now());
   await createClient(page, 'Northgate');
@@ -121,43 +90,56 @@ test('Alt+ArrowRight moves a bar and the move is stored', async ({ page }) => {
   await showGantt(page);
 
   const before = byName(await readActivities(page, orgSlug), 'Seeded 0');
-  expect(before.earlyStart).not.toBeNull();
+  expect(before.visualEffectiveStart).not.toBeNull();
 
   await ganttRow(page, 'Seeded 0').click();
   await page.keyboard.press('Alt+ArrowRight');
 
   // Asserted at the API. The bar visibly moving proves the ghost, not the write — and the ghost is
   // the half that cannot be wrong in a way anybody would notice later.
+  //
+  // **It reads `visualEffectiveStart`, and it read `earlyStart` until the collapse**
+  // (one-planning-surface M-F-T4b). The old assertion was not a fixture detail: before the collapse
+  // a move in Early mode wrote an `SNET`, and a constraint moves the EARLY dates. A move now writes
+  // a placement, and a placement deliberately does NOT move `earlyStart` — Pass 1 is the network's
+  // own answer and goes on computing it. So this ran green against the product for the right reason
+  // and red against it for the right reason too, on the same day; what changed is which column
+  // records a planner's move.
+  //
+  // `visualEffectiveStart` rather than `visualStart` because this case is about the bar MOVING —
+  // the engine's output, which is what the diagram and the grid draw. The next case asserts the
+  // input, and that the write left no constraint behind.
   await expect
-    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').earlyStart, {
-      timeout: 20_000,
-    })
-    .not.toBe(before.earlyStart);
+    .poll(
+      async () => byName(await readActivities(page, orgSlug), 'Seeded 0').visualEffectiveStart,
+      { timeout: 20_000 },
+    )
+    .not.toBe(before.visualEffectiveStart);
+
+  // And Pass 1 is untouched, which is the claim the epic makes everywhere and asserts almost
+  // nowhere end to end: the network's own earliest start is not a planner's placement.
+  expect(byName(await readActivities(page, orgSlug), 'Seeded 0').earlyStart).toBe(
+    before.earlyStart,
+  );
 });
 
-test('an EARLY-mode move writes a constraint, not a placement', async ({ page }) => {
+/**
+ * **One test, where there were two** (one-planning-surface M-F-T4b).
+ *
+ * This pair asserted the contrast the epic removes: in EARLY a keyboard move wrote a constraint and
+ * left `visualStart` null; in VISUAL it wrote a placement and left `constraintType` null. There is
+ * one planning surface now, so the EARLY half describes behaviour the product no longer has — and
+ * it would not have FAILED, it would have gone on passing against nothing, which is worse.
+ *
+ * The surviving half is the one that mattered: **and NO constraint**. That is the only end-to-end
+ * proof that the collapse did not quietly leave the SNET write in place behind the placement — a
+ * plan that grew constraints nobody set looks identical on screen and is found months later.
+ * `useVisualMode` is deleted rather than pointed elsewhere; a helper with no caller is how the next
+ * reader concludes the mode still exists.
+ */
+test('a move writes a placement, and NO constraint', async ({ page }) => {
   test.setTimeout(180_000);
   const orgSlug = await ganttPlan(page);
-  await showGantt(page);
-
-  await ganttRow(page, 'Seeded 0').click();
-  await page.keyboard.press('Alt+ArrowRight');
-
-  await expect
-    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').constraintType, {
-      timeout: 20_000,
-    })
-    .not.toBeNull();
-
-  // And NOT a placement: `visualStart` is the Visual-mode input and must stay untouched in EARLY.
-  // Writing both would make the two modes disagree about the same bar the moment one is switched on.
-  expect(byName(await readActivities(page, orgSlug), 'Seeded 0').visualStart).toBeNull();
-});
-
-test('a VISUAL-mode move writes a placement, and NO constraint', async ({ page }) => {
-  test.setTimeout(180_000);
-  const orgSlug = await ganttPlan(page);
-  await useVisualMode(page, orgSlug);
   await showGantt(page);
 
   await ganttRow(page, 'Seeded 0').click();
@@ -169,8 +151,6 @@ test('a VISUAL-mode move writes a placement, and NO constraint', async ({ page }
     })
     .not.toBeNull();
 
-  // The half that matters. A drag that quietly wrote a constraint here would look identical on
-  // screen and be found only when somebody asked why the plan had grown constraints nobody set.
   expect(byName(await readActivities(page, orgSlug), 'Seeded 0').constraintType).toBeNull();
 });
 
@@ -213,7 +193,13 @@ test('a summary refuses to move', async ({ page }) => {
   // refusal is asserted by the unit suite; this proves the WRITE did not happen, which is the half
   // only a real server can show.
   await page.waitForTimeout(1_500);
-  expect(byName(await readActivities(page, orgSlug), 'Seeded 0').earlyStart).toBe(summaryStart);
+  const after = byName(await readActivities(page, orgSlug), 'Seeded 0');
+  expect(after.earlyStart).toBe(summaryStart);
+  // **And no placement**, which this case did not need until the collapse: a move now writes
+  // `visualStart`, and a placement does not move `earlyStart`, so the assertion above would pass
+  // against a product that had happily placed a WBS summary. The hole opened the day the write
+  // changed column, in a case that goes on looking correct.
+  expect(after.visualStart).toBeNull();
 });
 
 test('a bar carries a pointer resize handle a planner can actually reach', async ({ page }) => {

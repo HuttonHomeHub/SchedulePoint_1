@@ -32,6 +32,8 @@ export const DIAGNOSTIC_IDS = [
   'snet-inert',
   'snet-unclassified',
   'snet-full-baseline-coverage',
+  'visual-conflict-earlier-than-logic',
+  'visual-conflict-later-than-bound',
 ] as const;
 
 export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
@@ -292,11 +294,26 @@ const VISUAL_PLACEMENT_ACTIVITIES: DiagnosticEntry = {
  * collapse. It is also the population the strip must not silently overwrite — an activity here can
  * carry a binding constraint AND a prior placement, and only one of the two survives a naive
  * conversion.
+ *
+ * **ITS PREMISE HAS LAPSED, AND THE ENTRY IS KEPT FOR ONE RELEASE RATHER THAN CORRECTED** (M-J).
+ * "The day the mode is collapsed" has passed: `schedulingMode` is gone from `apps/api/src` and
+ * `@repo/types`, `barDateSourceFor` no longer takes one, and **every** bar now draws from the
+ * placed basis. So this no longer counts a population that is about to change appearance — that
+ * change has happened — and it converges on D-D, under a label naming a concept the product does
+ * not have. Its `nature` moves to `retrospective` accordingly: the panel renders `prospective` as
+ * _"Live: this sizes work that is wrong now"_, and a placement on a plan whose frozen
+ * `scheduling_mode` happens to read `EARLY` is now entirely ordinary.
+ *
+ * **It is kept because FC-1's estate readings are still owed** and this is one of the readings that
+ * condition names; deleting it before they are taken would remove the only pre-collapse figure for
+ * this population, permanently. **It RETIRES with the column at M-J-T2** — it is the last reader of
+ * `plans.scheduling_mode` in the codebase, so dropping that column without removing this entry
+ * breaks the diagnostics route outright. That is a hard coupling, not a tidy-up.
  */
 const PLACEMENT_ON_EARLY_PLAN: DiagnosticEntry = {
   id: 'placement-on-early-plan',
   label: 'Hand-placed activities on a plan still in Early mode',
-  nature: 'prospective',
+  nature: 'retrospective',
   denominator: Prisma.sql`
     SELECT count(*) AS examined
     FROM activities a
@@ -326,6 +343,34 @@ const PLACEMENT_ON_EARLY_PLAN: DiagnosticEntry = {
  * Counted at BASELINE grain, so `affected` exceeds `affected_plans` wherever a plan has been
  * baselined more than once — which is the normal case and is the number that matters, because each
  * capture is separately comparable.
+ *
+ * **THE JOIN IS KEPT, ON A SWEEP RATHER THAN ON ONE DENSITY — AND ITS ESCALATION TRIGGER IS
+ * REPLACED** (M-J; `m0/measurements.md`, "M-J re-ran it"). This numerator materialises one row per
+ * (baseline × placed activity) pair, so its cost is a **product** that degrades exactly as the
+ * estate fills with placements, which is what this epic exists to do. Swept at eight densities on a
+ * 102,000-activity / 400-baseline fixture it runs 82 → 314 → 425 ms and touches ADR-0140's 500 ms
+ * bar at 90 % (457–523 ms across five runs, 918,360 joined rows, spilling to temp).
+ *
+ * **The trigger recorded at M0 measured the wrong quantity and is withdrawn.** It said to re-open
+ * the shape "when a substantial majority of plans carry at least one placement" — and at **1 %**
+ * density all 40 plans already carry one, where the join still wins by 3× (`EXISTS` 355–402 ms
+ * against 139–162 ms). It saturates long before the crossover and would have sent a reader to the
+ * slower shape. The quantity that decides is the **(baselines × placed activities) product**: ~1 M
+ * pairs is where the bar is reached, and the crossover in that fixture is between 2 % and 3 %.
+ *
+ * **Neither obvious alternative is the answer, which is why this is not a drive-by fix.** A
+ * correlated `EXISTS` measures **580 ms at 2 %** — also over the bar, because proving absence means
+ * exhausting a plan — and its cost is unstable across sessions on identical data, depending on
+ * where placed rows sit in index order. A `DISTINCT` pre-pass over the placed plan ids IS flat
+ * (**37–48 ms at 2 %, 50 % and 100 %**, byte-identical numbers), and it **fails gate S-4**: that
+ * gate reads the `SELECT` list of EVERY statement in the file, and the CTE projects `a.plan_id`.
+ * A review reported the pre-pass as S-4-compliant; it was built and the gate refused it.
+ *
+ * So shipping it means widening S-4 to inspect only the outermost projection — weakening a rule
+ * whose whole value is that it is syntactic and needs no reasoning — which is an ADR-0140-level
+ * decision and an ADR-0105 shared-gate trigger, not a fold-in inside a gate pass. **Recorded rather
+ * than done**: the deployed host holds 164 activities, so nothing is on fire, and the measurement
+ * is on the page for whoever reaches the trigger.
  */
 const BASELINES_OVER_PLACED_PLANS: DiagnosticEntry = {
   id: 'baselines-over-placed-plans',
@@ -525,6 +570,99 @@ const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
   `,
 };
 
+/**
+ * **D-J, D-K — the conflicted placements, split by the engine's own REASON.**
+ *
+ * `visual_conflict` says a placement disagrees with the schedule; it does not say which way, and
+ * the two directions are different facts with different remedies (ADR-0033 stay-and-flag, M-D):
+ *
+ * - **`EARLIER_THAN_LOGIC`** — the bar sits before its earliest feasible start. Its predecessors
+ *   cannot deliver it that early, so the remedy is to move the bar or change the logic.
+ * - **`LATER_THAN_BOUND`** — the bar sits past a commitment somebody recorded. The remedy is to
+ *   move the bar or renegotiate the commitment.
+ *
+ * M-D's whole subject is that those had been one boolean, and a reader given a single conflicted
+ * count could not tell "planners are optimistic" from "planners are late" — opposite programmes
+ * with opposite conversations. So the split is the reading, and a combined total would be the
+ * conflation this epic removed.
+ *
+ * **The two are disjoint by a database CHECK rather than by this query's `WHERE`.**
+ * `ck_activities_visual_conflict_matches_reason` refuses a row where `visual_conflict` and
+ * `visual_conflict_reason IS NOT NULL` disagree, and the reason is a two-value enum — so the union
+ * of these numerators is exactly the conflicted set, with no third bucket possible. That is a
+ * stronger guarantee than the SNET trio above, whose disjointness is arithmetic in the `WHERE`
+ * clauses and is asserted in the repository spec because nothing structural holds it.
+ *
+ * **Denominator: the PLACED population, not every activity.** A conflict is a property of a
+ * placement — an activity with no `visual_start` has nothing to conflict with, and M-D's own
+ * contract records `visual_conflict_reason` reading null for an unplaced activity and for a plan
+ * that has never been calculated. Counting these out of every activity would report a rate that
+ * falls purely because somebody added unplaced work, which is the "17 of 1,284" failure the shape
+ * of this registry exists to prevent, one denominator along. It is D-D's numerator, deliberately:
+ * the two are read together, D-D sizing how much has been placed and these sizing how much of that
+ * the engine disagrees with.
+ *
+ * **Why the reading is wanted before M-F.** Until the collapse, a conflicted placement is visible
+ * only on a plan in Visual mode; afterwards every plan renders on the placed basis, so each of
+ * these rows becomes a flag a planner meets whether or not they ever chose that mode. The count is
+ * how many people that is, and it is unobtainable from this container (ADR-0128's finding, one
+ * tier along) — only an operator press on the deployed host can answer it.
+ *
+ * **COSTED AT M-J, and the argument above held.** They shipped uncosted at M-E with the reasoning
+ * below stated honestly rather than implied — but ADR-0140's bar is "no query whose cost is
+ * unknown ships", and an argument is not a measurement. Measured on the 102,000-activity diluted
+ * estate, `EXPLAIN (ANALYZE, TIMING OFF)`, median of five:
+ *
+ * | Statement                                  | ms       |
+ * | ------------------------------------------ | -------- |
+ * | shared denominator (the placed population) | 37.8     |
+ * | `EARLIER_THAN_LOGIC` numerator             | 41.6     |
+ * | `LATER_THAN_BOUND` numerator               | 40.2     |
+ *
+ * Comfortably inside the 500 ms bar, and flat rather than estate-dependent: both are single-table
+ * scans of `activities` with a join to `plans`, the same shape as D-D, and neither introduces the
+ * join product that makes D-I's cost grow with placement density. If a press gets slow these are
+ * still not the first entries to suspect — `inherited-day-factor` is, at a measured 240–245 ms.
+ */
+const VISUAL_CONFLICT_DENOMINATOR = Prisma.sql`
+  SELECT count(*) AS examined
+  FROM activities a
+  JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+  WHERE a.deleted_at IS NULL AND a.visual_start IS NOT NULL
+`;
+
+const VISUAL_CONFLICT_EARLIER: DiagnosticEntry = {
+  id: 'visual-conflict-earlier-than-logic',
+  label: 'Placements the engine says are earlier than their logic allows',
+  nature: 'prospective',
+  denominator: VISUAL_CONFLICT_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.visual_conflict_reason = 'EARLIER_THAN_LOGIC'
+  `,
+};
+
+const VISUAL_CONFLICT_LATER: DiagnosticEntry = {
+  id: 'visual-conflict-later-than-bound',
+  label: 'Placements the engine says are past a recorded bound',
+  nature: 'prospective',
+  denominator: VISUAL_CONFLICT_DENOMINATOR,
+  numerator: Prisma.sql`
+    SELECT count(*) AS affected,
+           count(DISTINCT a.plan_id) AS affected_plans,
+           count(DISTINCT a.organization_id) AS affected_organizations
+    FROM activities a
+    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
+    WHERE a.deleted_at IS NULL
+      AND a.visual_conflict_reason = 'LATER_THAN_BOUND'
+  `,
+};
+
 /** The registry, in the order the panel renders it. D-A first, per CQ-1. */
 export const DIAGNOSTICS = [
   DAY_FACTOR_DIVERGENCE,
@@ -537,4 +675,6 @@ export const DIAGNOSTICS = [
   SNET_INERT,
   SNET_UNCLASSIFIED,
   SNET_FULL_BASELINE_COVERAGE,
+  VISUAL_CONFLICT_EARLIER,
+  VISUAL_CONFLICT_LATER,
 ] as const;

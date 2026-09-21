@@ -326,6 +326,24 @@ export class RevisionChangeReportDto implements RevisionChangeReport {
   classes!: readonly RevisionClassAssessmentDto[];
 
   @ApiProperty() cap!: number;
+
+  @ApiProperty({
+    nullable: true,
+    enum: REVISION_NOT_ASSESSABLE_REASONS,
+    description:
+      'Whether the two sides’ PLACEMENTS COULD be compared — null when both recorded one, a ' +
+      'reason when they did not. **No placement comparison is implemented yet**, so null means ' +
+      '“nothing prevents one”, never “one was done”: the ghosts and the delta both still run on ' +
+      'early dates on both sides. The field ships ahead of its consumer deliberately — it is ' +
+      'unrecoverable after the fact, because a baseline captured without the placement columns can ' +
+      'never be told what they held. A baseline froze where the NETWORK said work could go and never ' +
+      'where a planner had put it, so every baseline captured before that change is ' +
+      '`placement_snapshot_level: NONE` and **permanently** so: a backfill would state as history ' +
+      'a placement that baseline never saw. Reported whether or not either plan happens to hold a ' +
+      'placement — a reason that appeared only when there was something to compare could not ' +
+      'separate "nobody looked" from "we looked and there was nothing".',
+  })
+  placementNotAssessableReason!: RevisionNotAssessableReason | null;
 }
 
 export class RevisionGhostBarDto implements RevisionGhostBar {

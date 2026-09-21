@@ -378,11 +378,27 @@ export async function dragBar(
   await page.mouse.up();
 }
 
-/** Every activity's `earlyStart` and `laneIndex`, read from the API — the oracle for a move. */
-export async function placements(
-  page: Page,
-  orgSlug: string,
-): Promise<Map<string, { earlyStart: string | null; laneIndex: number }>> {
+/**
+ * One activity's three date-ish facts, and the distinction between them is the whole reason this
+ * type exists rather than a bare `earlyStart`.
+ *
+ * `visualStart` is the planner's **input** — what a drag or a typed date persisted. `earlyStart` is
+ * Pass 1's computed earliest, which a placement deliberately does **not** move. `visualEffectiveStart`
+ * is Pass 2's answer: where the bar is actually drawn.
+ *
+ * **This helper returned `earlyStart` alone until one-planning-surface M-F**, and the sibling
+ * `e2e-workspace-chrome/support.ts` had carried all three for an epic. That asymmetry is what let
+ * the bulk-drag assertion below poll a column the gesture had stopped writing.
+ */
+export interface PlacementRow {
+  earlyStart: string | null;
+  visualStart: string | null;
+  visualEffectiveStart: string | null;
+  laneIndex: number;
+}
+
+/** Every activity's dates and `laneIndex`, read from the API — the oracle for a move. */
+export async function placements(page: Page, orgSlug: string): Promise<Map<string, PlacementRow>> {
   const planId = openPlanId(page);
   const rows = await page.evaluate(
     async ({ org, id }: { org: string; id: string }) => {
@@ -391,13 +407,23 @@ export async function placements(
       });
       if (!r.ok) throw new Error(`activities ${String(r.status)}`);
       const b = (await r.json()) as {
-        data: { id: string; earlyStart: string | null; laneIndex: number }[];
+        data: (PlacementRow & { id: string })[];
       };
       return b.data;
     },
     { org: orgSlug, id: planId },
   );
-  return new Map(rows.map((a) => [a.id, { earlyStart: a.earlyStart, laneIndex: a.laneIndex }]));
+  return new Map(
+    rows.map((a) => [
+      a.id,
+      {
+        earlyStart: a.earlyStart,
+        visualStart: a.visualStart,
+        visualEffectiveStart: a.visualEffectiveStart,
+        laneIndex: a.laneIndex,
+      },
+    ]),
+  );
 }
 
 /**

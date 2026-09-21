@@ -14,7 +14,6 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
-  SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
 import { cn } from '@/lib/utils';
 
@@ -31,7 +30,7 @@ type LegendItem =
   | { label: string; summary: true }
   | { label: string; progress: true }
   | { label: string; lag: true }
-  | { label: string; tail: 'float' | 'drift' }
+  | { label: string; window: true }
   | { label: string; slack: true }
   | { label: string; text: true };
 
@@ -98,19 +97,25 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
         { label: 'Lag (waiting time)', lag: true } as const,
       ]
     : []),
-  // Visual-Planning conflict cue (ADR-0033) — an outlined warning triangle on a bar placed before its
-  // earliest feasible start. Only meaningful under scheduling modes, so listed only when enabled.
-  ...(SCHEDULING_MODES_ENABLED ? [{ label: 'Visual conflict', conflict: true } as const] : []),
+  // Placement-conflict cue (ADR-0033) — an outlined warning triangle on a bar placed outside its
+  // feasible window. **Unconditional since the collapse** (one-planning-surface M-F-T5): it was
+  // listed only under `SCHEDULING_MODES_ENABLED` because a conflict needed a hand-placed start and
+  // only a VISUAL plan could carry one. Every plan is a planning surface now, so every plan can
+  // paint this mark — which is precisely why withdrawing the key with the flag would have left the
+  // commonest cue in the diagram unexplained.
+  { label: 'Visual conflict', conflict: true } as const,
   // The ADR-0054 §4/§5 insight marks (behind `VITE_CANVAS_LIVE_FEEDBACK`). Listed like every other
   // toggleable cue here (Non-working and Today are keyed whether or not their toggle is on), so a
-  // planner who turns `Float & drift` on has somewhere to learn what the hatched tails mean — and,
-  // more importantly, why the left-hand one is usually absent. Drift is zero everywhere in Early
-  // mode by construction (everything is already as early as logic allows), so the label says
-  // *when* it appears rather than leaving its absence to read as a broken feature.
+  // planner who turns `Feasible window` on has somewhere to learn what the hatched bracket means.
+  //
+  // **ONE key, where there were two** (one-planning-surface M-E). The float and drift tails were
+  // one fact drawn twice and are now one bracket, so two keys would describe a picture the canvas
+  // no longer paints. The previous pair also had to explain why the left-hand tail was *usually
+  // absent* — drift is zero everywhere in Early mode by construction — and that whole apology
+  // disappears with the shape: a bracket with no drift simply starts at the bar.
   ...(CANVAS_LIVE_FEEDBACK_ENABLED
     ? [
-        { label: 'Total float (room to slip)', tail: 'float' } as const,
-        { label: 'Drift — earlier it could go (Visual mode)', tail: 'drift' } as const,
+        { label: 'Feasible window — earliest to latest', window: true } as const,
         { label: 'Link slack (days)', slack: true } as const,
       ]
     : []),
@@ -367,30 +372,35 @@ export function TsldLegend({
                 }}
               />
             </span>
-          ) : 'tail' in item ? (
+          ) : 'window' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
-              {/* A bar stub with the hollow, hatched slack tail running off it — right for float,
-                  left for drift, mirroring the canvas. Hatched, not filled: a filled extension
-                  would read as duration (and the hatch is the non-colour cue, WCAG 1.4.1). */}
+              {/* The feasible window: a hatched band spanning earliest→latest with a vertical cap
+                  at each end, and the bar stub sitting over its middle — which is exactly how the
+                  canvas paints it (the window is drawn BELOW the bars, so the bar occludes the
+                  span and it reads as two flanking tails). Hatched, not filled: a filled extension
+                  would read as duration, and the hatch is the non-colour cue (WCAG 1.4.1). */}
               <span
-                className="absolute top-1/2 -translate-y-1/2"
+                className="absolute top-1/2 left-0 -translate-y-1/2"
                 style={{
-                  [item.tail === 'float' ? 'left' : 'right']: 0,
-                  width: 8,
-                  height: 8,
-                  backgroundColor: 'var(--primary)',
-                }}
-              />
-              <span
-                className="absolute top-1/2 -translate-y-1/2"
-                style={{
-                  [item.tail === 'float' ? 'left' : 'right']: 9,
-                  width: 11,
+                  width: 20,
                   height: 5,
-                  border: '1px solid var(--muted-foreground)',
+                  borderTop: '1px solid var(--muted-foreground)',
+                  borderBottom: '1px solid var(--muted-foreground)',
                   backgroundImage:
                     'repeating-linear-gradient(45deg, transparent 0 2px, var(--muted-foreground) 2px 3px)',
                 }}
+              />
+              <span
+                className="absolute top-1/2 left-0 -translate-y-1/2"
+                style={{ width: 1, height: 5, backgroundColor: 'var(--muted-foreground)' }}
+              />
+              <span
+                className="absolute top-1/2 right-0 -translate-y-1/2"
+                style={{ width: 1, height: 5, backgroundColor: 'var(--muted-foreground)' }}
+              />
+              <span
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                style={{ width: 8, height: 8, backgroundColor: 'var(--primary)' }}
               />
             </span>
           ) : 'slack' in item ? (

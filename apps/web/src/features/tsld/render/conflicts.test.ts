@@ -15,7 +15,7 @@ function activity(over: Partial<ConflictableActivity> = {}): ConflictableActivit
     earlyStart: '2026-01-01',
     laneIndex: 0,
     constraintViolated: false,
-    visualConflict: false,
+    visualConflictReason: null,
     levelingWindowExceeded: false,
     ...over,
   };
@@ -27,10 +27,15 @@ describe('CONFLICT_FLAGS', () => {
   // programme, and `ScheduleSummaryStrip` already reports it) and `negativeFloat` (one root cause
   // counted N times down a chain, and the only member with no remedy — still visible via
   // `isCritical` and `FLOAT_BUCKETS[0]`). Near-critical was never in: it is a lens, not a conflict.
-  it('covers exactly the three actionable flags, near-critical excluded', () => {
+  // **Four since one-planning-surface M-D, and the new member is a SPLIT rather than an addition.**
+  // The placement conflict was one key because the engine flag was one-sided; it now reports which
+  // side, and the two sides do not share a remedy, so collapsing them here would carry the engine
+  // fix as far as the count and throw it away at the thing a planner presses.
+  it('covers exactly the four actionable flags, near-critical excluded', () => {
     expect(CONFLICT_FLAGS.map((f) => f.key)).toEqual([
       'constraintViolated',
-      'visualConflict',
+      'visualEarlierThanLogic',
+      'visualLaterThanBound',
       'levelingWindowExceeded',
     ]);
   });
@@ -44,9 +49,14 @@ describe('CONFLICT_FLAGS', () => {
     expect(orderedConflicts([activity({ id: 'x', constraintViolated: true })])[0]?.reasons).toEqual(
       ['constraint conflict'],
     );
-    expect(orderedConflicts([activity({ id: 'x', visualConflict: true })])[0]?.reasons).toEqual([
-      'visual placement conflict',
-    ]);
+    expect(
+      orderedConflicts([activity({ id: 'x', visualConflictReason: 'EARLIER_THAN_LOGIC' })])[0]
+        ?.reasons,
+    ).toEqual(['placed before its earliest start']);
+    expect(
+      orderedConflicts([activity({ id: 'x', visualConflictReason: 'LATER_THAN_BOUND' })])[0]
+        ?.reasons,
+    ).toEqual(['placed past a constraint']);
     expect(
       orderedConflicts([activity({ id: 'x', levelingWindowExceeded: true })])[0]?.reasons,
     ).toEqual(['levelling window exceeded']);
@@ -72,9 +82,9 @@ describe('orderedConflicts', () => {
 
   it('lists every reason for a multi-flag activity, in flag order', () => {
     const hit = orderedConflicts([
-      activity({ id: 'x', constraintViolated: true, visualConflict: true }),
+      activity({ id: 'x', constraintViolated: true, visualConflictReason: 'EARLIER_THAN_LOGIC' }),
     ])[0];
-    expect(hit?.reasons).toEqual(['constraint conflict', 'visual placement conflict']);
+    expect(hit?.reasons).toEqual(['constraint conflict', 'placed before its earliest start']);
   });
 
   it('orders by earlyStart → laneIndex → id', () => {

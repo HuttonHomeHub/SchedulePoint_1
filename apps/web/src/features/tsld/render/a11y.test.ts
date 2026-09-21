@@ -12,6 +12,8 @@ import {
   composeListboxRowText,
   describeActivity,
   lagPhrase,
+  levelledGhostClause,
+  levelledOverlaySummary,
   summarizeLogic,
   wbsGroupClause,
 } from './a11y';
@@ -60,10 +62,29 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    /**
+     * **Matched to `earlyStart`/`earlyFinish` above, because that is what the engine writes for an
+     * activity nobody has placed** — and the fixture said `null` opposite non-null early dates,
+     * which is a row the product cannot produce.
+     *
+     * It was harmless while the Tier-1 sentence read the network's dates and became load-bearing at
+     * the M-J gate pass, when that sentence moved to the DRAWN dates: every case here then resolved
+     * a null start and returned "not yet scheduled", so eight assertions about float, lane,
+     * constraints, drift and overlap went red at once against a correct function. That is the same
+     * shape as `remainingFloat` below — an incomplete fixture turning into a wrong one the moment
+     * the code under test starts reading the field it left out.
+     */
+    visualEffectiveStart: '2026-01-01',
+    visualEffectiveFinish: '2026-01-03',
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
+    // **Matched to `totalFloat` above, because the engine writes the pair together** (M-E-T7).
+    // Left at `null` beside a `totalFloat` of 0, this fixture described a row the product cannot
+    // produce — and once the Tier-1 sentence moved to the placed basis it silently stopped saying
+    // anything about float at all, which is how a fixture that is merely incomplete turns into one
+    // that is wrong.
+    remainingFloat: 0,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,
@@ -130,14 +151,17 @@ const ep = (id: string, name: string) => ({ id, code: null, name });
 
 describe('describeActivity (Tier 1)', () => {
   it('names an uncomputed activity with its duration, as not scheduled, and nothing more', () => {
-    expect(describeActivity(activity({ earlyStart: null }))).toBe(
+    // Both columns, because the sentence now tests the DRAWN start: before a recalculation the
+    // engine has written neither, and clearing only `earlyStart` would leave this passing for a
+    // reason that is not the one it is written for.
+    expect(describeActivity(activity({ earlyStart: null, visualEffectiveStart: null }))).toBe(
       'Excavate, 3 working days, not yet scheduled',
     );
   });
 
   it('prefixes the code and gives duration + a date range + lane (1-based)', () => {
     expect(describeActivity(activity({ code: 'A100', laneIndex: 2 }))).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float',
+      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float left',
     );
   });
 
@@ -149,13 +173,23 @@ describe('describeActivity (Tier 1)', () => {
   });
 
   it('collapses a single-day span to one date', () => {
-    expect(describeActivity(activity({ earlyFinish: '2026-01-01', totalFloat: 5 }))).toContain(
-      '1 Jan 2026, lane 1, 5 days float',
-    );
+    // `remainingFloat` beside `totalFloat`, because the engine writes the pair together and the
+    // sentence now reads the placed basis (M-E-T7). A fixture setting only one of them describes a
+    // row the product cannot produce.
+    expect(
+      describeActivity(
+        activity({
+          earlyFinish: '2026-01-01',
+          visualEffectiveFinish: '2026-01-01',
+          totalFloat: 5,
+          remainingFloat: 5,
+        }),
+      ),
+    ).toContain('1 Jan 2026, lane 1, 5 days float left');
   });
 
   it('says "critical" (implying zero float) and never adds a float count', () => {
-    const s = describeActivity(activity({ isCritical: true, totalFloat: 0 }));
+    const s = describeActivity(activity({ isCritical: true, totalFloat: 0, remainingFloat: 0 }));
     expect(s).toContain(', critical');
     expect(s).not.toContain('float');
   });
@@ -166,10 +200,9 @@ describe('describeActivity (Tier 1)', () => {
         activity({
           isNearCritical: true,
           visualStart: null,
-          visualEffectiveStart: null,
-          visualEffectiveFinish: null,
           visualConflict: false,
           visualDriftDays: null,
+          remainingFloat: 2,
           levelingPriority: null,
           leveledStart: null,
           leveledFinish: null,
@@ -185,7 +218,33 @@ describe('describeActivity (Tier 1)', () => {
           freeFloat: null,
         }),
       ),
-    ).toContain(', near-critical, 2 days float');
+    ).toContain(', near-critical, 2 days float left');
+  });
+
+  it('names a positive drift in DAYS, never in "days float"', () => {
+    /**
+     * **A shipped defect with no coverage at all, found by reading rather than by failing.**
+     *
+     * The drift clause shared the float pluraliser, which appends the word *float* — so a bar
+     * placed later than its earliest start announced `drift 2 days float later than its earliest
+     * start`: a sentence naming the wrong quantity, which does not parse. It shipped that way and
+     * M-E-T7 made it worse (`2 days float left later than …`) before anybody noticed, because
+     * **nothing in the estate asserted this sentence**. It surfaced only because a journey failed
+     * on a different line and sent me into the function.
+     *
+     * The same trap was avoided one function along — `summarizeLogic`'s slack phrase carries a
+     * comment explaining precisely why it must not use the float helper. One correct pattern,
+     * applied to a control and not to its neighbour.
+     */
+    const s = describeActivity(
+      activity({ visualConflict: false, visualDriftDays: 2, remainingFloat: 3 }),
+    );
+    expect(s).toContain('drift 2 days later than its earliest start');
+    expect(s).not.toContain('2 days float later');
+    expect(s).not.toContain('2 days float left later');
+    // The float clause is untouched and still labelled — the two read as different facts, which is
+    // the distinction the drift clause's own comment says it exists to preserve.
+    expect(s).toContain('3 days float left');
   });
 
   it('spells out a set date constraint (the spoken equivalent of the canvas pin)', () => {
@@ -205,10 +264,86 @@ describe('describeActivity (Tier 1)', () => {
   });
 
   it('states plain float, singular for one day, and omits float when uncomputed', () => {
-    expect(describeActivity(activity({ totalFloat: 1 }))).toContain(', 1 day float');
-    expect(describeActivity(activity({ totalFloat: null }))).toBe(
+    expect(describeActivity(activity({ totalFloat: 1, remainingFloat: 1 }))).toContain(
+      ', 1 day float left',
+    );
+    expect(describeActivity(activity({ totalFloat: null, remainingFloat: null }))).toBe(
       'Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1',
     );
+  });
+
+  it('speaks the dates the BAR IS DRAWN AT, not the network\u2019s (the whole point of a placement)', () => {
+    /**
+     * **The one assertion the epic did not have, and the gap is why the defect shipped.**
+     *
+     * Every other fixture in this file carried `visualEffectiveStart === earlyStart`, so the two
+     * bases were indistinguishable and reading the wrong one was invisible. Since M-F a bar draws
+     * from `visualEffective*` (`barDateSourceFor` returns `'visual'` unless the Late overlay is on),
+     * and this sentence is the ONLY route ADR-0026 D7 gives an AT user to a bar \u2014 so for any
+     * activity carrying a placement the canvas showed one span and the listbox announced another
+     * (WCAG 1.1.1/1.3.1).
+     *
+     * Verified red against the pre-fix `a.earlyStart`/`a.earlyFinish`, which announced the January
+     * dates.
+     */
+    const placed = activity({
+      earlyStart: '2026-01-01',
+      earlyFinish: '2026-01-03',
+      visualStart: '2026-02-10',
+      visualEffectiveStart: '2026-02-10',
+      visualEffectiveFinish: '2026-02-12',
+      visualDriftDays: 28,
+      remainingFloat: 0,
+      totalFloat: 28,
+    });
+    expect(describeActivity(placed)).toContain('10 Feb 2026 to 12 Feb 2026');
+    expect(describeActivity(placed)).not.toContain('Jan 2026');
+  });
+
+  it('follows the Late overlay when the caller says the bars are drawn at late dates', () => {
+    // The source is the CALLER'S, never decided here \u2014 a second place deciding the basis is the
+    // defect the case above removes. While the read-only Late overlay is on the bar draws at the
+    // late dates, so this sentence does too, for free.
+    expect(
+      describeActivity(activity({ lateStart: '2026-03-01', lateFinish: '2026-03-03' }), {
+        barDateSource: 'late',
+      }),
+    ).toContain('01 Mar 2026 to 03 Mar 2026');
+  });
+
+  it('names a placement past its constraint WITHOUT claiming it sits before its earliest start', () => {
+    /**
+     * **The `LATER_THAN_BOUND` sentence, which nothing asserted until the M-J gate pass** \u2014 the
+     * one case M-D exists to detect was the one case the function described wrongly.
+     *
+     * Drift is `placed \u2212 earliest` (`engine/compute.ts:348`), so it is POSITIVE here, and the
+     * clause gated on the `visualConflict` boolean, hard-coded the word "before" and ran the number
+     * through `Math.abs()`. A bar placed five days PAST a "no later than" date was announced as
+     * placed five days BEFORE its earliest start \u2014 in the same breath as a constraint clause
+     * naming the date it had overrun.
+     *
+     * Verified red against the boolean-gated version, which produced
+     * `conflict: placed 5 working days before its earliest feasible start`.
+     */
+    const s = describeActivity(
+      activity({
+        constraintType: 'FNLT',
+        constraintDate: '2026-01-05',
+        visualStart: '2026-01-06',
+        visualEffectiveStart: '2026-01-06',
+        visualEffectiveFinish: '2026-01-08',
+        visualConflict: true,
+        visualConflictReason: 'LATER_THAN_BOUND',
+        visualDriftDays: 5,
+        remainingFloat: 0,
+        totalFloat: 5,
+      }),
+    );
+    expect(s).toContain(', conflict: placed past the constraint on it');
+    expect(s).not.toContain('before its earliest feasible start');
+    // And the positive-drift clause stays out of its way: that sentence is for a placement that is
+    // merely late, not one that has breached a bound, and two of them would contradict each other.
+    expect(s).not.toContain('drift');
   });
 
   it('speaks a same-lane overlap only when the caller flags it (the spoken badge equivalent)', () => {
@@ -362,6 +497,12 @@ describe('chainNeighbour + announceChainStep', () => {
 // change one character of the parallel accessible representation: these pin the exact strings for
 // the badge-carrying cases the refresh touches visually (constraint pin, conflict triangle,
 // lane-overlap squares) and the lag phrase, so any drift fails loudly.
+//
+// **Re-baselined once, deliberately, at one-planning-surface M-E-T7**, when the float clause moved
+// from `totalFloat` to `remainingFloat` and gained the word `left`. The pin did its job: it was
+// one of two assertions that caught the sentence changing, which is exactly what a byte-for-byte
+// pin is for — the change is intended and is recorded here rather than absorbed by loosening the
+// assertion, which is how such a pin quietly stops pinning anything.
 describe('a11y-string parity across the M4 visual refresh', () => {
   it('pins the full badge-carrying Tier-1 sentence byte-for-byte', () => {
     expect(
@@ -372,11 +513,18 @@ describe('a11y-string parity across the M4 visual refresh', () => {
           constraintDate: '2026-01-02',
           visualConflict: true,
           visualDriftDays: -2,
+          // **2, not null** — `remainingFloat` is `totalFloat - visualDriftDays`, so a bar placed
+          // two working days before its earliest feasible start has two days of room before its
+          // late finish even while the placement itself is infeasible. The two facts are stated
+          // separately and always were: the float clause is about the finish, the conflict clause
+          // about the start. The fixture's previous `null` beside a drift of −2 was a row the
+          // engine cannot write.
+          remainingFloat: 2,
         }),
         { overlapsInLane: true },
       ),
     ).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 0 days float, ' +
+      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 2 days float left, ' +
         'Start no earlier than 02 Jan 2026, ' +
         'conflict: placed 2 working days before its earliest feasible start, ' +
         'overlaps another activity in its lane',
@@ -628,5 +776,81 @@ describe('the per-row compare clause', () => {
   it('states a single-day span once rather than as a range to itself', () => {
     const clause = compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-05' });
     expect(clause).not.toContain(' to ');
+  });
+});
+
+describe('the levelled ghost clause', () => {
+  it('says nothing when the lens drew this row no ghost', () => {
+    // Absence is not narrated, and the test is the same one the painter applies — both walk the
+    // gated array, so a row with a clause always has a ghost and one without never does.
+    expect(levelledGhostClause(null)).toBe('');
+  });
+
+  it('states the ghost as a DATE, not an offset', () => {
+    /**
+     * The tempting field is `levelingDelayDays` — engine-owned, already in working days, on the
+     * same row — and it is measured from the EARLY start while the bar is drawn at the PLACED one.
+     * It would be right on every plan in the estate today and wrong on exactly the plans this epic
+     * exists to create.
+     */
+    const clause = levelledGhostClause('2026-03-12');
+    expect(clause).toContain('levelled to');
+    expect(clause).toMatch(/12 Mar 2026/);
+    expect(clause).not.toMatch(/\d+ working days? (later|earlier)/);
+  });
+
+  it('is one parenthesised clause, like its two ghost siblings', () => {
+    // The row is read on every arrow keystroke, and three ghost clauses already share its budget.
+    expect(levelledGhostClause('2026-03-12')).toMatch(/^ \([^()]*\)$/);
+  });
+
+  /**
+   * **What is NOT here, and why, because the absence is the milestone's main finding.**
+   *
+   * This clause began as one describing both M-E overlays — the feasible window and this ghost —
+   * with cases for float, zero float, negative float, drift in both directions and the joint form.
+   * Every one of them passed. The journey's first run printed the finished row and the window's
+   * half was redundant to the last word: `describeActivity` already states the remaining float
+   * (M-E-T7), already names a positive drift, and already names the negative-drift conflict. The
+   * bracket DRAWS two facts the sentence carries; it does not add a third.
+   *
+   * Two unit suites could not see it, because each was right about its own function. Deleting
+   * those cases is the correct outcome, and it is recorded here rather than left as a gap somebody
+   * later "fixes" by writing them again.
+   */
+});
+
+describe('the levelled overlay summary — the empty state is the common one', () => {
+  it('counts what it drew', () => {
+    expect(levelledOverlaySummary(3, { levelResources: true })?.heading).toContain('3 activities');
+    expect(levelledOverlaySummary(1, { levelResources: true })?.heading).toContain('1 activity');
+  });
+
+  it('withholds the visible strip when the lens DID draw', () => {
+    // A complete picture carries no chrome: the strip exists to report an absence.
+    expect(levelledOverlaySummary(2, { levelResources: true })?.undrawnLabel).toBe('');
+  });
+
+  it('separates "levelling is off" from "levelling moved nothing"', () => {
+    /**
+     * The whole of T6. These are different facts — one names a setting a planner can change, the
+     * other reports a result — and the control's shaded reason covers only the first, because the
+     * second is not a refusal (M-E-T3). So this sentence is the only place it is ever said, and a
+     * single sentence for both cases would make a switched-off feature indistinguishable from a
+     * satisfied one (ADR-0073 C1's finding, applied to a diagram).
+     */
+    const off = levelledOverlaySummary(0, { levelResources: false });
+    const ran = levelledOverlaySummary(0, { levelResources: true });
+    expect(off?.undrawnLabel).not.toBe(ran?.undrawnLabel);
+    expect(off?.undrawnLabel).toMatch(/off for this plan/);
+    expect(ran?.undrawnLabel).toMatch(/did not move/);
+  });
+
+  it('always has something visible to say when it drew nothing', () => {
+    // FC-1 predicts this is the state on nearly every plan on the day it ships. A lens that lights
+    // and draws nothing with no sentence is the lit-but-inert dead end, not an edge case.
+    for (const levelResources of [true, false]) {
+      expect(levelledOverlaySummary(0, { levelResources })?.undrawnLabel).not.toBe('');
+    }
   });
 });

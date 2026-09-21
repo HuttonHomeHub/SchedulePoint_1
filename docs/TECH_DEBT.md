@@ -9217,12 +9217,13 @@ ADR-0130's epic exists to remove, narrowed rather than closed.
 **Measured, on the reading #287 asked for** (`apps/web/measure-toolbar/tech-debt-287-pen-foot-row.spec.ts`),
 with an activity selected and a peer's request outstanding:
 
-| width   | foot row, no request                                           | foot row, request outstanding | cost to the diagram                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------- | -------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 343     | Two screens carried facts they already held and did not render | 2026-09-19                    | **Closed by `docs/specs/unrendered-row-facts/`**, measure-first. (a) Clients gains a `Created` column (`width: 'fit'`, `Name` declared `auto`); (b) both Members sections state their count, which `page-composition/feature-spec.md` §4.6 specified and neither built, with no decision recorded either way. Four falsification conditions committed before the harness ran and **all four PASS** — the sharpest being FC-D clause 2, where the table's slack falls by **147px, exactly the new column's rendered width**, so it is paid for entirely out of emptiness and nothing was squeezed out of another column (`m3/README.md`). CQ-2 answered from numbers and deliberately NOT taken: `Actions` really is 401px for 82px of content, and shrink-wrapping a trailing column moves the buttons further from the facts while confounding the clause above. Clients is still 68% empty at 1646 and the row never claimed otherwise. Found on the way: #344. |
-| 1440 px | 87 px                                                          | **167 px**                    | **80 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 1646 px | 51 px                                                          | **127 px**                    | **76 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 1920 px | 51 px                                                          | 87 px                         | 36 px                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| width   | foot row, no request                                           | foot row, request outstanding | cost to the diagram                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------- | -------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 343     | Two screens carried facts they already held and did not render | 2026-09-19                    | **Closed by `docs/specs/unrendered-row-facts/`**, measure-first. (a) Clients gains a `Created` column (`width: 'fit'`, `Name` declared `auto`); (b) both Members sections state their count, which `page-composition/feature-spec.md` §4.6 specified and neither built, with no decision recorded either way. Four falsification conditions committed before the harness ran and **all four PASS** — the sharpest being FC-D clause 2, where the table's slack falls by **147px, exactly the new column's rendered width**, so it is paid for entirely out of emptiness and nothing was squeezed out of another column (`m3/README.md`). CQ-2 answered from numbers and deliberately NOT taken: `Actions` really is 401px for 82px of content, and shrink-wrapping a trailing column moves the buttons further from the facts while confounding the clause above. Clients is still 68% empty at 1646 and the row never claimed otherwise. Found on the way: #344.                                                                                                                                                                                                                                                                                                                           |
+| 360     | The overview journey spent its own rate-limit budget           | 2026-09-21                    | **Closed by `apps/web/playwright.overview.config.ts`**, and the row it replaces was WRONG in the direction that matters. #360 stated _"this epic did not cause it… the failure is pre-existing on `main`"_, on the strength of an empty `git diff` over `e2e-overview/`. Measured instead: the suite **passes 9/9 on `origin/main`** and fails 1/9 on the branch, both on fresh databases with the packages built. The empty diff was true and proved nothing — the journey was unchanged and the application it drives was not. The real quantity is a single handler's peak in a 60 s window, because a `ThrottlerGuard` bucket is keyed per IP AND per handler: `GET /api/v1/me` peaks at **99 on `main` and 106 on the branch** against a limit of **100**, so the suite had been passing one request below a hard ceiling and the epic's +16 requests (+3.1%, 584→602) tipped it. No refetch storm, no product defect. Two instrument failures on the way, both the ADR-0099 trap: the first `main` run measured a tree with no Prisma client and no built packages (499 then 24 TS errors, webServer never started), and a branch API server survived its own cleanup and served the next run, voiding it. The harness now refuses to start against a held port. Generalised as #361. |
+| 1440 px | 87 px                                                          | **167 px**                    | **80 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 1646 px | 51 px                                                          | **127 px**                    | **76 px**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 1920 px | 51 px                                                          | 87 px                         | 36 px                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 1646 is the product owner's own screen. The diagram goes 702 → 626 px there, and 666 → 586 px at 1440.
 
@@ -10617,6 +10618,126 @@ Neither is a defect in the shipped code. The action is to re-take the web number
 finish, and to decide whether a floor with a quarter of a point of headroom is still a ratchet or
 has become a tripwire.
 
+### 351. 61 web test files hand-build an `ActivitySummary` beside a shared factory that exists
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (one-planning-surface M-D; found by a required field breaking every one of them) · **Size:** M · **Owner:** web
+
+`apps/web/src/test/activity-fixture.ts` exists and builds an `ActivitySummary` with every field
+defaulted. **61 test files do not use it** and construct the whole ~60-field object by hand
+instead.
+
+Measured, not estimated: adding one required field to the shared type produced **63 typecheck
+errors** — 61 hand-built fixtures plus two production files that legitimately enumerate every field
+(`clone-projection.ts`'s disposition census and `guest-api.ts`'s widening, both of which SHOULD
+break, because each is a per-field decision somebody has to make).
+
+The 61 should not. Each was a mechanical `remainingFloat: null,` insertion carrying no information,
+and the same sweep will be required by every future field. It is not merely churn: a hand-built
+fixture also silently stops matching the shape the product produces, one field at a time, and
+nothing reports that — the fixtures compile, so they look maintained.
+
+**Why the factory was missed until now, which is the part worth carrying.** It is
+`src/test/activity-fixture.ts`, not `*.test.ts`, so a sweep scoped to test files does not find it —
+this one did not, and the last error in the run was the factory itself failing to satisfy the type
+it produces. A grep for `visualDriftDays:` in test files returned 61 and the answer was 62.
+
+**Not fixed here.** Converting 61 files is a mechanical change with a real review cost and no
+behavioural content, and folding it into a milestone that changes the engine would make that
+milestone's diff unreadable — ADR-0105's trigger in miniature. It wants its own small change.
+
+### 349. `e2e-local.sh` refuses a busy port and not a busy database — so a contended run reports a product defect
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (one-planning-surface M-B-T1; the same wall hit independently by a second agent in the same hour) · **Size:** S · **Owner:** repo
+
+`scripts/e2e-local.sh` refuses to start while anything answers on 3000 or 5173. That guard exists
+because ADR-0099 records `reuseExistingServer` silently adopting a leftover dev server, so a config's
+flag pins never applied and three consecutive diagnoses were made against the wrong environment.
+
+**The identical failure is reachable one layer down and nothing refuses it.** The script takes no
+lock on `app_test`, so two runs — or a run and a migration harness, or a run and a seeding pass —
+share one database. What comes back is a red journey with a plausible symptom.
+
+Measured, not hypothetical. While two agents held `app_test`, `web:authoring` failed with the create
+popover closing and the diagram listbox staying at zero options for 15 s — which reads exactly like
+"the drawn bar never plots", and a coherent false story was already under construction about
+ADR-0033 having removed ADR-0032's first-draw start pin. A second run failed **differently** (a 401
+on the clients list straight after the organisation was created), which is the only reason the
+environment came under suspicion at all: a defect does not change its symptom between two runs of
+the same code. On a quiet database the suite passed three consecutive times, and the other twelve
+passed first time. The second agent reached the same conclusion from the other side — it found a
+concurrent `vitest run` and an `ALTER TABLE ... waiting` lock and killed its own run.
+
+**Why the symptom is the dangerous part.** A contended database does not produce an error naming
+contention. It produces a red assertion about the product, with a screenshot, in the suite you were
+already editing — and the next move is to change the test. `docs/specs/one-planning-surface/m-b/triage.md`
+clause 3 records how close that came.
+
+**Candidate remedy, not yet costed:** a Postgres advisory lock taken on `app_test` for the life of
+the run, refusing with the holding PID rather than queueing — queueing would turn a fast failure into
+a slow one and hide the same fact. `pg_try_advisory_lock` on a fixed key is one line either side. The
+open question is whether the refusal should name the other run in a way a reader can act on, which
+needs `pg_stat_activity` and is the part worth measuring before writing.
+
+**What it is not.** Not a CI problem: CI provisions a container per job and the ADR-0138 shards do
+not share one. This is local-only, and it is exactly where the pre-push gate is supposed to be the
+cheap opinion.
+
+### 350. A seeded constraint case may be vacuous — `C_NONWORK` has no non-working time to resolve away
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (one-planning-surface M-B-T3; found by running the pure engine over the existing spec, not by reading it) · **Size:** S · **Owner:** api
+
+`constraintsPlan()`'s `C_NONWORK` exists, by its own comment, to prove that "a constraint date on a
+non-working day must resolve to a legal working instant rather than pinning the bar into the weekend
+wash". The plan declares no `defaultCalendarKey`, and `calendarId: null` resolves to the
+**all-minutes (24/7)** calendar — so there is no weekend, and nothing to resolve away.
+
+Observed rather than inferred: run through `specToEngineInput()` + `computeSchedule()`, that
+activity's successor starts on **Saturday 2026-03-07**, and the SNET of **2026-03-21** (also a
+Saturday) lands on exactly that date with no adjustment. The case passes, and would pass equally
+against an engine that did no non-working-day resolution at all — ADR-0093's shape, one file over.
+
+The same reading corrected a sibling assumption in the new placement plans before they shipped: their
+first draft also omitted the calendar, so their expected dates were wrong (successors starting on
+Saturdays). They now declare an explicit Mon–Fri calendar, matching `typesAndWbsPlan`.
+
+**Deliberately not fixed in the pass that found it.** Giving `constraintsPlan()` a working-week
+calendar changes the dates of a plan `docs/TEST_PLAYBOOK.md` already documents and other rows may
+lean on, which is a behavioural change to shared fixture data made as a drive-by. The fix is to give
+it an explicit Mon–Fri calendar, re-derive the playbook row's dates from the engine, and confirm the
+case is red against an engine that skips the resolution.
+
+### 352. `docs/DATABASE.md` documents a snake_case enum convention that 24 of 26 enums do not follow
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (database-architect, designing `VisualConflictReason` for one-planning-surface M-D) · **Size:** S · **Owner:** docs
+
+`docs/DATABASE.md:33` states the house convention as **"Enums: `snake_case` type,
+`SCREAMING_SNAKE_CASE` values."** Its two neighbouring bullets — "Tables: plural `snake_case`" and
+"Columns: `snake_case`" — are both about the **database** name, so this one reads the same way.
+
+Measured against the schema: **all 26 Prisma enum types are PascalCase**, and exactly **two** carry
+an `@@map` to a snake_case database type (`AuditActorType` → `audit_actor_type`, `AuditOutcome` →
+`audit_outcome`). So at the database level 24 of 26 diverge from the documented rule and 2 comply.
+The values half of the bullet is followed everywhere.
+
+**The agent that raised it reported "24 of 26 are PascalCase, the two exceptions are
+`audit_actor_type`/`audit_outcome`", which understates it** — those two are not PascalCase
+exceptions, they are the only two that _comply_, and they comply at the layer the rule is about.
+Re-derived here by reading `^enum ` declarations and their `@@map`s rather than by accepting the
+count, which is the only reason the direction came out right.
+
+**Do not "fix" this by renaming the types.** Renaming a Postgres enum type is a migration each, on
+types referenced by columns across 32 models, for zero user-visible benefit and a non-zero chance of
+a checksummed migration going wrong on a host that self-migrates at boot (ADR-0018). The question is
+which way the convention should point, and the answer the code has already given 24 times is
+PascalCase — consistent with `ConstraintType`, `SchedulingMode`, `PlacementSnapshotLevel` and the
+rest.
+
+**The likely remedy is to correct the document to describe the code**, and to say what the two
+`@@map`ped audit enums are (they predate the pattern and are not worth churning either). That is a
+one-line change plus a sentence, and it stops the next schema author doing what this one did: reading
+the rule, finding the code contradicts it, and having to decide alone which to follow. `VisualConflictReason`
+followed the code.
+
 ### 348. The float tail is drawn from the placed bar at total float, so it overshoots the late finish by the drift
 
 **Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (ui-architect review of the one-planning-surface overlay design; independently confirmed by reading) · **Size:** S · **Owner:** web
@@ -10813,3 +10934,356 @@ change with a design question in it, not a mechanical substitution.
 
 **Trigger:** the next screen added to or removed from the roster, or the next epic that touches
 `composition.spec.ts`.
+
+### 353. `react-hooks/exhaustive-deps` is a warning, so four real staleness defects shipped under a green `lint`
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found while composing an extra
+clause into `rowTextById` during one-planning-surface M-E-T5) · **Size:** M · **Owner:** web
+
+`packages/config/eslint/react.js` spreads `reactHooks.configs.recommended.rules`, in which
+`exhaustive-deps` is `warn`. `pnpm lint` does not fail on warnings, and `scripts/prepush.sh`
+prints only a gate's verdict — so `apps/web` has carried **six warnings** (four
+`exhaustive-deps`, two `incompatible-library`) while every run printed `ok lint`. Errors: 0.
+
+**This is not a style question; three of the four were live, user-visible staleness.** Each was
+found by reading the warning the gate had been printing all along:
+
+| Site                               | Missing dependency         | What went stale                                                                                                                                                                                                                                                                     |
+| ---------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TsldPanel.tsx` `rowTextById`      | `compareClauseById`        | **fixed** — toggling the comparison overlay changed nothing else this memo reads, so every listbox row went on speaking `(earlier revision …)` after it was switched off. The canvas is `aria-hidden`; that text is a screen-reader user's only route to the picture (ADR-0127 D6). |
+| `use-diagram-image.ts`             | `comparedWithPlanName`     | **fixed** — the exported picture's title named the PREVIOUSLY compared plan, which is the exact false statement that field's own docblock exists to prevent.                                                                                                                        |
+| `TsldPanel.tsx` `selectionCtx`     | `canWriteNotes`, `onNotes` | **fixed** — a role change revoking note-writing left the selection bar offering the old answer.                                                                                                                                                                                     |
+| `plan-workspace-toolbar.tsx:788`   | `model`                    | open — needs reading before it is either fixed or given a written reason.                                                                                                                                                                                                           |
+| `use-pen-lock-view.ts:202`         | `view`                     | open — the pen view is the input ADR-0133 D6 records putting a per-second tick into the workspace root, so this one wants care.                                                                                                                                                     |
+| `use-tsld-toolbar-context.tsx:875` | `dependencies`             | open — the toolbar context's own memo, where a stale edge set decides what the logic commands act on.                                                                                                                                                                               |
+
+The three fixed ones were in the files that milestone was already editing. The other three are
+**not** — fixing them in a lens milestone would be the scope creep ADR-0105 guards, and two of them
+have a real design question in them rather than a missing line.
+
+**The row is the SEVERITY, not the six sites.** Raising `exhaustive-deps` to `error` is a
+shared-gate change (ADR-0105's trigger), and it cannot simply be flipped: the two
+`incompatible-library` warnings are a different rule with a different answer, and a suppression
+written to get a red gate green is worse than the warning — the register records that shape under
+`docs/TECH_DEBT.md` #85, where two `react-hooks/refs` suppressions were held open deliberately with
+a standing instruction attached. What this needs is a pass that reads each remaining site, fixes or
+justifies it **in writing at the call site**, and only then arms the severity, so the gate is armed
+against a clean tree (ADR-0058 — a gate that fails on day one gets deleted rather than fixed).
+
+**The transferable finding is about `prepush.sh`, and it is wider than this rule.** A gate whose
+pass/fail is binary makes a warning indistinguishable from silence: the instrument named these four
+defects on the day each shipped, in a line nobody sees, because the runner prints `ok` and sends the
+output to a log. ADR-0124 gave that script a third result state for an **advisory gate**; there is
+no equivalent for a **passing gate with findings**. Whether that is worth building is a question for
+the same pass, and it is the half most likely to prevent a recurrence: the severity fixes one rule,
+the reporting fixes the class.
+
+**Trigger:** the next epic touching `packages/config/eslint/`, or the next `exhaustive-deps` warning
+added to the estate — which nobody will see, which is the point.
+
+### 354. `check-flags.mjs` reads Playwright configs as raw text, so a comment describing a pin reads as a pin
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found when retiring
+`VITE_SCHEDULING_MODES` during one-planning-surface M-F-T5) · **Size:** S · **Owner:** repo
+
+Assertion 4 of `scripts/check-flags.mjs` scans every `apps/web/playwright*.config.ts` for
+`/(VITE_[A-Z0-9_]+)\s*:\s*'(true|false)'/g` and refuses to let a flag retire while a config pins it.
+The scan is over the **whole file**, so a docblock containing that literal is indistinguishable from
+an `env:` entry.
+
+**Measured, not hypothesised.** `playwright.gantt-editing.config.ts`'s docblock explained that the
+config it was copied from had pinned the scheduling-modes flag off, and wrote the pin out verbatim.
+Retiring the flag produced:
+
+```
+VITE_SCHEDULING_MODES is retired, but apps/web/playwright.gantt-editing.config.ts pins it OFF
+  — that config IS a flag-off harness, and its specs are written against the pinned world.
+```
+
+That config pins no flag at all, and says so two lines above the sentence the gate matched.
+
+**It is the fifth recorded instance of one class in this repository** — a scan whose subject is code
+matching prose that merely describes it. The four before it are ADR-0106 M4's
+`reset-fills.structural.test.ts` (a docblock explaining why a token must not be used counted as
+using it), ADR-0099 M4's sizing ratchet, ADR-0098's weight ratchet, and ADR-0124's `check:counts`
+firing on prose inside the entry documenting the gates built to stop that. Three of the four fixed
+themselves the same way: **strip comments before scanning**.
+
+**The direction of the failure is the mild one, and that is why this is a row rather than a fix
+folded into an epic.** A false pin BLOCKS a retirement — noisy, loud, and it stops the work rather
+than letting something through. The dangerous inverse (a real pin hidden from the scan) is not
+reachable: the regex is a superset of the true pin syntax.
+
+**Remedy:** strip block and line comments before `matchAll`, reusing whatever
+`scripts/lib/` offers rather than writing a fifth private stripper — that proliferation is half the
+reason this class keeps recurring. Two fixtures, one per direction: a config whose `env:` really
+pins a retired flag must still fail, and a config that only mentions one in prose must pass. Verify
+red against **both** before believing either.
+
+**Why it was worked around rather than fixed on the day.** `check-flags.mjs` is a shared gate, and
+ADR-0105 makes a shared-gate change a full-spec trigger; ADR-0136 records folding one into an epic's
+last milestone as exactly what that rule exists to stop (`docs/TECH_DEBT.md` #298). So M-F-T5
+reworded the docblock — the prose is accurate either way, and the literal was incidental — and left
+the scan for somebody to fix deliberately.
+
+**Trigger:** the next retirement blocked by a comment, or the next epic touching
+`scripts/check-flags.mjs`.
+
+### 355. Five `measure-toolbar` harnesses no longer reach their subject after the mode collapse
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found while running
+`measure:toolbar` during one-planning-surface M-F-T5) · **Size:** S · **Owner:** web
+
+One-planning-surface M-F-T5 deleted the `Early | Visual` pair from the plan header's mode cluster,
+which took the container from two named segments to one — so ADR-0119's ux rule (a compound name is
+right for a container of two groups and wrong for one) renamed the toolbar `Plan mode and view` →
+`Plan view`. Five harnesses locate it by the old name and now fail at their fixture:
+
+| file                              | subject                                     | state after the collapse                 |
+| --------------------------------- | ------------------------------------------- | ---------------------------------------- |
+| `m0-header-and-treatment.spec.ts` | header merge budget, bands, label treatment | locator only — subject intact            |
+| `m0-merged-row.spec.ts`           | the merged row, priced from ink             | locator only — subject intact            |
+| `m1-merged-probe.spec.ts`         | the merged row, shrink-to-fit               | locator only — subject intact            |
+| `m1-result.spec.ts`               | the object bar on one line at 1646          | locator, **and** an Early-mode assertion |
+| `m0-mode-divider.spec.ts`         | the divider BETWEEN the two mode segments   | **subject gone** — there is one segment  |
+
+**Nothing is gated on them and nothing in CI runs them**, so this is dormant rather than red:
+`measure:toolbar` is a manual script, not a `test:e2e:*` suite, and `check:e2e-roster` does not see
+it. It matters because a harness that throws at its fixture is indistinguishable from one that has
+nothing to say, and the next person to reach for a header measurement will find four of them broken
+for a reason that has nothing to do with the question they are asking.
+
+**The two halves want different answers, which is why this is a row rather than a sweep.** For the
+four whose subject is intact, repointing the locator is mechanical and produces the number for
+today's header — which is what a re-run is for — and it is ADR-0091 M7's own standing rule (locate a
+toolbar by role and name, and re-check the name after any label change) being applied a milestone
+late. For `m0-mode-divider` the subject is gone, and the ADR-0084 D5 rule says a harness goes with
+its subject; the precedent is `tech-debt-204c-mode-flip-focus.spec.ts`, deleted in the same
+milestone because converting it would have made it produce a **different** reading from the one its
+spec records.
+
+**Deliberately not fixed in M-F**, and the reason is proportion rather than tidiness: repairing five
+ungated historical harnesses inside a milestone whose own journeys were still being converted is how
+a milestone stops being reviewable, and `m1-result`'s Early-mode assertion is a judgement about what
+that file still claims rather than a locator edit.
+
+**Remedy:** repoint the four, delete `m0-mode-divider.spec.ts` with a line in
+`docs/specs/mode-divider/` (or wherever its reading is recorded) saying the divider it measured no
+longer exists, and re-read `m1-result.spec.ts:150` before touching it.
+
+**Trigger:** the next epic that needs a header or command-surface measurement.
+
+### 356. A share link draws early dates while its author sees placed ones
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found by the FC-7 Part A
+surface census during one-planning-surface M-F — not from a report, and not by anything failing) ·
+**Size:** M · **Owner:** api + web
+
+**Five checked facts, no inference past them.**
+
+1. `visualEffectiveStart` / `visualEffectiveFinish` are on the guest DTO's **forbidden** list
+   (`apps/api/src/modules/share/dto/guest-dto.spec.ts:136-137`), under an exact-key assertion.
+2. The web guest adapter therefore sets both to `null`
+   (`apps/web/src/features/share/guest-api.ts:227-228`).
+3. `TsldPanel`'s `barDateSource` prop defaults to `'early'` (`TsldPanel.tsx:601`).
+4. `GuestPlanView` passes no `barDateSource` (`GuestPlanView.tsx:255-261`).
+5. Since the collapse the member view draws `visualEffective*` unconditionally
+   (`lib/bar-dates.ts`, `plan-workspace-toolbar.tsx:482`).
+
+**So the one artefact a planner hands to somebody who was not in the room shows the bars somewhere
+other than where the planner put them.** This is `#135`'s class — two views of one plan disagreeing
+about where a bar sits, each internally consistent, so only somebody who opens both ever sees it —
+on the surface ADR-0103 identifies as existing precisely to be read by a stranger.
+
+**Widened by the collapse, not created by it.** Before M-F it diverged only for `VISUAL` plans; the
+collapse makes every plan a planning surface, so the population is now every plan carrying a
+placement. The guest view itself was not touched by the epic, and FC-7 Part A is unaffected — its
+bar is scoped to plans with **no** placement, where the two bases are equal.
+
+**Nothing was going to catch it, and that is checked rather than assumed.**
+`apps/web/e2e-share/share.spec.ts` asserts that bars are _present_ in the canvas's parallel listbox
+(ADR-0026 D7) and that the guest chrome is absent — never **where** a bar sits — so it passed in the
+same sweep that produced this finding, correctly, about what it tests. No structural test compares
+the member and guest bases, and none could without one importing the other's adapter.
+
+**Why it is not fixed in the epic.** Widening the guest projection changes the ADR-0051
+`SCHEDULE_READ` scope — a security boundary — which is an ADR-0105 full-spec trigger. Folding it
+into a milestone whose subject is the toolbar is exactly what that ADR exists to stop.
+
+**Remedy: put the question before writing anything**, because it is a product decision rather than a
+bug report. A guest could reasonably be shown (a) the placed bars, which is what the plan IS after
+the collapse; (b) the computed bars, which is what they get today; or (c) both. **(a) is not simply
+"add two fields"**: `guest-dto.spec.ts`'s exclusion is deliberate and every sibling exclusion is
+written down, so it needs its own reasoning about what a guest may learn from a placement.
+
+**Trigger:** the next epic touching the share surface, or the first report of a shared link showing
+the wrong dates — whichever comes first.
+
+### 357. The CSV export carries a basis the canvas no longer draws
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (alongside `#356`, same
+census) · **Size:** S · **Owner:** web
+
+`apps/web/src/features/tsld/export/export-csv.ts:80` emits a column headed **"Early start"** read
+from `a.earlyStart`, and the finish column beside it does the same. After the collapse every bar on
+the canvas is drawn from `visualEffective*`, so a planner who places their programme and exports it
+gets the **computed** dates.
+
+**This is materially weaker than `#356` and is filed separately for that reason.** The column says
+what it is, so nothing is misrepresented — it is a labelled early-dates export, and a reader who
+wanted the placed dates can see they did not get them. `#356`'s guest view carries no such label.
+
+It is also a different remedy with a different owner: `apps/web` alone, no security boundary and no
+DTO change. Bundling the two would put one decision's trigger on the other's row.
+
+**Check before acting:** whether the CSV is meant to be the plan or the analysis. `lib/bar-dates.ts`
+records that `'early'` "survives for the **analyses**, which measure the network rather than the
+plan as placed", and the float-paths panel is gated to early dates **by decision**
+(`float-paths-view-agnostic.structural.test.ts`). If the CSV is an analysis export this row closes
+as a decision rather than a change, which is why no remedy is written here as an instruction.
+
+**Trigger:** the next change to the export surface, or `#356`'s decision — whose answer probably
+settles this one too.
+
+### 358. A rule cited nine times, which the file citing it most already breaks
+
+**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-I,
+incidentally — the milestone was verifying its own premise) · **Size:** M · **Owner:** web
+
+Nine comments across seven files state, as a rule with a citation, that **`features/tsld` imports no
+other feature (ADR-0026 D8)**. It is false, and false most conspicuously in the file that states it:
+
+```
+apps/web/src/features/tsld/components/TsldPanel.tsx:106  import … from '@/features/activities';
+apps/web/src/features/tsld/components/TsldPanel.tsx:107  import … from '@/features/plan-actions/build-selection-context';
+apps/web/src/features/tsld/components/TsldPanel.tsx:108  import … from '@/features/wbs';
+```
+
+`TsldPanel.tsx:329` asserts the rule 221 lines below those three imports. `TsldCanvas.tsx:414` is
+sharper still: it explains that a derivation lives in `features/wbs` **"because the tsld feature
+imports no other feature"** — and `TsldPanel` imports exactly that module.
+
+**It is not a cosmetic inconsistency, because the rule has been shaping designs.** Things are passed
+in as props, and derivations are placed in other features, _because_ of it —
+`use-plan-workspace-model.ts:729`, `activity-crud-dialogs.tsx:28`, `wbs-groups.ts:159` and
+`wbs-groups.test.ts:163` each cite it as the reason for a structural choice. A reader deciding where
+to put the next thing gets a rule that the code does not follow, so either the designs are paying a
+cost for nothing or three imports are violations nobody has noticed. **Which of those it is cannot
+be answered from the comments**, which is the finding.
+
+**What was checked:** `grep -rn "imports no other feature" apps/web/src docs/` (nine sites, listed
+above), the import block at `TsldPanel.tsx:106-108`, and **ADR-0026 §8 itself**, which is the one
+thing none of the nine comments' authors appears to have re-read.
+
+**The rule is real, and reading it removed the ambiguity rather than confirming it.** §8 is headed
+_"Module structure & composition (no sideways feature imports)"_ and says, in as many words:
+_"`features/tsld` depends only on **shared layers and `@repo/types`** — it imports **no** other
+feature. This honours ADR-0004's `features → shared`, no `feature → feature` rule."_ It is stated
+twice over, in two ADRs. **So the three imports are violations, not a rule that was quietly
+narrowed** — which is the answer this row was first filed as being unable to give.
+
+(The citation form `D8` is itself slightly wrong: ADR-0026's decisions are numbered `§1`–`§9c`, and
+§8 is plainly the referent. That is a footnote, not the finding, and the first draft of this row
+made it the finding — asserting the citation "does not resolve" **without opening the ADR**, which
+is the ADR-0076 Class 3 failure committed inside a row about unverified claims. Corrected in place.)
+
+**Not fixed here, deliberately.** Unpicking three imports means deciding where
+`ACTIVITY_TYPE_LABELS`, `buildSelectionBarContext` and the WBS band derivations should live and
+threading them through as props or shared modules — a design change to the canvas's public surface,
+which is an ADR-0105 full-spec trigger rather than a drive-by edit inside a milestone about
+migrating constraints. M-I therefore did **not** add a fourth violation: `TsldPanel`'s new
+`placementMigrationNotice` prop takes a **rendered node** rather than importing the component, which
+obeys §8 as written, and its docblock gives the reason that is true independently of the rule (the
+panel has no org slug and no session, so it could not fetch the report even if it wanted to).
+
+**Trigger:** the next epic that touches the `features/tsld` boundary. It is worth doing then rather
+than opportunistically, because the cheap half — correcting nine comments to match the code — is the
+**wrong** half: it would record the violation as the rule.
+
+### 359. Baseline variance compares a frozen network date against a live placed one
+
+**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-J) ·
+**Size:** M · **Owner:** api + web
+
+Two rows of the epic's own §4.11 API table were specified and never built, and they are **one piece
+of work rather than two**:
+
+| Row                            | Specified                                                                      | Built |
+| ------------------------------ | ------------------------------------------------------------------------------ | ----- |
+| `GET …/baselines/:id`          | `+ placedStart`, `+ placedFinish`, `+ visualStart`, `+ placementSnapshotLevel` | no    |
+| `GET …/baselines/:id/variance` | live side reads placed; carries the level                                      | no    |
+
+M-C froze the three placement columns on `baseline_activities` **for this** — its own record says
+so in as many words: _"after M-F the placed span is what every view draws, so a variance read needs
+it frozen"_. `baseline.repository.ts:264-266` writes them; **nothing in `apps/api/src` reads them**,
+and `BaselineActivitySnapshotResponseDto` does not carry them.
+
+**It is live-wrong after M-I rather than merely incomplete, and the migrated population is exactly
+the one that exhibits it.** `baselines.service.ts:421` builds the live side from
+`earlyStart`/`earlyFinish`. The strip converts a **binding** constraint — one that was holding an
+activity later than logic wanted — into a placement, so afterwards that activity's `early_start`
+moves **earlier** while its drawn span stays where it was. Variance therefore reports the activity
+as having moved **ahead of baseline** when the bar has not moved at all. That is the "a basis change
+presented as slippage" risk `m-c/placement-snapshot.md` §3 records as **not closed by that
+milestone and not claimed to be** — in its mirror form, and it is worse than a stale number because
+the Gantt draws the baseline variance bar from it, so the picture agrees with the wrong figure.
+
+**The fix is placed-vs-placed, gated on the level, and it is not a one-line swap.** Moving only the
+live side to the placed span would compare a frozen **network** date against a live **placed** one,
+which is worse than what ships. The honest shape is:
+
+- both sides placed where `placementSnapshotLevel` is `FULL`;
+- both sides on today's network basis where it is `NONE` — **every baseline captured before M-C**,
+  permanently, because a backfill would state as history a placement that baseline never saw;
+- the level carried on the response so a reader can tell which question was answered, since the same
+  plan reports different numbers depending on which baseline is active.
+
+**Not fixed in M-J, deliberately.** It changes `BaselineVarianceRow`'s public contract and the
+Gantt's variance bar, which is an ADR-0105 full-spec trigger rather than a fold-in inside a gate
+pass — and smuggling it into an epic's last milestone is exactly what that rule exists to stop. The
+spec's §4.11 is amended in place to say the two rows are unbuilt rather than left reading as
+delivered.
+
+**What was checked:** `baselines.service.ts:402-427` (the live projection), `variance.ts:67`
+(`computeVariance`'s two inputs), `dto/baseline-response.dto.ts:85-143` (the snapshot DTO's field
+list), `baseline.repository.ts:264-266` (the columns are written), and
+`grep -rn "placedStart" apps/api/src` (no reader).
+
+**Trigger:** the next epic that touches baselines, Earned Value or the Gantt's variance bar —
+whichever comes first. Until then a planner comparing a migrated plan against a pre-migration
+baseline should read the variance as a statement about the **network**, which is what it is.
+
+### 361. A journey suite can exhaust a rate-limit bucket and report it as a broken screen
+
+**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-J,
+from #360's corrected diagnosis) · **Size:** S · **Owner:** web
+
+Four of the 49 Playwright configs now raise `RATE_LIMIT_LIMIT` for their own harness. Three did it
+after hitting the wall; the fourth (`playwright.overview.config.ts`) did it on 2026-09-21 after the
+wall was hit, mis-diagnosed as pre-existing, published as such, and only then measured (#360).
+
+**The cost is not the limit. It is that spending the budget does not look like spending the
+budget.** A 429 on the session read makes `useSession` yield no user, and every screen that branches
+on a user renders its signed-out half — correctly. So the symptom is a product screen that looks
+broken: `playwright.measure-gantt.config.ts` records sign-up failing "with the form still filled and
+NO error on screen", and #360's was an invitation offering `Sign in / Create an account` to somebody
+who had just signed up. In both cases the journey then waits out its timeout on a control the
+product is right not to draw, and the report names that control. Nothing in the failure mentions the
+throttler, because `LOG_LEVEL: 'silent'` is set in every one of these configs.
+
+Two things follow, and only the second is work:
+
+- The remaining 45 configs have the same exposure and no one knows which are near a ceiling. The
+  buckets are **per IP and per handler** (stock `ThrottlerGuard`, no `generateKey` override), so the
+  quantity that matters is a single handler's peak in 60 s, not a suite's total — `overview` runs
+  517 requests through a 100/60 s limit and its peak handler was at **99**.
+- **The cheap remedy is to make the cause visible, not to raise more limits.** A 429 from the API
+  during a journey should fail loudly and name the throttler. Candidates: a Playwright fixture that
+  fails the test on any 429 response, or dropping `LOG_LEVEL` to `warn` in these configs so the
+  ThrottlerException reaches the report.
+
+**Trigger:** the next journey suite that fails at an infrastructure point (a heading or button that
+never appears) rather than at an assertion. Before diagnosing the screen, count the handler.
+
+**Not to be answered by raising the limit again** — that is the fourth time, and it treats the
+symptom each time while leaving the next suite to rediscover it from scratch.

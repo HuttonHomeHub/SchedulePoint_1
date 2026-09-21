@@ -37,10 +37,11 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canWriteNotes: true,
     onNotes: vi.fn(),
     isSummary: false,
+    // This whole suite is about a control that only exists for a PLACED activity (M-F-T6).
+    hasPlacement: true,
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
     // Visible unless a case says otherwise — the fixtures' status quo (M1).
-    clearPlacementApplies: true,
     onClearVisualPlacement: spies.onClearVisualPlacement,
     onOpenEditorAt: spies.onOpenEditorAt,
     onOpenLogic: spies.onOpenLogic,
@@ -121,33 +122,32 @@ describe('Clear visual start on the selection bar', () => {
     expect(clearButton()).toHaveAccessibleDescription('Start editing to clear the placement.');
   });
   /**
-   * **M1: omitted outside Visual mode, not shaded** (foot-row-and-deck epic).
+   * **The omission case MOVED from the plan to the activity** (one-planning-surface M-F-T6), and
+   * both halves are asserted because either alone is satisfied by the wrong thing.
    *
-   * The suite above pins the ADR-0082 SHADE case and its docblock calls that "rather than hidden".
-   * That is still right for every reason the gate can give **except one**: outside Visual mode the
-   * action does not apply to the plan at all, which is ADR-0082's own *omit* clause, not its shade
-   * clause. The two cases live side by side here so the distinction is visible to the next reader
-   * rather than inferred.
+   * It used to assert that `Clear visual start` is omitted outside Visual mode — ADR-0082's *omit*
+   * clause, because a plan scheduled Early had no hand-placed start anywhere in it. The collapse
+   * removes that condition and the predicate follows the subject down a level: an activity nobody
+   * has PLACED has no placement to clear.
    *
-   * Measured, it is also load-bearing: the control is 146 px of a row that needs 1037.4 px and is
-   * given 775.6 px at 1646, where the resulting wrap costs the diagram 36 px
-   * (`docs/specs/workspace-foot-and-deck/m0-measurement.md`).
+   * **The pair is the point** (ADR-0093). A suite asserting only the absence would pass equally if
+   * the item had been deleted from the registry outright — "correctly omitted" and "the capability
+   * is gone" are the same green — and one asserting only the presence would pass against the
+   * unconditional version this milestone measured at 36 px of diagram at 1646.
    *
-   * **Verified red**: with `isVisible` removed from the registry entry, the first case fails on the
-   * control still being found. The second case is the pinned positive — without it, deleting the
-   * item outright would pass the first assertion just as well, which is the ADR-0093 lesson about a
-   * green suite that cannot tell "the duplicate is gone" from "the capability is gone".
+   * The shade cases above are untouched and still hold: a reader who does not hold the pen sees the
+   * control on a placed activity, shaded, with a reason.
    */
-  it('is omitted entirely when the plan is not in Visual mode', () => {
-    render(
-      <SelectionActionsBar
-        context={ctx({
-          clearPlacementApplies: false,
-          clearPlacement: { enabled: false, reason: 'Only available in Visual mode' },
-        })}
-      />,
-    );
+  it('is offered when the selected activity carries a placement', () => {
+    render(<SelectionActionsBar context={ctx()} />);
+    expect(screen.getByRole('button', { name: /Clear visual start/i })).toBeInTheDocument();
+  });
+
+  it('is omitted when the selected activity has no placement to clear', () => {
+    render(<SelectionActionsBar context={ctx({ hasPlacement: false })} />);
     expect(screen.queryByRole('button', { name: /Clear visual start/i })).toBeNull();
+    // The pinned positive — without it this passes against a bar that rendered nothing at all.
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });
 
   /**

@@ -116,7 +116,13 @@ function activity(id: string, planId: string, overrides: Partial<Activity> = {})
     visualEffectiveStart: null,
     visualEffectiveFinish: null,
     visualConflict: false,
+    // one-planning-surface M-D. NULL here is the ONLY value consistent with the `false` above:
+    // ck_activities_visual_conflict_matches_reason refuses a row where the flag and the reason
+    // disagree, so a fixture pairing them differently would describe a state the database refuses.
+    visualConflictReason: null,
     visualDriftDays: null,
+    // one-planning-surface M-A: the column exists; M-D computes it. NULL = not yet calculated.
+    remainingFloat: null,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,

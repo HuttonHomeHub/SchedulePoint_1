@@ -27,7 +27,12 @@ vi.mock('../export/render-export-image', () => ({
   renderExportImage: vi.fn(() => Promise.resolve(new Blob(['png'], { type: 'image/png' }))),
 }));
 vi.mock('../render/to-render-model', () => ({
-  barDateSourceFor: () => 'early',
+  // **`'visual'`, because that is what the real function now returns for every plan** (M-F-T1).
+  // Left at `'early'` this mock would describe a world no shipped bundle can produce — the shape
+  // ADR-0088 records the base journey's editing specs having been in for months. The value is
+  // still mocked rather than real because these suites are about the host, not the resolver;
+  // `lib/bar-dates.test.ts` covers the rule itself, which until M-F nothing did.
+  barDateSourceFor: () => 'visual',
   toRenderActivities: () => [{ earlyStart: '2026-01-01', earlyFinish: '2026-01-10', laneIndex: 0 }],
   toRenderEdges: () => [],
 }));
@@ -39,7 +44,6 @@ vi.mock('../export/pdf', () => ({ exportDiagramToPdf }));
 
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
-  useSetPlanSchedulingMode: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculateCommand: () => ({ isPending: false, run: vi.fn() }),
@@ -146,7 +150,6 @@ const PLAN = {
   name: 'North Tower',
   status: 'ACTIVE',
   plannedStart: '2026-01-01',
-  schedulingMode: 'EARLY',
   version: 1,
 } as unknown as LoadedPlan;
 

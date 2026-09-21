@@ -1,0 +1,138 @@
+-- THE PLACEMENT SNAPSHOT — a baseline freezes where the work was PLACED, not only where the logic
+-- put it. The FIFTH amendment to ADR-0025's snapshot-copy model, after ADR-0042's cost baseline,
+-- ADR-0071 M3's cost decomposition, ADR-0125's criticality rule and ADR-0126's revision snapshot.
+-- Spec: docs/specs/one-planning-surface/feature-spec.md (§4.9, US-6; CQ-1/CQ-8 answered by the
+-- product owner 2026-09-20). Milestone M-A-T1 + M-A-T2.
+--
+-- WHY. This epic deletes `plans.scheduling_mode` and makes PLACED dates the product's single answer
+-- to "when is this activity" — on the canvas, in the Gantt, in the print, in the export and across
+-- a plan boundary. A baseline today freezes `baseline_start`/`baseline_finish`, which ARE the
+-- captured EARLY start/finish (the pure-network dates). After the collapse, a comparison that left
+-- those columns alone would be measuring today's PLACED dates against a frozen EARLY date and
+-- reporting the difference as slippage — a large, real-looking variance with nothing in the
+-- database able to disagree. That is ADR-0125's criticality finding one basis along.
+--
+-- WHY `visual_start` IS FROZEN BESIDE THE TWO PLACED DATES, AND IT IS NOT REDUNDANT. `placed_start`
+-- / `placed_finish` are an ENGINE OUTPUT (`activities.visual_effective_start`/`_finish`);
+-- `visual_start` is the PLANNER'S INPUT, and after this epic it is the ONLY one — a drag writes it
+-- and nothing else (the drag stops writing constraints, §4.6). Without it a comparison can see that
+-- a bar moved and cannot say WHY: "the planner moved it" and "the logic moved an unplaced bar
+-- underneath" produce identical `placed_*` deltas, and telling those two apart is the whole reason
+-- a planner opens a comparison. It is `baseline_activities.budgeted_expense`'s argument one class
+-- along — state the component, do not leave it to be recovered by subtraction.
+--
+-- ITS VALUE IS ENTIRELY PROSPECTIVE, AND THAT IS PUT HERE RATHER THAN IN A CONSEQUENCES SECTION
+-- (ADR-0126 CQ-1's rule). No baseline captured before this migration can ever be told where its
+-- bars sat: the data was never recorded, a capture cannot be re-run, and a backfill could only
+-- stamp TODAY's placement as history — precisely what ADR-0025's copy-not-reference rule exists to
+-- prevent. The clock starts here. Every baseline that exists on any host today reads
+-- `placement_snapshot_level = 'NONE'`, which is the literal truth about it, and the comparison
+-- states that as a typed reason (ADR-0126's `NOT_ASSESSABLE` vocabulary, reused by M-C-T2) rather
+-- than omitting the class or reporting a silent "no change". `?? 'MATCH'` is the exact lie this
+-- column exists to prevent.
+--
+-- WHY A LEVEL AND NOT A TWO-VALUED `date_basis` (rejected in the spec's §4.13 alternatives table).
+-- A basis says "these dates are early" OR "these dates are placed", and after this epic NEITHER is
+-- true of a capture: EVERY post-epic capture writes BOTH column sets, because `baseline_start`
+-- stays the pure-network early date (float variance, DCMA and the whole ADR-0034 matrix depend on
+-- it) and the three columns below land BESIDE it rather than instead of it. So the row is not one
+-- or the other, and the question a reader actually has is not "which basis?" but "was the placement
+-- recorded at all?" — which only a level can answer. It is `revision_snapshot_level`'s own argument
+-- (ADR-0126), one column along, and `DEFAULT 'NONE'` is the literal truth of every existing row.
+--
+-- AND NO PER-ROW TEST CAN ANSWER IT. All three new `baseline_activities` columns have a LEGITIMATE
+-- null under 'FULL': `visual_start` is null for any activity the planner never moved — which today
+-- is EVERY activity on the deployed estate, since FC-1 predicts zero placements anywhere, so the
+-- ambiguous case is the COMMON one — and `placed_start`/`placed_finish` are null for a plan never
+-- recalculated, exactly the null `baseline_start`/`baseline_finish` already carry beside them. NOR
+-- CAN A ROW COUNT: `baseline.repository.ts` guards its `createMany` on `input.activities.length > 0`
+-- (verified, not assumed), so a 'FULL' capture of an empty plan writes no rows at all. The read
+-- must branch on the discriminator and never on a column's nullness or a list's length.
+--
+-- NO DEFAULT ON THE THREE DATE COLUMNS, AND THAT IS THE LOAD-BEARING DECISION. The
+-- `baselines.hours_per_day_minutes DEFAULT 1440` precedent licenses nothing here: that default was
+-- legal because 1440 was TRUE of every pre-existing row (nothing could author a non-full-day
+-- calendar), and none of these three values is knowable for ANY row that exists. This is
+-- `baseline_activities.budgeted_expense`'s "0 is a claim" (ADR-0071 M3), ADR-0125's rejected
+-- `is_critical DEFAULT false`, and ADR-0126's `lane_index` trap — the same rule, three migrations
+-- running.
+--
+-- NO CHECK CONSTRAINTS ON THE THREE, AND THE OMISSION IS DELIBERATE RATHER THAN AN OVERSIGHT.
+-- ADR-0126's ten shape columns took four, because each mirrors a LIVE constraint and "a frozen copy
+-- must not be able to hold a value its source would refuse". The live columns these three copy
+-- carry NONE: `activities.visual_start` is unconstrained, and `visual_effective_start`/`_finish`
+-- are engine-owned and unconstrained. In particular nothing asserts `placed_finish >= placed_start`
+-- — a zero-length milestone makes them equal, and asserting an ordering the engine has never been
+-- asked to guarantee would let a future engine change FAIL a capture rather than record it. The
+-- second half of ADR-0126's rule applies here and the first does not: a frozen copy must also never
+-- REFUSE a plan the product allows.
+--
+-- ONE MIGRATION IS CORRECT, AND IT WAS RE-PROVED RATHER THAN INHERITED. The two-migration rule
+-- (ADR-0053 M3) is about `ALTER TYPE … ADD VALUE`, which PostgreSQL forbids USING in the
+-- transaction that added it. This migration adds no label to an existing type: it CREATEs a new one
+-- and uses it in the same transaction, which is legal. Re-proved against the PostgreSQL 16.13 this
+-- repository's CI and local harness provision (2026-09-20), both ways round:
+--   * POSITIVE  BEGIN; CREATE TYPE "ZzProbeLevel" AS ENUM ('NONE','FULL');
+--               CREATE TABLE zz_probe (id int primary key, lvl "ZzProbeLevel" NOT NULL
+--               DEFAULT 'NONE'); INSERT …; SELECT lvl;  →  COMMITs, returns 'NONE'.
+--   * NEGATIVE  CREATE TYPE "ZzProbeExisting" AS ENUM ('A'); BEGIN;
+--               ALTER TYPE "ZzProbeExisting" ADD VALUE 'B'; CREATE TABLE … DEFAULT 'B';
+--               →  ERROR 55P04, "unsafe use of new value "B" of enum type".
+-- The negative control is what makes the positive result mean something. Two shipped precedents on
+-- this same table agree: 20260906120000_baseline_revision_snapshot (:74, :97) and
+-- 20260802140000_baseline_assignment_costs.
+--
+-- BOOT SAFETY (ADR-0018 — the API self-migrates on start, and the host pulls and recreates the
+-- image unattended under ADR-0047, so a migration that CAN fail is the API failing to BOOT, an
+-- outage rather than a failed deploy step). Every statement below is additive and touches no
+-- existing row's data:
+--   * CREATE TYPE is catalogue-only.
+--   * ADD COLUMN of a nullable column with no default is metadata-only: existing rows are neither
+--     read nor rewritten.
+--   * ADD COLUMN with a constant, non-volatile DEFAULT (`placement_snapshot_level`) is likewise
+--     metadata-only since PostgreSQL 11 — the default is stored once in the catalogue rather than
+--     written into every row.
+--   OBSERVED rather than asserted, by querying `pg_attribute` after applying this file to a
+--   POPULATED PostgreSQL 16.13 database (ADR-0107's rule: this class of defect is invisible on an
+--   empty table): the three `baseline_activities` columns read `atthasmissing = f,
+--   attmissingval = NULL` (nothing to fill in, because they are NULL) and
+--   `baselines.placement_snapshot_level` reads `atthasmissing = t, attmissingval = {NONE}` — the
+--   fast-default catalogue entry, which is what a rewrite would NOT have produced. Row counts on
+--   `baselines`, `baseline_activities` and `activities` were unchanged across the apply.
+--
+-- PARITY. The CPM engine never reads `baselines` or any of its children — it is handed activities,
+-- edges, calendars and ComputeOptions built from `plans`. `computeSchedule`'s signature, inputs and
+-- outputs are unchanged and nothing under src/modules/schedule/engine/ is touched, so the ADR-0034
+-- recalculation parity gate is untouched BY CONSTRUCTION.
+--
+-- DARK. Nothing writes 'FULL' and nothing writes the three columns at this milestone; M-C does.
+-- Until then 'NONE' is correct for every row, including rows captured after this file applies.
+
+-- CreateEnum: what a baseline froze of the PLACEMENT. 'NONE' is what every existing baseline is,
+-- and is the constant DEFAULT below. See the PlacementSnapshotLevel docblock in schema.prisma,
+-- which ENUMERATES what 'FULL' vouches for; MUST stay in lock-step with @repo/types when M-C
+-- surfaces it.
+CREATE TYPE "PlacementSnapshotLevel" AS ENUM ('NONE', 'FULL');
+
+-- AddColumn: the discriminator, and the load-bearing statement of this migration. See the header
+-- for why a level rather than a basis, and why no per-row test and no row count can substitute.
+ALTER TABLE "baselines"
+  ADD COLUMN "placement_snapshot_level" "PlacementSnapshotLevel" NOT NULL DEFAULT 'NONE';
+
+-- AddColumn x3: the frozen placement of one activity. ALL NULLABLE WITH NO DEFAULT (header), and
+-- `@db.Date` because the schedule is measured in calendar days (ADR-0023) exactly like the
+-- `baseline_start`/`late_start` columns they sit beside — NOT timestamptz.
+ALTER TABLE "baseline_activities"
+  ADD COLUMN "placed_start"  DATE,
+  ADD COLUMN "placed_finish" DATE,
+  ADD COLUMN "visual_start"  DATE;
+
+-- Down (forward-only in production, ADR-0018; documented for completeness). Everything below was
+-- created by this migration, so dropping it destroys only data authored after it shipped. It is
+-- nonetheless IRREVERSIBLE in the way that matters: unlike an engine-owned mirror these values do
+-- not repopulate on the next recalculation — they are gone with the captures that produced them,
+-- and a capture cannot be re-run.
+--   ALTER TABLE "baseline_activities"
+--     DROP COLUMN "visual_start", DROP COLUMN "placed_finish", DROP COLUMN "placed_start";
+--   ALTER TABLE "baselines" DROP COLUMN "placement_snapshot_level";
+--   DROP TYPE "PlacementSnapshotLevel";

@@ -238,9 +238,8 @@ export function ScheduleHealthPanel({
               {effectiveReport.computedAt === null
                 ? 'Never calculated'
                 : `Calculated ${effectiveReport.computedAt.slice(0, 10)}`}{' '}
-              · data date {effectiveReport.dataDate} ·{' '}
-              {effectiveReport.schedulingMode === 'EARLY' ? 'Early' : 'Visual'} scheduling ·
-              baseline: {effectiveReport.baseline?.name ?? 'none'}
+              · data date {effectiveReport.dataDate} · baseline:{' '}
+              {effectiveReport.baseline?.name ?? 'none'}
             </p>
 
             {/* Panel-level, not per-row: with several rows expanded under a lens the per-row copy

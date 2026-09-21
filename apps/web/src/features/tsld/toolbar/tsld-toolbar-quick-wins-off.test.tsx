@@ -18,7 +18,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: true,
   NOTES_ENABLED: true,
   UNDO_REDO_ENABLED: false,
   TOOLBAR_QUICK_WINS_ENABLED: false,
@@ -28,7 +27,6 @@ const SELECTED = { id: 'a1', version: 7, name: 'Excavate' } as unknown as Activi
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({
-    schedulingMode: 'VISUAL',
     summaryContent: null,
     selectedActivityId: 'a1',
     selectedActivity: SELECTED,

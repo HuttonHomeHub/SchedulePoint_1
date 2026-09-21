@@ -1057,6 +1057,78 @@ describe('paintScene — insight lenses', () => {
     expect(ctx.setLineDash).toHaveBeenCalledWith([2, 2]);
   });
 
+  it('draws the levelled ghosts on a THIRD dash, distinct from both neighbours', () => {
+    // `GHOST_DASH` is [2,2] and `COMPARE_DASH` is [6,3] — and that constant's docblock records the
+    // two having been pixel-identical once, found by a ux review. A long-short rhythm is a third
+    // shape class rather than a third length of the same one.
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      {
+        ...lensScene,
+        levelledGhosts: [
+          {
+            id: 'a',
+            leveledStart: '2026-01-06',
+            leveledFinish: '2026-01-08',
+            laneIndex: 0,
+            isMilestone: false,
+          },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const dashes = ctx.setLineDash.mock.calls.map((c) => JSON.stringify(c[0]));
+    expect(dashes).toContain(JSON.stringify([5, 2, 1, 2]));
+    expect(JSON.stringify([5, 2, 1, 2])).not.toBe(JSON.stringify([2, 2]));
+    expect(JSON.stringify([5, 2, 1, 2])).not.toBe(JSON.stringify([6, 3]));
+  });
+
+  it('is a no-op with no levelled ghosts — the parity contract', () => {
+    // Absent means the lens is off, levelling never ran, or nothing moved. FC-1 predicts the third
+    // of those is what most plans look like, so this is the COMMON path, not an edge case.
+    const withNone = mockCtx();
+    const withEmpty = mockCtx();
+    paintScene(withNone, lensScene, VIEW, SIZE, PALETTE);
+    paintScene(withEmpty, { ...lensScene, levelledGhosts: [] }, VIEW, SIZE, PALETTE);
+    expect(withEmpty.strokeRect.mock.calls).toEqual(withNone.strokeRect.mock.calls);
+    expect(withEmpty.setLineDash.mock.calls).toEqual(withNone.setLineDash.mock.calls);
+  });
+
+  it('culls a levelled ghost whose live bar is off-screen, like its baseline neighbour', () => {
+    // Cull by `visibleIds` FIRST — correct here and WRONG for the comparison layer between them,
+    // where removed work has no live activity at all. Copying the wrong neighbour is a defect that
+    // looks right on every plan where nothing was deleted.
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      {
+        ...lensScene,
+        levelledGhosts: [
+          {
+            id: 'not-in-the-scene',
+            leveledStart: '2026-01-06',
+            leveledFinish: '2026-01-08',
+            laneIndex: 0,
+            isMilestone: false,
+          },
+        ],
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    // Measured on `strokeRect`, not on `setLineDash`: the dash is set ONCE outside the loop, so it
+    // fires whenever the array is non-empty whether or not any ghost survives the cull. The first
+    // version of this case asserted on the dash and failed against a correctly-culling painter —
+    // the instrument was measuring "the block ran", not "a ghost drew".
+    const baseline = mockCtx();
+    paintScene(baseline, lensScene, VIEW, SIZE, PALETTE);
+    expect(ctx.strokeRect.mock.calls.length).toBe(baseline.strokeRect.mock.calls.length);
+  });
+
   it('culls an off-screen ghost (no stroke for a ghost far outside the viewport)', () => {
     const ctx = mockCtx();
     const before = ((): number => {
@@ -1788,6 +1860,75 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     expect(refreshed.fill.mock.calls.length).toBe(legacy.fill.mock.calls.length);
     expect(refreshed.fillRect.mock.calls.length).toBe(legacy.fillRect.mock.calls.length);
     expect(refreshed.strokeRect.mock.calls.length).toBe(legacy.strokeRect.mock.calls.length + 1);
+  });
+
+  it('marks the BREACHED edge: a start conflict at the start, an overrun bound at the finish', () => {
+    /**
+     * **The badge was drawn at `rect.x` for both reasons until the M-J gate pass**, under a docblock
+     * that said "start edge" and described only `EARLIER_THAN_LOGIC` — correct while that was the
+     * one reason the flag had. M-D added `LATER_THAN_BOUND`, whose engine test is
+     * `placedFinish > constraintCeiling`, so the breach is at the FINISH; marking the start pointed
+     * a planner at the end of the bar nothing is wrong with, typically with the pin for the bound
+     * that was overrun sitting at the other end.
+     *
+     * The bar here is `rect.x = 72`, `rect.w = 48` (the same geometry the selection-ring case below
+     * pins), so the triangle's base-left lands at 73 for a start mark and at 113 for a finish one.
+     *
+     * Verified red against the pre-fix unconditional `rect.x`, which put both at 73.
+     */
+    const badgeBaseX = (reason: 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND'): number => {
+      const ctx = mockCtx();
+      paintScene(
+        ctx,
+        refreshScene({
+          activities: [task({ visualConflict: true, visualConflictReason: reason })],
+        }),
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      const move = sceneMoveCalls(ctx).find(([x]) => x !== 0);
+      if (!move) throw new Error('no conflict badge was drawn');
+      return move[0];
+    };
+    expect(badgeBaseX('EARLIER_THAN_LOGIC')).toBe(73);
+    expect(badgeBaseX('LATER_THAN_BOUND')).toBe(113);
+  });
+
+  it('keeps an overrun bound’s badge ON a bar narrower than the badge itself', () => {
+    /**
+     * **The clamp, and the case it is for is NOT the one the first draft asserted.** That draft used
+     * a milestone, reasoning that a diamond is narrow — and `MILESTONE_RADIUS * 2 = 14`, comfortably
+     * wider than the badge, so the clamp never fired and the test passed against a build with no
+     * clamp at all. A vacuous assertion dressed as a boundary case.
+     *
+     * The real case is a zoomed-out task bar: `activityRect` floors width at 2 px, so at a
+     * whole-plan framing a short activity is narrower than the 6 px badge and the finish-edge
+     * arithmetic lands to the LEFT of the bar it marks. Here `pxPerDay: 1` gives `rect.x = 61,
+     * rect.w = 2`, so unclamped the triangle's base-left would be 56 — five pixels outside the
+     * shape, over whatever the neighbouring lane happens to be drawing.
+     *
+     * Verified red against the unclamped expression.
+     */
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      refreshScene({
+        activities: [
+          task({
+            earlyFinish: '2026-01-02',
+            visualConflict: true,
+            visualConflictReason: 'LATER_THAN_BOUND',
+          }),
+        ],
+      }),
+      { pxPerDay: 1, originX: 60, originY: 40 },
+      SIZE,
+      PALETTE,
+    );
+    const move = sceneMoveCalls(ctx).find(([x]) => x !== 0);
+    if (!move) throw new Error('no conflict badge was drawn');
+    expect(move[0]).toBe(62);
   });
 
   it('rounds the selection ring with the bar (roundRect path) and keeps the square fallback', () => {

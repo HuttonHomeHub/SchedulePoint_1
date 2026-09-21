@@ -17,10 +17,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * What each case here exists to catch, stated so a future reader can tell a real failure from a
  * fixture drift:
  *
- * - **Mode.** EARLY pins an SNET; VISUAL writes `visualStart`. Getting this wrong writes the wrong
- *   field on every bar of the drag — silently, with correct-looking dates, on exactly the plans
- *   where placement is hand-made. A TDZ slip during development had `isVisualMode` missing from the
- *   memo's dependencies, which produced precisely that.
+ * - **The field a move writes.** It is `visualStart`, on every plan (one-planning-surface M-F-T3).
+ *   Getting this wrong writes the wrong field on every bar of the drag — silently, with
+ *   correct-looking dates. This bullet used to describe a fork (EARLY pinned an SNET, VISUAL wrote
+ *   a placement) and named the defect that made it worth testing: a TDZ slip had `isVisualMode`
+ *   missing from the memo's dependencies. The fork is gone with the mode; the assertion that a move
+ *   writes a placement and nothing else is what it leaves behind, and it is the half that mattered.
  * - **Conflict and pen loss.** These branches did not exist until the consolidation pass: the whole
  *   method had no `catch`, so a 409 propagated as a raw rejection and a 423 skipped
  *   `pen.onWriteRejected` entirely, leaving the client's pen state stale until the next poll. The
@@ -32,7 +34,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   undoRedo: false,
-  visual: false,
   record: vi.fn(),
   notify: vi.fn(),
   hold: vi.fn(),
@@ -48,7 +49,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
     NOTES_ENABLED: false,
-    SCHEDULING_MODES_ENABLED: true,
     get UNDO_REDO_ENABLED() {
       return h.undoRedo;
     },
@@ -85,7 +85,6 @@ vi.mock('@/features/plans', () => ({
       id: 'p1',
       projectId: 'proj1',
       plannedStart: '2026-01-01',
-      schedulingMode: h.visual ? 'VISUAL' : 'EARLY',
     }),
 }));
 vi.mock('@/features/projects', () => ({ useProject: () => query({ clientId: 'c1' }) }));
@@ -154,7 +153,9 @@ const ACTIVITY: ActivitySummary = {
   visualEffectiveStart: null,
   visualEffectiveFinish: null,
   visualConflict: false,
+  visualConflictReason: null,
   visualDriftDays: null,
+  remainingFloat: null,
   levelingPriority: null,
   leveledStart: null,
   leveledFinish: null,
@@ -217,7 +218,6 @@ function apiError(status: number): ApiFetchError {
 beforeEach(() => {
   vi.clearAllMocks();
   h.undoRedo = false;
-  h.visual = false;
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.batchPlacements.mockResolvedValue([
     { id: 'a1', version: 8 },
@@ -226,32 +226,34 @@ beforeEach(() => {
 });
 
 describe('usePlanWorkspaceModel — moveMany (the plural drag)', () => {
-  it('pins an SNET on every moved row in EARLY mode', async () => {
-    await moveMany()([ACTIVITY, OTHER], { dayDelta: 3, laneDelta: 0 });
-    const sent = h.batchPlacements.mock.calls[0]?.[0] as {
-      placements: { id: string; constraintType?: string | null; visualStart?: string | null }[];
-    };
-    expect(sent.placements).toHaveLength(2);
-    for (const p of sent.placements) {
-      expect(p.constraintType).toBe('SNET');
-      // `visualStart` rides along at its ORIGINAL value — the batch DTO takes complete rows, so an
-      // omitted field is a validation error rather than "leave it alone". What matters is that
-      // EARLY does not *shift* it: doing so would drag the Visual placement of every moved bar
-      // behind a mode that is not currently drawing from it, and nobody would see it until the
-      // plan was switched to Visual. This assertion was `toBeUndefined()` first, which was a guess.
-      expect(p.visualStart).toBe('2026-02-02');
-    }
-  });
-
   /**
-   * VISUAL does not merely *omit* the constraint — it sends `constraintType: null`, clearing any
-   * SNET an earlier EARLY-mode drag pinned. That is the load-bearing half: a bar carrying a stale
-   * SNET while the plan schedules visually is pinned by a constraint nobody can see on a surface
-   * that does not show constraints. Asserted as `null` after the first version of this test guessed
-   * `undefined` and went red — read the behaviour, do not remember it (ADR-0076).
+   * **The `EARLY` case is DELETED** (M-F-T3). It asserted `constraintType: 'SNET'` on every moved
+   * row, which is exactly what a bulk drag no longer does: twelve bars used to be pinned by a
+   * gesture nobody read as a commitment.
+   *
+   * Its better half is preserved and inverted below — that a move must not disturb a row's own
+   * constraint — and is asserted where it can actually discriminate, in
+   * `features/tsld/model/bulk-move.test.ts`, against a fixture carrying a non-null one.
    */
-  it('writes visualStart and CLEARS the constraint in VISUAL mode', async () => {
-    h.visual = true;
+  /**
+   * **This docblock claimed the move CLEARS a constraint, and that was never true** — corrected at
+   * M-F-T3 rather than carried.
+   *
+   * `movedPlacement` spreads the row's current placement, so `constraintType` arrives at whatever
+   * the row already had; the batch DTO takes complete rows, so it is present rather than omitted,
+   * which is the fact the original author was reaching for. The fixture's constraint is `null`, so
+   * this case asserts `null` on a row that was already `null` — it passes, and it has never been
+   * able to tell "carried through" from "cleared".
+   *
+   * The claim mattered: "a bar carrying a stale SNET while the plan schedules visually is pinned by
+   * a constraint nobody can see" describes a real hazard, and the reassurance that a move fixed it
+   * was false. What the product actually guarantees is the opposite and is better — a move does not
+   * touch a commitment at all — and it is asserted against a non-null fixture in
+   * `features/tsld/model/bulk-move.test.ts`, which is where it can discriminate.
+   *
+   * Kept here as the seam check it really is: the batch carries a placement and a complete row.
+   */
+  it('writes visualStart and sends a COMPLETE row, constraint field included', async () => {
     await moveMany()([ACTIVITY, OTHER], { dayDelta: 3, laneDelta: 0 });
     const sent = h.batchPlacements.mock.calls[0]?.[0] as {
       placements: { id: string; constraintType?: string | null; visualStart?: string | null }[];

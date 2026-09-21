@@ -84,7 +84,6 @@ export interface HealthPlanInput {
   /** The data date (`plans.planned_start`), `YYYY-MM-DD` — NOT NULL since ADR-0033 M1. */
   dataDate: string;
   computedAt: string | null;
-  schedulingMode: 'EARLY' | 'VISUAL';
 }
 
 export interface HealthComputeInput {
@@ -283,7 +282,6 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
     planName: plan.name,
     dataDate: plan.dataDate,
     computedAt: plan.computedAt,
-    schedulingMode: plan.schedulingMode,
     activityCount: acts.length,
     relationshipCount: dependencies.length,
     baseline: baseline

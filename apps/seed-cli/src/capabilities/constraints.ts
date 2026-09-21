@@ -1,6 +1,6 @@
 import type { SeedSpec } from '@repo/seed';
 
-import { activity, capabilityPlan, link } from './builders.js';
+import { activity, calendar, capabilityPlan, DAY, link } from './builders.js';
 
 /**
  * **Constraints** (ADR-0066 M2) — one activity per constraint type, each with the same predecessor,
@@ -151,5 +151,77 @@ export function expectedFinishPlan(): SeedSpec {
       activity('E3', { name: 'Successor' }),
     ],
     dependencies: [link('E1', 'E2'), link('E2', 'E3')],
+  });
+}
+
+/**
+ * **The SNET effect classes** (ADR-0140's D-F/D-G/D-H diagnostics; the one-planning-surface epic's
+ * M0/M-B-T3). The plan above demonstrates every constraint TYPE; this one demonstrates the three
+ * readable EFFECTS one SNET can have, which is a different question — `plan:capability-constraints`
+ * has no activity built to be inert, and none built to be permanently unclassified.
+ *
+ * An SNET applies as `max(logicEarlyStart, constraintDate)` (`engine/constraints.ts:155-156`), which
+ * splits every SNET in the estate into three classes the arithmetic settles outright — plus a fourth
+ * that arises two ways, only one of which this plan can hold still long enough to seed.
+ *
+ * `S_UNCLASSIFIED` is the permanent half of that fourth class: `compute.ts:765` writes a started
+ * activity's actual start VERBATIM, bypassing the clamp altogether ("actuals never move", ADR-0035
+ * §1) — so its early_start reads below its own constraint in a schedule computed seconds ago, and
+ * never clears. The other half — a stored schedule that simply predates a constraint added since —
+ * clears on the very next recalculation, which `seedPlan` performs exactly once, at the end of every
+ * run. It is not a shape a single recalculate can hold still, so it is not seeded here: seeding it
+ * would need a second, unrecalculated write after the one this catalogue always performs, which is a
+ * different (and much rarer) product state than "the estate has a constraint like this in it" — an
+ * ordinary planner mid-edit, not a resting shape a catalogue exists to demonstrate.
+ */
+export function snetEffectsPlan(): SeedSpec {
+  // A plain Monday–Friday week, given explicitly. A plan with no `defaultCalendarKey` is PATCHed
+  // with `calendarId: null`, which resolves to the ALL-MINUTES calendar (`plan-calendar.ts`) — every
+  // date below (and the plain-language "9 Mar" in the description) depends on a weekend gap existing.
+  const cal = calendar('SE_CAL', 'SNET effects five-day week', [1, 2, 3, 4, 5]);
+  return capabilityPlan({
+    seedName: 'capability-snet-effects',
+    name: 'SNET: binding, inert, and unclassified by an actual start',
+    description:
+      'S_BINDING’s constraint (23 Mar) is later than logic alone would reach (9 Mar), so it wins: ' +
+      'binding. S_INERT’s constraint (20 Feb) is earlier than logic already reaches, so the max() ' +
+      'discards it: inert. S_UNCLASSIFIED started on 23 Feb — its early_start is that actual start, ' +
+      'verbatim — under a constraint of 23 Mar; it reads below its own constraint permanently, ' +
+      'because an actual start is never reclamped.',
+    defaultCalendarKey: cal.key,
+    calendars: [cal],
+    activities: [
+      activity('S0', { name: 'Common predecessor' }),
+      activity('S_BINDING', {
+        name: 'SNET the logic has not yet reached',
+        constraintType: 'SNET',
+        constraintDate: '2026-03-23',
+      }),
+      activity('S_INERT', {
+        name: 'SNET the logic has already overtaken',
+        constraintType: 'SNET',
+        constraintDate: '2026-02-20',
+      }),
+      // No predecessor: the actual start is what decides early_start here, and giving it one would
+      // only invite the question of whether the predecessor is what is being read instead.
+      activity('S_UNCLASSIFIED', {
+        name: 'Started before a later SNET, permanently unclassified',
+        constraintType: 'SNET',
+        constraintDate: '2026-03-23',
+        progress: {
+          status: 'IN_PROGRESS',
+          percentComplete: 30,
+          percentCompleteType: 'DURATION',
+          physicalPercentComplete: null,
+          actualStart: '2026-02-23T00:00',
+          actualFinish: null,
+          remainingDurationMinutes: 4 * DAY,
+          suspendDate: null,
+          resumeDate: null,
+          expectedFinish: null,
+        },
+      }),
+    ],
+    dependencies: [link('S0', 'S_BINDING'), link('S0', 'S_INERT')],
   });
 }

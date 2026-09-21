@@ -7,7 +7,6 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
   NOTES_ENABLED,
-  SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
 import {
@@ -103,7 +102,6 @@ import {
   durationResizeCommand,
   lagDragCommand,
   relaneCommand,
-  repositionCommand,
   updateCommand,
   visualResizeCommand,
   visualStartCommand,
@@ -121,7 +119,6 @@ import {
   useOrgRole,
 } from '@/hooks/use-org-role';
 import { ApiFetchError } from '@/lib/api/client';
-import { minorToMajorInput } from '@/lib/format-money';
 
 /**
  * What a duplicate attempt did. Three distinguishable outcomes, because a planner needs to know
@@ -596,11 +593,31 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // move needs no recalc; the canvas path already skips it). The canvas reposition/link callbacks
   // still `notify()` explicitly, which just coalesces with this. Baseline is taken on the first
   // *loaded* (non-pending) observation, so opening a plan never fires a gratuitous recalc.
+  //
+  // **`visualStart` joined the signature at one-planning-surface M-F, and its absence was a
+  // regression the collapse introduced rather than an old gap.** A hand-placement IS a scheduling
+  // input — it is what Pass 2 solves from — so it belongs here on the rule this comment already
+  // states; what kept it out was that it used to be a VISUAL-mode-only field.
+  //
+  // The net this signature casts is what used to catch **undo**. No undo path calls `notify()` —
+  // every one of the ten call sites is a forward seam — so an inverse has always relied on landing
+  // in a watched field. Before the collapse a drag wrote an `SNET`, which is watched two fields to
+  // the left, so undoing one changed the signature and the recalculation followed. After it a drag
+  // writes a `visualStart`, which was watched by nothing, so `PATCH …/activities/placements`
+  // restored the INPUT and left `visualEffectiveStart` describing the edit just reversed.
+  //
+  // Measured on a real plan before the fix: three bars dragged and undone read `visualStart: null`
+  // on all three — undo fired and was correct — with `visualEffectiveStart` still a day late on all
+  // three, so the bars stayed where they had been dragged. `e2e-multi-select` is what found it, and
+  // only because its assertion stopped polling `earlyStart`, which the drag no longer moves.
+  //
+  // No loop: this is an input the planner writes, not an engine-computed column a recalculation
+  // writes back — which is the discriminator the paragraph above already draws.
   const structureSignature = useMemo(() => {
     const acts = (activities.data ?? [])
       .map(
         (a) =>
-          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}:${a.parentId ?? ''}`,
+          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}:${a.parentId ?? ''}:${a.visualStart ?? ''}`,
       )
       .sort()
       .join('|');
@@ -625,8 +642,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   }, [structureSignature, activities.isPending, dependencies.isPending, autoRecalc]);
 
   // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
-  // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
-  // with an SNET constraint, then the authoritative recalc places it.
+  // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK **hand-placed** at the dropped
+  // day, then the authoritative recalc lands its dates. (It read "pinned … with an SNET
+  // constraint" until the M-J gate pass — true of the code M-F-T3 deleted, and contradicted
+  // twenty lines below by the block that describes what replaced it.)
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
   // Delete, used by the undo/redo inverses (ADR-0048 M2): undoing a create deletes it. The
   // full-definition CREATE that undoing a delete used to need is gone with `docs/TECH_DEBT.md` #92 —
@@ -647,18 +666,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // conflict without re-prompting (never a second POST). The next recalc reconciles dates.
     // The draw kind (ADR-0032 M4): a task spans its dragged days; a milestone is a zero-duration
     // point (the canvas already collapsed the drag to a single day, and the API rejects a non-zero
-    // milestone duration). An SNET at the start day pins placement; recalc then lands the dates.
-    // VISUAL mode (ADR-0033 M3): the drop hand-places `visualStart`, no implicit SNET constraint;
-    // EARLY mode keeps the SNET-at-start pin. Either way recalc then lands the dates.
+    // milestone duration). The drop hand-places `visualStart` and writes **no implicit
+    // constraint** (M-F-T3); recalc then lands the dates. The `EARLY` branch that pinned an SNET
+    // at the start day is deleted with the mode: pinning a constraint was never what a planner
+    // asked for by drawing a bar, it was how a plan with no placement column could remember a
+    // position at all.
     const dropDate = addCalendarDays(plannedStart, input.startDay);
     const placedInput = {
       name: input.name,
       type: input.type,
       durationDays: isMilestoneType(input.type) ? 0 : input.endDay - input.startDay + 1,
       laneIndex: input.laneIndex,
-      ...(isVisualMode
-        ? { visualStart: dropDate }
-        : { constraintType: 'SNET' as const, constraintDate: dropDate }),
+      visualStart: dropDate,
     };
     const created = await createPlacedActivity.mutateAsync(placedInput);
     // Record the create for undo (ADR-0048 M2) — the single user edit, NOT the follow-up recalc.
@@ -693,7 +712,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   };
 
   // TSLD free-2D reposition (M4): a body drag moves a bar in time and/or lane at once, reported
-  // as the axes that changed. A day change is an SNET-at-new-start + recalc (M2); a lane change is
+  // as the axes that changed. A day change hand-places `visualStart` at the drop + recalc (M2, and
+  // this said "an SNET-at-new-start" until the M-J gate pass); a lane change is
   // a layout-only `laneIndex` write with NO recalc. Both go through the single-activity PATCH with
   // the live version (optimistic lock) — a stale version is a non-destructive conflict, never re-sent.
   const updateActivity = useUpdateActivity(orgSlug, planId);
@@ -729,9 +749,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // Taken as a plain function for the same `exhaustive-deps` reason as its siblings above.
   const batchPlacements = batchPlacementsMutation.mutateAsync;
   const removeLink = deleteDependency.mutateAsync;
-  // Declared here, above the memo that depends on it: `moveMany` must write the field the plan's
-  // CURRENT mode calls for, and a memo cannot list a binding declared below itself.
-  const isVisualMode = SCHEDULING_MODES_ENABLED && plan.data?.schedulingMode === 'VISUAL';
   // Destructured, not reached through `pen`, so the memo depends on the stable `useCallback` rather
   // than on the pen object — which is rebuilt on every 15-second status poll and would otherwise
   // rebuild every callback the canvas holds, four times a minute, for nothing.
@@ -773,10 +790,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
        * `PATCH …/activities/placements`, and `bulkPlacementCommand` makes the pair reversible. The
        * gesture kept moving one bar, so the data layer was correct and unreachable.
        *
-       * Mode-aware through `bulkMoveSnapshots`, never inline: the single-bar drag branches on the
-       * plan's scheduling mode (EARLY pins an SNET, VISUAL writes `visualStart`), and doing that
-       * branch a second time here is how the two come to disagree — invisibly, because each looks
-       * right alone and only a planner who moved one bar and then twelve would ever see it.
+       * Its placement arithmetic lives in `bulkMoveSnapshots`, never inline — the single-bar drag
+       * writes the same field by the same rule, and doing that a second time here is how the two
+       * come to disagree, invisibly, because each looks right alone and only a planner who moved
+       * one bar and then twelve would ever see it. Since M-F-T3 there is ONE rule rather than two,
+       * which makes the seam cheaper to keep rather than less necessary.
        */
       moveMany: async (
         rows: readonly ActivitySummary[],
@@ -786,7 +804,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         const { before, after, versions } = bulkMoveSnapshots({
           activities: rows,
           delta,
-          mode: isVisualMode ? 'visual' : 'early',
         });
         // Hold the coalesced recalculation across the write so the bars cannot move under the
         // planner mid-batch, released in `finally` — a leaked hold stalls every later
@@ -902,16 +919,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       editHistory,
       autoRecalc,
       planId,
-      // `moveMany`'s six. `isVisualMode` is the one that matters: without it the memo would keep
-      // a stale mode and a plural move on a plan switched to Visual would go on writing SNET
-      // constraints — wrong dates, silently, on exactly the plans where placement is hand-made.
+      // `moveMany`'s own two, below. **This named a third, `isVisualMode`, and explained at length
+      // why omitting it would leave the memo writing `SNET` constraints on a plan switched to
+      // Visual** — a hazard M-F removed along with the mode and the branch, so the paragraph
+      // survived as a warning about a fork that no longer exists. A plural move hand-places, on
+      // every plan, with nothing to be stale about.
       //
       // `pen.onWriteRejected` and not `pen`: the whole object is rebuilt on every status poll, so
       // depending on it would rebuild this memo — and every callback the canvas holds — four times a
       // minute for no reason. The function itself is a `useCallback` over
       // `[acknowledgeLost, queryClient, orgSlug, planId]`, checked rather than assumed.
       batchPlacements,
-      isVisualMode,
       onWriteRejected,
     ],
   );
@@ -1009,9 +1027,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
   );
-  // Visual-Planning mode (ADR-0033 M3): a day-drag hand-places `visualStart` (no SNET constraint),
-  // then the effective-Visual recalc pins the bar and pushes its unplaced successors. Flag-off (or in
-  // EARLY mode) the schedule mode is always EARLY, so today's SNET path is byte-for-byte unchanged.
+  // A day-drag hand-places `visualStart` (no constraint of any kind), then the effective-Visual
+  // recalc pins the bar and pushes its unplaced successors.
+  //
+  // **The second half of this comment described a branch M-F-T3 deleted**, and called the EARLY
+  // `SNET` path "byte-for-byte unchanged" — in a function that has had one branch since the
+  // collapse. It is corrected at one-planning-surface M-I rather than in M-F because M-I is the
+  // milestone that strips the rows that path left behind, and a reader arriving at the strip would
+  // otherwise find the product's own drag handler claiming it still writes them. The sibling
+  // docblock inside `onTsldResize`'s `else` WAS updated by M-F and its parent was not, which is
+  // the one-neighbour-and-not-the-other shape rather than an oversight about the code itself.
   const onTsldReposition = async ({
     activityId,
     startDay,
@@ -1052,76 +1077,39 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       }
     }
 
-    // Day changed (optionally lane too). VISUAL mode (ADR-0033 M3): hand-place `visualStart` at the
-    // drop via the minimal PATCH — NO constraint write — then recalc; the effective-Visual pass pins
-    // this bar and pushes its unplaced successors. EARLY mode: one PATCH imposing an SNET-at-new-start
-    // (ADR-0023) — which by design overwrites any prior constraint, re-pinning a pinned bar where it
-    // was dropped — plus the lane if it moved, then recalc. Resent definition fields are unchanged.
+    // Day changed (optionally lane too). Hand-place `visualStart` at the drop via the minimal
+    // PATCH — **no constraint write** — then recalc; the effective-Visual pass pins this bar and
+    // pushes its unplaced successors.
+    //
+    // **The `EARLY` branch is deleted** (M-F-T3), and what goes with it is worth naming: it sent a
+    // FULL activity update imposing an SNET at the new start, which by design overwrote whatever
+    // constraint was there — so dragging a bar silently replaced a commitment somebody had
+    // recorded on purpose. It also had to round-trip fifteen definition fields to avoid clearing
+    // them, each of which this file records having been forgotten once. The minimal placement
+    // PATCH carries none of that risk because it touches one column.
     const plannedStart = plan.data?.plannedStart;
     if (!plannedStart) return { applied: false, conflict: null };
     const droppedDate = addCalendarDays(plannedStart, startDay);
     try {
-      if (isVisualMode) {
-        const saved = await setVisualStart.mutateAsync({
-          activityId,
-          visualStart: droppedDate,
-          version: activity.version,
-          ...(laneIndex !== undefined ? { laneIndex } : {}),
-        });
-        // Record the Visual-mode placement for undo (ADR-0048 M2) — the single user edit, NOT the
-        // follow-up recalc. The inverse restores the prior `visualStart` (and lane); a drag/nudge
-        // burst coalesces to one step (the command carries a coalescing key). Guarded on the flag.
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            visualStartCommand({
-              setVisualStart: setVisualStart.mutateAsync,
-              activityId,
-              before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
-              after: { visualStart: droppedDate, laneIndex: laneIndex ?? activity.laneIndex },
-              version: saved.version,
-            }),
-          );
-        }
-      } else {
-        const saved = await updateActivity.mutateAsync({
-          activityId,
-          version: activity.version,
-          name: activity.name,
-          code: activity.code ?? undefined,
-          type: activity.type,
-          // Round-trip the duration type unchanged (ADR-0040) — a canvas move must not reset it.
-          durationType: activity.durationType,
-          // The exact stored minutes (ADR-0070) — resending the ROUNDED day here silently
-          // flattened a sub-day activity to zero on every canvas move.
-          duration: String(activity.durationDays),
-          durationMinutes: activity.durationMinutes,
-          description: activity.description ?? undefined,
-          // Round-trip the Earned-Value inputs unchanged (EV4b, ADR-0042) — the update body always
-          // sends them, so a canvas move must resend the stored values (money minor → major units) or
-          // it would silently clear them, exactly like the duration type above.
-          percentCompleteType: activity.percentCompleteType,
-          // Round-trip the cost accrual unchanged (M7 rung 5, ADR-0044 §32) — the update body always
-          // sends it, so a canvas move must resend the stored value or it would silently reset it.
-          accrualType: activity.accrualType,
-          physicalPercentComplete: activity.physicalPercentComplete ?? undefined,
-          budgetedExpense: minorToMajorInput(activity.budgetedExpense),
-          actualExpense: minorToMajorInput(activity.actualExpense),
-          constraintType: 'SNET',
-          constraintDate: droppedDate,
-          ...(laneIndex !== undefined ? { laneIndex } : {}),
-        });
-        // Record the reposition for undo (ADR-0048, dark M1) — the single user edit, NOT the follow-up
-        // recalc below (recompute-don't-restore: the inverse replays the input, recalc redraws). The
-        // inverse restores the pre-edit definition (its prior constraint) and lane. Guarded on the flag.
-        if (UNDO_REDO_ENABLED) {
-          editHistory.record(
-            repositionCommand({
-              update: updateActivity.mutateAsync,
-              before: activity,
-              after: saved,
-            }),
-          );
-        }
+      const saved = await setVisualStart.mutateAsync({
+        activityId,
+        visualStart: droppedDate,
+        version: activity.version,
+        ...(laneIndex !== undefined ? { laneIndex } : {}),
+      });
+      // Record the Visual-mode placement for undo (ADR-0048 M2) — the single user edit, NOT the
+      // follow-up recalc. The inverse restores the prior `visualStart` (and lane); a drag/nudge
+      // burst coalesces to one step (the command carries a coalescing key). Guarded on the flag.
+      if (UNDO_REDO_ENABLED) {
+        editHistory.record(
+          visualStartCommand({
+            setVisualStart: setVisualStart.mutateAsync,
+            activityId,
+            before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
+            after: { visualStart: droppedDate, laneIndex: laneIndex ?? activity.laneIndex },
+            version: saved.version,
+          }),
+        );
       }
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
@@ -1154,11 +1142,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // path uses — carried as the FULL definition round-trip (`activityDefinitionInput`) so
   // durationType / EV / accrual / constraints are resent verbatim, never silently cleared; it does
   // NOT touch the primary constraint or lane. **Start edge** (`startDay` present): move the start,
-  // keep the finish — mode-aware (ADR-0052 §3): EARLY imposes an SNET at the new start (the same
-  // constraint expression a reposition writes) PLUS the new duration in the one full-definition
-  // PATCH; VISUAL hand-places `visualStart` + the new duration through the minimal
-  // `setVisualStart` PATCH (the reposition-in-VISUAL seam — no constraint write, no definition
-  // resend). Optimistic-lock 409 and pen-loss 423 reuse the exact reposition contract; the
+  // keep the finish by hand-placing `visualStart` + the new duration through the minimal
+  // `setVisualStart` PATCH — no constraint write, no definition resend, the same seam a reposition
+  // drop uses. (This read "mode-aware (ADR-0052 §3): EARLY imposes an SNET at the new start …"
+  // until one-planning-surface M-I; M-F-T3 deleted that half, and the `else` below carries its own
+  // docblock saying so — see the note above `onTsldReposition` for why the correction lands here.) Optimistic-lock 409 and pen-loss 423 reuse the exact reposition contract; the
   // follow-up recalc is the coalesced auto-recalc (or the inline recalc when authoring is off).
   const resizeConflict =
     'This plan changed since you opened it — your resize wasn’t applied. Refresh to see the latest.';
@@ -1178,7 +1166,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     const plannedStart = plan.data?.plannedStart;
     if (startDay !== undefined && !plannedStart) return { applied: false, conflict: null };
     try {
-      if (startDay !== undefined && isVisualMode) {
+      if (startDay !== undefined) {
         // VISUAL start-edge: hand-place the new start + duration in ONE minimal PATCH — the
         // effective-Visual pass then pins the bar (ADR-0033), exactly like a reposition drop.
         const saved = await setVisualStart.mutateAsync({
@@ -1199,28 +1187,34 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           );
         }
       } else {
+        /**
+         * **The FINISH-edge resize, which changes the duration and nothing else.**
+         *
+         * This branch used to be shared with the EARLY start-edge drag — one `else` doing two
+         * jobs, distinguished inside itself by a spread on `startDay !== undefined`. M-F-T3
+         * deleted the start-edge half and very nearly took this with it: removing the
+         * `isVisualMode` condition makes the `if` read as "start-edge", and the `else` then looks
+         * like dead EARLY-mode code rather than the only route a finish-edge drag has.
+         *
+         * Caught by `tsc` reporting newly-unused imports and by reading the diff, not by a test —
+         * the resize suites mock the mutation, so a dropped call reads as "no write" and a no-op
+         * resize asserts nothing. Recorded because the next reader meets the same shape: an `else`
+         * that survives a collapsed condition is not automatically the branch that was collapsed.
+         *
+         * No constraint is written here and none ever was: a finish-edge drag spread neither
+         * field, so a stored constraint round-trips verbatim.
+         */
         const saved = await updateActivity.mutateAsync({
           activityId,
           version: activity.version,
           ...activityDefinitionInput(activity),
-          // EARLY start-edge (ADR-0052 §3): the start is computed, so the moved edge is pinned as
-          // an SNET at the new start — mirroring how a reposition builds its SNET payload — and
-          // the duration shrinks/grows so the finish stays put. A finish-edge resize spreads
-          // neither field, leaving the stored constraint round-tripped verbatim.
-          ...(startDay !== undefined
-            ? {
-                constraintType: 'SNET' as const,
-                constraintDate: addCalendarDays(plannedStart!, startDay),
-              }
-            : {}),
           // The resize is a DAY drag on a day-scaled diagram, so it sets days — and takes
           // precedence over the exact-minutes round-trip the spread above carries (ADR-0070).
           durationDays,
         });
         // Record the resize for undo (ADR-0048) — the single user edit, NOT the follow-up recalc.
-        // The inverse restores the whole pre-edit definition (its prior duration AND, for a
-        // start-edge drag, its prior constraint); a drag/held-key burst coalesces to one step
-        // (`resize:{id}`). Guarded on the flag so behaviour is unchanged off.
+        // The inverse restores the pre-edit definition; a drag/held-key burst coalesces to one
+        // step (`resize:{id}`). Guarded on the flag so behaviour is unchanged off.
         if (UNDO_REDO_ENABLED) {
           editHistory.record(
             durationResizeCommand({
@@ -1708,7 +1702,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       rows.reduce((hi, a) => Math.max(hi, a.laneIndex), -1) +
       1 -
       Math.min(...sources.map((a) => a.laneIndex)),
-    mode: isVisualMode ? 'VISUAL' : 'EARLY',
   });
 
   const duplicateActivities = async (
@@ -2186,8 +2179,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     onTsldCreate,
     onTsldReposition,
     // Bar-end resize (ADR-0052 M2 finish, M3 start — `VITE_CANVAS_DIRECT_MANIPULATION`): the
-    // full-definition durationDays PATCH (+ mode-aware SNET/visualStart for a start drag) +
-    // coalesced recalc + coalesced undo.
+    // full-definition durationDays PATCH (+ a hand-placed `visualStart` for a start drag) +
+    // coalesced recalc + coalesced undo. The `mode-aware SNET` half of this sentence described
+    // ADR-0052 §3's `EARLY` branch, which M-F deleted along with the mode.
+
     onTsldResize,
     // Lag-anchor drag / Logic-panel lag nudge (ADR-0052 M3): the dependency PATCH echoing the
     // unchanged type + lag calendar + coalesced recalc + coalesced undo.

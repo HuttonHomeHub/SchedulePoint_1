@@ -22,7 +22,6 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  SCHEDULING_MODES_ENABLED: true,
   // Pin canvas nav OFF here: this suite proves the flag-off conflict gate (P-sug1) — `orderedConflicts`
   // must not run, so the conflict surface degrades to zero/null. The flag-on conflict derivation is
   // covered in use-tsld-toolbar-context-canvas-nav.test.tsx.
@@ -30,7 +29,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
-  useSetPlanSchedulingMode: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculateCommand: () => ({ isPending: false, run: vi.fn() }),
@@ -123,7 +121,6 @@ function makeCanvasUi(lateOverlay = false): TsldCanvasUiState {
 const PLAN = {
   status: 'ACTIVE',
   plannedStart: '2026-01-01',
-  schedulingMode: 'VISUAL',
   version: 1,
 } as unknown as LoadedPlan;
 

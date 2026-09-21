@@ -59,10 +59,22 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    /**
+     * **Matched to `earlyStart`/`earlyFinish` above, because that is what the engine writes for an
+     * activity nobody has placed** — and this said `null` opposite non-null early dates, which is a
+     * row the product cannot produce.
+     *
+     * It became load-bearing at the M-J gate pass, when the Tier-1 sentence moved to the DRAWN
+     * dates: the canvas has drawn from `visualEffective*` since M-F and this fixture's bars would
+     * therefore not be drawn at all, so every assertion about float, lanes and overlap resolved
+     * "not yet scheduled". The sentence is right and the fixture was wrong.
+     */
+    visualEffectiveStart: '2026-01-01',
+    visualEffectiveFinish: '2026-01-03',
     visualConflict: false,
+    visualConflictReason: null,
     visualDriftDays: null,
+    remainingFloat: null,
     levelingPriority: null,
     leveledStart: null,
     leveledFinish: null,

@@ -1,4 +1,4 @@
-import type { ActivitySummary, SchedulingMode } from '@repo/types';
+import type { ActivitySummary } from '@repo/types';
 
 import type { GanttCellKey } from './cell-edit';
 
@@ -62,7 +62,6 @@ export type CellCommitResult =
 export interface CellWriteContext {
   activity: ActivitySummary;
   hoursPerDay: number | undefined;
-  schedulingMode: SchedulingMode;
   barDateSource: BarDateSource;
 }
 
@@ -142,7 +141,7 @@ function calendarDaysBetween(from: string, to: string): number {
 function dateWriteFields(
   key: 'earlyStart' | 'earlyFinish',
   trimmed: string,
-  { activity, schedulingMode, barDateSource }: CellWriteContext,
+  { activity, barDateSource }: CellWriteContext,
 ): CellWrite {
   // **The Late overlay is read-only by ADR-0033**, so the dates on screen are not inputs at all —
   // writing from them would take a planner's typed value and apply it to a different pair of
@@ -181,14 +180,14 @@ function dateWriteFields(
   }
 
   if (key === 'earlyFinish') {
-    // **D3 — a typed `Finish` writes a DURATION, in both modes, and no constraint at all.** This
+    // **D3 — a typed `Finish` writes a DURATION and no constraint at all.** This
     // is the branch a reader expects to be `FNLT` and is not. A finish-edge resize "spreads
     // neither field, leaving the stored constraint round-tripped verbatim"; a typed finish does
     // the same, so the two surfaces cannot come to mean different things.
     //
-    // Its honest consequence, which ADR-0134 states rather than leaving to be discovered: in Early
-    // mode with no constraint the start is computed, so a later recalculation can move the start
-    // and carry this finish with it. The typed finish is not a pin — exactly as true of the drag.
+    // Its honest consequence, which ADR-0134 states rather than leaving to be discovered: with no
+    // constraint and no placement the start is computed, so a later recalculation can move it and
+    // carry this finish with it. The typed finish is not a pin — exactly as true of the drag.
     const durationDays = calendarDaysBetween(start, typed) + 1;
     if (durationDays < 1) return refuse('The finish cannot be before the start.');
     return write({ durationDays });
@@ -197,16 +196,18 @@ function dateWriteFields(
   const durationDays = calendarDaysBetween(typed, finish) + 1;
   if (durationDays < 1) return refuse('The start cannot be after the finish.');
 
-  if (schedulingMode === 'VISUAL') {
-    // **D1 — hand-place, and write NO constraint.** A placement is advisory and a constraint is
-    // not; the ADR-0033 effective-Visual pass pins the bar afterwards, exactly as it does for a
-    // reposition drop.
-    return write({ visualStart: typed, durationDays });
-  }
-
-  // **D2 — pin it.** In Early mode the start is computed, so the only honest way to move it is an
-  // `SNET` at the typed date, with the duration adjusted so the finish stays where it was.
-  return write({ constraintType: 'SNET', constraintDate: typed, durationDays });
+  /**
+   * **D1 — hand-place, and write NO constraint.** A placement is advisory and a constraint is not;
+   * the effective-Visual pass pins the bar afterwards, exactly as it does for a reposition drop.
+   *
+   * **ADR-0134 D2's `SNET` branch is deleted with the mode** (M-F-T3/T6). It existed because in
+   * Early mode a start is computed, so pinning was the only honest way to move it — and the
+   * pinning overwrote whatever constraint the row carried, which is the same write the drag has
+   * stopped making one file over. A typed start and a dragged start now mean one thing, which is
+   * what ADR-0134 D1 asked of them in the first place: "a typed date writes the constraint a drag
+   * writes."
+   */
+  return write({ visualStart: typed, durationDays });
 }
 
 /**
@@ -241,7 +242,6 @@ export async function commitCell({
   key,
   text,
   hoursPerDay,
-  schedulingMode,
   barDateSource,
   update,
 }: {
@@ -249,14 +249,12 @@ export async function commitCell({
   key: GanttCellKey;
   text: string;
   hoursPerDay: number | undefined;
-  schedulingMode: SchedulingMode;
   barDateSource: BarDateSource;
   update: UpdateActivityFieldsFn;
 }): Promise<CellCommitResult> {
   const result = cellWriteFields(key, text, {
     activity,
     hoursPerDay,
-    schedulingMode,
     barDateSource,
   });
   // **The refusal's own sentence, not a generic one.** ADR-0134 D4 refuses a perfectly

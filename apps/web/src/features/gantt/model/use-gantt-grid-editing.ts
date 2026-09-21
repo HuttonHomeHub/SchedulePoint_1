@@ -1,4 +1,4 @@
-import type { ActivitySummary, SchedulingMode } from '@repo/types';
+import type { ActivitySummary } from '@repo/types';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 
 import { commitCell, type UpdateActivityFieldsFn } from './cell-commit';
@@ -65,7 +65,6 @@ export function useGanttGridEditing({
   gating,
   hasComputedSchedule,
   barDateSource,
-  schedulingMode,
   hoursPerDayFor,
   updateFields,
   announce,
@@ -77,16 +76,6 @@ export function useGanttGridEditing({
   hasComputedSchedule: boolean;
   /** Which dates the grid is showing — the seed must match what the cell renders. */
   barDateSource: BarDateSource | undefined;
-  /**
-   * The plan's scheduling mode, which decides what a typed `Start` MEANS (ADR-0134 D1/D2):
-   * hand-placed in Visual, pinned as an `SNET` in Early.
-   *
-   * **Passed in, never re-derived here.** `barDateSource` above is already a function of this plus
-   * the Late overlay, and deriving the mode back out of it would be a second answer to a question
-   * the host has already answered — the shape `lib/bar-dates.ts`'s own docblock records shipping
-   * once as `docs/TECH_DEBT.md` #135.
-   */
-  schedulingMode: SchedulingMode;
   hoursPerDayFor: (activity: ActivitySummary) => number | undefined;
   updateFields: UpdateActivityFieldsFn;
   /** The shared polite live region. A committed write that says nothing is invisible to AT. */
@@ -164,7 +153,6 @@ export function useGanttGridEditing({
       key: current.target.key,
       text: current.text,
       hoursPerDay: hoursPerDayFor(before),
-      schedulingMode,
       barDateSource: barDateSource ?? 'early',
       update: updateFields,
     });

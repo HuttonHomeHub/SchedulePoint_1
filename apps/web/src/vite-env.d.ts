@@ -16,7 +16,6 @@ interface ImportMetaEnv {
   /** Canvas-first plan authoring (ADR-0032). "true"/"1" enables it; off by default. */
   readonly VITE_CANVAS_AUTHORING?: string;
   /** Scheduling modes & de-overloaded plan start (ADR-0033). On by default; "false"/"0" disables it. */
-  readonly VITE_SCHEDULING_MODES?: string;
   /** Per-activity working-time calendar picker (ADR-0037). On by default; "false"/"0" disables it. */
   readonly VITE_ACTIVITY_CALENDAR?: string;
   /** Progress ingestion controls — remaining/suspend/resume + recalc mode (ADR-0035, M2). On by default; "false"/"0" disables it. */
