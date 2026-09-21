@@ -83,8 +83,35 @@ describe('toRenderActivities', () => {
       isNearCritical: false,
       // The render model carries only the engine-owned conflict cue, not the source dates.
       visualConflict: false,
+      visualConflictReason: null,
       visualDriftDays: null,
     });
+  });
+
+  it('carries the conflict REASON across the seam, on the same gate as the boolean', () => {
+    /**
+     * The painter needs the reason to decide which EDGE it marks (`LATER_THAN_BOUND` is a breach of
+     * the placed finish), and it had only the boolean until the M-J gate pass — so both reasons drew
+     * their triangle at the start. A render model that carried one without the other would force
+     * that guess back on the painter, which is why the seam is asserted here rather than only in
+     * `paint.test.ts`: neither suite crosses the other's defect.
+     *
+     * The gate is the boolean's own, for the boolean's own reason: on the Late overlay the bar is
+     * not drawn where it was placed, so a conflict cue about that placement would name a breach the
+     * picture is not showing.
+     */
+    const conflicted = activity({
+      visualStart: '2026-01-09',
+      visualEffectiveStart: '2026-01-09',
+      visualEffectiveFinish: '2026-01-11',
+      visualConflict: true,
+      visualConflictReason: 'LATER_THAN_BOUND',
+    });
+    expect(toRenderActivities([conflicted], 'visual')[0]?.visualConflictReason).toBe(
+      'LATER_THAN_BOUND',
+    );
+    expect(toRenderActivities([conflicted], 'late')[0]?.visualConflictReason).toBeNull();
+    expect(toRenderActivities([conflicted], 'early')[0]?.visualConflictReason).toBeNull();
   });
 
   /**

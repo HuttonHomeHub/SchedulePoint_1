@@ -62,6 +62,10 @@ export function toRenderActivities(
     // The conflict cue + drift are meaningful only in VISUAL mode — the engine computes them for
     // every plan, so gate them to the visual source here (EARLY/late bars never show the cue).
     visualConflict: source === 'visual' ? a.visualConflict : false,
+    // The reason travels with the boolean, on the same gate — the painter needs it to decide which
+    // EDGE it marks, and a render model carrying one without the other would force the painter to
+    // guess (it guessed `rect.x` for both until the M-J gate pass).
+    visualConflictReason: source === 'visual' ? a.visualConflictReason : null,
     visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
     laneOverlap: overlapping.has(a.id),
     constraint: activeConstraintAnchor(a),

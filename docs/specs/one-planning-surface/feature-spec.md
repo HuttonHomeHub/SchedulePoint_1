@@ -1,6 +1,6 @@
 # Feature Spec: One planning surface — Visual is the plan; the feasible window and the levelled ghost are overlays
 
-- **Status:** Draft
+- **Status:** Approved
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-20 · **Revised twice**: after the product owner answered §6, and after four
   specialist reviews (two blocking) plus a product-owner decision on the overlay shape.

@@ -14,7 +14,7 @@ const OTHER_ORG = 'org-2';
 const PLAN_ID = 'plan-1';
 const SLUG = 'acme';
 
-const MEMBER: Permission[] = ['plan:read'];
+const MEMBER: Permission[] = ['plan:read', 'activity:read'];
 
 function principal(permissions: Permission[], organizationId = ORG_ID): Principal {
   return new Principal('user-me', [{ organizationId, role: 'VIEWER', permissions }]);
@@ -147,5 +147,25 @@ describe('PlacementMigrationService', () => {
     await expect(
       service.report(principal(MEMBER, OTHER_ORG), SLUG, PLAN_ID),
     ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  /**
+   * **Both permissions are asserted, not either**, and each half has its own case because a single
+   * `||` is satisfied by whichever one the test happens to withhold. They are granted to the same
+   * set today, so this guards a future narrowing rather than a present hole — the rule this epic's
+   * own `cross-plan-revision-compare.controller.ts:94-96` states, applied here.
+   */
+  it('refuses a caller holding plan:read but not activity:read', async () => {
+    await expect(service.report(principal(['plan:read']), SLUG, PLAN_ID)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    expect(repository.findForPlan).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller holding activity:read but not plan:read', async () => {
+    await expect(
+      service.report(principal(['activity:read']), SLUG, PLAN_ID),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(repository.findForPlan).not.toHaveBeenCalled();
   });
 });

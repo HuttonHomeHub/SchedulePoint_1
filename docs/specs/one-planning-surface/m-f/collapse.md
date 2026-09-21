@@ -105,8 +105,25 @@ accrual type). The minimal placement PATCH carries none of that risk because it 
 So the collapse **removes a write** rather than redirecting one, and the surviving guarantee is
 stronger than the one it replaces: a move cannot disturb a constraint at all.
 
-`repositionCommand`, `minorToMajorInput` and `CloneMode` became unreachable and are deleted; `tsc`
-found all three.
+`CloneMode` became unreachable and is deleted; the now-unused `minorToMajorInput` **import** in
+`clone-projection.ts` went with it. `tsc` found both.
+
+> **This sentence named three deletions and only one of them happened, which is a finding about the
+> instrument rather than a typo.** It read "`repositionCommand`, `minorToMajorInput` and `CloneMode`
+> became unreachable and are deleted; `tsc` found all three".
+>
+> `minorToMajorInput` is alive in `lib/format-money` with three consumers — what M-F removed was one
+> file's import of it, which is a different fact and reads in the register as a helper having been
+> retired. And **`repositionCommand` was never touched at all**: `undo-redo/commands.ts` is not in
+> M-F's diff. It survived, exported from `features/undo-redo/index.ts`, with a full unit suite
+> asserting that it writes `constraintType: 'SNET'` — a green test pinning a write path the product
+> had stopped having, and a docblock inviting the next author to reach for it.
+>
+> **`tsc` structurally cannot find it.** An exported symbol with no caller is not an error; the two
+> it did find were local. So "tsc found all three" was not merely wrong about the count, it was
+> wrong about what that tool can answer — the ADR-0076 Class 3 shape, in the sentence claiming a
+> tool had verified the work. Deleted at the M-J gate pass, with its suite, and
+> `visualStartCommand`'s docblock now records that it is the only inverse a canvas move has.
 
 ### The near-miss: an `else` that was doing two jobs
 

@@ -6,12 +6,27 @@ import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Dialog } from '@/components/ui/dialog';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { formatCalendarDate } from '@/lib/format-date';
 
 export interface PlacementMigrationNoticeProps {
   /** How many constraints the migration converted on this plan. Never rendered when zero. */
   count: number;
   rows: readonly PlacementMigrationRow[];
   onDismiss: () => void;
+  /**
+   * Hand focus somewhere stable after the strip unmounts itself.
+   *
+   * The Dismiss button is a child of the thing it removes, so pressing it destroys the focused
+   * element and focus falls to `<body>` — WCAG 2.4.3, and on this workspace it also silently
+   * disables every keyboard accelerator, because they are a React `onKeyDown` on the workspace
+   * root. The host supplies the target because only it knows which surface is mounted; it is the
+   * same contract `SelectionActionsBar` states, for the same reason, and must be referentially
+   * stable for the same reason too.
+   *
+   * Optional so a caller with nothing to return to is not forced to invent an anchor — both
+   * production hosts pass one.
+   */
+  restoreFocus?: (() => void) | undefined;
 }
 
 const COLUMNS: Column<PlacementMigrationRow>[] = [
@@ -23,7 +38,10 @@ const COLUMNS: Column<PlacementMigrationRow>[] = [
   },
   {
     header: 'Was a constraint on',
-    cell: (row) => row.priorConstraintDate,
+    // Through the shared formatter, like every other date in the product. It printed the raw ISO
+    // string until the M-J gate pass — on the one screen whose own docblock calls it the only place
+    // the product explains an irreversible act, in the one column a planner is most likely to read.
+    cell: (row) => formatCalendarDate(row.priorConstraintDate),
     width: 'fit',
   },
 ];
@@ -69,6 +87,7 @@ export function PlacementMigrationNotice({
   count,
   rows,
   onDismiss,
+  restoreFocus,
 }: PlacementMigrationNoticeProps): React.ReactElement {
   const [listOpen, setListOpen] = useState(false);
   const noun = count === 1 ? 'constraint' : 'constraints';
@@ -76,8 +95,21 @@ export function PlacementMigrationNotice({
 
   return (
     <>
+      {/*
+        **No `role`, and that is ADR-0132's rule rather than a preference.** Its discriminator is
+        "would this sentence read the same to somebody who arrived five minutes later and did
+        nothing?" — and it would, identically: a migration ran on a deploy, before the reader opened
+        the plan. That makes it a `condition`, and a condition renders **no live-region role at
+        all**. `role="status"` is still an event-shaped announcement, merely a polite one.
+
+        This shipped as `role="status"` and the M-J accessibility review caught it, which is the
+        sharper half: the test below invoked ADR-0132's discriminator by name, reached the right
+        classification, and then chose between `alert` and `status` rather than between a role and
+        none. It also reproduced the mechanical failure that ADR records for this shape — the strip
+        mounts only once the query settles, so the region and its content enter the DOM together,
+        which is the unreliable case for a live region rather than the silent one.
+      */}
       <NoticeStrip
-        role="status"
         tone="info"
         density="comfortable"
         messageFit="grow"
@@ -92,7 +124,18 @@ export function PlacementMigrationNotice({
         <Button variant="outline" size="sm" onClick={() => setListOpen(true)}>
           See which
         </Button>
-        <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Dismiss this notice">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            onDismiss();
+            // AFTER, not before: `onDismiss` is what unmounts this button, so focus has to be sent
+            // somewhere that still exists once it has. See `restoreFocus`'s docblock for why
+            // `<body>` is not merely untidy on this workspace.
+            restoreFocus?.();
+          }}
+          aria-label="Dismiss this notice"
+        >
           <X aria-hidden="true" className="size-4" />
         </Button>
       </NoticeStrip>

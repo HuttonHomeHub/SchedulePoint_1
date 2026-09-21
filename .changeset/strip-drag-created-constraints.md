@@ -47,7 +47,10 @@ and the notice appears the first time the plan is opened, which is before any re
 The notice is the canvas dock's lowest-precedence strip, so it never covers a failed write, an armed
 tool or the empty-plan prompt — it waits, and costs the diagram no height.
 
-**Measured, against a real database with every prior migration replayed:** 199–241 ms converting
-2,826 rows on a 102,000-activity estate, 5.4 ms on the deployed one, and it does not sequentially
-scan. No new index: the predicate is a whole-table question with no selectivity to offer, and an
-index for a once-ever statement would cost every activity write for ever.
+**Measured, against a real database with every prior migration replayed:** 116–143 ms converting
+2,826 rows on a 102,000-activity estate, and 5.4 ms on the deployed one. It sequentially scans
+`activities` once, which is the correct plan — the predicate is a whole-table question with no
+selectivity any index can offer, and forcing the index-driven shape instead measures 211 ms, 1.5–1.8×
+slower. So there is no new index, and that decision rests on a measurement rather than an instinct:
+an index for a once-ever statement would cost every activity write for ever, and would not even win
+the once.

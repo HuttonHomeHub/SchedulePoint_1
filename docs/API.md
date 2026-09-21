@@ -184,6 +184,76 @@ The write-gate is **behind a staged-rollout flag** `PLAN_EDIT_LOCK_ENFORCED`
 acquire a lock yet. Ops enable it only once the front end acquires the pen across
 every editing entry point (edit-lock M2/M3).
 
+### The planning surface: placement, not mode (one-planning-surface)
+
+ADR-0033 split a plan into `EARLY` (computed-earliest) and `VISUAL` (hand-placed). That split is
+**gone**, and three parts of the contract move with it.
+
+**`schedulingMode` is removed from the plan DTOs, and a caller naming it gets a `422`.**
+`ValidationPipe` runs with `forbidNonWhitelisted`, so `POST …/projects/:projectId/plans` and
+`PATCH …/plans/:planId` both refuse the field rather than dropping it. The difference is the point:
+a silently-ignored field would let an old client go on "setting the mode" for ever, succeeding, and
+changing nothing. The refusal is total — nothing is created on the create path, and no version is
+burned on the update path, because the write never reaches the service. `PlanResponseDto` no longer
+carries the field either.
+
+**A placement is `visualStart`, and where a bar is drawn is `visualEffectiveStart` /
+`visualEffectiveFinish`.** The two are not the same field and a client must not substitute one for
+the other: the first is the planner's input, the second is what the engine's second pass produces
+after pushing successors and applying the data-date floor. Clearing a placement is
+`visualStart: null` through the minimal placement PATCH; there is no mode to consult and no implicit
+constraint written anywhere. `PATCH …/plans/:planId/activities/placements` (documented under **Batch
+mutations**) is the plural form.
+
+**Two engine-owned read fields carry what a placement costs:**
+
+| Field                  | On             | Meaning                                                                                                                                                                                      |
+| ---------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `remainingFloat`       | activity reads | Whole working days of slack left **from where the bar is placed** — `totalFloat − visualDriftDays`, subtracted in minutes and rounded once on the server. Equals `totalFloat` when unplaced. |
+| `visualConflictReason` | activity reads | `EARLIER_THAN_LOGIC` (placed before the earliest feasible start) · `LATER_THAN_BOUND` (the placed finish overran an `SNLT`/`FNLT`/`MSO`/`MFO` ceiling) · `null`.                             |
+
+`visualConflict` survives as `visualConflictReason !== null`, with a database CHECK refusing a row
+where the two disagree — **read the reason wherever the sentence or the mark differs by direction**.
+Never derive `remainingFloat` client-side from `totalFloat − visualDriftDays`: the difference of two
+roundings is not the rounding of the difference, and minutes are persisted for neither input.
+
+**Revision comparison reports whether placements are comparable at all.** Both
+`…/revision-compare` and `…/cross-plan-revision-compare` carry
+`placementNotAssessableReason` — `null` when both sides recorded a placement, `NOT_SNAPSHOTTED` when
+one did not. A baseline froze where the **network** said work could go and never where a planner had
+put it, so every baseline captured before that change is `placement_snapshot_level: NONE` and
+**permanently** so: a backfill would state as history a placement that baseline never saw. It is
+reported whether or not either plan happens to hold a placement, because a reason that appeared only
+when there was something to compare could not separate "nobody looked" from "we looked and there was
+nothing".
+
+### The placement migration report (one-planning-surface M-I)
+
+`GET …/plans/:planId/placement-migration` — **any member** of the organisation
+(`plan:read` + `activity:read`), org-scoped with the uniform anti-IDOR **404**.
+
+A one-time SQL migration converted the constraints a drag had written into hand-placements, on the
+plans that carried them. The act is **irreversible**, and `PATCH …/activities/:activityId` is
+classified `PLAN_CONTENT` in the audit census — permanently excluded under ADR-0073 — so nothing in
+`audit_events` will ever record it. This route is the only thing that can say what happened.
+
+`{ planId, count, rows }`, oldest first. Each row carries the activity's id, its code and name **as
+they stood at migration time** (never refreshed by a rename), the removed `priorConstraintType` /
+`priorConstraintDate`, a `priorVisualStart` that is expected null on every row, and a `migratedAt`
+shared by the whole batch. `activityId` is a plain correlation id with **no foreign key** — the row
+survives the activity being deleted, which is when it is most wanted.
+
+**Deliberately unpaginated**, and the exemption is noted here per the house rule below: the rows are
+written once by a schema migration and by nothing else, so a plan's count is fixed at that instant
+and can never grow. A cursor would be a contract with no subject. `count` is sent anyway, redundant
+with `rows.length` today, so the first cap added cannot silently turn the array's length into a
+different quantity for a client that had been reading it as the total.
+
+It reports only what **changed**. Three classes of start-no-earlier-than constraint were left alone
+— inert, unclassified, and any activity already carrying a placement — and they are absent because
+nothing happened to them. Their estate-wide classification belongs to the ADR-0140 staff diagnostics
+(`snet-inert`, `snet-unclassified`), which are addressed to an operator rather than to a planner.
+
 ### Cross-plan dependencies (ADR-0045)
 
 A **live cross-plan dependency** is an inter-project logic edge whose predecessor

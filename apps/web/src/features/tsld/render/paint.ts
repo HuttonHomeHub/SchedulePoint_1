@@ -624,12 +624,23 @@ const CONFLICT_BADGE_W = 6;
 const CONFLICT_BADGE_H = 7;
 
 /**
- * An upward warning triangle at a conflicting bar's start edge (ADR-0033): a Visual placement earlier
- * than its feasible start. A **shape** cue in the warning hue — distinct from the downward constraint
- * pin — so it never relies on colour alone (WCAG 1.4.1). It carries a **contrasting outline** (the
- * foreground stroke, like the critical/near-critical bar outlines) so the triangle clears the 3:1
- * non-text-contrast bar (WCAG 1.4.11) even against a same-hue near-critical bar fill, where the fill
- * colour alone would vanish. The legend names it and the listbox spells it out for AT.
+ * An upward warning triangle at the **breached edge** of a conflicting bar (ADR-0033). A **shape**
+ * cue in the warning hue — distinct from the downward constraint pin — so it never relies on colour
+ * alone (WCAG 1.4.1). It carries a **contrasting outline** (the foreground stroke, like the
+ * critical/near-critical bar outlines) so the triangle clears the 3:1 non-text-contrast bar (WCAG
+ * 1.4.11) even against a same-hue near-critical bar fill, where the fill colour alone would vanish.
+ * The legend names it and the listbox spells it out for AT.
+ *
+ * **Which edge is the caller's to decide, and it is not always the start.** The badge marked
+ * `rect.x` unconditionally until the M-J gate pass, under a docblock that said "start edge" and
+ * described only `EARLIER_THAN_LOGIC` — correct while that was the one reason the flag had. M-D
+ * added `LATER_THAN_BOUND`, whose test is `placedFinish > constraintCeiling`, so its breach is at
+ * the finish; marking the start pointed the planner at the end of the bar that is not the problem.
+ *
+ * It sits INSIDE the bar (`barTop + 1` downwards) while the constraint pin sits ABOVE it
+ * (`barTop - CONSTRAINT_PIN_H`), so the two never collide even when both mark the same edge —
+ * which is the common shape for this reason, since the bound that was breached is usually drawn as
+ * a pin at that very edge.
  */
 function drawConflictBadge(ctx: Ctx2D, startX: number, barTop: number, palette: TsldPalette): void {
   const ax = startX + 1;
@@ -1654,11 +1665,24 @@ export function paintScene(
           : rect.x;
       drawConstraintPin(ctx, edgeX, rect.y, palette, scene.visualRefresh === true);
     }
-    // Visual-Planning conflict (ADR-0033): the placement is before its earliest feasible start. A
-    // warning triangle at the bar's start — never auto-moved, only flagged (the mapping seam gates
-    // this to VISUAL mode, so EARLY/late bars never show it).
+    // Placement conflict (ADR-0033): never auto-moved, only flagged. The mapping seam gates this to
+    // the placed basis, so a Late-overlay bar never shows it.
+    //
+    // **The edge is chosen by the REASON, not the boolean** (M-J gate pass). `LATER_THAN_BOUND` is
+    // a breach of the placed FINISH against a ceiling (`engine/compute.ts:836`), so it is marked at
+    // the finish; `EARLIER_THAN_LOGIC` is a start placed before the earliest feasible one and stays
+    // at the start. The boolean is true for both, so gating on it drew every conflict at the start
+    // — and for the late reason that is the one end of the bar nothing is wrong with, next to a
+    // constraint pin sitting at the other.
+    //
+    // Clamped to the bar's own start so a narrow bar or a milestone keeps its badge on the shape
+    // rather than hanging it off the left edge.
     if (activity.visualConflict) {
-      drawConflictBadge(ctx, rect.x, rect.y, palette);
+      const badgeX =
+        activity.visualConflictReason === 'LATER_THAN_BOUND'
+          ? Math.max(rect.x, rect.x + rect.w - CONFLICT_BADGE_W - 2)
+          : rect.x;
+      drawConflictBadge(ctx, badgeX, rect.y, palette);
     }
     // Same-lane time-overlap (TECH_DEBT #24c): a manual lane drop left this bar overlapping another
     // in its lane. A stacked-squares badge above the bar's centre — width-independent (so a milestone

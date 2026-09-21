@@ -62,8 +62,20 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    /**
+     * **Matched to `earlyStart`/`earlyFinish` above, because that is what the engine writes for an
+     * activity nobody has placed** — and the fixture said `null` opposite non-null early dates,
+     * which is a row the product cannot produce.
+     *
+     * It was harmless while the Tier-1 sentence read the network's dates and became load-bearing at
+     * the M-J gate pass, when that sentence moved to the DRAWN dates: every case here then resolved
+     * a null start and returned "not yet scheduled", so eight assertions about float, lane,
+     * constraints, drift and overlap went red at once against a correct function. That is the same
+     * shape as `remainingFloat` below — an incomplete fixture turning into a wrong one the moment
+     * the code under test starts reading the field it left out.
+     */
+    visualEffectiveStart: '2026-01-01',
+    visualEffectiveFinish: '2026-01-03',
     visualConflict: false,
     visualConflictReason: null,
     visualDriftDays: null,
@@ -139,7 +151,10 @@ const ep = (id: string, name: string) => ({ id, code: null, name });
 
 describe('describeActivity (Tier 1)', () => {
   it('names an uncomputed activity with its duration, as not scheduled, and nothing more', () => {
-    expect(describeActivity(activity({ earlyStart: null }))).toBe(
+    // Both columns, because the sentence now tests the DRAWN start: before a recalculation the
+    // engine has written neither, and clearing only `earlyStart` would leave this passing for a
+    // reason that is not the one it is written for.
+    expect(describeActivity(activity({ earlyStart: null, visualEffectiveStart: null }))).toBe(
       'Excavate, 3 working days, not yet scheduled',
     );
   });
@@ -162,7 +177,14 @@ describe('describeActivity (Tier 1)', () => {
     // sentence now reads the placed basis (M-E-T7). A fixture setting only one of them describes a
     // row the product cannot produce.
     expect(
-      describeActivity(activity({ earlyFinish: '2026-01-01', totalFloat: 5, remainingFloat: 5 })),
+      describeActivity(
+        activity({
+          earlyFinish: '2026-01-01',
+          visualEffectiveFinish: '2026-01-01',
+          totalFloat: 5,
+          remainingFloat: 5,
+        }),
+      ),
     ).toContain('1 Jan 2026, lane 1, 5 days float left');
   });
 
@@ -178,8 +200,6 @@ describe('describeActivity (Tier 1)', () => {
         activity({
           isNearCritical: true,
           visualStart: null,
-          visualEffectiveStart: null,
-          visualEffectiveFinish: null,
           visualConflict: false,
           visualDriftDays: null,
           remainingFloat: 2,
@@ -250,6 +270,80 @@ describe('describeActivity (Tier 1)', () => {
     expect(describeActivity(activity({ totalFloat: null, remainingFloat: null }))).toBe(
       'Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1',
     );
+  });
+
+  it('speaks the dates the BAR IS DRAWN AT, not the network\u2019s (the whole point of a placement)', () => {
+    /**
+     * **The one assertion the epic did not have, and the gap is why the defect shipped.**
+     *
+     * Every other fixture in this file carried `visualEffectiveStart === earlyStart`, so the two
+     * bases were indistinguishable and reading the wrong one was invisible. Since M-F a bar draws
+     * from `visualEffective*` (`barDateSourceFor` returns `'visual'` unless the Late overlay is on),
+     * and this sentence is the ONLY route ADR-0026 D7 gives an AT user to a bar \u2014 so for any
+     * activity carrying a placement the canvas showed one span and the listbox announced another
+     * (WCAG 1.1.1/1.3.1).
+     *
+     * Verified red against the pre-fix `a.earlyStart`/`a.earlyFinish`, which announced the January
+     * dates.
+     */
+    const placed = activity({
+      earlyStart: '2026-01-01',
+      earlyFinish: '2026-01-03',
+      visualStart: '2026-02-10',
+      visualEffectiveStart: '2026-02-10',
+      visualEffectiveFinish: '2026-02-12',
+      visualDriftDays: 28,
+      remainingFloat: 0,
+      totalFloat: 28,
+    });
+    expect(describeActivity(placed)).toContain('10 Feb 2026 to 12 Feb 2026');
+    expect(describeActivity(placed)).not.toContain('Jan 2026');
+  });
+
+  it('follows the Late overlay when the caller says the bars are drawn at late dates', () => {
+    // The source is the CALLER'S, never decided here \u2014 a second place deciding the basis is the
+    // defect the case above removes. While the read-only Late overlay is on the bar draws at the
+    // late dates, so this sentence does too, for free.
+    expect(
+      describeActivity(activity({ lateStart: '2026-03-01', lateFinish: '2026-03-03' }), {
+        barDateSource: 'late',
+      }),
+    ).toContain('01 Mar 2026 to 03 Mar 2026');
+  });
+
+  it('names a placement past its constraint WITHOUT claiming it sits before its earliest start', () => {
+    /**
+     * **The `LATER_THAN_BOUND` sentence, which nothing asserted until the M-J gate pass** \u2014 the
+     * one case M-D exists to detect was the one case the function described wrongly.
+     *
+     * Drift is `placed \u2212 earliest` (`engine/compute.ts:348`), so it is POSITIVE here, and the
+     * clause gated on the `visualConflict` boolean, hard-coded the word "before" and ran the number
+     * through `Math.abs()`. A bar placed five days PAST a "no later than" date was announced as
+     * placed five days BEFORE its earliest start \u2014 in the same breath as a constraint clause
+     * naming the date it had overrun.
+     *
+     * Verified red against the boolean-gated version, which produced
+     * `conflict: placed 5 working days before its earliest feasible start`.
+     */
+    const s = describeActivity(
+      activity({
+        constraintType: 'FNLT',
+        constraintDate: '2026-01-05',
+        visualStart: '2026-01-06',
+        visualEffectiveStart: '2026-01-06',
+        visualEffectiveFinish: '2026-01-08',
+        visualConflict: true,
+        visualConflictReason: 'LATER_THAN_BOUND',
+        visualDriftDays: 5,
+        remainingFloat: 0,
+        totalFloat: 5,
+      }),
+    );
+    expect(s).toContain(', conflict: placed past the constraint on it');
+    expect(s).not.toContain('before its earliest feasible start');
+    // And the positive-drift clause stays out of its way: that sentence is for a placement that is
+    // merely late, not one that has breached a bound, and two of them would contradict each other.
+    expect(s).not.toContain('drift');
   });
 
   it('speaks a same-lane overlap only when the caller flags it (the spoken badge equivalent)', () => {

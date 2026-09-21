@@ -642,8 +642,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   }, [structureSignature, activities.isPending, dependencies.isPending, autoRecalc]);
 
   // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
-  // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
-  // with an SNET constraint, then the authoritative recalc places it.
+  // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK **hand-placed** at the dropped
+  // day, then the authoritative recalc lands its dates. (It read "pinned … with an SNET
+  // constraint" until the M-J gate pass — true of the code M-F-T3 deleted, and contradicted
+  // twenty lines below by the block that describes what replaced it.)
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
   // Delete, used by the undo/redo inverses (ADR-0048 M2): undoing a create deletes it. The
   // full-definition CREATE that undoing a delete used to need is gone with `docs/TECH_DEBT.md` #92 —
@@ -710,7 +712,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   };
 
   // TSLD free-2D reposition (M4): a body drag moves a bar in time and/or lane at once, reported
-  // as the axes that changed. A day change is an SNET-at-new-start + recalc (M2); a lane change is
+  // as the axes that changed. A day change hand-places `visualStart` at the drop + recalc (M2, and
+  // this said "an SNET-at-new-start" until the M-J gate pass); a lane change is
   // a layout-only `laneIndex` write with NO recalc. Both go through the single-activity PATCH with
   // the live version (optimistic lock) — a stale version is a non-destructive conflict, never re-sent.
   const updateActivity = useUpdateActivity(orgSlug, planId);
@@ -916,9 +919,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       editHistory,
       autoRecalc,
       planId,
-      // `moveMany`'s six. `isVisualMode` is the one that matters: without it the memo would keep
-      // a stale mode and a plural move on a plan switched to Visual would go on writing SNET
-      // constraints — wrong dates, silently, on exactly the plans where placement is hand-made.
+      // `moveMany`'s own two, below. **This named a third, `isVisualMode`, and explained at length
+      // why omitting it would leave the memo writing `SNET` constraints on a plan switched to
+      // Visual** — a hazard M-F removed along with the mode and the branch, so the paragraph
+      // survived as a warning about a fork that no longer exists. A plural move hand-places, on
+      // every plan, with nothing to be stale about.
       //
       // `pen.onWriteRejected` and not `pen`: the whole object is rebuilt on every status poll, so
       // depending on it would rebuild this memo — and every callback the canvas holds — four times a
@@ -2174,8 +2179,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     onTsldCreate,
     onTsldReposition,
     // Bar-end resize (ADR-0052 M2 finish, M3 start — `VITE_CANVAS_DIRECT_MANIPULATION`): the
-    // full-definition durationDays PATCH (+ mode-aware SNET/visualStart for a start drag) +
-    // coalesced recalc + coalesced undo.
+    // full-definition durationDays PATCH (+ a hand-placed `visualStart` for a start drag) +
+    // coalesced recalc + coalesced undo. The `mode-aware SNET` half of this sentence described
+    // ADR-0052 §3's `EARLY` branch, which M-F deleted along with the mode.
+
     onTsldResize,
     // Lag-anchor drag / Logic-panel lag nudge (ADR-0052 M3): the dependency PATCH echoing the
     // unchanged type + lag calendar + coalesced recalc + coalesced undo.

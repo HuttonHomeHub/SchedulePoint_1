@@ -13,7 +13,12 @@
  *
  * Nothing here imports from `render-model.ts`, and nothing here may. That is the whole contract.
  */
-import type { ActivityType, DependencyType, LagCalendarSource } from '@repo/types';
+import type {
+  ActivityType,
+  DependencyType,
+  LagCalendarSource,
+  VisualConflictReason,
+} from '@repo/types';
 
 import { daysBetween } from './working-time';
 
@@ -420,9 +425,20 @@ export interface RenderActivity {
   earlyFinish: string | null;
   isCritical: boolean;
   isNearCritical: boolean;
-  /** Engine-owned (ADR-0033): true when a Visual placement is earlier than its feasible start —
-   * the painter marks it (a warning cue, never colour-only). Only meaningful in VISUAL mode. */
+  /** Engine-owned (ADR-0033): true when the placement conflicts — see {@link visualConflictReason}
+   * for which way. The painter marks it (a warning cue, never colour-only). */
   visualConflict?: boolean;
+  /**
+   * Engine-owned (one-planning-surface M-D): **which** conflict, and therefore which edge of the
+   * bar the painter marks.
+   *
+   * M-D split the flag in two and the painter kept gating on the boolean alone, so both reasons
+   * drew the same triangle at `rect.x`. For `LATER_THAN_BOUND` that is the wrong end of the bar:
+   * the engine's test is `placedFinish > constraintCeiling` (`engine/compute.ts:836`), so the
+   * breach is at the **finish**, and marking the start pointed a planner at the edge that is not
+   * the problem — on a bar whose constraint pin was already drawn at the other end.
+   */
+  visualConflictReason?: VisualConflictReason | null;
   /** Engine-owned (ADR-0033): working-day drift of the placement from the early start (signed). */
   visualDriftDays?: number | null;
   /**

@@ -1,8 +1,8 @@
 # Implementation Plan: One planning surface
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Approved** (ADR-0148)
 - **Falsification conditions:** [`./falsification.md`](./falsification.md)
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** _(to be assigned)_
 - **Revised twice.** After §6 was answered (three answers against the stated defaults), and after
   four specialist reviews — two blocking — plus a product-owner decision on the overlay shape.
@@ -259,14 +259,23 @@ ones.**
   **by equality**, so this is a decision written down rather than an omission. The Cascade FK
   already gives the right lifecycle.
 
-##### Task M-A-T5 — draft ADR-01NN
+##### Task M-A-T5 — draft ADR-01NN · **landed at M-J as ADR-0148**
 
 - **Description:** spec §4.16's outline, **twelve decisions** (D0 Pass-2 branches and D11 the log's
   lifecycle are new). Filed at the next free number, **checked at filing** (ADR-0079 took `0079`
-  rather than the `0078` its plan named).
+  rather than the `0078` its plan named); `0148` was free and was taken.
 - **Complexity:** M
-- **Testing:** `check:adr-coverage`, `check:adr-register` — **and the `CLAUDE.md` §16 entry in the
-  same commit** (ADR-0147). Spec header → `Approved` (ADR-0131).
+- **Testing:** `check:adr-coverage` — **and the `CLAUDE.md` §16 entry in the same commit**
+  (ADR-0147). Spec header → `Approved` (ADR-0131).
+- **`check:adr-register` does not exist**, and this line named it until M-J. ADR-0147 folded that
+  limb into `check:adr-coverage`, which now checks the ADR index and §16 in both directions; a
+  testing line naming a script nobody can run is a gate that reads as covered and is not.
+- **It was scheduled in M-A and written in M-J, and nothing noticed for eight milestones.** Both
+  gates that would have caught it pass **because** the ADR was missing: `check:adr-coverage`
+  validates the ADRs that exist rather than the ones a plan promises, and ADR-0131's refusal only
+  bites a `Draft` spec **cited by an ADR** — so the absent ADR suppressed the check on its own
+  spec's `Draft` header. Found by the M-J-T1 database review. ADR-0133's "specified and not built"
+  at whole-artefact scale, and the epic's own records already carry three smaller instances.
 
 ---
 

@@ -3,7 +3,7 @@
 -- Spec: docs/specs/one-planning-surface/feature-spec.md §4.6; falsification.md FC-10 clauses A, C
 -- and D; m-i/premise.md, which re-verified the premise before this file was designed.
 -- Designed by the database-architect agent (CLAUDE.md §19.3), against a real PostgreSQL 16.13 with
--- all 68 prior migrations replayed; every number below is that run's, not an estimate.
+-- all 67 prior migrations replayed; every number below is that run's, not an estimate.
 --
 -- WHY. Before M-F, dragging a bar on an EARLY plan wrote a binding SNET at the drop date. M-F
 -- replaced that with a first-class `visual_start`, and `apps/web/src` now contains zero live 'SNET'
@@ -122,14 +122,34 @@
 -- IDEMPOTENT. A re-run converts nothing, because the predicate no longer matches. `migrate deploy`
 -- will not re-run it; a replay from backup or a manual run is harmless.
 --
--- COST, MEASURED:
---   102,000 activities / 2,826 converted — 199-241 ms, and IT DOES NOT SEQUENTIALLY SCAN: the
---   planner drives from `plans` and uses idx_activities_plan_updated_at (ADR-0098) on its leftmost
---   prefix `plan_id`, whose partial `deleted_at IS NULL` predicate matches this WHERE. Forcing a
---   sequential scan costs 781-798 ms, so the index path is real and not a coincidence.
+-- COST, MEASURED — AND THE PLAN IS A SEQUENTIAL SCAN, WHICH IS CORRECT.
+--   102,000 activities / 2,826 converted: 116-143 ms across four runs, with
+--   `Seq Scan on activities` feeding a nested loop from a `Seq Scan on plans` (40 rows), then an
+--   `Index Scan using activities_pkey` for the update side. That is the right shape: the predicate
+--   (`constraint_type = 'SNET' AND early_start = constraint_date AND visual_start IS NULL`) is a
+--   whole-table question with no selectivity any index can offer, and reading 102,000 rows once to
+--   answer it is cheaper than driving 40 index lookups. Measured both ways: forcing the index path
+--   with `enable_seqscan = off` produces exactly the plan-driven shape (`Index Scan using
+--   plans_pkey` -> `Bitmap Index Scan on idx_activities_plan_updated_at`) and costs **211 ms** —
+--   1.5-1.8x SLOWER.
+--
+--   **THIS PARAGRAPH SAID THE OPPOSITE UNTIL THE M-J GATE PASS, AND IT WAS WRONG IN BOTH
+--   DIRECTIONS.** It claimed "it does NOT sequentially scan: the planner drives from `plans` and
+--   uses idx_activities_plan_updated_at... forcing a sequential scan costs 781-798 ms, so the index
+--   path is real and not a coincidence." Measured independently by the backend-performance review
+--   and then re-derived here against a fresh database with all 67 prior migrations replayed and the
+--   corrected `m0/dilute.sql` fixture (population confirmed identical: 2,826 convertible, 706
+--   already-placed, 14,571 SNETs): the natural plan IS the sequential scan, the index-driven plan
+--   is the slower one, and the 781-798 ms figure does not reproduce under any planner setting
+--   tried. It was inherited from the design review and not re-derived before being written into a
+--   FORWARD-ONLY file — which is precisely the ADR-0076 Class 2 failure, committed in the one kind
+--   of artefact that cannot be quietly edited afterwards. Corrected while the epic was still on a
+--   branch.
+--
 --   164 activities (ADR-0140's first press on the deployed host) — 5.4 ms.
---   NO NEW INDEX: the predicate is a whole-table question with no selectivity to offer, and an
---   index for a once-ever statement would cost every activity write forever.
+--   NO NEW INDEX, and the corrected measurement STRENGTHENS that rather than weakening it: an index
+--   for a once-ever statement would cost every activity write forever, and the forced index plan is
+--   measurably slower here anyway.
 --   Under ADR-0018 this runs before the API serves, and WATCHTOWER_ROLLING_RESTART recreates one
 --   container at a time, so there is no concurrent writer for the lock to block.
 --
@@ -144,7 +164,19 @@
 -- exclusions. That is the exclusion working, not a failed strip.
 --
 -- FORWARD-ONLY. A rollback is a COMPENSATING migration, and this table is what makes one possible,
--- which is the clearest statement of why it exists:
+-- which is the clearest statement of why it exists.
+--
+-- **THE RECIPE BELOW HAS BEEN RUN ONCE, against the M-I schema, 2026-09-21** — and that sentence
+-- is narrower than it looks, which is why it replaces the one it replaces rather than deleting it.
+-- The security review of M-J-T1 wrote "it has never been run", correctly at the time; the database
+-- review then ran it against a populated post-strip database (102,000 activities, 2,826 converted)
+-- and it restored all 2,826 rows exactly — `constraint_type`, `constraint_date` and `visual_start`
+-- back to their prior values, 0 left stripped, both guard predicates behaving as documented.
+--
+-- What that does NOT establish is the half the original note was really about: **nothing in the
+-- test suite drives it**, so it will not fail loudly if `activities`' column set changes underneath
+-- it. One green run against today's schema is evidence it is correct today, not a gate keeping it
+-- correct. Read it as a starting point that must be re-checked against the schema of the day.
 --   UPDATE "activities" a
 --      SET "constraint_type" = m."prior_constraint_type",
 --          "constraint_date" = m."prior_constraint_date",

@@ -762,6 +762,28 @@ export function ToolbarPlanWorkspace({
    * remount on a plan change, so nothing would clear it. Storing the key that was dismissed makes
    * both problems go away at once: it is self-invalidating.
    */
+  /**
+   * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
+   * listbox (ADR-0026 D7).
+   *
+   * **One callback rather than one per view**, because its caller is the placement-migration
+   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
+   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
+   * reason that one states.
+   *
+   * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
+   * order is a tie-break that never fires rather than a precedence.
+   */
+  const focusPlanSurface = useCallback(() => {
+    const grid = document.querySelector('[role="treegrid"]');
+    if (grid) {
+      const stop = grid.querySelector<HTMLElement>('[role="row"][tabindex="0"]');
+      (stop ?? (grid as HTMLElement)).focus();
+      return;
+    }
+    document.querySelector<HTMLElement>('[role="listbox"]')?.focus();
+  }, []);
+
   const session = useSession();
   const migrationUserId = session.data?.user.id ?? null;
   const placementMigration = usePlacementMigration(model.orgSlug, model.planId);
@@ -792,6 +814,7 @@ export function ToolbarPlanWorkspace({
       <PlacementMigrationNotice
         count={migrationCount}
         rows={placementMigration.data?.rows ?? []}
+        restoreFocus={focusPlanSurface}
         onDismiss={() => {
           setDismissedKey(migrationKey);
           if (migrationUserId !== null) {
@@ -1394,6 +1417,26 @@ export function ToolbarPlanWorkspace({
         */}
         <CanvasDock>
           <SelectionActionsBar context={ganttSelectionCtx} restoreFocus={focusGanttGrid} />
+          {/*
+            The placement-migration notice (one-planning-surface M-I), in the Gantt **as well as**
+            the diagram — and it is here because the first version of M-I passed it to `TsldPanel`
+            alone, which is verbatim the one-host-and-not-its-neighbour shape this register records
+            at ADR-0080 (`bulk` wired into one layout and not the one its flag selects), ADR-0064 §7
+            and ADR-0067 M4. Found by reading this file rather than by anything failing.
+
+            A planner who works in the Gantt would otherwise never be told that the constraints on
+            their plan had been converted — and the Gantt is where the consequence is most visible,
+            because its Float column shows the number that moves.
+
+            It needs no precedence decision here, unlike the canvas: this view has exactly one other
+            strip, and the dock's standing rule is at most one TRANSIENT strip **plus** one
+            selection bar, which these two are. The `resolveDockStrip` ladder exists because the
+            canvas has four transient strips competing for one row; the Gantt has none.
+
+            Dismissal is per plan per user rather than per view, so dismissing it here dismisses it
+            on the diagram too — which is right: it is one fact about one plan, not two notices.
+          */}
+          {placementMigrationNotice}
         </CanvasDock>
       </>
     ) : (

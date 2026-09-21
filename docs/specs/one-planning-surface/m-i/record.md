@@ -76,6 +76,32 @@ would have shipped as a suppression during the load window and a total one on an
 session. Caught because the host wiring test renders without a session and hit the case head-on —
 which is the ADR-0081 seam doing its job, one layer below the defect it was written for.
 
+## The defect I found in my own diff, before a reviewer did
+
+**M-I's first version showed the notice on the diagram and not in the Gantt.** The workspace's
+`surface` is a ternary with a Gantt branch and a canvas branch, each carrying its own `CanvasDock`,
+and the notice was wired into one of them — verbatim the one-host-and-not-its-neighbour shape this
+register records at ADR-0080 (`bulk` wired into one layout and not the one its flag selects),
+ADR-0064 §7 and ADR-0067 M4.
+
+It matters more than the symmetry: **the Gantt is where the consequence is most visible**, because
+its Float column shows the number the migration moves. A planner who works there would have seen
+their float figures change with nothing on screen explaining why.
+
+The fix is one line, and the gate is `host-parity.structural.test.ts` — that file's whole subject is
+"a fact about the PLAN reaches both views; a fact about a SURFACE need not", and a one-time
+migration having happened to this plan is a fact about the plan. It needed its own case rather than
+a table row, because the two mounts take different shapes: the canvas receives a prop and decides
+its dock precedence, while the Gantt renders the node as a child of its own dock, so the file's
+`propsPassedTo` extractor structurally cannot see the Gantt half. **Verified red both ways** —
+removing either mount fails it.
+
+The Gantt needs no precedence decision, and that is worth writing down rather than leaving as an
+asymmetry a later reader will try to "fix": the dock's standing rule is at most one **transient**
+strip plus one selection bar, and the Gantt has exactly one other strip, which is the selection bar.
+`resolveDockStrip`'s ladder exists because the canvas has four transient strips competing for one
+row.
+
 ## What is NOT built, and why
 
 **The `e2e-placement-migration` Playwright journey named by the plan does not exist.** This is a
@@ -113,19 +139,44 @@ with strips that a real browser drives every CI run.
 
 ## Measured
 
-Against a real PostgreSQL 16.13 with all prior migrations replayed, during the design review:
+Against a real PostgreSQL 16.13 with all prior migrations replayed — **re-derived at the M-J gate
+pass**, not inherited from the design review:
 
-| Estate                                        | Converted | Wall clock     |
-| --------------------------------------------- | --------: | -------------- |
-| 102,000 activities (622× the deployed estate) |     2,826 | **199–241 ms** |
-| 164 activities (the deployed host)            |         4 | **5.4 ms**     |
+| Estate                                        | Converted | Wall clock                 |
+| --------------------------------------------- | --------: | -------------------------- |
+| 102,000 activities (622× the deployed estate) |     2,826 | **116–143 ms** (four runs) |
+| 164 activities (the deployed host)            |         4 | **5.4 ms**                 |
 
-It does **not** sequentially scan — the planner drives from `plans` and uses
-`idx_activities_plan_updated_at` on its leftmost prefix, whose partial `deleted_at IS NULL`
-predicate matches the migration's `WHERE` exactly. Forcing a sequential scan costs 781–798 ms, so
-the index path is real rather than a coincidence. **No new index**: the predicate is a whole-table
-question with no selectivity to offer, and an index for a once-ever statement would cost every
-activity write for ever.
+**It DOES sequentially scan `activities`, and that is the correct plan.** `Seq Scan on activities`
+feeds a nested loop from a `Seq Scan on plans` (40 rows), then `Index Scan using activities_pkey`
+for the update side. The predicate is a whole-table question with no selectivity any index can
+offer, so reading 102,000 rows once beats driving 40 index lookups — measured both ways: forcing
+the index path with `enable_seqscan = off` produces exactly the plan-driven shape (`Index Scan
+using plans_pkey` → `Bitmap Index Scan on idx_activities_plan_updated_at`) at **211 ms**, 1.5–1.8×
+slower.
+
+> **This section asserted the opposite until the M-J gate pass, and it was wrong in both
+> directions.** It said the statement "does **not** sequentially scan", named the index-driven shape
+> as the one that runs, and cited 781–798 ms for a forced sequential scan as proof the index path
+> was "real rather than a coincidence". Every part of that is false: the natural plan **is** the
+> sequential scan, the index-driven plan is the **slower** one, and the 781–798 ms figure does not
+> reproduce under any planner setting tried.
+>
+> **It came from the design review and was written into a forward-only migration file without being
+> re-derived** — ADR-0076 Class 2, in the one kind of artefact that cannot be edited after release.
+> M-I verified that review's `version`-bump citation independently, because it was irreversible and
+> load-bearing, and did not apply the same test to its plan-shape claim. §19.11's rule is that a
+> claim inherited from a report is checked like any other, and the **selective** application of it
+> is the finding: the half that was checked was the half that felt dangerous, and the half that was
+> not is the one that ended up in an immutable file.
+>
+> Caught by the backend-performance review of M-J-T1, then re-derived here against a fresh database
+> with all 67 prior migrations replayed and the corrected `m0/dilute.sql` — population confirmed identical
+> before anything was rewritten (2,826 convertible, 706 already-placed, 14,571 SNETs).
+
+**No new index, and the correction strengthens that rather than weakening it**: an index for a
+once-ever statement would cost every activity write for ever, and the forced index plan is
+measurably slower here anyway.
 
 ## Still owed
 

@@ -1,5 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 
+import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import { formatFinishVariance } from '@/lib/schedule-format';
@@ -73,17 +74,46 @@ export function activityBarLabel(a: {
  * uncomputed (null). A zero-duration milestone carries no duration clause; an unscheduled activity
  * says its duration and that it is not scheduled, nothing more.
  */
-export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: boolean }): string {
+export function describeActivity(
+  a: ActivitySummary,
+  opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource },
+): string {
   const name = activityLabel(a);
   const duration =
     a.durationDays > 0
       ? `, ${a.durationDays} working ${a.durationDays === 1 ? 'day' : 'days'}`
       : '';
-  if (a.earlyStart === null) return `${name}${duration}, not yet scheduled`;
+  /**
+   * **The spoken dates are the DRAWN dates, through the one shared resolver** — and they were the
+   * network's until the M-J gate pass (one-planning-surface), which is a WCAG 1.1.1/1.3.1 failure
+   * on the only route ADR-0026 D7 gives an AT user to a bar.
+   *
+   * Since M-F every bar draws from `visualEffective*` (`barDateSourceFor` returns `'visual'` unless
+   * the read-only Late overlay is on), so for any activity carrying a placement the canvas showed
+   * one span and this sentence announced another. `floatPart` three lines below was moved to the
+   * placed basis at M-E-T7, with a comment explaining why; the dates above it were not — the
+   * one-neighbour-and-not-the-other shape, inside the epic's own file.
+   *
+   * **It resolves through `barDatesFor` rather than reading `visualEffective*` here**, so a second
+   * opinion about where a bar is cannot exist: the painter, the Gantt, the print document and this
+   * sentence all ask the same function (the ADR-0065 one-implementation argument). That also makes
+   * the Late overlay correct for free — while it is on, the bar draws at late dates and so does
+   * this.
+   *
+   * **The caller passes the source.** Defaulting it here would be a second place that decides the
+   * basis, which is the defect this fix removes.
+   *
+   * Found independently by the accessibility and UX reviews of M-J-T1. The epic's own widened-hazard
+   * census (`m-f/no-placement-parity.md` §5) found the two sibling instances — the CSV export and
+   * the guest share view — and structurally could not find this one: its method was "every file that
+   * lost a `schedulingMode` reference", and this file never held one to lose.
+   */
+  const drawn = barDatesFor(a, opts?.barDateSource ?? 'visual');
+  if (drawn.start === null) return `${name}${duration}, not yet scheduled`;
   const dates =
-    a.earlyFinish && a.earlyFinish !== a.earlyStart
-      ? `${formatCalendarDate(a.earlyStart)} to ${formatCalendarDate(a.earlyFinish)}`
-      : formatCalendarDate(a.earlyStart);
+    drawn.finish && drawn.finish !== drawn.start
+      ? `${formatCalendarDate(drawn.start)} to ${formatCalendarDate(drawn.finish)}`
+      : formatCalendarDate(drawn.start);
   // **`remainingFloat`, not `totalFloat`** (M-E-T7). Criticality still comes from the engine's own
   // flags, which are pure-network facts and stay so: an activity is critical because of the
   // network, not because a planner spent its slack. Only the NUMBER moves to the placed basis, and
@@ -98,15 +128,36 @@ export function describeActivity(a: ActivitySummary, opts?: { overlapsInLane?: b
   // Name a set date constraint so the pin drawn on the canvas has a spoken equivalent (WCAG 1.1.1).
   const constraint = formatConstraint(a);
   const constraintPart = constraint ? `, ${constraint.full}` : '';
-  // Visual-Planning conflict cue (ADR-0033): the spoken equivalent of the warning triangle drawn on a
-  // bar placed earlier than its earliest feasible start (WCAG 1.1.1). Kept a *separate* read-out from
-  // float (SQ-c), since float is a pure-network fact and drift is a placement fact.
+  /**
+   * The spoken equivalent of the warning triangle drawn on a conflicting bar (WCAG 1.1.1). Kept a
+   * *separate* read-out from float (SQ-c), since float is a pure-network fact and drift is a
+   * placement fact.
+   *
+   * **It branches on the REASON, not the boolean** — and it did not until the M-J gate pass, where
+   * the accessibility and UX reviews reached the same finding independently. M-D split the flag into
+   * two reasons and `visualConflictReason`'s own docblock says to "prefer the reason wherever the
+   * sentence matters"; this sentence kept gating on `visualConflict`, which is now true for both,
+   * and hard-coded "before its earliest feasible start".
+   *
+   * **For `LATER_THAN_BOUND` that was backwards, not merely vague.** Drift is
+   * `placed − earliest` (`engine/compute.ts:348`), so it is NEGATIVE for an early placement and
+   * POSITIVE for one past a ceiling — and `Math.abs()` erased the sign before the word "before" was
+   * applied to it. A bar placed five days PAST a "no later than" date was announced as placed five
+   * days BEFORE its earliest start, in the same breath as a constraint clause naming the date it had
+   * overrun. The one case M-D exists to detect was the one case this described wrongly.
+   *
+   * The late sentence needs no number: `constraintPart` immediately before it names the bound, and
+   * the drift is measured from the earliest start, which is not what was breached. It is written to
+   * stand alone anyway, so it stays true if a future reason fires without a constraint clause.
+   */
   const conflictPart =
-    a.visualConflict && a.visualDriftDays !== null
-      ? `, conflict: placed ${Math.abs(a.visualDriftDays)} working ${
-          Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
-        } before its earliest feasible start`
-      : '';
+    a.visualConflictReason === 'LATER_THAN_BOUND'
+      ? ', conflict: placed past the constraint on it'
+      : a.visualConflict && a.visualDriftDays !== null
+        ? `, conflict: placed ${Math.abs(a.visualDriftDays)} working ${
+            Math.abs(a.visualDriftDays) === 1 ? 'day' : 'days'
+          } before its earliest feasible start`
+        : '';
   // Same-lane time-overlap cue (TECH_DEBT #24c): the spoken equivalent of the stacked-squares badge
   // on a bar a manual lane drop left overlapping another in its lane (WCAG 1.1.1). Derived (not a
   // persisted field), so the caller passes it — computed at the mapping seam (`laneOverlapIds`).

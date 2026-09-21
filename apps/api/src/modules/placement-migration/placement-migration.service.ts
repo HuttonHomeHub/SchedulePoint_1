@@ -40,7 +40,16 @@ export class PlacementMigrationService {
     planId: string,
   ): Promise<PlacementMigrationReport> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
-    if (!principal.can('plan:read', organization.id)) {
+    // **Both permissions, not either.** They are granted to the same set today (`HIERARCHY_READ`
+    // bundles them), so this asserts nothing extra now — which is the point: narrowing either later
+    // cannot silently leave this route open on the strength of the other. It is the rule this
+    // epic's own `cross-plan-revision-compare.controller.ts:94-96` states in as many words, applied
+    // here for the same reason. `activity:read` belongs because every field this route returns is
+    // an activity's — its code, its name, and a date that was on it.
+    if (
+      !principal.can('plan:read', organization.id) ||
+      !principal.can('activity:read', organization.id)
+    ) {
       throw new ForbiddenError('You do not have permission to read plans in this organisation.');
     }
     const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);

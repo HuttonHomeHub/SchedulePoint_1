@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { ConstraintType, PlacementMigrationReport, PlacementMigrationRow } from '@repo/types';
+import { ConstraintType } from '@prisma/client';
+import type { PlacementMigrationReport, PlacementMigrationRow } from '@repo/types';
 
 /** One constraint the placement migration removed, and what stood there before it. */
 export class PlacementMigrationRowDto implements PlacementMigrationRow {
@@ -24,7 +25,18 @@ export class PlacementMigrationRowDto implements PlacementMigrationRow {
   @ApiProperty({ description: 'The activity’s name as it stood at migration time.' })
   activityName!: string;
 
+  /**
+   * **`enum:` with the PRISMA-GENERATED runtime enum, not the `@repo/types` union.**
+   *
+   * This repository runs no `@nestjs/swagger` CLI plugin (`nest-cli.json` declares no `plugins`),
+   * so Nest falls back to reflected `design:type` metadata — and a type-only import of a bare TS
+   * union erases to `Object`. Declared that way the generated spec would not say this field is
+   * restricted to the eight constraint labels at all. Every sibling gets this right by importing
+   * the Prisma enum object (`activity-response.dto.ts:82`); this one did not until the M-J gate
+   * pass.
+   */
   @ApiProperty({
+    enum: ConstraintType,
     description:
       'The removed constraint’s type — `SNET` (start no earlier than) for every row the strip ' +
       'writes, because its WHERE names that one kind and no other. The stored enum label, not a ' +
@@ -68,10 +80,23 @@ export class PlacementMigrationReportDto implements PlacementMigrationReport {
   @ApiProperty({ format: 'uuid' })
   planId!: string;
 
-  @ApiProperty({ description: 'How many constraints were converted to placements on this plan.' })
+  @ApiProperty({
+    description:
+      'How many constraints were converted to placements on this plan. Redundant with `rows.length` ' +
+      'today, because the read is deliberately uncapped — and sent anyway, so the first cap added ' +
+      'cannot silently turn the array’s length into a different quantity for a client that had been ' +
+      'reading it as the total.',
+  })
   count!: number;
 
-  @ApiProperty({ type: [PlacementMigrationRowDto], description: 'Oldest first. Empty when none.' })
+  @ApiProperty({
+    type: [PlacementMigrationRowDto],
+    description:
+      'Oldest first. Empty when none. **Unpaginated, and the exemption is noted here per the house ' +
+      'rule in docs/API.md:** the rows are written once by a schema migration and by nothing else, ' +
+      'so a plan’s count is fixed at that instant and can never grow — a cursor would be a contract ' +
+      'with no subject.',
+  })
   rows!: readonly PlacementMigrationRow[];
 
   static from(report: PlacementMigrationReport): PlacementMigrationReportDto {

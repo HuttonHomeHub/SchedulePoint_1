@@ -5237,6 +5237,93 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   commit that filed ADR-0147 until this entry existed. Cost 62–66 ms. **The CPM engine is not
   imported and no migration runs**; `apps/` contributes zero files to the diff.
 
+- **ADR-0148** _(Accepted; M-A–M-J landed 2026-09-21)_ — Visual is the plan; the feasible window
+  and the levelled ghost are overlays. ADR-0033 split a plan into two **scheduling modes**, because
+  the product had no column meaning "where the planner put this" — so on an `EARLY` plan a drag
+  wrote a binding `SNET` at the drop date, through a PATCH round-tripping fifteen definition fields
+  that **overwrote whatever constraint the row already carried**: moving a bar silently replaced a
+  commitment somebody had recorded on purpose, and a bulk drag replaced twelve. The mode was a
+  per-plan flag with no migration path, so every consumer that mattered — the canvas, the Gantt, the
+  printed programme, the export, the cross-plan derivation, the parallel accessible listbox — chose
+  its own column, each internally consistent, visible only to somebody opening one plan two ways.
+  And the float a planner was shown was `totalFloat`, measured from where the **network** would put
+  the bar, which on a hand-placed bar is not the number they can spend.
+  **The premise the whole collapse rests on was false as stated, and D0 exists because of it.** The
+  spec opened with "Early is Visual's resting state" and cited a fixture of five plain tasks — zero
+  `actualStart`, zero `remainingMinutes`, zero `WBS_SUMMARY`, zero `LEVEL_OF_EFFORT`. Measured
+  against a fixture that has them (`m-p/red-run.md`, produced by reverting **only** `compute.ts` and
+  running the case before any engine change), Pass 2 got a started activity's frozen actual start
+  wrong, its remaining span wrong, both of a complete activity's actuals wrong, and collapsed an LOE
+  or a summary to a point. So Pass 2 is taught Pass 1's three branches **first**, ordered before
+  everything else in the epic: every later parity argument is "the placed basis agrees with the
+  early basis where nobody has placed anything", and that sentence was not true until it landed. It
+  is the one milestone whose absence would have been invisible — a plan of plain unprogressed tasks
+  passes against the defect.
+  **The decisions.** `schedulingMode` is deleted from the DTOs, `@repo/types` and `apps/api/src`; a
+  caller naming it gets a **422 and not a silent drop**, because a silently-ignored field would let
+  an old client go on "setting the mode" for ever, succeeding, and changing nothing. `computeSchedule`'s
+  network pass is **byte-identical** — the golden suite and `pureFields` pass **unedited**, which is
+  the acceptance condition and not a remark — and the parity claim is stated in four parts with its
+  second part **withdrawn rather than stretched**, because Pass 2's outputs change deliberately for
+  the four shapes D0 repairs. Screen float becomes `remainingFloat` (`totalFloat − visualDriftDays`,
+  subtracted in minutes and rounded **once** on the server, never derived client-side: the
+  difference of two roundings is not the rounding of the difference), labelled **"float left"**,
+  because without the word the sentence silently changes meaning the first time somebody places a
+  bar. The float and drift tails become **one feasible window** plus one rival ghost — the product
+  owner's choice over three peer ghosts — amending ADR-0054 §4 (the tail's datum is the placed
+  finish, so its length is `T − d`) and ADR-0033 D6 (editing is never suppressed), with one
+  `traceWindowCap` for both caps because two tracers is how the inverted case ends up a half-pixel
+  off, visible only on the placements the feature exists to show. Levelled joins as a **lens**, never
+  an authority (ADR-0041 Q2 stands), with **three** states from `level.ts`'s exit paths, since
+  "levelling is off" and "levelling moved nothing" are different facts.
+  **ADR-0033 D5's unbuilt second disjunct is built**, and the rule that comes with it is a rule
+  because two consumers got it wrong: **read the reason, never the boolean**, wherever the sentence
+  or the mark differs by direction. `LATER_THAN_BOUND` is a breach of the placed **finish** against
+  an `SNLT`/`FNLT`/`MSO`/`MFO` ceiling, and drift is signed — so the accessible Tier-1 sentence
+  announced a bar placed five days _past_ a ceiling as placed five days _before_ its earliest start
+  (`Math.abs()` erasing the sign before the word "before" was applied to it), in the same breath as
+  a constraint clause naming the date it had overrun; and the canvas drew both reasons' warning
+  triangle at the bar's **start**, which for the late reason is the one end nothing is wrong with,
+  typically with the pin for the overrun bound sitting at the other.
+  **The strip is the irreversible half, and it is a four-class test.** **Binding**
+  (`early_start = constraint_date`) converts; **inert** is left, because converting it would place
+  the bar earlier than logic allows; **unclassified** is left, and one of the two ways it arises
+  **never clears**, since a started activity's actual start bypasses the clamp; **already placed** is
+  left, because a row can hold a stale placement _and_ a binding constraint — measured, removing
+  that one clause destroys **706 hand-placements** on the epic's 102,000-activity fixture. The
+  conversion and the record are **one set-based statement**, so the recorded set and the converted
+  set are the same set by construction, and it bumps `version` against every sibling data
+  migration's convention: that convention exists so an _engine_ write stays invisible to optimistic
+  locking, and this writes a _planner-owned input_ and wants the opposite. **The bars do not move
+  and the float downstream does** — an `SNET` binds through Pass 1 and a placement does not, so the
+  float that was never genuinely constrained comes back. Every conversion is recorded in
+  `placement_migrations`, which is the **only** record that will ever exist: the activity PATCH route
+  is `PLAN_CONTENT` in the audit census and permanently excluded from `audit_events`.
+  **The programme's forward bound reads the placed span and the backward bound deliberately does
+  not**, which is not an asymmetry to be tidied: the latest a network tolerates is a statement about
+  float, and there is no such thing as a placed late finish. Export **reports** the placement and
+  refuses to translate it, because a constraint in an XER file would put back, in somebody else's
+  tool, exactly the conflation this epic removed. **No `VITE_` flag** (ADR-0088 D1), and the
+  thirteen journey configs that pinned the mode off were **converted before the collapse rather than
+  stranded by it** — the ADR-0084 batch-1 lesson applied in advance.
+  **Two consequences are stated rather than tested away.** A stale web bundle **silently renders
+  Early dates** for placed plans until it refreshes, and the response side is not symmetric with the
+  request — sending the field is a 422, no longer receiving it is not an error, because the client
+  defaulted it to `'EARLY'`; ADR-0047 recreates the two images independently, so the window is real.
+  And the rollback from the schema drop is a **restore, not a redeploy**: once `plans.scheduling_mode`
+  is gone, redeploying the previous image gives a column that does not exist. That drop therefore
+  ships **one release later**, so the two halves can fail separately.
+  **Three of the epic's own gate-pass findings are the register's recurring shapes.** The migration's
+  cost comment asserted "it does **not** sequentially scan" and cited 781–798 ms for a forced
+  sequential scan as proof — every part false, re-derived at **116–143 ms for the natural sequential
+  scan against 211 ms for the forced index path**; it came from a design review and was written into
+  a **forward-only file** without being re-derived, while that same review's `version`-bump citation
+  _was_ checked, so the finding is the **selective** application of §19.11 rather than its absence.
+  `repositionCommand` survived the collapse exported, tested and uncalled, under `m-f/collapse.md`'s
+  claim that "`tsc` found all three" — which it structurally cannot, an exported symbol with no
+  caller being no error. And `docs/API.md` had never been told about any of it. **The CPM engine's
+  network pass is byte-identical for every input**, so the ADR-0034 conformance matrix is untouched.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

@@ -135,9 +135,14 @@ export interface TsldCreateOutcome {
 }
 
 /**
- * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to
- * an SNET constraint + recalc; `laneIndex` (present iff the lane changed) is layout only (no
- * recalc). The route issues the minimal PATCH for whichever axes are present. **At least one axis
+ * A committed reposition — a free-2D move (M4). `startDay` (present iff the day changed) maps to a
+ * hand-placed `visualStart` + recalc; `laneIndex` (present iff the lane changed) is layout only (no
+ * recalc).
+
+ * **It wrote an `SNET` constraint until the collapse** (one-planning-surface M-F-T3), and this
+ * block still said so at the M-J gate pass. A drop is a placement, not a commitment somebody
+ * recorded, and the difference is what the whole epic is about — so a docblock describing the
+ * drop as a constraint is the most misleading sentence a reader of this file could meet. The route issues the minimal PATCH for whichever axes are present. **At least one axis
  * is always present** — the gesture machine emits a `reposition` only when a whole cell changed,
  * and the route treats the all-absent case as a no-op — though the type can't enforce that.
  */
@@ -167,8 +172,9 @@ export type TsldRepositionOutcome = TsldEditOutcome;
  * `PATCH durationDays` carrying the FULL definition round-trip (like a reposition) + the
  * coalesced recalc; start day and lane are untouched. Start edge (`startDay` present): the
  * finish stays pinned (`durationDays` = finish − newStart + 1) and the route maps it
- * **mode-aware** (ADR-0052 §3): EARLY → `PATCH {constraintType: SNET, constraintDate,
- * durationDays}`, VISUAL → `PATCH {visualStart, durationDays}`.
+ * to `PATCH {visualStart, durationDays}`. **There is no longer a mode to be aware of**
+ * (one-planning-surface M-F): ADR-0052 §3's `EARLY` branch, which imposed an `SNET` at the new
+ * start, went with the mode it belonged to.
  */
 export interface TsldResizeInput {
   activityId: string;
@@ -300,11 +306,12 @@ export interface TsldPanelProps {
    * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
   onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
-  /** Route-composed reposition handler (SNET PATCH + recalc). Resolves with a conflict message
+  /** Route-composed reposition handler (the minimal `visualStart` PATCH + recalc). Resolves with a
+   * conflict message
    * when the move was refused (stale version) or dates couldn't recalc; rejects on real error. */
   onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
   /** Route-composed bar-end resize handler (ADR-0052 M2 finish edge, M3 start edge): the
-   * full-definition `PATCH durationDays` (+ SNET/`visualStart` for a start drag, mode-aware) +
+   * full-definition `PATCH durationDays` (+ `visualStart` for a start drag) +
    * recalc. Only reachable under `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the bar-end
    * resize handles + the `Shift+←/→` duration nudge. Resolves with a conflict message when
    * refused (stale version); rejects on real error. */
@@ -562,7 +569,7 @@ interface PendingCreate {
  * **M2 (flagged):** when editing is enabled (`canEdit` + `onCreate` + `VITE_TSLD_EDITING`),
  * a toolbar adds an **Add activity** tool — drag on the timeline to draw a task, then name it
  * in an inline popover — and in **Select** mode a writer drags a bar's body sideways to move it
- * in time (an SNET reposition) or drags from a bar's **edge handle** to another bar to draw a
+ * in time (a hand-placement) or drags from a bar's **edge handle** to another bar to draw a
  * dependency (modifier picks the type). Edits show an instant optimistic preview; the route owns
  * the write + authoritative recalc, and a stale-version / cycle / duplicate conflict surfaces as
  * a non-destructive banner. With editing off the surface is byte-for-byte the M1 read-only diagram.
@@ -2118,7 +2125,7 @@ export function TsldPanel({
       return;
     }
     // Alt+arrows nudge the focused activity — vertical = lane (no recalc), horizontal = start day
-    // (an SNET constraint, recalcs). The keyboard equivalent of a free-2D drag, coalesced so a held
+    // (a hand-placed `visualStart`, recalcs). The keyboard equivalent of a free-2D drag, coalesced so a held
     // key is one net write (WCAG 2.1.1; no pointer-only capability). Behind the edit flag.
     if (
       editingEnabled &&
@@ -2469,7 +2476,7 @@ export function TsldPanel({
           if (outcome.conflict) showConflict(outcome.conflict);
           // Announce "Moved" only when the move actually landed, so it never contradicts a
           // "wasn't applied" conflict banner (WCAG 4.1.3); name the new lane when it changed and,
-          // for any time change (SNET + recalc), that the dates will update — matching the keyboard
+          // for any time change (placement + recalc), that the dates will update — matching the keyboard
           // nudge's wording so the same operation reads the same to AT users.
           if (outcome.applied) {
             const timeChanged = intent.startDay !== undefined;
@@ -2510,8 +2517,9 @@ export function TsldPanel({
     if (intent.kind === 'resize') {
       // Bar-end resize (ADR-0052 M2 finish edge, M3 start edge) — the reposition contract. A
       // finish drag pins the start (the ghost's right edge tracks the new duration); a start drag
-      // pins the finish (the ghost's left edge tracks the new start; the route maps it mode-aware,
-      // ADR-0052 §3). The route owns the PATCH + recalc; a stale-version refusal banners.
+      // pins the finish (the ghost's left edge tracks the new start, which the route hand-places as
+      // a `visualStart` — ADR-0052 §3's mode-aware fork went with the mode at M-F). The route owns
+      // the PATCH + recalc; a stale-version refusal banners.
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedResize) return;
       clearConflict();
