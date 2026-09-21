@@ -124,12 +124,41 @@ note load-bearing rather than cautious.
 
 ## The journey sweep
 
-**46 suites, 45 green.** The one failure is `overview`, on its last case, and it is **not this
-epic's** — `git diff origin/main..HEAD` over `apps/web/e2e-overview/` and its config is empty, so it
-is pre-existing on `main`. Reproduced in isolation, and the case **passes when run alone**: the
-suite's first eight cases spend the global 100-per-60-second rate-limit budget and the ninth meets
-the wall. Filed as `docs/TECH_DEBT.md` #360 with the reproduction, the precedent that would fix it,
-and the reason that precedent's argument does not transfer.
+**46 suites, 45 green.** The one failure is `overview`, on its last case.
+
+**It was first written up here, and filed as `docs/TECH_DEBT.md` #360, as _not this epic's_ — on the
+strength of `git diff origin/main..HEAD` over `apps/web/e2e-overview/` and its config being empty.
+That conclusion was wrong and the evidence never supported it.** An empty diff over the journey says
+the journey did not change; it says nothing about the application the journey drives, which this
+epic changed extensively. The right instrument was never a diff — it was running the suite on
+`main`, which had not been done.
+
+Run (2026-09-21, fresh database each time, packages built, ports verified free): **`origin/main`
+passes 9/9; the branch fails 1/9**, at the case CI named. So the red IS this epic's to answer.
+
+What it is, measured rather than reasoned: a `ThrottlerGuard` bucket is keyed per IP **and per
+handler** (stock guard, no `generateKey` override), which is why 517 requests survive a 100/60 s
+limit at all. The quantity that decides the outcome is one handler's peak inside a 60 s window, and
+`GET /api/v1/me` peaks at **99 on `main` and 106 on the branch**. The limit is **100**. The suite had
+been passing one request below a hard ceiling, and the epic's +16 requests across nine journeys
+(+3.1%, 584 → 602 — no refetch storm, no product defect) tipped it. Raising `RATE_LIMIT_LIMIT` for
+this harness returns it to 9/9, which is the confirmation as well as the fix.
+
+The symptom is worth keeping, because it is why this was mis-read twice: a 429 on the session read
+makes `useSession` yield no user, so `AcceptInvitationCard` renders its signed-out half and offers
+`Sign in / Create an account` to a member who has just signed up. The journey then waits out its
+timeout on an `Accept and join` button the product is correct not to draw, and the failure names
+that button. `LOG_LEVEL: 'silent'` keeps the ThrottlerException out of the report entirely.
+Generalised as `docs/TECH_DEBT.md` #361; #360 is closed and ledgered with its own correction.
+
+**Two instrument failures on the way, both the ADR-0099 trap in its two directions.** The first
+`main` run measured a tree with no generated Prisma client and no built workspace packages — 499
+then 24 TypeScript errors, the webServer never started, `MAIN_OVERVIEW_EXIT=1` — which reads exactly
+like a failing suite and is a failure to run one. Then a branch API server survived its own cleanup
+(`pkill -f "nest start"` misses the `node dist/main` child) and served the next run through
+`EADDRINUSE`, so a `main` measurement was taken against branch code. The harness now refuses to
+start while anything holds 3000 or 5173, which is the rule `scripts/e2e-local.sh` already enforces
+and my own script did not.
 
 **What the sweep was for**: `a11y.ts` changes the Tier-1 sentence that many journeys assert on, so a
 change to which dates it speaks could have moved text under nineteen suites. None of them moved.

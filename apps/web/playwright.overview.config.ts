@@ -56,6 +56,29 @@ export default defineConfig({
               // real actor turns up on the overview. A journey against an unenforced lock would
               // pass without ever exercising the write path the read model reports on.
               PLAN_EDIT_LOCK_ENFORCED: 'true',
+              // Raised for the same reason the three gantt harnesses raise it, though NOT for their
+              // reason: nothing here seeds at scale. This suite is serial and multi-actor — nine
+              // journeys, each signing up an owner, onboarding an organisation and navigating it,
+              // with two of them minting a second member as well — so it compresses about ten
+              // sessions into roughly seventy seconds from one IP.
+              //
+              // `ThrottlerGuard` is stock, so a bucket is keyed per IP AND per handler; that is why
+              // 517 requests survive a 100/60 s limit at all. Measured 2026-09-21 against the same
+              // machine, one run each: `GET /api/v1/me` peaks at **99 requests in a 60 s window**
+              // before the one-planning-surface epic and **106** after it. The limit is 100. So the
+              // suite had been passing one request below a hard ceiling, and the next commit to add
+              // any page load was going to cross it whatever that commit was.
+              //
+              // What that looks like is the reason this is worth a paragraph: an exhausted budget is
+              // not reported as one. The viewer's session read 429s, `useSession` yields no user,
+              // and `AcceptInvitationCard` renders its signed-out branch — so a member who HAS just
+              // signed up is shown `Sign in / Create an account` and the journey waits thirty
+              // seconds for an `Accept and join` button that the product is correct not to draw.
+              // `playwright.measure-gantt.config.ts` records the same shape one screen along.
+              //
+              // Raised for this harness only — the guard is untouched, the product default stays
+              // 100/60 s, and no other suite or environment sees this value.
+              RATE_LIMIT_LIMIT: '100000',
             },
           },
           {
