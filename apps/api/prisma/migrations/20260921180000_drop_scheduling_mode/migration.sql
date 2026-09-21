@@ -1,0 +1,75 @@
+-- Drop `plans.scheduling_mode` and the `SchedulingMode` enum (ADR-0148, M-J-T2).
+--
+-- ADR-0148 collapsed the EARLY/VISUAL scheduling modes: every bar now draws from the placed
+-- basis, `schedulingMode` is gone from the DTOs, `@repo/types` and `apps/api/src`, and a caller
+-- naming it gets a 422. The column has been write-only dead weight since that shipped as
+-- api-v0.70.0. See `docs/specs/one-planning-surface/`.
+--
+-- ONE MIGRATION, FOR ATOMICITY — NOT because a split would fail.
+-- A two-file split WOULD work: Prisma applies pending migrations one file at a time, each
+-- committed before the next, so by the time a second file ran the column would already be gone
+-- and there would be no dependency left to refuse. This repository states that itself, for the
+-- inverse case, at `20260725130000_resource_group_kind/migration.sql:16-17`.
+-- (The implementation plan claimed the split "fails on the dependency". That inference does not
+-- follow from its own measurement — `DROP TYPE` alone fails, which is not what a split does — and
+-- the claim is corrected there rather than repeated here, because a reader would test it.)
+-- The real objection is that a split commits an intermediate state: column gone, type orphaned.
+-- If a deploy is interrupted between the two files — a live scenario on a host that auto-pulls
+-- unattended (ADR-0047) — that orphan persists, and `prisma:check-drift` then reports drift
+-- against a datamodel that no longer declares it. One file means both go or neither does.
+--
+-- NO EXPLICIT `BEGIN;`/`COMMIT;`, AND DO NOT ADD ONE.
+-- Prisma already wraps each migration file in a transaction; no migration in this repository uses
+-- explicit transaction control, and nine of them cite the wrapper as the reason `CONCURRENTLY` is
+-- unavailable. An explicit `COMMIT` here would end Prisma's OUTER transaction early, so a later
+-- failure could no longer roll this change back: the schema change would be applied while Prisma
+-- recorded the migration as FAILED. That is ADR-0107's `P3009` restart loop with an extra sting —
+-- recovery would need `prisma migrate resolve --applied`, not the `--rolled-back` that ADR-0107's
+-- precedent trains an operator to reach for. This is the most likely "helpful" edit a future
+-- reader will make to this file.
+--
+-- ORDER IS LOAD-BEARING. Reversed, the type drop fails 2BP01:
+--   ERROR:  cannot drop type "SchedulingMode" because other objects depend on it
+--   DETAIL:  column scheduling_mode of table plans depends on type "SchedulingMode"
+-- The dependency is named in DETAIL, not in the primary message — which is what the negative
+-- control in the accompanying spec asserts on.
+--
+-- COST AND LOCK POSTURE. Metadata-only: Postgres marks the attribute `attisdropped` and leaves the
+-- heap alone. Measured at 200,000 rows: relfilenode unchanged, `pg_relation_size` unchanged at
+-- 12,050,432 bytes, `ALTER TABLE` 0.318 ms, `DROP TYPE` 0.135 ms. The honest risk is lock QUEUING,
+-- not lock duration: `ACCESS EXCLUSIVE` conflicts with everything including `ACCESS SHARE`, so an
+-- open transaction holding a plain SELECT on `plans` blocks this, and everything queues behind the
+-- waiter. `lock_timeout` was considered and deliberately left out — no migration here sets one, and
+-- it would convert a harmless sub-millisecond wait into a restart loop.
+--
+-- NOT IDEMPOTENT. Re-running fails. This is a deliberate contrast with
+-- `20260921120000_strip_drag_constraints`, whose spec makes idempotence one of its claims; a reader
+-- copying that spec will assume it here and be wrong.
+--
+-- ROLLBACK IS A COMPENSATING MIGRATION PLUS THE PREVIOUS IMAGE — NEVER THE PREVIOUS IMAGE ALONE,
+-- AND THE FAILURE IS SILENT. An api-v0.70.0 image still selects this column. Its
+-- `prisma migrate deploy` exits 0 (Prisma does not fail on an applied-but-unknown migration), so
+-- the container STARTS; `/health/ready` is a bare connectivity ping that never touches `plans`, so
+-- it reports HEALTHY to Watchtower; and then every plan read 500s with
+-- `column "scheduling_mode" does not exist`. Nothing announces it. To roll back:
+--   CREATE TYPE "SchedulingMode" AS ENUM ('EARLY', 'VISUAL');
+--   ALTER TABLE "plans" ADD COLUMN "scheduling_mode" "SchedulingMode" NOT NULL DEFAULT 'EARLY';
+-- Metadata-only on PG 11+. Every row lands on 'EARLY', which differs from the original per-plan
+-- values — and nothing reads them, so the restored database is functionally identical to 0.70.0's.
+-- A backup restore is only needed if somebody wants the original EARLY/VISUAL values back, and the
+-- only thing that ever read them is the diagnostic retired in this same commit.
+--
+-- HARD COUPLING: the `placement-on-early-plan` staff diagnostic is deleted in this same commit. It
+-- was the last reader of this column, so dropping the column without removing it would break the
+-- diagnostics route outright rather than degrade a reading. A reader reverting this file must bring
+-- that entry back too. Its pre-collapse figure was knowingly forfeited (product owner, 2026-09-21).
+--
+-- NOTHING ELSE DEPENDS ON EITHER OBJECT. `pg_depend` has exactly three entries, all resolved
+-- automatically: the array type `_SchedulingMode` (goes with DROP TYPE), the column itself, and the
+-- `DEFAULT 'EARLY'` in `pg_attrdef` (goes with DROP COLUMN, measured 1 -> 0). No index, CHECK,
+-- foreign key, view, trigger or generated column. `Baseline` does NOT snapshot it — ADR-0125 D3
+-- freezes four criticality-rule columns and this is not among them.
+
+ALTER TABLE "plans" DROP COLUMN "scheduling_mode";
+
+DROP TYPE "SchedulingMode";

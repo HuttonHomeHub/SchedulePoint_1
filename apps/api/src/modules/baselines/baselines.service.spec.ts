@@ -32,7 +32,6 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     status: 'DRAFT',
     plannedStart: new Date('2026-01-05T00:00:00Z'),
     calendarId: null,
-    schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
     criticalPathDefinition: 'TOTAL_FLOAT',

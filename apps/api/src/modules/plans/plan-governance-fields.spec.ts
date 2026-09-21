@@ -38,7 +38,7 @@ describe('plan governance fields', () => {
 
   it('records the moved field and NO other', () => {
     const moved = diffGovernanceFields(
-      { plannedStart: new Date('2026-01-01'), schedulingMode: 'EARLY', name: 'Baseline' },
+      { plannedStart: new Date('2026-01-01'), name: 'Baseline' },
       { plannedStart: new Date('2026-02-01'), name: 'Renamed' },
     );
     expect(moved).not.toBeNull();
@@ -51,8 +51,8 @@ describe('plan governance fields', () => {
     // save, so a presence check would report fifteen changes each time a planner moved one.
     expect(
       diffGovernanceFields(
-        { schedulingMode: 'EARLY', totalFloatMode: 'START', levelResources: false },
-        { schedulingMode: 'EARLY', totalFloatMode: 'START', levelResources: false },
+        { progressRecalcMode: 'RETAINED_LOGIC', totalFloatMode: 'START', levelResources: false },
+        { progressRecalcMode: 'RETAINED_LOGIC', totalFloatMode: 'START', levelResources: false },
       ),
     ).toBeNull();
   });

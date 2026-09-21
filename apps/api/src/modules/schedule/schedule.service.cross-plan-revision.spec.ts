@@ -48,7 +48,6 @@ const planRow = (id: string, over: Partial<Plan> = {}): PlanWithProject =>
     status: 'DRAFT',
     plannedStart: new Date('2026-01-01T00:00:00.000Z'),
     calendarId: null,
-    schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
     criticalPathDefinition: 'TOTAL_FLOAT',
