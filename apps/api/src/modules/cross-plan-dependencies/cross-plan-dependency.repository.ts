@@ -31,21 +31,46 @@ export interface PlanCrossEdge {
 
 /**
  * An active cross-plan edge INTO a plan (its successor is in that plan), with the upstream
- * PREDECESSOR's persisted early dates — the forward (external early start) derivation input
+ * PREDECESSOR's **placed** dates — the forward (external early start) derivation input
  * (F4, ADR-0045 §2). Dates are `@db.Date` (`Date | null`); the service crosses them to `YYYY-MM-DD`.
+ *
+ * **It reads `visualEffective*`, and it read `earlyStart`/`earlyFinish` until
+ * one-planning-surface M-H.** A programme now interfaces on where the upstream work is **planned
+ * to happen**, not on the earliest the network would allow it to — which is the whole point of a
+ * planning surface, and it is the answer a downstream planner would give if you asked them when
+ * the handover is.
+ *
+ * **The fields are renamed with the switch rather than left reading `predecessorEarly*`.** A name
+ * that says "early" over a column holding placed dates is the silent redefinition this epic
+ * refuses everywhere else (it is why a baseline freezes its own criticality rule rather than
+ * reinterpreting one), and it is the defect most likely to survive review, because every call site
+ * keeps compiling and every test keeps passing while the word stops being true.
+ *
+ * The **backward** direction is deliberately NOT the mirror of this — see
+ * {@link OutgoingCrossPlanEdgeRow}.
  */
 export interface IncomingCrossPlanEdgeRow {
   successorId: string;
   type: DependencyType;
   lagMinutes: number;
-  predecessorEarlyStart: Date | null;
-  predecessorEarlyFinish: Date | null;
+  predecessorPlacedStart: Date | null;
+  predecessorPlacedFinish: Date | null;
 }
 
 /**
  * An active cross-plan edge OUT OF a plan (its predecessor is in that plan), with the downstream
  * SUCCESSOR's persisted late dates — the backward (external late finish) derivation input
  * (F4, ADR-0045 §2). Dates are `@db.Date` (`Date | null`); the service crosses them to `YYYY-MM-DD`.
+ *
+ * **These stay `successorLate*` and must never become a "Placed" variant** (one-planning-surface
+ * M-H). The symmetry is tempting and the thing it would name does not exist: a placement is a
+ * statement about where work is planned to START, and there is no such thing as a placed LATE
+ * finish. The late dates are Pass 1's backward answer — the latest the network tolerates — and a
+ * hand-placement is not an input to that question at all.
+ *
+ * A reader tidying the forward rename into a matching pair would invent a basis with nothing
+ * behind it, so `cross-plan-basis.structural.spec.ts` asserts the negative rather than leaving it
+ * to a comment.
  */
 export interface OutgoingCrossPlanEdgeRow {
   predecessorId: string;
@@ -171,7 +196,8 @@ export class CrossPlanDependencyRepository {
 
   /**
    * The plan's active INCOMING cross-plan edges (successor in this plan) with each upstream
-   * PREDECESSOR's persisted early dates — the forward-derivation load (F4, ADR-0045 §2). Only called
+   * PREDECESSOR's persisted PLACED dates (`visualEffective*`, one-planning-surface M-H) — the
+   * forward-derivation load (F4, ADR-0045 §2). Only called
    * when {@link countActiveForPlan} is non-zero. Org-scoped (anti-IDOR); no N+1 (dates come via the
    * predecessor include). Served by the (successor_plan_id, …) index.
    */
@@ -186,15 +212,15 @@ export class CrossPlanDependencyRepository {
         successorId: true,
         type: true,
         lagMinutes: true,
-        predecessor: { select: { earlyStart: true, earlyFinish: true } },
+        predecessor: { select: { visualEffectiveStart: true, visualEffectiveFinish: true } },
       },
     });
     return rows.map((r) => ({
       successorId: r.successorId,
       type: r.type,
       lagMinutes: r.lagMinutes,
-      predecessorEarlyStart: r.predecessor.earlyStart,
-      predecessorEarlyFinish: r.predecessor.earlyFinish,
+      predecessorPlacedStart: r.predecessor.visualEffectiveStart,
+      predecessorPlacedFinish: r.predecessor.visualEffectiveFinish,
     }));
   }
 

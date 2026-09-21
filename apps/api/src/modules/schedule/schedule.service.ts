@@ -1463,11 +1463,11 @@ export class ScheduleService {
         successorActivityId: e.successorId,
         type: e.type,
         lagDays: Math.round(e.lagMinutes / MINUTES_PER_DAY),
-        predecessorEarlyStart: e.predecessorEarlyStart
-          ? formatCalendarDate(e.predecessorEarlyStart)
+        predecessorPlacedStart: e.predecessorPlacedStart
+          ? formatCalendarDate(e.predecessorPlacedStart)
           : null,
-        predecessorEarlyFinish: e.predecessorEarlyFinish
-          ? formatCalendarDate(e.predecessorEarlyFinish)
+        predecessorPlacedFinish: e.predecessorPlacedFinish
+          ? formatCalendarDate(e.predecessorPlacedFinish)
           : null,
       }));
       const outgoing: OutgoingCrossPlanEdge[] = outgoingRows.map((e) => ({

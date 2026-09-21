@@ -31,8 +31,8 @@ export interface IncomingCrossPlanEdge {
   /** The edge's typed lag, in whole working days (a lead is negative). */
   lagDays: number;
   /** The upstream predecessor's persisted early start / finish (`YYYY-MM-DD`), or null if never calculated. */
-  predecessorEarlyStart: string | null;
-  predecessorEarlyFinish: string | null;
+  predecessorPlacedStart: string | null;
+  predecessorPlacedFinish: string | null;
 }
 
 /**
@@ -125,25 +125,25 @@ function forwardBound(
 ): { date: string | null; missing: boolean } {
   switch (edge.type) {
     case 'FS':
-      return edge.predecessorEarlyFinish === null
+      return edge.predecessorPlacedFinish === null
         ? { date: null, missing: true }
-        : { date: addDays(edge.predecessorEarlyFinish, edge.lagDays), missing: false };
+        : { date: addDays(edge.predecessorPlacedFinish, edge.lagDays), missing: false };
     case 'SS':
-      return edge.predecessorEarlyStart === null
+      return edge.predecessorPlacedStart === null
         ? { date: null, missing: true }
-        : { date: addDays(edge.predecessorEarlyStart, edge.lagDays), missing: false };
+        : { date: addDays(edge.predecessorPlacedStart, edge.lagDays), missing: false };
     case 'FF':
-      return edge.predecessorEarlyFinish === null
+      return edge.predecessorPlacedFinish === null
         ? { date: null, missing: true }
         : {
-            date: addDays(edge.predecessorEarlyFinish, edge.lagDays - successorDurationDays),
+            date: addDays(edge.predecessorPlacedFinish, edge.lagDays - successorDurationDays),
             missing: false,
           };
     case 'SF':
-      return edge.predecessorEarlyStart === null
+      return edge.predecessorPlacedStart === null
         ? { date: null, missing: true }
         : {
-            date: addDays(edge.predecessorEarlyStart, edge.lagDays - successorDurationDays),
+            date: addDays(edge.predecessorPlacedStart, edge.lagDays - successorDurationDays),
             missing: false,
           };
   }

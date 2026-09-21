@@ -74,6 +74,20 @@ export interface ComputedDates {
   earlyFinish: string;
   lateStart: string;
   lateFinish: string;
+  /**
+   * The **placed** span — what the forward cross-plan bound is derived from since
+   * one-planning-surface M-H, mirroring `cross-plan-dependency.repository.ts`.
+   *
+   * **This adapter is the SECOND producer of that bound**, and it has to move in the same commit
+   * as the first. The two feed the same `forwardBound`, so if only one switched the conformance
+   * harness would be measuring a rule the product does not run — and it would say nothing, because
+   * each side is internally consistent. `cross-plan-basis.structural.spec.ts` pins both.
+   *
+   * There is deliberately no placed equivalent of the late pair below: see
+   * `OutgoingCrossPlanEdgeRow`.
+   */
+  placedStart: string;
+  placedFinish: string;
 }
 
 export interface ProgrammeSolveResult {
@@ -127,8 +141,8 @@ function incomingEdgesInto(
         successorActivityId: edge.successorActivityId,
         type: edge.type,
         lagDays: edge.lagDays,
-        predecessorEarlyStart: pred?.earlyStart ?? null,
-        predecessorEarlyFinish: pred?.earlyFinish ?? null,
+        predecessorPlacedStart: pred?.placedStart ?? null,
+        predecessorPlacedFinish: pred?.placedFinish ?? null,
       };
     });
 }
@@ -189,6 +203,8 @@ function absorb(
       earlyFinish: result.earlyFinish,
       lateStart: result.lateStart,
       lateFinish: result.lateFinish,
+      placedStart: result.visualEffectiveStart,
+      placedFinish: result.visualEffectiveFinish,
     });
     resultsByActivity.set(result.activityId, result);
   }

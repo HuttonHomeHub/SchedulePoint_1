@@ -425,8 +425,8 @@ describe('ScheduleService.recalculate', () => {
         successorId: 'A',
         type: 'FS',
         lagMinutes: 0,
-        predecessorEarlyStart: new Date('2026-01-08T00:00:00.000Z'),
-        predecessorEarlyFinish: new Date('2026-01-10T00:00:00.000Z'),
+        predecessorPlacedStart: new Date('2026-01-08T00:00:00.000Z'),
+        predecessorPlacedFinish: new Date('2026-01-10T00:00:00.000Z'),
       },
     ]);
 
@@ -453,8 +453,8 @@ describe('ScheduleService.recalculate', () => {
         successorId: 'A',
         type: 'FS',
         lagMinutes: 0,
-        predecessorEarlyStart: new Date('2026-01-08T00:00:00.000Z'),
-        predecessorEarlyFinish: new Date('2026-01-10T00:00:00.000Z'),
+        predecessorPlacedStart: new Date('2026-01-08T00:00:00.000Z'),
+        predecessorPlacedFinish: new Date('2026-01-10T00:00:00.000Z'),
       },
     ]);
 
@@ -474,8 +474,8 @@ describe('ScheduleService.recalculate', () => {
         successorId: 'A',
         type: 'FS',
         lagMinutes: 0,
-        predecessorEarlyStart: null,
-        predecessorEarlyFinish: null,
+        predecessorPlacedStart: null,
+        predecessorPlacedFinish: null,
       },
     ]);
 

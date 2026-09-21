@@ -212,6 +212,28 @@ that would close a cycle between two plans is rejected **409
 is **409 `DUPLICATE_CROSS_PLAN_DEPENDENCY`** (N33). Concurrent mirror creates are
 serialised by an **org-scoped advisory lock** so exactly one wins.
 
+**What the downstream bound is derived FROM changed in one-planning-surface
+M-H.** The derivation (ADR-0045 §2) folds an upstream predecessor's persisted
+dates into the successor's ADR-0043 external instants; it now reads that
+predecessor's **placed** span — the effective-Visual start/finish the engine
+writes for every activity — rather than its computed **earliest**. A programme
+interfaces on where the upstream work is planned to happen, so an upstream bar a
+planner has hand-placed moves the interface; before the collapse of the
+`EARLY`/`VISUAL` split there was no single column that meant that. The **backward**
+direction is deliberately unchanged and is **not** the mirror of this: it reads the
+**downstream successor's** computed late start/finish to bound the upstream
+predecessor's `externalLateFinish`, because the latest a network tolerates is a
+statement about float and a hand-placement is not an input to that question — there
+is no such thing as a placed late finish. The pure engine still never sees a cross-plan edge — `computeSchedule`'s
+arguments are assembled the same way and the change is entirely in which persisted
+column feeds them.
+
+**Both recalculate routes carry it.** The derivation runs inside **ordinary**
+single-plan recalculation whenever the plan has any active cross-plan edge, so
+`POST …/plans/:planId/schedule/recalculate` is affected as well as
+`…/recalculate-programme`. A plan with no cross-plan edges is unaffected in
+either route, and no request or response shape changes.
+
 ### Cross-plan revision comparison
 
 `GET …/cross-plan-revision-compare` compares a revision of **one plan** against a
@@ -290,7 +312,9 @@ target's derived inter-project bounds (the live cross-plan derivation, ADR-0045
 single-plan recalc transaction** (its own advisory lock + pen), acquired in the
 deterministic topological order (a stable lock order ⇒ deadlock-free). The **pure
 engine is untouched**; a plan with **no** cross-plan edges recalculates just
-itself (equivalent to `…/schedule/recalculate`).
+itself (equivalent to `…/schedule/recalculate`). Each derived bound reads the
+upstream predecessor's **placed** dates (see "Cross-plan dependencies" above),
+which is why a fresh upstream recalculation is what the ordering buys.
 
 Because the solve **writes** every plan in the closure, the default policy
 (ADR-0045 Critical Question 3) is **fail-fast**: a pre-flight pass asserts the pen
