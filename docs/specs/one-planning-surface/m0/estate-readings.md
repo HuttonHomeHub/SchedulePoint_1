@@ -58,3 +58,87 @@ just its question — otherwise it expires silently while everything else procee
 ADR-0128 exists because a measurement was unreachable by the person who needed to take it; this is
 the same failure one step along, where the measurement was reachable and nobody was told it was
 about to stop being.
+
+---
+
+## Addendum — the POST-strip readings, taken 2026-09-21
+
+**FC-1's verdict above is unchanged and this addendum does not close it.** These readings were
+taken at **2026-09-21T09:14:32Z against `api` 0.71.0** — after both releases, so after the strip
+ran at boot. They cannot answer the pre-strip question and are not offered as if they could. They
+are recorded because they were taken, because nothing else in this repository holds an estate-wide
+number for the placement model, and because one of them confirms a design property that had only
+ever been asserted.
+
+| diagnostic                           | affected / examined | plans | elapsed |
+| ------------------------------------ | ------------------- | ----- | ------- |
+| `day-factor-divergence`              | 2 / 2               | 1     | 19 ms   |
+| `inherited-day-factor`               | 19 / 164            | 1     | 5 ms    |
+| `visual-placement-plans`             | 4 / 4               | 4     | 2 ms    |
+| `visual-placement-activities`        | 14 / 164            | 4     | 2 ms    |
+| `baselines-over-placed-plans`        | 2 / 2               | 1     | 4 ms    |
+| `snet-binding`                       | 1 / 6               | 1     | 3 ms    |
+| `snet-inert`                         | 5 / 6               | 3     | 2 ms    |
+| `snet-unclassified`                  | 0 / 6               | —     | 2 ms    |
+| `snet-full-baseline-coverage`        | 0 / 1               | —     | 4 ms    |
+| `visual-conflict-earlier-than-logic` | 2 / 14              | 1     | 3 ms    |
+| `visual-conflict-later-than-bound`   | 0 / 14              | —     | 2 ms    |
+
+One organisation throughout.
+
+### What they establish
+
+**1. The disjointness guard holds on real data, for the first time.** `snet-binding` 1 +
+`snet-inert` 5 + `snet-unclassified` 0 = **6**, which is the shared `SNET_DENOMINATOR`. The registry
+calls that identity _"the cheapest possible guard against a mis-written `WHERE`"_ and asserts it in
+the repository spec against fixtures; this is its first confirmation against a deployed estate.
+
+**2. The strip's four-class test is visible in the outcome.** Five of the six surviving SNETs are
+`inert` — `early_start > constraint_date`, the class the migration deliberately leaves because
+converting one would place the bar **earlier** than logic allows. That is the single largest class
+on this installation, and it is the one a naive `WHERE` would have moved.
+
+**3. Every plan on the installation now carries a placement** (`visual-placement-plans` 4 of 4),
+across 14 of 164 activities. The placement model is not a corner of this estate; it is all of it.
+
+**4. Two placements are in live conflict and the product can now say so.** `visual-conflict-
+earlier-than-logic` is 2 of 14 — placements the engine reports as earlier than their logic allows,
+which is exactly what M-D's `visualConflictReason` and M-E's feasible window were built to show.
+`later-than-bound` is 0, so the sign-error class the M-J gate pass fixed (`Math.abs()` erasing
+direction before the word "before" was applied to it) is **not exercised on this estate** — the fix
+is unproven in production rather than proven.
+
+### What they cannot say, and it matters
+
+**One binding SNET survives, and this reading cannot tell you which of two things it is.**
+`snet-binding` counts `early_start = constraint_date` with **no** `visual_start IS NULL` clause,
+while the migration's `WHERE` has one. So the survivor is either
+
+- the designed **"already placed"** exclusion — a row carrying both a stale placement and a binding
+  constraint, which the strip skips because converting it would overwrite the placement (the clause
+  measured as protecting 706 rows on the 102k fixture); or
+- a constraint **created or re-bound since** the strip ran, an SNET still being a first-class
+  planner input.
+
+Both are consistent with 1, and the count cannot separate them. Named rather than picked.
+`snet-full-baseline-coverage` adds that this survivor is **not** covered by a FULL baseline, so no
+historic copy of it exists anywhere in the system.
+
+**The conversion count is not here and is not estate-wide anywhere** — but it is reachable, which
+the body of this file understates. `GET /organizations/:orgSlug/plans/:planId/placement-migration`
+returns every row the strip converted on a plan, and
+`apps/web/src/features/placement-migration/` surfaces it as a workspace notice. Per plan, in the
+app, by any member. What has no reader is the estate-wide sum.
+
+### The one actionable line
+
+`day-factor-divergence` (2 / 2) and `inherited-day-factor` (19 / 164) are **identical to the
+2026-09-14 reading**. Those 21 activities keep their pre-ADR-0139 figures until their plans are
+recalculated, so a week has passed with the remedy un-applied. On a single-tenant installation
+"who to tell" is the reader of this file, and what to tell them is **which plan to recalculate**.
+
+### What this is not
+
+It is not a test of ADR-0140's cost limb. Every entry ran in 2–19 ms, and both re-arm triggers were
+derived against a 102,000-activity synthetic while this host holds 164 activities — so the ≤ 500 ms
+bar remains untested rather than cleared, exactly as ADR-0140's own entry records.

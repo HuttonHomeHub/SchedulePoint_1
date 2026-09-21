@@ -4100,9 +4100,17 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   is recorded as **disqualified**. The owed headed run was taken on the ADR-0128 panel and **the
   overlay costs nothing detectable at the working zoom** — Week, 2,000 activities, baseline 0.19 pp,
   treatment 0.00 pp at 60.0 fps, delta −0.19 pp, PASS on both limbs, the machine's own spread
-  0.56 pp inside the 2.00 pp bar, which is what makes the verdict mean anything (D8a). **Fit still
-  says nothing**: ungraded by P3, and `docs/TECH_DEBT.md` #260 records that a baseline of 98.33 pp
-  leaves less headroom than the bar, so that framing's delta is arithmetically incapable of failing.
+  0.56 pp inside the 2.00 pp bar, which is what makes the verdict mean anything (D8a). **Fit said
+  nothing until 2026-09-21, and now says something**: it is still ungraded by P3, and the reason it
+  was uninformative — `docs/TECH_DEBT.md` #260's baseline of 98.33 pp leaving less headroom than the
+  bar, so that framing's delta could not fail arithmetically — **turned out to be a property of
+  machine state rather than of the framing**. A sixth sitting on the machine class that produced the
+  original exhibit measured the Fit baseline **unsaturated at 74.44 pp (spread 4.44)**, i.e. 25.56 pp
+  of headroom, and the overlay's delta there is **+4.81 pp** — above ADR-0127's 2.00 pp bar and below
+  that machine's own spread, so INDETERMINATE in ADR-0128's sense rather than a failure or a pass.
+  The honest reading is that the overlay costs something at Fit of about the size of the noise; it
+  does **not** license "free at Fit", and it is not a regression claim, no earlier Fit reading having
+  had the headroom to produce a comparable number (#75 item 8(c)/(d), which withdraws item 7(d)).
   **The default moved anyway, and deliberately** (D8b, 2026-09-08): put to the product owner with
   both halves — free at Week, unknown at Fit — they turned it on. What the default decides is
   narrower than it sounds, which is what makes the unknown affordable: the overlay draws nothing
@@ -5560,6 +5568,13 @@ A lighter-weight running log of smaller decisions is in
   and §9 still names no display. What survives every sitting unchanged is
   **Week: 60.0 fps, 0.00 pp dropped, at both 500 and 2,000** — the surface a
   planner works on — and **cost tracking bars drawn rather than plan size**.
+  **A sixth sitting on 2026-09-21 (#75 item 8) reproduced the 2026-09-10
+  figures at the identical 1912×948 viewport**: Fit/2,000 at **34.6 fps**
+  against that set's 34.8 and 35.2, eleven days and a browser major version
+  apart — 0.6 fps across all three — with Week again 60.0 fps and 0.00 pp at
+  both scales. So the **23.3 fps reading of 2026-09-08 remains the one figure
+  in this row that nothing has reproduced**, and reading it alone is the
+  specific error this bullet warns against.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 
