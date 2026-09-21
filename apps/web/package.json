@@ -85,7 +85,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-hook-form": "^7.88.0",
-    "tailwind-merge": "^3.6.0",
+    "tailwind-merge": "^3.7.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
