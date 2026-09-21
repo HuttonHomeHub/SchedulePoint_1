@@ -254,8 +254,44 @@ Full detail in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). Summary:
    looking for a failure: `docker-publish.yml`'s **own** run list shows only
    manual `workflow_dispatch` runs, because reusable-workflow calls appear as
    jobs of the **caller's** run; and the same `GITHUB_TOKEN` rule is why the
-   "Version Packages" PR never has any checks. Neither is a fault. (Read this
+   "Version Packages" PR's checks never **run**. Neither is a fault. (Read this
    before concluding a release didn't publish — that mistake has been made.)
+
+   **This said the PR "never has any checks" until 2026-09-21, and that is not what
+   a reader sees.** Measured on PR #657's head `54ece428` **while it was still
+   open**: all three exist as check runs, `completed` with conclusion
+   **`action_required`** — created and held pending workflow approval, not absent —
+   so the PR reports `mergeable_state: unstable` rather than `clean`. They are
+   **check runs, not commit statuses**: the statuses API answers `total_count: 0`
+   throughout, so a reader who asks that one is told there is nothing there and is
+   reading a different object. The practical consequence is the one the old wording
+   described (nothing ran, nothing gates), but a reader checking for "no checks"
+   finds three and reasonably stops. Merge it anyway: `main` carries no branch
+   protection (§8), the diff is a generated version bump and two changelogs, and its
+   content was already validated on the PR that produced the changeset.
+
+   **Re-deriving those three run ids AFTER the merge does not reproduce that
+   reading**, which is worth knowing before you conclude this paragraph is wrong.
+   The workflow-run objects then read `completed` with conclusion **`failure`**, all
+   three `updated_at` landing on the minute #657 merged, and
+   `run_duration_ms: 62000` against a 62-second created→updated window — so the
+   whole duration is the wait for approval and no job body ran (§19.9's usage
+   check, agreeing with the `action_required` reading rather than the `failure`
+   one). Whether that is a transition at merge or the two APIs disagreeing was
+   **not established**, and one observation does not settle it. What is
+   established is that the answer depends on when you take it, so take it on the
+   **open** PR — which is the only moment you are deciding anything.
+
+   **And `changeset-release/main` is REUSED across releases**, so the GitHub API
+   lists a previous release's runs against the current Version Packages PR — #657
+   carried a `PR title` run with conclusion `failure` from an iteration five hours
+   earlier, on a different SHA. §19.9's "read the runs for the PR's **current
+   head**" is what excludes it; a roster read without that clause reports a red
+   check on a PR that has none. The paragraph above is why that compounds rather
+   than being a one-off: #657's own three runs are now `failure` on that same
+   reused branch, so the next Version Packages PR inherits **three** stale red
+   entries rather than one.
+
 4. Deployment promotes those immutable images through environments — automatic
    where an operator has enabled the Watchtower `autodeploy` profile (ADR-0047),
    manual otherwise.
