@@ -38,7 +38,6 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     // Data date late enough that the progress tests' 2026 actuals are all on/before it (M2 N07).
     plannedStart: new Date('2026-12-31T00:00:00.000Z'),
     calendarId: null,
-    schedulingMode: 'EARLY',
     progressRecalcMode: 'RETAINED_LOGIC',
     useExpectedFinishDates: false,
     criticalPathDefinition: 'TOTAL_FLOAT',

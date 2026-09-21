@@ -736,15 +736,33 @@ continue; // not a participant → no overlay`) and `pinAtNetwork` (`:174`,
 
 ##### Task M-J-T2 — drop the column and the enum, **in ONE migration**
 
-- **Description:** `BEGIN; ALTER TABLE plans DROP COLUMN scheduling_mode; DROP TYPE "SchedulingMode"; COMMIT;`
+- **Description:** `ALTER TABLE "plans" DROP COLUMN "scheduling_mode";` then `DROP TYPE "SchedulingMode";`
+  — two bare statements, **no explicit `BEGIN`/`COMMIT`**.
 - **Complexity:** M · **Dependencies:** M-J-T1, **one release of separation from M-F**
-- **Risks:** **not two migrations** — measured on a populated 200k-row table: `DROP TYPE` alone
-  fails on the dependency; the combined transaction succeeds, metadata-only, no rewrite. **The ADD
-  VALUE hazard has no mirror on the drop side.** · **The releases still split one apart, and the
-  reason is the rollback, not the transaction**: a release-N image still selecting
-  `plans.scheduling_mode` **500s on every plan read**, which is worse than ADR-0107's write-path
-  case. **So the rollback is a RESTORE, not a redeploy**, and that is stated in the migration's
-  comment and the release note.
+- **Risks:** THREE CLAIMS IN THE ORIGINAL VERSION OF THIS TASK WERE WRONG AND ARE CORRECTED HERE,
+  each disproved against a real cluster by the M-J-T2 `database-architect` design pass.
+  - **"not two migrations … `DROP TYPE` alone fails on the dependency"** — the measurement is right
+    and the inference does not follow. "`DROP TYPE` alone" means dropping the type WITHOUT the
+    column, which is not what a split does. A split **would work**: Prisma commits each migration
+    file before the next, which this repository states itself at
+    `20260725130000_resource_group_kind/migration.sql:16-17`. One migration is still correct, for
+    **atomicity** — a split commits an intermediate state with an orphan type that
+    `prisma:check-drift` would then report if a deploy were interrupted between the files.
+  - **The literal `BEGIN; … COMMIT;`** above was shorthand for "one transaction" and is a live
+    hazard written into a file: Prisma already wraps each migration, and an explicit `COMMIT` ends
+    that outer transaction early, so the schema change can land while Prisma records the migration
+    FAILED — ADR-0107's `P3009` loop, needing `migrate resolve --applied` rather than the
+    `--rolled-back` that precedent trains an operator to reach for.
+  - **"the rollback is a RESTORE, not a redeploy"** overstates the remedy. `docs/DATABASE.md:47-49`
+    already makes rollback a compensating migration plus the previous image, and re-adding the type
+    and column `NOT NULL DEFAULT 'EARLY'` suffices because nothing reads the values. A backup
+    restore is only needed to recover the original per-plan values, which only the retired
+    diagnostic ever read. What IS worse than assumed: the bare-redeploy failure is **silent** — the
+    old image starts, `/health/ready` is a bare ping so it reports healthy, and then every plan read
+    500s.
+    · **The releases still split one apart**, and that reasoning is verified: the strip released as
+    `api-v0.70.0`, so shipping the drop with it would have made the single-step rollback target an
+    image that selects the column.
 - **Testing:** the ADR-0107 proof shape — **replay all migrations, populate, apply, assert** — plus
   a **negative control** issuing `DROP TYPE` first and asserting the failure **names the
   constraint**. SC-1's grep becomes satisfiable here and nowhere earlier.

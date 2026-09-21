@@ -314,18 +314,6 @@ enum PlanStatus {
   ARCHIVED
 }
 
-// The plan-level scheduling mode (ADR-0033). Selects the canvas bar-x date source
-// and the time-drag semantics: EARLY renders pure-network `early_*` and a drag
-// imposes an explicit SNET + recalc (today's behaviour); VISUAL renders the
-// engine's `visual_effective_*` and a drag writes the Planner's `visual_start`
-// placement (no constraint) and pushes unplaced successors. Default EARLY is
-// behaviour-preserving. MUST stay in lock-step with the TypeScript union in
-// @repo/types (added in a later M3 task).
-enum SchedulingMode {
-  EARLY
-  VISUAL
-}
-
 // How the CPM engine reschedules remaining work when progress is out of sequence
 // (ADR-0035 §1, M2). RETAINED_LOGIC (default, behaviour-preserving in spirit) keeps
 // incomplete-predecessor logic bounding an in-progress activity's remaining start;
@@ -798,9 +786,6 @@ model Plan {
   name                                  String
   description                           String?
   status                                PlanStatus              @default(DRAFT)
-  // The scheduling mode (ADR-0033). Default EARLY is behaviour-preserving; a single-
-  // row column read with the plan, never filtered across plans, so no index.
-  schedulingMode                        SchedulingMode          @default(EARLY) @map("scheduling_mode")
   // The out-of-sequence progress recalc mode (ADR-0035 §1, M2). Default
   // RETAINED_LOGIC is behaviour-preserving in spirit (the engine does not consume it
   // until T2/T3). Like scheduling_mode, a single-row column read with the plan, never

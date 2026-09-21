@@ -438,28 +438,19 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     await recalculate(actor, placed);
     await actor.agent.post(`${org}/plans/${placed}/baselines`).send({ name: 'Over placements' });
 
-    // --- Plan 1b: a placement on a plan that IS in Visual mode --------------------------------
-    // The negative witness for D-D2, and without it that entry's `scheduling_mode = 'EARLY'`
-    // clause has no test at all: with every placement sitting on an EARLY plan, D-D and D-D2
-    // return identical numbers and the clause could be deleted with the suite green. This row is
-    // counted by D-D and NOT by D-D2, which is the only thing that separates them.
+    // --- Plan 1b: a second placed plan --------------------------------------------------------
+    // This was D-D2's negative witness — the one placed plan NOT in Early mode, which was the only
+    // thing separating D-D from D-D2. Both D-D2 and `plans.scheduling_mode` were retired at
+    // M-J-T2 (ADR-0148), so the distinction no longer exists and the mode write is gone with it.
+    // The row is KEPT rather than deleted because it is still a second placed plan on a second
+    // set of counts: removing it would move D-D's `affectedPlans` and weaken an assertion that has
+    // nothing to do with the mode.
     const visual = await planOn(actor, allDay, 'Already visual');
     const visualA = await activityOn(actor, visual, { name: 'Visual placement' });
     await actor.agent
       .patch(`${org}/activities/${visualA}`)
       .send({ visualStart: '2026-04-01', version: 1 })
       .expect(200);
-    // **Written straight to the column, and that is the only way left** (one-planning-surface
-    // M-F-T4). `schedulingMode` is gone from `UpdatePlanDto`, so a PATCH naming it now yields 422 —
-    // the fixture cannot ask the API for this state because the product no longer offers it.
-    //
-    // Departing from this suite's own "built through the public REST API throughout" rule is the
-    // point rather than a corner cut: D-D2 exists to SIZE a population the product can no longer
-    // create, on plans written before the collapse, and a diagnostic about legacy rows is tested
-    // against legacy rows or against nothing. The column survives until the epic's migration
-    // milestone, which is what keeps this reachable at all.
-    await prisma.plan.update({ where: { id: visual }, data: { schedulingMode: 'VISUAL' } });
-
     // --- Plan 2: the three readable SNET classes ----------------------------------------------
     const constrained = await planOn(actor, allDay, 'Constrained');
     const anchor = await activityOn(actor, constrained, { name: 'Anchor', durationDays: 10 });
@@ -634,22 +625,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       expect(byId.get(id), id).toMatchObject({ examined: 4, affected: 0, affectedPlans: 0 });
     }
 
-    // D-D2 — three of the four, and the gap is the point. `Placed` and `Constrained` are still in
-    // `EARLY` (the schema default) while `Already visual` is not, and `visualStart` is accepted
-    // regardless of mode. So the three on EARLY plans are the bars that move on the day the mode
-    // collapses, for a planner who did nothing; the fourth already renders where it sits.
-    //
-    // It was two of three until M-I's fourth-class row, which is a placement on the EARLY
-    // `Constrained` plan and therefore belongs in exactly this population. `affectedPlans` moving
-    // 1 → 2 with it is the load-bearing half: a query that had lost its plan grouping would have
-    // reported 1 either way, and this fixture could not have caught it before.
-    expect(byId.get('placement-on-early-plan')).toMatchObject({
-      examined: 11,
-      affected: 3,
-      affectedPlans: 2,
-      affectedOrganizations: 1,
-    });
-
     // Two of THREE baselines, and the third is what makes this an assertion rather than a tally:
     // `Over nothing` sits on a plan with no placement, so counting it would mean the placement
     // predicate was dropped, and counting neither of the other two would mean the join lost its
@@ -749,7 +724,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       'inherited-day-factor',
       'visual-placement-plans',
       'visual-placement-activities',
-      'placement-on-early-plan',
       'baselines-over-placed-plans',
       'snet-binding',
       'snet-inert',

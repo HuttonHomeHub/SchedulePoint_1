@@ -26,7 +26,6 @@ export const DIAGNOSTIC_IDS = [
   'inherited-day-factor',
   'visual-placement-plans',
   'visual-placement-activities',
-  'placement-on-early-plan',
   'baselines-over-placed-plans',
   'snet-binding',
   'snet-inert',
@@ -219,10 +218,12 @@ const INHERITED_DAY_FACTOR: DiagnosticEntry = {
 /**
  * **D-C — how much of the estate has ever been placed by hand.**
  *
- * A plan holding at least one activity with a `visual_start`. This is deliberately NOT filtered by
- * `plans.scheduling_mode`: a placement written while the plan was `VISUAL` survives a switch back
- * to `EARLY`, so filtering on the plan's CURRENT mode would undercount the population the collapse
- * is about. The column is the evidence; the mode is not.
+ * A plan holding at least one activity with a `visual_start`. This was deliberately NOT filtered by
+ * `plans.scheduling_mode`: a placement written while the plan was `VISUAL` survived a switch back
+ * to `EARLY`, so filtering on the plan's CURRENT mode would have undercounted the population the
+ * collapse was about. The column is the evidence; the mode is not — which is why this entry
+ * survived the collapse unchanged while `placement-on-early-plan`, which DID filter on the mode,
+ * was retired with the column at M-J-T2 (ADR-0148). The filter is no longer expressible at all.
  *
  * `affected` and `affected_plans` are necessarily equal here because the unit of the question IS a
  * plan. That redundancy is the fixed row shape doing its job rather than a mistake — a shape that
@@ -272,63 +273,6 @@ const VISUAL_PLACEMENT_ACTIVITIES: DiagnosticEntry = {
     FROM activities a
     JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
     WHERE a.deleted_at IS NULL AND a.visual_start IS NOT NULL
-  `,
-};
-
-/**
- * **D-D2 — the population whose bars MOVE on the day the mode is collapsed.**
- *
- * The one reading that predicts a visible change for a planner who did nothing, and it exists
- * because a `database-architect` review found nothing measuring it. An `EARLY` plan renders from
- * `early_start` today and will render from `visual_effective_start` afterwards; those agree for an
- * activity with no placement, and they do not agree for one that carries a stale `visual_start`.
- *
- * That combination is reachable and unremarkable: `visual_start` is accepted **regardless of the
- * plan's mode** (`activities.service.ts:388`, `:526-528`, no mode check at either site), so a
- * planner who placed bars while the plan was `VISUAL` and then switched it back to `EARLY` has
- * left exactly these rows behind. D-C and D-D count placements wherever they sit; this counts the
- * subset that is currently being ignored by the surface that will stop ignoring it.
- *
- * The denominator is every activity, shared with D-D, so the two are read together: D-D is how
- * much of the estate has ever been placed, this is how much of it changes appearance at the
- * collapse. It is also the population the strip must not silently overwrite — an activity here can
- * carry a binding constraint AND a prior placement, and only one of the two survives a naive
- * conversion.
- *
- * **ITS PREMISE HAS LAPSED, AND THE ENTRY IS KEPT FOR ONE RELEASE RATHER THAN CORRECTED** (M-J).
- * "The day the mode is collapsed" has passed: `schedulingMode` is gone from `apps/api/src` and
- * `@repo/types`, `barDateSourceFor` no longer takes one, and **every** bar now draws from the
- * placed basis. So this no longer counts a population that is about to change appearance — that
- * change has happened — and it converges on D-D, under a label naming a concept the product does
- * not have. Its `nature` moves to `retrospective` accordingly: the panel renders `prospective` as
- * _"Live: this sizes work that is wrong now"_, and a placement on a plan whose frozen
- * `scheduling_mode` happens to read `EARLY` is now entirely ordinary.
- *
- * **It is kept because FC-1's estate readings are still owed** and this is one of the readings that
- * condition names; deleting it before they are taken would remove the only pre-collapse figure for
- * this population, permanently. **It RETIRES with the column at M-J-T2** — it is the last reader of
- * `plans.scheduling_mode` in the codebase, so dropping that column without removing this entry
- * breaks the diagnostics route outright. That is a hard coupling, not a tidy-up.
- */
-const PLACEMENT_ON_EARLY_PLAN: DiagnosticEntry = {
-  id: 'placement-on-early-plan',
-  label: 'Hand-placed activities on a plan still in Early mode',
-  nature: 'retrospective',
-  denominator: Prisma.sql`
-    SELECT count(*) AS examined
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-  `,
-  numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT a.organization_id) AS affected_organizations
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-      AND a.visual_start IS NOT NULL
-      AND p.scheduling_mode = 'EARLY'
   `,
 };
 
@@ -669,7 +613,6 @@ export const DIAGNOSTICS = [
   INHERITED_DAY_FACTOR,
   VISUAL_PLACEMENT_PLANS,
   VISUAL_PLACEMENT_ACTIVITIES,
-  PLACEMENT_ON_EARLY_PLAN,
   BASELINES_OVER_PLACED_PLANS,
   SNET_BINDING,
   SNET_INERT,

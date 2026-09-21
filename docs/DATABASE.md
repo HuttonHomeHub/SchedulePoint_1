@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 32
-> models across 68 committed migrations — is the single source of truth for the data model.
+> models across 69 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -313,10 +313,13 @@ migration transaction. This is a **forward-only, irreversible** change (the
 backfilled dates are indistinguishable from originals afterward); a plan with only
 soft-deleted activities falls through to `created_at::date`.
 
-`Plan` also carries two single-row **mode** enums read with the plan and never
-filtered across plans (so neither is indexed): `scheduling_mode` (`SchedulingMode`,
-default `EARLY`; ADR-0033) and `progress_recalc_mode` (`ProgressRecalcMode`, default
-`RETAINED_LOGIC`; ADR-0035 §1, M2). The recalc mode selects how the CPM engine
+`Plan` carries one single-row **mode** enum read with the plan and never filtered
+across plans (so it is not indexed): `progress_recalc_mode` (`ProgressRecalcMode`,
+default `RETAINED_LOGIC`; ADR-0035 §1, M2). It was two until ADR-0148 collapsed the
+EARLY/VISUAL scheduling modes — `scheduling_mode` (`SchedulingMode`, ADR-0033) was
+dropped one release later by `20260921180000_drop_scheduling_mode`, together with the
+`placement-on-early-plan` staff diagnostic that was its last reader. The recalc mode
+selects how the CPM engine
 reschedules **out-of-sequence** remaining work — `RETAINED_LOGIC` keeps
 incomplete-predecessor logic, `PROGRESS_OVERRIDE` drops the incoming bound from
 incomplete predecessors, `ACTUAL_DATES` follows the ADR-0035 §1 actual-dates
