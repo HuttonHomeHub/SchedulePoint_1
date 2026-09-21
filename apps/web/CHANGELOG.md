@@ -1,5 +1,49 @@
 # @repo/web
 
+## 0.140.0
+
+### Minor Changes
+
+- [#654](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/654) [`b35c308`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b35c30803a27eab81fd92b4bd70765960d876121) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(api): the staff diagnostics sentence names the unit each question counts
+  
+  Two of the eleven registry entries do not count activities — `visual-placement-plans` asks
+  `FROM plans`, `baselines-over-placed-plans` asks `FROM baselines` — and the sentence beneath every
+  row said "activities" regardless. On the one screen whose whole purpose is to give a count its
+  denominator, the denominator was described wrongly for two of the questions
+  (`docs/TECH_DEBT.md` [#362](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/362)).
+  
+  The registry entry now carries a `unit`, a closed literal union (`activity | plan | baseline`)
+  served on the row beside `id`, `label` and `nature`. A closed union rather than a free-text noun
+  pair keeps the structural gate able to tell a registry literal from a value somebody interpolated,
+  and the web renderer maps it through a total record so a fourth grain is a typecheck failure rather
+  than a silent fallthrough.
+  
+  The "across N plans" clause is withheld when the unit IS a plan, where that count can never differ
+  from `affected` and therefore reads as information without being any.
+
+### Patch Changes
+
+- [#654](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/654) [`b35c308`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b35c30803a27eab81fd92b4bd70765960d876121) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - fix(web): the routed link's gutter leg lands in screen space
+  
+  `routeOrthogonal`'s last-resort route joins two vertical corridors with a short horizontal leg in
+  the inter-lane gutter, and computed that leg's y by **subtracting** `view.originY` where
+  `screenYOfLane` — the function that defines screen space — adds it, while the route's own endpoints
+  arrive already in screen space. The error is `2 × originY`, and `originY` is never zero in the
+  shipped product: 40 on first paint, 32 after Fit, accumulating negative after any downward pan.
+  
+  Measured against the real painter before the fix: the fallback fires on 385 routes across two
+  plans, two viewports and two zooms, and **every one** of those legs sat exactly `−2 × originY` from
+  the gutter it names — 64 px out at rest, 1,000 px out panned. On a 2,160-activity plan panned down,
+  58 of 60 fired legs were drawn off-canvas. That is a planner's report of a link leaving the page and
+  coming back, produced by arithmetic rather than by how far apart the two activities are.
+  
+  It survived because the repository's only two exercises of this path both pinned `originY: 0` — the
+  single value at which the two signs agree — and the unit case asserted the route's _shape_ rather
+  than where the leg landed. Both are fixed: the case is parameterised over `originY` and asserts the
+  value, derived from `screenYOfLane` rather than written as a literal.
+  
+  The exported diagram and the printed programme compose the same scene, so they carried it too.
+
 ## 0.139.0
 
 ### Minor Changes
