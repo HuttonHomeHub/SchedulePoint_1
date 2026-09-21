@@ -593,11 +593,31 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // move needs no recalc; the canvas path already skips it). The canvas reposition/link callbacks
   // still `notify()` explicitly, which just coalesces with this. Baseline is taken on the first
   // *loaded* (non-pending) observation, so opening a plan never fires a gratuitous recalc.
+  //
+  // **`visualStart` joined the signature at one-planning-surface M-F, and its absence was a
+  // regression the collapse introduced rather than an old gap.** A hand-placement IS a scheduling
+  // input — it is what Pass 2 solves from — so it belongs here on the rule this comment already
+  // states; what kept it out was that it used to be a VISUAL-mode-only field.
+  //
+  // The net this signature casts is what used to catch **undo**. No undo path calls `notify()` —
+  // every one of the ten call sites is a forward seam — so an inverse has always relied on landing
+  // in a watched field. Before the collapse a drag wrote an `SNET`, which is watched two fields to
+  // the left, so undoing one changed the signature and the recalculation followed. After it a drag
+  // writes a `visualStart`, which was watched by nothing, so `PATCH …/activities/placements`
+  // restored the INPUT and left `visualEffectiveStart` describing the edit just reversed.
+  //
+  // Measured on a real plan before the fix: three bars dragged and undone read `visualStart: null`
+  // on all three — undo fired and was correct — with `visualEffectiveStart` still a day late on all
+  // three, so the bars stayed where they had been dragged. `e2e-multi-select` is what found it, and
+  // only because its assertion stopped polling `earlyStart`, which the drag no longer moves.
+  //
+  // No loop: this is an input the planner writes, not an engine-computed column a recalculation
+  // writes back — which is the discriminator the paragraph above already draws.
   const structureSignature = useMemo(() => {
     const acts = (activities.data ?? [])
       .map(
         (a) =>
-          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}:${a.parentId ?? ''}`,
+          `${a.id}:${a.type}:${a.durationDays}:${a.constraintType ?? ''}:${a.constraintDate ?? ''}:${a.parentId ?? ''}:${a.visualStart ?? ''}`,
       )
       .sort()
       .join('|');

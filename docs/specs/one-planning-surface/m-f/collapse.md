@@ -417,3 +417,61 @@ promising a mode that is not in it. Two journeys located the toolbar by that nam
 
 **Suites run green after the fixes:** `api` (686), `workspace-chrome` (14), `gantt-editing` (30),
 `float-paths` (1), `workspace-fit` (16).
+
+## The full sweep — 45 green, one red, and the red one had a silent twin
+
+`scripts/e2e-sweep.sh`, all 46 suites: **45 green, `multi-select` red**. Two findings came out of
+it, and the second is the one worth carrying.
+
+### 5. The plural-drag oracle polled a column the gesture had stopped writing
+
+`dragging one of a plural selection moves them ALL` polled `earlyStart` and expected 3; it got
+**0** — the product being right. A drag writes a `visualStart`, and a placement deliberately does
+not move Pass 1's computed earliest. This is finding 2 above, one suite along: the identical
+correction had landed in `e2e-gantt-editing/bar-drag.spec.ts` one commit earlier and was not swept
+for its plural sibling. One correct pattern applied to a control and not its neighbour, which is
+exactly what a sweep exists to catch and what a grep scoped by memory does not.
+
+`e2e-multi-select/support.ts`'s `placements` helper returned `earlyStart` alone, while the sibling
+`e2e-workspace-chrome/support.ts` had carried all three date facts for an epic. That asymmetry is
+what made the stale oracle expressible.
+
+### 6. The undo assertion twenty lines below it was passing vacuously — and hiding a real defect
+
+It counted ids whose `earlyStart` still equalled the pre-drag value. Since a drag no longer moves
+that column, the count was **3 whatever undo did** — it would have gone on passing against an undo
+that did nothing, silently, for as long as the file existed. Only its noisy sibling pointed here.
+
+Rewritten to assert the placed basis is back **and** that the placement is gone, it went red. The
+diagnosis was measured rather than reasoned, after two wrong theories: a probe dumped the real
+post-undo state, and it read `visualStart: null` on all three — **undo fired and was correct** —
+with `visualEffectiveStart` still a day late on all three. So the input was restored and the
+engine's derived column still described the edit that had just been reversed.
+
+**The cause is one field missing from `structureSignature`, and the collapse is what put it
+there.** No undo path calls `autoRecalc.notify()` — all ten call sites are forward edit seams — so
+an inverse has always relied on landing in a field that signature watches. It watches
+`constraintType`/`constraintDate`; before M-F a bulk drag wrote an `SNET`, so undoing one changed
+the fingerprint and the recalculation followed. After M-F a drag writes a `visualStart`, which the
+signature did not watch, so nothing re-derived anything.
+
+That also explains why the vacuous assertion passed on the day it was written (2026-08-08,
+`d8d8c345`): it was **not** vacuous then. `earlyStart` really did move and really did come back.
+The collapse moved the field the gesture writes out from under the net, and turned a meaningful
+assertion into one that cannot fail — which is the more dangerous half of the same change.
+
+**The fix is one field**, not a new callback on the shared undo hook. An earlier draft added an
+`onApplied` prop to `usePlanUndoRedo` and was withdrawn: `visualStart` is a scheduling input — it
+is what Pass 2 solves from — so it belongs in a fingerprint whose own docblock says it keys on
+scheduling inputs and excludes only engine-_computed_ columns. Every other command type already
+lands in a watched field, so the hook prop would have been broad where the real gap was narrow.
+
+The asymmetry it removes is exact and was visible on one screen: clearing a placement through the
+selection bar notifies "so the effective-Visual pass re-plots the bar", and clearing the _same_
+placement through Ctrl+Z did not — so `Clear visual start` moved the bar back and undo left it
+where the planner had dragged it, with `visual_start` already null underneath.
+
+`use-plan-workspace-model.placement-recalc.test.ts` pins it, modelled on the `parentId` sibling
+that exists because this signature had the same hole one field along. **Verified red first**: three
+of its seven cases fail against the pre-fix signature and four pass, including the lane-only
+negative — so a signature that reacted for some other reason could not make it green.

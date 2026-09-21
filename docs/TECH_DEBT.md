@@ -11071,3 +11071,75 @@ that file still claims rather than a locator edit.
 longer exists, and re-read `m1-result.spec.ts:150` before touching it.
 
 **Trigger:** the next epic that needs a header or command-surface measurement.
+
+### 356. A share link draws early dates while its author sees placed ones
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (found by the FC-7 Part A
+surface census during one-planning-surface M-F — not from a report, and not by anything failing) ·
+**Size:** M · **Owner:** api + web
+
+**Five checked facts, no inference past them.**
+
+1. `visualEffectiveStart` / `visualEffectiveFinish` are on the guest DTO's **forbidden** list
+   (`apps/api/src/modules/share/dto/guest-dto.spec.ts:136-137`), under an exact-key assertion.
+2. The web guest adapter therefore sets both to `null`
+   (`apps/web/src/features/share/guest-api.ts:227-228`).
+3. `TsldPanel`'s `barDateSource` prop defaults to `'early'` (`TsldPanel.tsx:601`).
+4. `GuestPlanView` passes no `barDateSource` (`GuestPlanView.tsx:255-261`).
+5. Since the collapse the member view draws `visualEffective*` unconditionally
+   (`lib/bar-dates.ts`, `plan-workspace-toolbar.tsx:482`).
+
+**So the one artefact a planner hands to somebody who was not in the room shows the bars somewhere
+other than where the planner put them.** This is `#135`'s class — two views of one plan disagreeing
+about where a bar sits, each internally consistent, so only somebody who opens both ever sees it —
+on the surface ADR-0103 identifies as existing precisely to be read by a stranger.
+
+**Widened by the collapse, not created by it.** Before M-F it diverged only for `VISUAL` plans; the
+collapse makes every plan a planning surface, so the population is now every plan carrying a
+placement. The guest view itself was not touched by the epic, and FC-7 Part A is unaffected — its
+bar is scoped to plans with **no** placement, where the two bases are equal.
+
+**Nothing was going to catch it, and that is checked rather than assumed.**
+`apps/web/e2e-share/share.spec.ts` asserts that bars are _present_ in the canvas's parallel listbox
+(ADR-0026 D7) and that the guest chrome is absent — never **where** a bar sits — so it passed in the
+same sweep that produced this finding, correctly, about what it tests. No structural test compares
+the member and guest bases, and none could without one importing the other's adapter.
+
+**Why it is not fixed in the epic.** Widening the guest projection changes the ADR-0051
+`SCHEDULE_READ` scope — a security boundary — which is an ADR-0105 full-spec trigger. Folding it
+into a milestone whose subject is the toolbar is exactly what that ADR exists to stop.
+
+**Remedy: put the question before writing anything**, because it is a product decision rather than a
+bug report. A guest could reasonably be shown (a) the placed bars, which is what the plan IS after
+the collapse; (b) the computed bars, which is what they get today; or (c) both. **(a) is not simply
+"add two fields"**: `guest-dto.spec.ts`'s exclusion is deliberate and every sibling exclusion is
+written down, so it needs its own reasoning about what a guest may learn from a placement.
+
+**Trigger:** the next epic touching the share surface, or the first report of a shared link showing
+the wrong dates — whichever comes first.
+
+### 357. The CSV export carries a basis the canvas no longer draws
+
+**Status:** open · **Verified:** 2026-09-20 · **Raised:** 2026-09-20 (alongside `#356`, same
+census) · **Size:** S · **Owner:** web
+
+`apps/web/src/features/tsld/export/export-csv.ts:80` emits a column headed **"Early start"** read
+from `a.earlyStart`, and the finish column beside it does the same. After the collapse every bar on
+the canvas is drawn from `visualEffective*`, so a planner who places their programme and exports it
+gets the **computed** dates.
+
+**This is materially weaker than `#356` and is filed separately for that reason.** The column says
+what it is, so nothing is misrepresented — it is a labelled early-dates export, and a reader who
+wanted the placed dates can see they did not get them. `#356`'s guest view carries no such label.
+
+It is also a different remedy with a different owner: `apps/web` alone, no security boundary and no
+DTO change. Bundling the two would put one decision's trigger on the other's row.
+
+**Check before acting:** whether the CSV is meant to be the plan or the analysis. `lib/bar-dates.ts`
+records that `'early'` "survives for the **analyses**, which measure the network rather than the
+plan as placed", and the float-paths panel is gated to early dates **by decision**
+(`float-paths-view-agnostic.structural.test.ts`). If the CSV is an analysis export this row closes
+as a decision rather than a change, which is why no remedy is written here as an instruction.
+
+**Trigger:** the next change to the export surface, or `#356`'s decision — whose answer probably
+settles this one too.

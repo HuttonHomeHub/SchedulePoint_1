@@ -264,13 +264,35 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
       .poll(
         async () => {
           const after = await placements(page, orgSlug);
-          return ids.filter((id) => after.get(id)?.earlyStart !== before.get(id)?.earlyStart)
-            .length;
+          return ids.filter(
+            (id) => after.get(id)?.visualEffectiveStart !== before.get(id)?.visualEffectiveStart,
+          ).length;
         },
         { timeout: 20_000 },
       )
-      // ALL three. Today this is 1 — the dragged bar — which is the defect.
+      // ALL three. Before ADR-0080 wired the gesture this was 1 — the dragged bar — which was
+      // the defect this step was written against.
+      //
+      // **It polls `visualEffectiveStart`, and it polled `earlyStart` until the collapse** — which
+      // is why the full sweep caught this and nothing else did. A drag writes a `visualStart`, and
+      // a placement deliberately does NOT move `earlyStart`: Pass 1 is the network's answer and a
+      // hand-placement is not an input to it (`lib/bar-dates.ts`). So the old oracle returned **0**
+      // against a perfectly correct product. The identical correction landed in
+      // `e2e-gantt-editing/bar-drag.spec.ts` one commit earlier and was not swept for its plural
+      // sibling here — one correct pattern applied to a control and not its neighbour.
       .toBe(3);
+
+    // **And the network did NOT move — asserted positively, not merely implied.** This is the
+    // epic's central claim at the plural gesture: a placement relocates the bar and leaves Pass 1's
+    // computed earliest exactly where it was. Without this, switching the poll above to
+    // `visualEffectiveStart` would pass equally against a build that had gone back to writing SNET
+    // constraints, which move both. `bar-drag.spec.ts` carries the singular twin.
+    const afterDrag = await placements(page, orgSlug);
+    for (const id of ids) {
+      expect(afterDrag.get(id)?.earlyStart, 'a placement must not move the computed earliest').toBe(
+        before.get(id)?.earlyStart,
+      );
+    }
 
     // And it is ONE reversible step, not three: the whole gesture undoes together.
     //
@@ -282,12 +304,26 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
     // product never claimed.
     await list.focus();
     await page.keyboard.press('Control+z');
+
+    // **This assertion was passing for the wrong reason, and that is the worse of the two findings
+    // the sweep produced.** It counted ids whose `earlyStart` still equalled the pre-drag value —
+    // and after the collapse a drag never moves `earlyStart` at all, so the count was 3 whatever
+    // undo did. It would have gone on passing against an undo that did nothing, silently, for as
+    // long as the file existed; only its noisy sibling twenty lines above pointed here.
+    //
+    // It now asserts the placed basis is back AND that the placement itself is gone
+    // (`visualStart === null`). Both halves are needed: the first alone would pass if undo restored
+    // the dates by luck of the engine re-deriving them, and the second alone says nothing about
+    // where the bar is drawn.
     await expect
       .poll(
         async () => {
           const after = await placements(page, orgSlug);
-          return ids.filter((id) => after.get(id)?.earlyStart === before.get(id)?.earlyStart)
-            .length;
+          return ids.filter(
+            (id) =>
+              after.get(id)?.visualEffectiveStart === before.get(id)?.visualEffectiveStart &&
+              after.get(id)?.visualStart === null,
+          ).length;
         },
         { timeout: 20_000 },
       )
