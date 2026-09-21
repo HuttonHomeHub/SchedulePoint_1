@@ -10,6 +10,84 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-21 — The screenshot fixture could not exhibit the defect it was built to show
+
+**What was decided.** `seedDense` (`apps/web/scripts/shoot.mjs`) ties each phase's **first** task back
+to the previous phase, so the seven phases start at different dates.
+
+**Why.** The entry below closes `docs/TECH_DEBT.md` #364 and records that nobody had photographed the
+gaps. Photographing them produced two pixel-identical pictures, and the reason had nothing to do with
+the fix. Every phase's task 0 had no predecessor, so all seven started on the data date, all seven
+summaries rolled up to the same start, and `packLanes` sorts by `(startDay, endDay, id)` — so the long
+summaries sorted **last among the day-0 starters** and were already placed above every task. Confirmed
+in `psql` rather than inferred: both runs put the 8 summaries in lanes 7–14 and the tasks in 0–6,
+byte-identical. The fixture had accidentally produced the fix's own answer.
+
+**That is the finding, not the fixture bug.** #364's cost depends on **where** the band-only lanes
+land, which is a property of the plan: on the imported Unit 300 programme they are scattered (highest
+drawn bar in lane 26, 13 of 27 lanes band-only, 420 px); on a plan whose phases all start together
+they are at the end and cost nothing. `cheap-levers.md` said that had to be measured rather than
+assumed, and this is the same statement arriving from the other side.
+
+**Consequences.** Staggered, the fixture exhibits it and the before/after is photographed: **drawn
+extent 4 lanes → 2** (56 px), and the empty band-only row that sat _between_ two rows of work is gone,
+along with the long vertical link that reached down past it. Measured in `psql` on both runs, not read
+off the images. A real programme's phases stagger, so the fixture is also more representative than it
+was — the concurrency the shot exists to show is preserved, because the cross-phase links still feed
+each phase from the middle of the last.
+
+**The general shape.** A fixture is an instrument, and an instrument that cannot exhibit the defect
+reports a green picture indistinguishable from a fixed one. This one would have been read as "the fix
+does nothing" — or, had the images been taken only after, as "the fix works". Neither would have been
+supported by anything on screen.
+
+---
+
+## 2026-09-21 — Auto-arrange packs what the scene paints, and appends the band's summaries
+
+**What was decided.** `computeArrangeChanges` stops packing every activity. The rule moves to a pure
+`features/tsld/model/arrange-lanes.ts`, which packs `wbsBand.sceneActivities` into lanes `0..N-1`
+and then packs the summaries the WBS band draws and appends them at `N`
+(`docs/TECH_DEBT.md` #364, closed).
+
+**Why.** The packer and the band disagreed about what the diagram contains, and neither file was
+wrong on its own: `computeArrangeChanges` packed every dated activity, and `deriveWbsBandSource`
+then removed from the scene exactly the summaries the band draws. So band on, the rows reserved for
+those summaries painted nothing — and a lane's index fixes its y, so they are not spare capacity.
+Measured on the 144-bar Unit 300 programme, **13 of 27 lanes held nothing but band-drawn
+summaries**, scattered through the picture rather than stacked at the end, with the highest drawn
+bar in lane 26. The drawn extent falls **27 → 12 lanes, 420 px** at `LANE_HEIGHT` 28
+(scale-500 31 → 18, scale-2000 33 → 18).
+
+**Why appended rather than dropped.** Dropping them is one lane cheaper still — 12 against 30 on
+that fixture — and leaves each summary at whatever stale lane it had, so a planner who arranges with
+the band **on** and then turns it **off** meets same-lane time overlap, the condition
+`render/lane-overlap.ts` exists to detect (#24c). The choice was recorded as a genuine product
+decision until the extent was measured, and **the measurement removed it**: `worldExtent` reports
+the **max lane among the activities it is given** and `TsldPanel` gives it `wbsBand.sceneActivities`,
+so appended rows are invisible band-on and both shapes give the same 12-lane extent. Appending costs
+nothing where the planner is looking and removes the hazard outright.
+
+**Consequences.** Band **off**, `deriveWbsBandSource` returns the input array by identity, so the
+band set is empty and this is the pre-#364 call over the pre-#364 items — structurally the same
+answer rather than a second implementation that happens to agree. The band-off packing is pinned by
+its own case, which passes both before and after the change; the three cases that discriminate were
+verified red against the single pack first. `@repo/layout` is **not** touched: the full band
+assignment is read out of `packLanes` by handing it a sentinel current lane no pack can produce,
+rather than exporting a second entry point for it.
+
+**And the probe's model of the rule is now asserted against the rule.** `lane-travel-probe.ts`
+computed lever 2b itself, written before the shipped module existed — so `cheap-levers.md`'s figures
+could have described a packing nothing ships. It now calls `computeLaneArrangement` on every fixture
+carrying a band and **throws** on any disagreement, verified by mutating the shipped `base` and
+watching it name the activity and both lanes. That is ADR-0124's finding — a measurement taken with
+a copy of an instrument measures the copy — applied before it could bite.
+
+**Still owed.** Nobody has photographed the gaps, and #363 (Auto-arrange has no end-to-end coverage
+at all) is unchanged by this.
+
+---
+
 ## 2026-09-20 — `git add -A` is unsafe while an agent is writing
 
 **What was decided.** A commit made while a background agent holds files open stages **named

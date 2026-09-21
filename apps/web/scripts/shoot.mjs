@@ -356,6 +356,202 @@ async function seedProgramme(page, slug) {
 }
 
 /**
+ * Seed a **dense** programme — WBS summaries, eight concurrent chains, cross-phase logic — and
+ * return `{ planId, projectId, clientId }`.
+ *
+ * **A third seeder, for the reason the second one already gives about the first.**
+ * {@link seed} "photographs a lie" (one activity per plan); {@link seedProgramme} fixes that for
+ * the criticality ladder with six activities and three paths. Neither can exhibit what the product
+ * owner reported on 2026-09-21 — links travelling across many lanes — because six bars cannot be
+ * far apart, and neither carries a single `WBS_SUMMARY`, so the ADR-0063 band has never appeared in
+ * any photograph this repository holds.
+ *
+ * It is **additive**: `seedProgramme`'s plan and every shot pinned to it are untouched, so this
+ * cannot move a picture somebody is already comparing against.
+ *
+ * ## What it is built to show, and why each part is there
+ *
+ * - **Nine summaries within the band's depth cap** (one root at depth 0, eight phases at depth 1;
+ *   `WBS_BAND_MAX_DEPTH` is 2). The band draws them and `deriveWbsBandSource` lifts them out of the
+ *   scene — which is the precondition for `docs/TECH_DEBT.md` #364's empty lanes to appear at all.
+ * - **Eight chains that run CONCURRENTLY**, because lanes are a function of overlap. Nothing
+ *   constrains their starts, so they all begin at the data date and the packer must give each its
+ *   own lane.
+ * - **Cross-phase links**, which is the whole point: a link from one chain into another is a link
+ *   between lanes, and the further apart the packer puts them the further it has to travel.
+ *
+ * ## What it is NOT
+ *
+ * It is not the plan from the product owner's screenshot — they could not supply that (CQ-4) — and
+ * no claim is made that it resembles it beyond carrying the same *shape* of problem. Durations and
+ * names are plausible construction work rather than a real programme.
+ */
+async function seedDense(page, slug) {
+  return page.evaluate(async (org) => {
+    /**
+     * **Paced, because a dense plan is ~190 writes and the API throttles at 100/60 s.**
+     *
+     * The first run of this seeder fired them flat out and took a `429 RATE_LIMITED` part way
+     * through the activities — which is `docs/TECH_DEBT.md` #361, and that row says in as many
+     * words that the answer is NOT to raise the limit again. So the seeder lives inside the
+     * budget rather than asking the product to widen it for a harness.
+     *
+     * 650 ms was the first attempt and it **still took a 429**: that is ~92 requests a minute
+     * against a limit of 100 (`RATE_LIMIT_LIMIT`/`RATE_LIMIT_TTL`, `env.validation.ts:292-293`),
+     * and the seeder does not have the bucket to itself — the app page is open behind it, polling
+     * its edit-lock heartbeat and refetching. 1000 ms leaves a third of the budget for the product.
+     *
+     * The phase count came down with it, for the same reason rather than a different one: fewer
+     * writes is the other half of living inside a limit you have decided not to raise.
+     */
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const post = async (path, body) => {
+      const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
+      const data = (await response.json()).data;
+      await sleep(1000);
+      return data;
+    };
+    const client = await post('/clients', { name: 'Meridian Infrastructure' });
+    const project = await post(`/clients/${client.id}/projects`, { name: 'Unit 400 Upgrade' });
+    const plan = await post(`/projects/${project.id}/plans`, {
+      name: 'Unit 400 — Construction & Commissioning',
+      plannedStart: '2026-03-02',
+    });
+    await post(`/plans/${plan.id}/edit-lock`, {});
+
+    const root = await post(`/plans/${plan.id}/activities`, {
+      name: 'Unit 400 Upgrade',
+      code: 'W000',
+      durationDays: 1,
+      type: 'WBS_SUMMARY',
+    });
+
+    const phases = [
+      [
+        'Civils & Underground',
+        ['Survey & set out', 'Excavate', 'Blind', 'Reinforce', 'Pour bases', 'Backfill'],
+      ],
+      [
+        'Structural Steel',
+        [
+          'Deliver steel',
+          'Erect columns',
+          'Erect beams',
+          'Plumb & bolt',
+          'Grout bases',
+          'Fire protection',
+        ],
+      ],
+      [
+        'Mechanical',
+        ['Set vessels', 'Align pumps', 'Pipe spools', 'Weld tie-ins', 'Supports', 'Insulate'],
+      ],
+      [
+        'Piping',
+        [
+          'Prefab spools',
+          'Rack piping',
+          'Small bore',
+          'Hydrotest prep',
+          'Hydrotest',
+          'Reinstate joints',
+        ],
+      ],
+      [
+        'Electrical',
+        ['Cable tray', 'Pull cable', 'Terminate LV', 'Terminate HV', 'Earthing', 'Loop check'],
+      ],
+      [
+        'Instrumentation',
+        [
+          'Install transmitters',
+          'Impulse lines',
+          'Tubing',
+          'Calibrate',
+          'Loop folders',
+          'Functional test',
+        ],
+      ],
+      [
+        'Commissioning',
+        ['Flush & clean', 'Leak test', 'Energise', 'Dry run', 'Wet commissioning', 'Handover'],
+      ],
+    ];
+
+    const chains = [];
+    let code = 1000;
+    for (const [phaseName, tasks] of phases) {
+      const summary = await post(`/plans/${plan.id}/activities`, {
+        name: phaseName,
+        code: `W${String(code)}`,
+        durationDays: 1,
+        type: 'WBS_SUMMARY',
+        parentId: root.id,
+      });
+      code += 10;
+      const made = [];
+      for (const task of tasks) {
+        made.push(
+          await post(`/plans/${plan.id}/activities`, {
+            name: task,
+            code: `A${String(code)}`,
+            durationDays: 3 + (code % 7),
+            parentId: summary.id,
+          }),
+        );
+        code += 10;
+      }
+      for (let i = 1; i < made.length; i += 1) {
+        await post(`/plans/${plan.id}/dependencies`, {
+          predecessorId: made[i - 1].id,
+          successorId: made[i].id,
+        });
+      }
+      chains.push(made);
+    }
+
+    // **The cross-phase logic, which is what makes a link travel.** Each phase feeds the next from
+    // its middle, and two long-range links reach from the first phase to the last — the shape a
+    // planner sees as a line crossing most of the diagram.
+    //
+    // **Each phase's FIRST task is also tied back, and that is what makes this fixture able to
+    // exhibit anything about lane packing.** Without it every phase's task 0 has no predecessor,
+    // so all seven start on the data date, every phase summary rolls up to the same start, and the
+    // packer's `(startDay, endDay)` sort puts the long summaries last — i.e. exactly where
+    // `docs/TECH_DEBT.md` #364's fix puts them, by accident. The first version of this seeder did
+    // that, and the before/after screenshots of that row's fix were pixel-identical for a reason
+    // that had nothing to do with the fix. Real phases stagger; this one now does too.
+    for (let i = 1; i < chains.length; i += 1) {
+      await post(`/plans/${plan.id}/dependencies`, {
+        predecessorId: chains[i - 1][3].id,
+        successorId: chains[i][1].id,
+      });
+      await post(`/plans/${plan.id}/dependencies`, {
+        predecessorId: chains[i - 1][2].id,
+        successorId: chains[i][0].id,
+      });
+    }
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: chains[0][2].id,
+      successorId: chains[chains.length - 1][2].id,
+    });
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: chains[1][0].id,
+      successorId: chains[chains.length - 2][4].id,
+    });
+
+    await post(`/plans/${plan.id}/schedule/recalculate`, {});
+    return { planId: plan.id, projectId: project.id, clientId: client.id };
+  }, slug);
+}
+
+/**
  * Mint a guest share link for the seeded plan and return the URL a recipient would be sent.
  *
  * The token is returned **once**, at creation, and lives in the URL *fragment* (ADR-0051) so it
@@ -465,6 +661,28 @@ const SHOTS = [
     name: 'plan-workspace',
     programme: true,
     go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+  },
+  // **The dense programme** (`docs/specs/diagram-legibility/`). Every canvas shot above uses
+  // `seedProgramme`'s six activities, which cannot exhibit either thing this epic is about: a link
+  // travelling across many lanes, or the ADR-0063 WBS band — no fixture in this repository carried
+  // a single `WBS_SUMMARY` until now, so the band had never been photographed at all.
+  //
+  // **There is no PANNED companion, and the reason is worth more than the shot would have been.**
+  // One was written, because the defect that opened this epic showed itself panned (58 of 60
+  // gutter legs off-canvas — `m0-measurement.md`). Two helpers were tried and NEITHER panned: a
+  // drag is the ADR-0080 marquee selection once the pen is taken, and the wheel moved nothing
+  // either. Worse, the check that was supposed to catch it could not — comparing the two PNGs
+  // byte-for-byte reports a difference every time, because this harness mints a fresh tenant per
+  // run and paints its name into the header (ADR-0099 M2 records exactly that, which is why a
+  // pixel diff is the method there). The shot was removed rather than shipped under a filename
+  // that claimed something it did not show. If a panned view is wanted, the pan has to be built
+  // and verified by LOOKING, not by comparing bytes.
+  {
+    name: 'plan-workspace-dense',
+    dense: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: arrangeWithBand,
   },
   {
     name: 'plan-workspace-readonly',
@@ -814,6 +1032,35 @@ async function revealPrintDocument(page) {
   await page.waitForTimeout(400);
 }
 
+/**
+ * Turn the ADR-0063 WBS band on, then press **Arrange**, the way a planner meeting an imported
+ * programme does.
+ *
+ * **Both halves are the subject, not staging.** The band is what lifts summaries out of the scene,
+ * which is the precondition for `docs/TECH_DEBT.md` #364's empty lanes; `Arrange` is the packer
+ * whose objective this whole epic is about. A shot of this plan without them is a shot of neither.
+ *
+ * **It replaces hand-assigning `laneIndex`, which is what the first version did — badly.** Every
+ * activity was left on the API's default lane 0, so the picture was fifty bars overlapping in one
+ * row: no lanes, no visible logic, nothing to judge. `seedProgramme`'s own docblock warns about
+ * precisely that ("without a lane of its own the packer leaves it on lane 0 and it draws straight
+ * through the bars it is parallel to"), and this seeder made the same mistake after reading it.
+ * Pressing the real control is better than a hand-placed fixture anyway: it photographs what the
+ * product does rather than what the harness arranged for it to do.
+ */
+async function arrangeWithBand(page) {
+  await toggleViewSwitch(page, /WBS band/i);
+  await page.locator('[data-toolbar-item="auto-arrange"]').first().click();
+  const confirm = page.getByRole('button', { name: 'Auto-arrange' });
+  await confirm.waitFor({ timeout: 8000 });
+  await confirm.click();
+  // The repack is a batch write plus a refetch; the shot must not race it.
+  await page
+    .getByRole('button', { name: 'Auto-arrange' })
+    .waitFor({ state: 'detached', timeout: 20_000 });
+  await page.waitForTimeout(1500);
+}
+
 async function toggleViewSwitch(page, pattern) {
   // **By the registry id, never the copy** (`docs/TECH_DEBT.md` #199, and ADR-0091's own rule:
   // locate a toolbar control by `[data-toolbar-item]`). #199 hypothesised the old `/^View/` name
@@ -911,6 +1158,7 @@ for (const width of widths) {
   const slug = wanted.some((s) => !s.signedOut) ? await onboard(page, width) : null;
   let seeded = false;
   let ids = null;
+  let denseIds = null;
 
   for (const shot of wanted) {
     // **A failed shot records itself and the run carries on** (#199's second half): the list is
@@ -1071,6 +1319,13 @@ for (const width of widths) {
           seeded = true;
         }
         if (shot.programme && !ids) ids = await seedProgramme(page, slug);
+        // **`dense` rides the generic path rather than a branch of its own.** The first version of
+        // this gave it a dedicated `if`, which navigated and ran `after` and then fell out of the
+        // chain BEFORE the shared `page.screenshot` at the bottom — so the run printed the shot's
+        // name and wrote no file. A green line about nothing, which is the exact failure the
+        // "photographed a 404" guard below exists for, reproduced by a harness edit rather than by
+        // a wrong route. One camera, one path.
+        if (shot.dense && !denseIds) denseIds = await seedDense(page, slug);
         // **Intercepts arm BEFORE the navigation and disarm after the shot**, so a hung route cannot
         // leak into the next picture. `hang` never resolves — Playwright abandons it when the context
         // closes — which is the only way to hold a loading state still enough to photograph.
@@ -1086,7 +1341,7 @@ for (const width of widths) {
             });
           });
         }
-        await shot.go(page, slug, ids);
+        await shot.go(page, slug, shot.dense ? denseIds : ids);
         // **A shot that photographed a 404 reported success.** The first run of `plan-workspace`
         // used the wrong route, wrote a picture of "Not Found", and printed the shot's name as
         // though it had worked — a green result about nothing, which is the failure class this
