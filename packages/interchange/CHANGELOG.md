@@ -1,5 +1,16 @@
 # @repo/interchange
 
+## 0.9.1
+
+### Patch Changes
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An export now says when a plan's hand-placed bars will not survive the file.
+  
+  No interchange format encodes a hand-placement, so the receiving tool reads every activity
+  at its computed dates. The export report names how many activities are affected, once,
+  rather than leaving the reader to discover it in the other tool. Nothing changes for a plan
+  nobody has hand-placed, and no exported byte changes either way.
+
 ## 0.9.0
 
 ### Minor Changes
