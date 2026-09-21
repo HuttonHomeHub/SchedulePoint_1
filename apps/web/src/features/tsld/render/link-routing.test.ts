@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+// The geometry core, imported directly: these three are the DEFINITION of screen space, and the
+// assertion below is about agreeing with them rather than about where they are re-exported from.
+import { BAR_HEIGHT, LANE_HEIGHT, screenYOfLane } from './geometry';
 import {
   arrowhead,
   bundleCorridors,
@@ -178,6 +181,48 @@ describe('routeOrthogonal — obstacle awareness', () => {
     expect(routed[1]!.x).toBe(routed[2]!.x);
     expect(routed[2]!.y).toBe(routed[3]!.y);
     expect(routed[3]!.x).toBe(routed[4]!.x);
+  });
+
+  /**
+   * **The gutter leg is in SCREEN space, and this asserts its VALUE rather than its shape**
+   * (`docs/specs/diagram-legibility/`, FC-1).
+   *
+   * The case above is the only exercise this path had, and it could not see the defect for two
+   * independent reasons, each sufficient on its own:
+   *
+   * 1. `VIEW` pins `originY: 0` — **the single value at which a sign error on `view.originY` is
+   *    invisible**. `link-routing-bench.ts:141` pins it to 0 too, so the repository's only two
+   *    exercises of this code shared one blind spot.
+   * 2. It asserts the route's *shape* (`routed[2].y === routed[3].y`) and never where the leg
+   *    landed, so even a non-zero origin would have passed.
+   *
+   * The expected value is **derived from `screenYOfLane`** rather than written as a literal,
+   * because `screenYOfLane` is what defines screen space for every other consumer — a literal here
+   * would be a second opinion about the same thing and could drift from it silently.
+   *
+   * Measured against the shipped painter before this landed: the fallback fires on 385 routes
+   * across a sweep of two plans, two viewports and two zooms, and panned down on a
+   * 2,160-activity plan **58 of 60 fired legs were drawn off-canvas**.
+   */
+  it.each([0, 32, -500, 1500])('puts the gutter leg in screen space at originY %i', (originY) => {
+    const view: Viewport = { ...VIEW, originY };
+    const fromLane = 0;
+    const toLane = 2;
+    // Bar centres, in screen space, for the two endpoint lanes.
+    const centreOf = (lane: number): number => screenYOfLane(lane, view) + LANE_HEIGHT / 2;
+    const from = { x: 100, y: centreOf(fromLane) };
+    const to = { x: 400, y: centreOf(toLane) };
+    const index: LaneIntervalIndex = new Map([[1, { spans: [[-10_000, 10_000]] }]]);
+
+    const routed = routeOrthogonal(from, to, 'FS', view, 0, obstaclesWith(index, fromLane, toLane));
+
+    expect(routed).toHaveLength(6);
+    // The inter-lane gutter between lane 0 and lane 1: the band under one lane's bar bottom, which
+    // is the next lane's top minus the lane's spare height.
+    const gutterY =
+      screenYOfLane(Math.min(fromLane, toLane) + 1, view) - (LANE_HEIGHT - BAR_HEIGHT) / 2;
+    expect(routed[2]!.y).toBeCloseTo(gutterY, 6);
+    expect(routed[3]!.y).toBeCloseTo(gutterY, 6);
   });
 
   it('tries no more than the documented number of corridors', () => {

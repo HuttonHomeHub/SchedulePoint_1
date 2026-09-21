@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
  *
  * | Gate | Assertion | Verified red against |
  * | ---- | --------- | -------------------- |
- * | S-1 | every property on the row DTO is `number`, except the two registry literals | `planName: string` |
+ * | S-1 | every property on the row DTO is `number`, except the registry's own literals | `planName: string` |
  * | S-2 | the `diagnostics` handler declares no `@Query()` / `@Body()` / `@Param()` | adding `@Query() q: Dto` |
  * | S-4 | the SQL projection is `count(...)` expressions only | adding `, a.name` |
  * | S-5 | every registry entry produces the fixed row shape | an entry with an extra key |
@@ -59,7 +59,8 @@ function read(path: string): string {
  *
  * **Each one carries a fact about the QUESTION and never about this installation**, which is the
  * discriminator rather than "we decided these three were fine". `id` and `label` name the question;
- * `nature` says what a non-zero answer to it means. None of them varies with the data, so none of
+ * `nature` says what a non-zero answer to it means; `unit` says what one examined row IS, which is
+ * what the sentence's denominator is a denominator of (`docs/TECH_DEBT.md` #362). None of them varies with the data, so none of
  * them can disclose anything — and that is why widening this list is a decision about the registry's
  * vocabulary rather than a hole in clause 1.
  *
@@ -67,7 +68,7 @@ function read(path: string): string {
  * opposite reason: `string` is not a closed vocabulary, so the gate could no longer tell a literal
  * from a value somebody interpolated.
  */
-const LITERAL_PROPERTIES = ['id', 'label', 'nature'];
+const LITERAL_PROPERTIES = ['id', 'label', 'nature', 'unit'];
 
 /**
  * Every property declaration on `class StaffDiagnosticRowDto`, as `name → declared type`.
@@ -142,7 +143,7 @@ function stripDecorators(source: string): string {
 }
 
 describe('S-1 — the diagnostic row DTO carries numbers and nothing else (ADR-0140 D3.1)', () => {
-  it('declares every property as number, except the two registry literals', () => {
+  it("declares every property as number, except the registry's own literals", () => {
     const props = rowProperties(read(DTO_PATH));
 
     const offenders = props.filter(
@@ -364,7 +365,7 @@ describe('S-5 — every registry entry produces the one fixed shape (ADR-0140 D2
     // the interface left it green while its own docblock said "a widened entry type cannot pass
     // unremarked". Found by the M4 test review. Scoped to the interface body as well, so a key
     // named in a comment or in an entry literal cannot satisfy it.
-    expect(declared.sort()).toEqual(['denominator', 'id', 'label', 'nature', 'numerator']);
+    expect(declared.sort()).toEqual(['denominator', 'id', 'label', 'nature', 'numerator', 'unit']);
   });
 
   it('exports the registry frozen, so an entry cannot be added at runtime', () => {
@@ -388,7 +389,7 @@ describe('S-5 — every registry entry produces the one fixed shape (ADR-0140 D2
   it('backs every admitted literal with a closed vocabulary', () => {
     const source = read(REGISTRY_PATH);
 
-    for (const vocabulary of ['DIAGNOSTIC_IDS', 'DIAGNOSTIC_NATURES']) {
+    for (const vocabulary of ['DIAGNOSTIC_IDS', 'DIAGNOSTIC_NATURES', 'DIAGNOSTIC_UNITS']) {
       expect(source, `${vocabulary} must be a closed const vocabulary`).toMatch(
         new RegExp(`export const ${vocabulary} = \\[[^\\]]*\\] as const;`),
       );

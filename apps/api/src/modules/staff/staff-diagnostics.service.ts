@@ -54,6 +54,7 @@ export class StaffDiagnosticsService {
       id: entry.id,
       label: entry.label,
       nature: entry.nature,
+      unit: entry.unit,
       examined,
       affected: counts.affected,
       affectedPlans: counts.affectedPlans,

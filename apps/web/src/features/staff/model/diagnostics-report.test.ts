@@ -15,6 +15,7 @@ function row(overrides: Partial<StaffDiagnosticRow> = {}): StaffDiagnosticRow {
     id: 'day-factor-divergence',
     label: 'Day factor divergence (driving resource)',
     nature: 'retrospective',
+    unit: 'activity',
     examined: 1284,
     affected: 17,
     affectedPlans: 3,
@@ -47,6 +48,43 @@ describe('diagnosticSentence', () => {
     );
     expect(diagnosticSentence(row({ examined: 1284, affected: 0 }))).toBe(
       'None of the 1284 activities examined is affected.',
+    );
+  });
+
+  it('names the unit the diagnostic actually counts', () => {
+    // `docs/TECH_DEBT.md` #362: the noun was a hard-coded literal, so `visual-placement-plans` —
+    // whose denominator is `FROM plans` — reported its plan count as a count of activities, on the
+    // one screen whose entire purpose is to state a count's denominator correctly.
+    expect(
+      diagnosticSentence(
+        row({
+          id: 'visual-placement-plans',
+          unit: 'plan',
+          examined: 4,
+          affected: 1,
+          affectedPlans: 1,
+        }),
+      ),
+    ).toBe('1 of 4 plans, in 1 organisation.');
+
+    expect(
+      diagnosticSentence(row({ id: 'baselines-over-placed-plans', unit: 'baseline', affected: 2 })),
+    ).toBe('2 of 1284 baselines, across 3 plans in 1 organisation.');
+
+    expect(diagnosticSentence(row({ unit: 'baseline', examined: 7, affected: 0 }))).toBe(
+      'None of the 7 baselines examined is affected.',
+    );
+  });
+
+  it('withholds the plan spread only when the unit IS a plan', () => {
+    // The discriminator is the unit, never `affected === affectedPlans`. A value test would hide a
+    // real spread from an ACTIVITY diagnostic whose rows happened to land one per plan — an absence
+    // a reader cannot tell from a fact.
+    expect(diagnosticSentence(row({ affected: 3, affectedPlans: 3 }))).toBe(
+      '3 of 1284 activities, across 3 plans in 1 organisation.',
+    );
+    expect(diagnosticSentence(row({ unit: 'plan', affected: 3, affectedPlans: 3 }))).not.toContain(
+      'across',
     );
   });
 
