@@ -122,6 +122,18 @@ note load-bearing rather than cautious.
 - **An `e2e-placement-migration` journey** — refused at M-I on structural grounds (no journey in this
   repository can create a `placement_migrations` row), unchanged.
 
+## The journey sweep
+
+**46 suites, 45 green.** The one failure is `overview`, on its last case, and it is **not this
+epic's** — `git diff origin/main..HEAD` over `apps/web/e2e-overview/` and its config is empty, so it
+is pre-existing on `main`. Reproduced in isolation, and the case **passes when run alone**: the
+suite's first eight cases spend the global 100-per-60-second rate-limit budget and the ninth meets
+the wall. Filed as `docs/TECH_DEBT.md` #360 with the reproduction, the precedent that would fix it,
+and the reason that precedent's argument does not transfer.
+
+**What the sweep was for**: `a11y.ts` changes the Tier-1 sentence that many journeys assert on, so a
+change to which dates it speaks could have moved text under nineteen suites. None of them moved.
+
 ## Still owed
 
 **FC-1's estate readings** (`m0/estate-readings.md` does not exist). They come from the ADR-0140

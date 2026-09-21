@@ -11251,3 +11251,48 @@ list), `baseline.repository.ts:264-266` (the columns are written), and
 **Trigger:** the next epic that touches baselines, Earned Value or the Gantt's variance bar —
 whichever comes first. Until then a planner comparing a migrated plan against a pre-migration
 baseline should read the variance as a statement about the **network**, which is what it is.
+
+### 360. The overview journey spends its own rate-limit budget and fails its last case
+
+**Status:** open · **Verified:** 2026-09-21 · **Raised:** 2026-09-21 (one-planning-surface M-J,
+incidentally — found by the sweep, not reported) · **Size:** S · **Owner:** web
+
+`scripts/e2e-sweep.sh` ran 46 suites; **45 passed and `overview` failed**, on its **last** case:
+
+```
+✘ e2e-overview/standing.spec.ts:134 › a Viewer is told where the work stands, having no way to change it
+  [WebServer] ApiFetchError: ThrottlerException: Too Many Requests
+  Error: locator.click: Test ended.          1 failed, 8 passed (1.6m)
+```
+
+**It is not a cross-suite artefact and it is not a product defect**, and both were established
+rather than assumed:
+
+- **Reproduced in isolation** — running `overview` alone, with its own freshly started servers,
+  fails identically at the same case.
+- **The case passes on its own**: `playwright test --config playwright.overview.config.ts -g "a
+Viewer is told where the work stands"` → `1 passed (22.0s)`. So the suite's first eight cases
+  spend the budget and the ninth meets the wall.
+- **This epic did not cause it.** `git diff origin/main..HEAD -- apps/web/e2e-overview/
+apps/web/playwright.overview.config.ts` is **empty** — the branch touches neither the journey nor
+  its config, so the failure is pre-existing on `main`.
+
+The cause is the global `@nestjs/throttler` guard (`app.module.ts:100-103`, 100 requests / 60 s,
+unconditional). Nine cases each sign up actors and build an organisation → client → project → plan →
+activities through the public API, in one window.
+
+**The remedy already exists as a precedent and is deliberately not applied here.** Three of the 49
+Playwright configs raise `RATE_LIMIT_LIMIT` for their own harness —
+`playwright.gantt.config.ts:52-57` does it with the reason written down (_"Raised for this harness
+only — the guard itself is untouched, and no other suite or environment sees this value"_). Adding
+the same two lines to `playwright.overview.config.ts` would almost certainly fix it.
+
+It was **not** done inside M-J's gate pass, for a reason worth keeping: the gantt precedent raises
+the limit for a suite that seeds hundreds of activities **deliberately, to reach a size worth
+measuring**. This suite trips it through ordinary setup, so copying the remedy across would also
+copy an argument that does not hold for it — and "raise the limit until the red goes away" is how a
+guard stops being a guard. Whoever picks this up should decide between raising the harness limit
+(with a reason true of THIS suite) and thinning the setup, rather than reaching for the first.
+
+**Trigger:** the next sweep, or the next change to `e2e-overview/`. Until then the suite is a known
+red in a full sweep and a reader comparing sweeps should not read it as new.
