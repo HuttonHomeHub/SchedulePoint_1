@@ -161,6 +161,29 @@ export interface Framing {
   /** Observed minus the `screenYOfLane`-consistent value, over every VHV leg found. */
   deltas: number[];
   offCanvas: number;
+  /**
+   * **FC-2's quantity**: polylines of ANY shape whose vertical extent leaves the canvas.
+   *
+   * Two-point segments are excluded — gridlines, lane rules and the ruler are full-height or
+   * full-width by design and leaving the bounds is what they are for. What remains is the routed
+   * logic, whose endpoints are both culled-visible bars, so a correctly routed line between them
+   * cannot leave the canvas vertically. One that does is a defect.
+   */
+  offCanvasAny: number;
+  /**
+   * **FC-2's quantity, corrected.** A routed polyline whose INTERIOR vertices leave the y-range
+   * its own two endpoints span, by more than the fan-out and elbow tolerance.
+   *
+   * `offCanvasAny` above was the first attempt and it does not discriminate: `cull` keeps a bar
+   * whose rect intersects the viewport, so a partially-visible bar at the top edge legitimately has
+   * its anchor at a negative y, and every link touching it leaves the bounds without anything being
+   * wrong. FC-2 as literally written ("polylines whose extent leaves the canvas's vertical bounds")
+   * therefore cannot reach zero on any real scene, and a zero would mean the scene was empty.
+   *
+   * An **excursion** is the defect the product owner described: the line leaves the band between
+   * the two bars it connects and comes back. It is scale-free, viewport-free and cull-free.
+   */
+  excursions: number;
 }
 
 export interface ProbeResult {
@@ -224,6 +247,20 @@ export function probe(counts: number[]): ProbeResult {
             deltas.push(p[2]!.y - expected);
             if (p[2]!.y < 0 || p[2]!.y > vp.height) offCanvas += 1;
           }
+          // FC-2: any routed polyline (3+ points) escaping the canvas vertically.
+          let offCanvasAny = 0;
+          let excursions = 0;
+          for (const poly of polylines) {
+            if (poly.length < 3) continue;
+            const ys = poly.map((q) => q.y);
+            if (Math.min(...ys) < 0 || Math.max(...ys) > vp.height) offCanvasAny += 1;
+            // Fan-out shifts an anchor by at most FAN_OUT_MAX_PX (6); the elbow radius is 5. A
+            // tolerance of 12 is comfortably above both and far below a lane pitch (28), so it
+            // cannot absorb a leg that has crossed into another lane.
+            const lo = Math.min(poly[0]!.y, poly[poly.length - 1]!.y) - 12;
+            const hi = Math.max(poly[0]!.y, poly[poly.length - 1]!.y) + 12;
+            if (poly.slice(1, -1).some((q) => q.y < lo || q.y > hi)) excursions += 1;
+          }
           totalVhv += vhv.length;
           framings.push({
             scene: source.summary,
@@ -236,6 +273,8 @@ export function probe(counts: number[]): ProbeResult {
             vhv: vhv.length,
             deltas,
             offCanvas,
+            offCanvasAny,
+            excursions,
           });
         }
       }

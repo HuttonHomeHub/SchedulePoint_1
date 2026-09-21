@@ -89,7 +89,20 @@ leg's y, the quantity FC-1 is about.
 - `link-routing-bench.ts:141` — `const view: Viewport = { pxPerDay, originX: -i * pxPerDay, originY: 0 }`
 
 Those are the repository's only two exercises of this code, and **zero is the single value of
-`originY` at which the defect is invisible**. The unit suite's VHV case additionally asserts the
+`originY` at which the defect is invisible**.
+
+**A third instrument was blind for a third reason, and it is the interesting one.**
+`paint.golden.test.ts` — the whole-scene golden log, this repository's paint-identity oracle
+(ADR-0078 S1) — runs at `const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 }`
+(`:77`), so it has a **non-zero** origin and would have caught the defect on parameter grounds. It
+**passed unchanged** through M1. Since the fix shifts every VHV leg by 80 px at that origin, the
+deduction is forced: the golden's scene never reaches the fallback, because no lane in it is
+blocked across a crossing link's span.
+
+So the blindness was not one oversight repeated. One instrument had the wrong parameter, one
+asserted the wrong property, and one had the right parameter and a scene that could not exercise
+the path. **Parameter coverage and scene coverage are different things**, and a suite can be
+thorough in one while seeing nothing at all through the other. The unit suite's VHV case additionally asserts the
 route's _shape_ (`routed[2].y === routed[3].y`) and never the leg's value, so even a non-zero
 `originY` would not have caught it without a value assertion.
 
@@ -225,3 +238,42 @@ that landed on one number, and it is documented as such.
 So there is no gate to add here and no drift to report — recorded because the hypothesis was
 plausible enough that acting on it without reading would have produced a gate asserting a
 relationship the product explicitly does not have.
+
+---
+
+## Sequencing deviations from the plan, and how they turned out
+
+Three M0 tasks were re-ordered on 2026-09-21, each recorded rather than taken quietly (ADR-0142 D4).
+
+**M0-T4 (the budget curve) was DEFERRED until after M2 — and never needed to run.** The plan placed
+it in M0, but M2 is a withdrawal gate that can cancel M3 outright and T4 exists only to feed CQ-3,
+which feeds M3. Doing it in M0 risked being the largest single piece of wasted work in the epic,
+which is the epic's own "make withdrawal cheap" logic applied to its own task order. [FC-2
+passed](./m2-verdict.md), so M3 is withdrawn and the curve is not owed.
+
+**M0-T7 (the ink baseline) was deferred to just before M5**, where Part B needs it. It is not
+wasted work in either branch, only work placed where it is used.
+
+**M0-T5's photograph was folded into M1/M2 as before/after evidence**, which is where its value is.
+It was then **overtaken**: the probe gives a per-framing count against the real painter, which is a
+stronger claim than a screenshot, and the before/after is 380 → 0 rather than two pictures a reader
+has to compare by eye. A photograph remains owed for **Part B**, where the subject is what the
+diagram looks like and no count can stand in for it.
+
+## M1's journey: why there is not one, stated rather than skipped
+
+The plan has the Playwright journey land with M1 (ADR-0081). It does not, and the reason is
+structural rather than a shortcut.
+
+ADR-0081's rule exists so that **a milestone claiming user-facing capability names an entry point
+that a planner can reach**. M1 adds no entry point and no capability: it corrects where an existing
+line is drawn. What would have to be asserted is a polyline's y inside an `aria-hidden` Canvas 2D
+bitmap, which Playwright cannot read — so a journey here would assert something adjacent and prove
+nothing about the fix. The instrument that _can_ see it is the M0-T2 probe, which drives the real
+painter and is committed.
+
+**The gap the plan was really covering is separate and is now debt.** `Arrange` has **zero**
+end-to-end coverage (no match for `auto-arrange` anywhere under `apps/web/e2e*/`), and the journey
+was specified because M3 would have changed that command's behaviour. M3 is withdrawn, so the
+coverage gap outlives this epic and belongs in `docs/TECH_DEBT.md` rather than being satisfied by a
+journey written to exercise work that is no longer being done.

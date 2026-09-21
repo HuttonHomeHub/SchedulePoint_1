@@ -220,10 +220,29 @@ export function routeOrthogonal(
    * contract and an unbounded search on the paint path is how a draw budget dies.
    */
   const gutterLane = Math.min(obstacles.fromLane, obstacles.toLane);
+  /**
+   * **In SCREEN space, which means ADDING `view.originY`, not subtracting it.**
+   *
+   * `from.y` and `to.y` arrive already in screen space, and `screenYOfLane` — the function that
+   * defines it — is `view.originY + laneIndex * LANE_HEIGHT`. This expression subtracted instead,
+   * so the leg landed `2 x originY` away from the gutter it names. `originY` is never zero in the
+   * shipped product (40 on first paint, 32 after Fit, accumulating negative after any downward
+   * pan), so at rest the leg was 64 px out and panned ~34 lanes down it was ~1,920 px out — the
+   * line left the canvas and came back, which is exactly what a planner reported seeing.
+   *
+   * It survived because the only two exercises of this path both pinned `originY: 0` — the single
+   * value at which the two signs agree — and the unit case asserted the route's shape rather than
+   * the leg's value. Both are fixed in `link-routing.test.ts`.
+   *
+   * The pitch stays the INJECTED `obstacles.laneHeight` rather than becoming a `screenYOfLane`
+   * call: the two are the same value at the one real call site (`paint.ts:1185-1190` passes
+   * `LANE_HEIGHT`), and the parameter exists so this module does not depend on that constant.
+   * Swapping it would be a second change riding along with a one-character fix.
+   */
   const gutterY =
+    view.originY +
     (gutterLane + 1) * obstacles.laneHeight -
-    (obstacles.laneHeight - obstacles.barHeight) / 2 -
-    view.originY;
+    (obstacles.laneHeight - obstacles.barHeight) / 2;
   // Each leg only has to clear the lanes IT crosses, which is why this can succeed where a single
   // corridor could not: the near leg runs from the source lane down to the gutter, the far leg from
   // the gutter to the target lane, and neither spans the blocked middle.

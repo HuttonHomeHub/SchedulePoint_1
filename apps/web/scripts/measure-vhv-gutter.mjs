@@ -81,9 +81,26 @@ try {
       `  ${String(f.activities).padStart(5)} act  ${f.viewport.padEnd(9)} ` +
       `${String(f.pxPerDay).padStart(2)}px/d  originY ${String(f.originY).padStart(6)}  ` +
       `polylines ${String(f.polylines).padStart(5)}  VHV ${String(f.vhv).padStart(4)}  ` +
-      `off-canvas ${String(f.offCanvas).padStart(4)}  delta ${deltaText}`
+      `off-canvas VHV ${String(f.offCanvas).padStart(4)} / any ${String(f.offCanvasAny).padStart(5)}  delta ${deltaText}`
     );
   });
+
+  // ---- FC-2's quantity, printed whichever way FC-1 goes ----
+  const fc2 = result.framings.reduce((n, f) => n + f.excursions, 0);
+  const coarse = result.framings.reduce((n, f) => n + f.offCanvasAny, 0);
+  const fc2Detail = result.framings
+    .filter((f) => f.excursions > 0)
+    .map(
+      (f) =>
+        `    ${String(f.activities).padStart(5)} act  ${f.viewport}  ${String(f.pxPerDay)}px/d  ` +
+        `originY ${String(f.originY).padStart(6)}  ${String(f.excursions)} excursions`,
+    );
+  console.log(
+    `\n  FC-2 (routed polylines whose interior leaves the band their own endpoints span): ${String(fc2)}\n` +
+      `    [the coarse "leaves the canvas" count, which does NOT discriminate because a\n` +
+      `     partially-visible bar legitimately anchors outside the viewport: ${String(coarse)}]\n` +
+      (fc2 === 0 ? `    Zero at every framing measured.\n` : `${fc2Detail.join('\n')}\n`),
+  );
 
   // ---- FC-1 limb 1 ----
   if (result.totalVhv === 0) {

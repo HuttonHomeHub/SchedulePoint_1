@@ -6644,6 +6644,34 @@ to five, still failed. Third: measured the baseline by stashing the new test, wh
 exactly 22. Only then was the shape visible. The first attempt is the one worth remembering: a
 change that looks like a remedy, sits in the tree, and does nothing.
 
+### 363. `Arrange` has no end-to-end coverage at all
+
+**Status:** open · **Verified:** 2026-09-21 (`grep -rli "auto.arrange\|autoArrange" apps/web/e2e*`
+returns **zero files**) · **Raised:** 2026-09-21 (found while specifying
+`docs/specs/diagram-legibility/`) · **Size:** S · **Owner:** web
+
+The TSLD's `Arrange` command writes `lane_index` on every activity it moves, through a confirm
+dialog, against a real plan. **Nothing drives it end to end.** Its only cover is `packLanes`' own
+suite, which is a pure function over spans — it cannot see the command, the dialog, the batch write,
+the pen gate or the refetch.
+
+**Why it is filed rather than fixed where it was found.** `docs/specs/diagram-legibility/`
+specified this journey to land with its M1, because its M3 would have changed the command's
+objective function. [M2 withdrew M3 on measurement](specs/diagram-legibility/m2-verdict.md), so the
+journey would have been written to exercise work that is no longer being done — and M1 itself is a
+canvas-geometry fix that Playwright structurally cannot assert, since the canvas is an
+`aria-hidden` bitmap. The gap outlives the epic and is not that epic's to close.
+
+**What a journey has to cover**, from reading the command rather than guessing: the "nothing to
+move" early return that avoids opening the dialog at all; a plan where lanes genuinely change; that
+the count in the confirmation matches the rows written; the pen gate; and that **undo (ADR-0048)
+restores the prior lanes**. The last is the one no unit test can reach, and it is the one a planner
+is most likely to need.
+
+**Cost note.** A new Playwright config is not free: ADR-0136's `check:ci-roster` and ADR-0138's
+`check:e2e-roster` both refuse a suite that is not declared in `ci.yml`, `package.json` and the
+rosters, and it takes a shard slot. Budget for that rather than discovering it.
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this
