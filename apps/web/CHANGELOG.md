@@ -1,5 +1,187 @@
 # @repo/web
 
+## 0.139.0
+
+### Minor Changes
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Detect and report the other side of a placement conflict: a bar placed PAST an explicit bound.
+  
+  `activities.visual_conflict` has fired for one condition since it shipped — `placed < logicEarliest`
+  — so a hand-placed bar sitting past a `START_NO_LATER_THAN`, `FINISH_NO_LATER_THAN`,
+  `MANDATORY_START` or `MANDATORY_FINISH` ceiling was not a conflict at all. The engine now derives
+  that flag from a new nullable `visualConflictReason` (`EARLIER_THAN_LOGIC` / `LATER_THAN_BOUND`),
+  exposed on the activity response and withheld from the guest share scope.
+  
+  **This is a live change, not a dark one.** `VITE_SCHEDULING_MODES` is default-on, so on any plan in
+  Visual mode a breaching placement now counts toward the conflict total, is highlighted, is reachable
+  by _Next conflict_, and matches the "Has conflict" filter. It is a correction — the bar was always
+  breaching the bound and the product was silent about it — but nobody's plan data changes and no date
+  moves.
+  
+  **Why a reason and not a second boolean.** The spec's own justification was wrong and was measured
+  before the field was built: it argued the mandatory pair needed a flag "because remaining float does
+  not cover them", and remaining float covers all four, because a mandatory pin collapses total float
+  to zero so any drift takes the remainder negative exactly as a "no later than" ceiling does. What
+  the number cannot say is which of two things happened — a planner overran their **own slack**, which
+  is theirs to spend, or they overran a **commitment somebody recorded**. Same sign, different
+  sentence. A placement past an activity's own float with **no** constraint gets no reason at all;
+  there is no bound to breach, and flagging it would fire on every deliberate over-placement.
+  
+  **The conflict key splits with it, so the surface keeps the distinction.** The two sides do not share
+  a remedy: an early placement is answered by clearing it, which the selection bar already offers, and
+  a late one routes to the constraint the planner may not know exists — and because clearing stays
+  available regardless, that route is added rather than substituted. Collapsing them would have carried
+  the fix as far as the count and discarded it at the thing a planner presses.
+  
+  The boolean is now a derived column and the database says so: a CHECK refuses any row where the flag
+  and the reason disagree, which turns an invisible wiring defect — a column dropped from the batched
+  `UPDATE SET`, which a unit test mocking the raw statement cannot see — into a loud failure on the
+  first recalculation of a plan that has a conflict.
+  
+  The migration backfills `EARLIER_THAN_LOGIC` where the flag is already set. That is a transcription
+  rather than a claim about unknowable history: the boolean has meant that one condition for its whole
+  life. It is also required — without it the constraint's `VALIDATE` fails on any populated host while
+  succeeding on the empty database CI provisions, which is the API failing to boot. Proved both ways
+  against a populated database, with every assertion made to fail first.
+  
+  The pure forward and backward passes are untouched: early and late dates, float, criticality and the
+  project finish are byte-identical.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat!: one planning surface — `schedulingMode` leaves the API and the toolbar
+  
+  A bar is drawn where it is placed, on every plan. ADR-0033's `EARLY` / `VISUAL` split is collapsed:
+  the Early | Visual selector is gone from the command surface, and `schedulingMode` is gone from
+  `CreatePlanDto`, `UpdatePlanDto` and `PlanResponseDto`.
+  
+  BREAKING CHANGE: `POST …/projects/:projectId/plans` and `PATCH …/plans/:planId` now answer **422**
+  to a body naming `schedulingMode`, and `PlanResponseDto` no longer carries it. A client that still
+  sends the field is refused rather than silently ignored, which is deliberate: a silently-dropped
+  field would let an old client go on "setting the mode" for ever, succeeding, and changing nothing.
+  The Prisma column and its enum are untouched in this release.
+  
+  Three capabilities that shipped beside the mode are **kept and ungated** — the read-only Late-start
+  overlay, the Visual-conflict legend key, and the display-only Go-to-date control — because none of
+  them ever read `schedulingMode`. `VITE_SCHEDULING_MODES` is retired with the capability it gated.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Draw the feasible window — the span a bar may legally occupy — in place of the float and drift tails.
+  
+  The two tails were one fact drawn twice. Both centred on the same band, and their extremes were
+  already the window's: the drift tail's left edge is the early start, and a _corrected_ float tail's
+  right edge is the late finish. They become one hollow bracket with a cap at each end, drawn beneath
+  the bars so the bar occludes its middle and the span still reads as two flanking tails.
+  
+  It closes `docs/TECH_DEBT.md` [#348](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/348) by fixing it. The shipped float tail was drawn from the PLACED
+  finish using `totalFloat`, which is measured from the EARLY finish, so it overshot the late finish by
+  exactly the drift on every plan with a placement. The window's right edge derives from
+  `remainingFloat` instead — once, never independently from the late finish, which also makes a
+  rounding disagreement between the cap and the span's end unreachable rather than untested.
+  
+  Two states that previously drew nothing at all are now visible. A placement past a ceiling puts the
+  right cap inside the bar; a placement earlier than logic allows — which the engine keeps rather than
+  clamping — puts the left cap inside it. Each inverts the draw order for that cap alone, and they are
+  independent.
+  
+  A critical, unplaced bar now gets a zero-width bracket rather than no mark. That is the state most
+  bars on an existing plan are in, and a control that lights and does nothing is a dead end. The one
+  state that still draws nothing is a plan that has never been calculated, where there is no late
+  finish to bracket.
+  
+  The toggle, its label and the legend are unchanged by this release and are the next slice.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Convert the drag-created constraints into hand-placements, once, and tell the planner what changed.
+  
+  Before this epic, dragging a bar in Early mode wrote a binding `START_NO_EARLIER_THAN` at the drop
+  date. The collapse replaced that with a first-class `visualStart` — `apps/web/src` now contains zero
+  live `SNET` writes — so the estate carries constraints that are really hand-placements wearing a
+  constraint's clothes. A one-time SQL migration converts the **binding** ones and leaves the other
+  three classes alone.
+  
+  **The bars do not move**, and that is derived from the engine rather than asserted: before, the
+  forward clamp put the bar at the constraint date and the placed pass applied the same clamp; after,
+  the placed pass reads the `visualStart` the migration wrote. Identical, and successors do not move
+  either. What does change is the network pass downstream — a successor's earliest falls, its float
+  rises and its criticality can change. That is the point: **the float that was never genuinely
+  constrained comes back.**
+  
+  **Three classes are deliberately untouched.** An _inert_ constraint (logic already overtook it)
+  would place the bar earlier than logic allows. An _unclassified_ one is unmeasured against its
+  constraint, and one of the two ways that arises never clears — a started activity's actual start
+  bypasses the clamp, so it reads below its constraint in a schedule computed seconds ago. And an
+  activity **already carrying a placement** is excluded because a row can hold a stale placement _and_
+  a binding constraint: measured, removing that one clause destroys 706 hand-placements on a
+  102,000-activity estate.
+  
+  **It bumps `version`, departing from every other data migration in this repository, and the
+  departure is the load-bearing part.** The convention exists so an _engine_ write stays invisible to
+  optimistic locking; this writes a _planner-owned input_ and wants the opposite. The activity editor
+  resends the constraint on every definition save, seeded from the row the dialog was opened with, and
+  the batch placement route additionally resends `visualStart` — so a tab left open across the deploy
+  would otherwise silently re-write the stripped constraint, and through the batch route would clear
+  the placement the migration had just written. The bump turns both into the existing non-destructive
+  conflict message.
+  
+  **The act is irreversible and permanently unauditable** — the activity PATCH route is classified as
+  plan content and excluded from the audit log by design — so every conversion is recorded in
+  `placement_migrations` with the constraint and the label it replaced, and a new read route
+  (`GET …/plans/:planId/placement-migration`, any member) surfaces it. The plan workspace shows a
+  dismissible notice naming the count and the consequence. It says the float **will** change at the
+  next recalculation rather than that it already has: the migration cannot touch the computed columns,
+  and the notice appears the first time the plan is opened, which is before any recalculation.
+  
+  The notice is the canvas dock's lowest-precedence strip, so it never covers a failed write, an armed
+  tool or the empty-plan prompt — it waits, and costs the diagram no height.
+  
+  **Measured, against a real database with every prior migration replayed:** 116–143 ms converting
+  2,826 rows on a 102,000-activity estate, and 5.4 ms on the deployed one. It sequentially scans
+  `activities` once, which is the correct plan — the predicate is a whole-table question with no
+  selectivity any index can offer, and forcing the index-driven shape instead measures 211 ms, 1.5–1.8×
+  slower. So there is no new index, and that decision rests on a measurement rather than an instinct:
+  an index for a once-ever statement would cost every activity write for ever, and would not even win
+  the once.
+
+### Patch Changes
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Rename the `Float & drift` canvas toggle to `Feasible window`, and key the legend once instead of twice.
+  
+  The control describes the same overlay under a name that matches the picture it now draws. Its key
+  is unchanged, because renaming that would touch three consumers and the whole view-toggle contract
+  to say nothing new.
+  
+  The legend's two keys become one. The old pair had to explain why the left-hand tail was usually
+  absent — drift is zero everywhere in Early mode by construction — and that apology disappears with
+  the shape rather than being rewritten: a bracket with no drift simply starts at the bar.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Say where a bar is, in the sentence a screen reader hears and in the mark on the bar.
+  
+  The parallel accessible listbox is the only route a screen-reader user has to a bar on the diagram,
+  and it announced the **network's** dates while every bar has been drawn at its **placed** dates
+  since the collapse. A planner with a hand-placement saw one span and was told another. It now
+  resolves through the same shared function the painter, the Gantt and the print document use, which
+  makes the read-only Late overlay correct for free.
+  
+  The warning triangle on a conflicting bar marked the **start** for both kinds of conflict. A
+  placement that has overrun a deadline is a breach of the bar's **finish**, so the mark pointed at
+  the end of the bar nothing is wrong with — typically with the pin for the overrun bound sitting at
+  the other. It now marks the edge that was breached.
+  
+  Neither defect was visible in the tests, for the same reason: every fixture had the placed dates
+  null beside a real network date, which is a row the product cannot produce, so the two bases were
+  indistinguishable in every case.
+  
+  Also: the baseline variance read is recorded as **not** placement-aware (`docs/TECH_DEBT.md` [#359](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/359)) —
+  after the constraint strip it reports a converted activity as ahead of baseline when its bar has not
+  moved, and the honest fix changes a public contract, so it is filed rather than folded in.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Undoing a bar move now re-plots the bar.
+  
+  A drag writes a hand-placement, and the fingerprint that decides when the schedule is
+  re-derived did not watch that field — so `Ctrl+Z` removed the placement underneath the bar
+  and left the bar drawn where it had been dragged. Clearing the same placement from the
+  selection bar always re-plotted it correctly; the two routes now agree.
+- Updated dependencies [[`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6)]:
+  - @repo/types@0.34.0
+  - @repo/interchange@0.9.1
+
 ## 0.138.1
 
 ### Patch Changes

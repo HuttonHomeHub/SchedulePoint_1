@@ -1,5 +1,155 @@
 # @repo/types
 
+## 0.34.0
+
+### Minor Changes
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Detect and report the other side of a placement conflict: a bar placed PAST an explicit bound.
+  
+  `activities.visual_conflict` has fired for one condition since it shipped — `placed < logicEarliest`
+  — so a hand-placed bar sitting past a `START_NO_LATER_THAN`, `FINISH_NO_LATER_THAN`,
+  `MANDATORY_START` or `MANDATORY_FINISH` ceiling was not a conflict at all. The engine now derives
+  that flag from a new nullable `visualConflictReason` (`EARLIER_THAN_LOGIC` / `LATER_THAN_BOUND`),
+  exposed on the activity response and withheld from the guest share scope.
+  
+  **This is a live change, not a dark one.** `VITE_SCHEDULING_MODES` is default-on, so on any plan in
+  Visual mode a breaching placement now counts toward the conflict total, is highlighted, is reachable
+  by _Next conflict_, and matches the "Has conflict" filter. It is a correction — the bar was always
+  breaching the bound and the product was silent about it — but nobody's plan data changes and no date
+  moves.
+  
+  **Why a reason and not a second boolean.** The spec's own justification was wrong and was measured
+  before the field was built: it argued the mandatory pair needed a flag "because remaining float does
+  not cover them", and remaining float covers all four, because a mandatory pin collapses total float
+  to zero so any drift takes the remainder negative exactly as a "no later than" ceiling does. What
+  the number cannot say is which of two things happened — a planner overran their **own slack**, which
+  is theirs to spend, or they overran a **commitment somebody recorded**. Same sign, different
+  sentence. A placement past an activity's own float with **no** constraint gets no reason at all;
+  there is no bound to breach, and flagging it would fire on every deliberate over-placement.
+  
+  **The conflict key splits with it, so the surface keeps the distinction.** The two sides do not share
+  a remedy: an early placement is answered by clearing it, which the selection bar already offers, and
+  a late one routes to the constraint the planner may not know exists — and because clearing stays
+  available regardless, that route is added rather than substituted. Collapsing them would have carried
+  the fix as far as the count and discarded it at the thing a planner presses.
+  
+  The boolean is now a derived column and the database says so: a CHECK refuses any row where the flag
+  and the reason disagree, which turns an invisible wiring defect — a column dropped from the batched
+  `UPDATE SET`, which a unit test mocking the raw statement cannot see — into a loud failure on the
+  first recalculation of a plan that has a conflict.
+  
+  The migration backfills `EARLIER_THAN_LOGIC` where the flag is already set. That is a transcription
+  rather than a claim about unknowable history: the boolean has meant that one condition for its whole
+  life. It is also required — without it the constraint's `VALIDATE` fails on any populated host while
+  succeeding on the empty database CI provisions, which is the API failing to boot. Proved both ways
+  against a populated database, with every assertion made to fail first.
+  
+  The pure forward and backward passes are untouched: early and late dates, float, criticality and the
+  project finish are byte-identical.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Compute and expose remaining float: the float a hand-placed bar has not already spent.
+  
+  `totalFloat` is measured from the pure-network early finish, so once a planner places a bar the room
+  it still has is `totalFloat − drift`. The engine now emits that in working minutes and the
+  recalculation's batched write converts it **once**, on the activity's own calendar, into
+  `activities.remaining_float`. It is exposed as `remainingFloat` on the activity response and is
+  withheld from the guest share scope, like its two ADR-0033 neighbours.
+  
+  **The single rounding is the whole feature.** A client subtracting the two day-denominated columns
+  computes `round(T/f) − round(d/f)`, and that is not `round((T − d)/f)` wherever the drift is not a
+  whole multiple of the activity's hours-per-day — which a sub-day duration makes ordinary, because a
+  successor of a four-hour task starts half an eight-hour day in. On a critical bar nudged a day and a
+  half, the naive form reports two days past its float and the correct one reports one. No client can
+  compute the right answer at all: minutes are persisted for neither input.
+  
+  Negative is the feature, not an error. A bar placed past what its own float allows has negative
+  remaining float, and that is exactly what it is for; there is no CHECK constraint refusing it.
+  
+  Nothing reads it yet — no screen, no column, no lens. The pure forward and backward passes are
+  untouched, so early and late dates, float, criticality and the project finish are byte-identical.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Record whether two revisions' placements COULD be compared, so a later reader is not misled.
+  
+  A baseline captured before placements were frozen holds no `placed_start`, `placed_finish` or
+  `visual_start`, and no backfill is possible — writing one would state as history a placement that
+  baseline never saw. The revision comparison now reports that on both routes as
+  `placementNotAssessableReason`, null when both sides recorded a placement.
+  
+  It is a nullable REASON and deliberately not a three-valued verdict. A verdict is a thing you can
+  default, and `?? 'MATCH'` is a defensible-looking line to write beside one; absence of a reason is
+  the only thing that can mean "comparable", and absence cannot be defaulted into existence. The
+  mistake is closed by making the shape wrong for it rather than by remembering not to make it.
+  
+  The flag is a second one beside the existing shape-snapshot flag rather than a widening of it. The
+  two levels are written by different milestones, so a baseline can carry either without the other,
+  and folding them is wrong in both directions and silently: a shape-complete baseline would report
+  its placement as recorded when it is not, and a placement-complete one would report its logic as
+  unrecorded.
+  
+  The reason fires whether or not either plan holds a placement. That is the rule all three snapshot
+  levels are written under — a reason that appeared only when there was something to compare could
+  not separate "nobody looked" from "we looked and there was nothing". Every comparison against an
+  existing baseline therefore now carries it, which is correct rather than noisy.
+  
+  **Nothing renders it, and nothing compares placements yet either** — the ghosts and the delta still
+  run on the early dates on both sides. So `null` means "nothing prevents a comparison", never "one
+  was done", and both DTOs say so. The field ships ahead of its consumer deliberately: what it
+  records is **unrecoverable after the fact**, because a baseline captured without the placement
+  columns can never be told what they held.
+  
+  The CPM engine is not imported and no migration runs.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Convert the drag-created constraints into hand-placements, once, and tell the planner what changed.
+  
+  Before this epic, dragging a bar in Early mode wrote a binding `START_NO_EARLIER_THAN` at the drop
+  date. The collapse replaced that with a first-class `visualStart` — `apps/web/src` now contains zero
+  live `SNET` writes — so the estate carries constraints that are really hand-placements wearing a
+  constraint's clothes. A one-time SQL migration converts the **binding** ones and leaves the other
+  three classes alone.
+  
+  **The bars do not move**, and that is derived from the engine rather than asserted: before, the
+  forward clamp put the bar at the constraint date and the placed pass applied the same clamp; after,
+  the placed pass reads the `visualStart` the migration wrote. Identical, and successors do not move
+  either. What does change is the network pass downstream — a successor's earliest falls, its float
+  rises and its criticality can change. That is the point: **the float that was never genuinely
+  constrained comes back.**
+  
+  **Three classes are deliberately untouched.** An _inert_ constraint (logic already overtook it)
+  would place the bar earlier than logic allows. An _unclassified_ one is unmeasured against its
+  constraint, and one of the two ways that arises never clears — a started activity's actual start
+  bypasses the clamp, so it reads below its constraint in a schedule computed seconds ago. And an
+  activity **already carrying a placement** is excluded because a row can hold a stale placement _and_
+  a binding constraint: measured, removing that one clause destroys 706 hand-placements on a
+  102,000-activity estate.
+  
+  **It bumps `version`, departing from every other data migration in this repository, and the
+  departure is the load-bearing part.** The convention exists so an _engine_ write stays invisible to
+  optimistic locking; this writes a _planner-owned input_ and wants the opposite. The activity editor
+  resends the constraint on every definition save, seeded from the row the dialog was opened with, and
+  the batch placement route additionally resends `visualStart` — so a tab left open across the deploy
+  would otherwise silently re-write the stripped constraint, and through the batch route would clear
+  the placement the migration had just written. The bump turns both into the existing non-destructive
+  conflict message.
+  
+  **The act is irreversible and permanently unauditable** — the activity PATCH route is classified as
+  plan content and excluded from the audit log by design — so every conversion is recorded in
+  `placement_migrations` with the constraint and the label it replaced, and a new read route
+  (`GET …/plans/:planId/placement-migration`, any member) surfaces it. The plan workspace shows a
+  dismissible notice naming the count and the consequence. It says the float **will** change at the
+  next recalculation rather than that it already has: the migration cannot touch the computed columns,
+  and the notice appears the first time the plan is opened, which is before any recalculation.
+  
+  The notice is the canvas dock's lowest-precedence strip, so it never covers a failed write, an armed
+  tool or the empty-plan prompt — it waits, and costs the diagram no height.
+  
+  **Measured, against a real database with every prior migration replayed:** 116–143 ms converting
+  2,826 rows on a 102,000-activity estate, and 5.4 ms on the deployed one. It sequentially scans
+  `activities` once, which is the correct plan — the predicate is a whole-table question with no
+  selectivity any index can offer, and forcing the index-driven shape instead measures 211 ms, 1.5–1.8×
+  slower. So there is no new index, and that decision rests on a measurement rather than an instinct:
+  an index for a once-ever statement would cost every activity write for ever, and would not even win
+  the once.
+
 ## 0.33.0
 
 ### Minor Changes

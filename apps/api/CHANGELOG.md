@@ -1,5 +1,309 @@
 # @repo/api
 
+## 0.70.0
+
+### Minor Changes
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Detect and report the other side of a placement conflict: a bar placed PAST an explicit bound.
+  
+  `activities.visual_conflict` has fired for one condition since it shipped — `placed < logicEarliest`
+  — so a hand-placed bar sitting past a `START_NO_LATER_THAN`, `FINISH_NO_LATER_THAN`,
+  `MANDATORY_START` or `MANDATORY_FINISH` ceiling was not a conflict at all. The engine now derives
+  that flag from a new nullable `visualConflictReason` (`EARLIER_THAN_LOGIC` / `LATER_THAN_BOUND`),
+  exposed on the activity response and withheld from the guest share scope.
+  
+  **This is a live change, not a dark one.** `VITE_SCHEDULING_MODES` is default-on, so on any plan in
+  Visual mode a breaching placement now counts toward the conflict total, is highlighted, is reachable
+  by _Next conflict_, and matches the "Has conflict" filter. It is a correction — the bar was always
+  breaching the bound and the product was silent about it — but nobody's plan data changes and no date
+  moves.
+  
+  **Why a reason and not a second boolean.** The spec's own justification was wrong and was measured
+  before the field was built: it argued the mandatory pair needed a flag "because remaining float does
+  not cover them", and remaining float covers all four, because a mandatory pin collapses total float
+  to zero so any drift takes the remainder negative exactly as a "no later than" ceiling does. What
+  the number cannot say is which of two things happened — a planner overran their **own slack**, which
+  is theirs to spend, or they overran a **commitment somebody recorded**. Same sign, different
+  sentence. A placement past an activity's own float with **no** constraint gets no reason at all;
+  there is no bound to breach, and flagging it would fire on every deliberate over-placement.
+  
+  **The conflict key splits with it, so the surface keeps the distinction.** The two sides do not share
+  a remedy: an early placement is answered by clearing it, which the selection bar already offers, and
+  a late one routes to the constraint the planner may not know exists — and because clearing stays
+  available regardless, that route is added rather than substituted. Collapsing them would have carried
+  the fix as far as the count and discarded it at the thing a planner presses.
+  
+  The boolean is now a derived column and the database says so: a CHECK refuses any row where the flag
+  and the reason disagree, which turns an invisible wiring defect — a column dropped from the batched
+  `UPDATE SET`, which a unit test mocking the raw statement cannot see — into a loud failure on the
+  first recalculation of a plan that has a conflict.
+  
+  The migration backfills `EARLIER_THAN_LOGIC` where the flag is already set. That is a transcription
+  rather than a claim about unknowable history: the boolean has meant that one condition for its whole
+  life. It is also required — without it the constraint's `VALIDATE` fails on any populated host while
+  succeeding on the empty database CI provisions, which is the API failing to boot. Proved both ways
+  against a populated database, with every assertion made to fail first.
+  
+  The pure forward and backward passes are untouched: early and late dates, float, criticality and the
+  project finish are byte-identical.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Compute and expose remaining float: the float a hand-placed bar has not already spent.
+  
+  `totalFloat` is measured from the pure-network early finish, so once a planner places a bar the room
+  it still has is `totalFloat − drift`. The engine now emits that in working minutes and the
+  recalculation's batched write converts it **once**, on the activity's own calendar, into
+  `activities.remaining_float`. It is exposed as `remainingFloat` on the activity response and is
+  withheld from the guest share scope, like its two ADR-0033 neighbours.
+  
+  **The single rounding is the whole feature.** A client subtracting the two day-denominated columns
+  computes `round(T/f) − round(d/f)`, and that is not `round((T − d)/f)` wherever the drift is not a
+  whole multiple of the activity's hours-per-day — which a sub-day duration makes ordinary, because a
+  successor of a four-hour task starts half an eight-hour day in. On a critical bar nudged a day and a
+  half, the naive form reports two days past its float and the correct one reports one. No client can
+  compute the right answer at all: minutes are persisted for neither input.
+  
+  Negative is the feature, not an error. A bar placed past what its own float allows has negative
+  remaining float, and that is exactly what it is for; there is no CHECK constraint refusing it.
+  
+  Nothing reads it yet — no screen, no column, no lens. The pure forward and backward passes are
+  untouched, so early and late dates, float, criticality and the project finish are byte-identical.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Record whether two revisions' placements COULD be compared, so a later reader is not misled.
+  
+  A baseline captured before placements were frozen holds no `placed_start`, `placed_finish` or
+  `visual_start`, and no backfill is possible — writing one would state as history a placement that
+  baseline never saw. The revision comparison now reports that on both routes as
+  `placementNotAssessableReason`, null when both sides recorded a placement.
+  
+  It is a nullable REASON and deliberately not a three-valued verdict. A verdict is a thing you can
+  default, and `?? 'MATCH'` is a defensible-looking line to write beside one; absence of a reason is
+  the only thing that can mean "comparable", and absence cannot be defaulted into existence. The
+  mistake is closed by making the shape wrong for it rather than by remembering not to make it.
+  
+  The flag is a second one beside the existing shape-snapshot flag rather than a widening of it. The
+  two levels are written by different milestones, so a baseline can carry either without the other,
+  and folding them is wrong in both directions and silently: a shape-complete baseline would report
+  its placement as recorded when it is not, and a placement-complete one would report its logic as
+  unrecorded.
+  
+  The reason fires whether or not either plan holds a placement. That is the rule all three snapshot
+  levels are written under — a reason that appeared only when there was something to compare could
+  not separate "nobody looked" from "we looked and there was nothing". Every comparison against an
+  existing baseline therefore now carries it, which is correct rather than noisy.
+  
+  **Nothing renders it, and nothing compares placements yet either** — the ghosts and the delta still
+  run on the early dates on both sides. So `null` means "nothing prevents a comparison", never "one
+  was done", and both DTOs say so. The field ships ahead of its consumer deliberately: what it
+  records is **unrecoverable after the fact**, because a baseline captured without the placement
+  columns can never be told what they held.
+  
+  The CPM engine is not imported and no migration runs.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the placement schema, dark: three placement columns and a snapshot level on the baseline tree,
+  `activities.remaining_float`, and the `placement_migrations` record.
+  
+  Nothing reads or writes any of them yet — no DTO, no service, no engine input — so the API's
+  behaviour is unchanged and the ADR-0034 recalculation parity gate is untouched by construction.
+  The migrations ship ahead of their consumers deliberately, so a schema failure and a behaviour
+  failure land in separate releases (the ADR-0125 precedent).
+  
+  `baselines.placement_snapshot_level` defaults to `NONE`, which is the literal truth of every
+  existing row: a baseline captured before this migration froze no placement, and `NONE` says
+  nobody looked rather than claiming there was nothing to look at (ADR-0126). None of the seven
+  new nullable columns takes a `DEFAULT`, for the same reason — a value that cannot be known for
+  a pre-existing row must not be fabricated for it.
+  
+  Proved against a POPULATED database rather than a pristine one (ADR-0107): all three migrations
+  commit, no heap is rewritten, no existing value changes, and each assertion was made to fail
+  first. The committed `placement-schema.e2e-spec.ts` asserts only what `prisma:check-drift`
+  structurally cannot see — the absence of CHECK constraints — and carries its own negative
+  control.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - feat!: one planning surface — `schedulingMode` leaves the API and the toolbar
+  
+  A bar is drawn where it is placed, on every plan. ADR-0033's `EARLY` / `VISUAL` split is collapsed:
+  the Early | Visual selector is gone from the command surface, and `schedulingMode` is gone from
+  `CreatePlanDto`, `UpdatePlanDto` and `PlanResponseDto`.
+  
+  BREAKING CHANGE: `POST …/projects/:projectId/plans` and `PATCH …/plans/:planId` now answer **422**
+  to a body naming `schedulingMode`, and `PlanResponseDto` no longer carries it. A client that still
+  sends the field is refused rather than silently ignored, which is deliberate: a silently-dropped
+  field would let an old client go on "setting the mode" for ever, succeeding, and changing nothing.
+  The Prisma column and its enum are untouched in this release.
+  
+  Three capabilities that shipped beside the mode are **kept and ungated** — the read-only Late-start
+  overlay, the Visual-conflict legend key, and the display-only Go-to-date control — because none of
+  them ever read `schedulingMode`. `VITE_SCHEDULING_MODES` is retired with the capability it gated.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A baseline freezes the placement, not just the network's answer.
+  
+  A capture recorded where the network said work could go and never where a planner had actually put
+  it. `baseline_activities` now freezes the engine's effective-Visual span (`placed_start` /
+  `placed_finish`) and the planner's own hand-placement (`visual_start`) beside the early and late
+  columns, and `baselines.placement_snapshot_level` records that it looked.
+  
+  The third column is not redundant with the other two. After the mode collapse the placed span is
+  what every view draws, so a variance read needs it frozen — but "did a planner put this here, or did
+  the engine?" is answerable only from `visual_start`, and an activity nobody moved has a placed span
+  identical to its early one.
+  
+  The level is written unconditionally, for the third time in this table and for the same reason as
+  `cost_snapshot_level` and `revision_snapshot_level`: zero placements on a FULL baseline means there
+  genuinely were none, and the same nulls on a NONE baseline mean nobody looked. A row count cannot
+  separate those. It is the likelier slip here than for its two siblings, because an unplaced plan's
+  placement columns are all null and look like nothing worth recording.
+  
+  It depends on the effective-Visual pass having been taught the pure pass's branches first. Before
+  that, a progressed activity's placed span ran at full duration from the data date and an LOE or WBS
+  summary collapsed to a point — and a capture taken then would have frozen all of it immutably. The
+  new e2e uses exactly that fixture for that reason; a plain five-task plan passes against the defect.
+  
+  Its sibling case is the one that earns its keep: on an unplaced plan the placed and early spans are
+  equal by definition, so freezing the early span twice satisfies every assertion. A second fixture
+  with one hand-placed bar makes that a failing state instead of an indistinguishable one.
+  
+  Nothing reads the new columns yet. No DTO exposes them, the CPM engine is not imported, and the
+  recalculation parity gate is untouched.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Derive a cross-plan interface from the upstream predecessor's **placed** dates, not its earliest.
+  
+  A live cross-plan dependency's forward bound (ADR-0045 §2) folded the upstream predecessor's
+  persisted `earlyStart`/`earlyFinish` into the successor's ADR-0043 external instants. It now folds
+  its **placed** span — the effective-Visual start/finish the engine writes for every activity. A
+  programme interfaces on where the upstream work is planned to happen, not on the earliest the
+  network would allow it to, and that is the answer a downstream planner would give if you asked them
+  when the handover is. Before this epic collapsed the `EARLY`/`VISUAL` split there was no single
+  column that meant that, which is why the derivation read the earliest one.
+  
+  **The backward direction is deliberately NOT the mirror of it.** `successorLate*` stays
+  `successorLate*`: a placement is a statement about where work is planned to start, there is no such
+  thing as a placed late finish, and the latest a network tolerates is a question a hand-placement is
+  not an input to. The symmetry is tempting enough that a structural test asserts the negative rather
+  than leaving it to a comment — and that test was verified red both ways, so renaming the backward
+  side fails it and switching only one of the two forward producers fails it.
+  
+  **Both recalculate routes carry the change**, because the derivation runs inside ordinary
+  single-plan recalculation whenever the plan has any active cross-plan edge — not only inside
+  `…/recalculate-programme`. A plan with no cross-plan edges is unaffected in either route, and no
+  request or response shape changes.
+  
+  The fields are renamed with the switch rather than left reading `predecessorEarly*`. A name that
+  says "early" over a column holding placed dates is the silent redefinition this epic refuses
+  everywhere else, and it is the defect most likely to survive review: every call site keeps
+  compiling and every test keeps passing while the word stops being true.
+  
+  The pure engine is untouched — `computeSchedule` still never sees a cross-plan edge, its arguments
+  are assembled exactly as before, and the change is entirely in which persisted column feeds them.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Convert the drag-created constraints into hand-placements, once, and tell the planner what changed.
+  
+  Before this epic, dragging a bar in Early mode wrote a binding `START_NO_EARLIER_THAN` at the drop
+  date. The collapse replaced that with a first-class `visualStart` — `apps/web/src` now contains zero
+  live `SNET` writes — so the estate carries constraints that are really hand-placements wearing a
+  constraint's clothes. A one-time SQL migration converts the **binding** ones and leaves the other
+  three classes alone.
+  
+  **The bars do not move**, and that is derived from the engine rather than asserted: before, the
+  forward clamp put the bar at the constraint date and the placed pass applied the same clamp; after,
+  the placed pass reads the `visualStart` the migration wrote. Identical, and successors do not move
+  either. What does change is the network pass downstream — a successor's earliest falls, its float
+  rises and its criticality can change. That is the point: **the float that was never genuinely
+  constrained comes back.**
+  
+  **Three classes are deliberately untouched.** An _inert_ constraint (logic already overtook it)
+  would place the bar earlier than logic allows. An _unclassified_ one is unmeasured against its
+  constraint, and one of the two ways that arises never clears — a started activity's actual start
+  bypasses the clamp, so it reads below its constraint in a schedule computed seconds ago. And an
+  activity **already carrying a placement** is excluded because a row can hold a stale placement _and_
+  a binding constraint: measured, removing that one clause destroys 706 hand-placements on a
+  102,000-activity estate.
+  
+  **It bumps `version`, departing from every other data migration in this repository, and the
+  departure is the load-bearing part.** The convention exists so an _engine_ write stays invisible to
+  optimistic locking; this writes a _planner-owned input_ and wants the opposite. The activity editor
+  resends the constraint on every definition save, seeded from the row the dialog was opened with, and
+  the batch placement route additionally resends `visualStart` — so a tab left open across the deploy
+  would otherwise silently re-write the stripped constraint, and through the batch route would clear
+  the placement the migration had just written. The bump turns both into the existing non-destructive
+  conflict message.
+  
+  **The act is irreversible and permanently unauditable** — the activity PATCH route is classified as
+  plan content and excluded from the audit log by design — so every conversion is recorded in
+  `placement_migrations` with the constraint and the label it replaced, and a new read route
+  (`GET …/plans/:planId/placement-migration`, any member) surfaces it. The plan workspace shows a
+  dismissible notice naming the count and the consequence. It says the float **will** change at the
+  next recalculation rather than that it already has: the migration cannot touch the computed columns,
+  and the notice appears the first time the plan is opened, which is before any recalculation.
+  
+  The notice is the canvas dock's lowest-precedence strip, so it never covers a failed write, an armed
+  tool or the empty-plan prompt — it waits, and costs the diagram no height.
+  
+  **Measured, against a real database with every prior migration replayed:** 116–143 ms converting
+  2,826 rows on a 102,000-activity estate, and 5.4 ms on the deployed one. It sequentially scans
+  `activities` once, which is the correct plan — the predicate is a whole-table question with no
+  selectivity any index can offer, and forcing the index-driven shape instead measures 211 ms, 1.5–1.8×
+  slower. So there is no new index, and that decision rests on a measurement rather than an instinct:
+  an index for a once-ever statement would cost every activity write for ever, and would not even win
+  the once.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Teach the effective-Visual pass the branches the pure pass has: actuals, derived spans, and the WBS
+  rollup.
+  
+  The epic that introduced Visual mode claimed "Early is Visual's resting state" and cited a fixture of
+  five plain unprogressed tasks — true of that fixture, false of any plan anybody has reported progress
+  on. Pass 1 freezes on a reported actual, schedules the **remaining** work, derives a Level of
+  Effort's span from its hammock and rolls a WBS summary's up from its children; Pass 2 had none of
+  those, so a progressed or grouped activity rendered in two different places depending on which basis
+  a view read.
+  
+  Four things are corrected, all in the placed basis only. A reported actual freezes the placed bar
+  exactly as it freezes the early one, so a placement is inert against it. The placed bar's length is
+  now read the way the early bar's is — from the computed instants, not the input duration — so an LOE
+  and a WBS summary stop collapsing to a point wherever they are drawn and a progressed activity stops
+  being drawn at full length. And an unplaced summary now renders at its rolled-up start rather than at
+  the data date.
+  
+  Nothing about the pure forward/backward pass changes: early and late dates, float, criticality and
+  the project finish are byte-identical, and all 264 pre-existing engine tests pass unedited, which is
+  the before/after oracle. Pass 2's propagation is unchanged too — the summary correction is a display
+  read, and a summary is never a predecessor.
+  
+  Every clause is pinned by a mutation verified to fail against the defect it guards, including the
+  careless port that would collapse a zero-duration task by re-deriving a rule instead of sharing it.
+
+### Patch Changes
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Say where a bar is, in the sentence a screen reader hears and in the mark on the bar.
+  
+  The parallel accessible listbox is the only route a screen-reader user has to a bar on the diagram,
+  and it announced the **network's** dates while every bar has been drawn at its **placed** dates
+  since the collapse. A planner with a hand-placement saw one span and was told another. It now
+  resolves through the same shared function the painter, the Gantt and the print document use, which
+  makes the read-only Late overlay correct for free.
+  
+  The warning triangle on a conflicting bar marked the **start** for both kinds of conflict. A
+  placement that has overrun a deadline is a breach of the bar's **finish**, so the mark pointed at
+  the end of the bar nothing is wrong with — typically with the pin for the overrun bound sitting at
+  the other. It now marks the edge that was breached.
+  
+  Neither defect was visible in the tests, for the same reason: every fixture had the placed dates
+  null beside a real network date, which is a row the product cannot produce, so the two bases were
+  indistinguishable in every case.
+  
+  Also: the baseline variance read is recorded as **not** placement-aware (`docs/TECH_DEBT.md` [#359](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/359)) —
+  after the constraint strip it reports a converted activity as ahead of baseline when its bar has not
+  moved, and the honest fix changes a public contract, so it is filed rather than folded in.
+
+- [#639](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/639) [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An export now says when a plan's hand-placed bars will not survive the file.
+  
+  No interchange format encodes a hand-placement, so the receiving tool reads every activity
+  at its computed dates. The export report names how many activities are affected, once,
+  rather than leaving the reader to discover it in the other tool. Nothing changes for a plan
+  nobody has hand-placed, and no exported byte changes either way.
+- Updated dependencies [[`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6), [`3ce6ed5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3ce6ed5d0dafac9ea8e26eb499ca8d24fc60cef6)]:
+  - @repo/types@0.34.0
+  - @repo/interchange@0.9.1
+
 ## 0.69.0
 
 ### Minor Changes
