@@ -1345,3 +1345,109 @@ export function readWholePlan(
     32,
   );
 }
+
+// ── Part D M0: link-over-bar OCCLUSION, which nothing in Part C ever counted ─────────────────────
+
+/**
+ * How many of a plan's links have a horizontal leg running **through a bar**.
+ *
+ * ## Why this is a different quantity from {@link countCrossings}
+ *
+ * `crossingsOf` counts segment-versus-segment against a `SegmentIndex` built from link polylines
+ * ONLY. Bars are not in it, and they structurally could not be: {@link recordingCtx} discards
+ * `fillRect` entirely (`fillRect: () => {}`), which is how a bar is painted. So the instrument
+ * Part C judged four milestones with was **incapable of seeing the thing the product owner was
+ * complaining about** — "the logic is mapping across other bars" — and ADR-0149's −20.8 % is a
+ * true statement about link-versus-link that says nothing at all about this.
+ *
+ * ## Why a leg can run through a bar at all
+ *
+ * `routeOrthogonal` applies its obstacle check (`isLaneFreeAt`) to the vertical corridor only, and
+ * only across `crossedLanes(fromLane, toLane)` — the lanes strictly BETWEEN the two endpoints. The
+ * two horizontal legs run at `from.y` and `to.y`, the source and target bars' centre-lines, and are
+ * checked against nothing. A leg therefore runs straight through any bar sharing its lane between
+ * the anchor and the corridor. Links paint UNDER bars (`paint.ts:1053` Layer 2, `:1622` Layer 3),
+ * so the line does not overlap the bar — it **disappears behind it**, which is worse for tracing.
+ *
+ * ## What counts
+ *
+ * A horizontal segment (`y1 === y2`) whose x-span overlaps a bar's x-span **strictly**, with the
+ * segment's y **strictly inside** the bar's vertical extent. Strictness is what excludes the
+ * segment's own anchor, which sits exactly on its bar's edge by construction — the same
+ * interiority argument {@link crossingsOf} uses, and for the same reason: it needs no per-link
+ * bookkeeping about which bars are its own endpoints.
+ *
+ * Rects come from `activityRect` — **the painter's own rect source**, never a re-derivation from
+ * the routing formula. M-C0-T4 established that as the rule after measuring the gutter against the
+ * routing expression and getting an answer about the formula rather than about the picture.
+ */
+export function countOcclusions(
+  links: readonly RecordedPath[],
+  scene: TsldScene,
+  view: { pxPerDay: number; originX: number; originY: number },
+): { occluded: number; incidents: number; horizontals: number } {
+  const EPS_X = 0.5;
+  const rects: { x1: number; x2: number; y1: number; y2: number }[] = [];
+  for (const activity of scene.activities) {
+    const rect = activityRect(activity, view, scene.dataDate);
+    if (rect === null) continue;
+    rects.push({ x1: rect.x, x2: rect.x + rect.w, y1: rect.y, y2: rect.y + rect.h });
+  }
+
+  let occluded = 0;
+  let incidents = 0;
+  let horizontals = 0;
+  for (const link of links) {
+    let hit = false;
+    for (let i = 0; i + 1 < link.pts.length; i += 1) {
+      const a = link.pts[i]!;
+      const b = link.pts[i + 1]!;
+      if (Math.abs(a.y - b.y) > 0.01) continue; // vertical corridors are already obstacle-checked
+      horizontals += 1;
+      const lo = Math.min(a.x, b.x);
+      const hi = Math.max(a.x, b.x);
+      for (const r of rects) {
+        if (a.y <= r.y1 || a.y >= r.y2) continue; // strictly inside the bar's height
+        if (hi <= r.x1 + EPS_X || lo >= r.x2 - EPS_X) continue; // strict x overlap
+        incidents += 1;
+        hit = true;
+      }
+    }
+    if (hit) occluded += 1;
+  }
+  return { occluded, incidents, horizontals };
+}
+
+/** One whole-plan reading carrying BOTH quantities, so they can be compared on one row. */
+export function readBoth(
+  asap: ReturnType<typeof unit300Asap>,
+  layout: Layout,
+  pxPerDay: number,
+): CrossingReading & { occluded: number; incidents: number; horizontals: number } {
+  const acts = asap.activities as { key: string }[];
+  const maxDay = Math.max(...acts.map((a) => asap.finish.get(a.key) ?? 0));
+  const worstLanes = Math.max(layout.lanes, 145);
+  const vp = {
+    label: 'whole-plan',
+    width: (maxDay + 4) * pxPerDay + 400,
+    height: worstLanes * LANE_HEIGHT + 200,
+  };
+  const { scene } = sceneFor(asap, layout);
+  const base = read(scene, layout, vp, pxPerDay, 32);
+
+  const { ctx, paths } = recordingCtx();
+  paintScene(
+    ctx as Parameters<typeof paintScene>[0],
+    scene,
+    { pxPerDay, originX: 40, originY: 32 },
+    { width: vp.width, height: vp.height },
+    PALETTE,
+    1,
+  );
+  const occ = countOcclusions(linkPaths(paths), scene, {
+    pxPerDay,
+    originX: 40,
+    originY: 32,
+  });
+  return { ...base, ...occ };
+}
