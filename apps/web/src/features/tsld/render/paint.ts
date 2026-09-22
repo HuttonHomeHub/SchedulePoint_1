@@ -13,7 +13,6 @@ import { buildPaintFrame } from './paint-frame';
 import {
   arrowhead,
   barGlyphKind,
-  computeEdgeFanOut,
   daysBetween,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
@@ -26,11 +25,16 @@ import {
   lagRunSegment,
   linkHighlightIds,
   loeBracketRects,
+  NODE_RADIUS,
+  nodeCentres,
+  nodeIsFilled,
   makeWorkingDayWalk,
   laneAtScreenY,
   progressGeometry,
   rectsIntersect,
   routeOrthogonal,
+  rowReservesTextRows,
+  rowSlots,
   screenXOfDay,
   screenYOfLane,
   summaryTabRects,
@@ -59,7 +63,6 @@ import {
   LANE_HEIGHT,
   MILESTONE_RADIUS,
   PROGRESS_MIN_PX_PER_DAY,
-  type FanOutOffsets,
   type LagRun,
   type Point,
   type Rect,
@@ -76,32 +79,6 @@ import {
 } from './resource-strip';
 import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from './view-toggles';
 import type { WbsBandBar } from './wbs-band';
-
-/**
- * Fan-out offsets memoised on the edges ARRAY identity (ADR-0052 M5 perf). `scene.edges` is
- * reference-stable across pan/zoom frames (the scene is only rebuilt on a data / selection /
- * hover-id change, and those rebuilds reuse the same edges array), so recomputing the pure
- * `computeEdgeFanOut` per frame is pure waste — measured 5–11 ms alone at 2,000 activities /
- * 4,000 edges, busting the ADR-0026 ≤4 ms draw budget on its own. A WeakMap keyed by the array
- * lets a replaced edge list recompute once and lets the old entry be GC'd with its array.
- */
-const edgeFanOuts = new WeakMap<readonly RenderEdge[], ReadonlyMap<RenderEdge, FanOutOffsets>>();
-
-/**
- * The memoised {@link computeEdgeFanOut} the painter reads: the SAME array instance returns the
- * SAME (identical) offsets map; a new array instance recomputes. Exported so the memo identity
- * is unit-testable — the painter is its only production caller.
- */
-export function edgeFanOutFor(
-  edges: readonly RenderEdge[],
-): ReadonlyMap<RenderEdge, FanOutOffsets> {
-  let offsets = edgeFanOuts.get(edges);
-  if (!offsets) {
-    offsets = computeEdgeFanOut(edges);
-    edgeFanOuts.set(edges, offsets);
-  }
-  return offsets;
-}
 
 /** Below this px-per-day the per-day gridlines would merge into a solid block, so they're culled. */
 const DAY_GRID_MIN_PX = 6;
@@ -822,7 +799,6 @@ function drawRefreshedBar(
   scene: TsldScene,
   view: Viewport,
 ): void {
-  const dash = criticalDash(activity);
   const glyph = barGlyphKind(activity.type);
   if (glyph === 'milestone') {
     const cx = rect.x + rect.w / 2;
@@ -830,18 +806,11 @@ function drawRefreshedBar(
     traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
     ctx.fill();
     ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
-    if (dash) {
-      ctx.strokeStyle = palette.outline;
-      ctx.lineWidth = EMPHASIS_STROKE_W;
-      ctx.setLineDash(dash);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    } else {
-      // The consistent-glyph hairline: a calm definition stroke on the same diamond path.
-      ctx.strokeStyle = palette.barStroke;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
+    // A milestone keeps its outline as the definition stroke. It draws NO nodes: the diamond is
+    // already a terminal glyph, and two nodes on a zero-width shape are two circles on each other.
+    ctx.strokeStyle = nodeIsFilled(activity) ? palette.outline : palette.barStroke;
+    ctx.lineWidth = nodeIsFilled(activity) ? EMPHASIS_STROKE_W : 1;
+    ctx.stroke();
     return;
   }
 
@@ -854,38 +823,61 @@ function drawRefreshedBar(
   } else if (glyph === 'summary') {
     for (const tab of summaryTabRects(rect)) ctx.fillRect(tab.x, tab.y, tab.w, tab.h);
   }
-  // In-bar progress, LOD-culled like labels; still at the bar's alpha so a dim recedes whole.
+  // **Progress is a second, shorter bar along the same line, not an in-bar band** (M3-T3, CQ-6's
+  // default). `progressGeometry`'s band is inset 2 px top and bottom inside the bar, which needs
+  // 8 px before the band itself; a thin bar has 5. So the completed portion is redrawn in the
+  // bar's paired ink over the bar's own full height, with a hairline divider at the front standing
+  // 2 px proud top and bottom — a **shape** cue (WCAG 1.4.1) that survives at this thickness where
+  // the old in-bar divider, clamped to a band that no longer exists, would not.
   if (view.pxPerDay >= PROGRESS_MIN_PX_PER_DAY) {
     const progress = progressGeometry(rect, activity.percentComplete ?? 0);
     if (progress) {
       ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
-      const { band, frontX } = progress;
+      const { band, front } = progress;
       ctx.fillRect(band.x, band.y, band.w, band.h);
-      // The hairline front divider — the non-colour boundary cue (WCAG 1.4.1) — clamped to the
-      // band's own vertical extent so it marks the band's front without slicing through the
-      // centred inside label (ux review). Skipped at 100%, where the front coincides with the
-      // bar's end edge.
-      if (frontX !== null) ctx.fillRect(frontX - 0.5, band.y, 1, band.h);
+      if (front) ctx.fillRect(front.x, front.y, front.w, front.h);
     }
   }
   ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
-  if (dash) {
-    // Stronger-than-legacy emphasis (2px vs 1.5) so the critical path pops; the solid/dashed
-    // dash cue is untouched (WCAG 1.4.1 — never colour or weight alone).
-    ctx.strokeStyle = palette.outline;
-    ctx.lineWidth = EMPHASIS_STROKE_W;
-    ctx.setLineDash(dash);
-    const inset: Rect = { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 };
-    if (beginRoundedRect(ctx, inset, Math.max(1, BAR_RADIUS - 1))) ctx.stroke();
-    else ctx.strokeRect(inset.x, inset.y, inset.w, inset.h);
-    ctx.setLineDash([]);
-  } else {
-    // The calm hairline definition stroke — quieter than the emphasis, so normal bars recede.
-    ctx.strokeStyle = palette.barStroke;
-    ctx.lineWidth = 1;
-    const inset: Rect = { x: rect.x + 0.5, y: rect.y + 0.5, w: rect.w - 1, h: rect.h - 1 };
-    if (beginRoundedRect(ctx, inset, BAR_RADIUS)) ctx.stroke();
-    else ctx.strokeRect(inset.x, inset.y, inset.w, inset.h);
+  // **The bar's own outline is GONE, deliberately** (M3-T3). A non-critical bar carried a 1 px
+  // inset hairline and a critical one a 2 px dashed emphasis; inset into a 5 px bar the first
+  // leaves 3 px of fill and the second is a dash whose period exceeds the shape it dashes. The
+  // reference draws a plain line and puts the definition in the node, which is what happens below.
+  //
+  // Recorded here because it was dropped silently on the first pass and the suite did not notice:
+  // the case guarding the hairline asks whether ANY `strokeRect` was emitted, and the node emits
+  // one. It now asks for the stroke on the bar's own extent.
+  //
+  // **The node at each end, and criticality's second channel** (M3-T3, CQ-6's default).
+  //
+  // The shipped criticality cue was a dashed emphasis outline on the bar. A dash on a 5 px outline
+  // is not a channel a reader can use — the dash period is wider than the shape being dashed — so
+  // the non-colour half moves to the node, filled versus hollow, which the reference already draws
+  // both ways and which is legible across a whole diagram rather than only on the bar under the
+  // cursor. Colour is unchanged, so criticality still carries two channels (WCAG 1.4.1).
+  //
+  // A circle is traced as a `roundRect` whose radius is half its side, which needs no addition to
+  // the `Ctx2D` surface; contexts without `roundRect` get the same square fallback every other
+  // rounded shape here already takes.
+  const filled = nodeIsFilled(activity);
+  ctx.strokeStyle = filled ? palette.outline : palette.barStroke;
+  ctx.lineWidth = 1;
+  for (const centre of nodeCentres(rect)) {
+    const box: Rect = {
+      x: centre.x - NODE_RADIUS,
+      y: centre.y - NODE_RADIUS,
+      w: NODE_RADIUS * 2,
+      h: NODE_RADIUS * 2,
+    };
+    if (beginRoundedRect(ctx, box, NODE_RADIUS)) {
+      if (filled) ctx.fill();
+      ctx.stroke();
+    } else if (filled) {
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.strokeRect(box.x, box.y, box.w, box.h);
+    } else {
+      ctx.strokeRect(box.x, box.y, box.w, box.h);
+    }
   }
 }
 
@@ -1111,14 +1103,17 @@ export function paintScene(
         : ELAPSED_DAY_WALK
       : null;
     // Link visual refresh (ADR-0052 M5) — the SAME `visualRefresh` scene field M4 reads (ONE env
-    // flag, ONE flag-off parity gate): rounded elbows, deterministic fan-out of crowded bar-edge
-    // anchors (memoised on the edges array identity via `edgeFanOutFor` — the array is stable
-    // across pan/zoom frames, so offsets never jitter while panning and never recompute per
-    // frame), the dashed lag-run depiction, and the incident-link highlight for the selection
-    // (persistent, keyboard/AT-reachable) + idle hover (transient). All inert when
-    // `visualRefresh` is off ⇒ byte-for-byte today's edge layer.
+    // flag, ONE flag-off parity gate): rounded elbows, the dashed lag-run depiction, and the
+    // incident-link highlight for the selection (persistent, keyboard/AT-reachable) + idle hover
+    // (transient). All inert when `visualRefresh` is off ⇒ byte-for-byte today's edge layer.
+    //
+    // **Fan-out is gone** (M3-T3, spec D10). It spread several link ends along a bar edge by
+    // `FAN_OUT_STEP_PX`, which needs the bar's half-height to spread within; the row treatment's
+    // bar is 5 px and the step alone exceeded 2.5. The reference solves the same crowding the
+    // other way — every link converges on the **node glyph** at the bar's end — which needs no
+    // vertical room on the bar at all, and takes a per-frame memoised pass off the draw path with
+    // it (it was measured at 5–11 ms alone at 2,000 activities / 4,000 edges).
     const refresh = scene.visualRefresh === true;
-    const fanOut = refresh ? edgeFanOutFor(scene.edges) : null;
     /**
      * Obstacle awareness for the corridor (ADR-0064 M2). Built **once per frame, from the culled
      * set** — a route is drawn inside the viewport, so a bar outside it cannot be visibly crossed,
@@ -1154,7 +1149,7 @@ export function paintScene(
       }
       const walk = edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : workingWalk;
       const lag = edge.lagDays ?? 0;
-      if (!fanOut) {
+      if (!refresh) {
         return dependencyPolylineTimeTrue(
           pred,
           succ,
@@ -1177,14 +1172,14 @@ export function paintScene(
         rectCache,
       );
       if (!anchors) return null;
-      const off = fanOut.get(edge);
       if (lagRuns && lag !== 0) {
         // FS/FF walk the successor end, SS/SF the predecessor end — the SAME choice `classifyHit`
-        // makes for the draggable anchor, so the handle can never land on the wrong end. Both the
-        // run and the handle ride that end's fan-out offset, staying with their own link line
-        // (the ±FAN_OUT_MAX_PX spread is well inside the zone's ±BAR_HEIGHT/2 y tolerance).
+        // makes for the draggable anchor, so the handle can never land on the wrong end.
+        //
+        // The per-end vertical offset that used to ride here was fan-out's, and fan-out is retired
+        // (M3-T3): every link now converges on the node glyph at its bar end, so there is no
+        // spread for a run or a handle to stay with.
         const walkedSucc = edge.type === 'FS' || edge.type === 'FF';
-        const dy = (walkedSucc ? off?.succ : off?.pred) ?? 0;
         const run = lagRunSegment(
           pred,
           succ,
@@ -1195,31 +1190,20 @@ export function paintScene(
           walk,
           rectCache,
         );
-        if (run) {
-          lagRuns.push(
-            dy === 0
-              ? run
-              : {
-                  from: { x: run.from.x, y: run.from.y + dy },
-                  to: { x: run.to.x, y: run.to.y + dy },
-                },
-          );
-        }
+        if (run) lagRuns.push(run);
         if (lagHandlePoints) {
           // Collected off the ANCHOR, not the run: a clamped anchor (a lag past the bar's extent)
           // yields no run but is still grabbable, and that is exactly the case where an invisible
           // target would silently shadow the bar-end resize handle.
           const anchor = walkedSucc ? anchors.succ : anchors.pred;
-          const point: Point = { x: anchor.x, y: anchor.y + dy };
+          const point: Point = { x: anchor.x, y: anchor.y };
           if (edge.id !== undefined && edge.id === scene.activeLagId) activeLagHandle = point;
           else lagHandlePoints.push(point);
         }
       }
-      const from =
-        off && off.pred !== 0 ? { x: anchors.pred.x, y: anchors.pred.y + off.pred } : anchors.pred;
-      const to =
-        off && off.succ !== 0 ? { x: anchors.succ.x, y: anchors.succ.y + off.succ } : anchors.succ;
-      if (!laneIndex) return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0);
+      const from = anchors.pred;
+      const to = anchors.succ;
+      if (!laneIndex) return routeOrthogonal(from, to, edge.type, view);
       /**
        * The two endpoint bars' own x-spans (logic-legibility M2-T2). A horizontal leg begins on its
        * anchor's edge, so the leg check has to exclude that bar by identity — and `laneIndex`
@@ -1228,7 +1212,7 @@ export function paintScene(
        */
       const predRect = activityRect(pred, view, scene.dataDate, rectCache);
       const succRect = activityRect(succ, view, scene.dataDate, rectCache);
-      return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0, {
+      return routeOrthogonal(from, to, edge.type, view, 0, {
         index: laneIndex,
         fromLane: pred.laneIndex,
         toLane: succ.laneIndex,
@@ -1284,7 +1268,7 @@ export function paintScene(
        * values that then change — ADR-0090's recorded oscillation with a third subject — so this
        * runs after every x is final and moves y only.
        */
-      packGutterChannels(corridors, LANE_HEIGHT, BAR_HEIGHT);
+      packGutterChannels(corridors, rowSlots(0).clearHalfBandPx);
     }
     const drawEdges = (driving: boolean, highlighted = false): void => {
       const heads: [Point, Point, Point][] = [];
@@ -1956,6 +1940,7 @@ export function paintScene(
   // milestone when the same-lane neighbour leaves clear room, else suppressed. The visible set is
   // bucketed by lane and x-sorted once (O(v log v)) so each label's right-neighbour is known without
   // a per-label scan; widths are memoised (font fixed) so a label measures at most once ever.
+  const reservesTextRows = rowReservesTextRows();
   if ((toggles.labels ?? true) && view.pxPerDay >= LABEL_MIN_PX_PER_DAY) {
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'middle';
@@ -1977,10 +1962,40 @@ export function paintScene(
           barHeight: rect.h,
           isMilestone: isMilestone(activity.type),
           besideRoomPx,
+          rowHasNameRow: reservesTextRows,
         });
         if (placement === 'none') continue;
         const cy = rect.y + rect.h / 2;
-        if (placement === 'inside') {
+        if (placement === 'above') {
+          // The reference's own placement: the name centred over its bar, in the row `rowSlots`
+          // reserves for it. Centred rather than left-aligned because the bar it names is a span
+          // and the eye reads the pair as one object.
+          //
+          // Truncated to the bar's width PLUS the room its neighbour leaves, and **nothing else**.
+          // The name row carries no other bar's ink, so the only thing a name can collide with is
+          // the next name in the same lane — which is exactly what `besideRoomPx` measures. A cap
+          // was written here first and removed on measurement: it bound the commonest case in the
+          // product, a **milestone**, whose bar is 14 px wide, so every milestone's name truncated
+          // in a row that was otherwise empty.
+          //
+          // The residual is stated rather than hidden: a CENTRED name spends half its overhang to
+          // the left, where the room is the PREVIOUS neighbour's and this layer does not compute
+          // it. A name can therefore reach left into a preceding bar's name. Bounded (the previous
+          // bar's own name is centred on itself) and visible in the M3-T3 picture, so it is a
+          // judgement for that review rather than a guess here.
+          // **The lane, never `rect.y - BAR_PAD`.** That subtraction recovers the lane's top for a
+          // task bar and NOT for a milestone, whose rect is centred on the lane rather than
+          // padded into it — so a milestone's name sat 4.5 px above every other name in the row,
+          // a ragged text row nothing but a rendered picture would have shown.
+          const slots = rowSlots(screenYOfLane(activity.laneIndex, view));
+          const roomPx = rect.w + Math.max(0, besideRoomPx);
+          const text = truncateToWidth(activity.label, roomPx, measure);
+          if (!text) continue;
+          ctx.fillStyle = palette.labelBeside;
+          ctx.textAlign = 'center';
+          ctx.fillText(text, rect.x + rect.w / 2, slots.nameY);
+          ctx.textAlign = 'left';
+        } else if (placement === 'inside') {
           const text = truncateToWidth(activity.label, rect.w - insidePad * 2, measure);
           if (!text) continue;
           // A Colour-by lens repaints the bar a non-criticality hue, so the criticality-based ink can
@@ -2035,6 +2050,31 @@ export function paintScene(
           startWidthPx,
           finishWidthPx,
         });
+        // **Below the bar when the row reserves a row for it** (M3-T3) — the reference's own
+        // placement, and it disposes of `dateLabelSlot` entirely in that case: a flanking date
+        // competes with the same-lane neighbour for horizontal room and is suppressed when it
+        // loses, which on a dense programme is most of them. A date under its own bar end has no
+        // neighbour to lose to, so every bar states both its dates at every density.
+        //
+        // **The reference's third run — the duration — is deliberately NOT drawn here, and
+        // building it is what established why.** It is already on screen: `activityBarLabel`
+        // (`a11y.ts:58`) composes `{code} {name} · {n}d` into the name row above. Printing it again
+        // would be one fact drawn twice, which is the defect ADR-0093 records removing and which
+        // this epic's own feasible window exists to avoid. And it could not be honestly re-derived
+        // here even if it were absent: `durationDays` is a **working-day** figure that `a11y.ts`
+        // records as "not derivable from the spoken calendar dates", while the only duration this
+        // layer can reach is the drawn calendar span — a different number on any non-24-hour
+        // calendar, printed under a bar as if it were the same one.
+        if (reservesTextRows) {
+          const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
+          ctx.fillStyle = palette.labelBeside;
+          ctx.textAlign = 'left';
+          ctx.fillText(startText, rect.x, below);
+          ctx.textAlign = 'right';
+          ctx.fillText(finishText, rect.x + rect.w, below);
+          ctx.textAlign = 'left';
+          continue;
+        }
         const cy = rect.y + rect.h / 2;
         const plate = (x: number, w: number): void => {
           if (!plated) return;
@@ -2390,9 +2430,9 @@ export function paintInteractionLayer(
       const progress = progressGeometry(r, detail.percentComplete);
       if (progress) {
         ctx.fillStyle = palette.labelInside;
-        const { band, frontX } = progress;
+        const { band, front } = progress;
         ctx.fillRect(band.x, band.y, band.w, band.h);
-        if (frontX !== null) ctx.fillRect(frontX - 0.5, band.y, 1, band.h);
+        if (front) ctx.fillRect(front.x, front.y, front.w, front.h);
       }
     }
     if (detail.milestone) return; // a diamond has no room for an inside label

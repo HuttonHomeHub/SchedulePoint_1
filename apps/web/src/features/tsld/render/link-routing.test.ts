@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 // The geometry core, imported directly: these three are the DEFINITION of screen space, and the
 // assertion below is about agreeing with them rather than about where they are re-exported from.
-import { BAR_HEIGHT, LANE_HEIGHT, screenYOfLane } from './geometry';
+import { BAR_HEIGHT, LANE_HEIGHT, rowSlots, screenYOfLane } from './geometry';
 import {
   arrowhead,
   bundleCorridors,
@@ -12,7 +12,6 @@ import {
   ARROWHEAD_HALF_W_PX,
   ARROWHEAD_PX,
   ARROWHEAD_ROUTED_PX,
-  FAN_OUT_STEP_PX,
   isLaneFreeAt,
   isLaneFreeBetween,
   isLegClear,
@@ -263,8 +262,8 @@ describe('routeOrthogonal — obstacle awareness', () => {
     index,
     fromLane,
     toLane,
-    laneHeight: 28,
-    barHeight: 18,
+    laneHeight: LANE_HEIGHT,
+    barHeight: BAR_HEIGHT,
   });
 
   /** The same, plus the two endpoint bars' own spans — what the painter passes after M2-T2. */
@@ -534,14 +533,16 @@ describe('arrowhead — routed size (T17)', () => {
     expect(Math.abs(head[1].y)).toBeCloseTo(ARROWHEAD_PX / 2);
   });
 
-  it('grows in LENGTH only — the barbs stay at the fan-out step', () => {
+  it('grows in LENGTH only — the barbs stay at their own half-width', () => {
     const head = arrowhead(LINE, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)!;
     expect(head[1].x).toBeCloseTo(100 - ARROWHEAD_ROUTED_PX);
     expect(ARROWHEAD_ROUTED_PX).toBeGreaterThan(ARROWHEAD_PX);
-    // The reason it is not `size / 2`: a wider barb would cross the neighbouring line of a fanned
-    // bundle (ADR-0052 M5), trading one legibility defect for another.
-    expect(Math.abs(head[1].y)).toBeCloseTo(FAN_OUT_STEP_PX);
-    expect(ARROWHEAD_HALF_W_PX).toBeLessThanOrEqual(FAN_OUT_STEP_PX);
+    // It is not `size / 2`, and the reason **changed at M3-T3**: ADR-0052 M5's argument was that a
+    // wider barb crosses the neighbouring line of a **fanned bundle**, and fan-out is retired, so
+    // the constraint has no subject. The half-width is kept because it is the head the product
+    // draws, not because anything still derives it — which is why this asserts the value rather
+    // than a relationship that no longer exists.
+    expect(Math.abs(head[1].y)).toBeCloseTo(ARROWHEAD_HALF_W_PX);
   });
 });
 
@@ -806,21 +807,36 @@ describe('packGutterChannels', () => {
   const legYs = (cs: { line: Point[] }[]): number[] => cs.map((c) => c.line[2]!.y);
 
   /**
-   * **Capacity is DERIVED, and that is what stops M3 rebuilding this** (FC-L3's amended clause).
-   *
-   * `pad` is `(laneHeight - barHeight) / 2` and the usable half-band is `pad - 1` — one pixel inside
-   * each bar edge. A constant here would have to be re-chosen the moment decision 5 thins the bar,
-   * which is precisely the edit a later reader would not know to make.
+   * The clear half-band the shipped row leaves at a lane boundary — what the painter passes
+   * (`paint.ts`, M3-T3). Read from `rowSlots` rather than restated, so a pitch change moves this
+   * suite's expectations with the product rather than leaving them asserting a dead geometry.
    */
-  it('derives its channel count from the geometry, at two bar heights', () => {
-    // Today: 28/18 -> pad 5 -> usable +/- 4 -> floor(4/3) = 1 step either side -> 3 channels.
-    expect(gutterChannels(LANE_HEIGHT, BAR_HEIGHT)).toEqual([0, -3, 3]);
-    // A NetPoint-thin 5 px bar in the same pitch -> pad 11.5 -> usable 10.5 -> 3 steps -> 7.
-    expect(gutterChannels(28, 5)).toEqual([0, -3, 3, -6, 6, -9, 9]);
+  const CLEAR_HALF_BAND = rowSlots(0).clearHalfBandPx;
+
+  /**
+   * **Capacity is DERIVED, and M3-T3 corrected what it is derived FROM.**
+   *
+   * M1 took `(laneHeight, barHeight)` and this case asserted that a NetPoint-thin 5 px bar in a
+   * 28 px pitch would give seven channels — _"with nothing here changed"_, as the function's own
+   * docblock put it. **M3-T3 falsified that.** The band a thin bar hands back is exactly where the
+   * row's name and date rows now live, so the raw pad stopped being clear space the moment the row
+   * carried text: the old derivation would have claimed seven channels straight through a label.
+   *
+   * It takes the **clear** half-band now, which the caller gets from `rowSlots`. The prediction is
+   * recorded here rather than deleted, because an epic that measures its own claims should keep
+   * the one it got wrong.
+   */
+  it('derives its channel count from the clear band it is given', () => {
+    // A band of 4 (the shipped 28/18 pad, less one) -> floor(3/3) = 1 step either side -> 3.
+    expect(gutterChannels(4)).toEqual([0, -3, 3]);
+    // The M3-T3 row at pitch 52: 7.5 clear -> usable 6.5 -> 2 steps either side -> 5 channels.
+    expect(gutterChannels(7.5)).toEqual([0, -3, 3, -6, 6]);
     // Centre-out, so a gutter carrying one run draws it on the boundary.
-    expect(gutterChannels(28, 5)[0]).toBe(0);
-    // A pitch with no room at all yields one channel and the pass becomes a no-op.
-    expect(gutterChannels(20, 18)).toEqual([0]);
+    expect(gutterChannels(7.5)[0]).toBe(0);
+    // A row with no clear band at all yields one channel and the pass becomes a no-op — which is
+    // what a pitch too small for the treatment honestly looks like, not a failure to hide.
+    expect(gutterChannels(0)).toEqual([0]);
+    expect(gutterChannels(1)).toEqual([0]);
   });
 
   /**
@@ -828,30 +844,25 @@ describe('packGutterChannels', () => {
    * and this pass's capacity have to satisfy TOGETHER, because a channel is only safe if the datum
    * is the boundary AND the offset stays inside the band.
    */
-  it('never places a channel inside a bar, at any pitch or bar height', () => {
-    for (const laneHeight of [20, 24, 28, 36, 44, 64]) {
-      for (const barHeight of [3, 5, 8, 12, 18]) {
-        if (barHeight >= laneHeight) continue;
-        const pad = (laneHeight - barHeight) / 2;
-        for (const k of gutterChannels(laneHeight, barHeight)) {
-          // The boundary is 0 in this frame; the bar above ends at -pad, the one below starts at +pad.
-          expect(Math.abs(k)).toBeLessThanOrEqual(pad - 1);
-          expect(k).toBeGreaterThan(-pad);
-          expect(k).toBeLessThan(pad);
-        }
+  it('never places a channel outside the band it was given, at any band', () => {
+    for (const band of [0, 0.5, 1, 2, 4, 7.5, 10.5, 16, 24]) {
+      for (const k of gutterChannels(band)) {
+        // The boundary is 0 in this frame; the band runs to +/-`band` either side of it.
+        expect(Math.abs(k)).toBeLessThanOrEqual(Math.max(0, band - 1));
+        expect(Math.abs(k)).toBeLessThan(Math.max(1, band));
       }
     }
   });
 
   it('leaves one run on the boundary and moves nothing', () => {
     const cs = [vhv(100, 0, 50)];
-    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(packGutterChannels(cs, CLEAR_HALF_BAND)).toBe(0);
     expect(legYs(cs)).toEqual([100]);
   });
 
   it('leaves runs in the SAME gutter that do not overlap in x on the boundary', () => {
     const cs = [vhv(100, 0, 40), vhv(100, 60, 90), vhv(100, 200, 260)];
-    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(packGutterChannels(cs, CLEAR_HALF_BAND)).toBe(0);
     expect(legYs(cs)).toEqual([100, 100, 100]);
   });
 
@@ -867,13 +878,13 @@ describe('packGutterChannels', () => {
    */
   it('treats runs that merely touch at one x as sharing a channel', () => {
     const cs = [vhv(100, 0, 50), vhv(100, 50, 120)];
-    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(packGutterChannels(cs, CLEAR_HALF_BAND)).toBe(0);
     expect(legYs(cs)).toEqual([100, 100]);
   });
 
   it('separates runs that overlap in x, and leaves different gutters independent', () => {
     const cs = [vhv(100, 0, 100), vhv(100, 50, 150), vhv(200, 0, 100), vhv(200, 50, 150)];
-    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(2);
+    expect(packGutterChannels(cs, CLEAR_HALF_BAND)).toBe(2);
     expect(legYs(cs)).toEqual([
       100,
       100 - GUTTER_CHANNEL_PITCH_PX,
@@ -899,7 +910,7 @@ describe('packGutterChannels', () => {
     ];
     const run = (order: number[]): Map<string, number> => {
       const cs = order.map((i) => vhv(100, spans[i]![0], spans[i]![1]));
-      packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT);
+      packGutterChannels(cs, CLEAR_HALF_BAND);
       return new Map(
         cs.map((c, j) => [
           `${String(spans[order[j]!]![0])}-${String(spans[order[j]!]![1])}`,
@@ -929,8 +940,8 @@ describe('packGutterChannels', () => {
    */
   it('spreads surplus runs across channels rather than piling them on one', () => {
     const cs = Array.from({ length: 7 }, (_, i) => vhv(100, i * 5, 200 + i * 5));
-    packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT);
-    const channels = gutterChannels(LANE_HEIGHT, BAR_HEIGHT).length;
+    packGutterChannels(cs, CLEAR_HALF_BAND);
+    const channels = gutterChannels(CLEAR_HALF_BAND).length;
     const perY = new Map<number, number>();
     for (const y of legYs(cs)) perY.set(y, (perY.get(y) ?? 0) + 1);
     expect(Math.max(...perY.values())).toBeLessThanOrEqual(Math.ceil(cs.length / channels));
@@ -953,7 +964,7 @@ describe('packGutterChannels', () => {
       toLane: 2,
     };
     const before = JSON.stringify(elbow.line);
-    expect(packGutterChannels([elbow], LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(packGutterChannels([elbow], CLEAR_HALF_BAND)).toBe(0);
     expect(JSON.stringify(elbow.line)).toBe(before);
   });
 });

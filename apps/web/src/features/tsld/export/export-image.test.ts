@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { resolvePrintPalette, resolveTsldPalette } from '../render/palette';
-import { screenXOfDay, type RenderActivity, type Viewport } from '../render/render-model';
+import {
+  LANE_HEIGHT,
+  screenXOfDay,
+  type RenderActivity,
+  type Viewport,
+} from '../render/render-model';
 
 import {
   buildExportViewport,
@@ -49,8 +54,8 @@ describe('buildExportViewport — whole extent', () => {
       markerRow: 0,
       dpr: 1,
     });
-    // Span is day 0 … day 5 (finish+1) = 5 days at 10px → 50px wide; 3 lanes (0..2) × 28px tall.
-    expect(result.size).toEqual({ width: 50, height: 84 });
+    // Span is day 0 … day 5 (finish+1) = 5 days at 10px → 50px wide; 3 lanes (0..2) tall.
+    expect(result.size).toEqual({ width: 50, height: 3 * LANE_HEIGHT });
     // The earliest day sits at the left edge and the latest finish+1 at the right edge — the bounds
     // cover the whole extent (reusing the shipped inclusive-finish convention).
     expect(screenXOfDay(0, result.viewport)).toBe(0);
@@ -69,7 +74,7 @@ describe('buildExportViewport — whole extent', () => {
       dpr: 1,
     });
     expect(result.viewport.originY).toBe(48); // topBand + padding
-    expect(result.size.height).toBe(40 + 28 + 16); // band + one lane + 2× padding
+    expect(result.size.height).toBe(40 + LANE_HEIGHT + 16); // band + one lane + 2× padding
   });
 
   it('caps the device-pixel-ratio to EXPORT_DPR_CAP', () => {

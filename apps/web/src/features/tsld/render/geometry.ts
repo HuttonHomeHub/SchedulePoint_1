@@ -36,10 +36,26 @@ import type { ConstraintAnchor } from '@/lib/constraint-format';
  * painter) draws from, and it is exhaustively unit-tested.
  */
 
-/** Row height per lane, in CSS px at 1× zoom (x scales with `pxPerDay`; y is fixed). */
-export const LANE_HEIGHT = 28;
-/** Activity bar height (leaves vertical padding within the lane). */
-export const BAR_HEIGHT = 18;
+/**
+ * Row height per lane, in CSS px at 1× zoom (x scales with `pxPerDay`; y is fixed).
+ *
+ * **Set from M3-T4's sweep, not by eye.** It and {@link BAR_HEIGHT} are one decision: a row that
+ * carries the name above the bar and the dates below it needs the height for three text rows, and
+ * the product owner's "as many rows as it takes — readability is the deal breaker" is what makes
+ * spending it allowed. See {@link rowSlots} for how the row divides, and FC-L11 for the condition
+ * the division is judged against.
+ */
+export const LANE_HEIGHT = 52;
+/**
+ * Activity bar height — **a thin line, in the tradition of the reference the product owner chose**.
+ *
+ * The largest single source of routing channel in the epic (spec §0.10): a bar that is 5 px rather
+ * than 18 hands 13 px back to the space a link can run through. What it does **not** buy is any
+ * improvement to occlusion — a horizontal leg runs at the bar's centre-line, so whether it meets a
+ * bar in its lane is an x-overlap question the bar's height does not enter. Only M2 served that,
+ * and "we made the bars thinner" is the most natural wrong thing to believe about this epic.
+ */
+export const BAR_HEIGHT = 5;
 /**
  * The vertical clearance between a lane's edge and the bar inside it — half the leftover row.
  *
@@ -54,6 +70,72 @@ export const BAR_HEIGHT = 18;
  */
 export const BAR_PAD = (LANE_HEIGHT - BAR_HEIGHT) / 2;
 
+/** The gap (px) between the bar and the text row immediately above or below it. */
+export const ROW_TEXT_GAP_PX = 2;
+
+/** Where each part of one row sits, in screen y. All absolute — the lane's top is the input. */
+export interface RowSlots {
+  /** Top y of the bar itself. The bar stays centred in the lane. */
+  barY: number;
+  /** Centre y of the **name** line, above the bar (`textBaseline = 'middle'`). */
+  nameY: number;
+  /** Centre y of the **dates and duration** line, below the bar. */
+  belowY: number;
+  /**
+   * The half-band, at each lane boundary, that a routed link may use **clear of every text row** —
+   * the quantity FC-L11 calls the row's NET gain, as opposed to the gross `BAR_PAD`.
+   *
+   * Zero when the row has no room to spare, which is the honest answer at a pitch too small for
+   * the treatment rather than a reason to overlap the text.
+   */
+  clearHalfBandPx: number;
+}
+
+/**
+ * **The row's internal layout, derived once** (logic-legibility M3-T3).
+ *
+ * The reference the product owner chose puts an activity's **name above** a thin bar and its
+ * **dates and duration below** it. Four things need to agree about where those rows are — the
+ * painter, the export, the hit-test and the channel capacity M1 derives — and four opinions would
+ * drift in the one way nobody would ever see: a diagram and the PNG of it, disagreeing by two
+ * pixels about where a date sits. That is ADR-0059's "the time axis is shared, not reimplemented"
+ * applied to the other axis.
+ *
+ * Measured **outwards from the bar**, which stays centred in the lane, so `BAR_PAD` keeps meaning
+ * what it meant and every cue derived from it in M3-T2 keeps working. What the text rows then
+ * spend is taken off both ends symmetrically, and what is left is {@link RowSlots.clearHalfBandPx}.
+ *
+ * **The arithmetic is why bar thickness and pitch are one decision** (spec §0.10). At the shipped
+ * 28 px pitch a 5 px bar leaves 11.5 px either side, a text line needs 14, and the clear band is
+ * **zero** — the treatment is not buildable at that pitch at all, and no amount of care in the
+ * painter changes it.
+ */
+export function rowSlots(laneTop: number): RowSlots {
+  const barY = laneTop + BAR_PAD;
+  const textOffset = ROW_TEXT_GAP_PX + LABEL_LINE_H / 2;
+  return {
+    barY,
+    nameY: barY - textOffset,
+    belowY: barY + BAR_HEIGHT + textOffset,
+    clearHalfBandPx: Math.max(0, BAR_PAD - ROW_TEXT_GAP_PX - LABEL_LINE_H),
+  };
+}
+
+/**
+ * The minimum height (px) of a **pointer target** on the canvas — WCAG 2.2 §2.5.8's 24 px.
+ *
+ * It exists because the row treatment made the drawn rect and the hit rect different objects for
+ * the first time. A bar was 18 px tall and every pointer question could be asked of the shape on
+ * screen; at 5 px the same question makes selecting an activity a 5 px-tall target, and
+ * `hit-test.ts`'s lag-anchor docblock — which states in as many words that its zone _"meets WCAG
+ * 2.5.8 outright"_ — would have become false in a file the row change does not obviously touch.
+ *
+ * So the target is the **row band**, not the line: {@link activityHitRect} inflates the drawn rect
+ * about its centre. The row reserves ~23 px either side of the bar, so this costs nothing and
+ * cannot reach a neighbouring lane's bar.
+ */
+export const MIN_TARGET_PX = 24;
+
 /** Half-diagonal of a milestone diamond, in CSS px. */
 export const MILESTONE_RADIUS = 7;
 
@@ -62,6 +144,15 @@ export const MILESTONE_RADIUS = 7;
 export const LABEL_MIN_PX_PER_DAY = 4;
 /** A bar must be at least this wide (px) to hold an inside label; narrower bars try a beside label. */
 export const LABEL_INSIDE_MIN_PX = 24;
+/**
+ * The nominal line box (px) of an on-canvas text run at {@link LABEL_FONT} — the 11 px face plus
+ * the 1.5 px of leading a centred line needs either side before it touches what it sits between.
+ *
+ * One constant for every text row in {@link rowSlots}, because the name, the dates and the
+ * duration are the same face at the same size and three numbers would drift.
+ */
+export const LABEL_LINE_H = 14;
+
 /**
  * A bar must be at least this **tall** (px) to hold an inside label.
  *
@@ -75,7 +166,7 @@ export const LABEL_INSIDE_MIN_PX = 24;
  * 14 px is the 11 px {@link LABEL_FONT} plus the 1.5 px of leading a centred line needs either
  * side before it touches the bar's edge.
  */
-export const LABEL_INSIDE_MIN_HEIGHT_PX = 14;
+export const LABEL_INSIDE_MIN_HEIGHT_PX = LABEL_LINE_H;
 /** Horizontal padding (px) inside a bar before/after inside-label text. */
 export const LABEL_PAD_PX = 3;
 /** Gap (px) between a bar's right edge and a beside label. */
@@ -634,6 +725,26 @@ function computeActivityRect(
 }
 
 /**
+ * The **pointer target** for an activity — the drawn rect, inflated vertically to at least
+ * {@link MIN_TARGET_PX} about its own centre.
+ *
+ * Separate from {@link activityRect} deliberately, and the separation is the decision: what is
+ * *drawn* is a 5 px line in the tradition of the reference, and what a planner can *hit* must be
+ * 24 px or the row treatment quietly fails WCAG 2.2 §2.5.8 for every activity in the product. The
+ * two were the same object while a bar was 18 px tall, which is why nothing said so.
+ *
+ * Never inflated horizontally: x is time on this diagram, so a wider target would claim days the
+ * activity does not occupy and would overlap its own same-lane neighbours. A short bar's width is
+ * already handled by the bar-end handle clamp (`hit-test.ts`), and a milestone's diamond box is
+ * 14 px wide, which the bar-end rule leaves as one body target rather than two edges.
+ */
+export function activityHitRect(rect: Rect): Rect {
+  if (rect.h >= MIN_TARGET_PX) return rect;
+  const grow = (MIN_TARGET_PX - rect.h) / 2;
+  return { x: rect.x, y: rect.y - grow, w: rect.w, h: MIN_TARGET_PX };
+}
+
+/**
  * Where an activity's label should sit (ADR-0026 D1): **inside** a task bar wide enough to hold
  * text; **beside** (to the right) for a narrow bar or a milestone when the same-lane neighbour
  * leaves clear room; else **none** (suppressed). Pure — the painter supplies the measured bar
@@ -648,7 +759,21 @@ export function labelPlacement(args: {
   barHeight: number;
   isMilestone: boolean;
   besideRoomPx: number;
-}): 'inside' | 'beside' | 'none' {
+  /**
+   * Whether the row reserves a text row **above** the bar — {@link rowSlots}, M3-T3.
+   *
+   * Required rather than read from `LANE_HEIGHT` here, because that is the one thing this pure
+   * function must not know: it is called for the canvas, the export and the printed programme, and
+   * an export that frames a row differently would otherwise get a placement decided for the screen.
+   */
+  rowHasNameRow: boolean;
+}): 'inside' | 'above' | 'beside' | 'none' {
+  // **Above wins outright when the row reserves the space**, and that ordering is the treatment:
+  // the reference puts every name above its bar, at every bar width, so a name never has to
+  // compete with its own bar for the same pixels and never vanishes on a narrow one. The `inside`
+  // branch below survives for a row that reserves nothing, which is also what flag-off geometry
+  // and the 28 px-pitch fallback look like.
+  if (args.rowHasNameRow) return 'above';
   if (
     !args.isMilestone &&
     args.barWidth >= LABEL_INSIDE_MIN_PX &&
@@ -658,6 +783,19 @@ export function labelPlacement(args: {
   }
   if (args.besideRoomPx >= LABEL_BESIDE_MIN_PX) return 'beside';
   return 'none';
+}
+
+/**
+ * Whether the current row geometry reserves a text row above and below the bar — i.e. whether the
+ * NetPoint treatment is buildable at this pitch at all.
+ *
+ * `rowSlots` answers in absolute y and this answers the yes/no its callers actually branch on, so
+ * neither has to restate the other's arithmetic. False is not a failure mode to be hidden: it is
+ * what a pitch too small for the treatment honestly looks like, and every caller degrades to the
+ * shipped inside/beside placement rather than painting text into a neighbouring row.
+ */
+export function rowReservesTextRows(): boolean {
+  return BAR_PAD >= ROW_TEXT_GAP_PX + LABEL_LINE_H;
 }
 
 /**

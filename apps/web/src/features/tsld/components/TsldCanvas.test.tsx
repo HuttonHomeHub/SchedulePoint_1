@@ -4,7 +4,25 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { liveLag, liveResize, TsldCanvas, type TsldCanvasHandle } from './TsldCanvas';
 
-import type { RenderActivity } from '@/features/tsld/render/render-model';
+import {
+  BAR_HEIGHT,
+  BAR_PAD,
+  DEFAULT_VIEWPORT,
+  LANE_HEIGHT,
+  type RenderActivity,
+} from '@/features/tsld/render/render-model';
+
+/**
+ * The vertical centre of a lane's bar under `DEFAULT_VIEWPORT` — what a pointer aims at.
+ *
+ * Derived rather than written. These were literal `clientY` values chosen when a bar was 18 px
+ * tall and sat 5 px inside a 28 px lane; the logic-legibility row treatment moves both, and a
+ * literal asserts where the bar WAS rather than that a press on it lands.
+ */
+const laneMid = (lane: number): number =>
+  DEFAULT_VIEWPORT.originY + lane * LANE_HEIGHT + BAR_PAD + BAR_HEIGHT / 2;
+const LANE_MID_0 = laneMid(0);
+const LANE_MID_1 = laneMid(1);
 
 const ACTIVITIES: RenderActivity[] = [
   {
@@ -128,8 +146,8 @@ describe('TsldCanvas', () => {
 
     // Pick a1 as the LOE start driver (body zone: x in (62, 102), y in (45, 63) at the default
     // viewport) — armed, awaiting the finish driver.
-    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
     expect(onLoeSpanStep).toHaveBeenCalledExactlyOnceWith({ kind: 'start', startId: 'a1' });
     expect(onIntent).not.toHaveBeenCalled();
 
@@ -139,8 +157,8 @@ describe('TsldCanvas', () => {
 
     // The very next click (on a2, lane 1: y in (73, 91)) must be a FRESH first pick, not a silent
     // commit reusing the abandoned a1 driver.
-    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 80, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 70, clientY: 80, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: LANE_MID_1, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 70, clientY: LANE_MID_1, pointerId: 1 });
     expect(onIntent).not.toHaveBeenCalled();
     expect(onLoeSpanStep).toHaveBeenLastCalledWith({ kind: 'start', startId: 'a2' });
   });
@@ -193,8 +211,8 @@ describe('TsldCanvas', () => {
     const canvas = container.querySelector('canvas')!;
 
     // Click a2 (lane 1: y in (73, 91)) — resolves as the finish driver against the seeded start a1.
-    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 80, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 70, clientY: 80, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: LANE_MID_1, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 70, clientY: LANE_MID_1, pointerId: 1 });
 
     expect(onIntent).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'loeSpan', startDriverId: 'a1', finishDriverId: 'a2' }),
@@ -358,17 +376,17 @@ describe('TsldCanvas — the write-busy gate (canvas status & feedback M2)', () 
   it('refuses a NEW edit grab while writeBusy: a bar-body drag pans instead of arming a reposition', () => {
     const { canvas, onIntent, onSelect } = renderBusy({ writeBusy: true });
     // The a1 bar (days 1..4 at lane 0) body sits at x 62..102, y 45..63 at the default viewport.
-    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
     expect(onIntent).not.toHaveBeenCalled(); // the gesture never armed…
     expect(onSelect).not.toHaveBeenCalled(); // …and the drag was a pan, not a click
   });
 
   it('still selects on a stationary bar click while writeBusy (selection is a read)', () => {
     const { canvas, onIntent, onSelect } = renderBusy({ writeBusy: true });
-    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
     expect(onSelect).toHaveBeenCalledWith('a1');
     expect(onIntent).not.toHaveBeenCalled();
   });
@@ -408,11 +426,11 @@ describe('TsldCanvas — the write-busy gate (canvas status & feedback M2)', () 
     // advertises the resize grab; while a write is in flight that grab would be refused, so the
     // zone must not advertise it — '' falls back to the class-based busy cursor.
     const busy = renderBusy({ writeBusy: true });
-    fireEvent.pointerMove(busy.canvas, { clientX: 106, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(busy.canvas, { clientX: 106, clientY: LANE_MID_0, pointerId: 1 });
     expect(busy.canvas.style.cursor).toBe('');
     busy.unmount();
     const live = renderBusy();
-    fireEvent.pointerMove(live.canvas, { clientX: 106, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(live.canvas, { clientX: 106, clientY: LANE_MID_0, pointerId: 1 });
     expect(live.canvas.style.cursor).toBe('ew-resize');
   });
 
@@ -427,16 +445,16 @@ describe('TsldCanvas — the write-busy gate (canvas status & feedback M2)', () 
   it('keeps the create-popover gate TOTAL: while `pending` is set no pan starts and no gesture arms', () => {
     const { canvas, onIntent, onSelect } = renderBusy({ pending: true });
     // An attempted body drag arms nothing (the pointer-down returns before the pan setup)…
-    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
     expect(onIntent).not.toHaveBeenCalled();
     // …and an attempted pan moved nothing: the bar still answers a click at its ORIGINAL pixels.
     fireEvent.pointerDown(canvas, { clientX: 300, clientY: 200, pointerId: 2 });
     fireEvent.pointerMove(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
     fireEvent.pointerUp(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
-    fireEvent.pointerDown(canvas, { clientX: 70, clientY: 54, pointerId: 3 });
-    fireEvent.pointerUp(canvas, { clientX: 70, clientY: 54, pointerId: 3 });
+    fireEvent.pointerDown(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 3 });
     expect(onSelect).toHaveBeenLastCalledWith('a1');
     // The popover state is not "busy" — it is a held question, not an in-flight write.
     expect(canvas.className).not.toContain('cursor-progress');

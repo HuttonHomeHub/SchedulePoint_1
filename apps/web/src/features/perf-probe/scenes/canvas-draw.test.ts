@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { buildDrawScene, framingFor, minVisibleBarsFor } from './canvas-draw';
 
+import { LANE_HEIGHT } from '@/features/tsld/render/geometry';
+
 /**
  * The scene and its framing — and above all the **visible-bar counts**, which are the numbers that
  * decide whether a reading is about the painter or about the cull.
@@ -89,12 +91,37 @@ describe('the canvas-draw scene', () => {
   });
 
   it('asks a majority of the scene at Fit and only a slice at Week', () => {
-    // The floors differ because the presets mean different things. Fit frames the whole plan, so if
-    // most of it is off screen the framing has failed at its own job; Week frames a working window,
+    // The floors differ because the presets mean different things. Week frames a working window,
     // which is a slice by design — with an absolute guard underneath, because 5 % of a tiny scene
     // is not a measurement either.
-    expect(minVisibleBarsFor('fit', 2000)).toBe(1000);
-    expect(minVisibleBarsFor('week', 2000)).toBe(100);
-    expect(minVisibleBarsFor('week', 100)).toBe(25);
+    expect(minVisibleBarsFor('week', 2000, 60, VIEWPORT)).toBe(100);
+    expect(minVisibleBarsFor('week', 100, 10, VIEWPORT)).toBe(25);
+    // Fit asks for a majority — while the lane axis can hold one.
+    expect(minVisibleBarsFor('fit', 2000, 10, VIEWPORT)).toBe(1000);
+  });
+
+  /**
+   * **Fit's floor is capped by what the lane axis can physically hold**, and the cap is a finding.
+   *
+   * `fitToContent` shrinks `pxPerDay`, which is the TIME axis; the lane axis is fixed at
+   * `LANE_HEIGHT` and no zoom touches it. "Fit frames the whole plan" was therefore only ever true
+   * while a plan's lanes fitted the viewport, and at the row treatment's pitch a 2,000-activity
+   * scene's do not — a 900 px viewport holds 17 lanes, not 32.
+   *
+   * Lowering the fraction until the scene passed would have been tuning a threshold to the answer.
+   * The floor states the property instead: **show every bar in every lane you can fit**. So it
+   * still fails on the ADR-0066 shape it was written for — a cull doing more than geometry
+   * requires — and the consequence for `docs/TECH_DEBT.md` #75/#261 is stated rather than buried:
+   * a Fit reading at 2,000 activities is no longer a reading about the whole plan.
+   */
+  it('caps the Fit floor at the lanes the viewport can hold', () => {
+    const lanesThatFit = Math.floor(VIEWPORT.height / LANE_HEIGHT);
+    // A scene whose lanes all fit is unaffected — the majority rule still binds.
+    expect(minVisibleBarsFor('fit', 2000, lanesThatFit, VIEWPORT)).toBe(1000);
+    // A scene twice as tall as the viewport can only be asked for what it can show.
+    expect(minVisibleBarsFor('fit', 2000, lanesThatFit * 2, VIEWPORT)).toBe(1000);
+    expect(minVisibleBarsFor('fit', 2000, lanesThatFit * 4, VIEWPORT)).toBe(500);
+    // And the guard it exists for still fires: a scene culled to a tenth fails its own floor.
+    expect(minVisibleBarsFor('fit', 2000, lanesThatFit, VIEWPORT)).toBeGreaterThan(200);
   });
 });

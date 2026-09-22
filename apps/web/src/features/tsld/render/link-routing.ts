@@ -2,7 +2,6 @@ import type { DependencyType } from '@repo/types';
 
 import {
   activityRect,
-  BAR_HEIGHT,
   screenXOfDay,
   type Point,
   type RectCache,
@@ -539,19 +538,25 @@ function gutterRoute(
 export const GUTTER_CHANNEL_PITCH_PX = 3;
 
 /**
- * The channel offsets available in a gutter, **derived from the geometry and ordered centre-out**.
+ * The channel offsets available in a gutter, **derived from the band and ordered centre-out**.
  *
- * `pad` is `(laneHeight - barHeight) / 2`, so the usable half-band is `pad - 1` — one pixel inside
- * each bar edge, which is what makes "a channel never enters a bar's extent" true rather than
- * nearly true. At the shipped 28/18 that is +/- 4 px and **3 channels**; at a NetPoint-thin 5 px bar
- * in the same pitch it is +/- 10 px and **7 channels**, with nothing here changed.
+ * Takes the usable **half-band in px**, one number, rather than the lane and bar heights it took
+ * at M1 — and the change is a correction rather than a tidy-up. **M1's own docblock predicted that
+ * a NetPoint-thin 5 px bar would give "+/- 10 px and 7 channels, with nothing here changed", and
+ * M3-T3 falsified it**: the band a thin bar hands back is exactly where the row's name and date
+ * rows now live, so the raw pad stopped being the clear space the moment the row carried text.
+ * Deriving capacity from `(laneHeight, barHeight)` would have claimed seven channels through the
+ * middle of a label.
+ *
+ * The caller passes {@link RowSlots.clearHalfBandPx}, which knows what the row spends. One pixel
+ * comes off inside each end here, which is what makes "a channel never enters what bounds it" true
+ * rather than nearly true.
  *
  * Centre-out, so a gutter carrying one run draws it on the boundary — the tidiest answer — and the
  * picture degrades gracefully as a gutter fills rather than starting off-centre.
  */
-export function gutterChannels(laneHeight: number, barHeight: number): number[] {
-  const pad = (laneHeight - barHeight) / 2;
-  const usable = Math.max(0, pad - 1);
+export function gutterChannels(clearHalfBandPx: number): number[] {
+  const usable = Math.max(0, clearHalfBandPx - 1);
   const steps = Math.floor(usable / GUTTER_CHANNEL_PITCH_PX);
   const offsets = [0];
   for (let k = 1; k <= steps; k += 1) {
@@ -596,10 +601,9 @@ export function gutterChannels(laneHeight: number, barHeight: number): number[] 
  */
 export function packGutterChannels(
   candidates: readonly BundleCandidate[],
-  laneHeight: number,
-  barHeight: number,
+  clearHalfBandPx: number,
 ): number {
-  const offsets = gutterChannels(laneHeight, barHeight);
+  const offsets = gutterChannels(clearHalfBandPx);
   if (offsets.length < 2) return 0;
 
   // A gutter run is the horizontal leg of a VHV route: a 6-point line's middle segment. Its y is a
@@ -913,103 +917,25 @@ export function elbowRadius(a: Point, b: Point, c: Point, max = LINK_ELBOW_RADIU
 }
 
 /**
- * Vertical spacing (px) between fanned-out edge ends sharing a bar edge — small, so the spread
- * stays inside the bar's half-height and reads as separation, not displacement.
+ * **Fan-out is retired** (logic-legibility M3-T3, spec D10).
  *
- * **This is the one constant in the epic whose invariant the compiler could not see, and it was
- * false in a comment rather than in code.** `FAN_OUT_MAX_PX`'s docblock justified 6 by
- * *"BAR_HEIGHT/2 = 9px"* in a module that did not import `BAR_HEIGHT` at all, so the relationship
- * existed only as a sentence — and at a NetPoint-thin bar the half-height is 2.5, which the *step*
- * of 3 already exceeds before the cap is reached. Fan-out as designed cannot work there, which is
- * why the reference converges links on a **node glyph** instead (spec D10, M3-T3).
+ * `computeEdgeFanOut` spread several link ends sharing one bar edge apart by `FAN_OUT_STEP_PX`,
+ * capped at `FAN_OUT_MAX_PX`, so a crowded edge did not collapse into one unreadable bundle. Its
+ * justification was written as a comment — _"BAR_HEIGHT/2 = 9px; ±6 keeps every anchor visibly on
+ * it"_ — **in a module that did not import `BAR_HEIGHT`**, so nothing could check it, and the row
+ * treatment's 5 px bar made it false: the half-height is 2.5 and the *step* alone was 3.
  *
- * Both are now derived from the bar they are about, reproducing today's 3 and 6 exactly at
- * `BAR_HEIGHT = 18`. The import is the point: the next person to change the bar's height gets a
- * compile-time dependency where there was a comment.
- */
-export const FAN_OUT_STEP_PX = Math.max(1, Math.round(BAR_HEIGHT / 6));
-/** Cap (px) on a fan-out offset: a very crowded bar edge saturates rather than spilling the
- * anchors off the bar. A third of the bar, so every anchor stays visibly on it — see
- * {@link FAN_OUT_STEP_PX} for why this is derived and not written. */
-export const FAN_OUT_MAX_PX = Math.max(FAN_OUT_STEP_PX, Math.round(BAR_HEIGHT / 3));
-
-/**
- * Half the **routed** arrowhead's width across (ADR-0064 T17) — see {@link ARROWHEAD_ROUTED_PX}
- * for why the head grows in length only.
+ * The reference the product owner chose solves the same crowding the other way. Every link
+ * converges on the **node glyph** at the bar's end (`render-model.ts`), which is a shape a reader's
+ * eye lands on rather than a spread that needs vertical room on the bar. So this is a replacement,
+ * not a loss — and it takes a per-frame memoised pass off the draw path, measured at 5–11 ms alone
+ * at 2,000 activities / 4,000 edges.
  *
- * **Deliberately its own constant rather than `= FAN_OUT_STEP_PX`.** ADR-0065 pinned the two
- * together for a real reason — widening the barbs past the fan-out step would push each head
- * across its neighbour in a fanned bundle — but that reason is about the **fan**, and the fan is
- * about the bar. An arrowhead is a decoration on a *link*, so inheriting a bar-derived value would
- * shrink every arrowhead the day the bar thins, for no reason anybody chose. The coupling ADR-0065
- * wanted is re-stated as an assertion in `geometry.constant-derivation.test.ts` instead, where it
- * can hold without making the head a function of the bar.
+ * `elbowShift` survives as a general parameter of {@link routeOrthogonal}: fan-out was its only
+ * caller, but it says something about the elbow rather than about the bar, and the corridor search
+ * still uses it.
  */
 export const ARROWHEAD_HALF_W_PX = 3;
-
-/** The signed vertical offsets (px) a fanned-out edge applies at each of its two ends. */
-export interface FanOutOffsets {
-  pred: number;
-  succ: number;
-}
-
-/**
- * Deterministic fan-out for crowded bar edges (ADR-0052 M5): when several relationship ends
- * attach to the SAME bar edge (e.g. many FS successors springing from one finish, or many
- * predecessors landing on one start), spread them vertically by {@link FAN_OUT_STEP_PX}, centred
- * on the bar's centreline and capped at ±{@link FAN_OUT_MAX_PX}, so the links don't overdraw
- * into one unreadable bundle. Ends group by the bar edge their type anchors to (FS/FF pred ends
- * at the predecessor's finish, SS/SF at its start; FS/SS succ ends at the successor's start,
- * FF/SF at its finish — the same mapping the anchors use), and members order by **edge id**
- * (falling back to the `(pred, succ, type)` triple for id-less edges), so the layout is stable
- * across frames AND across input-array permutations — no jitter, ever. A group of one gets no
- * offset (and is omitted from the map), so an uncrowded diagram — the common zero-lag FS chain —
- * is byte-for-byte unmoved. O(edges) grouping + a per-group sort; one map per frame.
- */
-export function computeEdgeFanOut(
-  edges: readonly RenderEdge[],
-): ReadonlyMap<RenderEdge, FanOutOffsets> {
-  const keyOf = (e: RenderEdge): string =>
-    e.id ?? `${e.predecessorId}\u0000${e.successorId}\u0000${e.type}`;
-  const groups = new Map<string, { edge: RenderEdge; end: 'pred' | 'succ' }[]>();
-  const add = (groupKey: string, edge: RenderEdge, end: 'pred' | 'succ'): void => {
-    const members = groups.get(groupKey);
-    if (members) members.push({ edge, end });
-    else groups.set(groupKey, [{ edge, end }]);
-  };
-  for (const edge of edges) {
-    add(
-      `${edge.predecessorId}:${edge.type === 'FS' || edge.type === 'FF' ? 'F' : 'S'}`,
-      edge,
-      'pred',
-    );
-    add(
-      `${edge.successorId}:${edge.type === 'FS' || edge.type === 'SS' ? 'S' : 'F'}`,
-      edge,
-      'succ',
-    );
-  }
-  const offsets = new Map<RenderEdge, FanOutOffsets>();
-  for (const members of groups.values()) {
-    if (members.length < 2) continue;
-    members.sort((x, y) => {
-      const kx = keyOf(x.edge);
-      const ky = keyOf(y.edge);
-      return kx < ky ? -1 : kx > ky ? 1 : 0;
-    });
-    const mid = (members.length - 1) / 2;
-    for (let i = 0; i < members.length; i += 1) {
-      const raw = (i - mid) * FAN_OUT_STEP_PX;
-      const off = Math.max(-FAN_OUT_MAX_PX, Math.min(FAN_OUT_MAX_PX, raw));
-      if (off === 0) continue;
-      const member = members[i]!;
-      const current = offsets.get(member.edge) ?? { pred: 0, succ: 0 };
-      current[member.end] = off;
-      offsets.set(member.edge, current);
-    }
-  }
-  return offsets;
-}
 
 /** A lag run: the horizontal on-bar segment between a bar edge and its walked lag anchor. */
 export interface LagRun {

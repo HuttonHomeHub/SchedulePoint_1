@@ -8,11 +8,10 @@ import {
   LANE_HEIGHT,
   TAIL_HEIGHT,
 } from './geometry';
-import { ARROWHEAD_HALF_W_PX, FAN_OUT_MAX_PX, FAN_OUT_STEP_PX } from './link-routing';
 import { BAR_RADIUS, GLYPH_CAP_OVERHANG, PROGRESS_BAND_H, SUMMARY_TAB_H } from './render-model';
 
 /**
- * **Each glyph constant's justification, asserted** (logic-legibility M3-T2).
+ * **Each glyph constant's justification, asserted** (logic-legibility M3-T2, re-baselined at T3).
  *
  * Seven constants were literals whose entire reason for being that number was a sentence about
  * `BAR_HEIGHT = 18` — _"thinner than the bar"_, _"subtle at 18"_, _"1 px clearance"_,
@@ -30,12 +29,15 @@ import { BAR_RADIUS, GLYPH_CAP_OVERHANG, PROGRESS_BAND_H, SUMMARY_TAB_H } from '
  * what makes this milestone byte-identical and therefore committable on its own. The pinned values
  * below are that assertion; they are not the gate, the relationships above them are.
  *
- * **The fan-out pair is the sharpest, and it is the one the compiler could not see.**
- * `link-routing.ts` justified `FAN_OUT_MAX_PX = 6` by `BAR_HEIGHT / 2` in a module that did not
- * import `BAR_HEIGHT`. The import is the fix; this file is the proof it is load-bearing.
+ * **The fan-out pair used to be the sharpest case here and is now gone**, which is the strongest
+ * thing this file did. `link-routing.ts` justified `FAN_OUT_MAX_PX = 6` by `BAR_HEIGHT / 2` in a
+ * module that did not import `BAR_HEIGHT`; importing it made the relationship checkable, checking
+ * it at the target geometry showed it could not hold, and M3-T3 retired the mechanism in favour of
+ * the node glyph. Its two cases are **deleted with it, not relaxed** — exactly as the arrowhead
+ * case's own docblock said they would be.
  */
 
-/** A bar's half-height — the quantity the fan-out comment asserted and could not reach. */
+/** A bar's half-height — the quantity several of these constants are really about. */
 const HALF_BAR = BAR_HEIGHT / 2;
 
 describe('M3-T2 — each constant asserts the relationship its docblock claims', () => {
@@ -69,41 +71,6 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
     expect(PROGRESS_BAND_H * 2).toBeLessThanOrEqual(BAR_HEIGHT);
   });
 
-  /**
-   * The relationship `link-routing.ts` asserted in a comment for two years while importing
-   * nothing that could check it. **Verified red** by putting `FAN_OUT_STEP_PX` back to a literal
-   * 3 with `BAR_HEIGHT` at 5: the step alone then exceeds a half-height of 2.5.
-   */
-  it('the fan-out spread stays inside the bar it fans across', () => {
-    expect(FAN_OUT_STEP_PX).toBeLessThanOrEqual(HALF_BAR);
-    expect(FAN_OUT_MAX_PX).toBeLessThanOrEqual(HALF_BAR);
-    expect(FAN_OUT_MAX_PX).toBeGreaterThanOrEqual(FAN_OUT_STEP_PX);
-  });
-
-  /**
-   * ADR-0065's coupling, kept as an assertion now that `ARROWHEAD_HALF_W_PX` is its own constant.
-   *
-   * The reason it was `= FAN_OUT_STEP_PX` is real — widening the barbs past the fan-out step
-   * pushes each head across its neighbour in a fanned bundle — but that reason is about the fan,
-   * and the fan is about the bar. An arrowhead is a decoration on a **link**, so inheriting a
-   * bar-derived value would shrink every arrowhead the day the bar thins, for no reason anybody
-   * chose. The constraint is preserved; the derivation is not.
-   *
-   * **This assertion has a lifetime, and it is stated here rather than discovered at M3-T3.**
-   * Running the derivations forward at the target geometry — `BAR_HEIGHT = 5` — shows it failing:
-   * `FAN_OUT_STEP_PX` derives to 1 and the head stays 3. That is not a defect in either constant.
-   * ADR-0065's premise is a **fanned bundle**, and spec D10 retires fan-out in favour of the
-   * reference's node glyph precisely because a step of 3 already exceeds a 5 px bar's half-height
-   * of 2.5. With no fan there is no neighbour to cross, so the constraint loses its subject.
-   *
-   * So when M3-T3 retires fan-out, this case is **deleted with it, not relaxed** — and until then
-   * it is exactly tight (3 against 3), which is what makes it a test of the relationship rather
-   * than of slack.
-   */
-  it('an arrowhead is no wider than the fan-out step, without being derived from the bar', () => {
-    expect(ARROWHEAD_HALF_W_PX).toBeLessThanOrEqual(FAN_OUT_STEP_PX);
-  });
-
   it('LABEL_INSIDE_MIN_HEIGHT_PX holds the font it gates', () => {
     const px = Number(/(\d+(?:\.\d+)?)px/.exec(LABEL_FONT)?.[1]);
     expect(Number.isFinite(px)).toBe(true);
@@ -116,11 +83,13 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
    * the relationships above are what must still hold, and they are asserted separately for exactly
    * that reason.
    */
-  it('reproduces every shipped value at LANE_HEIGHT 28 / BAR_HEIGHT 18', () => {
+  it("reproduces the row treatment's values at the shipped geometry", () => {
+    // Re-baselined at M3-T3 **by reading**, not with `-u`: the relationships asserted above are
+    // what must still hold, and they are separate cases for exactly this moment.
     expect({ LANE_HEIGHT, BAR_HEIGHT, BAR_PAD }).toEqual({
-      LANE_HEIGHT: 28,
-      BAR_HEIGHT: 18,
-      BAR_PAD: 5,
+      LANE_HEIGHT: 52,
+      BAR_HEIGHT: 5,
+      BAR_PAD: 23.5,
     });
     expect({
       TAIL_HEIGHT,
@@ -128,18 +97,12 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
       GLYPH_CAP_OVERHANG,
       SUMMARY_TAB_H,
       PROGRESS_BAND_H,
-      FAN_OUT_STEP_PX,
-      FAN_OUT_MAX_PX,
-      ARROWHEAD_HALF_W_PX,
     }).toEqual({
-      TAIL_HEIGHT: 6,
-      BAR_RADIUS: 3,
-      GLYPH_CAP_OVERHANG: 3,
-      SUMMARY_TAB_H: 4,
-      PROGRESS_BAND_H: 4,
-      FAN_OUT_STEP_PX: 3,
-      FAN_OUT_MAX_PX: 6,
-      ARROWHEAD_HALF_W_PX: 3,
+      TAIL_HEIGHT: 2,
+      BAR_RADIUS: 1,
+      GLYPH_CAP_OVERHANG: 1,
+      SUMMARY_TAB_H: 1,
+      PROGRESS_BAND_H: 1,
     });
   });
 });

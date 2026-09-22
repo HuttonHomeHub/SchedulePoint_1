@@ -215,3 +215,126 @@ says it does — with fan-out retired in favour of the node glyph, there is no f
 constraint has no subject. So the case carries its own lifetime in its docblock: **deleted with
 fan-out at M3-T3, not relaxed.** Until then it is exactly tight, 3 against 3, which is what makes it
 a test of the relationship rather than of slack.
+
+---
+
+## T3 — the row
+
+### What shipped
+
+`LANE_HEIGHT` **28 → 52** (provisional — M3-T4's sweep sets the final value) and `BAR_HEIGHT`
+**18 → 5**. An activity is now a thin bar with a **node glyph at each end**, its **name centred
+above** and its **dates at each end below** — the reference the product owner chose.
+
+`rowSlots(laneTop)` is the **one derivation** of the row's internal layout (`barY`, `nameY`,
+`belowY`, `clearHalfBandPx`). Four things have to agree about where the text rows are — the
+painter, the export, the hit-test and the channel capacity M1 derives — and four opinions would
+drift in the one way nobody would ever see: a diagram and the PNG of it, two pixels apart about
+where a date sits. That is ADR-0059's "the time axis is shared, not reimplemented" applied to the
+other axis.
+
+### Fan-out is retired, and the node replaces it
+
+Spec D10, and M3-T2's forward check had already established it would have to be: `FAN_OUT_STEP_PX`
+derives to 1 at a 5 px bar and `ARROWHEAD_HALF_W_PX` stays 3, so the coupling assertion fails. That
+is not a defect in either constant — ADR-0065's premise is a **fanned bundle**, and with fan-out
+gone there is no neighbour for a head to cross. The assertion was **deleted with the mechanism, not
+relaxed**, exactly as its own docblock said it would be.
+
+`computeEdgeFanOut`, `edgeFanOutFor`, `FanOutOffsets` and both constants are gone from the painter,
+the router, the probe and four suites. It takes a per-frame memoised pass off the draw path that
+was measured at **5–11 ms alone** at 2,000 activities / 4,000 edges.
+
+### M1's own docblock predicted seven channels, and T3 falsified it
+
+`gutterChannels` took `(laneHeight, barHeight)` and its docblock said a NetPoint-thin bar would
+give _"±10 px and 7 channels, with nothing here changed"_. **The band a thin bar hands back is
+exactly where the row's name and date rows now live.** The old derivation would have claimed seven
+channels straight through a label.
+
+It takes the **clear** half-band now — `rowSlots().clearHalfBandPx`, which knows what the row
+spends. The prediction is corrected in the test rather than deleted, because an epic that measures
+its own claims should keep the one it got wrong.
+
+### The pointer target is the row band, not the 5 px line
+
+`activityHitRect` inflates the drawn rect to `MIN_TARGET_PX` (24) about its centre; **both**
+hit-tests use it. Without it, selecting any activity is a 5 px-tall target — WCAG 2.2 §2.5.8, across
+the whole product, from a change to two constants in `geometry.ts`.
+
+The same question caught a stated guarantee going false in a file the row change does not obviously
+touch: `LAG_ANCHOR_PX`'s docblock says its zone _"meets WCAG 2.5.8 outright"_, and its vertical
+tolerance was `BAR_HEIGHT / 2` — justified as "the bar the anchor sits on" **and** as covering
+fan-out's spread. Both halves expired at once, and 24 × 5 is not 24 × 24. It is
+`LAG_ANCHOR_VERTICAL_PX = LAG_ANCHOR_PX` now.
+
+### FC-6's ratchet reaches zero
+
+All three remaining escapes — the lane-overlap badge, that badge lifted above a constraint pin, the
+over-allocation histogram — **close with no change to any of them**, because the row's 23.5 px pad
+holds what a 5 px pad could not. That is M3-T2's recorded prediction landing: their sizes are
+legibility choices and the pad was the constraint. The ratchet limb is deleted, not relaxed.
+
+### Three decisions taken while building, each against the plan
+
+1. **The duration is NOT drawn below the bar**, though the reference prints it and the spec says
+   "dates and duration below". It is already on screen — `activityBarLabel` composes
+   `{code} {name} · {n}d` into the name row — so a second run would be one fact drawn twice, which
+   is the defect ADR-0093 records removing. And it could not be honestly re-derived here: the only
+   duration this layer can reach is the drawn **calendar** span, while `durationDays` is a
+   **working-day** figure `a11y.ts:58` records as _"not derivable from the spoken calendar dates"_.
+2. **The bar's own outline is gone.** A 1 px inset hairline leaves 3 px of fill in a 5 px bar, and
+   a 2 px dashed emphasis is a dash whose period exceeds the shape. The node carries the
+   definition. **It was dropped silently on the first pass** and the suite did not notice, because
+   the case guarding it asked whether _any_ `strokeRect` was emitted — which the node satisfies. It
+   now asks about the bar's own extent.
+3. **Crowding truncates a name; it no longer suppresses one.** The `none` branch existed because a
+   _beside_ label had nowhere to go. A name above the bar always has its own row, so the honest
+   degradation is a shorter name — a planner never loses an activity's identity to density.
+
+### Defects found while building, each by running rather than reading
+
+- **A ragged text row.** The painter recovered the lane's top as `rect.y - BAR_PAD`, which is right
+  for a task bar and wrong for a **milestone**, whose rect is centred on the lane rather than padded
+  into it — so a milestone's name drew 4.5 px above its neighbours'. It reads the lane now.
+  Verified red.
+- **The progress shape fired the wrong branch.** The discriminator was arithmetic fit, and at a 5 px
+  bar `PROGRESS_BAND_H` derives to 1, so `2 + 1 + 2 ≤ 5` held and the inset branch produced a 1 px
+  line inside a 5 px bar. The inset shape exists **to sit below a centred inside label**, so the
+  condition is now the one deciding whether there is a label to sit below — which also stops the two
+  thresholds drifting apart.
+- **The node and the active lag handle share a radius.** `NODE_RADIUS` derives to 5 and
+  `LAG_HANDLE_R_ACTIVE` is 5, and both are traced as a square with a half-side radius (how a circle
+  is drawn without widening `Ctx2D`). Excluding nodes by size silently dropped the disc two cases
+  are about. The discriminator is a **positive property of a handle** — it is traced twice, core
+  then halo — which stays true if either radius changes.
+- **An arbitrary cap bound the commonest case in the product.** A centred name was clamped to 48 px
+  of overhang either side; a milestone's box is 14 px wide, so **every milestone's name truncated in
+  a row that was otherwise empty**. The cap is gone; the residual (a centred name spends half its
+  overhang to the left, where this layer does not know the room) is stated rather than hidden.
+
+### Two instruments lost coverage silently, and both are fixed rather than re-baselined
+
+- **The golden log's canvas.** `SIZE` was 800×400 — eleven lanes at 28 px and **eight** at 52 — so
+  the maximal scene quietly stopped exercising three glyph families and every per-method count fell.
+  A shrinking golden log reads exactly like a painter doing less work. `SIZE` derives from the lane
+  count now, and the re-baseline accounts for **every** remaining delta exactly: `strokeRect` +10
+  (20 node strokes less 10 removed bar outlines), `fillRect` +4 (two criticality-filled bars × 2
+  nodes), `setLineDash` −4 (two emphasis dashes, set and reset), `moveTo`/`lineTo` −2 each (fan-out).
+- **ADR-0128's canvas-draw probe.** Its Fit non-vacuity floor asks for a majority of the scene, and
+  at 52 px a 2,000-activity plan's lanes no longer fit a 900 px viewport — `fitToContent` shrinks
+  `pxPerDay`, which is the **time** axis, and no zoom touches the lane axis. Lowering the fraction
+  until it passed would be tuning a threshold to the answer. The floor states the property instead —
+  **show every bar in every lane you can fit** — so it still fails on the ADR-0066 shape it was
+  written for. **The consequence for `docs/TECH_DEBT.md` #75/#261 is real: a Fit reading at 2,000
+  activities is no longer a reading about the whole plan.**
+
+### What is still owed
+
+- **FC-L11's net measurement and FC-L3's epic verdict** are M3-T4's. At pitch 52 the clear band is
+  **15 px** (half-band 7.5) against today's 10 — above FC-L11's floor, but **that is arithmetic from
+  the shipped constants and not the measured net**, which is what the condition asks for.
+- **CQ-6's two sub-decisions go to the product owner with the rendered picture**: where progress
+  goes (built as the default — a second, shorter bar along the same line) and criticality's second
+  non-colour channel (built as the default — a filled versus hollow node). Neither is settled here.
+- The pitch itself is **provisional**.

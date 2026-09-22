@@ -42,7 +42,12 @@ import { createHash } from 'node:crypto';
 import { packLanes, type PackItem } from '@repo/layout';
 
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
-import { activityRect, BAR_HEIGHT, LANE_HEIGHT } from '../src/features/tsld/render/geometry';
+import {
+  activityRect,
+  BAR_HEIGHT,
+  LANE_HEIGHT,
+  rowSlots,
+} from '../src/features/tsld/render/geometry';
 import {
   bundleCorridors,
   chooseCorridorsByCrossing,
@@ -57,12 +62,7 @@ import {
   MAX_CORRIDOR_CANDIDATES,
   routeOrthogonal,
 } from '../src/features/tsld/render/link-routing';
-import {
-  edgeFanOutFor,
-  paintScene,
-  type TsldPalette,
-  type TsldScene,
-} from '../src/features/tsld/render/paint';
+import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Point, Viewport } from '../src/features/tsld/render/render-model';
 import { ELAPSED_DAY_WALK } from '../src/features/tsld/render/working-time';
 
@@ -1721,6 +1721,8 @@ export function gutterStats(
   maxOverlappingOnOneY: number;
   channels: number;
   clearBandPx: number;
+  /** The GROSS band the thin bar hands back, before the row spends any of it (FC-L11). */
+  grossBandPx: number;
   usableBandPx: number;
 } {
   const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
@@ -1820,8 +1822,12 @@ export function gutterStats(
     legsTouchingABar: touching,
     peakGutterOverlap,
     maxOverlappingOnOneY,
-    channels: gutterChannels(LANE_HEIGHT, BAR_HEIGHT).length,
-    clearBandPx: LANE_HEIGHT - BAR_HEIGHT,
+    channels: gutterChannels(rowSlots(0).clearHalfBandPx).length,
+    // **The CLEAR band, not the raw one** (M3-T3). The gross figure — `LANE_HEIGHT - BAR_HEIGHT` —
+    // is what a thin bar hands back before the row's name and date rows take theirs, and FC-L11
+    // forbids quoting it alone. Both are reported so the net and the gross are never confused.
+    clearBandPx: rowSlots(0).clearHalfBandPx * 2,
+    grossBandPx: LANE_HEIGHT - BAR_HEIGHT,
     // What a channel may actually use: a channel at the band's own edge IS the bar edge, so the
     // usable span is the band less one pixel each side. Derived from `pad` rather than written as a
     // constant, so it re-scales when M3 thins the bar (FC-L3's amendment requires exactly that).
@@ -2006,7 +2012,6 @@ export function avoidableOcclusions(
   const index = laneIntervalIndex(scene.activities, view, scene.dataDate);
   const ctx = occlusionContext(scene, view);
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
-  const fanOut = edgeFanOutFor(scene.edges);
   const gap = corridorGap(view);
 
   const obstaclesFor = (fromLane: number, toLane: number) => ({
@@ -2035,17 +2040,16 @@ export function avoidableOcclusions(
       ELAPSED_DAY_WALK,
     );
     if (!anchors) continue;
-    const off = fanOut.get(edge);
-    const from =
-      off && off.pred !== 0 ? { x: anchors.pred.x, y: anchors.pred.y + off.pred } : anchors.pred;
-    const to =
-      off && off.succ !== 0 ? { x: anchors.succ.x, y: anchors.succ.y + off.succ } : anchors.succ;
+    // Fan-out is retired (M3-T3): every link converges on its bar's node glyph, so the anchors
+    // the painter routes from are the unshifted ones.
+    const from = anchors.pred;
+    const to = anchors.succ;
     // The endpoint spans the painter passes after M2-T2. Without them the model set stops matching
     // the picture and the digest control below reports DIVERGENT — which it did, on the first run
     // after M2 landed, rather than quietly producing a denominator from the wrong lines.
     const predRect = activityRect(pred, view, scene.dataDate);
     const succRect = activityRect(succ, view, scene.dataDate);
-    const line = routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0, {
+    const line = routeOrthogonal(from, to, edge.type, view, 0, {
       ...obstaclesFor(pred.laneIndex, succ.laneIndex),
       ...(predRect ? { fromSpan: { x0: predRect.x, x1: predRect.x + predRect.w } } : {}),
       ...(succRect ? { toSpan: { x0: succRect.x, x1: succRect.x + succRect.w } } : {}),
@@ -2064,7 +2068,7 @@ export function avoidableOcclusions(
   // **Last, exactly as the painter calls it** (M1-T3). Omitting it left the model carrying the same
   // occlusion as the picture and a different geometry — caught by the digest below, which is the
   // reason that control compares fingerprints and not counts.
-  packGutterChannels(corridors, LANE_HEIGHT, BAR_HEIGHT);
+  packGutterChannels(corridors, rowSlots(0).clearHalfBandPx);
 
   const sortedFingerprint = sortedDigest(corridors.map((c) => c.line));
 

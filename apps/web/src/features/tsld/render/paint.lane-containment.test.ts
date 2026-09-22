@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { activityRect, LANE_HEIGHT, screenYOfLane } from './geometry';
-import { computeEdgeFanOut, FAN_OUT_MAX_PX } from './link-routing';
 import {
   paintInteractionLayer,
   paintScene,
@@ -9,7 +8,7 @@ import {
   type TsldPalette,
   type TsldScene,
 } from './paint';
-import type { RenderActivity, RenderEdge, Viewport } from './render-model';
+import type { RenderActivity, Viewport } from './render-model';
 import { inkRecordingCtx, type InkExtent } from './test-support/ink-extents';
 
 /**
@@ -238,12 +237,6 @@ const CASES: readonly Case[] = [
     // 3 px above the lane. Both squares are wholly or partly in the neighbouring lane.
     name: 'lane-overlap badge',
     scene: sceneOf([activity({ id: 'o', laneOverlap: true })]),
-    escapes: [
-      'fillRect -1..4 of 0..28',
-      'strokeRect -1..4 of 0..28',
-      'fillRect -3..2 of 0..28',
-      'strokeRect -3..2 of 0..28',
-    ],
   },
   {
     // The worst of the four, and the clearest statement of the defect: the `lift` that stacks this
@@ -252,24 +245,12 @@ const CASES: readonly Case[] = [
     // never asked whether there was room for the result.
     name: 'lane-overlap badge above a constraint pin',
     scene: sceneOf([activity({ id: 'ok', laneOverlap: true, constraint: 'start' })]),
-    escapes: [
-      'fillRect -6..-1 of 0..28',
-      'strokeRect -6..-1 of 0..28',
-      'fillRect -8..-3 of 0..28',
-      'strokeRect -8..-3 of 0..28',
-    ],
   },
   {
     // `baseY = barTop - 2` with a tallest mini-bar of 7 reaches 9 px above the bar top, so the
     // histogram's tall end sits 4 px into the lane above.
     name: 'over-allocation badge',
     scene: sceneOf([activity({ id: 'v' })], { flaggedIds: new Set(['v']) }),
-    escapes: [
-      'fillRect -2..3 of 0..28',
-      'strokeRect -2..3 of 0..28',
-      'fillRect -4..3 of 0..28',
-      'strokeRect -4..3 of 0..28',
-    ],
   },
   {
     // `floatTails` is the window's toggle, and it is NOT in `sceneOf`'s default view block: the
@@ -397,29 +378,12 @@ describe('FC-6 — every glyph and decoration draws inside its own lane', () => 
   });
 
   /**
-   * The fan-out anchors are not painted marks — they are y offsets the router applies to a bar's
-   * centreline before a link leaves it — so they are asserted from the pure function rather than
-   * from a recorded frame.
+   * **The fan-out case is gone with fan-out** (M3-T3, spec D10). It asserted that the spread
+   * `computeEdgeFanOut` applied to crowded bar-edge anchors stayed inside the lane — a real
+   * question while the spread existed. Every link now converges on the node glyph at its bar's
+   * end, whose containment is covered by the bar cases above, so there is nothing left here to
+   * assert rather than a weaker assertion to keep.
    */
-  it('fan-out anchors stay inside the lane', () => {
-    const centre = LANE_TOP + LANE_HEIGHT / 2;
-    // Nine predecessors landing on one successor's start: enough for the spread to reach its cap
-    // in both directions, so the limb tests the extreme rather than a typical pair.
-    const edges: RenderEdge[] = Array.from({ length: 9 }, (_, i) => ({
-      id: `e${i}`,
-      predecessorId: `p${i}`,
-      successorId: 'target',
-      type: 'FS' as const,
-      isDriving: false,
-    }));
-    const offsets = [...computeEdgeFanOut(edges).values()].flatMap((o) => [o.pred, o.succ]);
-    expect(offsets).toContain(FAN_OUT_MAX_PX);
-    expect(offsets).toContain(-FAN_OUT_MAX_PX);
-    for (const off of offsets) {
-      expect(centre + off).toBeGreaterThanOrEqual(LANE_TOP);
-      expect(centre + off).toBeLessThan(LANE_BOTTOM);
-    }
-  });
 
   /**
    * The census limb (ADR-0093's rule: a roster assertion that found nothing passes vacuously).
@@ -431,26 +395,11 @@ describe('FC-6 — every glyph and decoration draws inside its own lane', () => 
   });
 
   /**
-   * **The ratchet.** FC-6 is not met today; four cases escape their lane, and the whole point of
-   * landing this gate before the geometry moves is that the number can only go down. A fifth
-   * escaping case fails its own assertion above; this limb is what stops one being added to
-   * `escapes` to make that assertion pass.
+   * **The ratchet reached zero at M3-T3 and is deleted, not relaxed.**
    *
-   * **Four at M3-T1, three at M3-T2**: the constraint pin's escape closed when its height stopped
-   * being a literal that happened to equal the pad. The other three do not close by derivation and
-   * the ADR says why — their sizes are legibility choices, and a 28 px lane holding an 18 px bar
-   * simply has no room above it for a 7 px badge. Clamping them to fit would mean 3 px squares
-   * with a 1 px outline, which is not a cue. **The fix is the pad, not the badge**, and it is
-   * M3-T3's.
-   *
-   * It reaches zero at M3-T3 and this limb is then deleted, not relaxed.
+   * It carried four escapes at T1, three at T2 when the constraint pin's height stopped being a
+   * literal that happened to equal the pad, and **none** here: the row's 23.5 px pad is simply
+   * large enough for badges that a 5 px pad could not hold. The `escapes` field stays on the case
+   * type so a future escape is recorded rather than tolerated, and every case now asserts `[]`.
    */
-  it('exactly three cases escape their lane, and no more', () => {
-    const escaping = CASES.filter((c) => (c.escapes ?? []).length > 0);
-    expect(escaping.map((c) => c.name)).toEqual([
-      'lane-overlap badge',
-      'lane-overlap badge above a constraint pin',
-      'over-allocation badge',
-    ]);
-  });
 });
