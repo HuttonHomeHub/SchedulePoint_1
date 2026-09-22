@@ -185,3 +185,32 @@ Three are CQ-6's, one is FC-L4's, one is FC-L6's, and the sixth arrived from thi
 Three findings are filed rather than fixed: `docs/TECH_DEBT.md` **#369** (`NODE_RADIUS` and
 `LAG_HANDLE_R_ACTIVE` are both 5 by coincidence), **#370** (no call-count budget names the new
 passes) and **#371** (the esbuild boilerplate).
+
+## 7. The sweep reported a failure the product does not have
+
+`scripts/e2e-sweep.sh` ran all 47 suites against the committed tree and returned **46 green and
+`authoring` red** — 93 axe `color-contrast` violations, `#b1b8c5` on `#606f89` at 2.54:1, on the
+plan-facts row's `Data date` and `Activities` labels and a `hover:bg-secondary-hover` button.
+**None of those elements is in this epic's diff.**
+
+Three independent facts settle it, and none of them is "it looks unrelated":
+
+1. **CI is green on the same commit.** `test:e2e:authoring` runs in web shard 1, and all four
+   shards passed on `c4d625b3`.
+2. **It passes alone.** `scripts/e2e-local.sh web:authoring`, with nothing listening on 3000 or
+   5173, is green in 27.3 s.
+3. The failing elements are chrome-scope surfaces the diff does not touch, which is consistent with
+   the page rendering under a scope its config did not intend.
+
+That is the ADR-0099 `reuseExistingServer` adoption confound: outside CI Playwright will adopt a
+server that is already listening, so a suite run straight after another can inherit the previous
+one's flag pins and never apply its own. `ci.yml`'s own comment for this step records the same
+sensitivity from the other side — it runs `authoring` **last**, "after the prior runs tear down
+their servers, reusing the ports".
+
+**Two things are worth carrying rather than filing.** Running the suite by its package script
+instead of through `e2e-local.sh` fails differently and loudly (`Executable doesn't exist at
+…chrome-headless-shell`), because that script is what exports `PLAYWRIGHT_CHROMIUM_PATH` — so the
+documented command is the only one that means anything here, which is §19.8's point restated. And
+the sweep's per-suite logs land in `/tmp/sweep-<name>.log` rather than in its own output, so the
+summary line names a suite and nothing else; reading the failure at all meant knowing that.
