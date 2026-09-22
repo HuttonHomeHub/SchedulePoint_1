@@ -55,6 +55,15 @@ Shipped = `packLanes` with the `predecessorsOf` hint over every activity, which 
 
 ## Finding 1 — lever 2 is not a lever. It is a visible defect.
 
+> **Its numbers are in question — `docs/TECH_DEBT.md` #365, raised 2026-09-22.** `unit300Asap`
+> places a `WBS_SUMMARY` at day 0 with its own stored duration (zero on this fixture) where the
+> engine derives its span from its children (`compute.ts:545`, ADR-0035 §24). Re-taken with that
+> corrected, the same fixture reports **4 summary-only lanes of 21 — 112 px**, not 13 of 27 / 420 px.
+> The finding itself stands: those rows paint nothing and removing them is right. Only the size of
+> the prize changes, and settling it properly needs a measurement in the product rather than another
+> reading from this harness. Left in place rather than rewritten, because it is the record of what
+> was measured on the day.
+
 **Of the 27 lanes the shipped packing produces on Unit 300, 13 hold nothing but summaries the WBS
 band draws.** Band on, those lanes paint nothing — and a lane's index fixes its y, so they are not
 spare capacity, they are **364 px of blank rows scattered through the diagram** at `LANE_HEIGHT` 28.

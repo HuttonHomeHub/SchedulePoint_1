@@ -26,6 +26,17 @@ import { pathToFileURL } from 'node:url';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 
+/**
+ * **Every Part C figure is measured with `rollUpSummaries: true`**, and that is a correction to how
+ * this harness started. Without it a `WBS_SUMMARY` sits at day 0 with its stored duration — zero on
+ * this fixture, so eighteen invisible points at the plan start — where the engine derives its span
+ * from its children (`compute.ts:545`, ADR-0035 §24). Found by LOOKING at a rendered picture, which
+ * is the method this epic exists to apply, after every number here had already been taken without
+ * it. What it changes is recorded in `part-c-m-c0.md`; the short version is that every headline
+ * conclusion survived or strengthened and one sub-finding was refuted.
+ */
+const ROLL_UP = { rollUpSummaries: true };
+
 const out = mkdtempSync(join(tmpdir(), 'sp-band-'));
 const bundle = join(out, 'probe.mjs');
 
@@ -45,7 +56,7 @@ execFileSync(
 );
 
 const { t3 } = await import(pathToFileURL(bundle).href);
-const result = t3(FIXTURE);
+const result = t3(FIXTURE, ROLL_UP);
 
 const commit = execFileSync('git', ['rev-parse', 'HEAD']).toString().trim();
 console.log(`\n[diagram-legibility Part C M-C0-T3 / CQ-C4] node, ${new Date().toISOString()}`);
@@ -108,8 +119,15 @@ const pct = (from, to) => ((to - from) / from) * 100;
 const arrow = (d) => (d > 0.5 ? 'WORSE' : d < -0.5 ? 'better' : 'no change');
 
 // ---- the decision: what the planner meets when the default flips ----
-console.log('\n  CQ-C4 — the flip the planner meets: B (band off, arranged, 27 rows)');
-console.log('          → D (band on, arranged, 12 rows).\n');
+// Row counts are READ from the readings, never restated: the summary rollup moved the shipped
+// layout from 27 lanes to 21, and a hard-coded caption would have gone on printing the old number
+// over the new figures — the exact defect this epic keeps finding in documents.
+const rowsOf = (prefix) => String(at(prefix, result.zooms[0])?.lanes ?? '?');
+const blankRows = String(
+  result.configs.find((c) => c.layout.name.startsWith('E '))?.summaryOnlyLanes ?? 0,
+);
+console.log(`\n  CQ-C4 — the flip the planner meets: B (band off, arranged, ${rowsOf('B ')} rows)`);
+console.log(`          → D (band on, arranged, ${rowsOf('D ')} rows).\n`);
 let decisionWorse = 0;
 for (const px of result.zooms) {
   const b = at('B ', px);
@@ -127,8 +145,10 @@ for (const px of result.zooms) {
 }
 
 // ---- the mechanism: compression and nothing else ----
-console.log('\n  MECHANISM — E (band on, pre-#364, 27 rows incl. 13 blank)');
-console.log('              → D (band on, #364, 12 rows). Identical bars, identical links.\n');
+console.log(`\n  MECHANISM — E (band on, pre-#364, ${rowsOf('E ')} rows incl. ${blankRows} blank)`);
+console.log(
+  `              → D (band on, #364, ${rowsOf('D ')} rows). Identical bars, identical links.\n`,
+);
 let mechanismWorse = 0;
 for (const px of result.zooms) {
   const e = at('E ', px);
@@ -150,8 +170,8 @@ if (decisionWorse > 0) {
   console.log(
     `    Crossings per link RISE at ${decisionWorse} of ${result.zooms.length} zooms across the ` +
       `flip.\n    Per CQ-C4's withdrawal clause the band default stays OFF, the dock still offers ` +
-      `the press,\n    and the finding is filed. It is NOT an argument for reverting #364 — those ` +
-      `13 rows paint\n    nothing whatever the band does.`,
+      `the press,\n    and the finding is filed. It is NOT an argument for reverting #364 — the ` +
+      `${blankRows} rows it removes paint\n    nothing whatever the band does.`,
   );
   process.exitCode = 1;
 } else {

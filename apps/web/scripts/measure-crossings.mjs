@@ -21,6 +21,17 @@ import { pathToFileURL } from 'node:url';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
 
+/**
+ * **Every Part C figure is measured with `rollUpSummaries: true`**, and that is a correction to how
+ * this harness started. Without it a `WBS_SUMMARY` sits at day 0 with its stored duration — zero on
+ * this fixture, so eighteen invisible points at the plan start — where the engine derives its span
+ * from its children (`compute.ts:545`, ADR-0035 §24). Found by LOOKING at a rendered picture, which
+ * is the method this epic exists to apply, after every number here had already been taken without
+ * it. What it changes is recorded in `part-c-m-c0.md`; the short version is that every headline
+ * conclusion survived or strengthened and one sub-finding was refuted.
+ */
+const ROLL_UP = { rollUpSummaries: true };
+
 const out = mkdtempSync(join(tmpdir(), 'sp-cross-'));
 const bundle = join(out, 'probe.mjs');
 
@@ -42,7 +53,7 @@ execFileSync(
 );
 
 const { fc1 } = await import(pathToFileURL(bundle).href);
-const result = fc1(FIXTURE);
+const result = fc1(FIXTURE, ROLL_UP);
 
 const commit = execFileSync('git', ['rev-parse', 'HEAD']).toString().trim();
 console.log(`\n[diagram-legibility Part C M-C0-T2 / FC-C1] node, ${new Date().toISOString()}`);

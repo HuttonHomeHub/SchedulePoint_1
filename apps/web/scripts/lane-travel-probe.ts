@@ -411,7 +411,24 @@ function measure(
  * comparing two LAYOUTS of one programme, where both sides carry identical dates and only the lane
  * assignment differs. It is not sound for anything else.
  */
-export function unit300Asap(path: string) {
+/**
+ * `options.rollUpSummaries` — derive each `WBS_SUMMARY`'s span from its children, deepest-first,
+ * as the engine does (`compute.ts:545-...`, ADR-0035 §24: earliest early-start to latest
+ * early-finish over its direct children, a summary's own duration being always zero).
+ *
+ * **Default OFF, and that is not a judgement that off is right.** Part A's figures
+ * (`cheap-levers.md`, `m0-measurement.md`) and `docs/TECH_DEBT.md` #364's 27 → 12 were all taken
+ * without it, and silently changing a shared derivation is how a recorded measurement stops
+ * describing what produced it (`vhv-gutter-probe.ts`'s own rule). So the correction is opt-in and
+ * each call site says which world it is measuring; re-deriving Part A's numbers under it is a
+ * separate piece of work, named rather than done here.
+ *
+ * Without it a summary sits at day 0 with its own stored duration — a short bar at the plan start
+ * rather than a wide one spanning its phase — which changes the packing, the router's obstacle
+ * index, and what a picture of the plan looks like. It was found by looking at a rendered picture,
+ * which is the method this epic exists to apply.
+ */
+export function unit300Asap(path: string, options: { rollUpSummaries?: boolean } = {}) {
   const result = importXer({ content: readFileSync(path), filename: 'p6_torture_test_v1.xer' });
   if (!result.ok)
     throw new Error(`Unit 300 import failed: ${result.error.code} ${result.error.message}`);
@@ -480,6 +497,36 @@ export function unit300Asap(path: string) {
       `ASAP layout resolved ${String(resolved)} of ${String(activities.length)} activities — ` +
         `the relationship graph is not acyclic, which contradicts ADR-0021. Refusing to judge.`,
     );
+  }
+
+  if (options.rollUpSummaries === true) {
+    const parentOf = new Map(activities.map((a) => [a.key, a.parentKey]));
+    const depthOf = (key: string): number => {
+      let depth = 0;
+      let cursor = parentOf.get(key) ?? null;
+      while (cursor !== null && depth < 50) {
+        depth += 1;
+        cursor = parentOf.get(cursor) ?? null;
+      }
+      return depth;
+    };
+    const childrenOf = new Map<string, string[]>();
+    for (const a of activities) {
+      const parent = a.parentKey;
+      if (parent === null || parent === undefined) continue;
+      const list = childrenOf.get(parent);
+      if (list) list.push(a.key);
+      else childrenOf.set(parent, [a.key]);
+    }
+    const summaries = activities
+      .filter((a) => a.type === 'WBS_SUMMARY')
+      .sort((a, b) => depthOf(b.key) - depthOf(a.key));
+    for (const summary of summaries) {
+      const children = childrenOf.get(summary.key) ?? [];
+      if (children.length === 0) continue; // the engine's empty-summary convention: the data date.
+      start.set(summary.key, Math.min(...children.map((c) => start.get(c) ?? 0)));
+      finish.set(summary.key, Math.max(...children.map((c) => finish.get(c) ?? 0)));
+    }
   }
 
   return { activities, dependencies, start, finish };

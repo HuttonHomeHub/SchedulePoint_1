@@ -29,6 +29,17 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
 
 const FIXTURE = '../../packages/engine-conformance/fixtures/p6_torture_test_v1.xer';
+
+/**
+ * **Every Part C figure is measured with `rollUpSummaries: true`**, and that is a correction to how
+ * this harness started. Without it a `WBS_SUMMARY` sits at day 0 with its stored duration — zero on
+ * this fixture, so eighteen invisible points at the plan start — where the engine derives its span
+ * from its children (`compute.ts:545`, ADR-0035 §24). Found by LOOKING at a rendered picture, which
+ * is the method this epic exists to apply, after every number here had already been taken without
+ * it. What it changes is recorded in `part-c-m-c0.md`; the short version is that every headline
+ * conclusion survived or strengthened and one sub-finding was refuted.
+ */
+const ROLL_UP = { rollUpSummaries: true };
 /** The product owner's Surface Pro: 2880x1920 at 175 % = 1646 CSS px. */
 const WIDTH = 1646;
 const DPR = 1.75;
@@ -84,7 +95,7 @@ for (const pitch of PITCHES) {
   const file = join(out, `probe-${String(pitch)}.mjs`);
   writeFileSync(file, atPitch(baseNode, pitch));
   const { gutterReadings } = await import(pathToFileURL(file).href);
-  for (const r of gutterReadings(FIXTURE, ZOOMS)) {
+  for (const r of gutterReadings(FIXTURE, ZOOMS, ROLL_UP)) {
     if (r.laneHeight !== pitch) {
       throw new Error(
         `M-C0-T4 INDETERMINATE: asked for pitch ${String(pitch)} and the painter reported ` +
@@ -164,7 +175,7 @@ const chromiumPath =
     .trim();
 
 const { sceneForShot } = await import(pathToFileURL(join(out, 'probe-28.mjs')).href);
-const shotScene = sceneForShot(FIXTURE);
+const shotScene = sceneForShot(FIXTURE, ROLL_UP);
 
 const browser = await chromium.launch({ executablePath: chromiumPath || undefined });
 for (const pitch of PITCHES) {

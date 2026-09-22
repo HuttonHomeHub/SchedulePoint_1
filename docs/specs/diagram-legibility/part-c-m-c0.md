@@ -7,6 +7,56 @@
 
 ---
 
+## Correction 2026-09-22 — the summary rollup, and what it changed
+
+**Every figure in this file was first taken with a `WBS_SUMMARY` sitting at day 0 carrying its own
+stored duration — zero on this fixture, so eighteen invisible points at the plan start.** The engine
+derives a summary's span from its children (`compute.ts:545`, ADR-0035 §24: earliest early-start to
+latest early-finish over its direct children, deepest-first, a summary's own duration being always
+zero), and the canvas packs the dates the engine wrote. So the first readings described a plan
+SchedulePoint does not produce.
+
+**It was found by looking at a rendered picture**, which is the method this epic exists to apply,
+after every number here had already been taken. `layout-shipped.png` showed eighteen tiny squares
+stacked at the left margin where a programme's phase bars should be.
+
+`unit300Asap` gains `rollUpSummaries`, **default off** — not because off is right, but because
+silently changing a shared derivation is how a recorded measurement stops describing what produced
+it (`vhv-gutter-probe.ts`'s own rule). Every Part C runner opts in explicitly; Part A's figures and
+`docs/TECH_DEBT.md` #364's were taken without it.
+
+### What it changed, in full
+
+| claim                                  | first taken |    corrected | effect                           |
+| -------------------------------------- | ----------: | -----------: | -------------------------------- |
+| shipped layout's drawn extent          |    27 lanes | **21 lanes** | **`#364`'s headline, see below** |
+| shipped whole-plan crossings per link  |       2.617 |    **2.612** | negligible                       |
+| scramble per link (FC-C1's comparand)  |       6.404 |    **7.085** | FC-C1 **2.45× → 2.71×**, passes  |
+| B → D compression penalty (4 px/d)     |     +11.7 % |  **+26.9 %** | T3's verdict **strengthened**    |
+| VHV routes on Unit 300                 |          35 |       **69** | T4's finding **strengthened**    |
+| gutter legs sharing one y              |          11 |       **13** | T4's finding **strengthened**    |
+| gutter legs inside a painted bar       |     31 / 34 |  **58 / 68** | T4's finding **strengthened**    |
+| **"the 18 summary bars move no line"** |        true |    **FALSE** | **refuted — see T3 below**       |
+
+**Every headline conclusion survived or strengthened, and exactly one sub-finding was refuted.**
+That is recorded as prominently as the findings themselves, because a measurement that only ever
+confirms its author is not a measurement.
+
+### It puts a number in `docs/TECH_DEBT.md` #364 in question, and that is named rather than buried
+
+`#364` records "13 of 27 lanes held nothing but band-drawn summaries … 420 px of blank rows", and
+`cheap-levers.md` Finding 1 is the same measurement. Both came from **this harness family**
+(`measure-lane-travel.mjs` + `lane-travel-probe.ts`), so they are not independent of the defect
+above. Re-taken with the rollup, the same fixture reports **4 summary-only lanes of 21 — 112 px**.
+
+Two things follow, and neither is "`#364` was wrong to ship". The change it made is right either
+way: band on, the drawn extent falls to 12 lanes and the blank rows go. What is in question is only
+**how much** that was worth on this fixture. And settling it properly needs a measurement against a
+real plan in the product rather than another harness reading, because this harness's ASAP pass is
+itself an approximation of the engine (whole days, no calendars). Filed rather than fixed here.
+
+---
+
 ## M-C0-T2a — what the painter actually emits, and why the plan's attribution rule needed checking
 
 **Taken:** 2026-09-22, against `0c48f5f3`. Scale scene, 500 activities / 800 edges, 12 px/day,
@@ -71,9 +121,9 @@ agree with itself the way a reimplementation would.
 
 | layout                         | rows | crossings |  per link |
 | ------------------------------ | ---: | --------: | --------: |
-| **shipped** (packed + hint)    |   27 |       492 | **2.617** |
+| **shipped** (packed + hint)    |   21 |       491 | **2.612** |
 | source order (one bar per row) |  144 |       406 | **2.160** |
-| scrambled (same 27 rows)       |   27 |      1204 | **6.404** |
+| scrambled (same 21 rows)       |   21 |      1332 | **7.085** |
 
 **FC-C1 asked for ≥ 3× between the best-known and worst-known layouts. It gets 0.83×, and in the
 wrong direction.** The condition fails on its own terms and is recorded as failing.
@@ -84,8 +134,8 @@ FC-C1 chose its two comparands because they "differ enormously on every proxy". 
 proxies measures link LENGTH** — mean `|Δlane|`, `>5-lane` links — and nothing in this epic had ever
 checked that length and crossings move together.
 
-The scramble settles it. A deterministic random assignment into **the same 27 rows** — same bars,
-same links, same height, a plainly worse assignment — measures **6.404 per link, 2.45× the shipped
+The scramble settles it. A deterministic random assignment into **the same 21 rows** — same bars,
+same links, same height, a plainly worse assignment — measures **7.085 per link, 2.71× the shipped
 layout**. So the metric responds strongly to assignment quality; it is not vacuous and not broken.
 What failed is the premise that a layout bad on length is bad on crossings.
 
@@ -96,16 +146,16 @@ measured on length (12.96 mean `|Δlane|`, 73 long links against the shipped 1.7
 ### Why that is mechanically unsurprising, and why it matters
 
 It is the epic's own §0.5 hypothesis, one compression further along. 144 rows offer 143 gutters;
-27 rows offer 26; the 188 links are unchanged. Compressing the diagram concentrates corridor
-traffic, and corridors that share a gutter are what cross. The same arithmetic predicts the 27 → 12
+21 rows offer 20; the 188 links are unchanged. Compressing the diagram concentrates corridor
+traffic, and corridors that share a gutter are what cross. The same arithmetic predicts the 21 → 12
 compression `#364` produces when the WBS band is on — which is exactly why CQ-C4 holds the band flip
 until this is measured.
 
 **The consequence for the epic is larger than the condition.** The product owner offered height
 without limit to buy fewer crossings. Measured on their own plan, the **maximum possible spend of
-height** — one bar per row, 144 rows against 27 — buys a **17 % crossing reduction**, against FC-C2's
+height** — one bar per row, 144 rows against 21 — buys a **17 % crossing reduction**, against FC-C2's
 floor of 50 % for a candidate to be worth offering at all. Assignment quality at **constant** height
-moves the same number by 2.45×. On this evidence the lever is **how rows are assigned and how
+moves the same number by 2.71×. On this evidence the lever is **how rows are assigned and how
 corridors are chosen, not how many rows there are** — which inverts the framing the epic was opened
 with, and is an argument for the router (zero height) preceding the layout rule, as already
 sequenced.
@@ -118,13 +168,14 @@ comparands. They chose **re-calibrate**.
 
 FC-C1 is amended in `part-c-conditions.md` (the amendment is dated, and deletes nothing): the pair
 becomes **shipped vs the same-height scramble**, and the threshold moves 3× → 2×. Measured
-**2.45× — PASSES**. `measure-crossings.mjs` judges on that pair and prints the original one as
-evidence, because `shipped 2.617 / source order 2.160` is the reading that re-aimed M-C4 and
-deleting it would remove the grounds for that decision.
+**2.71× — PASSES** (2.45× as first measured; see the correction section). `measure-crossings.mjs`
+judges on that pair and prints the original one as evidence, because
+`shipped 2.612 / source order 2.160` is the reading that re-aimed M-C4 and deleting it would remove
+the grounds for that decision.
 
 **The threshold did move after its measurement**, which is the one thing that file exists to
 prevent, and it is recorded as such rather than presented as unchanged. What makes it defensible is
-that the comparand change is what the failure argues for, and 2.45× clears the original bar's
+that the comparand change is what the failure argues for, and 2.71× clears the original bar's
 _purpose_ — an instrument that cannot separate a good assignment from a random one at identical
 height is broken — while missing its number.
 
@@ -186,68 +237,80 @@ like a finding:
 | A band off · as imported        | off  | source order        |  144 |  144 |    1 |       406 |    2.160 |
 | A band off · as imported        | off  | source order        |  144 |  144 |    4 |       366 |    1.947 |
 | A band off · as imported        | off  | source order        |  144 |  144 |   12 |       380 |    2.021 |
-| **B band off · arranged**       | off  | packed (all bars)   |   27 |  144 |    1 |       492 |    2.617 |
-| **B band off · arranged**       | off  | packed (all bars)   |   27 |  144 |    4 |       418 |    2.223 |
-| **B band off · arranged**       | off  | packed (all bars)   |   27 |  144 |   12 |       430 |    2.287 |
+| **B band off · arranged**       | off  | packed (all bars)   |   21 |  144 |    1 |       491 |    2.612 |
+| **B band off · arranged**       | off  | packed (all bars)   |   21 |  144 |    4 |       368 |    1.957 |
+| **B band off · arranged**       | off  | packed (all bars)   |   21 |  144 |   12 |       377 |    2.005 |
 | C band on · as imported         | on   | source order        |  144 |  126 |    1 |       406 |    2.160 |
 | C band on · as imported         | on   | source order        |  144 |  126 |    4 |       366 |    1.947 |
 | C band on · as imported         | on   | source order        |  144 |  126 |   12 |       380 |    2.021 |
-| E band on · arranged pre-`#364` | on   | packed (all bars)   |   27 |  126 |    1 |       492 |    2.617 |
-| E band on · arranged pre-`#364` | on   | packed (all bars)   |   27 |  126 |    4 |       418 |    2.223 |
-| E band on · arranged pre-`#364` | on   | packed (all bars)   |   27 |  126 |   12 |       430 |    2.287 |
+| E band on · arranged pre-`#364` | on   | packed (all bars)   |   21 |  126 |    1 |       476 |    2.532 |
+| E band on · arranged pre-`#364` | on   | packed (all bars)   |   21 |  126 |    4 |       382 |    2.032 |
+| E band on · arranged pre-`#364` | on   | packed (all bars)   |   21 |  126 |   12 |       391 |    2.080 |
 | **D band on · arranged**        | on   | packed (scene bars) |   12 |  126 |    1 |       548 |    2.915 |
 | **D band on · arranged**        | on   | packed (scene bars) |   12 |  126 |    4 |       467 |    2.484 |
 | **D band on · arranged**        | on   | packed (scene bars) |   12 |  126 |   12 |       477 |    2.537 |
 
-**An independent agreement worth noting:** A and B at 1 px/day read 2.160 and 2.617, which are
-M-C0-T2b's whole-plan source-order and shipped figures to the decimal. Two runners written a day
-apart, sharing the metric and nothing else about their framing, land on the same numbers.
+**An agreement worth noting, with its limit stated:** A and B at 1 px/day read 2.160 and 2.612,
+which are M-C0-T2b's whole-plan source-order and shipped figures to the decimal. Two runners,
+sharing the metric and nothing else about their framing, land on the same numbers — which checks the
+framing and the attribution. It is **not** independent of the scene, because both build it from the
+same `unit300Asap`; the summary defect above is exactly the failure that agreement cannot see.
 
 ### The verdict
 
-| comparison                              | 1 px/d      | 4 px/d      | 12 px/d     |
-| --------------------------------------- | ----------- | ----------- | ----------- |
-| **B → D**, the flip a planner meets     | **+11.4 %** | **+11.7 %** | **+10.9 %** |
-| **E → D**, compression and nothing else | **+11.4 %** | **+11.7 %** | **+10.9 %** |
+| comparison                                    | 1 px/d      | 4 px/d      | 12 px/d     |
+| --------------------------------------------- | ----------- | ----------- | ----------- |
+| **B → D** (21 → 12), the flip a planner meets | **+11.6 %** | **+26.9 %** | **+26.5 %** |
+| **E → D** (21 → 12), same bars, same links    | **+15.1 %** | **+22.3 %** | **+22.0 %** |
 
 **Crossings per link rise at 3 of 3 zooms.** Per CQ-C4's withdrawal clause, **the band default
 stays off**, the dock still offers the press, and this is filed. It is **not** an argument for
 reverting `#364` — those 13 rows paint nothing whatever the band does, and D is a better picture
 than E in every respect except this one.
 
-### The two comparisons are identical because the band moves no line at all
+### ~~The two comparisons are identical because the band moves no line at all~~ — **REFUTED**
 
-They agree to the decimal, and that is a consequence rather than a coincidence. **B and E
-fingerprint identically at all three zooms** — the routed polylines are byte-for-byte the same with
-and without the 18 summary bars — so the only difference the band makes to the lines is the row
-count, and the decision comparison and the mechanism comparison are the same measurement.
+**This section first said the routed polylines were byte-for-byte identical with and without the 18
+summary bars, and that was an artefact of the summary defect above.** With summaries at day 0 they
+were zero-width points that obstructed nothing; rolled up they are wide phase bars, and **B and E
+now fingerprint differently at every zoom** — the summary bars move lines.
 
-That is a claim about the **router**, so it carries its own discriminator: painting with
-`scene.linkRouting` **off** (the pre-ADR-0065 route) fingerprints **differently** at every zoom, so
-the obstacle-aware branch is the one being measured. Without that reading, "the summary bars move no
-line" and "this harness lost obstacle awareness" are indistinguishable.
+The claim is left standing in strikethrough rather than deleted, because how it was reached is the
+useful part: it was measured correctly, with a discriminator that ruled out the obvious alternative
+(painting with `scene.linkRouting` **off** fingerprints differently, so the obstacle-aware branch
+really was the one under test), and it was still wrong — because **the discriminator tested the
+instrument's routing and not its scene**. A control that proves the right code ran says nothing
+about whether it ran on the right data.
 
-**Why, measured rather than reasoned.** `routeOrthogonal` returns today's elbow unexamined when the
-endpoints are within one lane of each other (`link-routing.ts:191-193`), and an obstacle only
-differs between band on and band off in a lane holding nothing but band-drawn summaries:
+**What the corrected reading says.** `routeOrthogonal` returns today's elbow unexamined when the
+endpoints are within one lane of each other (`link-routing.ts:191-193`), so only a spanning link can
+consult an obstacle, and an obstacle differs between band on and band off only in a lane holding
+nothing but band-drawn summaries:
 
 | configuration | rows | summary-only lanes | spanning links | …crossing a summary-only lane |
 | ------------- | ---: | -----------------: | -------------: | ----------------------------: |
 | A / C         |  144 |                 18 |     130 of 188 |                         **0** |
-| B / E         |   27 |                 13 |      73 of 188 |                         **3** |
+| B / E         |   21 |                  4 |      88 of 188 |                        **43** |
 | D             |   12 |                  6 |      70 of 188 |                         **0** |
 
-**Three links out of 188** even span one of the rows the band empties, and for those three the
-corridor the router picks is clear either way. The obstacle sets genuinely differ — 27 occupied
-lanes against 14, 84 merged spans against 66 — and almost nothing consults the part that differs.
+**43 of 88 spanning links** cross one of the rows the band empties — where the first reading found
+three — which is why the two comparisons above now differ from each other, and why B → D is no
+longer purely a statement about height.
 
 ### What this says about the epic, beyond CQ-C4
 
 It is M-C0-T2b's finding at a second compression ratio, in the same direction and at a smaller
-magnitude. Across the three zooms measured here, 144 → 27 rows costs **+13 % to +21 %** crossings
-per link (2.160→2.617, 1.947→2.223, 2.021→2.287) and 27 → 12 costs **+11 % to +12 %**. Height and
-crossings move together, and **the epic's own remedy runs the wrong way** — every row `Arrange`
-saves is paid for in crossings.
+magnitude. Across the three zooms measured here, 144 → 21 rows costs **+0.5 % to +21 %** crossings
+per link (2.160→2.612, 1.947→1.957, 2.021→2.005 — so a **rise at 1 px/day and essentially nothing at
+the two working zooms**), and 21 → 12 costs **+11.6 % to +26.9 %**. Height and crossings move
+together at the compressions that matter, and **the epic's own remedy runs the wrong way** — every
+row `Arrange` saves is paid for in crossings.
+
+**The 144 → 21 figure is weaker than the first reading made it look, and that is stated rather than
+left to a reader comparing tables.** At 4 and 12 px/day the difference between 144 rows and 21 is
+within half a per cent — so "spending the maximum possible height buys 17 %" is a statement about
+the **1 px/day** framing, and at the zooms a planner works at it buys close to nothing at all. That
+makes the case against spending height for its own sake stronger, not weaker.
 
 The per-zoom spread is worth keeping rather than averaging away: the effect is largest at 1 px/day,
 where the programme is a narrow column and corridors are forced together horizontally, and smallest
@@ -267,8 +330,10 @@ cheaply.
 - **Not that the band is bad.** The band is a legibility feature about reading the programme's
   structure, and this measures one thing. It says the default should not flip **on this limb**; the
   press stays offered and a planner who wants it still gets it.
-- **Not that `#364` was wrong.** Its 13 blank rows are strictly worse than D's 12 real ones: E draws
-  the _same_ picture as B, with the same lines, in 27 rows instead of 12.
+- **Not that `#364` was wrong.** Its blank rows are strictly worse than D's 12 real ones, and
+  removing them is right whatever the count. What the correction section puts in question is only
+  **how many** there are on this fixture — 4 of 21 under the rollup, against the 13 of 27 that row
+  records.
 - **Not a licence to judge candidates.** FC-C1 is still unresolved, and its withdrawal clause binds
   the _candidate_ readings. This one is a diagnosis of the shipped product against a fixed metric,
   which is why it could be taken now.
@@ -374,12 +439,12 @@ identical numbers.
 
 | pitch | gutter | px/d | links | VHV | gutter legs | distinct y | most on one y | legs inside a bar | min clearance |
 | ----: | -----: | ---: | ----: | --: | ----------: | ---------: | ------------: | ----------------: | ------------: |
-|    28 |  10 px |    4 |   188 |  35 |          34 |          7 |        **11** |            **31** |    **0.0 px** |
-|    28 |  10 px |   12 |   188 |  34 |          33 |          7 |        **11** |            **30** |    **0.0 px** |
-|    36 |  18 px |    4 |   188 |  35 |          34 |          7 |        **11** |            **31** |    **0.0 px** |
-|    36 |  18 px |   12 |   188 |  34 |          33 |          7 |        **11** |            **30** |    **0.0 px** |
-|    44 |  26 px |    4 |   188 |  35 |          34 |          7 |        **11** |            **31** |    **0.0 px** |
-|    44 |  26 px |   12 |   188 |  34 |          33 |          7 |        **11** |            **30** |    **0.0 px** |
+|    28 |  10 px |    4 |   188 |  69 |          68 |         12 |        **13** |            **58** |    **0.0 px** |
+|    28 |  10 px |   12 |   188 |  69 |          68 |         12 |        **13** |            **58** |    **0.0 px** |
+|    36 |  18 px |    4 |   188 |  69 |          68 |         12 |        **13** |            **58** |    **0.0 px** |
+|    36 |  18 px |   12 |   188 |  69 |          68 |         12 |        **13** |            **58** |    **0.0 px** |
+|    44 |  26 px |    4 |   188 |  69 |          68 |         12 |        **13** |            **58** |    **0.0 px** |
+|    44 |  26 px |   12 |   188 |  69 |          68 |         12 |        **13** |            **58** |    **0.0 px** |
 
 A gutter leg is identified by the painter's **own** definition rather than by a band — a horizontal
 segment whose offset within its lane is exactly `pad + barHeight`, which is
@@ -391,7 +456,7 @@ restatement of the expression rather than a measurement of the picture.
 
 ### First half — two runs through one gutter never read as two lines
 
-**11 of the 34 gutter legs are drawn at a single y**, and widening the gutter from 10 px to 26 px
+**13 of the 68 gutter legs are drawn at a single y**, and widening the gutter from 10 px to 26 px
 changes that number by nothing. It cannot: the leg's y is
 `(gutterLane + 1) * laneHeight - (laneHeight - barHeight) / 2`, which has **no per-link term at any
 pitch**. Eleven lines at one y are eleven lines drawn on top of each other however tall the gutter
@@ -402,7 +467,7 @@ is, and `bundleCorridors` cannot help — it bundles **vertical** segments (`a.x
 
 `gutterY` expands to **exactly the bottom edge of the upper lane's bar**: `pad` is
 `(laneHeight − barHeight) / 2` at both ends, so the difference cancels to zero at every pitch. The
-measurement agrees and goes further — **31 of 34 legs lie _within_ a painted bar's vertical
+measurement agrees and goes further — **58 of 68 legs lie _within_ a painted bar's vertical
 extent**, not merely tangent to one, with a smallest gap of **0.0 px** at 28, 36 and 44.
 
 ### The pictures, which are what FC-C3 actually asks to be judged on
@@ -429,7 +494,7 @@ choice" — and that is now measured rather than supposed.
 
 **The epic's own sequencing already accounts for it.** M-C1 was the gutter; it is withdrawn. What
 remains is the router (M-C3, zero height) and the re-aimed layout rule (M-C4, logic-aware assignment
-at constant height), which is exactly where M-C0-T2b's 2.45× lives. Three independent measurements
+at constant height), which is exactly where M-C0-T2b's 2.71× lives. Three independent measurements
 now point the same way: height does not buy legibility, **assignment and corridor choice do**.
 
 ### What is NOT concluded here
@@ -438,10 +503,39 @@ now point the same way: height does not buy legibility, **assignment and corrido
   wider one is not spent on the problem. Changing it in either direction is a separate decision with
   no evidence behind it.
 - **Not that the VHV fallback is wrong.** It puts a line where a bar cannot be, which is what it was
-  built for (ADR-0064 M2). What is wrong is that eleven of them choose the same line.
+  built for (ADR-0064 M2). What is wrong is that thirteen of them choose the same line.
 - **Not that this exonerates the router.** It is an argument that the remedy belongs in **how a
   corridor is chosen**, which is M-C3's subject — including, now, distributing legs within a gutter
   rather than stacking them.
+
+---
+
+## The pictures (CQ-C1)
+
+The product owner reserved the layout choice for themselves on the **numbers and the pictures**, per
+their own instruction, and a reader who has seen 2.612, 2.160 and 7.085 still has no idea what any
+of them looks like. `apps/web/scripts/shoot-layouts.mjs` paints all three — same viewport, same
+zoom, same framing, lane 0 at the top, so the lane assignment is the only variable:
+
+| picture                   | layout                   | rows | whole-plan crossings per link |
+| ------------------------- | ------------------------ | ---: | ----------------------------: |
+| `layout-shipped.png`      | what ships today         |   21 |                     **2.612** |
+| `layout-source-order.png` | as imported, one per row |  144 |                     **2.160** |
+| `layout-scrambled.png`    | seeded scramble, 21 rows |   21 |                     **7.085** |
+
+1646 CSS px × 820 at DPR 1.75, 4 px/day — Unit 300's whole 391-day span, the framing the product
+owner's own screenshots show. Painted by the real `paintScene` against a real Chromium 2D context
+with the real `resolveTsldPalette` reading the real `globals.css` tokens through ADR-0102's canvas
+surface scope.
+
+**The scramble is there to calibrate the eye, not as a candidate.** It is what 2.71× worse looks
+like, and without it "2.612 crossings per link" is a number with no scale attached.
+
+**What these are not.** They are the three layouts M-C0 **measured**; they are not the three
+candidates CQ-C1 chooses between, because those do not exist yet — M-C4 is unbuilt and has been
+re-aimed at logic-aware assignment. What they give the product owner now is the **baseline** picture
+every later candidate will be judged against, and a calibrated sense of what the metric's numbers
+mean.
 
 ---
 
@@ -462,8 +556,11 @@ now point the same way: height does not buy legibility, **assignment and corrido
   ever revisited, this and FC-C8's three limbs come back with it.
 - ~~**M-C0-T4** — the gutter sweep, in both configurations.~~ **Taken** (above): FC-C3 fails at
   every pitch and the gutter is recorded as **not the term**. Swept on the shipped band-off arranged
-  configuration only — the band-on one is not a separate question here, because M-C0-T3 established
-  that the band moves no line at all.
+  configuration only. That was first justified by M-C0-T3's "the band moves no line" reading, which
+  the correction section **refutes** — so the honest justification is the weaker one that survives:
+  the mechanism is `gutterY` having no per-link term, which is a property of `routeOrthogonal` and
+  not of a configuration, and the band-on configuration has strictly fewer bars and the same links.
+  Re-sweeping band-on would be cheap and is **not** claimed to have been done.
 
 ### A blind spot inherited deliberately, and how it is handled
 

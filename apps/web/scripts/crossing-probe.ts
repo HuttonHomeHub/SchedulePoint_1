@@ -424,13 +424,16 @@ export function sceneFor(
 }
 
 /** The two layouts FC-C1 compares: what ships today, and the worst configuration measured. */
-export function unit300Layouts(path: string): {
+export function unit300Layouts(
+  path: string,
+  options: { rollUpSummaries?: boolean } = {},
+): {
   asap: ReturnType<typeof unit300Asap>;
   shipped: Layout;
   sourceOrder: Layout;
   scrambled: Layout;
 } {
-  const asap = unit300Asap(path);
+  const asap = unit300Asap(path, options);
   const acts = asap.activities as { key: string }[];
   const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
 
@@ -592,8 +595,8 @@ export interface Fc1Result {
  * the routing path paint at `originY: 0`, which `vhv-gutter-probe.ts` records as "the single value
  * at which the defect below is invisible".
  */
-export function fc1(path: string): Fc1Result {
-  const { asap, shipped, sourceOrder, scrambled } = unit300Layouts(path);
+export function fc1(path: string, options: { rollUpSummaries?: boolean } = {}): Fc1Result {
+  const { asap, shipped, sourceOrder, scrambled } = unit300Layouts(path, options);
   const readings: CrossingReading[] = [];
 
   // The control framing: every lane of the worst layout on screen, so nothing is culled.
@@ -703,12 +706,15 @@ export interface BandConfig {
   spanningLinksOverSummaryOnlyLane: number;
 }
 
-export function unit300BandConfigs(path: string): {
+export function unit300BandConfigs(
+  path: string,
+  options: { rollUpSummaries?: boolean } = {},
+): {
   asap: ReturnType<typeof unit300Asap>;
   configs: BandConfig[];
   maxDay: number;
 } {
-  const asap = unit300Asap(path);
+  const asap = unit300Asap(path, options);
   const acts = asap.activities as { key: string }[];
   const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
   const bandDrawn = bandDrawnKeys(asap);
@@ -880,8 +886,8 @@ export interface T3Result {
  * together horizontally; at 12 it is a wide ribbon. A finding that holds at one zoom and reverses
  * at another is a finding about the zoom.
  */
-export function t3(path: string): T3Result {
-  const { asap, configs, maxDay } = unit300BandConfigs(path);
+export function t3(path: string, options: { rollUpSummaries?: boolean } = {}): T3Result {
+  const { asap, configs, maxDay } = unit300BandConfigs(path, options);
   const zooms = [1, 4, 12];
   const readings: T3Reading[] = [];
   const routingOff: T3Reading[] = [];
@@ -950,8 +956,12 @@ export interface GutterReading {
   minClearancePx: number;
 }
 
-export function gutterReadings(path: string, pxPerDays: readonly number[]): GutterReading[] {
-  const { asap, configs, maxDay } = unit300BandConfigs(path);
+export function gutterReadings(
+  path: string,
+  pxPerDays: readonly number[],
+  options: { rollUpSummaries?: boolean } = {},
+): GutterReading[] {
+  const { asap, configs, maxDay } = unit300BandConfigs(path, options);
   // The shipped configuration a planner meets: band off, lanes arranged.
   const config = configs.find((c) => c.layout.name.startsWith('B '));
   if (!config) throw new Error('the band-off arranged configuration is missing');
@@ -1028,8 +1038,11 @@ export function gutterReadings(path: string, pxPerDays: readonly number[]): Gutt
  * The lane is measured here at the shipped pitch rather than chosen; the browser recomputes its own
  * `originY` from it, because where a lane sits on screen is a function of the pitch under test.
  */
-export function sceneForShot(path: string): { scene: TsldScene; focusLane: number } {
-  const { asap, configs, maxDay } = unit300BandConfigs(path);
+export function sceneForShot(
+  path: string,
+  options: { rollUpSummaries?: boolean } = {},
+): { scene: TsldScene; focusLane: number } {
+  const { asap, configs, maxDay } = unit300BandConfigs(path, options);
   const config = configs.find((c) => c.layout.name.startsWith('B '));
   if (!config) throw new Error('the band-off arranged configuration is missing');
   const { scene } = sceneFor(asap, config.layout);
@@ -1065,4 +1078,24 @@ export function sceneForShot(path: string): { scene: TsldScene; focusLane: numbe
   }
   const focusLane = [...byLane.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]![0];
   return { scene, focusLane };
+}
+
+/**
+ * The three layouts M-C0-T2b measured, as scenes ready to photograph.
+ *
+ * The numbers alone do not settle CQ-C1 and were never meant to: this epic exists because a diagram
+ * that satisfied every number was still hard to read, and the product owner reserved the choice for
+ * themselves on the pictures as well as the figures. A reader who has seen 2.617, 2.160 and 6.404
+ * still has no idea what any of them looks like — these are what calibrates that.
+ */
+export function layoutScenes(
+  path: string,
+  options: { rollUpSummaries?: boolean } = {},
+): { name: string; scene: TsldScene; lanes: number }[] {
+  const { asap, shipped, sourceOrder, scrambled } = unit300Layouts(path, options);
+  return [shipped, sourceOrder, scrambled].map((layout) => ({
+    name: layout.name,
+    scene: sceneFor(asap, layout).scene,
+    lanes: layout.lanes,
+  }));
 }
