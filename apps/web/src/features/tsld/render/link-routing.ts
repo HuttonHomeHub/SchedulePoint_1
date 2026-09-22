@@ -147,6 +147,18 @@ function crossedLanes(fromLane: number, toLane: number): number[] {
   return lanes;
 }
 
+/**
+ * The elbow's clearance from a bar edge, in CSS px.
+ *
+ * Exported because {@link chooseCorridorsByCrossing} needs the same quantity to build its candidate
+ * offsets, and two copies of this expression would drift apart in the one place a reader could
+ * never see it: a corridor that moved by a different step than the one the router would have
+ * considered.
+ */
+export function corridorGap(view: Viewport): number {
+  return Math.min(12, Math.max(4, view.pxPerDay));
+}
+
 export function routeOrthogonal(
   from: Point,
   to: Point,
@@ -170,7 +182,7 @@ export function routeOrthogonal(
   if (from.y === to.y) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
-  const gap = Math.min(12, Math.max(4, view.pxPerDay));
+  const gap = corridorGap(view);
   const shift = elbowShift === 0 ? 0 : Math.max(-(gap - 1), Math.min(gap - 1, elbowShift));
   const preferred =
     type === 'FS'
@@ -661,4 +673,230 @@ export function linkHighlightIds(
  * painter partitions its edge passes with (ADR-0052 M5). */
 export function edgeTouches(edge: RenderEdge, ids: ReadonlySet<string>): boolean {
   return ids.has(edge.predecessorId) || ids.has(edge.successorId);
+}
+
+// ── Crossing-aware corridor choice (diagram-legibility M-C3) ─────────────────────────────────────
+
+/** How far either side of its current x a corridor may be moved, in `corridorGap` multiples. */
+const CORRIDOR_OFFSETS = [1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8] as const;
+const EPS = 0.001;
+
+/** `true` iff every value in the sorted array strictly before `x` … (an upper bound by binary search). */
+function countBelow(sorted: readonly number[], x: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid]! < x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * A frozen picture of every horizontal segment on screen, indexed by y for containment counting.
+ *
+ * **Frozen is the load-bearing word.** The pass below moves corridors, and moving a corridor moves
+ * the two horizontals attached to it — so a chooser that re-read the geometry as it went would be
+ * measuring its own output, which is ADR-0090's recorded oscillation with a different subject. The
+ * snapshot is taken once, every decision is made against it, and no decision is ever re-evaluated.
+ */
+interface SegmentIndex {
+  /** Sorted distinct positions on the segments' FIXED axis (y for horizontals, x for verticals). */
+  readonly at: number[];
+  /** Per position, the segment starts and ends on the other axis, each sorted. */
+  readonly spans: Map<number, { starts: number[]; ends: number[] }>;
+}
+
+interface Snapshot {
+  readonly horizontals: SegmentIndex;
+  readonly verticals: SegmentIndex;
+}
+
+function emptyIndex(): { at: number[]; spans: Map<number, { starts: number[]; ends: number[] }> } {
+  return { at: [], spans: new Map() };
+}
+
+function push(
+  index: { spans: Map<number, { starts: number[]; ends: number[] }> },
+  at: number,
+  lo: number,
+  hi: number,
+): void {
+  const bucket = index.spans.get(at) ?? { starts: [], ends: [] };
+  bucket.starts.push(lo);
+  bucket.ends.push(hi);
+  index.spans.set(at, bucket);
+}
+
+function seal(index: {
+  at: number[];
+  spans: Map<number, { starts: number[]; ends: number[] }>;
+}): SegmentIndex {
+  for (const bucket of index.spans.values()) {
+    bucket.starts.sort((p, q) => p - q);
+    bucket.ends.sort((p, q) => p - q);
+  }
+  index.at = [...index.spans.keys()].sort((p, q) => p - q);
+  return index;
+}
+
+function snapshotSegments(candidates: readonly BundleCandidate[]): Snapshot {
+  const horizontals = emptyIndex();
+  const verticals = emptyIndex();
+  for (const candidate of candidates) {
+    const line = candidate.line;
+    for (let i = 0; i + 1 < line.length; i += 1) {
+      const a = line[i]!;
+      const b = line[i + 1]!;
+      if (Math.abs(a.y - b.y) <= EPS && Math.abs(a.x - b.x) > EPS) {
+        push(horizontals, a.y, Math.min(a.x, b.x), Math.max(a.x, b.x));
+      } else if (Math.abs(a.x - b.x) <= EPS && Math.abs(a.y - b.y) > EPS) {
+        push(verticals, a.x, Math.min(a.y, b.y), Math.max(a.y, b.y));
+      }
+    }
+  }
+  return { horizontals: seal(horizontals), verticals: seal(verticals) };
+}
+
+/**
+ * How many snapshot segments a segment at `fixed`, spanning `(lo, hi)` on the other axis, crosses.
+ *
+ * Only positions strictly inside the span can be crossed: a segment meeting this one at an endpoint
+ * is its own elbow, or another link's segment meeting it at a shared anchor — and ADR-0065's
+ * fan-out puts many of those on one bar edge **by design**. Strict interiority also excludes a
+ * link's own segments structurally (they meet at its elbows), so this needs no owner bookkeeping.
+ */
+function crossingsOf(index: SegmentIndex, fixed: number, from: number, to: number): number {
+  const lo = Math.min(from, to);
+  const hi = Math.max(from, to);
+  let total = 0;
+  for (let i = countBelow(index.at, lo + EPS); i < index.at.length; i += 1) {
+    const position = index.at[i]!;
+    if (position >= hi - EPS) break;
+    const bucket = index.spans.get(position)!;
+    total += countBelow(bucket.starts, fixed - EPS) - countBelow(bucket.ends, fixed + EPS);
+  }
+  return total;
+}
+
+/**
+ * Move each vertical corridor to the candidate x it crosses the fewest other lines at, **in place**.
+ *
+ * ## Why this exists
+ *
+ * `routeOrthogonal` chooses a corridor for what it **hits** — a bar in a lane it passes through —
+ * and has never had an opinion about what it **crosses**. The product owner's complaint was about
+ * crossings ("the logic lines cross each other, which in NetPoint they rarely do"), and
+ * `docs/specs/diagram-legibility/part-c-m-c0.md` measured that the obvious remedy is not height: at
+ * the two zooms a planner works at, spreading Unit 300 over 144 rows instead of 21 changes
+ * crossings per link by under half a per cent, while a bad assignment at constant height changes it
+ * by 2.7×. So the levers are assignment and corridor choice, and this is the corridor half — at
+ * **zero** vertical cost, which is why it is sequenced before the layout rule.
+ *
+ * ## The four properties, in the order they matter
+ *
+ * 1. **It measures a frozen snapshot, never its own output.** See {@link snapshotHorizontals}.
+ * 2. **It never undoes the routing.** A corridor moves only to an x that is free of bars across
+ *    every lane it crosses — the same `isLaneFreeAt` test `routeOrthogonal` applies — so this
+ *    cannot snap an obstacle-avoiding corridor back through the bar ADR-0065 M2 moved it off. That
+ *    is the same hazard {@link bundleCorridors} records, and it is checked the same way.
+ * 3. **It moves only on a strict improvement**, and the candidate order is fixed, so the same frame
+ *    always produces the same lines. A route that varies between frames reads as the diagram
+ *    twitching (ADR-0065), and a tie is not a reason to abandon the line the router chose.
+ * 4. **It moves the line only.** Lag anchors, their drag handles and their hit zones are computed
+ *    before this runs and are not passed in — {@link bundleCorridors}'s structural property,
+ *    inherited by taking the same argument.
+ *
+ * Bounded: four candidate offsets per corridor, and each is costed over the lanes that corridor
+ * crosses rather than over the plan. Returns the number of corridors moved, so a test can assert it
+ * did something rather than assert the absence of a change it never attempted.
+ */
+export function chooseCorridorsByCrossing(
+  candidates: readonly BundleCandidate[],
+  index: LaneIntervalIndex,
+  gap: number,
+): number {
+  if (candidates.length < 2) return 0;
+  const snapshot = snapshotSegments(candidates);
+
+  let moved = 0;
+  for (const candidate of candidates) {
+    /**
+     * **Adjacent lanes are NOT skipped here, and that single decision is most of the result.**
+     *
+     * `routeOrthogonal` returns today's elbow unexamined when `crossedLanes` is empty, because it
+     * is answering "could this corridor hit a bar?" and the answer is no. This pass answers a
+     * different question — "what does this corridor cross?" — and a one-lane hop crosses other
+     * links just as readily. On Unit 300 **115 of 188 links are one lane apart or less**, so
+     * inheriting that early return excluded 61 % of the diagram: measured, the pass was worth
+     * −4.1 % with the skip and **−20.8 % without it**.
+     *
+     * The bar check below then does the right thing for free: an empty lane list makes
+     * `Array.every` vacuously true, which is correct — there is no intermediate lane to hit.
+     */
+    const lanes = crossedLanes(candidate.fromLane, candidate.toLane);
+    const line = candidate.line;
+    // Only the plain four-point elbow is moved. A six-point VHV route was produced because NO
+    // single corridor was clear (`routeOrthogonal`'s last structured attempt), so there is nothing
+    // here to improve on and moving one of its two legs would be re-deciding that search from the
+    // outside with less information than it had.
+    if (line.length !== 4) continue;
+    const from = line[0]!;
+    const elbow = line[1]!;
+    const to = line[3]!;
+
+    /**
+     * **The whole line, not just the corridor.** Moving the elbow moves the two horizontals
+     * attached to it, and an objective that counted only the vertical would trade one crossing for
+     * two elsewhere — measured: corridor-only scoring made Unit 300 very slightly WORSE
+     * (2.612 → 2.622 per link), which is how this came to count all three segments.
+     *
+     * The snapshot is frozen, so the two horizontals other links see are the ones they had before
+     * this pass ran. Re-snapshotting after every move was measured as well and is worth a further
+     * 1.2 % for an O(N²) rebuild — declined, and recorded rather than left as an open idea.
+     */
+    const score = (x: number): number =>
+      crossingsOf(snapshot.horizontals, x, from.y, to.y) +
+      crossingsOf(snapshot.verticals, from.y, from.x, x) +
+      crossingsOf(snapshot.verticals, to.y, x, to.x);
+
+    const current = score(elbow.x);
+    if (current === 0) continue; // nothing to improve, and a move could only make it worse
+
+    /**
+     * Two families, because they answer different questions and the measurement says both earn
+     * their place (Unit 300, whole-plan crossings per link, 2.612 baseline):
+     *
+     * - **Offsets from the elbow** — "shift it a little" — reach 2.117 on their own (−18.9 %).
+     * - **Positions relative to the ENDPOINTS** — "run it beside the successor's start instead of
+     *   the predecessor's finish", "run it down the middle" — take that to **2.037 (−22.0 %)**.
+     *
+     * Sampling the whole span at sixteen points instead was measured too and buys 0.2 % more, so
+     * it is not done: a corridor at an arbitrary fraction of the span has nothing to say for
+     * itself, and this list is one a reader can justify line by line.
+     */
+    const anchored = [
+      (from.x + to.x) / 2,
+      to.x - gap,
+      from.x + gap,
+      (from.x + to.x * 3) / 4,
+      (from.x * 3 + to.x) / 4,
+    ];
+    let bestX = elbow.x;
+    let best = current;
+    for (const x of [...CORRIDOR_OFFSETS.map((step) => elbow.x + step * gap), ...anchored]) {
+      if (!lanes.every((lane) => isLaneFreeAt(index, lane, x))) continue;
+      const count = score(x);
+      if (count < best) {
+        best = count;
+        bestX = x;
+      }
+    }
+    if (bestX === elbow.x) continue;
+    line[1] = { x: bestX, y: from.y };
+    line[2] = { x: bestX, y: to.y };
+    moved += 1;
+  }
+  return moved;
 }

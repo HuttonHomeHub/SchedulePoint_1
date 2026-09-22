@@ -39,6 +39,8 @@ import {
   BAR_RADIUS,
   ARROWHEAD_HALF_W_PX,
   bundleCorridors,
+  chooseCorridorsByCrossing,
+  corridorGap,
   ARROWHEAD_ROUTED_PX,
   ELAPSED_DAY_WALK,
   EMPHASIS_STROKE_W,
@@ -1209,17 +1211,25 @@ export function paintScene(
       if (line) lines.set(edge, line);
     }
     if (laneIndex && lines.size > 1) {
+      const corridors = [...lines.entries()].map(([edge, line]) => ({
+        line,
+        fromLane: byId.get(edge.predecessorId)?.laneIndex ?? 0,
+        toLane: byId.get(edge.successorId)?.laneIndex ?? 0,
+      }));
+      /**
+       * **Corridor choice BEFORE bundling** (diagram-legibility M-C3), and the order is a decision.
+       *
+       * `routeOrthogonal` picks a corridor for what it HITS; this moves it for what it CROSSES,
+       * which is the thing the product owner reported and the thing
+       * `docs/specs/diagram-legibility/part-c-m-c0.md` measured height cannot buy. Bundling then
+       * merges whatever near-identical verticals remain — run the other way round it would merge a
+       * comb first and then pull members out of the trunk it had just made, undoing its own work.
+       */
+      chooseCorridorsByCrossing(corridors, laneIndex, corridorGap(view));
       // Trunk/branch bundling (ADR-0065 M3): a hub's dozen near-identical verticals become one
       // trunk. Rides the SAME flag as the routing it bundles — a comb is only worth merging once
       // the corridors are chosen deliberately, and the free-check it does needs that index anyway.
-      bundleCorridors(
-        [...lines.entries()].map(([edge, line]) => ({
-          line,
-          fromLane: byId.get(edge.predecessorId)?.laneIndex ?? 0,
-          toLane: byId.get(edge.successorId)?.laneIndex ?? 0,
-        })),
-        laneIndex,
-      );
+      bundleCorridors(corridors, laneIndex);
     }
     const drawEdges = (driving: boolean, highlighted = false): void => {
       const heads: [Point, Point, Point][] = [];

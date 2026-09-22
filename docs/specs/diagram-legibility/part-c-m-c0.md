@@ -4,6 +4,10 @@
   before any harness file existed)
 - **Status:** Approved
 - **Harness:** `apps/web/scripts/crossing-probe.ts`
+- **These figures describe the painter as it was BEFORE M-C3.** That milestone's crossing-aware
+  corridor pass changes the lines deliberately (whole-plan crossings per link 2.612 → 2.069 on the
+  shipped layout), so re-running any harness here against a later tree will not reproduce the
+  numbers below — and should not. M-C0's job was to measure the state the epic was opened on.
 
 ---
 

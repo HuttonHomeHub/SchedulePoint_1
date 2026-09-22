@@ -18,6 +18,7 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     mode: 'select',
     authoringFlowEnabled: true,
     hasPlacementMigrationNotice: false,
+    hasArrangeOffer: false,
     ...overrides,
   };
 }
@@ -112,6 +113,36 @@ describe('resolveDockStrip', () => {
 
     it('is absent when the migration changed nothing here', () => {
       expect(resolveDockStrip(input({ hasPlacementMigrationNotice: false }))).toBeNull();
+    });
+  });
+
+  /**
+   * The `Arrange` offer, asserted the same way as its neighbour: every case says what it BEAT or
+   * LOST to, so a green run can never mean "the strip is broken".
+   */
+  describe('the Arrange offer', () => {
+    it('shows on an otherwise settled canvas', () => {
+      expect(resolveDockStrip(input({ hasArrangeOffer: true }))).toBe('arrange-offer');
+    });
+
+    it('beats the migration notice — a live fact outranks what a deploy did', () => {
+      expect(
+        resolveDockStrip(input({ hasArrangeOffer: true, hasPlacementMigrationNotice: true })),
+      ).toBe('arrange-offer');
+    });
+
+    it('loses to a conflict, to an armed tool, and to the empty-plan notice', () => {
+      expect(resolveDockStrip(input({ hasArrangeOffer: true, hasConflict: true }))).toBe(
+        'conflict',
+      );
+      expect(resolveDockStrip(input({ hasArrangeOffer: true, modeStatement: ARMED }))).toBe('mode');
+      expect(resolveDockStrip(input({ hasArrangeOffer: true, activityCount: 0 }))).toBe('empty');
+    });
+
+    it('is absent when there is nothing to move, or the reader cannot take it', () => {
+      // One boolean carries both — see the field's docblock for why the pen is a precondition here
+      // rather than a shading, which is the opposite of how every command on this surface is gated.
+      expect(resolveDockStrip(input({ hasArrangeOffer: false }))).toBeNull();
     });
   });
 });

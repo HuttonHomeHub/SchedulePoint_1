@@ -1,6 +1,9 @@
 # Feature Spec: Diagram legibility — link directness and the activity glyph
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Accepted — Part C shipped (ADR-0149: the crossing-aware corridor pass and the
+  `Arrange` offer). Part A's lane budget (M3) and Part B (the bar/link visual refresh) are
+  **held by the product owner**, not withdrawn — see `part-c-verdict.md` for why height turned
+  out not to be the currency this spec assumed it was.
 - **Author(s):** feature-analyst (Claude Opus 5)
 - **Date:** 2026-09-21
 - **Tracking issue / epic:** _(none yet)_

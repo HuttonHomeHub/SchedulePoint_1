@@ -547,7 +547,20 @@ where it would buy something. Closes `docs/TECH_DEBT.md` **#363**.
 
 ---
 
-## Milestone 3 — The crossing-aware router _(conditional on M-C0)_
+## Milestone 3 — The crossing-aware router — **LANDED 2026-09-22, −20.8 %**
+
+> **Measured on Unit 300, whole-plan, 188 links: 2.612 → 2.069 crossings per link at zero vertical
+> cost.** FC-C2's 50 % floor is **not met** and is recorded as not met rather than reinterpreted —
+> that condition governs the layout rule; this milestone's own test was "if it is negligible it is
+> withdrawn", and 20.8 % for no height is not negligible.
+>
+> The decision that produced most of the result: `routeOrthogonal` skips a corridor whose endpoints
+> are within one lane of each other, correctly, because it is asking whether the corridor could hit
+> a **bar**. This pass asks what it **crosses**, and inheriting that skip excluded 115 of 188 links —
+> the pass was worth −4.1 % with it and −20.8 % without. Full table in
+> [`./part-c-verdict.md`](./part-c-verdict.md).
+>
+> FC-C4 limb B holds: `paint.routing-budget.test.ts` is green **without being edited**.
 
 **Outcome:** a corridor is chosen for what it crosses, not only for what it hits.
 **Entry point:** the **TSLD canvas itself**, plus the export and the print — no control.
@@ -604,7 +617,23 @@ where it would buy something. Closes `docs/TECH_DEBT.md` **#363**.
 
 ---
 
-## Milestone 4 — The layout rule _(conditional on CQ-C1 and FC-C2)_
+## Milestone 4 — The layout rule — **WITHDRAWN 2026-09-22 on FC-C2's own withdrawal clause**
+
+> **All three candidates are WORSE than what ships**, measured whole-plan on Unit 300 with 188
+> links on every side: chain rows **+85.8 %**, depth-first pack **+63.2 %**, near-predecessors
+> **+9.7 %**, against a shipped 1.691 crossings per link. Every one is below the 20 % at which the
+> decision would have gone to the product owner, so the clause fires as written and M-C4 is
+> recorded as **measured-and-rejected** rather than dropped.
+>
+> The full table, the harness (`apps/web/scripts/measure-assignment.mjs`) and what the result does
+> **not** say are in [`./part-c-verdict.md`](./part-c-verdict.md). The short version: the shipped
+> greedy first-fit with its predecessor hint is already near the good end — a random assignment at
+> the same height is 2.7× worse — and the most intuitive idea in the epic, giving each logic chain a
+> row of its own, is the worst of the three, because reserving a row for a chain lengthens every
+> link that is not in it.
+>
+> The text below is kept rather than deleted, because the reasoning is what makes the withdrawal
+> checkable.
 
 > **Re-aimed 2026-09-22, on M-C0-T2b's measurement and the product owner's decision.** This
 > milestone was framed as _spend rows to buy fewer crossings_, with CQ-C1 choosing how many. That

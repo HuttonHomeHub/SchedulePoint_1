@@ -1099,3 +1099,249 @@ export function layoutScenes(
     lanes: layout.lanes,
   }));
 }
+
+// ── M-C4: logic-aware lane assignment candidates ─────────────────────────────────────────────────
+
+/**
+ * The three assignment rules M-C4 measures, built here **before** anything is built in the product.
+ *
+ * M-C0-T2b re-aimed this milestone: height does not buy legibility (144 rows against 21 differs by
+ * under half a per cent at the two working zooms) and assignment quality does (2.7× between a good
+ * 21-row assignment and a random one). So a candidate is an **assignment rule**, and the height it
+ * happens to need is an output rather than a budget.
+ *
+ * All three are measured against FC-C2's floor — a candidate must halve whole-plan crossings per
+ * link to be offered at all — with the withdrawal clause stated in `part-c-conditions.md`.
+ */
+export interface AssignmentCandidate {
+  name: string;
+  laneOf: Map<string, number>;
+  lanes: number;
+}
+
+interface Item {
+  key: string;
+  startDay: number;
+  endDay: number;
+}
+
+/** Lowest lane whose latest occupant finishes before `startDay`, or `-1` to open one. */
+function firstFree(laneEnds: number[], startDay: number): number {
+  return laneEnds.findIndex((end) => startDay > end);
+}
+
+export function assignmentCandidates(path: string): {
+  asap: ReturnType<typeof unit300Asap>;
+  shipped: Layout;
+  candidates: AssignmentCandidate[];
+} {
+  const { asap, shipped } = unit300Layouts(path, { rollUpSummaries: true });
+  const acts = asap.activities as { key: string }[];
+  const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
+  const items: Item[] = acts.map((a) => ({
+    key: a.key,
+    startDay: asap.start.get(a.key) ?? 0,
+    endDay: asap.finish.get(a.key) ?? 0,
+  }));
+  const byKey = new Map(items.map((i) => [i.key, i]));
+
+  const successorsOf = new Map<string, string[]>();
+  const predecessorsOf = new Map<string, string[]>();
+  for (const d of deps) {
+    (
+      successorsOf.get(d.predecessorKey) ??
+      successorsOf.set(d.predecessorKey, []).get(d.predecessorKey)!
+    ).push(d.successorKey);
+    (
+      predecessorsOf.get(d.successorKey) ??
+      predecessorsOf.set(d.successorKey, []).get(d.successorKey)!
+    ).push(d.predecessorKey);
+  }
+
+  /**
+   * **Candidate A — chain rows.** Decompose the logic into chains longest-first and give each chain
+   * a row of its own where its members fit.
+   *
+   * The idea a time-scaled diagram makes obvious: a chain drawn on ONE row has no vertical corridor
+   * at all — every link in it is a short horizontal hop between neighbours. That is what a NetPoint
+   * diagram looks like, and it is the shape the product owner's own screenshots were compared
+   * against.
+   */
+  const chainRows = (): Map<string, number> => {
+    const lane = new Map<string, number>();
+    const laneEnds: number[] = [];
+    const remaining = new Set(items.map((i) => i.key));
+    // A deterministic topological order over the whole graph, reused for every extraction.
+    const order = [...items].sort(
+      (a, b) => a.startDay - b.startDay || a.endDay - b.endDay || (a.key < b.key ? -1 : 1),
+    );
+    while (remaining.size > 0) {
+      // Longest chain (by member count) through the remaining set, by DP over the fixed order.
+      const best = new Map<string, number>();
+      const next = new Map<string, string | null>();
+      for (let i = order.length - 1; i >= 0; i -= 1) {
+        const key = order[i]!.key;
+        if (!remaining.has(key)) continue;
+        let bestLen = 1;
+        let bestNext: string | null = null;
+        for (const successor of successorsOf.get(key) ?? []) {
+          if (!remaining.has(successor)) continue;
+          const length = (best.get(successor) ?? 0) + 1;
+          if (
+            length > bestLen ||
+            (length === bestLen && bestNext !== null && successor < bestNext)
+          ) {
+            bestLen = length;
+            bestNext = successor;
+          }
+        }
+        best.set(key, bestLen);
+        next.set(key, bestNext);
+      }
+      let head: string | null = null;
+      let headLen = -1;
+      for (const item of order) {
+        if (!remaining.has(item.key)) continue;
+        const length = best.get(item.key) ?? 0;
+        if (length > headLen) {
+          headLen = length;
+          head = item.key;
+        }
+      }
+      if (head === null) break;
+      const chain: string[] = [];
+      for (let at: string | null = head; at !== null; at = next.get(at) ?? null) chain.push(at);
+
+      // The chain's own row: the lowest lane its FIRST member fits in, then every member that fits
+      // after it. A member that does not fit (an SS/FF overlap) spills to the general pool rather
+      // than forcing the chain apart wholesale.
+      const first = byKey.get(chain[0]!)!;
+      let row = firstFree(laneEnds, first.startDay);
+      if (row === -1) {
+        row = laneEnds.length;
+        laneEnds.push(Number.NEGATIVE_INFINITY);
+      }
+      for (const key of chain) {
+        const item = byKey.get(key)!;
+        const target = item.startDay > laneEnds[row]! ? row : firstFree(laneEnds, item.startDay);
+        const placed = target === -1 ? laneEnds.push(Number.NEGATIVE_INFINITY) - 1 : target;
+        laneEnds[placed] = item.endDay;
+        lane.set(key, placed);
+        remaining.delete(key);
+      }
+    }
+    return lane;
+  };
+
+  /**
+   * **Candidate B — predecessor adjacency, allowed to open a row.** Today's packer chooses among
+   * lanes that are already free and never opens one for the sake of the hint
+   * (`pack-lanes.ts`'s own docblock says so). This one opens a row when the nearest free lane is
+   * more than `NEAR` away from the predecessor mean — trading height for link length directly.
+   */
+  const NEAR = 2;
+  const nearPredecessors = (): Map<string, number> => {
+    const lane = new Map<string, number>();
+    const laneEnds: number[] = [];
+    const order = [...items].sort(
+      (a, b) => a.startDay - b.startDay || a.endDay - b.endDay || (a.key < b.key ? -1 : 1),
+    );
+    for (const item of order) {
+      const placed = (predecessorsOf.get(item.key) ?? [])
+        .map((p) => lane.get(p))
+        .filter((l): l is number => l !== undefined);
+      const free: number[] = [];
+      laneEnds.forEach((end, l) => {
+        if (item.startDay > end) free.push(l);
+      });
+      let target: number;
+      if (placed.length === 0) {
+        target = free.length > 0 ? free[0]! : laneEnds.length;
+      } else {
+        const mean = placed.reduce((sum, l) => sum + l, 0) / placed.length;
+        let nearest = -1;
+        let distance = Number.POSITIVE_INFINITY;
+        for (const l of free) {
+          const d = Math.abs(l - mean);
+          if (d < distance) {
+            distance = d;
+            nearest = l;
+          }
+        }
+        target = nearest !== -1 && distance <= NEAR ? nearest : laneEnds.length;
+      }
+      if (target >= laneEnds.length) laneEnds.push(Number.NEGATIVE_INFINITY);
+      laneEnds[target] = item.endDay;
+      lane.set(item.key, target);
+    }
+    return lane;
+  };
+
+  /**
+   * **Candidate C — topological depth first.** Sort by longest-path depth before first-fit, so a
+   * chain's members are placed in logical order rather than in date order. Free: it changes one
+   * comparator and nothing else.
+   */
+  const depthFirst = (): Map<string, number> => {
+    const depth = new Map<string, number>();
+    const order = [...items].sort((a, b) => a.startDay - b.startDay || (a.key < b.key ? -1 : 1));
+    for (const item of order) {
+      const preds = predecessorsOf.get(item.key) ?? [];
+      depth.set(
+        item.key,
+        preds.length === 0 ? 0 : Math.max(...preds.map((p) => (depth.get(p) ?? 0) + 1)),
+      );
+    }
+    const lane = new Map<string, number>();
+    const laneEnds: number[] = [];
+    const sorted = [...items].sort(
+      (a, b) =>
+        (depth.get(a.key) ?? 0) - (depth.get(b.key) ?? 0) ||
+        a.startDay - b.startDay ||
+        (a.key < b.key ? -1 : 1),
+    );
+    for (const item of sorted) {
+      let target = firstFree(laneEnds, item.startDay);
+      if (target === -1) {
+        target = laneEnds.length;
+        laneEnds.push(Number.NEGATIVE_INFINITY);
+      }
+      laneEnds[target] = item.endDay;
+      lane.set(item.key, target);
+    }
+    return lane;
+  };
+
+  const build = (name: string, laneOf: Map<string, number>): AssignmentCandidate => ({
+    name,
+    laneOf,
+    lanes: Math.max(...laneOf.values()) + 1,
+  });
+
+  return {
+    asap,
+    shipped,
+    candidates: [
+      build('A chain rows', chainRows()),
+      build('B near predecessors', nearPredecessors()),
+      build('C depth-first pack', depthFirst()),
+    ],
+  };
+}
+
+/** One whole-plan reading of an arbitrary lane assignment — the comparison M-C4 is judged on. */
+export function readWholePlan(
+  asap: ReturnType<typeof unit300Asap>,
+  layout: Layout,
+): CrossingReading {
+  const acts = asap.activities as { key: string }[];
+  const maxDay = Math.max(...acts.map((a) => asap.finish.get(a.key) ?? 0));
+  const worstLanes = Math.max(layout.lanes, 145);
+  return read(
+    sceneFor(asap, layout).scene,
+    layout,
+    { label: 'whole-plan', width: (maxDay + 4) * 4 + 400, height: worstLanes * LANE_HEIGHT + 200 },
+    4,
+    32,
+  );
+}
