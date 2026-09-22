@@ -175,4 +175,76 @@ describe('packLanes', () => {
     ];
     expect(packLanes(sequential)).toEqual([{ id: 'm', laneIndex: 0 }]);
   });
+
+  /**
+   * **Packing an already-packed set moves nothing.**
+   *
+   * This is the property the whole "is this plan already arranged?" question rests on. An import
+   * runs `packLanes` in ADR-0069 phase 3 (`interchange.service.ts:1096`); the canvas then runs it
+   * again through `computeLaneArrangement` to decide whether to offer `Arrange` at all
+   * (`TsldPanel.tsx:2213-2219`, `:2226-2228` — an empty result announces "Lanes are already
+   * arranged; nothing to move."). If the packer were not idempotent, a freshly imported plan would
+   * offer a press that reshuffles a diagram phase 3 had already laid out correctly — and nothing
+   * anywhere asserted it.
+   *
+   * It is a property rather than an example, so it is checked over the fixture shapes the rest of
+   * this file covers **and** with the predecessor hint in force, because the hint is the one input
+   * that chooses between equally-valid free lanes and is therefore the one that could make a second
+   * pass disagree with the first.
+   *
+   * **Verified red** against the defect it names — emitting a row for every item rather than only
+   * the ones that move (`pack-lanes.ts:87`) — which fails here with "the second pass must move
+   * nothing". That mutation also reddens the three single-pass minimal-diff cases, because they
+   * pin the same line; **no mutation was found that reddens only this one**, and two were tried
+   * (sorting by the input lane first, and steering an unhinted item toward its own current lane)
+   * which leave the packer idempotent and are caught elsewhere or not at all. What this case adds
+   * that none of its neighbours can is the **second pass**: they assert the diff is minimal for one
+   * input, and only this one asserts the packer's own output is a fixed point.
+   */
+  it('is idempotent: re-packing its own output moves nothing', () => {
+    const cases: { name: string; items: PackItem[]; hint?: Map<string, string[]> }[] = [
+      {
+        name: 'a chain that must spread',
+        items: [
+          { id: 'a', startDay: 0, endDay: 5, laneIndex: 9 },
+          { id: 'b', startDay: 2, endDay: 7, laneIndex: 4 },
+          { id: 'c', startDay: 3, endDay: 4, laneIndex: 0 },
+          { id: 'd', startDay: 8, endDay: 9, laneIndex: 7 },
+        ],
+      },
+      {
+        name: 'source order — one bar per lane, every lane wrong',
+        items: Array.from({ length: 12 }, (_, i) => ({
+          id: `s${String(i)}`,
+          startDay: i * 2,
+          endDay: i * 2 + 1,
+          laneIndex: i,
+        })),
+      },
+      {
+        name: 'with the predecessor hint in force',
+        items: [
+          { id: 'p', startDay: 0, endDay: 3, laneIndex: 6 },
+          { id: 'q', startDay: 0, endDay: 3, laneIndex: 2 },
+          { id: 'r', startDay: 4, endDay: 6, laneIndex: 5 },
+          { id: 's', startDay: 4, endDay: 6, laneIndex: 1 },
+        ],
+        hint: new Map([
+          ['r', ['p']],
+          ['s', ['q']],
+        ]),
+      },
+    ];
+
+    for (const { name, items, hint } of cases) {
+      const first = packLanes(items, hint);
+      const settled = laneAssignment(items, first);
+      const packed = items.map((i) => ({ ...i, laneIndex: settled.get(i.id)! }));
+      // The control: a case where the first pass moved nothing proves nothing about idempotence.
+      expect(first.length, `${name}: the first pass must actually move something`).toBeGreaterThan(
+        0,
+      );
+      expect(packLanes(packed, hint), `${name}: the second pass must move nothing`).toEqual([]);
+    }
+  });
 });

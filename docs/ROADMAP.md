@@ -304,6 +304,19 @@ keep `main` releasable.
   dependencies — not `plans.updated_at`, which does not move when an activity is edited, so the
   naive ordering ranks a plan somebody worked in all morning below one whose name was corrected last
   week **and every row still looks correct**.
+- **The diagram's logic lines cross each other less** (ADR-0149, amending ADR-0065/0069). The
+  product owner compared the TSLD with a NetPoint diagram and reported that the lines cross where
+  NetPoint's rarely do, offering unlimited vertical space to fix it. **The space turned out not to
+  be the currency**: spreading a 144-activity programme over 144 rows instead of 21 changes
+  crossings per link by under half a per cent at the zooms a planner works at. What does change it
+  is where a corridor runs — the router now chooses each one for what it **crosses** rather than
+  only for what it hits, worth **20.8 % fewer crossings on a real imported programme at no vertical
+  cost at all**. Two of the epic's four milestones were withdrawn on their own committed
+  measurements: a taller row gap cannot separate two runs through one gutter (the geometry puts them
+  at the same y whatever the pitch), and all three logic-aware row-assignment rules measured worse
+  than the packer that ships. `Arrange` also stops being a button nobody knew to press: where one
+  press would tidy the rows, the canvas says so and says what it would cost.
+
 - **A plan has one planning surface** (ADR-0148, amending ADR-0033/0041/0052/0054/0126/0134). A plan
   used to be in one of two **scheduling modes**, and the mode decided where every bar was drawn.
   Dragging a bar on an `Early` plan did not move it — it wrote an invisible _start no earlier than_

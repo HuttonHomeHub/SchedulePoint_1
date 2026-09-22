@@ -817,6 +817,20 @@ jobs:
         if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:activity-editor
 
+      # Auto-arrange (playwright.arrange.config.ts, diagram-legibility M-C2), closing
+      # `docs/TECH_DEBT.md` #363 — which was raised by grepping every e2e directory for the command
+      # and finding ZERO files: `Arrange` shipped with the canvas and nothing had ever pressed it.
+      # Four things live only here. The pen is ENFORCED at the API, so the offer's omit-don't-shade
+      # gate is the real one rather than a client guess; the written lanes are read back from the
+      # API, which is the only place the batch's optimistic `version` check is real (a mocked fetch
+      # accepts any version); the early return on an already-tidy plan is proved to open NO dialog;
+      # and a REAL .xer import is driven to show that ADR-0069 phase 3 leaves the offer with
+      # nothing to say, which is the negative control the milestone's own plan first got backwards.
+      # Runs after the prior suites tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (Auto-arrange)
+        if: ${{ matrix.shard == 2 }}
+        run: pnpm --filter @repo/web test:e2e:arrange
+
       # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
       # AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
       # membership write is per-row optimistic-locked (a mocked fetch accepts any version, so the

@@ -6,6 +6,8 @@ import { BAR_HEIGHT, LANE_HEIGHT, screenYOfLane } from './geometry';
 import {
   arrowhead,
   bundleCorridors,
+  chooseCorridorsByCrossing,
+  corridorGap,
   BUNDLE_TOLERANCE_PX,
   ARROWHEAD_HALF_W_PX,
   ARROWHEAD_PX,
@@ -334,5 +336,169 @@ describe('bundleCorridors — co-linear runs become one trunk (M3)', () => {
     const one = [elbow(100)];
     expect(bundleCorridors(one, CLEAR)).toBe(0);
     expect(one[0]!.line[1]!.x).toBe(100);
+  });
+});
+
+describe('chooseCorridorsByCrossing', () => {
+  /**
+   * The crossing-aware corridor pass (diagram-legibility M-C3). It moves a four-point elbow to the
+   * candidate x its WHOLE line crosses fewest others at, measured against a frozen snapshot.
+   *
+   * Every case asserts a property rather than a coordinate: the pass is a minimisation over a
+   * bounded candidate list, so pinning "it lands on 12" would be pinning the list.
+   */
+  const GAP = corridorGap(VIEW);
+
+  /** A four-point elbow line, as `routeOrthogonal` builds one. */
+  const elbow = (fromX: number, fromY: number, x: number, toX: number, toY: number) => [
+    { x: fromX, y: fromY },
+    { x, y: fromY },
+    { x, y: toY },
+    { x: toX, y: toY },
+  ];
+
+  /** How many of `others`' horizontals the line's vertical crosses, strictly inside both. */
+  function crossings(
+    line: { x: number; y: number }[],
+    others: { x: number; y: number }[][],
+  ): number {
+    const vx = line[1]!.x;
+    const lo = Math.min(line[1]!.y, line[2]!.y);
+    const hi = Math.max(line[1]!.y, line[2]!.y);
+    let total = 0;
+    for (const other of others) {
+      for (let i = 0; i + 1 < other.length; i += 1) {
+        const a = other[i]!;
+        const b = other[i + 1]!;
+        if (a.y !== b.y) continue;
+        const x0 = Math.min(a.x, b.x);
+        const x1 = Math.max(a.x, b.x);
+        if (a.y > lo && a.y < hi && vx > x0 && vx < x1) total += 1;
+      }
+    }
+    return total;
+  }
+
+  /** A line whose long tail runs at y = 50 from x = 12 to x = 200. */
+  const OBSTRUCTED = () => elbow(5, 10, 12, 200, 50);
+
+  it('moves a corridor off the line it was crossing', () => {
+    const crosser = elbow(0, 0, 20, 100, 100);
+    const other = OBSTRUCTED();
+    expect(crossings(crosser, [other])).toBe(1); // the pinned positive: there IS something to fix
+
+    const moved = chooseCorridorsByCrossing(
+      [
+        { line: crosser, fromLane: 0, toLane: 3 },
+        { line: other, fromLane: 0, toLane: 1 },
+      ],
+      laneIntervalIndex([], VIEW, '2026-01-01'),
+      GAP,
+    );
+
+    expect(moved).toBeGreaterThan(0);
+    expect(crossings(crosser, [other])).toBe(0);
+  });
+
+  it('never moves a corridor onto a bar, even when that is the only way to stop crossing', () => {
+    /**
+     * The hazard `bundleCorridors` records and checks the same way: a later pass quietly undoing
+     * ADR-0065 M2's obstacle avoidance, on exactly the plans where both matter. Here every
+     * candidate is blocked, so the correct answer is to leave a crossing in place.
+     */
+    const crosser = elbow(0, 0, 20, 100, 100);
+    const other = OBSTRUCTED();
+    const before = JSON.parse(JSON.stringify(crosser)) as typeof crosser;
+
+    // One bar filling the whole of the one lane this corridor crosses.
+    const index: LaneIntervalIndex = new Map([[1, { spans: [[-1000, 1000] as [number, number]] }]]);
+
+    const moved = chooseCorridorsByCrossing(
+      [
+        { line: crosser, fromLane: 0, toLane: 2 },
+        { line: other, fromLane: 0, toLane: 1 },
+      ],
+      index,
+      GAP,
+    );
+
+    expect(moved).toBe(0);
+    expect(crosser).toEqual(before);
+  });
+
+  it('is deterministic: the input array order cannot change the lines', () => {
+    // ADR-0065's rule — a route that varies between frames reads as the diagram twitching. The
+    // pass decides each corridor against a FROZEN snapshot, so the order it walks them in is not
+    // an input to any decision.
+    const build = () => [elbow(0, 0, 20, 100, 100), OBSTRUCTED(), elbow(3, 5, 18, 120, 95)];
+    const forward = build();
+    const backward = build();
+    const lanes = [
+      { fromLane: 0, toLane: 3 },
+      { fromLane: 0, toLane: 1 },
+      { fromLane: 0, toLane: 3 },
+    ];
+    const index = laneIntervalIndex([], VIEW, '2026-01-01');
+
+    chooseCorridorsByCrossing(
+      forward.map((line, i) => ({ line, ...lanes[i]! })),
+      index,
+      GAP,
+    );
+    chooseCorridorsByCrossing(
+      [...backward.map((line, i) => ({ line, ...lanes[i]! }))].reverse(),
+      index,
+      GAP,
+    );
+
+    expect(forward).toEqual(backward);
+  });
+
+  it('leaves a six-point VHV route alone', () => {
+    /**
+     * A VHV route exists because NO single corridor was clear — `routeOrthogonal`'s last
+     * structured attempt. Moving one of its two legs would be re-deciding that search from the
+     * outside with less information than it had.
+     */
+    const vhv = [
+      { x: 0, y: 0 },
+      { x: 20, y: 0 },
+      { x: 20, y: 30 },
+      { x: 60, y: 30 },
+      { x: 60, y: 100 },
+      { x: 100, y: 100 },
+    ];
+    const before = JSON.parse(JSON.stringify(vhv)) as typeof vhv;
+
+    chooseCorridorsByCrossing(
+      [
+        { line: vhv, fromLane: 0, toLane: 3 },
+        { line: OBSTRUCTED(), fromLane: 0, toLane: 1 },
+      ],
+      laneIntervalIndex([], VIEW, '2026-01-01'),
+      GAP,
+    );
+
+    expect(vhv).toEqual(before);
+  });
+
+  it('does nothing at all when nothing crosses', () => {
+    // The `current === 0` early return: a corridor that crosses nothing has no reason to move, and
+    // moving it could only make the picture worse.
+    const a = elbow(0, 0, 20, 100, 100);
+    const b = elbow(500, 0, 520, 600, 100);
+    const before = JSON.parse(JSON.stringify([a, b])) as unknown[];
+
+    expect(
+      chooseCorridorsByCrossing(
+        [
+          { line: a, fromLane: 0, toLane: 3 },
+          { line: b, fromLane: 0, toLane: 3 },
+        ],
+        laneIntervalIndex([], VIEW, '2026-01-01'),
+        GAP,
+      ),
+    ).toBe(0);
+    expect([a, b]).toEqual(before);
   });
 });

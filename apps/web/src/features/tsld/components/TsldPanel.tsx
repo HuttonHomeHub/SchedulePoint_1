@@ -23,7 +23,7 @@ import {
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
-import { computeLaneArrangement } from '../model/arrange-lanes';
+import { arrangeOfferMessage, summariseLaneArrangement } from '../model/arrange-lanes';
 import {
   addAll,
   type CanvasSelection,
@@ -1624,6 +1624,58 @@ export function TsldPanel({
   // bars simply don't paint (`paint.ts` skips `earlyStart === null`).
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
 
+  const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
+
+  /**
+   * What one press of `Arrange` would do — **derived once**, and read by the dock's offer, the
+   * confirmation dialog and the toolbar's early return alike (diagram-legibility M-C2).
+   *
+   * Before this the pack ran only when a planner pressed the button. The offer has to know the
+   * answer **before** they ask — that is what makes it an offer rather than a button — so the
+   * derivation moves onto the render path. **Measured before it was moved** (M-C0-T3b, FC-C8's
+   * cost limb): 8.15 ms worst of nine runs at `scale-2000` against a 16 ms frame budget, with the
+   * withdrawal clause written down first. It is memoised on the four inputs it reads, so a pan, a
+   * zoom, a selection or a hover costs nothing.
+   *
+   * `wbsBand.sceneActivities` is what the canvas paints and what gets packed into the low lanes
+   * (`docs/TECH_DEBT.md` #364); band off, that field is `activities` by identity, so this is the
+   * pre-#364 pack unchanged.
+   */
+  const arrangeSummary = useMemo(
+    () =>
+      summariseLaneArrangement({
+        activities,
+        sceneActivities: wbsBand.sceneActivities,
+        dependencies,
+        dataDate,
+      }),
+    [activities, wbsBand.sceneActivities, dependencies, dataDate],
+  );
+  /**
+   * Dismissed for this plan, for this session. **Not persisted**, consistent with every other
+   * toggle on this surface (`use-tsld-canvas-ui-state.ts` holds them all in `useState`), and per
+   * plan by construction rather than by a key: the host remounts this panel on `key={planId}`.
+   */
+  const [arrangeOfferDismissed, setArrangeOfferDismissed] = useState(false);
+  /**
+   * **Omitted, not shaded, when the reader cannot take it** (ADR-0082's omit clause). The strip's
+   * entire content is an offer to press a pen-gated command, so without the pen there is nothing
+   * left of it but a permanently un-actionable notice — the lit-but-inert defect ADR-0059 M6 and
+   * ADR-0062 M6 both record shipping. That is the opposite of how every *command* on this surface
+   * is gated, and deliberately so: a command shaded with a reason still tells you what it would do.
+   *
+   * It reads `editingEnabled` — the panel's one authoring gate — rather than assembling a fourth
+   * `{ role, pen }` boolean beside it (ADR-0062's rule). That makes it **one conjunct stricter**
+   * than the toolbar item, which does not consult `onCreate`: a host that wired `onAutoArrange`
+   * and not `onCreate` would get the command and no offer. No such host exists, and the honest
+   * trade is one shared gate against a fourth hand-assembled one.
+   */
+  const arrangeOfferAvailable =
+    onAutoArrange !== undefined &&
+    editingEnabled &&
+    !arrangeOfferDismissed &&
+    arrangeSummary.changes.length > 0;
+
   /**
    * Which strip the canvas dock shows. The rule and its reasoning live in
    * `model/dock-strip.ts`, exported so the DECISION can be asserted rather than the DOM
@@ -1637,8 +1689,8 @@ export function TsldPanel({
     mode,
     authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
     hasPlacementMigrationNotice: placementMigrationNotice != null,
+    hasArrangeOffer: arrangeOfferAvailable,
   });
-  const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
   // The docked selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
   // (open-logic + edit + delete). Its mutating actions are pen-gated as a set via `canEditSchedule`,
@@ -2210,13 +2262,10 @@ export function TsldPanel({
   // lanes: the summaries the band draws are appended above it rather than threaded through it
   // (`docs/TECH_DEBT.md` #364). Band off, that field is `activities` by identity, so this is the
   // pre-#364 pack unchanged.
-  const computeArrangeChanges = (): { id: string; laneIndex: number }[] =>
-    computeLaneArrangement({
-      activities,
-      sceneActivities: wbsBand.sceneActivities,
-      dependencies,
-      dataDate,
-    });
+  // **The same derivation the dock's offer reads** (`arrangeSummary` above), so the rows the strip
+  // promises and the moves the dialog confirms can never be a version apart — the drift ADR-0065
+  // and ADR-0121 both record, where each number looks right alone.
+  const computeArrangeChanges = (): { id: string; laneIndex: number }[] => arrangeSummary.changes;
 
   // Toolbar click: compute the pack up front so an already-tidy diagram reports "nothing to move"
   // immediately (no pointless confirm round-trip, and no dialog that could dead-end) — only open
@@ -2954,6 +3003,73 @@ export function TsldPanel({
                 Start editing this plan to draw activities.
               </span>
             )}
+          </NoticeStrip>
+        ) : null}
+
+        {/*
+          **The `Arrange` offer** (diagram-legibility M-C2), closing `docs/TECH_DEBT.md` #363's
+          second half: the command existed and nothing ever told a planner it was worth pressing.
+
+          The sentence states what the press would DO, in all three directions, because a press can
+          legitimately make the diagram taller — `packLanes` refuses same-lane time overlap, so a
+          layout that overlaps needs more rows to be correct, and an offer that only ever promised
+          a saving would be false on exactly those plans. Measured at `scale-2000`: 50 rows → 41.
+          Measured on a synthetic 500-bar scene whose generator deals bands into lanes without
+          regard to overlap: 32 → 41.
+
+          Omitted rather than shaded without the pen — see `arrangeOfferAvailable`.
+        */}
+        {dockStrip === 'arrange-offer' ? (
+          <NoticeStrip
+            data-testid="canvas-arrange-offer"
+            emphasis="dashed"
+            message={arrangeOfferMessage(arrangeSummary)}
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                // The SUCCESS path has the Dismiss hazard one step later, and only here — the
+                // toolbar's Arrange button survives its own press, this one does not. A native
+                // `<dialog>` restores focus on close to whatever held it when `showModal()` ran,
+                // and by then the write has landed, `arrangeSummary.changes` is empty and this
+                // strip has gone: focus would be handed back to a button that no longer exists.
+                // Moving it first makes the listbox the restore target, so the dialog returns the
+                // planner to the diagram it just rearranged. Deliberately NOT inside
+                // `openAutoArrange`, which the toolbar shares and whose own trigger is stable.
+                //
+                // Proven in a browser rather than reasoned about: removing this one line turns
+                // `e2e-arrange`'s step (5) red with focus on <body>. The accessibility review
+                // raised it as a RISK it could not settle from source, and it is real.
+                listboxRef.current?.focus();
+                openAutoArrange();
+              }}
+            >
+              Arrange
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // Dismissing UNMOUNTS the strip holding the button being pressed, and the rung
+                // below it (`placement-migration`) may not render at all — so without a
+                // destination focus reverts to <body>. That is WCAG 2.4.3, and on THIS surface it
+                // is also silent: every keyboard accelerator is a React `onKeyDown` on the
+                // workspace root, and <body> is that root's ancestor, so a planner who dismisses
+                // the offer loses Undo, Escape and the arrow keys with nothing on screen saying
+                // so. Focus goes to the diagram's parallel listbox for the same reason the empty
+                // strip's button sends it there (above): it is where the canvas is operated from
+                // next, and it is this file's established destination for a programmatic move.
+                // Ordered BEFORE the state flip, because the element focus is leaving is the one
+                // the flip destroys.
+                listboxRef.current?.focus();
+                setArrangeOfferDismissed(true);
+              }}
+            >
+              Dismiss
+            </Button>
           </NoticeStrip>
         ) : null}
 

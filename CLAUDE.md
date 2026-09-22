@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1290 web
-> source files with 44 Playwright suites beside the base journey, and
-> 148 ADRs.
+> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1291 web
+> source files with 45 Playwright suites beside the base journey, and
+> 149 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5367,6 +5367,112 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   claim that "`tsc` found all three" — which it structurally cannot, an exported symbol with no
   caller being no error. And `docs/API.md` had never been told about any of it. **The CPM engine's
   network pass is byte-identical for every input**, so the ADR-0034 conformance matrix is untouched.
+
+- **ADR-0149** _(Accepted; M-C0/M-C2/M-C3 landed 2026-09-22, M-C1 and M-C4 withdrawn on their own
+  conditions)_ — A corridor is chosen for what it crosses, and height was never the currency. The
+  product owner compared the TSLD with a NetPoint diagram — _"the logic lines cross each other,
+  which in NetPoint they rarely do"_ — and set the trade explicitly: _"I get we are minimising lanes
+  but this isn't the deal breaker, readability is. I'm happy to have to pan the canvas to see clear
+  data if it's better readable."_ That reverses the objective `packLanes` was built around, and
+  **every measurement since says the space was never the currency**.
+  **Nothing here could measure the complaint.** Every number the epic had produced — mean `|Δlane|`,
+  the `>5-lane` count, `vhv-gutter-probe`'s excursion — is a per-link **magnitude**, and a crossing
+  is a property of a **pair**; no function of the first determines the second. So the metric reads
+  the polylines the **real painter** draws, through a recorder that captures **how each path was
+  flushed** — because 237 of 520 sentinel-coloured paths in the first dump were filled arrowhead
+  triangles built from `moveTo` + `lineTo`, and a recorder that could not tell a `fill()` from a
+  `stroke()` would have reported **84 % more lines than exist** with nothing on screen looking
+  wrong. The colour narrows it to the layer; the flush kind is the discriminator.
+  **FC-C1, the condition calibrating that metric, FAILED at 0.83× in the wrong direction**: source
+  order — the epic's worst layout on every length proxy — measures 2.160 crossings per link against
+  the shipped 2.612, i.e. **17 % better**. The instrument was sound (a same-height scramble measures
+  7.085, **2.71×**); the premise was not, because **length and crossings are different and partly
+  opposed quantities** and nothing had ever checked. The comparands were replaced on the product
+  owner's decision and **the threshold moved 3× → 2× after its measurement**, which is the one thing
+  `part-c-conditions.md` exists to prevent and is recorded as such rather than presented as
+  unchanged.
+  **D3 — the gutter is not the term, and no pitch can make it one.** Both halves of FC-C3 are
+  unachievable, identically at 28, 36 and 44 px: `routeOrthogonal` derives the VHV leg's y from an
+  expression with **no per-link term**, so 13 of Unit 300's 68 gutter legs draw at a **single y**
+  whatever the pitch (and `bundleCorridors` bundles verticals only, so it cannot help); and that
+  expression expands to exactly the upper lane's bar bottom at every pitch, so measured against
+  `activityRect` — the painter's own rect source, never the routing formula — **58 of 68 legs lie
+  _inside_ a painted bar**, smallest gap 0.0 px. M-C1 withdrawn, pitch stays 28.
+  **D4 — the router ships and is the epic's one positive result: 2.612 → 2.069 crossings per link,
+  −20.8 %, at zero vertical cost.** A post-pass beside `bundleCorridors` and before it, moving each
+  four-point elbow to the candidate x at which its **whole line** crosses fewest others. It never
+  measures its own output (the snapshot is frozen — moving a corridor moves the two horizontals
+  attached to it, and re-reading as it went is ADR-0090's oscillation with a different subject),
+  never undoes ADR-0065 M2's obstacle avoidance (the same `isLaneFreeAt` check `bundleCorridors`
+  makes), moves only on a **strict** improvement in a fixed order, and moves the line only. **The
+  single decision worth carrying**: `routeOrthogonal` skips a corridor whose endpoints are within
+  one lane of each other — correctly, because it is asking whether it could hit a **bar** — and
+  inheriting that skip excluded **115 of 188 links**. The pass is worth −4.1 % with it and −20.8 %
+  without. Scoring the corridor alone made the diagram very slightly **worse** (+0.4 %), which is
+  how the objective came to count all three segments. FC-C2's 50 % floor is **not met** and is
+  recorded as not met.
+  **D5 — the layout rule is WITHDRAWN, and all three candidates are worse than what ships.** The
+  product owner re-aimed M-C4 at logic-aware assignment on the evidence that a random assignment at
+  constant height is 2.71× worse. Measured whole-plan against a shipped 1.691: chain rows
+  **+85.8 %**, depth-first pack **+63.2 %**, near-predecessors **+9.7 %**. **Chain rows — the most
+  intuitive idea in the epic, and the shape a NetPoint diagram has — is the worst of the three**,
+  because reserving a row for a chain pushes everything else up and lengthens every link that is not
+  in it, and a 144-activity programme has far more cross-chain links than chain links. It does not
+  say assignment is irrelevant; it says the shipped greedy first-fit with its predecessor hint is
+  already near the good end.
+  **D6 — `Arrange` is offered, and the offer is omitted rather than shaded.** `docs/TECH_DEBT.md`
+  #363 was raised by grepping every `e2e*` directory for the command and finding **zero files**: it
+  shipped with the canvas, nothing had ever pressed it, and nothing told a planner it was worth
+  pressing. The strip states all three row outcomes — a press can legitimately make the diagram
+  **taller**, because `packLanes` refuses same-lane overlap — from **one** derivation shared with
+  the confirmation dialog, costed at **8.15 ms at `scale-2000`** against a 16 ms frame before it
+  moved onto the render path. Without the pen it is **omitted**, the opposite of how every command
+  here is gated and deliberately so: the strip's whole content is an offer to press a pen-gated
+  command. `apps/web/e2e-arrange/` is the first thing in this repository ever to press it, with the
+  pen enforced at the API, and it drives a **real `.xer` import** to prove the offer is correctly
+  silent there — the negative control the milestone's own plan first had backwards.
+  **D7 — the WBS band's default stays off**: compressing 21 rows to 12 costs **+11.6 % to +26.9 %**
+  crossings at three of three zooms, so CQ-C4's withdrawal clause fires. Not an argument for
+  reverting `#364`.
+  **An instrument defect was found by LOOKING at a picture, after every number had been taken.** The
+  harness placed each `WBS_SUMMARY` at day 0 rather than rolling its span up from its children;
+  re-taken, every headline conclusion survived or strengthened and one sub-finding was **refuted** —
+  "the band's summary bars move no line" was an artefact, and the discriminator that had ruled out
+  the obvious alternative proved the right **code** ran while saying nothing about whether it ran on
+  the right **data**. It also puts `#364`'s "13 of 27 lanes, 420 px" in question (same harness
+  family; re-reads as 4 of 21 / 112 px), filed as **#365**.
+  **D8 — the gate pass, and what a dock strip owes the control it unmounts.** Three specialist
+  reviews; **component** returned nothing blocking, having re-derived the epic's own figures from
+  the shipped code and cleared the ADR-0133 D6 memo-stability question dependency by dependency. The
+  other two blocked and **reached the same defect independently**: `Dismiss` unmounted the strip
+  holding the button being pressed with nothing moving focus first, so focus reverted to `<body>` —
+  WCAG 2.4.3, and on this surface also **silent**, because the workspace's keyboard accelerators are
+  a React handler on a root of which `<body>` is an ancestor, so a planner who dismissed the offer
+  lost Undo, Escape and the arrow keys with nothing on screen saying so. **The fix pattern was
+  eleven lines above it in the same file** — the empty strip's button focuses the listbox before
+  arming the mode that unmounts it, under a comment citing this exact criterion — which is one
+  correct pattern applied to a control and not its neighbour for the ninth recorded time here, in a
+  strip written days after reading the one that has it. The test that should have caught it existed
+  and asserted the wrong thing: that the strip was gone, which passes identically either way. So the
+  rule is stated generally — **a control that destroys itself names its successor** — and applied to
+  the **success** path too, which was raised as a risk rather than a finding and was therefore
+  checked rather than filed: a native `<dialog>` restores focus on close to whatever held it when
+  `showModal()` ran, and by then the strip has gone. Fixed at the **strip's call site only**,
+  because the toolbar shares the handler and its own trigger survives its press; **asserted in the
+  journey and not in a unit test**, since jsdom has neither a top layer nor native focus restoration
+  and no unit suite here can ask the question at all. The third blocking finding was a sentence that
+  was accurate and undersold the press — "the same 9 rows" reads as _nothing visible happens_ — now
+  naming the **mechanism** rather than an outcome per link, because the predecessor hint chooses
+  among lanes that are **already free** and promising the shorter link would overclaim. Four
+  non-blocking findings are `docs/TECH_DEBT.md` **#366**; the one that **cannot** be fixed here is
+  worth the sentence, since the offer is omitted from a Planner who has merely not taken the pen and
+  `canEdit` fuses role and pen before this component sees it, so the honest second sentence is
+  unwritable without #114.1 — and shading with the wrong reason is the false-statement defect #114
+  records shipping.
+  **Two of four milestones were withdrawn on their own committed conditions, and the epic's
+  deliverable is as much those two negative results as the 20.8 %.** `apps/api` contributes zero
+  files to the diff, so the CPM engine is not imported, no migration runs, and the ADR-0034 parity
+  gate is untouched by construction.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

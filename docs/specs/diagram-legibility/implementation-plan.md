@@ -1,8 +1,7 @@
 # Implementation Plan: Diagram legibility — link directness and the activity glyph
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval before
-  implementation.**
-- **Status:** Draft — awaiting approval before implementation
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted.**
+- **Status:** Accepted — Part C shipped (ADR-0149); Part A M3 and Part B held by the product owner
 - **Owner:** web
 
 > **Read §0 of the spec first.** Four claims in the brief that started this epic did not survive

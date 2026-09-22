@@ -1,6 +1,9 @@
 # Feature Spec: Diagram legibility — link directness and the activity glyph
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Accepted — Part C shipped (ADR-0149: the crossing-aware corridor pass and the
+  `Arrange` offer). Part A's lane budget (M3) and Part B (the bar/link visual refresh) are
+  **held by the product owner**, not withdrawn — see `part-c-verdict.md` for why height turned
+  out not to be the currency this spec assumed it was.
 - **Author(s):** feature-analyst (Claude Opus 5)
 - **Date:** 2026-09-21
 - **Tracking issue / epic:** _(none yet)_
@@ -817,6 +820,13 @@ No design-system component changes; no new UI primitive; no one-off styling.
 ---
 
 ## 5. Links
+
+> **This epic has a Part C**, opened 2026-09-22 after `web-v0.140.1` was used:
+> [`./part-c-feature-spec.md`](./part-c-feature-spec.md) ·
+> [`./part-c-implementation-plan.md`](./part-c-implementation-plan.md). It is about **link–link
+> crossings**, which is a different quantity from this document's excursions and travel proxies —
+> see its §0.4 — and its §0.1 records that `cheap-levers.md`'s "shipped" row and every height figure
+> derived from it describe the **pre-#364** tree.
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Docs this change will update: `docs/DECISIONS.md` (M1), `docs/TECH_DEBT.md` (the new row for the
