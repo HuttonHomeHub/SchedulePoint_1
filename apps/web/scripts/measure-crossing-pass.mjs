@@ -5,10 +5,15 @@
  *   node scripts/measure-crossing-pass.mjs
  *
  * `chooseCorridorsByCrossing` bought ADR-0149 its headline −20.8 % on crossings. It moves an elbow
- * to candidates including `(from.x + to.x) / 2`, `to.x − gap` and offsets up to `± 8 × gap`
- * (`link-routing.ts:879-890`), scores them on **crossings only** (`:859-862`), and checks bars in
- * the **crossed lanes** only (`:889`) — which excludes both endpoint lanes, where the two horizontal
- * legs run. **Nothing checks the resulting legs.** A corridor moved far from its anchor lengthens
+ * to candidates including `(from.x + to.x) / 2`, `to.x − gap` and offsets up to `± 8 × gap`, scores
+ * them on **crossings only**, and checks bars in the **crossed lanes** only — which excludes both
+ * endpoint lanes, where the two horizontal legs run. **Nothing checks the resulting legs.**
+ *
+ * (Named rather than cited by line: the three `link-routing.ts:8xx` citations this docblock carried
+ * were accurate when M0 wrote them and pointed at `arrowhead()` by the time M3 landed ~300 lines
+ * earlier in the file. The M6 component review found them. A line number in a script that outlives
+ * the milestone that wrote it is a claim with a short shelf life and no gate — `check:claims` binds
+ * only citations into DEPENDENCIES, so nothing here was ever going to fail.) A corridor moved far from its anchor lengthens
  * the leg, and a long leg is what meets a bar.
  *
  * So the pass is a candidate cause of a defect Part C never measured, and this measures it: the FC-L0
@@ -16,7 +21,7 @@
  *
  * ## How OFF is produced, and why it is a bundle patch rather than a flag
  *
- * There is no seam. `paint.ts:1228` calls the pass unconditionally inside the `scene.linkRouting`
+ * There is no seam. `paint.ts` calls the pass unconditionally inside the `scene.linkRouting`
  * branch, and adding a scene flag would be product code written to serve a measurement — the thing
  * ADR-0128 exists to refuse. Instead the harness bundles `crossing-probe.ts` once, then produces a
  * second bundle with that one call statement textually removed.

@@ -36,10 +36,19 @@ import type { Viewport } from '@/features/tsld/render/render-model';
  *
  * | scene | preset | total | on screen | px/day | span   |
  * | ----- | ------ | ----- | --------- | ------ | ------ |
- * | 500   | week   | 540   | **192**   | 12.00  | 362 d  |
- * | 500   | fit    | 540   | 540       | 4.55   | 362 d  |
- * | 2,000 | week   | 2,160 | **222**   | 12.00  | 1,150 d|
- * | 2,000 | fit    | 2,160 | 1,591     | 1.43   | 1,150 d|
+ * | 500   | week   | 540   | **196**   | 12.00  | 362 d  |
+ * | 500   | fit    | 540   | 311       | 4.55   | 362 d  |
+ * | 2,000 | week   | 2,160 | **224**   | 12.00  | 1,150 d|
+ * | 2,000 | fit    | 2,160 | 914       | 1.43   | 1,150 d|
+ *
+ * **Re-derived 2026-09-22 against the 52 px row** (logic-legibility M3-T3, ADR-0151). Week barely
+ * moves — 192 → 196 and 222 → 224, which is the cull doing its job on a time axis the row never
+ * touched. **Fit falls by nearly half** (1,591 → 914 at 2,000), because a 900 px viewport now holds
+ * 17 lanes at 52 px where it held 32 at 28 — and no zoom touches the lane axis, so at Fit the
+ * probe now frames a smaller share of the plan than it used to. The figures above were stale for
+ * one release and a performance review caught them; `minVisibleBarsFor`'s geometric cap was
+ * updated in the same epic and this table was not, which is a document and its own code
+ * disagreeing about a number they both compute.
  *
  * **At the Week framing the two limbs draw almost the same picture** — 192 bars against 222 — because
  * a working zoom frames roughly 137 days whatever the plan's size, and a bigger plan is mostly a

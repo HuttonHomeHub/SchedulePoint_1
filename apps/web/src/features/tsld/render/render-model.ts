@@ -224,23 +224,34 @@ export function nodeCentres(rect: Rect): [Point, Point] {
 }
 
 /**
- * Whether a bar's node glyphs are **filled** (as opposed to hollow) — criticality's second,
- * non-colour channel (WCAG 1.4.1, CQ-6).
+ * **Criticality's second, non-colour channel — three rungs, not two** (WCAG 1.4.1, CQ-6).
  *
- * The shipped cue was a **dashed emphasis outline** on the bar, and a dash on a 5 px outline is
- * not a channel a reader can use — the dash period is larger than the shape it is dashing. So the
- * shape difference moves to the node, which the reference already draws both ways and which is
- * legible at a glance across a whole diagram rather than only on the bar under the cursor.
+ * The cue this epic replaced was a **dashed emphasis outline on the bar**, and it carried three
+ * states: solid for critical, dashed for near-critical, absent for neither. A dash on a 5 px
+ * outline is not a channel a reader can use — the dash period is wider than the shape being
+ * dashed — so the shape difference moves to the node, which the reference draws both ways.
  *
- * **This is a product-owner decision presented as a default, not settled here** (FC-L8 limb 1: a
- * cue that moves is recorded as moved, a cue that goes is theirs). It is put up with the rendered
- * picture at M3-T3, and the fill is the default because it is the reference's own answer.
+ * **M3-T3 shipped that move as a BOOLEAN, and the accessibility gate caught it**: `isCritical ||
+ * isNearCritical` collapsed two states into one, so critical and near-critical became
+ * distinguishable by **hue alone** — a real WCAG 1.4.1 regression against a cue that had carried
+ * three states for a year, on the most important distinction in the product. So the rung is a
+ * three-value union and the compiler makes every caller name each branch.
+ *
+ * **Which glyph carries each rung is still CQ-6's to settle** (FC-L8 limb 1: a cue that moves is
+ * recorded as moved, a cue that goes is the product owner's). What is NOT open is the count:
+ * three states in, three states out.
  */
-export function nodeIsFilled(activity: {
+export type CriticalityRung = 'critical' | 'near' | 'none';
+
+/** The rung an activity draws at. `isCritical` wins where both flags are set — the engine never
+ * sets both, and a reader who sees the critical mark on a critical activity is not misled. */
+export function criticalityRung(activity: {
   isCritical?: boolean;
   isNearCritical?: boolean;
-}): boolean {
-  return activity.isCritical === true || activity.isNearCritical === true;
+}): CriticalityRung {
+  if (activity.isCritical === true) return 'critical';
+  if (activity.isNearCritical === true) return 'near';
+  return 'none';
 }
 
 /** Which refreshed glyph family a bar draws as (ADR-0052 M4). */

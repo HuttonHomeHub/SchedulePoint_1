@@ -8,7 +8,13 @@ import {
   LANE_HEIGHT,
   TAIL_HEIGHT,
 } from './geometry';
-import { BAR_RADIUS, GLYPH_CAP_OVERHANG, PROGRESS_BAND_H, SUMMARY_TAB_H } from './render-model';
+import {
+  BAR_RADIUS,
+  GLYPH_CAP_OVERHANG,
+  NODE_RADIUS,
+  PROGRESS_BAND_H,
+  SUMMARY_TAB_H,
+} from './render-model';
 
 /**
  * **Each glyph constant's justification, asserted** (logic-legibility M3-T2, re-baselined at T3).
@@ -104,5 +110,18 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
       SUMMARY_TAB_H: 1,
       PROGRESS_BAND_H: 1,
     });
+  });
+
+  /**
+   * **`NODE_RADIUS` is bounded by the row, symbolically.** It is the one BAR_HEIGHT-derived glyph
+   * constant that arrived without an inequality (its siblings all carry `Math.min(BAR_PAD - 1, …)`),
+   * so containment was proved only by `paint.lane-containment.test.ts` running the painter at the
+   * shipped numbers. That is real cover and it is not the same claim: a future change to
+   * `LANE_HEIGHT` alone would be caught by the containment suite and not by any rule. Added by the
+   * M6 component review so the coverage is uniform across the family.
+   */
+  it('keeps a node inside its lane — the relationship, not the shipped number', () => {
+    // A node is centred on the bar's centre-line, so it reaches `NODE_RADIUS` above the bar's top.
+    expect(NODE_RADIUS - BAR_HEIGHT / 2).toBeLessThanOrEqual(BAR_PAD);
   });
 });

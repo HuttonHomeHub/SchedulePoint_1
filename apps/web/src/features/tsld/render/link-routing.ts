@@ -928,12 +928,29 @@ export function elbowRadius(a: Point, b: Point, c: Point, max = LINK_ELBOW_RADIU
  * The reference the product owner chose solves the same crowding the other way. Every link
  * converges on the **node glyph** at the bar's end (`render-model.ts`), which is a shape a reader's
  * eye lands on rather than a spread that needs vertical room on the bar. So this is a replacement,
- * not a loss — and it takes a per-frame memoised pass off the draw path, measured at 5–11 ms alone
- * at 2,000 activities / 4,000 edges.
+ * not a loss — and it takes a pass off the draw path. **What that saves is smaller than the figure
+ * usually quoted with it, and the M6 performance review was right to say so.** The 5–11 ms measured
+ * at 2,000 activities / 4,000 edges (`docs/TECH_DEBT.md` 51(a)) is the cost the ADR-0052 M5 WeakMap
+ * memo had ALREADY removed from a pan frame: `scene.edges` is reference-stable across pan and zoom
+ * (`TsldPanel.tsx`'s `useMemo` over `dependencies`), so the per-frame cost was a `WeakMap.get`. What
+ * this deletion actually reclaims is that lookup per frame, plus the 5–11 ms **once per edge-list
+ * change** — real, and a rarer event than a frame.
  *
  * `elbowShift` survives as a general parameter of {@link routeOrthogonal}: fan-out was its only
  * caller, but it says something about the elbow rather than about the bar, and the corridor search
  * still uses it.
+ */
+/**
+ * Half-width (px) of a routed arrowhead's barbs.
+ *
+ * **Its old justification named fan-out and this epic deleted fan-out** (ADR-0151 D4), so the
+ * constant briefly stood with a reason that pointed at nothing — the exact shape
+ * `geometry.constant-derivation.test.ts` exists to remove, one file over, found by the M6
+ * component review. Re-stated in terms of what it still protects: the barbs must stay inside the
+ * corridor the head sits on, and at the tightest bundling `corridorGap` allows a wider barb would
+ * reach across its neighbour's line. It is deliberately NOT derived from `BAR_HEIGHT`: an
+ * arrowhead is a decoration on a LINK, and inheriting a bar-derived value would shrink every head
+ * the day the bar thins, for no reason anybody chose (the ADR-0151 D2 ruling).
  */
 export const ARROWHEAD_HALF_W_PX = 3;
 

@@ -1,8 +1,14 @@
 /**
  * The visible key for the diagram, mirroring the canvas exactly: each activity class is a
- * fill colour **paired with an outline style** (solid / dashed / none) so criticality is
- * never conveyed by colour alone (WCAG 1.4.1). Swatches read their colours from the same
- * design tokens the painter uses, so the key stays truthful across themes.
+ * fill colour **paired with a node glyph** (filled / ring / hairline) so criticality is never
+ * conveyed by colour alone (WCAG 1.4.1). Swatches read their colours from the same design tokens
+ * the painter uses, so the key stays truthful across themes.
+ *
+ * **The node replaced a dashed bar outline** (logic-legibility M3-T3): a 5 px bar has no room to
+ * dash. This file kept describing the retired cue for one epic — a key teaching a shape language
+ * the diagram no longer speaks is worse than no key at all, because a planner hunts for a mark
+ * that is not there — and that is the half of the M6 accessibility finding nothing could have
+ * caught from the painter alone.
  *
  * Shared so the self-contained {@link TsldPanel} chrome and the canvas-first floating Legend panel
  * (ADR-0031) render one definition — the key can't drift from the canvas or itself.
@@ -19,6 +25,7 @@ import { cn } from '@/lib/utils';
 
 type LegendItem =
   | { label: string; swatch: React.CSSProperties }
+  | { label: string; criticality: 'critical' | 'near' | 'none'; fill?: string }
   | { label: string; line: 'solid' | 'dashed' }
   | { label: string; pin: true }
   | { label: string; today: true }
@@ -34,30 +41,21 @@ type LegendItem =
   | { label: string; slack: true }
   | { label: string; text: true };
 
-/** The Critical / Near-critical / On-schedule colour key (the default, criticality-mode fills). */
+/** The Critical / Near-critical / On-schedule key — **fill AND node**, because the canvas draws
+ * both and the node is the channel that survives without colour (WCAG 1.4.1). */
 const CRITICALITY_SWATCHES: ReadonlyArray<LegendItem> = [
-  {
-    label: 'Critical',
-    swatch: {
-      backgroundColor: 'var(--destructive)',
-      border: '1.5px solid var(--foreground)',
-    },
-  },
-  {
-    label: 'Near-critical',
-    swatch: {
-      backgroundColor: 'var(--warning)',
-      border: '1.5px dashed var(--foreground)',
-    },
-  },
-  { label: 'On schedule', swatch: { backgroundColor: 'var(--primary)' } },
+  { label: 'Critical', criticality: 'critical', fill: 'var(--destructive)' },
+  { label: 'Near-critical', criticality: 'near', fill: 'var(--warning)' },
+  { label: 'On schedule', criticality: 'none', fill: 'var(--primary)' },
 ];
 
-/** The criticality **outline** shape cues, kept in every non-Criticality Colour-by mode so criticality
- * is still readable when the fill encodes something else (WCAG 1.4.1). */
+/** The criticality **node** cues alone, kept in every non-Criticality Colour-by mode so criticality
+ * is still readable when the fill encodes something else (WCAG 1.4.1). Three rungs, because the
+ * canvas draws three: a filled node, a heavier ring, and the calm hairline every other bar wears —
+ * so "on schedule" needs no row here, only the two that are marked. */
 const CRITICALITY_OUTLINES: ReadonlyArray<LegendItem> = [
-  { label: 'Critical (outline)', swatch: { border: '1.5px solid var(--foreground)' } },
-  { label: 'Near-critical (outline)', swatch: { border: '1.5px dashed var(--foreground)' } },
+  { label: 'Critical (node)', criticality: 'critical' },
+  { label: 'Near-critical (node)', criticality: 'near' },
 ];
 
 /** The shape/marker + link cues shared by every mode (independent of the bar fill). */
@@ -194,7 +192,34 @@ export function TsldLegend({
     >
       {items.map((item) => (
         <li key={item.label} className="flex items-center gap-1.5">
-          {'text' in item ? (
+          {'criticality' in item ? (
+            // A thin bar with its end node — the canvas's own pair. The node is `--foreground` at
+            // both emphasised rungs and `--border` at rest, exactly as `resolveTsldPalette` maps
+            // `outline` and `barStroke`, so the key cannot describe a mark the painter does not draw.
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
+              <span
+                className="w-full"
+                style={{ height: 3, backgroundColor: item.fill ?? 'var(--muted-foreground)' }}
+              />
+              <span
+                className="absolute"
+                style={{
+                  right: 0,
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  backgroundColor:
+                    item.criticality === 'critical' ? 'var(--foreground)' : 'transparent',
+                  border:
+                    item.criticality === 'critical'
+                      ? undefined
+                      : item.criticality === 'near'
+                        ? '2px solid var(--foreground)'
+                        : '1px solid var(--border)',
+                }}
+              />
+            </span>
+          ) : 'text' in item ? (
             <span aria-hidden="true" className="inline-flex h-3 w-5 justify-center" />
           ) : 'pin' in item ? (
             <span aria-hidden="true" className="inline-flex h-3 w-5 items-center justify-center">

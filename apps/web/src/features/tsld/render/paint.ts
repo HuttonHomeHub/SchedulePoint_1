@@ -27,7 +27,7 @@ import {
   loeBracketRects,
   NODE_RADIUS,
   nodeCentres,
-  nodeIsFilled,
+  criticalityRung,
   makeWorkingDayWalk,
   laneAtScreenY,
   LABEL_ELLIPSIS,
@@ -519,6 +519,11 @@ function strikeThrough(ctx: Ctx2D, x: number, midY: number, width: number): void
  * The dash pattern that encodes criticality without relying on colour (WCAG 1.4.1):
  * a solid outline for critical, a dashed outline for near-critical, and `null` (no
  * outline) otherwise. Paired with the fill colour and the panel's visible legend.
+ *
+ * **Two consumers, and they are not the same shape.** The legacy (non-refresh) bar layer still
+ * outlines the BAR with it. The refreshed path outlines a **milestone diamond** — which has no
+ * node to carry the rung — and never a bar: a `[3, 2]` period is wider than a 5 px bar outline,
+ * which is the whole reason the bar's rung moved to its nodes (`criticalityRung`).
  */
 function criticalDash(activity: RenderActivity): number[] | null {
   if (activity.isCritical) return [];
@@ -809,9 +814,16 @@ function drawRefreshedBar(
     ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
     // A milestone keeps its outline as the definition stroke. It draws NO nodes: the diamond is
     // already a terminal glyph, and two nodes on a zero-width shape are two circles on each other.
-    ctx.strokeStyle = nodeIsFilled(activity) ? palette.outline : palette.barStroke;
-    ctx.lineWidth = nodeIsFilled(activity) ? EMPHASIS_STROKE_W : 1;
+    // **A milestone has no nodes, so its own outline carries the rung** — weight for emphasis and
+    // the dash for which emphasis, which is exactly the three-state cue the bar used to carry.
+    // It stays legible here for the reason it stopped being legible there: a 14 px diamond's
+    // perimeter has room for a `[3, 2]` dash and a 5 px bar outline has none.
+    const dash = criticalDash(activity);
+    ctx.strokeStyle = dash === null ? palette.barStroke : palette.outline;
+    ctx.lineWidth = dash === null ? 1 : EMPHASIS_STROKE_W;
+    if (dash !== null) ctx.setLineDash(dash);
     ctx.stroke();
+    if (dash !== null) ctx.setLineDash([]);
     return;
   }
 
@@ -860,9 +872,21 @@ function drawRefreshedBar(
   // A circle is traced as a `roundRect` whose radius is half its side, which needs no addition to
   // the `Ctx2D` surface; contexts without `roundRect` get the same square fallback every other
   // rounded shape here already takes.
-  const filled = nodeIsFilled(activity);
-  ctx.strokeStyle = filled ? palette.outline : palette.barStroke;
-  ctx.lineWidth = 1;
+  // **A bracketed span draws no node either, for the milestone's own reason.** An LOE/hammock
+  // cap is 2 px wide and a summary tab 3 px, both at the bar's ends — and a node is a 10 px disc
+  // centred on that same end, so it paints the glyph out entirely. The milestone branch above
+  // states the rule ("the diamond is already a terminal glyph"); the component review found it had
+  // been written for one glyph family and not its two neighbours, which is this register's most
+  // recorded shape. The node is the TASK's terminal glyph; a span that has one of its own keeps it.
+  if (glyph === 'loe' || glyph === 'summary') return;
+
+  const rung = criticalityRung(activity);
+  const filled = rung === 'critical';
+  ctx.strokeStyle = rung === 'none' ? palette.barStroke : palette.outline;
+  // **A RING is near-critical's rung**: heavier than the calm hairline, hollow where critical is
+  // solid. Three shapes, so hue is never the only thing separating the two states a planner most
+  // needs to tell apart — which is what M3-T3's boolean cost and the accessibility gate caught.
+  ctx.lineWidth = rung === 'near' ? EMPHASIS_STROKE_W : 1;
   for (const centre of nodeCentres(rect)) {
     const box: Rect = {
       x: centre.x - NODE_RADIUS,
@@ -1113,7 +1137,9 @@ export function paintScene(
     // bar is 5 px and the step alone exceeded 2.5. The reference solves the same crowding the
     // other way — every link converges on the **node glyph** at the bar's end — which needs no
     // vertical room on the bar at all, and takes a per-frame memoised pass off the draw path with
-    // it (it was measured at 5–11 ms alone at 2,000 activities / 4,000 edges).
+    // it (5–11 ms at 2,000 activities / 4,000 edges — but see `link-routing.ts`'s retirement
+    // note: that is the cost the WeakMap memo had already taken off a PAN frame, so what goes
+    // with the pass is a lookup per frame and the 5–11 ms once per edge-list change).
     const refresh = scene.visualRefresh === true;
     /**
      * Obstacle awareness for the corridor (ADR-0064 M2). Built **once per frame, from the culled
@@ -1659,8 +1685,10 @@ export function paintScene(
     ctx.stroke();
   }
 
-  // Layer 3: activity bars + milestone diamonds. Critical/near-critical activities also
-  // get a solid/dashed outline (a non-colour cue for criticality — WCAG 1.4.1).
+  // Layer 3: activity bars + milestone diamonds. **On the LEGACY path** critical/near-critical
+  // activities get a solid/dashed outline on the bar itself (a non-colour cue for criticality —
+  // WCAG 1.4.1); the refreshed path carries the same three rungs on the node glyph instead, and
+  // `drawRefreshedBar` uses `dash` only for a milestone's own outline.
   for (const [id, rect] of rects) {
     const activity = byId.get(id)!;
     const dash = criticalDash(activity);
@@ -1998,12 +2026,42 @@ export function paintScene(
           // survives, and below that the row shows the bar alone — the name is still on the bar's
           // option in the parallel listbox (ADR-0026 D7), which is where identity actually lives.
           const slots = rowSlots(screenYOfLane(activity.laneIndex, view));
-          const roomPx = rect.w + Math.max(0, besideRoomPx);
-          const text = truncateToWidth(activity.label, roomPx, measure);
+          // **A gap is shared, so each side claims HALF of it.** The residual above was judged by
+          // the M6 UX review against a rendered picture and it garbles: two adjacent names read as
+          // one string (`A.A2300` in `assignment-shipped.png`), which is worse than a shorter name
+          // because it reads as content and is wrong. Halving is what makes non-collision
+          // provable rather than likely — bar i may reach `(gap - LABEL_GAP_PX) / 2` right and bar
+          // i+1 the same distance left, so the two are always `LABEL_GAP_PX` apart. Claiming the
+          // WHOLE gap on each side, which is what the old right-only rule did, lets both do it.
+          const halfGap = (raw: number): number =>
+            raw === Infinity ? size.width : Math.max(0, (raw - LABEL_GAP_PX) / 2);
+          const rightRoom = halfGap(nextLeftX - (rect.x + rect.w));
+          // **The left bound exists only where a previous name does.** With no neighbour behind
+          // it, a first-in-row name keeps today's free centring — it overhangs into empty lane,
+          // which is where the reference puts it and is nobody's room to lose. The room it may
+          // claim for WIDTH is still zero there, so this fix never makes a label longer than the
+          // rule it replaces; it only stops one reaching into another.
+          const hasPrev = i > 0;
+          const leftRoom = hasPrev
+            ? halfGap(rect.x - (row[i - 1]!.rect.x + row[i - 1]!.rect.w))
+            : 0;
+          const text = truncateToWidth(activity.label, rect.w + leftRoom + rightRoom, measure);
           if (!text || text === LABEL_ELLIPSIS) continue;
+          // Centred on its bar where the room allows, then slid back inside whichever neighbour's
+          // half it would otherwise cross. A milestone's 14 px box with a generous gap on one side
+          // still gets that whole half — the alternative (a symmetric cap) would truncate it for
+          // room it is not using.
+          const textW = measure(text);
+          const minCx = hasPrev ? rect.x - leftRoom + textW / 2 : -Infinity;
+          const maxCx = rect.x + rect.w + rightRoom - textW / 2;
+          const centreX = rect.x + rect.w / 2;
           ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'center';
-          ctx.fillText(text, rect.x + rect.w / 2, slots.nameY);
+          ctx.fillText(
+            text,
+            minCx <= maxCx ? Math.min(Math.max(centreX, minCx), maxCx) : centreX,
+            slots.nameY,
+          );
           ctx.textAlign = 'left';
         } else if (placement === 'inside') {
           const text = truncateToWidth(activity.label, rect.w - insidePad * 2, measure);
@@ -2063,8 +2121,9 @@ export function paintScene(
         // **Below the bar when the row reserves a row for it** (M3-T3) — the reference's own
         // placement, and it disposes of `dateLabelSlot` entirely in that case: a flanking date
         // competes with the same-lane neighbour for horizontal room and is suppressed when it
-        // loses, which on a dense programme is most of them. A date under its own bar end has no
-        // neighbour to lose to, so every bar states both its dates at every density.
+        // loses, which on a dense programme is most of them. A date under its own bar end competes
+        // with its own TWIN instead — see the fit test below, and read it before believing the
+        // first draft of this sentence, which promised "both its dates at every density".
         //
         // **The reference's third run — the duration — is deliberately NOT drawn here, and
         // building it is what established why.** It is already on screen: `activityBarLabel`
@@ -2076,12 +2135,53 @@ export function paintScene(
         // layer can reach is the drawn calendar span — a different number on any non-24-hour
         // calendar, printed under a bar as if it were the same one.
         if (reservesTextRows) {
+          // **Both dates or neither, and only when the pair fits inside the bar's own width.**
+          // The M6 UX review reproduced the defect against the real painter: this branch measured
+          // nothing, so on any bar narrower than its two dates the start (left-aligned at the bar's
+          // left edge) and the finish (right-aligned at its right edge) overprint each other, and
+          // the surplus spills past both ends into the neighbours' gaps. The comment below this
+          // one claimed the opposite — "every bar states both its dates at every density" — which
+          // is the reservation of a vertical ROW being read as a guarantee about horizontal room.
+          //
+          // The ladder is the one every other label layer here uses, and **suppression is its
+          // last rung rather than its first**: inside the bar's own ends where the pair fits
+          // there, flanking the ends where the row has room beside them, and nothing where it has
+          // neither — with the dates always on the bar's option in the parallel listbox
+          // (ADR-0026 D7). A first draft suppressed outright, and `paint.dates-budget.test.ts`
+          // refused it: at the LOD threshold a five-day bar is 30 px and two dates are ~72, so
+          // every date in that fixture vanished and the budget gate measured nothing — which its
+          // own docblock calls worse than no fixture. The gate was right and the rule was too
+          // blunt.
           const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
           ctx.fillStyle = palette.labelBeside;
-          ctx.textAlign = 'left';
-          ctx.fillText(startText, rect.x, below);
-          ctx.textAlign = 'right';
-          ctx.fillText(finishText, rect.x + rect.w, below);
+          if (startWidthPx + finishWidthPx + LABEL_GAP_PX <= rect.w) {
+            // **Inside its own ends**, which is the reference's placement and reaches nothing.
+            ctx.textAlign = 'left';
+            ctx.fillText(startText, rect.x, below);
+            ctx.textAlign = 'right';
+            ctx.fillText(finishText, rect.x + rect.w, below);
+          } else {
+            // **Otherwise flank the ends it has room beside**, each end judged on its own HALF of
+            // the gap — the same sharing rule the name row uses one line up, and for the same
+            // reason: the whole gap belongs to two bars, so a rule that grants it to each of them
+            // grants it twice. `dateLabelSlot` is the room test the flanking path has always used;
+            // what is new is halving what it is told the room is.
+            const half = (raw: number): number => Math.max(0, raw / 2);
+            const belowSlot = dateLabelSlot({
+              roomLeftPx: half(rect.x - prevRight),
+              roomRightPx: half(nextLeft - (rect.x + rect.w)),
+              startWidthPx,
+              finishWidthPx,
+            });
+            if (belowSlot.start) {
+              ctx.textAlign = 'right';
+              ctx.fillText(startText, rect.x - LABEL_GAP_PX, below);
+            }
+            if (belowSlot.finish) {
+              ctx.textAlign = 'left';
+              ctx.fillText(finishText, rect.x + rect.w + LABEL_GAP_PX, below);
+            }
+          }
           ctx.textAlign = 'left';
           continue;
         }
