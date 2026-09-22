@@ -25,11 +25,13 @@ import {
   routeOrthogonal,
   summaryTabRects,
   truncateToWidth,
+  BAR_HEIGHT,
   ELAPSED_DAY_WALK,
   FAN_OUT_MAX_PX,
   FAN_OUT_STEP_PX,
   LAG_ANCHOR_PX,
   LABEL_INSIDE_MIN_PX,
+  LABEL_INSIDE_MIN_HEIGHT_PX,
   LABEL_BESIDE_MIN_PX,
   dayAtScreenX,
   dayCellRect,
@@ -940,14 +942,48 @@ describe('fitToContent', () => {
 describe('labelPlacement', () => {
   it('places inside a wide-enough task bar', () => {
     expect(
-      labelPlacement({ barWidth: LABEL_INSIDE_MIN_PX, isMilestone: false, besideRoomPx: 0 }),
+      labelPlacement({
+        barWidth: LABEL_INSIDE_MIN_PX,
+        barHeight: BAR_HEIGHT,
+        isMilestone: false,
+        besideRoomPx: 0,
+      }),
     ).toBe('inside');
+  });
+
+  /**
+   * The height term (logic-legibility M3-T2). `LABEL_INSIDE_MIN_PX` gates **width** and nothing
+   * gated height, so a bar wide enough took an inside label whatever its height — correct at
+   * `BAR_HEIGHT = 18` and, at a NetPoint-thin bar, an 11 px line painted outside a 5 px bar.
+   *
+   * `barHeight` is a **required** parameter rather than a module-level comparison so a milestone
+   * that thins the bar cannot leave this unconsidered (the ADR-0070 rule for `hoursPerDay`).
+   */
+  it('refuses an inside label on a bar too short to hold the line, however wide', () => {
+    expect(
+      labelPlacement({
+        barWidth: LABEL_INSIDE_MIN_PX * 10,
+        barHeight: LABEL_INSIDE_MIN_HEIGHT_PX - 1,
+        isMilestone: false,
+        besideRoomPx: LABEL_BESIDE_MIN_PX,
+      }),
+    ).toBe('beside');
+    // …and with no neighbourly room either, suppressed rather than drawn outside the bar.
+    expect(
+      labelPlacement({
+        barWidth: LABEL_INSIDE_MIN_PX * 10,
+        barHeight: LABEL_INSIDE_MIN_HEIGHT_PX - 1,
+        isMilestone: false,
+        besideRoomPx: 0,
+      }),
+    ).toBe('none');
   });
 
   it('falls back to beside when the bar is too narrow but the neighbour leaves room', () => {
     expect(
       labelPlacement({
         barWidth: LABEL_INSIDE_MIN_PX - 1,
+        barHeight: BAR_HEIGHT,
         isMilestone: false,
         besideRoomPx: LABEL_BESIDE_MIN_PX,
       }),
@@ -955,13 +991,19 @@ describe('labelPlacement', () => {
   });
 
   it('never places a label inside a milestone (no width) — beside when there is room, else none', () => {
-    expect(labelPlacement({ barWidth: 14, isMilestone: true, besideRoomPx: 100 })).toBe('beside');
-    expect(labelPlacement({ barWidth: 14, isMilestone: true, besideRoomPx: 4 })).toBe('none');
+    const milestone = { barWidth: 14, barHeight: BAR_HEIGHT, isMilestone: true };
+    expect(labelPlacement({ ...milestone, besideRoomPx: 100 })).toBe('beside');
+    expect(labelPlacement({ ...milestone, besideRoomPx: 4 })).toBe('none');
   });
 
   it('suppresses when the bar is narrow and the neighbour is too close', () => {
     expect(
-      labelPlacement({ barWidth: 10, isMilestone: false, besideRoomPx: LABEL_BESIDE_MIN_PX - 1 }),
+      labelPlacement({
+        barWidth: 10,
+        barHeight: BAR_HEIGHT,
+        isMilestone: false,
+        besideRoomPx: LABEL_BESIDE_MIN_PX - 1,
+      }),
     ).toBe('none');
   });
 });

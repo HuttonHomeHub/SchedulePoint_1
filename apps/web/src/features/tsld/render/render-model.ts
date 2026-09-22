@@ -1,6 +1,6 @@
 import type { ActivityType } from '@repo/types';
 
-import { isMilestone, LABEL_MIN_PX_PER_DAY, type Rect } from './geometry';
+import { BAR_HEIGHT, BAR_PAD, isMilestone, LABEL_MIN_PX_PER_DAY, type Rect } from './geometry';
 
 /**
  * The pure, renderer-agnostic TSLD render model (ADR-0026) — **the barrel**, plus the bar-glyph
@@ -26,17 +26,31 @@ export * from './working-time';
 
 // ── Bar visual refresh (ADR-0052 M4, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ────────────
 
-/** Corner radius (px) of a refreshed task bar — subtle at BAR_HEIGHT 18, so the bar reads
- * "softened", not "pill". The selection/hover rings add 2 so their curve tracks the bar's. */
-export const BAR_RADIUS = 3;
+/**
+ * Corner radius (px) of a refreshed task bar — **subtle**, so the bar reads "softened", not
+ * "pill". The selection/hover rings add 2 so their curve tracks the bar's.
+ *
+ * Derived rather than written, because "subtle" is a statement about the radius **relative to the
+ * bar** and the literal 3 was subtle only at `BAR_HEIGHT = 18`: at a NetPoint-thin bar, 3 is more
+ * than half the height and the bar is a capsule. A sixth of the bar reproduces today's 3 exactly.
+ */
+export const BAR_RADIUS = Math.max(1, Math.round(BAR_HEIGHT / 6));
 
 /** Outline width (px) of the refreshed critical/near-critical emphasis stroke — heavier than the
  * legacy 1.5 so the critical path pops against the calmer hairline-stroked normal bars. The
  * solid-vs-dashed dash cue is unchanged (WCAG 1.4.1 — never colour/weight alone). */
 export const EMPHASIS_STROKE_W = 2;
 
-/** Height (px) of the in-bar progress band (the completed portion), inset along the bar bottom. */
-export const PROGRESS_BAND_H = 4;
+/**
+ * Height (px) of the in-bar progress band (the completed portion), inset along the bar bottom.
+ *
+ * Bar-relative for the same reason as its neighbours: the band plus its inset must fit inside the
+ * bar with the centred label still legible above it, which a literal 4 does at `BAR_HEIGHT = 18`
+ * and cannot at 5 — `PROGRESS_INSET_PX * 2 + PROGRESS_BAND_H` already exceeds a thin bar outright.
+ * Whether an in-bar band survives the row treatment at all is CQ-6, a product-owner decision; this
+ * makes the constant honest either way rather than pre-empting it.
+ */
+export const PROGRESS_BAND_H = Math.max(1, Math.round(BAR_HEIGHT / 4.5));
 /** Inset (px) of the progress band from the bar's left/right/bottom edges (shape-bounded). */
 export const PROGRESS_INSET_PX = 2;
 /** Bars narrower than this (px) draw no progress detail — it would be a sub-pixel smear. */
@@ -78,8 +92,15 @@ export function progressGeometry(rect: Rect, percentComplete: number): ProgressG
 
 /** Width (px) of an LOE/hammock bracket end-cap; the caps overhang the bar top+bottom. */
 export const GLYPH_CAP_W = 2;
-/** How far (px) an LOE/hammock bracket end-cap overhangs the bar's top and bottom edges. */
-export const GLYPH_CAP_OVERHANG = 3;
+/**
+ * How far (px) an LOE/hammock bracket end-cap overhangs the bar's top and bottom edges.
+ *
+ * Two bounds, and the literal 3 satisfied both only by coincidence at `BAR_HEIGHT = 18`. It must
+ * stay a **proportion** of the bar — at 5 px a +/-3 overhang makes a cap more than twice the bar
+ * it brackets — and it must fit inside {@link BAR_PAD}, or the bracket leaves the lane (FC-6). The
+ * literal cleared the second by 2 px and nothing said so.
+ */
+export const GLYPH_CAP_OVERHANG = Math.max(1, Math.min(BAR_PAD - 1, Math.round(BAR_HEIGHT / 6)));
 
 /**
  * The two vertical end-cap rects of the refreshed LOE / hammock **bracketed-span** glyph
@@ -99,7 +120,16 @@ export function loeBracketRects(rect: Rect): [Rect, Rect] {
 
 /** Width / height (px) of a WBS-summary bracket's downward end tab. */
 export const SUMMARY_TAB_W = 3;
-export const SUMMARY_TAB_H = 4;
+/**
+ * The tab's drop below the bar.
+ *
+ * The shipped 4 was justified by the **1 px clearance** it left inside a 28 px lane — a clearance
+ * argument, which stops being the binding one the moment the bar thins: at a NetPoint-thin bar the
+ * pad is ~11 px and a 4 px tab under a 5 px bar is nearly as tall as the bar it hangs from. So it
+ * is a **proportion** first and a clearance second, and both are expressed: a quarter-ish of the
+ * bar, never more than the pad will hold. Reproduces today's 4 at `BAR_HEIGHT = 18`.
+ */
+export const SUMMARY_TAB_H = Math.max(1, Math.min(BAR_PAD - 1, Math.round(BAR_HEIGHT / 4.5)));
 
 /**
  * The two downward end-tab rects of the refreshed WBS-summary **bracket** glyph (ADR-0052 M4):

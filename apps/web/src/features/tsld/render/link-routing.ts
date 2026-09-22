@@ -2,6 +2,7 @@ import type { DependencyType } from '@repo/types';
 
 import {
   activityRect,
+  BAR_HEIGHT,
   screenXOfDay,
   type Point,
   type RectCache,
@@ -911,20 +912,40 @@ export function elbowRadius(a: Point, b: Point, c: Point, max = LINK_ELBOW_RADIU
   return Math.min(max, inLen / 2, outLen / 2);
 }
 
-/** Vertical spacing (px) between fanned-out edge ends sharing a bar edge — small, so the spread
- * stays inside the bar's half-height and reads as separation, not displacement. */
-export const FAN_OUT_STEP_PX = 3;
+/**
+ * Vertical spacing (px) between fanned-out edge ends sharing a bar edge — small, so the spread
+ * stays inside the bar's half-height and reads as separation, not displacement.
+ *
+ * **This is the one constant in the epic whose invariant the compiler could not see, and it was
+ * false in a comment rather than in code.** `FAN_OUT_MAX_PX`'s docblock justified 6 by
+ * *"BAR_HEIGHT/2 = 9px"* in a module that did not import `BAR_HEIGHT` at all, so the relationship
+ * existed only as a sentence — and at a NetPoint-thin bar the half-height is 2.5, which the *step*
+ * of 3 already exceeds before the cap is reached. Fan-out as designed cannot work there, which is
+ * why the reference converges links on a **node glyph** instead (spec D10, M3-T3).
+ *
+ * Both are now derived from the bar they are about, reproducing today's 3 and 6 exactly at
+ * `BAR_HEIGHT = 18`. The import is the point: the next person to change the bar's height gets a
+ * compile-time dependency where there was a comment.
+ */
+export const FAN_OUT_STEP_PX = Math.max(1, Math.round(BAR_HEIGHT / 6));
 /** Cap (px) on a fan-out offset: a very crowded bar edge saturates rather than spilling the
- * anchors off the bar (BAR_HEIGHT/2 = 9px; ±6 keeps every anchor visibly on it). */
-export const FAN_OUT_MAX_PX = 6;
+ * anchors off the bar. A third of the bar, so every anchor stays visibly on it — see
+ * {@link FAN_OUT_STEP_PX} for why this is derived and not written. */
+export const FAN_OUT_MAX_PX = Math.max(FAN_OUT_STEP_PX, Math.round(BAR_HEIGHT / 3));
 
 /**
- * Half the **routed** arrowhead's width across (ADR-0064 T17), pinned to the fan-out step rather
- * than derived from {@link ARROWHEAD_ROUTED_PX} — see that constant for why the head grows in
- * length only. Declared here, below `FAN_OUT_STEP_PX`, because a module-level `const` cannot read
- * one declared after it.
+ * Half the **routed** arrowhead's width across (ADR-0064 T17) — see {@link ARROWHEAD_ROUTED_PX}
+ * for why the head grows in length only.
+ *
+ * **Deliberately its own constant rather than `= FAN_OUT_STEP_PX`.** ADR-0065 pinned the two
+ * together for a real reason — widening the barbs past the fan-out step would push each head
+ * across its neighbour in a fanned bundle — but that reason is about the **fan**, and the fan is
+ * about the bar. An arrowhead is a decoration on a *link*, so inheriting a bar-derived value would
+ * shrink every arrowhead the day the bar thins, for no reason anybody chose. The coupling ADR-0065
+ * wanted is re-stated as an assertion in `geometry.constant-derivation.test.ts` instead, where it
+ * can hold without making the head a function of the bar.
  */
-export const ARROWHEAD_HALF_W_PX = FAN_OUT_STEP_PX;
+export const ARROWHEAD_HALF_W_PX = 3;
 
 /** The signed vertical offsets (px) a fanned-out edge applies at each of its two ends. */
 export interface FanOutOffsets {

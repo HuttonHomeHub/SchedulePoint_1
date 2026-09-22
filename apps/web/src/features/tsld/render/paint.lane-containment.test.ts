@@ -224,14 +224,13 @@ const CASES: readonly Case[] = [
   { name: 'LOE bracket', scene: sceneOf([activity({ id: 'l', type: 'LEVEL_OF_EFFORT' })]) },
   { name: 'WBS summary tab', scene: sceneOf([activity({ id: 's', type: 'WBS_SUMMARY' })]) },
   {
-    // The filled triangle tops out EXACTLY at the lane boundary (`barTop - CONSTRAINT_PIN_H`,
-    // `paint.ts:605`, and the bar's own pad is `(28 - 18) / 2 = 5`). The outlined variant traced
-    // over it at `lineWidth = 1` therefore puts half a pixel of ink in the lane above. Marginal,
-    // and marginal only by arithmetic that nobody chose: the pin's height and the bar's pad were
-    // set in different files for different reasons and happen to be equal.
+    // **Closed at M3-T2.** The filled triangle used to top out EXACTLY at the lane boundary —
+    // `barTop - CONSTRAINT_PIN_H` with a literal 5 against a pad of `(28 - 18) / 2 = 5` — so the
+    // outlined variant's 1 px stroke put half a pixel in the lane above. The two numbers lived in
+    // different files, were equal by coincidence, and nothing coupled them. `CONSTRAINT_PIN_H` is
+    // now `min(5, BAR_PAD - 1)`, where the `- 1` is the outline's half-width.
     name: 'constraint pin',
     scene: sceneOf([activity({ id: 'k', constraint: 'start' })]),
-    escapes: ['stroke -0.5..5.5 of 0..28'],
   },
   { name: 'conflict badge', scene: sceneOf([activity({ id: 'f', visualConflict: true })]) },
   {
@@ -254,11 +253,10 @@ const CASES: readonly Case[] = [
     name: 'lane-overlap badge above a constraint pin',
     scene: sceneOf([activity({ id: 'ok', laneOverlap: true, constraint: 'start' })]),
     escapes: [
-      'stroke -0.5..5.5 of 0..28',
-      'fillRect -7..-2 of 0..28',
-      'strokeRect -7..-2 of 0..28',
-      'fillRect -9..-4 of 0..28',
-      'strokeRect -9..-4 of 0..28',
+      'fillRect -6..-1 of 0..28',
+      'strokeRect -6..-1 of 0..28',
+      'fillRect -8..-3 of 0..28',
+      'strokeRect -8..-3 of 0..28',
     ],
   },
   {
@@ -438,12 +436,18 @@ describe('FC-6 — every glyph and decoration draws inside its own lane', () => 
    * escaping case fails its own assertion above; this limb is what stops one being added to
    * `escapes` to make that assertion pass.
    *
+   * **Four at M3-T1, three at M3-T2**: the constraint pin's escape closed when its height stopped
+   * being a literal that happened to equal the pad. The other three do not close by derivation and
+   * the ADR says why — their sizes are legibility choices, and a 28 px lane holding an 18 px bar
+   * simply has no room above it for a 7 px badge. Clamping them to fit would mean 3 px squares
+   * with a 1 px outline, which is not a cue. **The fix is the pad, not the badge**, and it is
+   * M3-T3's.
+   *
    * It reaches zero at M3-T3 and this limb is then deleted, not relaxed.
    */
-  it('exactly four cases escape their lane, and no more', () => {
+  it('exactly three cases escape their lane, and no more', () => {
     const escaping = CASES.filter((c) => (c.escapes ?? []).length > 0);
     expect(escaping.map((c) => c.name)).toEqual([
-      'constraint pin',
       'lane-overlap badge',
       'lane-overlap badge above a constraint pin',
       'over-allocation badge',

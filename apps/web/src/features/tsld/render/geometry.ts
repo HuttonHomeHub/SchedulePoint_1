@@ -40,6 +40,20 @@ import type { ConstraintAnchor } from '@/lib/constraint-format';
 export const LANE_HEIGHT = 28;
 /** Activity bar height (leaves vertical padding within the lane). */
 export const BAR_HEIGHT = 18;
+/**
+ * The vertical clearance between a lane's edge and the bar inside it — half the leftover row.
+ *
+ * Five sites recomputed `(LANE_HEIGHT - BAR_HEIGHT) / 2` inline, and every cue that draws ABOVE or
+ * BELOW a bar is really asking for this number without being able to say so. `paint.lane-containment.test.ts`
+ * found four of them sized as absolutes instead: a constraint pin whose height happened to equal
+ * the pad, a lane-overlap badge 3 px past it, that badge lifted 9 px past it, an over-allocation
+ * histogram 4 px past it. Nothing coupled them to the pad, so nothing reported it.
+ *
+ * Naming it is the precondition for the rest of this milestone: a constant derived from `BAR_PAD`
+ * re-scales when the row does, and one written as a number does not.
+ */
+export const BAR_PAD = (LANE_HEIGHT - BAR_HEIGHT) / 2;
+
 /** Half-diagonal of a milestone diamond, in CSS px. */
 export const MILESTONE_RADIUS = 7;
 
@@ -48,6 +62,20 @@ export const MILESTONE_RADIUS = 7;
 export const LABEL_MIN_PX_PER_DAY = 4;
 /** A bar must be at least this wide (px) to hold an inside label; narrower bars try a beside label. */
 export const LABEL_INSIDE_MIN_PX = 24;
+/**
+ * A bar must be at least this **tall** (px) to hold an inside label.
+ *
+ * {@link LABEL_INSIDE_MIN_PX} is a width gate with no height term, so `labelPlacement` returned
+ * `'inside'` for any bar wide enough regardless of whether the text fitted vertically — which is
+ * correct at `BAR_HEIGHT = 18` and paints an 11 px line outside a 5 px bar. A live defect rather
+ * than a styling choice, and it is a **required parameter** below rather than a module-level
+ * comparison so a milestone that thins the bar cannot leave it unconsidered (the ADR-0070 rule for
+ * `hoursPerDay`: the compiler enforces the ordering).
+ *
+ * 14 px is the 11 px {@link LABEL_FONT} plus the 1.5 px of leading a centred line needs either
+ * side before it touches the bar's edge.
+ */
+export const LABEL_INSIDE_MIN_HEIGHT_PX = 14;
 /** Horizontal padding (px) inside a bar before/after inside-label text. */
 export const LABEL_PAD_PX = 3;
 /** Gap (px) between a bar's right edge and a beside label. */
@@ -142,8 +170,16 @@ export function slackByDependencyId(args: {
   return slack;
 }
 
-/** Height (px) of a float/drift tail — thinner than the bar, so it never reads as duration. */
-export const TAIL_HEIGHT = 6;
+/**
+ * Height (px) of a float/drift tail — **thinner than the bar, so it never reads as duration**.
+ *
+ * Derived rather than written, because that sentence is the constant's entire justification and it
+ * inverts the moment the bar thins: at a NetPoint-thin bar a literal 6 would be *thicker* than the
+ * bar it is meant to recede behind, and the docblock would go on asserting the opposite. A third
+ * of the bar reproduces today's 6 at `BAR_HEIGHT = 18` exactly, so this is byte-identical now and
+ * self-correcting later. `geometry.constant-derivation.test.ts` asserts the relationship.
+ */
+export const TAIL_HEIGHT = Math.max(1, Math.round(BAR_HEIGHT / 3));
 
 /**
  * **The feasible window** — the span `[earlyStart, lateFinish]` a bar may legally occupy
@@ -578,7 +614,7 @@ function computeActivityRect(
 ): Rect | null {
   if (activity.earlyStart === null) return null;
   const startDay = daysBetween(dataDateIso, activity.earlyStart);
-  const top = screenYOfLane(activity.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
+  const top = screenYOfLane(activity.laneIndex, view) + BAR_PAD;
 
   if (isMilestone(activity.type)) {
     const cx = screenXOfDay(startDay, view);
@@ -605,10 +641,21 @@ function computeActivityRect(
  */
 export function labelPlacement(args: {
   barWidth: number;
+  /**
+   * The bar's drawn height. Required, never defaulted — see {@link LABEL_INSIDE_MIN_HEIGHT_PX}.
+   * A milestone passes its diamond's box; the `isMilestone` branch decides it first anyway.
+   */
+  barHeight: number;
   isMilestone: boolean;
   besideRoomPx: number;
 }): 'inside' | 'beside' | 'none' {
-  if (!args.isMilestone && args.barWidth >= LABEL_INSIDE_MIN_PX) return 'inside';
+  if (
+    !args.isMilestone &&
+    args.barWidth >= LABEL_INSIDE_MIN_PX &&
+    args.barHeight >= LABEL_INSIDE_MIN_HEIGHT_PX
+  ) {
+    return 'inside';
+  }
   if (args.besideRoomPx >= LABEL_BESIDE_MIN_PX) return 'beside';
   return 'none';
 }

@@ -36,6 +36,7 @@ import {
   summaryTabRects,
   truncateToWidth,
   BAR_HEIGHT,
+  BAR_PAD,
   BAR_RADIUS,
   ARROWHEAD_HALF_W_PX,
   bundleCorridors,
@@ -370,9 +371,21 @@ export interface TsldScene {
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
 const EDGE_HANDLE_MARK = 3;
 
-/** Width / height (px) of the little triangular pin marking a bar's constrained edge. */
+/**
+ * Width / height (px) of the little triangular pin marking a bar's constrained edge.
+ *
+ * **The height is a fourth constant in the M3-T2 family that the spec's table did not name**, and
+ * `paint.lane-containment.test.ts` is what named it: the pin drops `CONSTRAINT_PIN_H` above the
+ * bar's top and the literal 5 happened to equal `BAR_PAD` exactly, so the filled triangle topped
+ * out ON the lane boundary and the outlined variant's 1 px stroke put ink in the lane above
+ * (FC-6). Nothing coupled the two — one lives here and the other is a function of two constants in
+ * `geometry.ts` — so nothing would have reported it had they not been equal.
+ *
+ * The `- 1` is the outline's half-width, which is the part that escaped. The width stays absolute:
+ * it is a horizontal measure and the row treatment does not touch x.
+ */
 const CONSTRAINT_PIN_W = 7;
-const CONSTRAINT_PIN_H = 5;
+const CONSTRAINT_PIN_H = Math.max(2, Math.min(5, BAR_PAD - 1));
 
 /**
  * Re-exported so every existing consumer keeps importing them from `paint.ts` (ADR-0078 §3: the
@@ -670,7 +683,20 @@ function drawConflictBadge(ctx: Ctx2D, startX: number, barTop: number, palette: 
   ctx.stroke();
 }
 
-/** Side (px) of each little square in the stacked-squares lane-overlap badge. */
+/**
+ * Side (px) of each little square in the stacked-squares lane-overlap badge.
+ *
+ * **Deliberately NOT derived from {@link BAR_PAD}, and the reason is the rule for this whole
+ * family: a badge's size is a legibility choice and the pad is a constraint it either satisfies or
+ * does not.** Conflating the two is how a constant ends up illegible.
+ *
+ * Two 5 px squares offset by 2 need 7 px above the bar, and a 28 px lane holding an 18 px bar has
+ * 5 — so the badge escapes its lane today (`paint.lane-containment.test.ts`), by 3 px alone and by
+ * 9 px once the constraint-pin lift applies. Clamping it to fit would mean 3 px squares with a
+ * 1 px outline, which is not a cue. **The fix is the pad, not the badge**: M3-T3's row leaves
+ * ~19 px above the bar and the escape closes with no change here. Recorded rather than papered
+ * over, and pinned in the containment gate until it does.
+ */
 const OVERLAP_BADGE_S = 5;
 
 /**
@@ -707,6 +733,14 @@ function drawOverlapBadge(
 /** Bar width / gap / tallest-bar height (px) of the over-allocation mini-histogram badge. */
 const OVERALLOC_BAR_W = 2;
 const OVERALLOC_BAR_GAP = 1;
+/**
+ * The tallest mini-bar, and therefore the badge's whole height.
+ *
+ * Intrinsic, not pad-derived — see {@link OVERLAP_BADGE_S} for the rule and the same outcome: 7 px
+ * plus a 2 px lift-off needs 9 px above the bar against the 5 px a 28 px lane leaves, so the
+ * histogram's tall end sits 4 px into the lane above today (FC-6). A three-bar histogram clamped
+ * to 3 px is a smudge. M3-T3's row closes it by widening the pad.
+ */
 const OVERALLOC_BADGE_H = 7;
 /** The three ascending mini-bar heights (a rising histogram = "over-allocated resource"). */
 const OVERALLOC_BAR_HEIGHTS: readonly number[] = [3, 5, OVERALLOC_BADGE_H];
@@ -1940,6 +1974,7 @@ export function paintScene(
         const besideRoomPx = nextLeftX - (rect.x + rect.w) - LABEL_GAP_PX;
         const placement = labelPlacement({
           barWidth: rect.w,
+          barHeight: rect.h,
           isMilestone: isMilestone(activity.type),
           besideRoomPx,
         });
