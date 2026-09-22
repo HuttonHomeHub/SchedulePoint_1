@@ -106,7 +106,16 @@ await page.evaluate(
   },
   { scene, width: WIDTH, height: HEIGHT, dpr: DPR, lane: focusLane },
 );
-const file = 'docs/specs/logic-legibility/gutter-channels.png';
+/**
+ * **The filename carries the pitch, because this harness is run twice by design.**
+ *
+ * FC-L3 is read once at M1's geometry (a progress reading) and once at M3's (the epic's verdict),
+ * and both pictures are cited. A fixed name silently replaces the first with the second: the
+ * document goes on saying "at today's 28/18 geometry" above an image of a 52 px row, and nothing
+ * fails. Re-running this at an unchanged pitch still overwrites its own file, which is what a
+ * re-shoot should do.
+ */
+const file = `docs/specs/logic-legibility/gutter-channels-${String(reading.laneHeight)}.png`;
 await page.screenshot({ path: join('../..', file) });
 await page.close();
 await browser.close();

@@ -338,3 +338,182 @@ legibility choices and the pad was the constraint. The ratchet limb is deleted, 
   goes (built as the default — a second, shorter bar along the same line) and criticality's second
   non-colour channel (built as the default — a filled versus hollow node). Neither is settled here.
 - The pitch itself is **provisional**.
+
+---
+
+## T4 — the pitch, and the epic's verdicts
+
+`node apps/web/scripts/measure-row-pitch.mjs`, at `d7014dd9`. Seven pitches × two zooms, the bundle
+rewritten rather than a tracked file (M-C0-T4's method), every variant reporting the pitch it
+painted with, and two controls — one whole-sweep, one **per-pitch**, the second added because the
+first only fires when every row is empty.
+
+| pitch  | gross | **net** | channels | legs | distinct y | max/y | **overlapping/y** | peak | in a bar | smallest gap | `x/link` @4 |
+| ------ | ----- | ------- | -------- | ---- | ---------- | ----- | ----------------- | ---- | -------- | ------------ | ----------- |
+| 40     | 35    | 3       | 1        | 102  | 14         | 14    | 7                 | 7    | 0        | 13.0         | 1.181       |
+| 44     | 39    | 7       | 1        | 102  | 14         | 14    | 7                 | 7    | 0        | 15.0         | 1.181       |
+| 48     | 43    | 11      | 3        | 102  | 35         | 9     | 3                 | 7    | 0        | 14.0         | 1.771       |
+| **52** | 47    | **15**  | **5**    | 102  | 46         | 9     | **2**             | 7    | 0        | 13.0         | **1.856**   |
+| 56     | 51    | 19      | 5        | 102  | 46         | 9     | 2                 | 7    | 0        | 15.0         | 1.856       |
+| 60     | 55    | 23      | 7        | 102  | 51         | 9     | 1                 | 7    | 0        | 14.0         | 1.915       |
+| 68     | 63    | 31      | 9        | 102  | 51         | 9     | 1                 | 7    | 0        | 18.0         | 1.915       |
+
+Both zooms agree on every figure, which is itself a stability check rather than a coincidence: the
+channel derivation has no zoom term.
+
+### The pitch is 52, and three of the seven candidates buy nothing
+
+**44 buys nothing over 40, 56 nothing over 52, 68 nothing over 60** — same channel count, same
+worst bunching, byte-identical crossings. The efficient frontier is 48, 52 and 60, so the choice is
+between three numbers and not seven.
+
+**FC-L11 removes two of them**: at 40 and 44 the net clear band is 3 px and 7 px against today's
+10, so the row treatment would have spent the channel it was also supposed to supply.
+
+**FC-L4's crossings ceiling removes 60.** `x/link` may rise by ≤ 10 % against M0's **1.691** at
+4 px/day: 48 is +4.7 %, 52 and 56 are **+9.8 %**, 60 and 68 are **+13.2 %**. So 52 is the largest
+pitch that buys anything and stays inside a committed ceiling. **60 is not rejected — it is not a
+milestone's to take.** FC-L4's withdrawal clause says in terms that a breach "goes to the product
+owner with both numbers and both rendered pictures … never resolved inside a milestone", and what
+60 buys is the last layer of the fourth symptom they reported: worst overlapping-on-one-y falls
+from 2 to 1, i.e. no two runs that overlap in x share a y anywhere in the plan. It goes to them
+with CQ-6.
+
+**And the crossing metric rewards the defect, which is why the ceiling is used as a ceiling and
+never as a reason to prefer a smaller pitch.** At one channel `x/link` is **1.181 — 30 % _below_
+the M0 baseline** — because seven coincident legs on one y do not cross, they overlap, and
+`countCrossings` cannot see a line hidden under another line. A reading that took the number at
+face value would ship the bunching the epic exists to remove and report an improvement. The rise
+from 1.181 to 1.856 is not the picture getting worse; it is lines that were always there becoming
+visible, and no instrument here can separate the two.
+
+**Nothing changes in the tree.** 52 is the provisional value M3-T3 shipped, and it is the right one
+for a reason nobody had when it was chosen.
+
+### FC-L11 — **clears**, and the gross never travels alone
+
+Gross **47 px**, net **15 px**, five channels, against today's 10 px. The withdrawal clause does
+not fire.
+
+### FC-L3 — the epic's verdict (M1-T4's was a progress reading)
+
+- **Limb 1 — `legsTouchingABar` = 0**, at every pitch, smallest gap to a bar edge **13.0 px**.
+  Today's figure was **58 of 68**. It means something now in a way it did not two days ago: the
+  instrument that reports it had been finding legs by a datum M1-T1 moved, and reported 0 legs from
+  103 six-point routes — a blind spot wearing a triumph's clothes, fixed in T4 and controlled for
+  per-pitch.
+- **Limb 2 — reported both ways, as `gutterStats` records.** The literal count **fails at every
+  pitch** (at 52: bound `ceil(7/5) = 2`, literal 9); the overlapping count **meets it exactly at
+  every pitch** (at 52: 2 ≤ 2). A channel legitimately carries many runs that do not overlap in x,
+  which is what packing by x-interval is _for_, so the literal bound is a question about the wrong
+  quantity. Both are printed so neither can be quoted alone.
+- **Limb 3 — the picture**: `gutter-channels-52.png`, the busiest gutter (lane 2) at 1646 × 420,
+  12 px/day, band off. Two runs through one gutter read as two lines, clear of both bar edges.
+  **The file is named after the pitch** — the harness used one fixed name and had already silently
+  replaced M1's progress picture with M3's once, leaving the M1 write-up's "at today's 28/18
+  geometry" above an image of a 52 px row with nothing failing.
+- **Limb 4 — FC-6 holds.** `paint.lane-containment.test.ts` is green at the shipped geometry, 17
+  cases plus the hover ring.
+- **The harness's own prediction was wrong and is corrected rather than dropped.** Its docblock says
+  a NetPoint-thin bar "makes the same derivation yield seven" channels. It yields **five**.
+
+### The occlusion prediction — confirmed twice, with a residual it does not explain
+
+The prediction, committed in the spec (§0.10) before any of this was built: thinning the bar does
+**nothing** for occlusion, because a horizontal leg runs at the bar's **centre-line**, so whether it
+meets a bar is an x-overlap question the bar's **height** does not enter.
+
+| what was varied           | `occl/link` @ 1 / 4 / 12 px/day  | fingerprints |
+| ------------------------- | -------------------------------- | ------------ |
+| pitch, 40 → 68 (7 values) | 0.410 / 0.261 / 0.239 — constant | all differ   |
+| bar height, 5 → 10 → 18   | 0.410 / 0.261 / 0.239 — constant | all differ   |
+
+**Constant to three decimals while every fingerprint differs** is the discriminating form: it is not
+"the same picture, so the same count" — the routes genuinely moved and the count did not follow.
+`foreign`, `2pt f/all` and `buriedPx` are identical across all ten readings too.
+
+The pitch half also has a mechanism read from the call order rather than inferred from the result:
+`routeOrthogonal` → `chooseCorridorsByCrossing` (which moves a corridor's **x**) →
+`packGutterChannels` (which moves only its **y**), `paint.ts:1206-1271`. Channels can therefore
+change crossings — and the table above shows they do — while being structurally unable to change
+leg-versus-bar occlusion, because a leg never enters a bar.
+
+**What the prediction does not cover: `occl/link` at 4 px/day is 0.261 here and M2 recorded 0.250.**
+Measured at the M2 tip (`5fc9439a`) in a git worktree with the workspace's `node_modules`
+symlinked, the harness reproduces M2's recorded figures **exactly** — 0.404 / 0.250 / 0.229 and
+`x/link` 2.399 / 1.840 / 1.835 — so the difference is the product, not the instrument.
+
+The attributable change is **two-point links: 25 → 55**. `routeOrthogonal` returns `[from, to]`
+when the two anchors share a y, and fan-out — retired in T3 because a 3 px step cannot separate
+anything on a 5 px bar — was offsetting endpoint y and keeping thirty links out of that branch. So
+thirty more links are now same-lane straight lines. Within that population the foreign **rate**
+falls (5/25 = 20 % → 9/55 = 16 %) and foreign **incidents** fall (53 → 52); the per-link figure
+rises because the denominator of links carrying the same-lane mechanism more than doubled. M2's
+same-lane branch still routes a blocked one into the gutter, so this is more members of a handled
+category rather than a new hole — **and it is M4's business**, because §0.3 names the same-lane
+two-point link as the small-plan mechanism and M4 is assignment.
+
+### FC-L7 — reported, never used to bound height, and its own expectation is falsified
+
+Unit 300 band-off (21 lanes) and a 2,000-activity scale scene (50 lanes), at
+`devicePixelRatio = 1.75`.
+
+| fixture    | pitch | export CSS  | raster @ 1.75 | scaled to fit |
+| ---------- | ----- | ----------- | ------------- | ------------- |
+| Unit 300   | 28    | 1632 × 770  | 2856 × 1348   | no            |
+| Unit 300   | 52    | 1632 × 1274 | 2856 × 2230   | no            |
+| scale-2000 | 28    | 4668 × 1582 | 8169 × 2769   | no            |
+| scale-2000 | 52    | 4668 × 2782 | 8169 × 4869   | no            |
+| scale-2000 | 68    | 4668 × 3582 | 8169 × 6269   | no            |
+
+FC-L7 calls the export "the condition most likely to bind", on the reasoning that decision 6 makes
+the pitch spendable. **Measured, the pitch does not bind it and cannot**: the binding term is the
+**width** (`days × pxPerDay`), which no pitch touches. At 12 px/day on the 2,000-activity scene
+`scaledToFit` fires at pitch 28, 52 and 68 alike — it already fired before this epic — and at 1 and
+4 px/day it fires at none of them. The height cap binds at **160 lanes at pitch 28, 86 at 52 and 66
+at 68**, derived from a measured 182 px of reserved chrome against 4,681 CSS px of cap.
+
+**Minimap `pxPerLane` is 5.714 at every pitch**, because `minimap.ts:212` allocates the box across
+**lanes** and `minimap-axes.structural.test.ts` bans the name `LANE_HEIGHT` from that module.
+Measured rather than asserted, which is what FC-L7 asks for: a figure that is invariant because a
+gate forbids the dependency is worth printing.
+
+**Where the pitch does land is the reader's window inside that box**, and nothing had named it:
+`sceneWindowRect` takes the scene's row height as a parameter, so visible lanes fall **24.3 → 13.1**
+and the rectangle's height falls **139.0 → 74.8 px** in a 120 px box. At pitch 28 the rectangle was
+_larger than the box_ — degenerate, delimiting everything and therefore saying nothing. At 52 it
+covers 62 % of the plan's height and starts carrying information. That is the orientation cost of
+decision 6 and also, on this fixture, the moment the overview's viewport mark begins to work.
+
+**The parallel listbox is unchanged** — `TsldPanel.wbs-band-a11y.test.tsx` and the 59 render suites
+(874 cases) pass unedited, which is the ADR-0063 §4 form: an invariant you have to touch to make
+room for your change was never an invariant.
+
+### The picture found a defect the numbers could not
+
+M3-T3 wrote that crowding "truncates a name; it no longer suppresses one … a planner never loses an
+activity's identity to density." In the rendered frame two milestones were labelled **`…` and
+nothing else**. `truncateToWidth` returns a bare ellipsis when not even one character fits
+(`geometry.ts:824`), so the degradation ladder ends in a glyph that names nothing and reads as
+content — the claim was asserted about the branch above it and never checked against the branch
+below.
+
+The name is now suppressed when the truncation keeps no characters, and the claim is restated to
+what is true: **a name is shortened rather than suppressed while any character survives, and below
+that the row shows the bar alone**, with the full name still on the bar's option in the parallel
+listbox, which is where identity actually lives (ADR-0026 D7). The regression test widens the
+width function rather than crowding the fixture further — a milestone's box is 14 px and `'M…'` at
+the 6 px-per-glyph stub is 12, so the stub structurally cannot reach the branch, and a test that
+could only be written by pretending otherwise would be testing the stub. Verified red.
+
+### What is still owed to the product owner (CQ-6)
+
+Three sub-decisions, none of which a milestone may take (FC-L8 limb 1's withdrawal clause, and
+FC-L4's):
+
+1. **Where progress goes.** Built as the default — a second, shorter bar along the same line.
+2. **Criticality's second non-colour channel.** Built as the default — a filled versus hollow node.
+3. **Pitch 60 instead of 52.** It removes the last layer of the bunching they reported (worst
+   overlapping-on-one-y 2 → 1) and costs +13.2 % crossings against M0, outside FC-L4's ceiling —
+   with the caveat above, that the metric cannot separate "more crossings" from "the same lines,
+   now visible". 8 px per row, and they have already said height is spendable.

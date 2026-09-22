@@ -804,11 +804,13 @@ export function rowReservesTextRows(): boolean {
  * the longest prefix (trailing space trimmed) plus the ellipsis. Text width is monotonic in prefix
  * length, so a binary search finds the fit in O(log n) measurements.
  */
+export const LABEL_ELLIPSIS = '…';
+
 export function truncateToWidth(
   text: string,
   maxPx: number,
   measure: (s: string) => number,
-  ellipsis = '…',
+  ellipsis = LABEL_ELLIPSIS,
 ): string {
   if (maxPx <= 0 || text.length === 0) return '';
   if (measure(text) <= maxPx) return text;

@@ -38,15 +38,18 @@
  * segment's interior, and two segments that cross still cross. Stated rather than left implicit.
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import { packLanes, type PackItem } from '@repo/layout';
 
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
+import { buildExportViewport } from '../src/features/tsld/export/export-image';
 import {
   activityRect,
   BAR_HEIGHT,
   LANE_HEIGHT,
   rowSlots,
+  worldExtent,
 } from '../src/features/tsld/render/geometry';
 import {
   bundleCorridors,
@@ -62,6 +65,7 @@ import {
   MAX_CORRIDOR_CANDIDATES,
   routeOrthogonal,
 } from '../src/features/tsld/render/link-routing';
+import { minimapViewport, sceneWindowRect } from '../src/features/tsld/render/minimap';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Point, Viewport } from '../src/features/tsld/render/render-model';
 import { ELAPSED_DAY_WALK } from '../src/features/tsld/render/working-time';
@@ -975,6 +979,22 @@ export interface GutterReading {
   legsTouchingABar: number;
   /** The smallest gap between a gutter leg and the nearest bar edge, in CSS px. */
   minClearancePx: number;
+  /** Channels available at this pitch, derived from the CLEAR band (M3-T3). */
+  channels: number;
+  /**
+   * The **net** band a channel may use, after the row's name and date rows have taken theirs —
+   * FC-L11's quantity, and the one the epic's verdict is read against.
+   */
+  clearBandPx: number;
+  /**
+   * The **gross** band the thin bar hands back, before the row spends any of it. **FC-L11 forbids
+   * quoting this without the net beside it**, which is why both are on every row.
+   */
+  grossBandPx: number;
+  /** The most runs simultaneously live in one gutter — the denominator of FC-L3's second limb. */
+  peakGutterOverlap: number;
+  /** The most runs that OVERLAP IN X and share a y — what that limb is really about. */
+  maxOverlappingOnOneY: number;
 }
 
 export function gutterReadings(
@@ -988,7 +1008,6 @@ export function gutterReadings(
   if (!config) throw new Error('the band-off arranged configuration is missing');
   const { scene } = sceneFor(asap, config.layout);
   const originY = 32;
-  const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
 
   return pxPerDays.map((pxPerDay) => {
     const view: Viewport = { pxPerDay, originX: 40, originY };
@@ -997,17 +1016,21 @@ export function gutterReadings(
     paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
     const links = linkPaths(paths);
 
-    const legs: { y: number; x0: number; x1: number }[] = [];
-    for (const link of links) {
-      for (let i = 1; i < link.pts.length; i += 1) {
-        const a = link.pts[i - 1]!;
-        const b = link.pts[i]!;
-        if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
-        const within = a.y - originY - Math.floor((a.y - originY) / LANE_HEIGHT) * LANE_HEIGHT;
-        if (Math.abs(within - (pad + BAR_HEIGHT)) > 0.001) continue;
-        legs.push({ y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
-      }
-    }
+    // **The legs come from `gutterStats`, not from a second search here** (logic-legibility M3-T4).
+    //
+    // This function found them by testing a leg's y against the BAR'S BOTTOM EDGE — M1-T1's datum
+    // before M1-T1 moved it to the lane boundary. `gutterStats` was corrected to the
+    // datum-independent definition (`packGutterChannels`'s own: the middle horizontal of a
+    // six-point polyline) and this was not, so two leg-finders diverged in the one direction that
+    // reports well.
+    //
+    // **Measured at the M3-T3 geometry before the fix: 103 six-point routes painted, 0 gutter legs
+    // found, `legsTouchingABar: 0`** — the "blind spot wearing a triumph's clothes" the other
+    // function's docblock records having fixed, reproduced here because the fix reached one of the
+    // two. `measure-gutter-pitch.mjs`'s control only fires when EVERY row is empty, so a sweep in
+    // which one pitch happened to work would have graded the rest on nothing.
+    const stats = gutterStats(links, scene, view);
+    const legs = stats.legs;
 
     // Bar extents from `activityRect` — the painter's own source, so this measures the picture.
     const bars = scene.activities.flatMap((activity) => {
@@ -1048,6 +1071,15 @@ export function gutterReadings(
       maxLegsOnOneY: legs.length === 0 ? 0 : Math.max(...byY.values()),
       legsTouchingABar: touching,
       minClearancePx: legs.length === 0 ? Number.NaN : minClearance,
+      // What FC-L3 and FC-L11 are judged on at each swept pitch (M3-T4). `clearBandPx` is the NET
+      // band — what a channel may use after the row's name and date rows have taken theirs — and
+      // `grossBandPx` is what the thin bar hands back before they do. FC-L11 forbids the second
+      // without the first beside it.
+      channels: stats.channels,
+      clearBandPx: stats.clearBandPx,
+      grossBandPx: stats.grossBandPx,
+      peakGutterOverlap: stats.peakGutterOverlap,
+      maxOverlappingOnOneY: stats.maxOverlappingOnOneY,
     };
   });
 }
@@ -1713,6 +1745,8 @@ export function gutterStats(
   scene: TsldScene,
   view: Viewport,
 ): {
+  /** The pitch this reading was painted at — every reading says which geometry it describes. */
+  laneHeight: number;
   gutterLegs: number;
   distinctGutterY: number;
   maxLegsOnOneY: number;
@@ -1724,6 +1758,11 @@ export function gutterStats(
   /** The GROSS band the thin bar hands back, before the row spends any of it (FC-L11). */
   grossBandPx: number;
   usableBandPx: number;
+  /**
+   * The legs themselves, so `gutterReadings` measures clearance against the SAME set rather than
+   * running a second search — which is exactly how the two diverged (M3-T4).
+   */
+  legs: readonly { y: number; x0: number; x1: number }[];
 } {
   const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
   const legs: { y: number; x0: number; x1: number }[] = [];
@@ -1816,6 +1855,7 @@ export function gutterStats(
   }
 
   return {
+    laneHeight: LANE_HEIGHT,
     gutterLegs: legs.length,
     distinctGutterY: byY.size,
     maxLegsOnOneY: legs.length === 0 ? 0 : Math.max(...byY.values()),
@@ -1832,6 +1872,7 @@ export function gutterStats(
     // usable span is the band less one pixel each side. Derived from `pad` rather than written as a
     // constant, so it re-scales when M3 thins the bar (FC-L3's amendment requires exactly that).
     usableBandPx: Math.max(0, 2 * (pad - 1) + 1),
+    legs,
   };
 }
 
@@ -2219,4 +2260,124 @@ export function avoidableOcclusions(
     avoidableByEither,
     sortedFingerprint,
   };
+}
+
+/**
+ * **What the pitch costs the deliverable, the overview and the reader's window** (logic-legibility
+ * M3-T4, FC-L7).
+ *
+ * FC-L7 is **reported, never used to bound height** (decision 2) — the product owner removed the row
+ * cap deliberately, so a number here is a cost to state and not a veto. Three limbs, and the third
+ * is the one the condition insists be measured rather than assumed.
+ *
+ * - **Export.** `buildExportViewport` sizes the `whole` raster as `(maxLane + 1) * LANE_HEIGHT`
+ *   plus the reserved bands, so the height term is **linear in the pitch**. Read at the product
+ *   owner's own `devicePixelRatio = 1.75` (FC-C7's rule, reused), because the raster is `size × dpr`
+ *   and reading at 1 overstates the headroom by that factor.
+ * - **Minimap `pxPerLane`.** `minimap.ts:212` is `box.height / laneCount` — the box is allocated
+ *   across **lanes**, not across scene pixels, and `minimap-axes.structural.test.ts` bans the name
+ *   `LANE_HEIGHT` from that module. So the pitch structurally cannot move it. Measured anyway: a
+ *   figure that is invariant **because a gate forbids the dependency** is worth printing, and the
+ *   alternative is asserting a structural claim in a document.
+ * - **The reader's window inside the minimap.** `sceneWindowRect` takes `sceneLaneHeight` as a
+ *   parameter, and `visibleLanes = size.height / sceneLaneHeight`. **This is where the pitch lands**:
+ *   a taller row means fewer lanes on screen, so the rectangle that says "you are here" covers less
+ *   of the plan. It is the orientation cost of decision 6, and it is a real number rather than the
+ *   "no lane remedy touches the minimap" reading `docs/TECH_DEBT.md` #323 would otherwise licence.
+ */
+export function rowCosts(
+  path: string,
+  pxPerDays: readonly number[],
+  options: { rollUpSummaries?: boolean; scaleTo?: number } = {},
+): {
+  laneHeight: number;
+  pxPerDay: number;
+  lanes: number;
+  exportWidth: number;
+  exportHeight: number;
+  rasterWidth: number;
+  rasterHeight: number;
+  scaledToFit: boolean;
+  pxPerLane: number;
+  minimapLaneCount: number;
+  visibleLanes: number;
+  windowRectHeight: number;
+}[] {
+  /**
+   * **`scaleTo` names the fixture FC-L7's "largest measured" clause is about.** Unit 300 is 21
+   * lanes; ADR-0128's canvas scenes are 2,000 activities, and the export's height term is
+   * `(maxLane + 1) * LANE_HEIGHT`. A reading taken only on Unit 300 would report acres of headroom
+   * on the fixture where the cap cannot bind.
+   */
+  let scene: TsldScene;
+  if (options.scaleTo === undefined) {
+    const { asap, configs } = unit300BandConfigs(path, options);
+    const config = configs.find((c) => c.layout.name.startsWith('B '));
+    if (!config) throw new Error('the band-off arranged configuration is missing');
+    scene = sceneFor(asap, config.layout).scene;
+  } else {
+    const source = scaleScene(options.scaleTo);
+    scene = {
+      activities: source.activities,
+      edges: source.edges,
+      dataDate: '2026-01-01',
+      visualRefresh: true,
+      timeTrueLinks: true,
+      linkRouting: true,
+    };
+  }
+  /** The product owner's own display (FC-C7), and the viewport ADR-0091 M7 made permanent. */
+  const DPR = 1.75;
+  const LIVE = { width: 1646, height: 681 };
+  /**
+   * `MINIMAP_BOX` is exported from a `.tsx` component, so importing it would pull React into a
+   * node probe. It is restated here and **checked against the source**, because a restated
+   * constant that drifts reports the old box under the new box's name.
+   */
+  const box = { width: 200, height: 120 };
+  // Resolved from the working directory, never from `import.meta.url`: the sweep bundles this
+  // file into a temp directory, where a path relative to the module resolves outside the repo.
+  const declared = readFileSync('src/features/tsld/components/TsldMinimap.tsx', 'utf8');
+  const expected = `export const MINIMAP_BOX: MinimapBox = { width: ${String(box.width)}, height: ${String(box.height)} };`;
+  if (!declared.includes(expected)) {
+    throw new Error(
+      `rowCosts INDETERMINATE: \`MINIMAP_BOX\` is no longer \`${expected}\`. The figures below ` +
+        'would describe a box the product does not draw. Refusing to measure.',
+    );
+  }
+
+  return pxPerDays.map((pxPerDay) => {
+    const live = {
+      view: { pxPerDay, originX: 40, originY: 32 },
+      size: LIVE,
+    };
+    const ex = buildExportViewport(scene.activities, scene.dataDate, {
+      extent: 'whole',
+      liveViewport: live,
+      dpr: DPR,
+    });
+    const extent = worldExtent(scene.activities, scene.dataDate);
+    if (extent === null) {
+      throw new Error(
+        'rowCosts INDETERMINATE: the scene has no placeable extent, so the export falls back to ' +
+          'the live framing and the minimap draws nothing. There is no row cost to report.',
+      );
+    }
+    const mapping = minimapViewport(extent, box);
+    const rect = sceneWindowRect(live.view, LIVE, LANE_HEIGHT, mapping);
+    return {
+      laneHeight: LANE_HEIGHT,
+      pxPerDay,
+      lanes: extent.maxLane + 1,
+      exportWidth: Math.round(ex.size.width),
+      exportHeight: Math.round(ex.size.height),
+      rasterWidth: Math.round(ex.size.width * ex.dpr),
+      rasterHeight: Math.round(ex.size.height * ex.dpr),
+      scaledToFit: ex.scaledToFit,
+      pxPerLane: mapping.pxPerLane,
+      minimapLaneCount: mapping.laneCount,
+      visibleLanes: LIVE.height / LANE_HEIGHT,
+      windowRectHeight: rect.true.h,
+    };
+  });
 }

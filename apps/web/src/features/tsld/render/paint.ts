@@ -30,6 +30,7 @@ import {
   nodeIsFilled,
   makeWorkingDayWalk,
   laneAtScreenY,
+  LABEL_ELLIPSIS,
   progressGeometry,
   rectsIntersect,
   routeOrthogonal,
@@ -1987,10 +1988,19 @@ export function paintScene(
           // task bar and NOT for a milestone, whose rect is centred on the lane rather than
           // padded into it — so a milestone's name sat 4.5 px above every other name in the row,
           // a ragged text row nothing but a rendered picture would have shown.
+          //
+          // **A lone ellipsis is not a shorter name, and M3-T3's own claim needed this line.**
+          // That milestone said crowding "truncates a name; it no longer suppresses one … a
+          // planner never loses an activity's identity to density" — and `truncateToWidth` returns
+          // a bare `LABEL_ELLIPSIS` when not even one character fits (`geometry.ts:824`), which
+          // names nothing and reads as content. Found in the M3-T4 picture: a milestone beside a
+          // close neighbour drew `…` and nothing else. So the claim holds while any character
+          // survives, and below that the row shows the bar alone — the name is still on the bar's
+          // option in the parallel listbox (ADR-0026 D7), which is where identity actually lives.
           const slots = rowSlots(screenYOfLane(activity.laneIndex, view));
           const roomPx = rect.w + Math.max(0, besideRoomPx);
           const text = truncateToWidth(activity.label, roomPx, measure);
-          if (!text) continue;
+          if (!text || text === LABEL_ELLIPSIS) continue;
           ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'center';
           ctx.fillText(text, rect.x + rect.w / 2, slots.nameY);

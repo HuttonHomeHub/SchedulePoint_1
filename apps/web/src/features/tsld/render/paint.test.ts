@@ -1027,6 +1027,41 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     expect(drawn).toContain('M2 Done');
   });
 
+  /**
+   * **…and a lone ellipsis is not a shorter name.** The case above is the claim the milestone
+   * above it makes; this is the branch that claim did not cover. `truncateToWidth` returns a bare
+   * `LABEL_ELLIPSIS` when not even one character fits (`geometry.ts:824`), so a hard-crowded name
+   * drew one glyph that names nothing and reads as content — found in the M3-T4 picture, where a
+   * milestone beside a close neighbour was labelled `…` and nothing else.
+   *
+   * The 6 px-per-glyph stub cannot reach it (a milestone's box is 14 px, wider than `'M…'` at
+   * 12), which is why the width function is widened here rather than the fixture crowded further:
+   * the real canvas font is what makes the branch reachable in the product, and a test that can
+   * only be written by pretending otherwise is testing the stub. At 14 px per glyph the ellipsis
+   * fits and one character does not — exactly the branch.
+   */
+  it('draws no name at all when the room fits nothing but the ellipsis', () => {
+    const ctx = mockCtx();
+    ctx.measureText = vi.fn((s: string) => ({ width: s.length * 14 }) as TextMetrics);
+    const left = milestone({ id: 'l' });
+    const right = milestone({
+      id: 'r',
+      label: 'M2 Done',
+      earlyStart: '2026-01-04',
+      earlyFinish: '2026-01-04',
+    });
+    paintScene(
+      ctx,
+      { activities: [left, right], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const drawn = ctx.fillText.mock.calls.map((c) => c[0] as string);
+    expect(drawn).toContain('M2 Done');
+    expect(drawn).not.toContain('…');
+  });
+
   it('truncates a beside label when the neighbour leaves only partial room', () => {
     const ctx = mockCtx();
     // Neighbour four days right (x=120): ~32px of clear room beside the left diamond — enough to
