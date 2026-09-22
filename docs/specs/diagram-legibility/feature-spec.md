@@ -821,6 +821,16 @@ No design-system component changes; no new UI primitive; no one-off styling.
 
 ## 5. Links
 
+> **And a successor epic**, opened 2026-09-22 after `web-v0.141.0` (ADR-0149) was used and the
+> product owner reported that nothing they could see had changed:
+> [`../logic-legibility/`](../logic-legibility/). It is about **link-versus-BAR occlusion** — a
+> third quantity, which neither this document's travel proxies nor Part C's crossing metric can
+> see, and which the Part C instrument **structurally could not** count (its index is built from
+> link polylines only, and its recording context discards `fillRect`). It carries its own
+> conditions, its own directory and a canonical `feature-spec.md`, for the reason that document's
+> header gives: `check:spec-status` reads `feature-spec.md` and `spec.md` only, so
+> `part-c-feature-spec.md` below is invisible to it and still reads `Draft` today.
+>
 > **This epic has a Part C**, opened 2026-09-22 after `web-v0.140.1` was used:
 > [`./part-c-feature-spec.md`](./part-c-feature-spec.md) ·
 > [`./part-c-implementation-plan.md`](./part-c-implementation-plan.md). It is about **link–link
