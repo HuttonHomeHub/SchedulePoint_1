@@ -216,6 +216,64 @@ export function laneOverlapBetween(
   return total;
 }
 
+/**
+ * Is a horizontal leg in `lane`, running between `a` and `b`, clear of every bar **except its own
+ * anchor**?
+ *
+ * This is the question `routeOrthogonal` never asked. Its obstacle check covers the vertical
+ * corridor only, and only across `crossedLanes` — the lanes strictly BETWEEN the two endpoints —
+ * so the two horizontal legs, which run at the source and target bars' centre-lines, were checked
+ * against nothing. A leg therefore ran straight through any bar sharing its lane between the anchor
+ * and the corridor, and because links paint UNDER bars it did not overlap the bar, it **disappeared
+ * behind it**. Measured band-off on Unit 300: 105 of 188 links.
+ *
+ * **The anchor is excluded by its own span, not by an epsilon.** The leg starts on the anchor's
+ * edge, so a plain interval test reports it blocked by itself; an epsilon at the anchor does not
+ * work either, because an `SF` corridor sits at `(from.x + to.x) / 2`, which can fall well inside
+ * either bar, and a clamped lag anchor is placed **on** the bar deliberately. Splitting the leg at
+ * the anchor's own edges and testing only the parts outside it is exact, and it is exact **through
+ * the merge**: a touching neighbour is a different bar and its share of the merged span still
+ * blocks, which is the whole point.
+ *
+ * `anchor` absent ⇒ every bar in the lane counts, which is the right answer for a leg with no
+ * anchor in that lane at all.
+ */
+export function isLegClear(
+  index: LaneIntervalIndex,
+  lane: number,
+  a: number,
+  b: number,
+  /**
+   * The leg's own anchors in this lane — **none, one, or TWO**. A same-lane link has both of its
+   * anchors in the lane its leg runs along, and excluding only one reports the link as blocked by
+   * the bar it is drawn to. Found by the existing parity suite rather than by reading.
+   */
+  anchors: readonly { x0: number; x1: number }[] = [],
+): boolean {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  // The leg minus its own anchors: walk the gaps left between them, in x order.
+  const sorted = [...anchors].sort((p, q) => p.x0 - q.x0);
+  let cursor = lo;
+  for (const anchor of sorted) {
+    const until = Math.min(hi, anchor.x0);
+    if (cursor < until && laneOverlapBetween(index, lane, cursor, until) > LEG_CLEARANCE_PX) {
+      return false;
+    }
+    cursor = Math.max(cursor, anchor.x1);
+  }
+  return !(cursor < hi && laneOverlapBetween(index, lane, cursor, hi) > LEG_CLEARANCE_PX);
+}
+
+/**
+ * How much of a bar a leg may overlap before it counts as running through it, in CSS px.
+ *
+ * Half a pixel: the question is whether a reader loses the line, and a sub-pixel graze is a
+ * rounding artefact rather than an occlusion. It is the same tolerance the measurement harness
+ * uses, for the same reason.
+ */
+export const LEG_CLEARANCE_PX = 0.5;
+
 /** Is screen-x `x` clear of every bar in `lane`? The degenerate {@link isLaneFreeBetween}. */
 export function isLaneFreeAt(index: LaneIntervalIndex, lane: number, x: number): boolean {
   return isLaneFreeBetween(index, lane, x, x);
@@ -264,9 +322,28 @@ export function routeOrthogonal(
     /** Lane pitch and bar height, so the 5-point fallback can find the inter-lane gutter. */
     laneHeight: number;
     barHeight: number;
+    /**
+     * The two endpoint bars' own x-spans (logic-legibility M2-T2).
+     *
+     * A horizontal leg begins ON its anchor's edge, so a test that simply asks "is this interval
+     * clear of every bar in the lane" reports every leg in the plan as blocked by itself. The
+     * anchor has to be excluded by identity, and `laneIntervalIndex` cannot supply it: it MERGES
+     * spans that overlap **or touch**, and `packLanes` puts activities end to end — so a leg
+     * crossing its immediate neighbour is inside the same merged span as its own bar. Measured in
+     * the M0 harness, attributing against merged spans undercounts foreign occlusion **6.6x**.
+     *
+     * So the caller passes the two rects it already has. Absent ⇒ the legs are not checked and this
+     * function behaves exactly as it did before M2, which is the parity default ADR-0064 M2 set for
+     * the obstacle parameter itself.
+     */
+    fromSpan?: { x0: number; x1: number };
+    toSpan?: { x0: number; x1: number };
   },
 ): Point[] {
-  if (from.y === to.y) return [from, to];
+  // **Parity first**: with no obstacle index this function returns exactly what it always returned
+  // (ADR-0064 M2's default, FC-L10). The same-lane straight segment is part of that, and moving
+  // this line below the elbow arithmetic broke it — caught by the parity suite, not by reading.
+  if (from.y === to.y && !obstacles) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
   const gap = corridorGap(view);
@@ -288,13 +365,52 @@ export function routeOrthogonal(
   if (!obstacles) return fourPoint(preferred);
 
   const crossed = crossedLanes(obstacles.fromLane, obstacles.toLane);
-  // Nothing between the two lanes to hit: today's elbow is already correct, and taking the
-  // candidate path anyway would risk moving a line that had no reason to move.
-  if (crossed.length === 0) return fourPoint(preferred);
 
-  const free = (x: number): boolean =>
-    crossed.every((lane) => isLaneFreeAt(obstacles.index, lane, x));
-  if (free(preferred)) return fourPoint(preferred);
+  /**
+   * **Viability, not freedom** (logic-legibility M2-T2). A corridor is usable when the lanes it
+   * crosses are clear **and** the two horizontal legs it implies are clear in their own lanes. The
+   * candidate list, its order and its bound are unchanged; only the test they are judged by is.
+   *
+   * The leg terms are skipped when the caller passed no spans, which keeps the pre-M2 behaviour
+   * available and is what the byte-identity cases assert.
+   */
+  const legsClear = (x: number): boolean =>
+    (obstacles.fromSpan === undefined ||
+      isLegClear(obstacles.index, obstacles.fromLane, from.x, x, [obstacles.fromSpan])) &&
+    (obstacles.toSpan === undefined ||
+      isLegClear(obstacles.index, obstacles.toLane, x, to.x, [obstacles.toSpan]));
+  const viable = (x: number): boolean =>
+    crossed.every((lane) => isLaneFreeAt(obstacles.index, lane, x)) && legsClear(x);
+
+  /**
+   * **A same-lane link is the small-plan mechanism, and it used to return before any of this.**
+   *
+   * `packLanes` packs by time, so A and C sit in one lane with B between them; the straight line
+   * `[from, to]` then draws through B and vanishes behind it. That early return is why the product
+   * owner's report said _"even for a simple plan"_ — a plan with few lanes has most of its links
+   * in one. Measured on Unit 300, which is the unfavourable case for this shape: 26 two-point
+   * links, 5 running through a foreign bar.
+   *
+   * The line is kept when it is clear, which is the overwhelmingly common case and FC-L10's
+   * parity; when it is not, the link leaves the lane and travels in the gutter below, which is what
+   * the reference diagram does and what M1 made safe.
+   */
+  if (from.y === to.y) {
+    // BOTH anchors are in this lane, so both are excluded; with either span missing the leg is not
+    // checked at all and the straight segment stands, which is the pre-M2 behaviour.
+    const anchors = [obstacles.fromSpan, obstacles.toSpan].filter(
+      (span): span is { x0: number; x1: number } => span !== undefined,
+    );
+    if (anchors.length < 2) return [from, to];
+    if (isLegClear(obstacles.index, obstacles.fromLane, from.x, to.x, anchors)) return [from, to];
+    return gutterRoute(from, to, view, obstacles, preferred, gap);
+  }
+
+  // Nothing between the two lanes to hit — but the two legs still run somewhere, and before M2 that
+  // ended the question. `chooseCorridorsByCrossing` already refuses to inherit this early return
+  // for its own reason; this is the same correction one function up.
+  if (crossed.length === 0 && legsClear(preferred)) return fourPoint(preferred);
+  if (viable(preferred)) return fourPoint(preferred);
 
   /**
    * A **bounded** candidate list, tried in a fixed order so the same input always produces the same
@@ -308,7 +424,7 @@ export function routeOrthogonal(
     Math.max(from.x, to.x) + gap * 3,
   ].slice(0, MAX_CORRIDOR_CANDIDATES);
   for (const candidate of candidates) {
-    if (free(candidate)) return fourPoint(candidate);
+    if (viable(candidate)) return fourPoint(candidate);
   }
 
   /**
@@ -318,6 +434,39 @@ export function routeOrthogonal(
    * gutter itself is unusable the line falls back to today's elbow, because bounded work is the
    * contract and an unbounded search on the paint path is how a draw budget dies.
    */
+  return gutterRoute(from, to, view, obstacles, preferred, gap);
+}
+
+/**
+ * The VHV escape: leave the lane, travel in the gutter, arrive.
+ *
+ * **Both legs hug their own anchor, and that is the largest single lever this epic measured.** The
+ * shipped shape put its far corridor at `(from.x + to.x) / 2`, so the leg at the target's y ran
+ * half the span and met whatever was in the way — which is why a clear channel alone rescued almost
+ * nothing. Measured over Unit 300's 105 foreign-occluded links (`m0-measurement.md` §5):
+ *
+ * - every x in `routeOrthogonal`'s candidate list rescues **31**
+ * - **every** x, swept at 1 px across the anchors' span plus three gaps either side, rescues **35**
+ *   — so widening the search is worth four links and the obvious remedy is disposed of
+ * - this shape rescues **45 on its own**, more than every elbow position in existence combined
+ *
+ * The corridors sit one gap outside each anchor, on the side the other end is, so the two legs are
+ * as short as the geometry allows. It is the last structured attempt and it is unconditional: if
+ * the gutter itself is unusable the line is still drawn here rather than searched for, because
+ * bounded work is the contract and an unbounded search on the paint path is how a draw budget dies.
+ * {@link routeResidue} counts the cases where it does not clear, so a shortfall is explainable
+ * rather than mysterious.
+ */
+function gutterRoute(
+  from: Point,
+  to: Point,
+  view: Viewport,
+  obstacles: NonNullable<Parameters<typeof routeOrthogonal>[5]>,
+  preferred: number,
+  gap: number,
+): Point[] {
+  // For a cross-lane link the gutter is the one below the upper of the two lanes; for a same-lane
+  // link (M2-T2) both are the same lane, so `Math.min` names it and the band below it is used.
   const gutterLane = Math.min(obstacles.fromLane, obstacles.toLane);
   /**
    * **In SCREEN space, which means ADDING `view.originY`, not subtracting it.**
@@ -357,14 +506,21 @@ export function routeOrthogonal(
   // Each leg only has to clear the lanes IT crosses, which is why this can succeed where a single
   // corridor could not: the near leg runs from the source lane down to the gutter, the far leg from
   // the gutter to the target lane, and neither spans the blocked middle.
-  const near = preferred + gap * 2;
-  const far = (from.x + to.x) / 2;
+  const forward = from.x <= to.x;
+  const near = forward ? from.x + gap : from.x - gap;
+  const far = forward ? to.x - gap : to.x + gap;
+  // A degenerate span — the two anchors closer together than two gaps — would cross the corridors
+  // over each other and draw a bow tie. Fall back to the shipped placement there, which is correct
+  // and merely long, and is the case `preferred` was chosen for.
+  const tight = forward ? near <= far : near >= far;
+  const nearX = tight ? near : preferred + gap * 2;
+  const farX = tight ? far : (from.x + to.x) / 2;
   return [
     from,
-    { x: near, y: from.y },
-    { x: near, y: gutterY },
-    { x: far, y: gutterY },
-    { x: far, y: to.y },
+    { x: nearX, y: from.y },
+    { x: nearX, y: gutterY },
+    { x: farX, y: gutterY },
+    { x: farX, y: to.y },
     to,
   ];
 }
@@ -1121,6 +1277,22 @@ export function chooseCorridorsByCrossing(
     let best = current;
     for (const x of [...CORRIDOR_OFFSETS.map((step) => elbow.x + step * gap), ...anchored]) {
       if (!lanes.every((lane) => isLaneFreeAt(index, lane, x))) continue;
+      /**
+       * **This pass deliberately does NOT check the legs, and that was measured rather than
+       * assumed** (logic-legibility M2-T4).
+       *
+       * The concern was real on its face: the pass moves an elbow up to `± 8 × gap` from its anchor
+       * on a **crossings-only** score, so it can move a corridor to an x whose legs run through a
+       * bar — spending M2's gain immediately after M2 produces it. Built and measured band-off on
+       * Unit 300, adding `isLegClear` here moves `occl/link` by **−0.026 / +0.005 / −0.006** at
+       * 1 / 4 / 12 px/day — a wash, and worse at the middle zoom — while `x/link` rises at all
+       * three, taking 4 px/day to **+11.1 %** against the M0 baseline and back outside FC-L4's
+       * 10 % ceiling.
+       *
+       * So it is withdrawn and recorded as measured-and-rejected. The reason it costs nothing is
+       * that `routeOrthogonal` has already chosen an elbow whose legs are clear (M2-T2), and this
+       * pass only ever moves off it for a strictly better crossing count.
+       */
       const count = score(x);
       if (count < best) {
         best = count;

@@ -47,6 +47,7 @@ import {
   EMPHASIS_STROKE_W,
   LABEL_FONT,
   LABEL_GAP_PX,
+  activityRect,
   DATE_LABEL_MIN_PX_PER_DAY,
   dateLabelSlot,
   edgeGapDays,
@@ -1185,12 +1186,22 @@ export function paintScene(
       const to =
         off && off.succ !== 0 ? { x: anchors.succ.x, y: anchors.succ.y + off.succ } : anchors.succ;
       if (!laneIndex) return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0);
+      /**
+       * The two endpoint bars' own x-spans (logic-legibility M2-T2). A horizontal leg begins on its
+       * anchor's edge, so the leg check has to exclude that bar by identity — and `laneIndex`
+       * cannot supply it, because it merges spans that touch and `packLanes` puts activities end to
+       * end. These rects are already cached for this frame, so it costs a lookup.
+       */
+      const predRect = activityRect(pred, view, scene.dataDate, rectCache);
+      const succRect = activityRect(succ, view, scene.dataDate, rectCache);
       return routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0, {
         index: laneIndex,
         fromLane: pred.laneIndex,
         toLane: succ.laneIndex,
         laneHeight: LANE_HEIGHT,
         barHeight: BAR_HEIGHT,
+        ...(predRect ? { fromSpan: { x0: predRect.x, x1: predRect.x + predRect.w } } : {}),
+        ...(succRect ? { toSpan: { x0: succRect.x, x1: succRect.x + succRect.w } } : {}),
       });
     };
     /**

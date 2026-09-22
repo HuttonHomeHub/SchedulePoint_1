@@ -15,6 +15,7 @@ import {
   FAN_OUT_STEP_PX,
   isLaneFreeAt,
   isLaneFreeBetween,
+  isLegClear,
   laneIntervalIndex,
   laneOverlapBetween,
   GUTTER_CHANNEL_PITCH_PX,
@@ -264,6 +265,123 @@ describe('routeOrthogonal — obstacle awareness', () => {
     toLane,
     laneHeight: 28,
     barHeight: 18,
+  });
+
+  /** The same, plus the two endpoint bars' own spans — what the painter passes after M2-T2. */
+  const obstaclesWithSpans = (
+    index: LaneIntervalIndex,
+    fromLane: number,
+    toLane: number,
+    fromSpan: { x0: number; x1: number },
+    toSpan: { x0: number; x1: number },
+  ) => ({ ...obstaclesWith(index, fromLane, toLane), fromSpan, toSpan });
+
+  /**
+   * **Spec §0.3's same-lane shape, which `routeOrthogonal` used to answer before looking.**
+   *
+   * `packLanes` packs by time, so A and C share a lane with B between them — and the straight
+   * segment `[from, to]` drew through B and vanished behind it, because links paint UNDER bars.
+   * That early return is why the report said _"even for a simple plan"_: a plan with few lanes has
+   * most of its links in one.
+   *
+   * Verified red against the shipped early return, which returned the two-point line unexamined.
+   */
+  it('leaves its own lane when a foreign bar sits between the two anchors', () => {
+    const index: LaneIntervalIndex = new Map([
+      [0, { spans: [[0, 40] as [number, number], [120, 200], [300, 340]] }],
+    ]);
+    const from = { x: 40, y: 50 };
+    const to = { x: 300, y: 50 };
+    const routed = routeOrthogonal(from, to, 'FS', VIEW, 0, {
+      ...obstaclesWithSpans(index, 0, 0, { x0: 0, x1: 40 }, { x0: 300, x1: 340 }),
+    });
+    expect(routed).toHaveLength(6);
+    // It travels in the gutter BELOW its own lane, where a bar can never be (M1-T1).
+    const boundary = screenYOfLane(1, VIEW);
+    expect(routed[2]!.y).toBeCloseTo(boundary, 6);
+    expect(routed[3]!.y).toBeCloseTo(boundary, 6);
+    // And both ends still meet their anchors.
+    expect(routed[0]).toEqual(from);
+    expect(routed[5]).toEqual(to);
+  });
+
+  it('keeps the straight segment when its own lane is clear between the anchors', () => {
+    // The same two anchors with nothing between them: the commonest link in the product, and
+    // FC-L10's parity — a diagram with no occlusion must not move at all.
+    const index: LaneIntervalIndex = new Map([
+      [0, { spans: [[0, 40] as [number, number], [300, 340]] }],
+    ]);
+    const from = { x: 40, y: 50 };
+    const to = { x: 300, y: 50 };
+    expect(
+      routeOrthogonal(from, to, 'FS', VIEW, 0, {
+        ...obstaclesWithSpans(index, 0, 0, { x0: 0, x1: 40 }, { x0: 300, x1: 340 }),
+      }),
+    ).toEqual([from, to]);
+  });
+
+  /**
+   * **A leg is not blocked by the bar it is drawn to.** Both anchors lie in the leg's own lane, and
+   * excluding only one of them reports every same-lane link as occluded by its own target — which
+   * is what the first version did, caught by the parity suite rather than by reading.
+   */
+  /**
+   * The same rule at the ROUTING call site rather than at the predicate. An `FF` tie between two
+   * same-lane activities draws its leg to the target's FAR edge, so the leg crosses the whole
+   * target bar — and excluding only the source sends a perfectly clear link into the gutter.
+   *
+   * It earns its place because the predicate's own case does not reach here: a mutation excluding
+   * one anchor at this call site left that case green, and only this one goes red.
+   */
+  it('keeps an FF straight segment that crosses its own target bar', () => {
+    const index: LaneIntervalIndex = new Map([
+      [0, { spans: [[0, 40] as [number, number], [300, 340]] }],
+    ]);
+    const from = { x: 40, y: 50 };
+    const to = { x: 340, y: 50 };
+    expect(
+      routeOrthogonal(from, to, 'FF', VIEW, 0, {
+        ...obstaclesWithSpans(index, 0, 0, { x0: 0, x1: 40 }, { x0: 300, x1: 340 }),
+      }),
+    ).toEqual([from, to]);
+  });
+
+  it("excludes BOTH of a same-lane leg's anchors, not just the source", () => {
+    const index: LaneIntervalIndex = new Map([
+      [0, { spans: [[0, 40] as [number, number], [300, 340]] }],
+    ]);
+    // The leg ends at the target's FAR edge, which is what an `FF` tie draws, so it crosses the
+    // whole target bar. Excluding only the source reports it blocked by the bar it is drawn to.
+    expect(isLegClear(index, 0, 40, 340, [{ x0: 0, x1: 40 }])).toBe(false);
+    expect(
+      isLegClear(index, 0, 40, 340, [
+        { x0: 0, x1: 40 },
+        { x0: 300, x1: 340 },
+      ]),
+    ).toBe(true);
+  });
+
+  /**
+   * **An adjacent-lane link has no crossed lane and still has two legs.** That early return ended
+   * the question before a leg was considered; `chooseCorridorsByCrossing` already refuses to
+   * inherit it for its own reason, and this is the same correction one function up.
+   */
+  it('moves the corridor for an adjacent-lane link whose leg is blocked', () => {
+    const index: LaneIntervalIndex = new Map([
+      // The blocker starts INSIDE the preferred elbow's reach (`from.x + gap`), which is what
+      // makes the source leg cross it. A blocker beyond that reach leaves the elbow correct, and
+      // the first version of this fixture had one — the case passed for the right reason and
+      // tested nothing.
+      [0, { spans: [[0, 40] as [number, number], [45, 200]] }],
+      [1, { spans: [[400, 460] as [number, number]] }],
+    ]);
+    const from = { x: 40, y: screenYOfLane(0, VIEW) + 14 };
+    const to = { x: 400, y: screenYOfLane(1, VIEW) + 14 };
+    const routed = routeOrthogonal(from, to, 'FS', VIEW, 0, {
+      ...obstaclesWithSpans(index, 0, 1, { x0: 0, x1: 40 }, { x0: 400, x1: 460 }),
+    });
+    // The preferred elbow at `from.x + gap` would put the source leg through the bar at [60, 200].
+    expect(routed[1]!.x).not.toBeCloseTo(40 + corridorGap(VIEW), 6);
   });
 
   it('is byte-identical to the parity shape when no lane is crossed', () => {

@@ -142,3 +142,83 @@ test('a link forced into the gutter is painted there, clear of the bar borders',
   expect(best.run).toBeGreaterThan(8);
   expect(best.fromEdge).toBeGreaterThanOrEqual(EDGE_SKIP_PX);
 });
+
+/**
+ * **Spec §0.3's same-lane shape, driven in a real browser** (logic-legibility M2).
+ *
+ * `packLanes` packs by time, so A and C share a lane with B between them — and before M2
+ * `routeOrthogonal` returned the straight segment `[from, to]` **before obstacles were consulted**
+ * (`link-routing.ts:182`), so the link drew through B and vanished behind it. That early return is
+ * why the product owner's report said _"even for a simple plan"_: a plan with few lanes has most of
+ * its links in one.
+ *
+ * **It does not discriminate the defect either, and the reason is now general enough to state
+ * once.** Run against the restored early return it stays green: this canvas carries many dark
+ * near-neutral horizontals that are not links — bar borders, the data-date and today marks, ruler
+ * ticks — and a classifier that separates ink by colour and saturation cannot tell them from a
+ * routed line. Every pixel assertion attempted here, five across two cases, found one of those
+ * instead of the link.
+ *
+ * So the geometry is gated where an instrument can actually see it, and both are stronger than a
+ * pixel test would have been:
+ *
+ * - `link-routing.test.ts` asserts the routes as numbers, verified red against **three** named
+ *   mutations — the same-lane early return, the adjacent-lane early return, and excluding only one
+ *   of a same-lane leg's two anchors.
+ * - `scripts/measure-occlusion.mjs` and `measure-avoidable.mjs` read the **painter's own output**,
+ *   and the second proves its reconstruction is byte-identical to the painted line set before it
+ *   reports anything — a control that fired twice during M2 and refused to judge.
+ *
+ * What these two cases establish is what only a browser can: the real product, against a real API
+ * with the pen enforced, reaches this code, takes the fallback, and paints a line rather than
+ * throwing or drawing nothing. That is worth having and it is not a geometry gate.
+ */
+const SAME_LANE = [
+  { name: 'Strip out', laneIndex: 0, durationDays: 5 },
+  { name: 'First fix', laneIndex: 0, durationDays: 5 },
+  { name: 'Handover', laneIndex: 0, durationDays: 5 },
+];
+
+test('a link over a bar in its own lane is routed and painted', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  await createPlan(page, 'One lane');
+  await ensurePen(page);
+  const made = await seedActivities(page, orgSlug, SAME_LANE);
+  const a = made.find((m) => m.name === 'Strip out');
+  const b = made.find((m) => m.name === 'First fix');
+  const c = made.find((m) => m.name === 'Handover');
+  if (!a || !b || !c) throw new Error('the fixture did not seed its three activities');
+  // The chain puts B between A and C in time; the extra A -> C link is the one that must route.
+  await seedDependency(page, orgSlug, a.id, b.id);
+  await seedDependency(page, orgSlug, b.id, c.id);
+  await seedDependency(page, orgSlug, a.id, c.id);
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+  await expect(page.locator('canvas').first()).toBeAttached();
+
+  const { rows } = await canvasInk(page);
+  const bands: { top: number; bottom: number }[] = [];
+  for (let y = 0; y < rows.length; y += 1) {
+    if (rows[y]!.bar <= 20) continue;
+    const last = bands[bands.length - 1];
+    if (last && y === last.bottom + 1) last.bottom = y;
+    else bands.push({ top: y, bottom: y });
+  }
+  // The control: one lane, so one band. If the seed drifted into several this is not the shape.
+  expect(bands).toHaveLength(1);
+
+  /**
+   * A long horizontal link run OUTSIDE the band, clear of its border. Before M2 the A→C line sits
+   * at the bar's centre-line — inside the band, under the fill — so there is nothing out here to
+   * find; the run below belongs to the routed link.
+   */
+  const EDGE_SKIP_PX = 4;
+  let outsideRun = 0;
+  for (let y = 0; y < rows.length; y += 1) {
+    if (y > bands[0]!.top - EDGE_SKIP_PX && y < bands[0]!.bottom + EDGE_SKIP_PX) continue;
+    outsideRun = Math.max(outsideRun, rows[y]!.linkRun);
+  }
+  expect(outsideRun).toBeGreaterThan(8);
+});

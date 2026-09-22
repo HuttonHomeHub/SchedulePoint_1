@@ -53,6 +53,7 @@ import {
   laneIntervalIndex,
   laneOverlapBetween,
   type LaneIntervalIndex,
+  packGutterChannels,
   MAX_CORRIDOR_CANDIDATES,
   routeOrthogonal,
 } from '../src/features/tsld/render/link-routing';
@@ -2039,14 +2040,16 @@ export function avoidableOcclusions(
       off && off.pred !== 0 ? { x: anchors.pred.x, y: anchors.pred.y + off.pred } : anchors.pred;
     const to =
       off && off.succ !== 0 ? { x: anchors.succ.x, y: anchors.succ.y + off.succ } : anchors.succ;
-    const line = routeOrthogonal(
-      from,
-      to,
-      edge.type,
-      view,
-      off?.pred ?? 0,
-      obstaclesFor(pred.laneIndex, succ.laneIndex),
-    );
+    // The endpoint spans the painter passes after M2-T2. Without them the model set stops matching
+    // the picture and the digest control below reports DIVERGENT — which it did, on the first run
+    // after M2 landed, rather than quietly producing a denominator from the wrong lines.
+    const predRect = activityRect(pred, view, scene.dataDate);
+    const succRect = activityRect(succ, view, scene.dataDate);
+    const line = routeOrthogonal(from, to, edge.type, view, off?.pred ?? 0, {
+      ...obstaclesFor(pred.laneIndex, succ.laneIndex),
+      ...(predRect ? { fromSpan: { x0: predRect.x, x1: predRect.x + predRect.w } } : {}),
+      ...(succRect ? { toSpan: { x0: succRect.x, x1: succRect.x + succRect.w } } : {}),
+    });
     corridors.push({ line, fromLane: pred.laneIndex, toLane: succ.laneIndex });
     built.push({
       from,
@@ -2058,6 +2061,10 @@ export function avoidableOcclusions(
   }
   chooseCorridorsByCrossing(corridors, index, gap);
   bundleCorridors(corridors, index);
+  // **Last, exactly as the painter calls it** (M1-T3). Omitting it left the model carrying the same
+  // occlusion as the picture and a different geometry — caught by the digest below, which is the
+  // reason that control compares fingerprints and not counts.
+  packGutterChannels(corridors, LANE_HEIGHT, BAR_HEIGHT);
 
   const sortedFingerprint = sortedDigest(corridors.map((c) => c.line));
 
