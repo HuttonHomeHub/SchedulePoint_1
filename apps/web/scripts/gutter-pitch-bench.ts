@@ -24,6 +24,12 @@ interface SampleInput {
   pxPerDay: number;
   size: { width: number; height: number };
   dpr: number;
+  /**
+   * Optional horizontal origin. Defaults to 40, which is what Part C's three layout shots used and
+   * what keeps them byte-identical; M0-T5 passes its own so a picture of a 391-day plan can be
+   * framed on the cluster it is about rather than on whatever happens to sit at day zero.
+   */
+  originX?: number;
 }
 
 declare global {
@@ -34,11 +40,27 @@ declare global {
   };
 }
 
-globalThis.renderGutterSample = ({ canvas, root, scene, focusLane, pxPerDay, size, dpr }) => {
+globalThis.renderGutterSample = ({
+  canvas,
+  root,
+  scene,
+  focusLane,
+  pxPerDay,
+  size,
+  dpr,
+  originX,
+}) => {
   // Frame the busiest gutter a little below the top edge, at whatever pitch this bundle carries.
   const originY = 40 - focusLane * LANE_HEIGHT;
   const ctx = canvas.getContext('2d');
   if (ctx === null) throw new Error('no 2D context — the picture would be blank and look like one');
-  paintScene(ctx, scene, { pxPerDay, originX: 40, originY }, size, resolveTsldPalette(root), dpr);
+  paintScene(
+    ctx,
+    scene,
+    { pxPerDay, originX: originX ?? 40, originY },
+    size,
+    resolveTsldPalette(root),
+    dpr,
+  );
   return { laneHeight: LANE_HEIGHT, barHeight: BAR_HEIGHT, originY };
 };

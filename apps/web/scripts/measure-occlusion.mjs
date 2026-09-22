@@ -32,6 +32,22 @@
  * measured as lying inside a painted bar at 0.0 px clearance. `conditions.md` §0.2 binds every
  * document quoting that number to say so.
  *
+ * ## The FC-L0 vector (M0-T2)
+ *
+ * Section A sweeps zooms {1, 4, 12} x pans {0, 32, 200, 500} on the shipped layout and prints the
+ * condition's whole vector. The pan sweep is not an expectation of variation: `originY` shifts every
+ * lane and every leg together, so occlusion should be pan-invariant, and printing it is how that is
+ * ESTABLISHED rather than assumed. `vhv-gutter-probe.ts` records that `originY: 0` is the single
+ * value at which a whole class of gutter defect is invisible, which is why 0 is swept DELIBERATELY
+ * rather than avoided, and why no reading is taken at one pan alone.
+ *
+ * **The pans are positive, and the plan's literal {32, -200, -500} could not be used.** A negative
+ * `originY` lifts the scene above the viewport's top edge, `paint.ts` culls what is off screen, and
+ * FC-L0's own non-vacuity control then refuses the reading — correctly: at -200 it reports 135
+ * attributed polylines against 188 edges, and a whole-plan figure taken over two thirds of the plan
+ * is the "rewarding a candidate for culling the evidence" failure that condition exists to catch.
+ * Positive pans move the same phase through the same modulo arithmetic with every edge still drawn.
+ *
  * ## Two layouts
  *
  * ADR-0149 D5 withdrew the layout rule on the FIRST quantity, and the product owner has since
@@ -79,8 +95,78 @@ const onePerRow = {
   lanes: keys.length,
 };
 
-console.log(`\n[logic-legibility M0 / FC-L0] node, ${new Date().toISOString()}`);
-console.log(`  commit ${execFileSync('git', ['rev-parse', 'HEAD']).toString().trim()}`);
+const commit = execFileSync('git', ['rev-parse', 'HEAD']).toString().trim();
+
+// Symptom (c). A pure property of the assignment — no zoom or pan term — so it is computed once per
+// layout from the same `asap` the scene is built from, rather than re-derived per reading.
+const meanAbsDeltaLane = (layout) => {
+  const deps = asap.dependencies;
+  if (deps.length === 0) return 0;
+  let total = 0;
+  for (const d of deps) {
+    total += Math.abs(
+      (layout.laneOf.get(d.predecessorKey) ?? 0) - (layout.laneOf.get(d.successorKey) ?? 0),
+    );
+  }
+  return total / deps.length;
+};
+
+console.log(`\n[logic-legibility M0-T2 / FC-L0] node, ${new Date().toISOString()}`);
+console.log(`  commit ${commit}`);
+console.log(`  Unit 300 — ${String(keys.length)} activities, WBS band OFF, shipped layout`);
+console.log(
+  `  mean |Δlane| = ${meanAbsDeltaLane(shipped).toFixed(3)} over ${asap.dependencies.length} edges\n`,
+);
+console.log(
+  `    ${'zoom'.padStart(5)} ${'pan'.padStart(6)} ${'links'.padStart(5)} ${'occl/link'.padStart(9)} ` +
+    `${'x/link'.padStart(6)} ${'maxLegs/y'.padStart(9)} ${'gutter'.padStart(6)} ` +
+    `${'touching'.padStart(8)} ${'band'.padStart(6)} ${'fingerprint'.padStart(12)}`,
+);
+
+const vector = [];
+for (const pxPerDay of [1, 4, 12]) {
+  for (const originY of [0, 32, 200, 500]) {
+    const r = readBoth(asap, shipped, pxPerDay, originY);
+    vector.push({ pxPerDay, originY, ...r });
+    // **The non-vacuity control, per row and throwing.** A metric that examined nothing reports zero
+    // of everything and looks like a triumph (FC-L0). Two limbs: every edge is attributed, and no
+    // segment is diagonal — ADR-0065 rejected diagonals, so one is a recorder fault, not a route.
+    if (r.visibleLinks !== r.edges) {
+      throw new Error(
+        `VACUOUS: ${r.visibleLinks} attributed polylines against ${r.edges} edges at ` +
+          `${pxPerDay} px/day, pan ${originY}. Refusing to judge.`,
+      );
+    }
+    if (r.diagonal !== 0) {
+      throw new Error(
+        `NON-AXIS-ALIGNED: ${r.diagonal} segments at ${pxPerDay} px/day, pan ${originY}. ` +
+          `ADR-0065 rejected diagonals, so the recorder is reading something that is not a route.`,
+      );
+    }
+    console.log(
+      `    ${String(pxPerDay).padStart(5)} ${String(originY).padStart(6)} ${String(r.visibleLinks).padStart(5)} ` +
+        `${(r.foreignLinks / r.visibleLinks).toFixed(3).padStart(9)} ${r.perLink.toFixed(3).padStart(6)} ` +
+        `${String(r.maxLegsOnOneY).padStart(9)} ${String(r.gutterLegs).padStart(6)} ` +
+        `${String(r.legsTouchingABar).padStart(8)} ${`${String(r.clearBandPx)}/${String(r.usableBandPx)}`.padStart(6)} ` +
+        `${r.fingerprint.padStart(12)}`,
+    );
+  }
+}
+
+const panInvariant = (key) =>
+  [1, 4, 12].every(
+    (z) => new Set(vector.filter((v) => v.pxPerDay === z).map((v) => v[key])).size === 1,
+  );
+console.log(
+  `\n  pan-invariant: occlusion ${panInvariant('foreignLinks') ? 'YES' : 'NO'}, ` +
+    `crossings ${panInvariant('crossings') ? 'YES' : 'NO'}, ` +
+    `gutter legs ${panInvariant('gutterLegs') ? 'YES' : 'NO'}, ` +
+    `max legs on one y ${panInvariant('maxLegsOnOneY') ? 'YES' : 'NO'}`,
+);
+console.log(`  rows: ${String(shipped.lanes)} (reported, never scored — decision 2)\n`);
+
+console.log(`\n[logic-legibility M0 / FC-L1] node, ${new Date().toISOString()}`);
+console.log(`  commit ${commit}`);
 console.log(`  Unit 300 — ${String(keys.length)} activities, WBS band OFF (summaries rolled up)\n`);
 console.log(
   `    ${'layout'.padEnd(13)} ${'rows'.padStart(4)} ${'links'.padStart(5)} ${'x/link'.padStart(6)} ` +
