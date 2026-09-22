@@ -265,7 +265,31 @@ questions are asked.
 
 ---
 
-## Milestone 1 — The gutter _(conditional on FC-C3, and it may follow M-C2)_
+## Milestone 1 — The gutter — **WITHDRAWN 2026-09-22 on FC-C3's own withdrawal clause**
+
+> **The pitch stays at 28 and this milestone does not happen.** M-C0-T4 measured both halves of
+> FC-C3 at pitches 28, 36 and 44 and neither is achievable by changing the pitch:
+>
+> - **Two runs through one gutter never read as two lines.** 11 of Unit 300's 34 gutter legs draw
+>   at a **single y**, identically at every pitch — `routeOrthogonal`'s `gutterY` is
+>   `(gutterLane + 1) * laneHeight - (laneHeight - barHeight) / 2`, which has **no per-link term**,
+>   and `bundleCorridors` bundles verticals only.
+> - **The leg is never clear of a bar edge.** `gutterY` expands to exactly the upper lane's bar
+>   bottom at every pitch; measured against `activityRect`, **31 of 34 legs lie _inside_ a painted
+>   bar's extent**, smallest gap **0.0 px**.
+>
+> The rendered pictures (`gutter-pitch-{28,36,44}.png`) are the artefact FC-C3 asks to be judged on
+> and they say the same thing: at 44 the rows are far apart, the extra space is empty, and every
+> run sits where it sat at 28.
+>
+> **The condition names this outcome as itself a finding** — "the complaint is entirely row
+> assignment and corridor choice" — which is now the third independent measurement pointing that
+> way, beside M-C0-T2b's 2.45× and M-C0-T3's compression result. Distributing legs **within** a
+> gutter is a corridor decision and belongs to **M-C3**, and is recorded there rather than kept
+> alive here as a pitch change wearing a different name.
+>
+> The text below is kept rather than deleted, because the reasoning is what makes the withdrawal
+> checkable.
 
 > **The gutter interacts with the band work and the first draft said it did not.** Spec §4.6's
 > corrected table: in the state the reader is in (27 rows) Unit 300 already fills ~93 % of the
@@ -528,6 +552,15 @@ where it would buy something. Closes `docs/TECH_DEBT.md` **#363**.
 **Outcome:** a corridor is chosen for what it crosses, not only for what it hits.
 **Entry point:** the **TSLD canvas itself**, plus the export and the print — no control.
 **Journey:** none, for M-C1's recorded reason.
+
+> **Inherited from M-C1's withdrawal, 2026-09-22: distributing gutter legs is a corridor decision
+> and lands here.** M-C0-T4 measured 11 of Unit 300's 34 gutter legs drawing at a **single y**,
+> because `routeOrthogonal`'s `gutterY` has no per-link term, and a further **31 of 34** lying
+> inside a painted bar's vertical extent because that y expands to exactly the upper lane's bar
+> bottom at every pitch. Neither is a pitch problem and both are this milestone's kind of problem.
+> Whatever is built must keep ADR-0065's determinism rule — a route that varies between frames
+> reads as the diagram twitching — so an offset has to be a function of the edge, not of iteration
+> order.
 
 > **Measured before built, and it may not be built — and it comes BEFORE the layout rule on
 > purpose.** M-C0 reports how much of the complaint this absorbs at **zero height cost**. If that is

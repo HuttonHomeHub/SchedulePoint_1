@@ -348,6 +348,103 @@ on top of it.
 
 ---
 
+## M-C0-T4 — FC-C3: **the gutter is not the term**, and no pitch can make it one
+
+**Taken:** 2026-09-22, against `1e17f266`. Unit 300, band off, lanes arranged — the configuration a
+planner meets. Harness `apps/web/scripts/measure-gutter-pitch.mjs` +
+`apps/web/scripts/gutter-pitch-bench.ts`.
+
+FC-C3 asks for a pitch at which "two runs through one gutter read as two lines, clear of both bar
+edges", **judged on a rendered image at 1646**. Both halves were measured before any pitch was
+rendered, and both are **unachievable by changing the pitch** — not marginal, not
+fixture-dependent: identical at every pitch swept.
+
+### How the pitch was varied without touching a tracked file
+
+`LANE_HEIGHT` is a module constant with 37 call sites. The obvious sweep — patch `geometry.ts`,
+build, restore — leaves a tracked file modified for the length of the run behind a `finally` a crash
+can skip. Instead the **bundle** is rewritten: esbuild emits `var LANE_HEIGHT = 28;` as a real
+binding and references it rather than inlining it (checked, not assumed), so one substitution in a
+temp file moves every call site. The substitution asserts **exactly one** match, and both the
+arithmetic sweep and the browser render **report back the pitch they actually painted with** — so a
+substitution that silently failed appears as a reading at the wrong pitch, never as three plausible
+identical numbers.
+
+### The readings
+
+| pitch | gutter | px/d | links | VHV | gutter legs | distinct y | most on one y | legs inside a bar | min clearance |
+| ----: | -----: | ---: | ----: | --: | ----------: | ---------: | ------------: | ----------------: | ------------: |
+|    28 |  10 px |    4 |   188 |  35 |          34 |          7 |        **11** |            **31** |    **0.0 px** |
+|    28 |  10 px |   12 |   188 |  34 |          33 |          7 |        **11** |            **30** |    **0.0 px** |
+|    36 |  18 px |    4 |   188 |  35 |          34 |          7 |        **11** |            **31** |    **0.0 px** |
+|    36 |  18 px |   12 |   188 |  34 |          33 |          7 |        **11** |            **30** |    **0.0 px** |
+|    44 |  26 px |    4 |   188 |  35 |          34 |          7 |        **11** |            **31** |    **0.0 px** |
+|    44 |  26 px |   12 |   188 |  34 |          33 |          7 |        **11** |            **30** |    **0.0 px** |
+
+A gutter leg is identified by the painter's **own** definition rather than by a band — a horizontal
+segment whose offset within its lane is exactly `pad + barHeight`, which is
+`routeOrthogonal`'s `gutterY` (`link-routing.ts:225-228`). Anything looser would count a 4-point
+route's first or last leg, which runs at a bar's centre and is not in a gutter at all. Clearance is
+measured against **`activityRect`** — the one existing source of a bar's geometry, the same one
+`laneIntervalIndex` reads — never against the routing formula, which would make the answer a
+restatement of the expression rather than a measurement of the picture.
+
+### First half — two runs through one gutter never read as two lines
+
+**11 of the 34 gutter legs are drawn at a single y**, and widening the gutter from 10 px to 26 px
+changes that number by nothing. It cannot: the leg's y is
+`(gutterLane + 1) * laneHeight - (laneHeight - barHeight) / 2`, which has **no per-link term at any
+pitch**. Eleven lines at one y are eleven lines drawn on top of each other however tall the gutter
+is, and `bundleCorridors` cannot help — it bundles **vertical** segments (`a.x === b.x`,
+`link-routing.ts:315`) and never touches a horizontal leg.
+
+### Second half — the leg is never clear of a bar edge, by construction
+
+`gutterY` expands to **exactly the bottom edge of the upper lane's bar**: `pad` is
+`(laneHeight − barHeight) / 2` at both ends, so the difference cancels to zero at every pitch. The
+measurement agrees and goes further — **31 of 34 legs lie _within_ a painted bar's vertical
+extent**, not merely tangent to one, with a smallest gap of **0.0 px** at 28, 36 and 44.
+
+### The pictures, which are what FC-C3 actually asks to be judged on
+
+`gutter-pitch-28.png` / `-36.png` / `-44.png` — 1646 CSS px, DPR 1.75, painted by the real
+`paintScene` against a real Chromium 2D context, with the real `resolveTsldPalette` reading the real
+`globals.css` tokens through ADR-0102's canvas surface scope. No hex literal stands in for a token
+and nothing reconstructs the routing pipeline. The frame is centred on the **busiest** gutter,
+measured rather than chosen, because a picture of a quiet one shows a case nobody was complaining
+about.
+
+They say it plainly: at 44 the rows are much further apart, the extra space is **empty**, and every
+horizontal run still lies along a bar row exactly as it did at 28. One qualification, because the
+picture invites an over-reading: most of the long horizontals visible are a 4-point route's first
+and last legs, which run at a bar's **centre** and are pinned there by the endpoints — they are not
+gutter legs and no gutter can hold them. The gutter legs are the 34 counted above.
+
+### Verdict, and the withdrawal clause
+
+**FC-C3's withdrawal clause fires as written**: no candidate pitch shows two distinguishable runs,
+so **the pitch stays at 28** and the gutter is recorded as **not the term**. The condition names that
+outcome as itself a finding — "it would mean the complaint is entirely row assignment and corridor
+choice" — and that is now measured rather than supposed.
+
+**The epic's own sequencing already accounts for it.** M-C1 was the gutter; it is withdrawn. What
+remains is the router (M-C3, zero height) and the re-aimed layout rule (M-C4, logic-aware assignment
+at constant height), which is exactly where M-C0-T2b's 2.45× lives. Three independent measurements
+now point the same way: height does not buy legibility, **assignment and corridor choice do**.
+
+### What is NOT concluded here
+
+- **Not that the gutter should be narrowed.** Nothing measured says 10 px is too much; it says a
+  wider one is not spent on the problem. Changing it in either direction is a separate decision with
+  no evidence behind it.
+- **Not that the VHV fallback is wrong.** It puts a line where a bar cannot be, which is what it was
+  built for (ADR-0064 M2). What is wrong is that eleven of them choose the same line.
+- **Not that this exonerates the router.** It is an argument that the remedy belongs in **how a
+  corridor is chosen**, which is M-C3's subject — including, now, distributing legs within a gutter
+  rather than stacking them.
+
+---
+
 ## Still owed by M-C0
 
 - ~~**The fixture → painter bridge.**~~ **Built** (`sceneFor`, `1389a402`), and kept here because
@@ -363,7 +460,10 @@ on top of it.
 - ~~**M-C0-T3b** — the cost of deriving the band default.~~ **Withdrawn**: M-C0-T3 withdrew the
   derived default, so there is nothing to cost. Recorded rather than dropped — if the default is
   ever revisited, this and FC-C8's three limbs come back with it.
-- **M-C0-T4** — the gutter sweep, in both configurations.
+- ~~**M-C0-T4** — the gutter sweep, in both configurations.~~ **Taken** (above): FC-C3 fails at
+  every pitch and the gutter is recorded as **not the term**. Swept on the shipped band-off arranged
+  configuration only — the band-on one is not a separate question here, because M-C0-T3 established
+  that the band moves no line at all.
 
 ### A blind spot inherited deliberately, and how it is handled
 

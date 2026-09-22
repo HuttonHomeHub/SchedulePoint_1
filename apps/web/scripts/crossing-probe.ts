@@ -42,6 +42,7 @@ import { createHash } from 'node:crypto';
 import { packLanes, type PackItem } from '@repo/layout';
 
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
+import { activityRect, BAR_HEIGHT, LANE_HEIGHT } from '../src/features/tsld/render/geometry';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Viewport } from '../src/features/tsld/render/render-model';
 
@@ -906,4 +907,162 @@ export function t3(path: string): T3Result {
   for (const config of configs) sweep(readings, config, true);
   for (const config of configs) sweep(routingOff, config, false);
   return { edges: (asap.dependencies as unknown[]).length, configs, readings, routingOff, zooms };
+}
+
+// ── M-C0-T4: is the inter-lane gutter the term? (FC-C3) ──────────────────────────────────────────
+
+/**
+ * FC-C3 asks for a pitch at which "two runs through one gutter read as two lines, clear of both bar
+ * edges". Both halves are questions about the polylines the painter draws, so both are measured
+ * here before any pitch is rendered.
+ *
+ * **A gutter leg is identified by the painter's own definition, not by a band.** `routeOrthogonal`
+ * puts the VHV fallback's horizontal leg at `view.originY + (gutterLane + 1) * laneHeight -
+ * (laneHeight - barHeight) / 2` (`link-routing.ts:225-228`) — ONE value per gutter, with no
+ * per-link term. So a leg is a horizontal segment whose offset within its lane is exactly
+ * `pad + barHeight`, and anything looser would count a 4-point route's first or last leg, which
+ * runs at a bar's centre and is not in a gutter at all.
+ *
+ * **Clearance is measured against `activityRect`**, the one existing source of a bar's geometry and
+ * the same one `laneIntervalIndex` reads — never against the routing formula, which would make the
+ * answer a restatement of the expression rather than a measurement of the picture.
+ */
+export interface GutterReading {
+  laneHeight: number;
+  barHeight: number;
+  /** `laneHeight - barHeight` — the band every corridor has to share. */
+  gutterHeight: number;
+  pxPerDay: number;
+  links: number;
+  /** Routes that took the VHV fallback: 6 points rather than 4. */
+  vhvRoutes: number;
+  gutterLegs: number;
+  /** How many distinct y values those legs occupy. */
+  distinctGutterY: number;
+  /** The most legs sharing a single y — the number FC-C3's first half turns on. */
+  maxLegsOnOneY: number;
+  /**
+   * Gutter legs whose y lies within a bar's painted vertical extent, in either lane the gutter
+   * separates. FC-C3's second half — "clear of both bar edges" — is about this.
+   */
+  legsTouchingABar: number;
+  /** The smallest gap between a gutter leg and the nearest bar edge, in CSS px. */
+  minClearancePx: number;
+}
+
+export function gutterReadings(path: string, pxPerDays: readonly number[]): GutterReading[] {
+  const { asap, configs, maxDay } = unit300BandConfigs(path);
+  // The shipped configuration a planner meets: band off, lanes arranged.
+  const config = configs.find((c) => c.layout.name.startsWith('B '));
+  if (!config) throw new Error('the band-off arranged configuration is missing');
+  const { scene } = sceneFor(asap, config.layout);
+  const originY = 32;
+  const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
+
+  return pxPerDays.map((pxPerDay) => {
+    const view: Viewport = { pxPerDay, originX: 40, originY };
+    const size = { width: (maxDay + 4) * pxPerDay + 400, height: 145 * LANE_HEIGHT + 200 };
+    const { ctx, paths } = recordingCtx();
+    paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+    const links = linkPaths(paths);
+
+    const legs: { y: number; x0: number; x1: number }[] = [];
+    for (const link of links) {
+      for (let i = 1; i < link.pts.length; i += 1) {
+        const a = link.pts[i - 1]!;
+        const b = link.pts[i]!;
+        if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
+        const within = a.y - originY - Math.floor((a.y - originY) / LANE_HEIGHT) * LANE_HEIGHT;
+        if (Math.abs(within - (pad + BAR_HEIGHT)) > 0.001) continue;
+        legs.push({ y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
+      }
+    }
+
+    // Bar extents from `activityRect` — the painter's own source, so this measures the picture.
+    const bars = scene.activities.flatMap((activity) => {
+      const rect = activityRect(activity, view, scene.dataDate);
+      return rect === null
+        ? []
+        : [{ top: rect.y, bottom: rect.y + rect.h, x0: rect.x, x1: rect.x + rect.w }];
+    });
+
+    const byY = new Map<number, number>();
+    for (const leg of legs) byY.set(leg.y, (byY.get(leg.y) ?? 0) + 1);
+
+    let touching = 0;
+    let minClearance = Number.POSITIVE_INFINITY;
+    for (const leg of legs) {
+      for (const bar of bars) {
+        // Only bars the leg actually runs past horizontally can be touched by it.
+        if (bar.x1 < leg.x0 || bar.x0 > leg.x1) continue;
+        if (leg.y >= bar.top - 0.001 && leg.y <= bar.bottom + 0.001) {
+          touching += 1;
+          minClearance = 0;
+          break;
+        }
+        const gap = Math.min(Math.abs(leg.y - bar.top), Math.abs(leg.y - bar.bottom));
+        if (gap < minClearance) minClearance = gap;
+      }
+    }
+
+    return {
+      laneHeight: LANE_HEIGHT,
+      barHeight: BAR_HEIGHT,
+      gutterHeight: LANE_HEIGHT - BAR_HEIGHT,
+      pxPerDay,
+      links: links.length,
+      vhvRoutes: links.filter((l) => l.pts.length >= 6).length,
+      gutterLegs: legs.length,
+      distinctGutterY: byY.size,
+      maxLegsOnOneY: legs.length === 0 ? 0 : Math.max(...byY.values()),
+      legsTouchingABar: touching,
+      minClearancePx: legs.length === 0 ? Number.NaN : minClearance,
+    };
+  });
+}
+
+/**
+ * The scene the FC-C3 picture is taken of, and the lane whose gutter carries the most runs.
+ *
+ * The picture has to show the **worst** gutter, or it shows a case nobody was complaining about.
+ * The lane is measured here at the shipped pitch rather than chosen; the browser recomputes its own
+ * `originY` from it, because where a lane sits on screen is a function of the pitch under test.
+ */
+export function sceneForShot(path: string): { scene: TsldScene; focusLane: number } {
+  const { asap, configs, maxDay } = unit300BandConfigs(path);
+  const config = configs.find((c) => c.layout.name.startsWith('B '));
+  if (!config) throw new Error('the band-off arranged configuration is missing');
+  const { scene } = sceneFor(asap, config.layout);
+  const originY = 32;
+  const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
+  const pxPerDay = 12;
+  const { ctx, paths } = recordingCtx();
+  paintScene(
+    ctx as Parameters<typeof paintScene>[0],
+    scene,
+    { pxPerDay, originX: 40, originY },
+    { width: (maxDay + 4) * pxPerDay + 400, height: 145 * LANE_HEIGHT + 200 },
+    PALETTE,
+    1,
+  );
+  const byLane = new Map<number, number>();
+  for (const link of linkPaths(paths)) {
+    for (let i = 1; i < link.pts.length; i += 1) {
+      const a = link.pts[i - 1]!;
+      const b = link.pts[i]!;
+      if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
+      const rel = a.y - originY;
+      const lane = Math.floor(rel / LANE_HEIGHT);
+      if (Math.abs(rel - lane * LANE_HEIGHT - (pad + BAR_HEIGHT)) > 0.001) continue;
+      byLane.set(lane, (byLane.get(lane) ?? 0) + 1);
+    }
+  }
+  if (byLane.size === 0) {
+    throw new Error(
+      'M-C0-T4 INDETERMINATE: no gutter leg was found, so there is no worst gutter to photograph. ' +
+        'Refusing to produce a picture that would look like an answer.',
+    );
+  }
+  const focusLane = [...byLane.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]![0];
+  return { scene, focusLane };
 }
