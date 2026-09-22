@@ -818,6 +818,13 @@ No design-system component changes; no new UI primitive; no one-off styling.
 
 ## 5. Links
 
+> **This epic has a Part C**, opened 2026-09-22 after `web-v0.140.1` was used:
+> [`./part-c-feature-spec.md`](./part-c-feature-spec.md) ·
+> [`./part-c-implementation-plan.md`](./part-c-implementation-plan.md). It is about **link–link
+> crossings**, which is a different quantity from this document's excursions and travel proxies —
+> see its §0.4 — and its §0.1 records that `cheap-levers.md`'s "shipped" row and every height figure
+> derived from it describe the **pre-#364** tree.
+
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Docs this change will update: `docs/DECISIONS.md` (M1), `docs/TECH_DEBT.md` (the new row for the
   defect, plus a reading added to #75 and a note on #323), `docs/adr/` (the epic's ADR and
