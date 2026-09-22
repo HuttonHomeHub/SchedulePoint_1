@@ -2,7 +2,11 @@
 
 - **Status:** Draft — awaiting approval before implementation
 - **Author(s):** feature-analyst (Claude Opus 5)
-- **Date:** 2026-09-22
+- **Date:** 2026-09-22 · **amended 2026-09-22** (§0.8–§0.11, §2.7, §4.4 D8–D11) after the product
+  owner answered all four critical questions and supplied the NetPoint reference. One answer —
+  _adopt the NetPoint bar treatment_ — **withdraws a premise this spec's first draft reasoned
+  from**, so Part B is promoted from a conditional late milestone to a load-bearing one and the
+  sequencing changes. Amendments are additive and dated; the withdrawn reasoning is kept in place.
 - **Tracking issue / epic:** _(none yet)_
 - **Roadmap link:** _(none — a canvas-legibility epic, not a roadmap milestone)_
 - **Conditions:** [`./conditions.md`](./conditions.md) — **to be committed alone, before any harness
@@ -198,6 +202,101 @@ activities, and a 6/12 motif ratio.
 
 ---
 
+## 0.8 The NetPoint reference, measured rather than described (added 2026-09-22)
+
+The product owner supplied two images. The coordinator **measured the ratios** rather than
+characterising the style — second image, a 2011–13 procurement schedule, ~17 activities:
+
+| quantity              | NetPoint          | SchedulePoint                   | ratio |
+| --------------------- | ----------------- | ------------------------------- | ----- |
+| row pitch             | ~68 px            | **28 px** (`geometry.ts:40`)    | 2.43× |
+| bar thickness         | ~5 px             | **18 px** (`geometry.ts:42`)    | 0.28× |
+| bar as share of a row | ~7 %              | **64 %**                        | —     |
+| label                 | **above** the bar | **inside** it (`paint.ts:1898`) | —     |
+
+A NetPoint bar is a **thin line with a hollow node circle at each end**, the name centred above, the
+date at each end below, and the duration in days as a blue number centred below. **Links are yellow
+with red arrow ticks — a different hue from bars entirely — and they run in the clear channel, not
+along bar centre-lines.**
+
+**Three things follow that are not style observations.**
+
+1. **The reference's default routing is this spec's M2.** NetPoint runs horizontals in the channel,
+   _except_ where sequential activities sit on one row node-to-node with no elbow at all. That is
+   exactly "at bar level when the run is clear, in the gutter when it is not" — the design in §4.4
+   D2/D3, arrived at independently and now corroborated by the picture the product owner chose. It
+   is also the argument against the stronger variant (§4.5, _always_ gutter).
+2. **The chain-row observation is structural, and it bears on M4** — §0.9.
+3. **The thin bar is the largest single source of routing channel**, and it is the amendment's
+   headline — §0.10.
+
+## 0.9 Chain rows: the second verdict in this epic that may flip when the metric is corrected
+
+NetPoint chains sequential activities along **one row**: `FBP Specification → Bid & Award Fluid Bed
+Processor → Submittals/Approvals` is one row; `Automation Spec Review → Automation Procurement →
+Software Development → Software FAT → Factory Delivery` is another.
+
+That is **ADR-0149 D5's "chain rows" candidate**, which measured **+85.8 %** and was named the worst
+of three — **on link-versus-link crossings**, the metric §1 establishes was not the complaint. It is
+therefore a first-class M4 hypothesis with its own clause (FC-L6), not a footnote.
+
+**And its counter-hypothesis is named here so the measurement is not framed to confirm.** H1: a link
+between adjacent members of a chain in one row has nothing between them, so it needs no traversal —
+chain rows should be _best_ on occlusion. H2: chain rows puts **more bars per row**, and occlusion is
+a leg meeting a bar **in its own lane**, so every link _out_ of a chain has a leg in a crowded row.
+The two pull opposite ways and neither is obviously dominant. M4 reports same-row and cross-row links
+**separately**, because the aggregate cannot distinguish them.
+
+**This would be the third flip in one epic** — after FC-C1's comparands and ADR-0149 D5 itself. Three
+is a pattern rather than three coincidences, and the ADR should say so: _the metric, not the
+threshold, is what these decisions were wrong about._
+
+## 0.10 The bar and the pitch are ONE question, and the arithmetic says so
+
+Decision 5 (thin bar) and decision 6 (pitch is spendable) were answered separately and **cannot be
+built separately**:
+
+- A 5 px bar centred in a 28 px row leaves **11.5 px above it**. A text line at the canvas's label
+  size needs roughly 12–14 px. **So "name above the bar" is not buildable at the shipped pitch.**
+- The reference's own row is **~68 px** against our 28, and spends the difference on exactly that
+  label, the two date labels and the duration.
+
+So M3 is **one milestone covering bar thickness, label placement, pitch and the glyph budget**, and
+the alternative — shipping a thin bar first and the pitch later — would put a five-pixel bar under a
+label the row cannot hold.
+
+**What the thin bar buys, and what it does not.** Gross arithmetic from the shipped constants,
+labelled as arithmetic and not as measurement: clear band **10 px → ≈ 23 px** at constant pitch,
+usable channel band **± 4 px → ± 11 px**, i.e. roughly **2.2× the channels for no pitch at all** —
+the _"~57 % of every row handed back"_ figure. **It is a GROSS figure. The label above spends some of
+it back, and the net is an output of the design** (FC-L11, which forbids quoting the gross alone).
+
+**And it buys nothing for symptom (a).** A horizontal leg runs at the bar's **centre-line**, so
+whether it meets a bar in its lane is an **x-overlap** question that the bar's height does not enter.
+**Only M2 serves occlusion.** Stated here because "we made the bars thinner" is the most natural
+wrong thing to believe about this epic.
+
+## 0.11 The coordinator's independent verification, and the 77.1 % floor
+
+Two of this spec's findings were re-derived independently before being relayed, and both hold:
+
+- **`link-routing.ts:182` returns before obstacles are consulted** (§0.3).
+- **`gutterY` computes to 55.0 against a lane-0 bar bottom of 55.0** at `originY = 32` — the same
+  arithmetic §0.4 gives, confirmed by execution rather than by reading. So the instrument's
+  strict-interiority test (`crossing-probe.ts:1410`) **excludes every gutter leg**.
+
+A reading of **77.1 % of links occluded** was taken with it. **It is a FLOOR and is quoted that way
+everywhere in this epic**, for the reason immediately above: all 68 of Unit 300's gutter legs — 58 of
+which M-C0-T4 measured as lying _inside_ a painted bar at 0.0 px clearance — score **zero** under it.
+Its configuration is not recorded, and **decision 7 has since moved the baseline to band-off**, so
+M0-T3 re-takes it with the configuration named.
+
+**It also pre-satisfies FC-L2**, which asked for ≥ 0.10 and was written before the figure arrived.
+`conditions.md` §0.2 records that compromise in full: **the threshold is not moved**, the condition is
+marked pre-satisfied, and its withdrawal clause is recorded as moot rather than deleted.
+
+---
+
 ## 1. Business understanding
 
 ### Problem
@@ -223,13 +322,22 @@ bite"_):
 
 | Symptom                          | Mechanism                                                                                                                                                                    | Measured today                                                                         |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **(a) lines vanish behind bars** | Horizontal legs are checked against nothing (`link-routing.ts:203-210`); same-lane links are not checked at all (`:182`); links paint under bars (`paint.ts:1053` / `:1622`) | **never measured**                                                                     |
+| **(a) lines vanish behind bars** | Horizontal legs are checked against nothing (`link-routing.ts:203-210`); same-lane links are not checked at all (`:182`); links paint under bars (`paint.ts:1053` / `:1622`) | **77.1 % of links — a FLOOR** (§0.11)                                                  |
 | **(b) lines cross each other**   | Corridors and legs share space                                                                                                                                               | 2.069 per link after ADR-0149 D4, from 2.612                                           |
 | **(c) lines travel too far**     | Lanes are packed for minimum **count**; the `predecessorsOf` hint may never open a lane (`pack-lanes.ts:45-48`)                                                              | mean \|Δlane\| 1.78, 14 links over five lanes (Unit 300, shipped)                      |
 | **(d) lines bunch on one y**     | `gutterY` has **no per-link term at any pitch** (`link-routing.ts:254-257`)                                                                                                  | **13 of 68** gutter legs on one y; **58 of 68** inside a painted bar; 0.0 px clearance |
 
-Three of those four rows carry a number somebody has taken. The first does not, and it is the one
-the complaint names.
+**All four now carry a number, and the first one carries the worst kind.** Row (a) had never been
+measured when this spec was drafted; it has since been measured at **77.1 %**, and that figure is a
+**floor** rather than a reading — its instrument's strict-interiority test excludes **every** gutter
+leg, including the 58 of 68 that ADR-0149 measured as lying _inside_ a painted bar at 0.0 px
+clearance (§0.11). **It is quoted as a floor, with that blind spot named, everywhere it appears in
+this epic.** Its configuration is unrecorded and decision 7 has since moved the baseline to band-off,
+so M0-T3 re-takes it.
+
+Note also that rows (a) and (d) are **not independent counts of independent defects**: every gutter
+leg the (a) instrument silently drops is a leg the (d) row counts, which is why a single scalar for
+"how bad is the picture" was never going to work.
 
 **Why now.** This is the **third** report of the same family of complaint (2026-07-31, 2026-09-21,
 2026-09-22), each after a remedy shipped for the previous one. `docs/DECISIONS.md:3111-3157` records
@@ -282,33 +390,39 @@ nothing to move."_ Unchanged.
 - A link that has a clear route is drawn on it; a link that does not is drawn through a gutter, not
   through a bar.
 - Two runs through one gutter read as two lines.
-- Every quantity the product owner named has a number attached to it, taken on their plan, before
-  and after — including the ones a remedy made worse.
+- **An activity reads as a node on a timeline** — a thin bar with a node at each end, its name above,
+  its dates and duration below — rather than as a block of duration (decision 5).
+- Every quantity the product owner named has a number attached to it, taken on their plan **band-off**
+  (decision 7), before and after — including the ones a remedy made worse.
 - The exported and printed diagram match the screen (ADR-0103's rule, held).
+- **The WBS band is off**, which is the shipped default and the configuration every figure names.
 
 ### Success criteria
 
 Each is a falsification condition in [`./conditions.md`](./conditions.md), **committed in its own
 commit before any harness is edited or run**. Summarised:
 
-| #      | Criterion                                                                                                                           |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| FC-L0  | The reading is a **vector** of four quantities; a candidate measured on fewer is not judged.                                        |
-| FC-L1  | The occlusion metric discriminates, against a structural prediction committed in advance (one-per-row measures zero).               |
-| FC-L2  | The complaint is attributable to occlusion (≥ 0.10 per link) — or the diagnosis is withdrawn in place.                              |
-| FC-L3  | The gutter becomes a channel: `legsTouchingABar` → 0, legs distributed, judged on a picture, FC-6 holds.                            |
-| FC-L4  | Leg checking realises **≥ 70 % of the avoidable occlusions M0 measured**, with crossings up by ≤ 10 %.                              |
-| FC-L5  | Paint cost ≤ baseline + 2.00 pp with the machine's spread beside it; `paint.routing-budget.test.ts` green **without being edited**. |
-| FC-L6  | A travel or assignment candidate improves one quantity by ≥ 20 % while worsening none by > 10 %, or is not offered.                 |
-| FC-L7  | The export, the minimap and the AT layer survive whatever height costs.                                                             |
-| FC-L8  | Part B moves the ink against a criterion that exists first (CQ-3).                                                                  |
-| FC-L9  | Determinism at both tiers, verified red.                                                                                            |
-| FC-L10 | Byte-identity when not asked — three separate cases. **This is the rollback contract.**                                             |
+| #      | Criterion                                                                                                                                                                                                                                                  |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FC-L0  | The reading is a **vector** of four quantities; a candidate measured on fewer is not judged.                                                                                                                                                               |
+| FC-L1  | The occlusion metric discriminates, against a structural prediction committed in advance (one-per-row measures zero).                                                                                                                                      |
+| FC-L2  | **PRE-SATISFIED** on the relayed 77.1 % floor; the ≥ 0.10 threshold is **not moved**, the clause is moot, and M0-T3 re-takes it band-off.                                                                                                                  |
+| FC-L3  | The gutter becomes a channel: `legsTouchingABar` → 0, legs distributed, judged on a picture, FC-6 holds. **Read twice** — a progress reading at today's geometry, the verdict at M3's.                                                                     |
+| FC-L4  | Leg checking realises **≥ 70 % of the avoidable occlusions M0 measured**, with crossings up by ≤ 10 % — and `chooseCorridorsByCrossing` is inside the condition, not beside it.                                                                            |
+| FC-L5  | Paint cost ≤ baseline + 2.00 pp with the machine's spread beside it; `paint.routing-budget.test.ts` green **without being edited**. Three limbs now: routing, pitch, **and the row**.                                                                      |
+| FC-L6  | A travel or assignment candidate improves one quantity by ≥ 20 % while worsening none by > 10 %, or is not offered — with **chain rows as a named hypothesis and a named counter-hypothesis**.                                                             |
+| FC-L7  | The export, the minimap and the AT layer survive whatever height costs. **Now the likeliest to bind**, since the reference row is ~68 px against our 28.                                                                                                   |
+| FC-L8  | **REWRITTEN** — the row geometry: five limbs (every cue survives or its replacement is named; FC-6; every `BAR_HEIGHT`-justified constant re-derived; a picture against the reference; every new colour through all three canvas traps in a real browser). |
+| FC-L9  | Determinism at both tiers, verified red.                                                                                                                                                                                                                   |
+| FC-L10 | Byte-identity when not asked — three cases. **Case 2 is void from M3 onward**, where the rollback contract becomes the commit boundary plus the golden log.                                                                                                |
+| FC-L11 | **NEW** — the row's **net** clear-band gain is measured, and the gross _"~57 % handed back"_ figure is never quoted alone.                                                                                                                                 |
+| FC-L12 | **NEW** — the small fixture's value is its **logic density**, asserted by its own test in five limbs and verified red against a sparse version.                                                                                                            |
 
 ### Open questions
 
-See §2.7. **Three are critical** (CQ-1, CQ-2, CQ-3); two more are stated with defaults and need no
-answer to proceed.
+See §2.7. **All four critical questions (CQ-1 … CQ-4) were answered on 2026-09-22** and are recorded
+there as decisions. One new non-blocking question (CQ-6) falls out of the answers and carries a
+default; CQ-5 remains decided by default.
 
 ---
 
@@ -362,20 +476,37 @@ answer to proceed.
 >   FC-L6's ceiling, **then** it is put to the product owner with both numbers and both rendered
 >   pictures, and is **not** resolved inside a milestone.
 
-> **US-4** — As a **Planner**, I want the diagram to read as a network of related work, so that the
-> logic is the thing I see first.
+> **US-4** — As a **Planner**, I want an activity to read as a **node on a timeline** rather than as
+> a block of duration, so that the logic between activities is the thing I see first.
 >
-> **Acceptance criteria** — conditional on **CQ-3**; FC-L8's withdrawal clause collapses this to
-> link ink if the criterion is declined.
+> **Amended 2026-09-22.** This story was conditional on CQ-3 and scoped to link ink. **The product
+> owner answered it by adopting the NetPoint bar treatment** (decision 5), which withdraws the
+> premise the narrowing rested on. It is now unconditional, load-bearing, and the subject of M3.
 >
+> **Acceptance criteria**
+>
+> - **Given** any plan, **when** the diagram is painted, **then** an activity is a **thin bar with a
+>   node glyph at each end**, its **name above**, its **dates and duration below** — the reference's
+>   treatment, measured in §0.8 rather than described.
 > - **Given** any plan, **when** the diagram is painted, **then** every cue the bar carries today
->   survives: criticality (fill **and** dash — WCAG 1.4.1), near-criticality, the progress band and
->   its front divider, LOE brackets, WBS summary tabs, milestone diamonds, constraint pins, the
->   feasible window, the selection and hover rings.
+>   survives **or its replacement is named as a product-owner decision**: criticality, near-criticality,
+>   the progress band and its front divider, LOE brackets, WBS summary tabs, milestone diamonds,
+>   constraint pins, the feasible window, the selection and hover rings. **Two are known in advance not
+>   to survive as they are** — an in-bar progress band and an inside label have no room in a thin bar.
+> - **Given** the thin bar, **when** criticality is encoded, **then** it is **not colour-only**
+>   (WCAG 1.4.1). Today's second channel is a dashed emphasis outline, and **a dash on a 5 px outline
+>   is not a channel a reader can use** — so a second channel is designed, not assumed.
+> - **Given** the thin bar, **when** any constant justified by `BAR_HEIGHT = 18` is used, **then** it
+>   has been **re-derived rather than carried** — `SUMMARY_TAB_H`, `GLYPH_CAP_OVERHANG`,
+>   `FAN_OUT_MAX_PX`, `TAIL_HEIGHT`, `BAR_RADIUS`, `LABEL_INSIDE_MIN_PX` (FC-L8 limb 3).
+> - **Given** the thin bar, **when** links converge on one bar end, **then** the **node glyph carries
+>   them** — `FAN_OUT_STEP_PX = 3` already exceeds a 5 px bar's half-height of 2.5, so fan-out as
+>   designed cannot work and the reference supplies its replacement.
 > - **Given** any new canvas colour value, **when** it is resolved in a **real browser**, **then** it
->   resolves to a parseable colour under the `canvas` surface scope (§3, the three traps).
+>   resolves to a parseable colour under the `canvas` surface scope (§3, the three traps). The
+>   reference's links are a different hue entirely, so this **will** fire.
 > - **Given** a screen-reader user on the parallel listbox, **when** this ships, **then** the count
->   of AT-reachable activities is unchanged (ADR-0063 §4).
+>   of AT-reachable activities is unchanged (ADR-0063 §4) and every spoken row says what it said before.
 
 > **US-5** — As **the person who is not in the room**, I want the exported and printed diagram to be
 > as followable as the screen, so that the artefact I was sent is usable.
@@ -478,9 +609,22 @@ painter, per frame, from data the client already holds.
 | Pen not held when `Arrange` pressed  | `penGated` shading + `disabledReason`                                         | shaded with its reason (ADR-0082) — unchanged                            | —      |
 | Positions write conflicts (M4 only)  | optimistic lock                                                               | existing conflict banner — unchanged                                     | 409    |
 
-### 2.7 Open questions
+### 2.7 Open questions — **all four critical questions were ANSWERED on 2026-09-22**
 
-**CQ-1 — CRITICAL — is the height budget spendable on lane PITCH as well as on row COUNT?**
+> **The answers are recorded below each question rather than replacing it.** Three of them confirm
+> the default this spec had already stated, which is worth knowing; **one does not, and it withdraws
+> a premise this document reasoned from** — so deleting the question would delete the reasoning the
+> amendment corrects. `conditions.md` §1 carries the same eight decisions in the form that binds a
+> condition.
+>
+> | CQ       | Answer                                                                            | Was it the default?     |
+> | -------- | --------------------------------------------------------------------------------- | ----------------------- |
+> | **CQ-1** | **Yes** — pitch is spendable. M3 exists.                                          | yes                     |
+> | **CQ-2** | The **WBS band goes OFF**; band-off is the baseline. They did not know it was on. | yes                     |
+> | **CQ-3** | **ADOPT the NetPoint bar treatment.** Part B is promoted and load-bearing.        | **NO — see §0.8–§0.10** |
+> | **CQ-4** | **Build the fixture; do not wait.** Its value is **logic density**.               | partly                  |
+
+**CQ-1 — ANSWERED: YES — is the height budget spendable on lane PITCH as well as on row COUNT?**
 _"As many rows as it takes. No cap."_ was said about **rows**. Widening the 10 px gutter
 (`LANE_HEIGHT − BAR_HEIGHT`) to hold more distinguishable channels spends vertical space too, and it
 buys capacity for symptom (d) without touching assignment at all. **This needs an answer because it
@@ -500,7 +644,19 @@ bars are constitutionally supreme (decision 3), and its capacity is then the bin
 by `SUMMARY_TAB_H` (`render-model.ts:102`), so a pitch change is a **budget re-allocation across
 four glyph families**, which is what FC-6 exists to gate.
 
-**CQ-2 — CRITICAL — which configuration is the product owner in?** Their screenshot shows Unit 300
+> **ANSWER (decision 6): yes.** The default holds and M3 exists. **What changed with it is that M3
+> is no longer a milestone of its own**: §0.10 establishes by arithmetic that a 5 px bar leaves
+> 11.5 px above it at pitch 28 against a label's 12–14 px, so _"name above the bar"_ is unbuildable
+> at the shipped pitch and the bar, the label and the pitch are **one decision in one milestone**.
+>
+> **And the `SUMMARY_TAB_H` clearance quoted above must be re-derived, not carried.** At bar 5 the
+> pad is 11.5 px, so the 1 px clearance becomes ~7.5 px — **the problem inverts**: a 4 px tab under a
+> 5 px bar is nearly as tall as the bar, which is a **proportion** problem and not a clearance one.
+> Five more constants break differently at 5 px and each is enumerated in FC-L8 limb 3, the sharpest
+> being `FAN_OUT_MAX_PX`, whose `FAN_OUT_STEP_PX = 3` **already exceeds** a 5 px bar's half-height of
+> 2.5 — so fan-out as designed cannot work at all, and the reference's node glyph replaces it.
+
+**CQ-2 — ANSWERED: THE BAND GOES OFF — which configuration is the product owner in?** Their screenshot shows Unit 300
 in **12 rows**, and Part C measured that as **exactly one** of five configurations: _arranged, WBS
 band on_ — which M-C0-T3 measured as the **worst** of the five for crossings (+26.9 % at 4 px/day
 against the same plan with the band off), and on which evidence ADR-0149 D7 kept the band's default
@@ -510,7 +666,18 @@ today, and the epic's baseline is the wrong row.
 band off** (the shipped default) with the band-on row printed beside it, and the discrepancy is
 reported rather than resolved.
 
-**CQ-3 — CRITICAL — what is Part B's criterion?** Unanswered since 2026-09-21 (Part A's CQ-1).
+> **ANSWER (decision 7): the band goes OFF, and the epic re-baselines against band-off.** The
+> identification was right and **the product owner did not know it was on** — so they had been
+> reading the one configuration of five that M-C0-T3 measured as the worst for crossings, which is
+> a fair part of why ADR-0149's shipped improvement was invisible to them.
+>
+> Three consequences, none of them cosmetic. **(1)** Every figure in this epic names band-off unless
+> it says otherwise, and the relayed 77.1 % floor is re-taken band-off (§0.11). **(2)** No reading
+> taken band-on is a baseline — including any Part C figure quoted forward. **(3)** ADR-0149 D7 kept
+> the band's default off on measured evidence and was **right**, which is worth recording: the
+> remedy here was a toggle, not code.
+
+**CQ-3 — ANSWERED: ADOPT THE NETPOINT TREATMENT — what is Part B's criterion?** Unanswered since 2026-09-21 (Part A's CQ-1).
 _"NetPoint's look"_ and _"a diagram that reads as a network rather than a bar chart"_ diverge, and
 only the second is something a measurement or a reviewer can judge. It must be answered **before M5
 designs its measurement**, because it decides what M5 measures.
@@ -520,12 +687,48 @@ the canvas ground and against a bar it passes close to. That narrowing is not a 
 from decision 3. With bars constitutionally supreme, a bar redesign has little room, and the half of
 Part B that directly serves _"the logic is difficult to read"_ is the line, not the bar.
 
-**CQ-4 — not blocking — would the product owner share the 13-activity `best` plan?**
+> **ANSWER (decision 5): the NetPoint bar treatment is ADOPTED. The paragraph above is WITHDRAWN and
+> kept in place, because it is the reasoning this amendment corrects.**
+>
+> **The premise was wrong, and it was mine.** I inferred from _"bars stay visually supreme"_ that a
+> bar redesign had little room, and narrowed Part B to link ink on that inference. The product owner's
+> answer separates the two: **supremacy is about occlusion ORDER — links still never draw over a bar —
+> and says nothing about thickness.** A thin bar under the same paint order satisfies decision 3
+> exactly. This is ADR-0076 Class 3 in miniature: a decision-bearing inference from somebody else's
+> words, asserted without being put back to them.
+>
+> **What it changes.** Part B stops being a conditional late milestone and becomes **M3, load-bearing
+> and sequenced third** — it is the largest single source of routing channel (§0.10) and everything
+> downstream depends on the final geometry. FC-L8 is rewritten from "moves the ink against a criterion"
+> to five limbs on the row itself. CQ-3's question — _what is the criterion_ — is answered not by a
+> metric but by a **reference**, measured in §0.8 rather than described, which is a better answer than
+> the one the question asked for.
+>
+> **What it does NOT change.** The bar treatment buys **channel** and **ink**, and **nothing for
+> occlusion** (§0.10). Only M2 serves symptom (a).
+
+**CQ-4 — ANSWERED: BUILD IT — would the product owner share the 13-activity `best` plan?**
 §0.3 predicts the same-lane straight line is the dominant mechanism on a small plan, and the
 repository has **no small realistic fixture**: `shoot.mjs` seeds six linked activities
 (`apps/web/scripts/shoot.mjs:231`) and every canvas shot uses it, so the condition is unphotographed.
 **Default:** M0 builds a 13-activity fixture that exhibits the A→C-over-B shape, and **states in its
 own output that it is not the reported plan** (CQ-4's rule from Part A, kept).
+
+> **ANSWER (decision 8): build it; do not wait.** Their words: _"Build a small activity plan but
+> ensure it has sufficient logic links to make it realistic."_
+>
+> **The operative half is the second clause, and it is a condition rather than a preference.** A
+> fixture's value here is its **logic density**, not its activity count — and a sparse 13-activity
+> fixture would **pass every condition in this epic while exhibiting nothing**, then be quoted as
+> evidence that small plans are fine. So FC-L12 turns it into five properties the fixture **asserts
+> about itself**, verified red against a deliberately sparse version: link density ≥ 1.3 per activity
+> (Unit 300's own measured 188/144, so the floor is derived rather than chosen); ≥ 1 same-lane A→C
+> link with an intervening bar **after `packLanes` has run**, not as authored; ≥ 1 link whose
+> preferred corridor and all four candidates are blocked; ≥ 2 gutter runs overlapping in x in one
+> gutter; and `occl/link` > 0 with `max legs on one y` ≥ 2.
+>
+> ~13 activities remains the right order of magnitude. Its docblock states what it is for and that it
+> is **a construction, not their plan**.
 
 **CQ-5 — not blocking, decided by default — does the importer get anything from this epic?**
 M1–M3 and M5 are **render-time only**: the importer cannot reach them, because it writes
@@ -535,10 +738,25 @@ directly (`interchange.service.ts:1096`).
 reason ADR-0065/0069/0121 all record: two implementations drift, and the drift is invisible because
 each diagram looks plausible alone.
 
+**CQ-6 — NEW, not blocking, falls out of decision 5 — where does progress go, and what is
+criticality's second channel?** A thin bar has no room for the in-bar progress band and its front
+divider (`paint.ts:810-832`), and **a dash on a 5 px emphasis outline is not a channel a reader can
+use**, so WCAG 1.4.1's requirement that criticality is not colour-only needs a new answer. Both are
+sub-decisions **inside M3** and neither blocks approval of this spec, but neither may be settled by
+a milestone on its own — FC-L8 limb 1 says a cue that moves is recorded as moved and a cue that
+**goes** is a product-owner decision.
+**Default:** progress becomes a **second, shorter bar drawn along the same line** (the reference has
+the vertical room for it once the pitch rises) rather than an in-bar band; criticality's second
+channel becomes the **node glyph** — filled versus hollow — which the reference already draws and
+which is a shape difference rather than a colour one. Both are put up with the rendered picture at
+M3 rather than asserted here.
+
 **Defaults stated rather than asked (no answer needed):**
 
 - **Feature flag?** **No.** ADR-0088 D1. The rollback is a commit boundary and FC-L10 is what makes
-  that real: three separate byte-identity cases, each of which makes "revert" equal "pass nothing".
+  that real — with the amendment that **FC-L10 case 2 is void from M3 onward**, since the row
+  treatment moves every bar's geometry and therefore every anchor and every route. From M3 the
+  rollback contract is the commit boundary plus the golden log read line by line.
 - **Diagonal segments, or a second `Arrange` command?** No. ADR-0065 rejected diagonals because on a
   time-scaled diagram **x is time**, so a diagonal asserts work across the days it crosses;
   ADR-0093/0094 both record removing a second command that produces a second diagram of one plan.
@@ -548,17 +766,17 @@ each diagram looks plausible alone.
 
 ## 3. Technical analysis
 
-| Area               | Impact                                                                                                                                                  | Notes                                                                                                                                                                                                                                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend**       | **high**                                                                                                                                                | `render/link-routing.ts` (the predicate, the viability test, the gutter datum, the channel pass), `render/paint.ts` (one new pass in the edge layer), `render/geometry.ts` (M3's pitch only), `render/palette.ts` (M5 only).                                                                               |
+| Area               | Impact                                                                                                                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Frontend**       | **high** — and **higher since the amendment**                                                                                                           | **M1/M2:** `render/link-routing.ts` (the predicate, the viability test, the gutter datum, the channel pass) + one new pass call in `render/paint.ts`. **M3 (the row):** `render/geometry.ts` (`LANE_HEIGHT`, `BAR_HEIGHT`, `TAIL_HEIGHT`, `LABEL_INSIDE_MIN_PX`), `render/render-model.ts` (the node glyph and three re-derived constants), `paint.ts`'s bar/label/decoration layers, `render/palette.ts`, and `link-routing.ts` again for fan-out's retirement (D10). **M5:** `palette.ts`.                                                |
 | **Backend**        | **none** for M1–M3 and M5; **one call site** for M4 (`interchange.service.ts:1096`, and only under CQ-5's default). No new module, service or endpoint. |
-| **Database**       | **none**                                                                                                                                                | No model, column, index, constraint or migration. **`database-architect` is therefore not engaged, because there is nothing to design** — recorded explicitly so it cannot read as the judgement §19.3 forbids.                                                                                            |
-| **API**            | **none**                                                                                                                                                | No endpoint, DTO, status code or OpenAPI change. The lane-positions batch write keeps its contract exactly.                                                                                                                                                                                                |
-| **Security**       | **none**                                                                                                                                                | No new data, no new capability, no change to RBAC or org scope. The pen still gates the only write this epic can reach.                                                                                                                                                                                    |
-| **Performance**    | **medium**                                                                                                                                              | The painter's one measured quantity is **frames**, not paint duration (`docs/TECH_DEBT.md` #75). Every new pass is on the per-frame path. FC-L5 measures; `paint.routing-budget.test.ts` bounds.                                                                                                           |
-| **Infrastructure** | **low**                                                                                                                                                 | **No new CI step and no new shard.** The browser measurement harness uses the `measure:*` pattern, which is a `playwright.measure-*.config.ts` run on demand and is **not** a `test:e2e:*` script — so ADR-0138's roster gate has nothing to demand. The journey extends the existing `e2e-arrange` suite. |
-| **Observability**  | **none**                                                                                                                                                | Nothing new logged.                                                                                                                                                                                                                                                                                        |
-| **Testing**        | **high**                                                                                                                                                | See below.                                                                                                                                                                                                                                                                                                 |
+| **Database**       | **none**                                                                                                                                                | No model, column, index, constraint or migration. **`database-architect` is therefore not engaged, because there is nothing to design** — recorded explicitly so it cannot read as the judgement §19.3 forbids.                                                                                                                                                                                                                                                                                                                             |
+| **API**            | **none**                                                                                                                                                | No endpoint, DTO, status code or OpenAPI change. The lane-positions batch write keeps its contract exactly.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Security**       | **none**                                                                                                                                                | No new data, no new capability, no change to RBAC or org scope. The pen still gates the only write this epic can reach.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Performance**    | **medium → high at M3**                                                                                                                                 | The painter's one measured quantity is **frames**, not paint duration (`docs/TECH_DEBT.md` #75). Every new pass is on the per-frame path. **M3 is the expensive one and the amendment made it so**: the reference's row is a thin bar **plus two node glyphs plus three text runs** (name, dates, duration) per activity, and text is the painter's most expensive operation — `paint.dates-budget.test.ts` already exists to bound a _fraction_ of that. FC-L5 gains a third limb; `paint.routing-budget.test.ts` bounds the routing half. |
+| **Infrastructure** | **low**                                                                                                                                                 | **No new CI step and no new shard.** The browser measurement harness uses the `measure:*` pattern, which is a `playwright.measure-*.config.ts` run on demand and is **not** a `test:e2e:*` script — so ADR-0138's roster gate has nothing to demand. The journey extends the existing `e2e-arrange` suite.                                                                                                                                                                                                                                  |
+| **Observability**  | **none**                                                                                                                                                | Nothing new logged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Testing**        | **high**                                                                                                                                                | See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ### Testing
 
@@ -683,6 +901,13 @@ flowchart LR
   ENGINE["computeSchedule"]:::absent
   classDef absent stroke-dasharray: 4 4,color:#888;
 ```
+
+> **The diagram above is M1/M2's**, and M3 sits **upstream of every box in it.** `geometry.ts` is a
+> pure leaf that `link-routing.ts`, `render-model.ts`, `paint.ts` and the harness all read, so
+> changing `LANE_HEIGHT` and `BAR_HEIGHT` moves every rect, every anchor, every route and every
+> measurement in one step. That is exactly why **M1's channel capacity is derived from `pad` rather
+> than fixed** (FC-L3's amended clause) and why **FC-L10 case 2 is void from M3 onward** — there is
+> no byte-identity story for a change at the leaf, and the golden log is the oracle instead.
 
 **`computeSchedule` is not imported, not reachable and not called** by anything in this epic. That
 is **ADR-0125 D1's strong form** and deliberately **not ADR-0116 D7's weaker sibling** — named so
@@ -862,19 +1087,70 @@ Each milestone is shaped so "revert" is cheap and provable:
 - **M4** — one more optional parameter of `packLanes`; absent and neutral are two separate cases and
   both are byte-identical, which is what makes the importer's scope checkable (`interchange.service.ts:1096`).
 
+> **Amended 2026-09-22.** **M3's row treatment has no byte-identity story and cannot have one** — it
+> moves every bar's geometry, so every anchor, rect and route moves with it. From M3 onward the
+> rollback contract is the **commit boundary plus the golden log, re-baselined by reading** (ADR-0106).
+> That is weaker than FC-L10 case 2 and is stated as weaker rather than elided.
+
+#### D8 — The bar, the label and the pitch are ONE decision (added 2026-09-22)
+
+The product owner answered CQ-1 (pitch is spendable) and CQ-3 (adopt the NetPoint bar) separately.
+**They cannot be built separately**, and the arithmetic in §0.10 is why: a 5 px bar centred in a 28 px
+row leaves **11.5 px above it**, a label needs **12–14 px**, so _"name above the bar"_ is unbuildable
+at the shipped pitch. The reference's own row is **~68 px** against our 28 and spends the difference
+on exactly the name, the two dates and the duration.
+
+So M3 is **one milestone covering bar thickness, label placement, pitch and the glyph budget**. The
+alternative — thin bar first, pitch later — ships a five-pixel bar under a label the row cannot hold.
+
+#### D9 — The bar change serves (d) and ink; it serves (a) not at all (added 2026-09-22)
+
+Thinning the bar takes the clear band from **10 px to ≈ 23 px** at constant pitch — the _"~57 % of
+every row handed back"_ figure, which is **gross** and which FC-L11 forbids quoting without the net.
+
+**It does nothing for occlusion.** A horizontal leg runs at the bar's **centre-line**, so whether it
+meets a bar in its lane is an **x-overlap** question that the bar's height does not enter. Stated as a
+decision rather than left implicit, because _"we made the bars thinner"_ is the most natural wrong
+thing to believe about this epic, and because a milestone that claimed the bar as an occlusion remedy
+would pass FC-L0 while being false.
+
+#### D10 — The node glyph replaces fan-out; it does not sit beside it (added 2026-09-22)
+
+`FAN_OUT_MAX_PX = 6` is justified in a comment by `BAR_HEIGHT / 2 = 9`, in a file that **does not
+import `BAR_HEIGHT`** — a comment-only invariant the compiler cannot see. At a 5 px bar the
+half-height is **2.5**, and `FAN_OUT_STEP_PX = 3` **already exceeds it**: the mechanism's unit of
+separation is larger than the bar it is meant to spread anchors along. **Fan-out as designed cannot
+work.**
+
+**The reference supplies the replacement**: NetPoint converges links on a **hollow node circle** at
+each bar end rather than spreading them along an edge. So the node is not decoration — it is the
+structure that does fan-out's job once fan-out cannot. Recorded as a design consequence of adopting
+the reference rather than as a styling choice, and it is the tightest coupling in the epic between
+Part B's geometry and Part A's routing.
+
+#### D11 — Chain rows is a hypothesis with a named counter-hypothesis (added 2026-09-22)
+
+The reference's chained rows are ADR-0149 D5's worst candidate (+85.8 % on crossings). On occlusion
+it may be the best (H1) or worse (H2) — §0.9 gives both mechanisms. **M4 measures it first and
+reports same-row and cross-row links separately**, because the aggregate cannot distinguish them, and
+a measurement framed only by H1 would find H1.
+
 ### 4.5 Rejected alternatives
 
-| Alternative                                        | Why not                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Draw links **over** bars with a halo               | Declined by the product owner, 2026-09-22 (D4). Bars stay visually supreme.                                                                                                                                                                                                                                                                                                                                                        |
-| Hollow/outlined bars so links show through         | The same picture by another mechanism; same decision (D4).                                                                                                                                                                                                                                                                                                                                                                         |
-| Diagonal segments                                  | ADR-0065: on a time-scaled diagram **x is time**, so a diagonal asserts work across the days it crosses. Not re-opened.                                                                                                                                                                                                                                                                                                            |
-| Crossing "hops" (a small arc where two lines meet) | Makes crossings **readable** rather than fewer, which is a real answer to (b) — but it adds arcs to a batched stroke path whose budget is already the epic's tightest constraint (FC-L5), and it collides with the ADR-0052 M5 rounded-elbow language. **Not rejected on principle; deferred with a named reopen trigger** — if FC-L4's crossings ceiling is breached and D5 cannot recover it, this is the next thing to measure. |
-| A second "arrange for readable logic" command      | Two diagrams of one plan, reached from one surface. ADR-0093 and ADR-0094 both record removing exactly that.                                                                                                                                                                                                                                                                                                                       |
-| A separate router for the canvas and the export    | ADR-0103 exists because they diverged once. One `routeOrthogonal`, one `scene-layers.ts` composition.                                                                                                                                                                                                                                                                                                                              |
-| Global optimisation (minimise total crossings)     | Unbounded, not obviously deterministic, on the paint path. _"Bounded work is the contract"_ (`link-routing.ts:230-233`).                                                                                                                                                                                                                                                                                                           |
-| A per-plan pitch or channel setting                | Schema change, migration, ADR, `database-architect` — for a value nobody has chosen once.                                                                                                                                                                                                                                                                                                                                          |
-| Widening the gutter **alone** (M-C1 again)         | ADR-0149 D3 measured it as inert at 28, 36 and 44, because `gutterY` has no per-link term. M3 is the **untested combination** (pitch **with** a per-link term), and CQ-1's wording says so rather than reversing D3.                                                                                                                                                                                                               |
+| Alternative                                                    | Why not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Draw links **over** bars with a halo                           | Declined by the product owner, 2026-09-22 (D4). Bars stay visually supreme.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Hollow/outlined bars so links show through                     | The same picture by another mechanism; same decision (D4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Diagonal segments                                              | ADR-0065: on a time-scaled diagram **x is time**, so a diagonal asserts work across the days it crosses. Not re-opened.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Crossing "hops" (a small arc where two lines meet)             | Makes crossings **readable** rather than fewer, which is a real answer to (b) — but it adds arcs to a batched stroke path whose budget is already the epic's tightest constraint (FC-L5), and it collides with the ADR-0052 M5 rounded-elbow language. **Not rejected on principle; deferred with a named reopen trigger** — if FC-L4's crossings ceiling is breached and D5 cannot recover it, this is the next thing to measure.                                                                                                                                 |
+| A second "arrange for readable logic" command                  | Two diagrams of one plan, reached from one surface. ADR-0093 and ADR-0094 both record removing exactly that.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| A separate router for the canvas and the export                | ADR-0103 exists because they diverged once. One `routeOrthogonal`, one `scene-layers.ts` composition.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Global optimisation (minimise total crossings)                 | Unbounded, not obviously deterministic, on the paint path. _"Bounded work is the contract"_ (`link-routing.ts:230-233`).                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| A per-plan pitch or channel setting                            | Schema change, migration, ADR, `database-architect` — for a value nobody has chosen once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Widening the gutter **alone** (M-C1 again)                     | ADR-0149 D3 measured it as inert at 28, 36 and 44, because `gutterY` has no per-link term. M3 is the **untested combination** (pitch **with** a per-link term), and CQ-1's wording says so rather than reversing D3.                                                                                                                                                                                                                                                                                                                                               |
+| **Always** route horizontals in the gutter, never at bar level | The strongest form of M2, and **the reference itself argues against it**: NetPoint runs chained sequential activities **node to node along one row with no elbow at all** (§0.8), and only cross-row links take a channel. Routing an adjacent-bar hop down into a gutter and back would be a detour of several pixels' travel for a two-pixel link, on the commonest shape in the product. **Declined, with the reference as the evidence** — but named here because it is the obvious escalation and a later reader should meet the reason rather than the idea. |
+| Thinning the bar as an **occlusion** remedy                    | It is not one (D9). A leg runs at the bar's centre-line, so occlusion is an x-overlap question. Named as rejected because it is the plausible-sounding claim this epic is most likely to have made about itself.                                                                                                                                                                                                                                                                                                                                                   |
+| Keeping fan-out beside the node glyph                          | Impossible at a 5 px bar (D10): `FAN_OUT_STEP_PX = 3` exceeds the bar's 2.5 px half-height.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### 4.6 Database changes
 
@@ -907,31 +1183,51 @@ clause, and a table cannot carry one.
 4. **Under CQ-1 it changes `LANE_HEIGHT`**, a constant 65 lines in 18 files depend on, with a glyph
    budget four families silently share.
 
-**M4, if it ships, folds into the same ADR** (it changes a shared pure package's objective — ADR-0069's
-subject) **or takes its own**, decided at the milestone when the design exists. **M5 (Part B)
-probably needs its own**, on the discriminator Part A already wrote down: an ADR is required if the
-change alters the **glyph vocabulary** or the **geometry contract**, not if it is a value inside the
-existing contract.
+> **Amended 2026-09-22 — it is TWO ADRs, and the amendment is what makes that clear.** Decision 5
+> changes the **glyph vocabulary** (a node glyph arrives, fan-out leaves, criticality gets a new
+> second channel) **and** the **geometry contract** (bar, pitch, label placement, and six constants
+> justified by `BAR_HEIGHT = 18`). That is **both** halves of the discriminator Part A wrote down for
+> when Part B needs its own ADR, so it gets one.
+>
+> - **ADR-A — routing** (M1, M2): the corridor's new question, the gutter datum, the channel pass,
+>   the six-point skip re-derived, and the method failure that opened the epic.
+> - **ADR-B — the row** (M3): the reference adopted, the thin bar, the label above, the pitch, the
+>   node glyph replacing fan-out, and every re-derived constant with its new justification.
+>
+> They are separable because they are separable in the code: ADR-A is `link-routing.ts` and one call
+> in `paint.ts`; ADR-B is `geometry.ts`, `render-model.ts`, `paint.ts`'s bar and label layers, and
+> `palette.ts`. Writing one ADR for both would make the row's vocabulary an appendix to a routing
+> decision, and a later reader looking for _"why is a bar five pixels tall"_ would not find it there.
 
-**Number deliberately not pinned.** ADR-0079 records a number being taken between a plan and its
+**M4, if it ships, folds into ADR-A** (it changes a shared pure package's objective — ADR-0069's
+subject) **or takes its own**, decided at the milestone when the design exists. **M5 (link ink)
+folds into ADR-B**, since the reference's yellow-with-red-ticks link is part of the same picture and
+would be incoherent filed away from the bar it sits beside.
+
+**Numbers deliberately not pinned.** ADR-0079 records a number being taken between a plan and its
 milestone, and stepping over that rather than recording it is the ADR-0071 failure.
 
 ### 4.10 Component changes
 
-| Component                            | Change                                                                                                     | States              |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------- | ------------------- |
-| `render/link-routing.ts`             | `clearBetween`; leg viability in `routeOrthogonal`; the gutter datum; `packGutterChannels`; D5's extension | — (pure)            |
-| `render/link-routing.test.ts`        | the same-lane case (verified red), the three parity cases, the channel geometry                            | —                   |
-| `render/paint.ts`                    | one call to the channel pass in the edge layer                                                             | —                   |
-| `render/geometry.ts`                 | `LANE_HEIGHT` only, and only under CQ-1 (M3)                                                               | —                   |
-| `packages/layout/src/pack-lanes.ts`  | one optional parameter (M4 only, conditional)                                                              | — (pure)            |
-| `TsldPanel.tsx` confirm dialog       | copy, **only if M4 changes what `Arrange` does**                                                           | unchanged otherwise |
-| `render/palette.ts`                  | M5 only, and then under §3's three traps                                                                   | —                   |
-| `apps/web/scripts/crossing-probe.ts` | the reviewed occlusion half; the shared predicate; one paint per reading                                   | —                   |
-| `apps/web/scripts/shoot.mjs`         | a fixture that can exhibit the condition (CQ-4)                                                            | —                   |
-| `apps/web/e2e-arrange/`              | one new spec — **no new config, no new CI step**                                                           | —                   |
+| Component                            | Change                                                                                                                                                  | States              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `render/link-routing.ts`             | `clearBetween`; leg viability in `routeOrthogonal`; the gutter datum; `packGutterChannels`; D5's extension                                              | — (pure)            |
+| `render/link-routing.test.ts`        | the same-lane case (verified red), the three parity cases, the channel geometry                                                                         | —                   |
+| `render/paint.ts`                    | one call to the channel pass in the edge layer                                                                                                          | —                   |
+| `render/geometry.ts`                 | **M3** — `LANE_HEIGHT`, `BAR_HEIGHT`, `TAIL_HEIGHT`, `LABEL_INSIDE_MIN_PX`'s missing height term, `MILESTONE_RADIUS` against a thin bar                 | —                   |
+| `render/render-model.ts`             | **M3** — the node glyph; `SUMMARY_TAB_H`, `GLYPH_CAP_OVERHANG`, `BAR_RADIUS` re-derived; the glyph vocabulary                                           | — (pure)            |
+| `render/paint.ts`                    | **M1** one call to the channel pass; **M3** the bar, node, label-above, dates-below and duration layers, and whatever replaces the in-bar progress band | —                   |
+| `render/link-routing.ts` (fan-out)   | **M3** — `FAN_OUT_MAX_PX` / `FAN_OUT_STEP_PX` retire or re-derive as the node takes their job (D10)                                                     | — (pure)            |
+| `packages/layout/src/pack-lanes.ts`  | one optional parameter (M4 only, conditional)                                                                                                           | — (pure)            |
+| `TsldPanel.tsx` confirm dialog       | copy, **only if M4 changes what `Arrange` does**                                                                                                        | unchanged otherwise |
+| `render/palette.ts`                  | **M3/M5** — the link hue and the node's fill/hollow criticality channel, under §3's three traps                                                         | —                   |
+| `apps/web/scripts/crossing-probe.ts` | the reviewed occlusion half; the shared predicate; one paint per reading                                                                                | —                   |
+| `apps/web/scripts/shoot.mjs`         | the small logic-dense fixture (CQ-4 / FC-L12) — the condition has never been photographed                                                               | —                   |
+| `apps/web/e2e-arrange/`              | one new spec — **no new config, no new CI step**                                                                                                        | —                   |
 
-**No design-system component changes; no new UI primitive; no one-off styling.**
+**No design-system component changes; no new UI primitive; no one-off styling.** The row treatment is
+**canvas geometry, not DOM**, so it reaches no `components/ui/` primitive — worth saying, because
+"redesign the bars" sounds like a design-system change and is not one.
 
 ---
 
