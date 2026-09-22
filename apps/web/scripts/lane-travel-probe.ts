@@ -392,7 +392,26 @@ function measure(
  * repacks it — so `asArrived` for this fixture is the state a planner met before that decision, and
  * the packed rows are the state they meet now.
  */
-function unit300(path: string): FixtureResult[] {
+/**
+ * The Unit 300 programme, imported and laid out as-early-as-possible — the **ingredients**, before
+ * any lane assignment.
+ *
+ * Extracted at Part C M-C0 so a second harness can reach the same programme without a second copy
+ * of this pipeline. `crossing-probe.ts` needs these to build `RenderActivity`s for the real
+ * painter; two XER-to-ASAP implementations would drift, and the drift would be **invisible** —
+ * each would look right alone, and only somebody comparing two harnesses' numbers on one fixture
+ * would ever see it (ADR-0065's `routeOrthogonal` argument).
+ *
+ * **The extraction was verified behaviour-preserving**: `measure-lane-travel.mjs`'s whole output is
+ * byte-identical across it, which is the before/after oracle ADR-0078 used for the canvas
+ * decomposition.
+ *
+ * **These are NOT the CPM engine's dates** and must not be quoted as such — whole days at the
+ * file's own eight-hour `day_hr_cnt`, with this function's own PDM arithmetic. That is sound for
+ * comparing two LAYOUTS of one programme, where both sides carry identical dates and only the lane
+ * assignment differs. It is not sound for anything else.
+ */
+export function unit300Asap(path: string) {
   const result = importXer({ content: readFileSync(path), filename: 'p6_torture_test_v1.xer' });
   if (!result.ok)
     throw new Error(`Unit 300 import failed: ${result.error.code} ${result.error.message}`);
@@ -462,6 +481,12 @@ function unit300(path: string): FixtureResult[] {
         `the relationship graph is not acyclic, which contradicts ADR-0021. Refusing to judge.`,
     );
   }
+
+  return { activities, dependencies, start, finish };
+}
+
+function unit300(path: string): FixtureResult[] {
+  const { activities, dependencies, start, finish } = unit300Asap(path);
 
   // Source order is the lane an import assigns before ADR-0069 phase 3.
   const build = (keep: (t: string) => boolean): PackItem[] =>

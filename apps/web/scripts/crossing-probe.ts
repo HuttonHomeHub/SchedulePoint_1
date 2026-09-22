@@ -37,9 +37,13 @@
  * shipped line carries small rounded elbows. Rounding moves the corner arcs; it cannot move a
  * segment's interior, and two segments that cross still cross. Stated rather than left implicit.
  */
+import { packLanes, type PackItem } from '@repo/layout';
+
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Viewport } from '../src/features/tsld/render/render-model';
+
+import { unit300Asap } from './lane-travel-probe';
 
 export interface Pt {
   x: number;
@@ -346,4 +350,249 @@ export function countCrossings(links: readonly RecordedPath[]): {
     }
   }
   return { crossings, segments: segs.length, diagonal };
+}
+
+// ── FC-C1: does the metric discriminate? ─────────────────────────────────────────────────────────
+
+const DATA_DATE = '2026-01-01';
+const DAY_MS = 86_400_000;
+
+function iso(day: number): string {
+  return new Date(Date.parse(`${DATA_DATE}T00:00:00Z`) + day * DAY_MS).toISOString().slice(0, 10);
+}
+
+export interface Layout {
+  name: string;
+  laneOf: ReadonlyMap<string, number>;
+  lanes: number;
+}
+
+/** The Unit 300 programme as the painter wants it, under a given lane assignment. */
+function sceneFor(
+  asap: ReturnType<typeof unit300Asap>,
+  layout: Layout,
+): { scene: TsldScene; edges: number } {
+  const activities = (asap.activities as { key: string; type: string }[]).map((a) => ({
+    id: a.key,
+    type: a.type as never,
+    laneIndex: layout.laneOf.get(a.key) ?? 0,
+    label: a.key,
+    earlyStart: iso(asap.start.get(a.key) ?? 0),
+    earlyFinish: iso(asap.finish.get(a.key) ?? 0),
+    isCritical: false,
+    isNearCritical: false,
+  }));
+  const deps = asap.dependencies as {
+    predecessorKey: string;
+    successorKey: string;
+    type: string;
+  }[];
+  const edges = deps.map((d, i) => ({
+    predecessorId: d.predecessorKey,
+    successorId: d.successorKey,
+    type: d.type as never,
+    isDriving: i % 3 === 0,
+  }));
+  return {
+    scene: {
+      activities,
+      edges,
+      dataDate: DATA_DATE,
+      visualRefresh: true,
+      timeTrueLinks: true,
+      linkRouting: true,
+    },
+    edges: edges.length,
+  };
+}
+
+/** The two layouts FC-C1 compares: what ships today, and the worst configuration measured. */
+export function unit300Layouts(path: string): {
+  asap: ReturnType<typeof unit300Asap>;
+  shipped: Layout;
+  sourceOrder: Layout;
+  scrambled: Layout;
+} {
+  const asap = unit300Asap(path);
+  const acts = asap.activities as { key: string }[];
+  const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
+
+  // Source order is the lane an import assigns before ADR-0069 phase 3 — one bar per row, and the
+  // epic's WORST measured configuration (12.96 mean |Δlane| / 73 long links). It is the low end of
+  // FC-C1's discrimination test precisely because it is known to be bad.
+  const sourceLane = new Map(acts.map((a, i) => [a.key, i]));
+
+  const items: PackItem[] = acts.map((a) => ({
+    id: a.key,
+    startDay: asap.start.get(a.key) ?? 0,
+    endDay: asap.finish.get(a.key) ?? 0,
+    laneIndex: sourceLane.get(a.key) ?? 0,
+  }));
+  const predecessorsOf = new Map<string, string[]>();
+  for (const d of deps) {
+    const list = predecessorsOf.get(d.successorKey) ?? [];
+    list.push(d.predecessorKey);
+    predecessorsOf.set(d.successorKey, list);
+  }
+  const shippedLane = new Map(sourceLane);
+  for (const c of packLanes(items, predecessorsOf)) shippedLane.set(c.id, c.laneIndex);
+
+  const lanesIn = (m: ReadonlyMap<string, number>): number => Math.max(...m.values()) + 1;
+
+  /**
+   * **The metric's own discrimination test, at CONSTANT height.**
+   *
+   * FC-C1 compares the shipped layout against source order on the premise that a layout bad on the
+   * existing proxies is bad on crossings. Those proxies measure link LENGTH, and nothing here had
+   * ever checked that length and crossings move together — so if that comparison fails, it does not
+   * say which of the two is wrong.
+   *
+   * This one does. A deterministic scramble into the **same number of lanes** the shipped packing
+   * uses isolates assignment quality from height: same rows, same bars, same links, a plainly worse
+   * assignment. A metric that cannot separate a good 27-row assignment from a random one is broken;
+   * one that can is working, and a failure against source order is then a fact about source order
+   * rather than about the instrument.
+   *
+   * Seeded (a 32-bit LCG) so two runs agree exactly — FC-C5's determinism applies to the harness as
+   * much as to the product.
+   */
+  let seed = 0x2545f491;
+  const next = (): number => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const shippedLanes = lanesIn(shippedLane);
+  const scrambledLane = new Map(
+    acts.map((a) => [a.key, Math.floor(next() * shippedLanes)] as const),
+  );
+
+  return {
+    asap,
+    shipped: { name: 'shipped (packed + hint)', laneOf: shippedLane, lanes: shippedLanes },
+    sourceOrder: { name: 'source order', laneOf: sourceLane, lanes: lanesIn(sourceLane) },
+    scrambled: {
+      name: 'scrambled (same height)',
+      laneOf: scrambledLane,
+      lanes: lanesIn(scrambledLane),
+    },
+  };
+}
+
+export interface CrossingReading {
+  layout: string;
+  lanes: number;
+  viewport: string;
+  pxPerDay: number;
+  originY: number;
+  /** Stroked link polylines the painter drew — the denominator, printed beside every figure. */
+  visibleLinks: number;
+  crossings: number;
+  perLink: number;
+  segments: number;
+  diagonal: number;
+}
+
+/**
+ * Paint one layout at one framing and count.
+ *
+ * `height` is deliberately large enough to hold every lane of the **worst** layout when
+ * `whole` is set, which is what makes the control below independent: with nothing culled, the
+ * number of stroked link polylines must equal the number of edges exactly. That is a real check
+ * rather than a model of the cull — it does not reproduce the cull, it **removes** it, so it cannot
+ * agree with itself the way a reimplementation would (ADR-0124).
+ */
+export function read(
+  scene: TsldScene,
+  layout: Layout,
+  vp: { label: string; width: number; height: number },
+  pxPerDay: number,
+  originY: number,
+): CrossingReading {
+  const { ctx, paths } = recordingCtx();
+  paintScene(
+    ctx as Parameters<typeof paintScene>[0],
+    scene,
+    { pxPerDay, originX: 40, originY },
+    { width: vp.width, height: vp.height },
+    PALETTE,
+    1,
+  );
+  const links = linkPaths(paths);
+  const { crossings, segments, diagonal } = countCrossings(links);
+  return {
+    layout: layout.name,
+    lanes: layout.lanes,
+    viewport: vp.label,
+    pxPerDay,
+    originY,
+    visibleLinks: links.length,
+    crossings,
+    perLink: links.length === 0 ? 0 : crossings / links.length,
+    segments,
+    diagonal,
+  };
+}
+
+export interface Fc1Result {
+  edges: number;
+  control: { whole: CrossingReading; layout: string; expectedLinks: number };
+  /**
+   * **The verdict is read from these**, one per layout, at a framing holding the whole plan.
+   *
+   * FC-C1 says "whole-plan crossings per link", and the first version of this harness judged on a
+   * mean over the viewport sweep instead — which compares different sub-populations and is a
+   * measurement error, not a stricter reading. Source order spreads the plan over 144 rows, so at
+   * any one viewport only 21-52 of the 188 links are on screen and those few sit far apart; the
+   * shipped 27-row layout puts all 188 on screen at once. Normalising per VISIBLE link removes the
+   * raw-count version of "rewarding a candidate for culling the evidence" and leaves this one, in
+   * which a layout wins by showing less of the plan at a time.
+   *
+   * At the whole-plan framing both sides carry all 188 links, so the populations are identical and
+   * only the layout differs — which is the comparison FC-C1 asks for.
+   */
+  wholePlan: CrossingReading[];
+  /** The viewport sweep, kept as supporting evidence: it is what a planner actually sees. */
+  readings: CrossingReading[];
+}
+
+/**
+ * FC-C1. Both layouts, swept over pan positions — because this repository's only two exercises of
+ * the routing path paint at `originY: 0`, which `vhv-gutter-probe.ts` records as "the single value
+ * at which the defect below is invisible".
+ */
+export function fc1(path: string): Fc1Result {
+  const { asap, shipped, sourceOrder, scrambled } = unit300Layouts(path);
+  const readings: CrossingReading[] = [];
+
+  // The control framing: every lane of the worst layout on screen, so nothing is culled.
+  const whole = sceneFor(asap, sourceOrder);
+  const tall = { label: 'whole-plan', width: 4000, height: sourceOrder.lanes * 28 + 200 };
+  const controlReading = read(whole.scene, sourceOrder, tall, 1, 32);
+
+  for (const layout of [shipped, sourceOrder]) {
+    const { scene } = sceneFor(asap, layout);
+    for (const vp of [
+      { label: '1646x857', width: 1646, height: 857 },
+      { label: '1920x840', width: 1920, height: 840 },
+    ]) {
+      for (const pxPerDay of [2, 12]) {
+        for (const originY of [32, -200, -500]) {
+          readings.push(read(scene, layout, vp, pxPerDay, originY));
+        }
+      }
+    }
+  }
+
+  // The whole-plan framing for BOTH layouts — one box tall and wide enough for the worst of them,
+  // so neither side is culled and the two populations are identical.
+  const wholePlan = [shipped, sourceOrder, scrambled].map((layout) =>
+    read(sceneFor(asap, layout).scene, layout, tall, 1, 32),
+  );
+
+  return {
+    edges: whole.edges,
+    control: { whole: controlReading, layout: sourceOrder.name, expectedLinks: whole.edges },
+    wholePlan,
+    readings,
+  };
 }

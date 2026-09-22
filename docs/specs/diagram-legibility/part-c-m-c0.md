@@ -57,6 +57,72 @@ in this file is per visible link with the visible-link count printed beside it.
 
 ---
 
+## M-C0-T2b — FC-C1's verdict: **FAILS**, and the failure is a finding about the epic
+
+**Taken:** 2026-09-22, against `1389a402`. Unit 300 (`p6_torture_test_v1.xer`), 144 activities /
+188 links. Harness `apps/web/scripts/measure-crossings.mjs`.
+
+**The non-vacuity control passed first**, and it is independent rather than a model of the cull: at
+a framing holding the whole plan, the painter drew **188 stroked link polylines against 188 edges**,
+with **0** non-axis-aligned segments. It does not reproduce the cull, it removes it, so it cannot
+agree with itself the way a reimplementation would.
+
+### Whole-plan, like-for-like at 188 links on every side
+
+| layout                         | rows | crossings |  per link |
+| ------------------------------ | ---: | --------: | --------: |
+| **shipped** (packed + hint)    |   27 |       492 | **2.617** |
+| source order (one bar per row) |  144 |       406 | **2.160** |
+| scrambled (same 27 rows)       |   27 |      1204 | **6.404** |
+
+**FC-C1 asked for ≥ 3× between the best-known and worst-known layouts. It gets 0.83×, and in the
+wrong direction.** The condition fails on its own terms and is recorded as failing.
+
+### Which is wrong — the metric, or the condition's premise?
+
+FC-C1 chose its two comparands because they "differ enormously on every proxy". **Every one of those
+proxies measures link LENGTH** — mean `|Δlane|`, `>5-lane` links — and nothing in this epic had ever
+checked that length and crossings move together.
+
+The scramble settles it. A deterministic random assignment into **the same 27 rows** — same bars,
+same links, same height, a plainly worse assignment — measures **6.404 per link, 2.45× the shipped
+layout**. So the metric responds strongly to assignment quality; it is not vacuous and not broken.
+What failed is the premise that a layout bad on length is bad on crossings.
+
+**It is not, and the two are partly opposed.** Source order is the worst layout this epic has
+measured on length (12.96 mean `|Δlane|`, 73 long links against the shipped 1.78 / 14) and is
+**17 % better on crossings**.
+
+### Why that is mechanically unsurprising, and why it matters
+
+It is the epic's own §0.5 hypothesis, one compression further along. 144 rows offer 143 gutters;
+27 rows offer 26; the 188 links are unchanged. Compressing the diagram concentrates corridor
+traffic, and corridors that share a gutter are what cross. The same arithmetic predicts the 27 → 12
+compression `#364` produces when the WBS band is on — which is exactly why CQ-C4 holds the band flip
+until this is measured.
+
+**The consequence for the epic is larger than the condition.** The product owner offered height
+without limit to buy fewer crossings. Measured on their own plan, the **maximum possible spend of
+height** — one bar per row, 144 rows against 27 — buys a **17 % crossing reduction**, against FC-C2's
+floor of 50 % for a candidate to be worth offering at all. Assignment quality at **constant** height
+moves the same number by 2.45×. On this evidence the lever is **how rows are assigned and how
+corridors are chosen, not how many rows there are** — which inverts the framing the epic was opened
+with, and is an argument for the router (zero height) preceding the layout rule, as already
+sequenced.
+
+### What is NOT concluded here
+
+- **Not that the layout rule is withdrawn.** Source order is not a candidate; it is a deliberately
+  bad reference. A _logic-aware_ spread (chain rows) may do what a naive one cannot, and that is
+  precisely what M-C0 was to measure.
+- **Not that `#364` should be reverted.** Those 13 rows paint nothing whatever the band does. The
+  compression finding is about what to expect from compression, not about blank rows.
+- **Not a licence to judge candidates.** FC-C1 failed, and its withdrawal clause is explicit:
+  nothing else in M-C0 is judged on this metric until the condition is resolved. That resolution is
+  the product owner's, because the honest options change what the epic is for.
+
+---
+
 ## Still owed by M-C0
 
 - **The fixture → painter bridge.** `lane-travel-probe.ts` loads Unit 300 from
