@@ -43,6 +43,11 @@ import { packLanes, type PackItem } from '@repo/layout';
 
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
 import { activityRect, BAR_HEIGHT, LANE_HEIGHT } from '../src/features/tsld/render/geometry';
+import {
+  isLaneFreeBetween,
+  laneIntervalIndex,
+  laneOverlapBetween,
+} from '../src/features/tsld/render/link-routing';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Viewport } from '../src/features/tsld/render/render-model';
 
@@ -1346,84 +1351,229 @@ export function readWholePlan(
   );
 }
 
-// ── Part D M0: link-over-bar OCCLUSION, which nothing in Part C ever counted ─────────────────────
+// ── logic-legibility M0: link-over-bar OCCLUSION, which nothing in Part C ever counted ─────────
 
 /**
- * How many of a plan's links have a horizontal leg running **through a bar**.
+ * How many of a plan's links have a horizontal leg running **through a bar**, and how many merely
+ * **touch** one.
  *
  * ## Why this is a different quantity from {@link countCrossings}
  *
  * `crossingsOf` counts segment-versus-segment against a `SegmentIndex` built from link polylines
  * ONLY. Bars are not in it, and they structurally could not be: {@link recordingCtx} discards
- * `fillRect` entirely (`fillRect: () => {}`), which is how a bar is painted. So the instrument
- * Part C judged four milestones with was **incapable of seeing the thing the product owner was
- * complaining about** — "the logic is mapping across other bars" — and ADR-0149's −20.8 % is a
- * true statement about link-versus-link that says nothing at all about this.
+ * `fillRect` entirely (`fillRect: () => {}`), which is how a bar is painted. So the instrument Part
+ * C judged four milestones with was **incapable of seeing the thing the product owner was
+ * complaining about** — "the logic is mapping across other bars" — and ADR-0149's −20.8 % is a true
+ * statement about link-versus-link that says nothing at all about this.
  *
  * ## Why a leg can run through a bar at all
  *
- * `routeOrthogonal` applies its obstacle check (`isLaneFreeAt`) to the vertical corridor only, and
- * only across `crossedLanes(fromLane, toLane)` — the lanes strictly BETWEEN the two endpoints. The
- * two horizontal legs run at `from.y` and `to.y`, the source and target bars' centre-lines, and are
+ * `routeOrthogonal` applies its obstacle check to the vertical corridor only, and only across
+ * `crossedLanes(fromLane, toLane)` — the lanes strictly BETWEEN the two endpoints. The two
+ * horizontal legs run at `from.y` and `to.y`, the source and target bars' centre-lines, and are
  * checked against nothing. A leg therefore runs straight through any bar sharing its lane between
- * the anchor and the corridor. Links paint UNDER bars (`paint.ts:1053` Layer 2, `:1622` Layer 3),
- * so the line does not overlap the bar — it **disappears behind it**, which is worse for tracing.
+ * the anchor and the corridor. Links paint UNDER bars (`paint.ts` Layer 2 against Layer 3), so the
+ * line does not overlap the bar — it **disappears behind it**, which is worse for tracing.
  *
- * ## What counts
+ * ## ONE predicate, imported rather than restated (M0-T1 step 4)
  *
- * A horizontal segment (`y1 === y2`) whose x-span overlaps a bar's x-span **strictly**, with the
- * segment's y **strictly inside** the bar's vertical extent. Strictness is what excludes the
- * segment's own anchor, which sits exactly on its bar's edge by construction — the same
- * interiority argument {@link crossingsOf} uses, and for the same reason: it needs no per-link
- * bookkeeping about which bars are its own endpoints.
+ * The bars come from `laneIntervalIndex`, the same index `routeOrthogonal` consults, so what the
+ * router refuses and what this counts cannot drift into two opinions about where a bar is. The
+ * containment convention differs on purpose and is argued below.
+ * The lane index is `laneIntervalIndex`, likewise the router's own — and both derive from
+ * `activityRect`, the painter's own rect source, never from the routing formula. M-C0-T4 established
+ * that rule after measuring the gutter against the routing expression and getting an answer about
+ * the formula rather than about the picture.
  *
- * Rects come from `activityRect` — **the painter's own rect source**, never a re-derivation from
- * the routing formula. M-C0-T4 established that as the rule after measuring the gutter against the
- * routing expression and getting an answer about the formula rather than about the picture.
+ * ## TANGENCY IS ITS OWN COLUMN, and that is the correction this function exists to carry
+ *
+ * The first version of this counter tested `a.y > r.y1 && a.y < r.y2` — strictly inside a bar's
+ * vertical extent. `gutterY` expands to **exactly** the upper lane's bar bottom at every pitch
+ * (ADR-0149 D3's arithmetic; at `originY = 32`, lane 0, both are 55.0), so **every gutter leg scored
+ * zero** — including the 58 of Unit 300's 68 that M-C0-T4 measured as lying _inside_ a painted bar
+ * at 0.0 px clearance. The relayed **77.1 %** was taken with that blind spot and is a FLOOR, never a
+ * measurement; `conditions.md` §0.2 binds every document that quotes it to say so.
+ *
+ * So a leg is classified three ways against each bar in its lane:
+ *   - `through`  — its y is strictly inside the bar's vertical extent.
+ *   - `tangent`  — its y is exactly on the bar's top or bottom edge. A gutter leg, by construction.
+ *   - neither    — it is in clear air.
+ *
+ * ## The endpoint problem, which the router's own predicate could not answer
+ *
+ * A recorded polyline carries no link identity, so a leg's OWN endpoint bars cannot be excluded by
+ * id here, and every leg begins on one by construction. The first version of this function used
+ * {@link isLaneFreeBetween} directly — the router's predicate, CLOSED at both ends, because a
+ * corridor sitting on a bar's edge is drawn on the bar and is unusable. Run, it reported **100 % of
+ * Unit 300's links occluded at both layouts, with 391 of 395 incidents self-anchored**: a number
+ * that is true of the predicate and says nothing about the picture.
+ *
+ * So the occlusion test is {@link laneOverlapBetween}, which is deliberately OPEN and returns a
+ * LENGTH — a leg that merely touches an edge hides nothing, and `buriedPx` separates a leg buried
+ * forty pixels inside a bar from one grazing it. Both functions read the same `laneIntervalIndex`,
+ * so they cannot disagree about where a bar IS; only about whether an edge counts, which is the
+ * caller's question and not the index's. `grazing` reports the excluded residue rather than
+ * dropping it silently, because its size is what justifies excluding it.
+ *
+ * An epsilon on the anchor would NOT have worked: an `SF` corridor at `(from.x + to.x) / 2` can
+ * fall well inside either bar, and a clamped lag anchor is placed **on** the bar deliberately
+ * (`lagAnchorPoints`) — neither is near an edge. The overlap-length rule handles both without
+ * knowing which link it is looking at.
  */
 export function countOcclusions(
   links: readonly RecordedPath[],
   scene: TsldScene,
-  view: { pxPerDay: number; originX: number; originY: number },
-): { occluded: number; incidents: number; horizontals: number } {
-  const EPS_X = 0.5;
-  const rects: { x1: number; x2: number; y1: number; y2: number }[] = [];
+  view: Viewport,
+): {
+  occluded: number;
+  tangentOnly: number;
+  incidents: number;
+  tangentIncidents: number;
+  horizontals: number;
+  grazing: number;
+  buriedPx: number;
+  foreign: number;
+  foreignLinks: number;
+} {
+  const index = laneIntervalIndex(scene.activities, view, scene.dataDate);
+
+  // **Per-bar, UNMERGED, and that is not a detail.** `laneIntervalIndex` merges spans that overlap
+  // OR TOUCH (`span[0] <= last[1]`), which is right for the router — it only ever asks whether a
+  // position is usable — and useless for attribution, because `packLanes` puts activities end to
+  // end in a lane and two touching bars become one span. Attributing against merged spans reports a
+  // leg crossing its neighbour as "its own bar". Both this and the index read `activityRect`, the
+  // painter's own rect source, so they cannot disagree about where a bar is.
+  const barsOfLane = new Map<number, { x0: number; x1: number }[]>();
+  const extentOfLane = new Map<number, { top: number; bottom: number }>();
   for (const activity of scene.activities) {
     const rect = activityRect(activity, view, scene.dataDate);
     if (rect === null) continue;
-    rects.push({ x1: rect.x, x2: rect.x + rect.w, y1: rect.y, y2: rect.y + rect.h });
+    const lane = activity.laneIndex;
+    const bars = barsOfLane.get(lane);
+    if (bars) bars.push({ x0: rect.x, x1: rect.x + rect.w });
+    else barsOfLane.set(lane, [{ x0: rect.x, x1: rect.x + rect.w }]);
+    // Every bar in a lane shares one vertical extent (`activityRect`'s `top` depends on the lane
+    // and BAR_HEIGHT alone), so one (top, bottom) pair per lane is exact rather than an
+    // approximation — and it is why thinning the bar cannot reduce occlusion: a leg runs at its
+    // bar's CENTRE-LINE, so the question is pure x-overlap and the bar's height never enters it
+    // (spec decision D9).
+    if (!extentOfLane.has(lane)) extentOfLane.set(lane, { top: rect.y, bottom: rect.y + rect.h });
   }
 
+  /** Which bar does the point `(x, y)` sit on the edge of? The signature of a link's own anchor. */
+  const barAt = (x: number, y: number): string | null => {
+    for (const [lane, extent] of extentOfLane) {
+      if (y < extent.top - EPS_Y || y > extent.bottom + EPS_Y) continue;
+      const bars = barsOfLane.get(lane) ?? [];
+      for (let i = 0; i < bars.length; i += 1) {
+        if (x >= bars[i]!.x0 - EPS_X && x <= bars[i]!.x1 + EPS_X) return `${lane}:${i}`;
+      }
+    }
+    return null;
+  };
+
   let occluded = 0;
+  let tangentOnly = 0;
   let incidents = 0;
+  let tangentIncidents = 0;
   let horizontals = 0;
+  let grazing = 0;
+  let buriedPx = 0;
+  let foreign = 0;
+  let foreignLinks = 0;
   for (const link of links) {
-    let hit = false;
+    // **A link's own two anchors, recovered from the polyline's ends rather than from an id.** A
+    // recorded path carries no link identity (ADR-0149 D1 records why the recorder is built the way
+    // it is), but `routeOrthogonal`'s first and last points ARE the source and target anchors, and
+    // each sits on its bar's edge by construction. Running over your own bar is what a backward
+    // link does necessarily and is NOT the reported complaint — "the logic is mapping across other
+    // bars" — so the avoidable denominator (FC-L4) counts only the rest.
+    //
+    // The discriminator has an independent control rather than an argument: at ONE BAR PER LANE no
+    // lane holds a foreign bar at all, so `foreign` must read exactly ZERO. Predicted before the
+    // first run, asserted by `measure-occlusion.mjs`, which refuses to print otherwise.
+    const first = link.pts[0];
+    const last = link.pts[link.pts.length - 1];
+    const own = new Set<string>();
+    if (first) {
+      const id = barAt(first.x, first.y);
+      if (id !== null) own.add(id);
+    }
+    if (last) {
+      const id = barAt(last.x, last.y);
+      if (id !== null) own.add(id);
+    }
+
+    let through = false;
+    let tangent = false;
+    let foreignHere = false;
     for (let i = 0; i + 1 < link.pts.length; i += 1) {
       const a = link.pts[i]!;
       const b = link.pts[i + 1]!;
-      if (Math.abs(a.y - b.y) > 0.01) continue; // vertical corridors are already obstacle-checked
+      if (Math.abs(a.y - b.y) > EPS_Y) continue; // vertical corridors are already obstacle-checked
       horizontals += 1;
       const lo = Math.min(a.x, b.x);
       const hi = Math.max(a.x, b.x);
-      for (const r of rects) {
-        if (a.y <= r.y1 || a.y >= r.y2) continue; // strictly inside the bar's height
-        if (hi <= r.x1 + EPS_X || lo >= r.x2 - EPS_X) continue; // strict x overlap
-        incidents += 1;
-        hit = true;
+      for (const [lane, extent] of extentOfLane) {
+        const inside = a.y > extent.top + EPS_Y && a.y < extent.bottom - EPS_Y;
+        const onEdge =
+          Math.abs(a.y - extent.top) <= EPS_Y || Math.abs(a.y - extent.bottom) <= EPS_Y;
+        if (!inside && !onEdge) continue;
+        // The shared predicate decides whether this lane is hit at all. It is OPEN and returns a
+        // length, unlike the router's closed {@link isLaneFreeBetween} — see the docblock.
+        if (laneOverlapBetween(index, lane, lo, hi) <= EPS_X) {
+          // Zero (or sub-pixel) length: the leg touches a bar edge and hides nothing. That is the
+          // signature of its own anchor, and it is COUNTED AND REPORTED rather than dropped.
+          if (!isLaneFreeBetween(index, lane, lo, hi)) grazing += 1;
+          continue;
+        }
+        for (let j = 0; j < (barsOfLane.get(lane)?.length ?? 0); j += 1) {
+          const bar = barsOfLane.get(lane)![j]!;
+          const overlap = Math.min(hi, bar.x1) - Math.max(lo, bar.x0);
+          if (overlap <= EPS_X) continue;
+          buriedPx += overlap;
+          if (inside) {
+            incidents += 1;
+            through = true;
+          } else {
+            tangentIncidents += 1;
+            tangent = true;
+          }
+          if (!own.has(`${lane}:${j}`)) {
+            foreign += 1;
+            foreignHere = true;
+          }
+        }
       }
     }
-    if (hit) occluded += 1;
+    if (through) occluded += 1;
+    else if (tangent) tangentOnly += 1;
+    if (foreignHere) foreignLinks += 1;
   }
-  return { occluded, incidents, horizontals };
+  return {
+    occluded,
+    tangentOnly,
+    incidents,
+    tangentIncidents,
+    horizontals,
+    grazing,
+    buriedPx,
+    foreign,
+    foreignLinks,
+  };
 }
 
-/** One whole-plan reading carrying BOTH quantities, so they can be compared on one row. */
+/** Sub-pixel tolerances. `EPS_Y` decides tangency, which is an exact-equality question in theory
+ *  (`gutterY` IS the bar bottom) and a float question in practice. */
+const EPS_Y = 0.01;
+const EPS_X = 0.5;
+
+/** One whole-plan reading carrying BOTH quantities, from **one** paint (M0-T1 step 3). */
 export function readBoth(
   asap: ReturnType<typeof unit300Asap>,
   layout: Layout,
   pxPerDay: number,
-): CrossingReading & { occluded: number; incidents: number; horizontals: number } {
+): CrossingReading & ReturnType<typeof countOcclusions> {
   const acts = asap.activities as { key: string }[];
   const maxDay = Math.max(...acts.map((a) => asap.finish.get(a.key) ?? 0));
   const worstLanes = Math.max(layout.lanes, 145);
@@ -1433,21 +1583,36 @@ export function readBoth(
     height: worstLanes * LANE_HEIGHT + 200,
   };
   const { scene } = sceneFor(asap, layout);
-  const base = read(scene, layout, vp, pxPerDay, 32);
+  const view: Viewport = { pxPerDay, originX: 40, originY: 32 };
 
   const { ctx, paths } = recordingCtx();
   paintScene(
     ctx as Parameters<typeof paintScene>[0],
     scene,
-    { pxPerDay, originX: 40, originY: 32 },
+    view,
     { width: vp.width, height: vp.height },
     PALETTE,
     1,
   );
-  const occ = countOcclusions(linkPaths(paths), scene, {
+  const links = linkPaths(paths);
+  const { crossings, segments, diagonal } = countCrossings(links);
+  const digest = createHash('sha256');
+  for (const link of links) {
+    for (const pt of link.pts) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
+    digest.update('|');
+  }
+  return {
+    layout: layout.name,
+    lanes: layout.lanes,
+    viewport: vp.label,
     pxPerDay,
-    originX: 40,
     originY: 32,
-  });
-  return { ...base, ...occ };
+    visibleLinks: links.length,
+    crossings,
+    perLink: links.length === 0 ? 0 : crossings / links.length,
+    segments,
+    diagonal,
+    fingerprint: digest.digest('hex').slice(0, 12),
+    ...countOcclusions(links, scene, view),
+  };
 }

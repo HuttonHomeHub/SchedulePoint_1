@@ -117,21 +117,108 @@ export function laneIntervalIndex(
   return index;
 }
 
-/** Is screen-x `x` clear of every bar in `lane`? Binary search over the merged spans. */
-export function isLaneFreeAt(index: LaneIntervalIndex, lane: number, x: number): boolean {
+/**
+ * Is the closed screen-x interval `[from, to]` clear of every bar in `lane`?
+ *
+ * **ONE predicate, and that is the point of it** (logic-legibility M0-T1 step 4). A vertical
+ * corridor asks about a point and a horizontal leg asks about a span, and before this they were
+ * different questions answered by different code — `routeOrthogonal` consulted the point test and
+ * nothing at all asked the span one, which is why a leg has always been free to run through a bar
+ * in its own lane (`link-routing.ts`'s own obstacle check reaches only `crossedLanes`, and that
+ * excludes both endpoints). The measurement harness now imports THIS function, so what the router
+ * refuses and what the instrument counts as an occlusion cannot drift into two opinions — the
+ * ADR-0065 `routeOrthogonal` argument, applied to a predicate rather than to a route.
+ *
+ * **Containment is CLOSED at both ends, which makes the point case a true degenerate** —
+ * `isLaneFreeBetween(i, l, x, x)` is exactly `isLaneFreeAt(i, l, x)`, asserted rather than assumed
+ * (`link-routing.test.ts`). A closed interval also means a leg that merely TOUCHES a bar's edge
+ * counts as blocked, which is deliberate and is not the same question as whether it is occluded:
+ * every link's own anchor sits on its own bar's edge by construction, so a caller measuring
+ * occlusion owes an endpoint rule of its own. It cannot be bought here with an epsilon, because an
+ * `SF` corridor at `(from.x + to.x) / 2` can fall well INSIDE either bar and a clamped lag anchor is
+ * put on the bar deliberately (`lagAnchorPoints`), so neither is near an edge.
+ *
+ * Binary search over the merged spans: find any span whose start is `<= to`, then test it.
+ */
+export function isLaneFreeBetween(
+  index: LaneIntervalIndex,
+  lane: number,
+  from: number,
+  to: number,
+): boolean {
   const lane_ = index.get(lane);
   if (!lane_) return true;
+  const lo = Math.min(from, to);
+  const hi = Math.max(from, to);
   const spans = lane_.spans;
-  let lo = 0;
-  let hi = spans.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const span = spans[mid]!;
-    if (x < span[0]) hi = mid - 1;
-    else if (x > span[1]) lo = mid + 1;
-    else return false;
+  // Spans are sorted by start and merged, so the only candidate is the last one starting at or
+  // before `hi`; anything earlier ends before it (merging is what guarantees that) and anything
+  // later starts after it.
+  let left = 0;
+  let right = spans.length - 1;
+  let candidate = -1;
+  while (left <= right) {
+    const mid = (left + right) >> 1;
+    if (spans[mid]![0] <= hi) {
+      candidate = mid;
+      left = mid + 1;
+    } else right = mid - 1;
   }
-  return true;
+  if (candidate === -1) return true;
+  return spans[candidate]![1] < lo;
+}
+
+/**
+ * How much of the screen-x interval `[from, to]` lies inside a bar in `lane`, in pixels?
+ *
+ * **Deliberately OPEN where {@link isLaneFreeBetween} is closed, and the two conventions answer
+ * different questions about the same bars.** The router asks *may I draw a line here?* — a corridor
+ * sitting on a bar's edge is drawn on the bar and is unusable, so touching counts as blocked. This
+ * asks *is this line hidden by a bar?* — a line that merely touches an edge hides nothing, and
+ * every link's horizontal leg starts on its own bar's edge by construction, so a closed test
+ * reports every link in the plan as occluded by itself.
+ *
+ * That is measured rather than argued: the first reading taken with the closed predicate reported
+ * **100 % of Unit 300's links occluded with 391 of 395 incidents self-anchored**, which is the
+ * artefact and not the picture. Both functions read the same `laneIntervalIndex`, so they cannot
+ * disagree about where a bar IS; only about whether an edge counts, which is the caller's question.
+ *
+ * A length rather than a boolean, because a leg buried forty pixels inside a bar and one grazing it
+ * for half a pixel are not the same defect, and the caller owns the threshold.
+ */
+export function laneOverlapBetween(
+  index: LaneIntervalIndex,
+  lane: number,
+  from: number,
+  to: number,
+): number {
+  const lane_ = index.get(lane);
+  if (!lane_) return 0;
+  const lo = Math.min(from, to);
+  const hi = Math.max(from, to);
+  const spans = lane_.spans;
+  // The first span that could contribute is the first whose END lies beyond `lo`; spans are sorted
+  // by start and merged, so from there they are walked until one starts at or after `hi`.
+  let left = 0;
+  let right = spans.length - 1;
+  let first = spans.length;
+  while (left <= right) {
+    const mid = (left + right) >> 1;
+    if (spans[mid]![1] > lo) {
+      first = mid;
+      right = mid - 1;
+    } else left = mid + 1;
+  }
+  let total = 0;
+  for (let i = first; i < spans.length && spans[i]![0] < hi; i += 1) {
+    total += Math.min(hi, spans[i]![1]) - Math.max(lo, spans[i]![0]);
+  }
+  return total;
+}
+
+/** Is screen-x `x` clear of every bar in `lane`? The degenerate {@link isLaneFreeBetween}. */
+export function isLaneFreeAt(index: LaneIntervalIndex, lane: number, x: number): boolean {
+  return isLaneFreeBetween(index, lane, x, x);
 }
 
 /**

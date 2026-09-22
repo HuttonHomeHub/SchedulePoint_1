@@ -14,7 +14,9 @@ import {
   ARROWHEAD_ROUTED_PX,
   FAN_OUT_STEP_PX,
   isLaneFreeAt,
+  isLaneFreeBetween,
   laneIntervalIndex,
+  laneOverlapBetween,
   MAX_CORRIDOR_CANDIDATES,
   routeOrthogonal,
   type LaneIntervalIndex,
@@ -64,6 +66,138 @@ describe('laneIntervalIndex', () => {
     expect(isLaneFreeAt(index, 0, (x0 + x1) / 2)).toBe(false);
     expect(isLaneFreeAt(index, 0, x0 - 5)).toBe(true);
     expect(isLaneFreeAt(index, 0, x1 + 5)).toBe(true);
+  });
+
+  /**
+   * **The point case is a true degenerate, and this asserts it rather than assuming it**
+   * (logic-legibility M0-T1 step 4). The router asks about a corridor's x and a leg asks about a
+   * span; the whole reason one predicate answers both is that the second reduces to the first, and
+   * the measurement harness imports the same symbol so an occlusion it counts is an occlusion the
+   * router would refuse. Two opinions about where a bar is would disagree exactly when it mattered
+   * — the ADR-0065 `routeOrthogonal` argument, one level down at the predicate.
+   *
+   * **The control re-states the point rule rather than calling `isLaneFreeAt`, and that is the
+   * whole value of the case.** The first version of this test asserted
+   * `isLaneFreeBetween(i, l, x, x) === isLaneFreeAt(i, l, x)` — which is VACUOUS, because
+   * `isLaneFreeAt` delegates to `isLaneFreeBetween`, so it compared a function to itself and could
+   * never fail. Proven rather than reasoned: mutating the containment boundary to `<=` left all 35
+   * cases green. A generous reader owes a control that measures a DIFFERENT quantity (ADR-0124),
+   * and here that means a literal, independent statement of "x lies inside some span".
+   *
+   * Swept at a sub-pixel step across the spans and both flanks, and then pinned at the EXACT
+   * edges, because a containment boundary is right at every midpoint and wrong only where the
+   * integer sweep never lands.
+   */
+  it('is the degenerate interval, against an independently stated point rule', () => {
+    const index = laneIntervalIndex(
+      [
+        task('a', 0, '2026-01-03', '2026-01-05'),
+        task('b', 0, '2026-01-20', '2026-01-24'),
+        task('c', 0, '2026-02-10', '2026-02-11'),
+      ],
+      VIEW,
+      '2026-01-01',
+    );
+    const spans = index.get(0)!.spans;
+    const insideAnySpan = (x: number): boolean =>
+      spans.some(([start, end]) => x >= start && x <= end);
+
+    for (let x = -40; x <= 700; x += 0.25) {
+      expect(isLaneFreeBetween(index, 0, x, x)).toBe(!insideAnySpan(x));
+      expect(isLaneFreeAt(index, 0, x)).toBe(!insideAnySpan(x));
+    }
+
+    // The exact edges, which the sweep steps over: containment is CLOSED at both ends.
+    for (const [start, end] of spans) {
+      expect(isLaneFreeAt(index, 0, start)).toBe(false);
+      expect(isLaneFreeAt(index, 0, end)).toBe(false);
+      expect(isLaneFreeBetween(index, 0, end, end)).toBe(false);
+      // An interval whose LOW end sits exactly on a bar's right edge is blocked by that bar —
+      // the case a `<` / `<=` slip changes and nothing else does.
+      expect(isLaneFreeBetween(index, 0, end, end + 50)).toBe(false);
+    }
+  });
+
+  it('reports a span blocked when it touches or straddles ANY bar, and free between two', () => {
+    // Closed containment at both ends, which is what makes the degeneracy above hold. A leg that
+    // merely touches a bar's edge is blocked — deliberate, and the reason a caller measuring
+    // OCCLUSION owes an endpoint rule of its own rather than buying one here with an epsilon.
+    const index = laneIntervalIndex(
+      [task('a', 0, '2026-01-03', '2026-01-05'), task('b', 0, '2026-01-20', '2026-01-24')],
+      VIEW,
+      '2026-01-01',
+    );
+    const [[a0, a1], [b0, b1]] = index.get(0)!.spans as [[number, number], [number, number]];
+    expect(isLaneFreeBetween(index, 0, a1 + 1, b0 - 1)).toBe(true); // the clear water between
+    expect(isLaneFreeBetween(index, 0, a1, b0)).toBe(false); // touching both edges
+    expect(isLaneFreeBetween(index, 0, a0 - 50, a0 - 1)).toBe(true); // entirely left of the first
+    expect(isLaneFreeBetween(index, 0, b1 + 1, b1 + 50)).toBe(true); // entirely right of the last
+    expect(isLaneFreeBetween(index, 0, a0 - 50, b1 + 50)).toBe(false); // straddling both
+    expect(isLaneFreeBetween(index, 0, (a0 + a1) / 2, (b0 + b1) / 2)).toBe(false); // bar to bar
+    // Reversed arguments describe the same interval — a leg is drawn right-to-left as often as not.
+    expect(isLaneFreeBetween(index, 0, b0 - 1, a1 + 1)).toBe(true);
+  });
+
+  /**
+   * **The open predicate, against a brute-force control that shares no code with it.**
+   *
+   * `laneOverlapBetween` exists because the closed one answers the wrong question for occlusion:
+   * every link's horizontal leg begins on its own bar's edge, so `isLaneFreeBetween` reports every
+   * link in a plan as hidden by itself. Measured before this function was written — 100 % of Unit
+   * 300's links, 391 of 395 incidents self-anchored — which is the artefact the epic's instrument
+   * would otherwise have carried into its own baseline.
+   *
+   * The control integrates the union of the spans over a fine grid rather than re-deriving the
+   * closed form, so it is a different quantity arrived at a different way (ADR-0124). It is
+   * compared with a tolerance, because a Riemann sum of a step function is exact only up to its
+   * step; the EXACT cases that decide the open/closed boundary are pinned separately below, where
+   * no tolerance is involved.
+   */
+  it('measures overlap with OPEN containment, against an independent integration', () => {
+    const index = laneIntervalIndex(
+      [
+        task('a', 0, '2026-01-03', '2026-01-05'),
+        task('b', 0, '2026-01-20', '2026-01-24'),
+        task('c', 0, '2026-02-10', '2026-02-11'),
+      ],
+      VIEW,
+      '2026-01-01',
+    );
+    const spans = index.get(0)!.spans;
+    const STEP = 0.05;
+    const bruteForce = (from: number, to: number): number => {
+      const lo = Math.min(from, to);
+      const hi = Math.max(from, to);
+      let total = 0;
+      for (let x = lo + STEP / 2; x < hi; x += STEP) {
+        if (spans.some(([s0, s1]) => x > s0 && x < s1)) total += STEP;
+      }
+      return total;
+    };
+    for (const [from, to] of [
+      [-40, 700],
+      [0, 100],
+      [spans[0]![0] - 10, spans[0]![1] + 10],
+      [spans[0]![1], spans[1]![0]],
+      [spans[1]![0] + 3, spans[2]![1] - 3],
+      [spans[2]![1] + 5, 900],
+    ] as [number, number][]) {
+      expect(laneOverlapBetween(index, 0, from, to)).toBeCloseTo(bruteForce(from, to), 0);
+      // Reversed arguments describe the same interval — a leg is drawn right-to-left as often
+      // as not, and the router's own predicate normalises the same way.
+      expect(laneOverlapBetween(index, 0, to, from)).toBeCloseTo(bruteForce(from, to), 0);
+    }
+
+    // The open/closed boundary, exactly — an anchor's signature, and the only case that separates
+    // this function from `isLaneFreeBetween`. No tolerance: these are exact zeroes.
+    for (const [start, end] of spans) {
+      expect(laneOverlapBetween(index, 0, end, end + 50)).toBe(0);
+      expect(laneOverlapBetween(index, 0, start - 50, start)).toBe(0);
+      expect(laneOverlapBetween(index, 0, start, start)).toBe(0);
+      expect(isLaneFreeBetween(index, 0, end, end + 50)).toBe(false); // …and the router differs
+      expect(laneOverlapBetween(index, 0, end - 1, end + 50)).toBeCloseTo(1, 6);
+    }
+    expect(laneOverlapBetween(index, 1, -1000, 1000)).toBe(0); // a lane holding nothing
   });
 
   it('merges overlapping bars in one lane into a single span', () => {
