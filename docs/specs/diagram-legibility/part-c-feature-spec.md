@@ -240,6 +240,64 @@ and it makes the lane axis dominant on a plan where #323 measured that it is not
 recommendation-on-record ("accept") was reached on a layout this epic proposes to change, and it
 must be re-measured rather than inherited.
 
+### 0.9 The band default, and what flipping it exposes
+
+The product owner has asked for the WBS band to default **on**, because #364's 420 px has never
+reached anybody (§0.1). Four facts decide the shape of that change, all verified today.
+
+**The band is off by default and there are TWO declarations of that, which agree by accident.**
+`DEFAULT_VIEW_TOGGLES` (`view-toggles.ts:87-115`) **carries no `wbsBand` key at all** — its ten keys
+are `dayGrid`, `monthGrid`, `yearGrid`, `today`, `nonWorking`, `labels`, `lateOverlay`, `monthBands`,
+`dataDate`, `logicLinks` — so the painter's own resolution (`scene.view ?? DEFAULT_VIEW_TOGGLES`,
+then `view.wbsBand`) yields `undefined`, and the panel separately writes `?? false`
+(`TsldPanel.tsx:1100`). **Flipping one and not the other makes them disagree**, which is this
+register's most-recorded defect shape. The remedy is in §4.7a and it is one literal, read twice.
+
+**View toggles are never persisted.** `use-tsld-canvas-ui-state.ts:195` holds them in
+`useState(DEFAULT_VIEW_TOGGLES)`; its docblock at `:63-65` says "never server state, never
+persisted", `view-toggles.ts:32-36` repeats it about a neighbouring key, and
+`tsld-toolbar-items.tsx:497-501` records a plan's claim to the contrary being **corrected as false**.
+Three consequences, and the third is decisive:
+
+1. The flip reaches **every planner on every page load**, unconditionally. There is no stored
+   preference for a default to defer to.
+2. **A reader cannot opt out durably.** Turn the band off, reload, it is back on. So "they can just
+   turn it off" is not available as a mitigation and no design here may lean on it.
+3. **The remedy for the defect the flip creates is gated behind a permission the reader may not
+   hold.** The blank rows clear only when somebody presses `Arrange`, which is `penGated: true` plus
+   `canAutoArrange` (`tsld-toolbar-items.tsx:2926-2932`) — so a **Viewer, a Contributor without the
+   lock, and an External Guest cannot clear it at all**, and under (2) they meet it on every open.
+   On Unit 300 that is 13 of 27 rows blank, 364 px, permanently, for most of the people who read the
+   diagram.
+
+**That third point is why the flip may not ship as a flip**, and §4.7a designs against it rather
+than around it.
+
+**No existing test would catch the flip being wrong.** The three band suites set the toggle
+explicitly (`{ ...DEFAULT_VIEW_TOGGLES, wbsBand: true }` / `wbsBand: band`), so they are independent
+of the default — good for the change, and it means **the default is currently pinned by nothing**.
+A case that asserts it as a fact lands with the flip (ADR-0093's rule: a green assertion that cannot
+distinguish two facts is not cover).
+
+### 0.10 The import report is PRE-commit, so the "Arrange now" offer cannot live in it
+
+The product owner's answer to CQ-C3 asks for the **import report** to offer a one-press "Arrange
+now" with the row cost stated. Read against the code, that surface cannot carry it, for two
+structural reasons:
+
+- **The report the planner reads is the dry-run's**, rendered in step 2 of
+  `ImportScheduleDialog.tsx` before `Confirm import`. At that moment the plan does not exist, the
+  recalculation has not run, and ADR-0069's phase 3 has not packed anything — so **the resulting row
+  count is not knowable**, and the row cost is the whole point of the offer.
+- **On success the dialog closes and navigates away.** `ImportScheduleDialog.tsx:163-170`:
+  `announce(...)`, `onClose()`, then `navigate({ to: '/orgs/$orgSlug/plans/$planId' })`. There is no
+  post-commit report screen to hang anything on.
+
+So the offer has to live **after** the commit, on the surface the navigate lands on. §4.7a places it
+in the ADR-0092 canvas dock, which is on that screen, costs the canvas 0 px, and — this is the part
+that makes it one design rather than two — **is the same control the band flip needs.** The
+departure from the literal instruction is named here rather than smuggled into a task.
+
 ---
 
 ## 1. Business understanding
@@ -778,38 +836,143 @@ drift and the drift is invisible.
 - **The drift argument is answered rather than dodged.** ADR-0065's objection is to two
   _implementations_ of one rule; this is one implementation called two ways, and the difference is
   visible and intended — pressing a button changes the layout, which is what the button is for.
-- **Its honest cost is CQ-C3**: an imported programme will open lane-minimal and improve only when
-  somebody presses `Arrange`. That is a real regression in the first picture a planner sees of a
-  schedule they already know, which is ADR-0069's entire stated purpose, and it goes to the product
-  owner rather than being decided here.
+- **Its honest cost was CQ-C3, and the product owner has answered it** (§6): the import stays
+  byte-identical and the cost is paid by **offering `Arrange` after an import** instead. That offer
+  is §4.7a.
 
 **A sibling function is rejected**, and so is a second packer, and so is a second `Arrange` command
 ("arrange for shortest links") — the last because it produces two diagrams of one plan reached from
 one surface, which ADR-0093 and ADR-0094 both record removing.
 
+### 4.7a The band default, and the offer that makes it safe
+
+Two of the product owner's decisions land on one control, and this section is the argument for
+treating them as one design rather than two features that happen to touch the same screen.
+
+**The problem, stated exactly.** Flipping the band on (§0.9) exposes #364's own Finding 1 to every
+reader of every plan that has not been re-arranged: the importer packs all 144 activities into 27
+rows, the band then lifts 13 rows' worth of summaries out of the scene, their rows stay reserved
+because a lane's index fixes its y, and the diagram shows **13 blank rows, 364 px**. Toggles are not
+persisted, so it recurs on every load; and `Arrange` is pen-gated, so **a Viewer, a Contributor
+without the lock and a guest cannot clear it at all**. That is a defect shipped to the majority of
+readers with no route out, and it is not acceptable as a side effect of a default.
+
+#### The decision: the band's default is DERIVED, and the dock offers the press
+
+**`wbsBand` defaults on when the plan's lanes already are what the scene-first rule would produce,
+and off when they are not.** The predicate is one the product already computes:
+`computeArrangeChanges()` returning **empty** means "these lanes are exactly what `Arrange` would
+write", which — band-aware — means the scene occupies `0..N-1` contiguously and there are no blank
+rows to expose. Non-empty means the opposite, and band-off is the status quo, so defaulting off
+there can never be a regression.
+
+```mermaid
+flowchart TD
+  OPEN["plan opens · activities resolve"] --> D{"computeArrangeChanges() empty?"}
+  D -->|"yes — lanes already scene-first"| ON["band defaults ON<br/>compact, no blank rows<br/>every role, every reload"]
+  D -->|"no — importer's packing, or hand-edited"| OFF["band defaults OFF<br/>diagram exactly as today"]
+  OFF --> W{"can this reader press Arrange?<br/>(pen + role)"}
+  W -->|"yes"| STRIP["dock strip: 'Arrange would use 12 rows instead of 27'<br/>[Arrange] [Dismiss]"]
+  W -->|"no"| NONE["no strip — nothing to show<br/>(ADR-0082's omit clause)"]
+  STRIP -->|"Arrange pressed + confirmed"| RE["lanes rewritten → predicate flips empty →<br/>band comes on, strip self-extinguishes"]
+  STRIP -->|"Dismiss"| GONE["strip gone for this plan, this session;<br/>Arrange stays on the command strip"]
+```
+
+**Six properties, in the order they matter:**
+
+1. **No reader ever meets the blank-row defect**, whatever their role, on any plan. That is the
+   whole point and it is the only option below that achieves it.
+2. **It is derived, not remembered** — no schema, no migration, no stored flag, no
+   `database-architect` engagement. ADR-0087 M3's rule applied one surface along: a derived answer is
+   true of the data on a replica that has this instant booted, where a stored one cannot separate
+   "it is fine" from "nobody has run the thing that would have told us".
+3. **It self-extinguishes.** The predicate flips the moment the lanes are rewritten, so the strip is
+   not a nag and the band's arrival is the confirmation that the press worked.
+4. **It serves the import case with no import-specific machinery.** A freshly imported plan is
+   exactly a plan whose lanes are not scene-first, so the offer appears on arrival at the plan the
+   `navigate` lands on (§0.10) — which is what CQ-C3's answer asked for, at the one place that can
+   both know the row count and be reached after the commit.
+5. **The offer states the cost** — "12 rows instead of 27" — because `computeArrangeChanges()`
+   returns the changes, from which the resulting maximum lane is computable. That is the same number
+   M-C4's confirm dialog will state, from the same derivation, so the two cannot disagree.
+6. **Declining costs nothing and removes nothing.** Dismiss hides the strip for that plan for that
+   session; `Arrange` stays on the command strip. A rule that removed the only route to a behaviour
+   would be a defect rather than a scoping decision (ADR-0079's clause).
+
+**The seeding rule, because the obvious implementation has a known trap.** The derivation sets the
+toggle's **initial** value once per plan and then the planner owns it — not a continuously-derived
+value, or pressing `Arrange` would flip the band on under the reader's cursor and a later hand-edit
+would flip it off again. It must also fire when the plan's activities **first resolve** rather than
+at mount (at mount there are none) and must not re-fire on a refetch. That is the `useDurationSeed`
+staleness trap ADR-0070 M6 records closing: stop asking a flag, ask the thing itself, and guard on
+the plan id already seeded.
+
+**What a Viewer sees**, stated because the coordinator asked and because it is the case the design
+exists for: on an un-arranged plan, the diagram **exactly as it is today** — 27 rows, no blanks, no
+band, and **no strip**, because the strip's entire content is an offer to press a command they
+cannot press. That is ADR-0082's _omit_ clause ("there is nothing to show"), not its shade clause,
+and the discriminator is that this is an advisory nobody went looking for rather than a control they
+reached for and found shut — a permanent un-actionable notice is the lit-but-inert defect ADR-0059
+M6 and ADR-0062 M6 both record. On an arranged plan they see the band, compact, like everybody else.
+
+#### Where it lives, and what it is not
+
+The strip is a **fifth member of the ADR-0092 canvas dock**, joining `conflict | mode | empty |
+placement-migration` in `resolveDockStrip` (`model/dock-strip.ts:4, 53-70`). That function exists
+because the invariant "at most one strip is up" had been spelt three times in three shapes, and a
+fourth strip had to rediscover all of it — so a fifth is added **to the rule**, not beside it. Its
+precedence is **below `placement-migration`**, i.e. last: every strip above it is about what the
+planner is doing now, and this one is about how the plan was laid out before they arrived. It costs
+the canvas **0 px** (ADR-0092's measured guarantee), which is what makes an advisory affordable at
+all on a surface five epics were spent recovering.
+
+#### Four alternatives, rejected with reasons
+
+| Alternative                                                                | Why not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Flip unconditionally and offer `Arrange`**                               | Fails §0.9's point 3 outright: the offer is to press a pen-gated command, so a Viewer meets 364 px of blank rows on every load with no route out. This is the literal instruction and it is the one option that ships a defect.                                                                                                                                                                                                                                                                                                                                                    |
+| **A per-plan stored fact** ("arranged under the scene-first rule")         | A column, a migration, an ADR and a `database-architect` engagement to persist something that is **derivable in memory from data already loaded**. It also makes a Viewer's picture depend on whether a Planner has ever pressed a button, which is the same failure one step removed.                                                                                                                                                                                                                                                                                             |
+| **Compress lane indices at render time when the band is on**               | This is ADR-0142 D1's rejected remedy, and its stated objection (the packer never leaves an empty lane) genuinely does **not** apply here — these lanes are empty. It fails for a different and larger reason: `laneIndex` is the coordinate system. `laneAtScreenY` inverts it for hit-testing, drags write it, `a11y.ts` speaks it, and the Gantt, the export and the minimap read it. Remapping per toggle would move every bar when the band is toggled and would need all six to agree or the diagram becomes unclickable. A display problem may not buy a coordinate change. |
+| **Make the importer pack scene-first too** (`interchange.service.ts:1096`) | Genuinely tempting, and it does **not** conflict with ADR-0148 — a plan being created has no hand placements to preserve — so the obvious objection is not the real one. It is rejected because **the product owner has answered CQ-C3 the other way**: the import stays byte-identical and the cost is paid by the offer. It also fixes only future imports and leaves the whole existing estate untouched, so it is not sufficient even if it were taken. Recorded because it is the next thought a reader will have.                                                            |
+
+#### The two declarations that must not drift
+
+`DEFAULT_VIEW_TOGGLES` carries no `wbsBand` key and `TsldPanel.tsx:1100` writes `?? false` (§0.9).
+The flip adds `wbsBand` to `DEFAULT_VIEW_TOGGLES` as the **one literal**, and the panel's fallback
+reads that constant rather than repeating a second one — so the derived seed, the painter's
+resolution and the panel's fallback all resolve to the same value by construction, and a structural
+test asserts it. Flipping only the panel would leave the painter's `scene.view ?? DEFAULT_VIEW_TOGGLES`
+path disagreeing with it; flipping only the constant would leave `?? false` overriding it at the one
+site that matters. Both halves, one literal, one gate.
+
 ### 4.8 Entry points, and where the journey lands (ADR-0081)
 
-| Milestone | User-facing?                  | Entry point                                                                                                  |
-| --------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| M-C0      | **no — declares itself dark** | Nothing is reachable. Harnesses, conditions, pictures. The candidates live behind the probe and are deleted. |
-| M-C1      | yes — a picture change        | **The TSLD canvas itself**, plus the exported PNG/PDF and the printed diagram. No control is pressed.        |
-| M-C2      | yes — a command               | **`Arrange`** on the plan command strip (accessible name `Arrange`, description "Auto-arrange lanes").       |
-| M-C3      | yes — a picture change        | The canvas, export and print again. No control.                                                              |
-| M-C4      | no (test only)                | —                                                                                                            |
+| Milestone | User-facing?                  | Entry point                                                                                                                                        |
+| --------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M-C0      | **no — declares itself dark** | Nothing is reachable. Harnesses, conditions, pictures. The candidates live behind the probe and are deleted.                                       |
+| M-C1      | yes — a picture change        | **The TSLD canvas itself**, plus the exported PNG/PDF and the printed diagram. No control is pressed.                                              |
+| **M-C2**  | **yes — a new control**       | **The "Arrange now" strip in the canvas dock**, on `/orgs/:slug/plans/:planId` — the screen an import's `navigate` lands on. Plus the band itself. |
+| M-C3      | yes — a picture change        | The canvas, export and print again. No control.                                                                                                    |
+| M-C4      | yes — a command               | **`Arrange`** on the plan command strip (accessible name `Arrange`, description "Auto-arrange lanes").                                             |
+| M-C5      | no (review only)              | —                                                                                                                                                  |
 
-**The journey lands at M-C2, and the reason is recorded rather than convenient.** ADR-0081's rule
-exists so a milestone claiming user-facing capability names an entry point a planner can reach. M-C1
-and M-C3 add no entry point and no capability: they change where an existing line is drawn, inside an
-`aria-hidden` Canvas 2D bitmap that Playwright cannot read — which is the reasoning
-`m0-measurement.md` already recorded for Part A's M1, and the instrument that _can_ see it is the
-committed probe. M-C2 adds no entry point either, strictly — `Arrange` exists — but it **changes that
-command's behaviour**, which is exactly the condition `docs/TECH_DEBT.md` #363 was filed as
-outliving. So the journey lands there, closes #363, and covers what that row says a journey has to
-cover: the "nothing to move" early return, a plan where rows genuinely change, the count in the
-confirmation matching the rows written, the pen gate, and **undo restoring the prior lanes**.
+**The journey lands at M-C2, and that is a departure from the milestone list I was given.** It was
+placed after the layout rule; it belongs at the first milestone that adds a control a planner can
+reach, which is ADR-0081's rule rather than a preference. M-C2 adds the dock strip — a genuinely new
+affordance with a new entry point — **and its content is an offer to press `Arrange`**, so its
+journey must press `Arrange` to be worth anything. That is exactly what `docs/TECH_DEBT.md` #363 says
+a journey has to cover: the "nothing to move" early return, a plan where rows genuinely change, the
+count in the confirmation matching the rows written, the pen gate, and **undo restoring the prior
+lanes**. So **#363 closes at M-C2 rather than at the end**, and M-C4 extends that journey rather than
+creating one.
 
-**If CQ-C1 declines the layout rule, M-C2 does not happen and #363 stays open.** That is stated so a
-cancelled milestone does not silently take a filed obligation with it.
+M-C1 and M-C3 add no entry point and no capability: they change where an existing line is drawn,
+inside an `aria-hidden` Canvas 2D bitmap Playwright cannot read — the reasoning `m0-measurement.md`
+already recorded for Part A's M1, with the committed probe as the instrument that _can_ see it.
+
+**If CQ-C1 declines the layout rule, M-C4 does not happen — and #363 is already closed**, which is
+the practical gain from moving the journey. The first draft of this section had the obligation dying
+with a cancellable milestone.
 
 ### 4.9 Is this architecturally significant?
 
