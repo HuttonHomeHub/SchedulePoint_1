@@ -146,26 +146,29 @@ literally about the one quantity nothing here has ever measured. Designing a rem
 proxies would be measuring the thing we can measure rather than the thing that was reported — which
 is `docs/TECH_DEBT.md` #323's recorded failure, twice, on the neighbouring surface.
 
-### 0.5 #364 may have made crossings WORSE while making the diagram shorter — and nothing measured it
+### 0.5 Compressing the diagram may cost crossings — a HEADLINE measured configuration, not a note
 
-This is a hypothesis with a test, stated as one. It is the leading candidate explanation for why the
-complaint arrives **now**, one release after a change that was measured as an unambiguous win.
+12 rows against 27 is not background any more. §0.1 establishes that the product owner is at **27**
+and that 12 is what one press of `Arrange` with the band on already buys — so "should the diagram be
+compressed?" is a **live question this part is about to answer twice**, once by flipping the band
+(§4.7a) and once by spending rows on the layout rule. Both push in opposite directions and **only one
+side of that trade has ever been measured.**
 
-`web-v0.140.1` took Unit 300's drawn extent from 27 rows to 12 (§0.1) and left the link count
-unchanged at 188. Rows are separated by gutters, and a routed corridor's horizontal leg lives in
-one: 27 rows offer 26 inter-lane gutters, 12 rows offer 11. **The same 188 relationships now pass
-through 42 % as many gutters** — a ×2.4 increase in corridor traffic per gutter if it is anywhere
-near uniformly distributed. The `>5-lane` count fell 14 → 11, but those 11 links now span more than
-five of **twelve** rows rather than five of twenty-seven: each one crosses more than 40 % of the
-whole diagram's height.
+The arithmetic that makes it a question: 188 relationships are unchanged whichever packing runs, but
+27 rows offer 26 inter-lane gutters and 12 offer 11, and a routed corridor's horizontal leg lives in
+one. **The same links pass through 42 % as many gutters** — a ×2.4 increase in corridor traffic per
+gutter if it is anywhere near uniform. The `>5-lane` count falls 14 → 11, and those 11 then span more
+than five of **twelve** rows rather than five of twenty-seven: each crosses more than 40 % of the
+whole diagram's height rather than 19 %.
 
 Nothing in `cheap-levers.md` or `m2-verdict.md` measured density, because neither had a pairwise
-metric. **The test is M-C0's first run:** the crossing metric against `web-v0.140.0`'s layout
-(27 rows) and `web-v0.140.1`'s (12 rows) on the same plan at the same framing. If crossings-per-link
-rose, that is a finding about a shipped change and belongs in the register whatever this epic
-decides to build. **It is not an argument for reverting #364** — those 15 rows painted nothing at
-all, which is a separate and settled defect — it is an argument that height and legibility are being
-traded against each other and only one side of that trade has ever been measured.
+metric (§0.4). **M-C0-T3 measures all four configurations of §0.1's table** — band on and off, packed
+and un-packed — on crossings per link, and it is a **headline result** because it decides whether
+compressing the diagram helps or hurts the thing the product owner actually complained about.
+
+**It is not an argument for reverting #364** — those 13 rows paint nothing at all, which is a
+separate and settled defect — and it is not, on its own, an argument against flipping the band. It is
+the measurement that has to exist before either is claimed as an improvement.
 
 ### 0.6 The bundler can move a corridor across links, and its safety check cannot see that
 
@@ -227,10 +230,10 @@ rather than a footnote.**
 
 **The minimap's lane axis.** `minimapViewport` sets `pxPerLane = box.height / laneCount`
 (`render/minimap.ts:203-217`) over a `MINIMAP_BOX` of **200 × 120** (`TsldMinimap.tsx:43`), fed
-`sceneRef.current.activities` (`TsldCanvas.tsx:1928-1932`), which is `wbsBand.sceneActivities`. So
-Unit 300's minimap is **120 / 12 = 10 px per lane** today — comfortable. At 45 rows it is 2.7 px; at
-120 rows it is 1 px and every bar is floored (`MinimapRect`'s `h` is floored at 1 px,
-`minimap.ts:278`).
+`sceneRef.current.activities` (`TsldCanvas.tsx:1928-1932`), which is `wbsBand.sceneActivities`.
+**In the configuration the reader is in** (§0.1 — band off, 27 lanes) that is `120 / 27 = 4.4 px per
+lane`; band-on-after-Arrange it is `120 / 12 = 10 px`. At 45 rows it is 2.7 px; at 120 rows it is
+1 px and every bar is floored (`MinimapRect`'s `h` is floored at 1 px, `minimap.ts:278`).
 
 `docs/TECH_DEBT.md` **#323** measured the lane axis and concluded the **day** axis is the dominant
 term, with _"map by occupied-lane rank"_ withdrawn because `packLanes` structurally never leaves an
@@ -445,7 +448,38 @@ Seven falsification conditions, §4.10, committed **in their own commit before a
 >
 > - **Given** any of: opening a plan, importing a plan, a recalculation, a refetch, or a window
 >   resize, **when** the new objective exists, **then** **no** lane changes. The only writer is the
->   `Arrange` confirm path (`TsldPanel.tsx:2236-2255`).
+>   `Arrange` confirm path (`TsldPanel.tsx:2236-2255`). **The derived band default (§4.7a) reads that
+>   predicate and writes nothing**, which is what keeps this story true.
+
+> **US-6** — As a **Planner who has just imported a programme**, I want to be told in one line that
+> the diagram can be made shorter and by how much, so that I do not have to know a command exists to
+> get the picture the product can already draw.
+>
+> **Acceptance criteria**
+>
+> - **Given** a plan whose lanes are not what the scene-first rule would produce, **when** the plan
+>   opens and the reader can press `Arrange`, **then** the dock shows one strip stating the resulting
+>   row count against the current one, with an `Arrange` action and a `Dismiss`.
+> - **Given** the strip is shown, **then** the canvas loses **0 px** (ADR-0092's docked guarantee,
+>   asserted as an equality, not a bound).
+> - **Given** `Arrange` is taken from the strip, **when** the write succeeds, **then** the strip is
+>   gone because its predicate is, and the band comes on — no separate dismissal, no stored flag.
+> - **Given** `Dismiss`, **then** the strip is gone for that plan for that session and **`Arrange`
+>   remains on the command strip** — declining never removes the only route to the behaviour.
+> - **Given** a reader who cannot press `Arrange` (role or pen), **then** **no strip renders at all**
+>   (§4.7a), and the diagram is exactly what it is today.
+
+> **US-7** — As **any reader of a plan nobody has re-arranged**, I want the diagram not to show rows
+> with nothing in them, so that the picture is not worse than it was before the band existed.
+>
+> **Acceptance criteria**
+>
+> - **Given** an imported, never-arranged plan, **when** it opens, **then** the count of rows inside
+>   the drawn extent holding no painted bar is **0**, at every role.
+> - **Given** a plan whose lanes are scene-first, **when** it opens, **then** the band is **on** by
+>   default and the drawn extent is the compact one.
+> - **Given** either case, **when** the reader toggles the band by hand, **then** their choice stands
+>   for the rest of that plan's session and is **not** re-derived under them.
 
 ### 2.2 Workflows
 
@@ -466,20 +500,25 @@ CQ-C3.
 
 ### 2.3 Edge cases
 
-| Case                         | Expected behaviour                                                                                                                                                                          |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Plan never recalculated      | No `earlyStart` ⇒ no `PackItem` ⇒ nothing moves (`arrange-lanes.ts:67-77`).                                                                                                                 |
-| Zero dependencies            | Byte-identical to today. No chains exist.                                                                                                                                                   |
-| One activity                 | One row; every objective agrees.                                                                                                                                                            |
-| A predecessor not yet placed | Only **placed** predecessors steer (`pack-lanes.ts:94-109`). Any new objective must keep that, or the result becomes order-dependent and FC-C5 fails.                                       |
-| A cycle in `predecessorsOf`  | Impossible in the product (ADR-0021), but the packer is pure and has no right to assume its caller: it must terminate on any input.                                                         |
-| WBS band **off**             | `sceneActivities` is `activities` by identity (`arrange-lanes.ts:19-24`), so the split degenerates to one pack. The objective must not change that.                                         |
-| WBS band **on**              | Summaries are appended above the scene and are never dependency endpoints (ADR-0038), so the objective is inert for them — as the hint already is (`arrange-lanes.ts:115-116`).             |
-| Two links share a bar edge   | They converge by design (fan-out, `computeEdgeFanOut`). **Not a crossing** — the metric must exclude shared endpoints (§4.5).                                                               |
-| A bundled trunk              | Collinear overlap by design (ADR-0065 M3). **Not a crossing** — counting a trunk of `n` corridors as `n(n−1)/2` crossings would report the shipped bundler as the product's worst offender. |
-| Guest share view             | Read-only; inherits the picture; no payload change.                                                                                                                                         |
-| Gantt view                   | Uses neither `packLanes` nor `routeOrthogonal`; one bar per row. **Structurally out of reach** — established by reading at `m0-measurement.md` M0-T6, not assumed.                          |
-| Minimap                      | Sees the new row count through `worldExtent`. §0.8; FC-C7's second limb.                                                                                                                    |
+| Case                                     | Expected behaviour                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan never recalculated                  | No `earlyStart` ⇒ no `PackItem` ⇒ nothing moves (`arrange-lanes.ts:67-77`).                                                                                                                 |
+| Zero dependencies                        | Byte-identical to today. No chains exist.                                                                                                                                                   |
+| One activity                             | One row; every objective agrees.                                                                                                                                                            |
+| A predecessor not yet placed             | Only **placed** predecessors steer (`pack-lanes.ts:94-109`). Any new objective must keep that, or the result becomes order-dependent and FC-C5 fails.                                       |
+| A cycle in `predecessorsOf`              | Impossible in the product (ADR-0021), but the packer is pure and has no right to assume its caller: it must terminate on any input.                                                         |
+| WBS band **off**                         | `sceneActivities` is `activities` by identity (`arrange-lanes.ts:19-24`), so the split degenerates to one pack. The objective must not change that.                                         |
+| WBS band **on**                          | Summaries are appended above the scene and are never dependency endpoints (ADR-0038), so the objective is inert for them — as the hint already is (`arrange-lanes.ts:115-116`).             |
+| Two links share a bar edge               | They converge by design (fan-out, `computeEdgeFanOut`). **Not a crossing** — the metric must exclude shared endpoints (§4.5).                                                               |
+| A bundled trunk                          | Collinear overlap by design (ADR-0065 M3). **Not a crossing** — counting a trunk of `n` corridors as `n(n−1)/2` crossings would report the shipped bundler as the product's worst offender. |
+| **Band default, never-arranged plan**    | Defaults **off** — the predicate is non-empty — so no blank rows, at every role (§4.7a).                                                                                                    |
+| **Band default, arranged plan**          | Defaults **on**; the drawn extent is the compact one; no strip, because there is nothing to offer.                                                                                          |
+| **Reader toggles the band by hand**      | Their choice stands for the session. The derivation seeds **once per plan id** and never re-fires — the ADR-0070 M6 stale-seed trap.                                                        |
+| **Viewer / Contributor without the pen** | **No strip** (ADR-0082's omit clause: its whole content is an offer to press a command they cannot press) and no blank rows, because the band defaulted off.                                |
+| **Plan with no summaries at all**        | `bandItems` is empty, so `computeLaneArrangement` returns the plain pack and the predicate behaves exactly as band-off. Nothing new fires.                                                  |
+| Guest share view                         | Read-only; inherits the picture; no payload change. The strip cannot render there — the share view does not mount the `Arrange` path at all.                                                |
+| Gantt view                               | Uses neither `packLanes` nor `routeOrthogonal`; one bar per row. **Structurally out of reach** — established by reading at `m0-measurement.md` M0-T6, not assumed.                          |
+| Minimap                                  | Sees the new row count through `worldExtent`. §0.8; FC-C7's second limb.                                                                                                                    |
 
 ### 2.4 Permissions
 
@@ -557,8 +596,12 @@ cannot honestly be asked before M-C0 returns numbers and pictures.
 - **Real browser** — the unit tier is jsdom: no layout, no canvas, no colour resolution. Three of
   this register's canvas defects were invisible to it (ADR-0100 M4, ADR-0102, ADR-0121). The gutter's
   _picture_ is judged from a rendered image, not from arithmetic.
-- **Journey** — M-C4, which also closes `docs/TECH_DEBT.md` **#363**. See §4.8 for why it lands at
-  M-C2 and not at M-C1.
+- **Journey** — **M-C2**, which also closes `docs/TECH_DEBT.md` **#363**. See §4.8 for why it lands
+  there rather than at the end, and why that is a departure from the milestone list I was handed.
+- **The band default is pinned by nothing today** (§0.9), and the three band suites set the toggle
+  explicitly so none of them would fail if the flip were wrong. A case asserting the default **as a
+  fact** lands with it, plus a structural test that `DEFAULT_VIEW_TOGGLES.wbsBand` and the panel's
+  fallback resolve to one value.
 - **a11y** — `a11y.ts` speaks the lane number, so a repack changes what every moved row announces.
   The ADR-0063 §4 invariant (the count of AT-reachable activities does not change across a repack)
   is asserted, not assumed.
@@ -802,12 +845,14 @@ invariant. Raising the pitch moves all four the safe way and is one constant.
 committed probe value is **857** (`vhv-gutter-probe.ts:198-206`), which omits the foot row, so the
 real figure is nearer **816**. Both are given; M-C0 measures the live one.
 
-| `LANE_HEIGHT` | gutter | half-gutter | summary-tab clearance | visible rows @857 | Unit 300 today (12 rows) |     at 45 rows |
-| ------------: | -----: | ----------: | --------------------: | ----------------: | -----------------------: | -------------: |
-|  **28** today |     10 |           5 |                  1 px |              30.6 |    336 px (0.39 screens) | 1260 px (1.47) |
-|            32 |     14 |           7 |                  3 px |              26.8 |            384 px (0.45) | 1440 px (1.68) |
-|            34 |     16 |           8 |                  4 px |              25.2 |            408 px (0.48) | 1530 px (1.79) |
-|            36 |     18 |           9 |                  5 px |              23.8 |            432 px (0.50) | 1620 px (1.89) |
+| `LANE_HEIGHT` | gutter | half-gutter | summary-tab clearance | visible rows @857 | **Unit 300 as the reader has it (27 rows)** | after Arrange, band on (12 rows) |     at 45 rows |
+| ------------: | -----: | ----------: | --------------------: | ----------------: | ------------------------------------------: | -------------------------------: | -------------: |
+|  **28** today |     10 |           5 |                  1 px |              30.6 |                   **756 px (0.93 screens)** |            336 px (0.41 screens) | 1260 px (1.54) |
+|            32 |     14 |           7 |                  3 px |              26.8 |   864 px (1.06 — **wraps past one screen**) |                    384 px (0.47) | 1440 px (1.76) |
+|            34 |     16 |           8 |                  4 px |              25.2 |                               918 px (1.13) |                    408 px (0.50) | 1530 px (1.88) |
+|            36 |     18 |           9 |                  5 px |              23.8 |                               972 px (1.19) |                    432 px (0.53) | 1620 px (1.99) |
+
+Screens are against the ~816 px canvas at 1646 × 1097.
 
 **The candidate set is {28 (control), 32, 34, 36} and no value is proposed ahead of the picture.**
 ADR-0142 D4 is the rule: a remedy is measured before it is built, and an approved action is a claim
@@ -815,10 +860,14 @@ that it will work. This register has **seven** consecutive layout epics whose he
 expectation was contradicted by their own measurement, all in the same direction — and the eighth
 has no reason to resolve in my favour.
 
-Note what the table says about the gutter **on its own**: at Unit 300's present 12 rows, going to 36
-costs **96 px** on a canvas of ~816 and the diagram still occupies half of it. The gutter is nearly
-free today; it stops being free only in combination with a row-spending layout, which is why the two
-are measured together and shipped separately.
+**The gutter is NOT the nearly-free change this spec's first draft called it, and that is §0.1's
+correction landing here.** It read "96 px on a ~816 px canvas, and the diagram still occupies half of
+it" — true of the 12-row configuration, and the reader is in the 27-row one, where the diagram
+already fills **93 %** of the canvas and **any** pitch increase pushes it past one screen. So the
+gutter's cost and the band work interact: on a plan M-C2 has made compact, 36 px is comfortable; on
+a plan nobody has re-arranged, it is the difference between fitting and not. M-C0 measures the pitch
+candidates **in both configurations** for that reason, and the choice may legitimately be "34 after
+M-C2 lands, 28 before it".
 
 ### 4.7 `packLanes` is shared with the importer — how the tension is resolved
 
@@ -978,9 +1027,19 @@ with a cancellable milestone.
 
 **M-C1 (the gutter) — no ADR.** One constant, with a gate and a re-baselined golden log. It goes in
 `docs/DECISIONS.md`. (The _spec_ exists because ADR-0105's triggers fire on the Playwright config and
-CI step at M-C4, not because the gutter is large.)
+CI step at M-C2, not because the gutter is large.)
 
-**M-C2 (the layout rule) — yes, and it is this part's main ADR.** Five reasons, four of them the
+**M-C2 (the band default + the Arrange offer) — yes, and the trigger is ADR-0105's, not size.** It
+adds a **new user-facing entry point** (the dock strip) and a **new Playwright config and CI step**,
+either of which fires ADR-0105 on its own. Beyond that it makes two decisions a later reader must not
+have to reconstruct: that a **default may be derived from plan data** rather than being a constant,
+which nothing else in `TsldViewToggles` does; and that **the remedy for a permission-gated defect is
+to withhold the defect rather than to offer a remedy the reader cannot take** (§4.7a). Whether that
+is its own ADR or a section of M-C4's is decided at the milestone — but it is **not** a
+`docs/DECISIONS.md` line, because the derived default is a mechanism and the register's rule is that
+a mechanism with a reason outlives the epic that needed it.
+
+**M-C4 (the layout rule) — yes, and it is this part's main ADR.** Five reasons, four of them the
 existing spec's §4.7 and the fifth new:
 
 1. it changes the **objective function of a shared pure package** consumed from two applications;
@@ -989,9 +1048,11 @@ existing spec's §4.7 and the fifth new:
 4. it changes what a planner's diagram looks like after one button press;
 5. **it deliberately diverges the `Arrange` picture from the import picture** — ADR-0069's subject —
    and ADR-0065/0069/0121's shared rule is that an unexplained divergence is the thing to refuse. The
-   explanation belongs in an ADR or it does not exist.
+   explanation belongs in an ADR or it does not exist. **The product owner has now chosen how that
+   divergence is paid for** (CQ-C3: the offer, not a second objective), so the ADR records the
+   decision rather than posing it.
 
-**M-C3 (the crossing-aware router) — probably folds into the same ADR.** It amends ADR-0064 M2 and
+**M-C3 (the crossing-aware router) — probably folds into M-C4's ADR.** It amends ADR-0064 M2 and
 ADR-0065 by adding a second obstacle class to a bounded search. The discriminator is stated rather
 than left to judgement: it needs its own ADR if it changes the **bounded-work contract**
 (`link-routing.ts:218-220`) or the bundler's safety rule (§0.6); it folds in if it is one more term in
@@ -1083,11 +1144,36 @@ is byte-identical, point for point — the existing obstacle parameter's own par
   owner has accepted it (CQ-C2). **Measured at `devicePixelRatio = 1.75`, their own display, and not
   at 1** — the raster is `size × dpr`, so the CSS-px headroom is 1.75× smaller than the constant
   suggests (§0.8).
-- **Minimap.** `pxPerLane` at the chosen candidate on Unit 300 is measured and reported against
-  today's 10 px, with a rendered pair.
+- **Minimap.** `pxPerLane` at the chosen candidate on Unit 300 is measured and reported against the
+  baseline **in the configuration the reader is in** — 27 lanes, i.e. `120 / 27 = 4.4 px per lane`,
+  not the 10 px this spec's first draft quoted from the band-on-after-Arrange case (§0.1). A rendered
+  pair accompanies it.
   **Withdrawal clause.** If either is judged unacceptable, the remedy is **not** a row cap on the
   packer — the product owner removed that constraint deliberately — but a cap **in the export**, or a
   minimap change, each of which is its own scope and is filed rather than smuggled in.
+
+**FC-C8 — the derived band default is correct, cheap, and pinned.**
+Three limbs, because §4.7a's design fails differently in three ways and one assertion would hide two
+of them.
+
+- **Correctness.** On a plan whose lanes are scene-first, the band defaults **on** and the drawn
+  extent contains **no blank row**; on a plan whose lanes are not, it defaults **off**. Asserted as
+  the predicate's two branches, **verified red** against a default that ignores the predicate — which
+  is the shipped-today behaviour, so the red run is free to produce.
+- **The blank-row defect is unreachable.** On an imported, never-arranged plan, at every role, the
+  count of drawn-extent rows holding no painted bar is **0**. **Verified red against the
+  unconditional flip** — the alternative §4.7a rejects — which must produce 13 on Unit 300, or the
+  measurement is not discriminating between the two designs.
+- **Cost.** Deriving the default runs `packLanes` once per plan load. At `scale-2000` (2,160
+  activities) the derivation completes within **16 ms**, one frame, measured rather than asserted.
+  **Withdrawal clause.** Over budget, the derivation moves behind the existing on-demand path and the
+  default falls back to **off** with the strip still offered — which is strictly today's behaviour
+  plus an offer, and is therefore always available as the safe landing.
+
+**And one thing FC-C8 deliberately does not assert**, stated so its absence is a decision: that a
+planner's _manual_ toggle survives a refetch. It does not, and cannot — toggles are `useState`
+(§0.9) — so seeding once per plan id is the whole of the contract and anything stronger would be a
+persistence feature nobody has asked for.
 
 ### 4.11 Database changes
 
@@ -1102,15 +1188,19 @@ import pipeline keep their contracts exactly, and `apps/api` contributes zero fi
 
 ### 4.13 Component changes
 
-| Component                              | Change                                                                       | States                    |
-| -------------------------------------- | ---------------------------------------------------------------------------- | ------------------------- |
-| `render/geometry.ts`                   | `LANE_HEIGHT` (M-C1), if FC-C3 passes.                                       | — (pure)                  |
-| `render/link-routing.ts`               | One optional crossing parameter on `routeOrthogonal` (M-C3, conditional).    | — (pure)                  |
-| `packages/layout/src/pack-lanes.ts`    | One optional objective parameter (M-C2, conditional).                        | — (pure)                  |
-| `features/tsld/model/arrange-lanes.ts` | Passes the objective. The **only** site that does.                           | — (pure)                  |
-| `TsldPanel.tsx` confirm dialog         | States the row cost; drops "the fewest lanes" in **both** branches.          | pending / error unchanged |
-| `apps/web/scripts/`                    | The crossing harness + probe; the candidate chooser (deleted at M-C0's end). | —                         |
-| `apps/web/e2e-arrange/`                | The first journey ever to press `Arrange` (M-C4).                            | —                         |
+| Component                              | Change                                                                       | States                       |
+| -------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------- |
+| `render/geometry.ts`                   | `LANE_HEIGHT` (M-C1), if FC-C3 passes.                                       | — (pure)                     |
+| `render/view-toggles.ts`               | `DEFAULT_VIEW_TOGGLES` gains `wbsBand` — the **one literal** (M-C2).         | — (pure)                     |
+| `TsldPanel.tsx` band derivation        | `?? false` reads the shared constant; the seed runs once per plan id (M-C2). | seeded / user-owned          |
+| `features/tsld/model/dock-strip.ts`    | A fifth `DockStrip` member, last in precedence (M-C2).                       | — (pure)                     |
+| The dock strip component               | "Arrange would use N rows instead of M" + `Arrange` + `Dismiss` (M-C2).      | offered / dismissed / absent |
+| `render/link-routing.ts`               | One optional crossing parameter on `routeOrthogonal` (M-C3, conditional).    | — (pure)                     |
+| `packages/layout/src/pack-lanes.ts`    | One optional objective parameter (M-C4, conditional).                        | — (pure)                     |
+| `features/tsld/model/arrange-lanes.ts` | Passes the objective. The **only** site that does.                           | — (pure)                     |
+| `TsldPanel.tsx` confirm dialog         | States the row cost; drops "the fewest lanes" in **both** branches (M-C4).   | pending / error unchanged    |
+| `apps/web/scripts/`                    | The crossing harness + probe; the candidate chooser (deleted at M-C0's end). | —                            |
+| `apps/web/e2e-arrange/`                | The strip, the band default, and the first press of `Arrange` (M-C2).        | —                            |
 
 No design-system component changes; no new UI primitive; no new colour value; no one-off styling.
 
@@ -1124,10 +1214,14 @@ maintained forever, not a rollback).
 The rollback is a **commit boundary**, and each slice is shaped to make that real:
 
 - **M-C1** is one constant plus a re-baselined golden log — one revert.
-- **M-C2**'s objective is an optional parameter whose absence is byte-identical, so "revert" is also
-  "stop passing it at the one call site", which is a one-line change.
+- **M-C2** is one predicate and one dock strip. Reverting the predicate returns the default to `false`
+  and reverting the strip removes an advisory — neither leaves a half-state, which matters because
+  reverting **only** the predicate while keeping the flip is the one combination that ships the
+  defect (§4.7a), and the two live in one commit so that combination is not reachable by a revert.
 - **M-C3**'s crossing parameter is the same shape as the existing obstacle parameter, whose absence is
   already the documented parity gate.
+- **M-C4**'s objective is an optional parameter whose absence is byte-identical, so "revert" is also
+  "stop passing it at the one call site", which is a one-line change.
 
 ---
 
@@ -1139,40 +1233,50 @@ The rollback is a **commit boundary**, and each slice is shaped to make that rea
 - Part A/B measurements: [`./m0-measurement.md`](./m0-measurement.md) ·
   [`./m2-verdict.md`](./m2-verdict.md) · [`./cheap-levers.md`](./cheap-levers.md)
 - **This part's plan:** [`./part-c-implementation-plan.md`](./part-c-implementation-plan.md)
-- Docs this change will update: `docs/DECISIONS.md` (M-C1), `docs/TECH_DEBT.md` (#363 closed by
-  M-C4; a reading added to #75; #323's lane-axis measurement re-opened; a new row if §0.5's
-  hypothesis holds), `docs/adr/` (M-C2's ADR and `docs/adr/README.md`), **`CLAUDE.md` §16** (the
-  register entry, which ADR-0147's gate refuses to let land separately), `docs/TESTING.md`,
-  `.github/workflows/ci.yml`, `scripts/ci-roster.json` and the e2e duration roster (M-C4's step —
+- Docs this change will update: `docs/DECISIONS.md` (M-C1), `docs/TECH_DEBT.md` (**#363 closed by
+  M-C2**; a reading added to #75; #323's lane-axis measurement re-opened; **two new rows CQ-C2 asked
+  for** — the export raster and the minimap lane axis; a third if §0.5 holds), `docs/adr/` (M-C4's
+  ADR, M-C2's ADR-or-section per §4.9, and `docs/adr/README.md`), **`CLAUDE.md` §16** (the register
+  entry, which ADR-0147's gate refuses to let land separately), `docs/TESTING.md`,
+  `.github/workflows/ci.yml`, `scripts/ci-roster.json` and the e2e duration roster (**M-C2's step** —
   ADR-0136 and ADR-0138 both refuse otherwise).
 
 ---
 
 ## 6. Open questions
 
-**CQ-C1 — CRITICAL, and deferred by construction — which layout rule, at what height?**
-The product owner explicitly reserved this: _"measure all three first … with before/after pictures,
-and they will pick."_ It cannot honestly be asked now because nobody has the numbers or the pictures.
-M-C0 produces both; **gate M-C2-G stops the work until they answer.**
-**Default if declined:** the layout rule is withdrawn (no objective change), the epic finishes at the
-gutter and, if it earned its place, the router. That default is deliberately the conservative one.
+### Answered 2026-09-22 — recorded, not deleted
 
-**CQ-C2 — CRITICAL — the export raster and the minimap are two places where "I'm happy to pan" does
-not apply.** §0.8. A diagram taller than **~160 rows on their own display** (8192 raster px ÷ their
-`devicePixelRatio` of 1.75, less the bands) is silently down-sampled in the PNG, the PDF and the
-printed programme; and the minimap's lane axis compresses linearly with the row count, from today's
-comfortable 10 px per lane on Unit 300. Neither was in front of the product owner when they removed
-the height ceiling, and the first figure is 1.75× nearer than the constant makes it look.
-**Default if unanswered:** ship, report the measured figures, do **not** cap rows in the packer, and
-file both as register rows with their numbers.
+**CQ-C1 — still deferred by construction, and it is the only one left open.** _"Measure all three
+first, with before/after pictures, and I will pick."_ M-C0 produces both; **gate M-C4-G stops the
+work until they answer.** (The gate was M-C2-G in the first draft; the layout rule is M-C4 now.)
+**Default if declined:** the layout rule is withdrawn, and the part finishes at the gutter, the band
+work and — if it earned its place — the router.
 
-**CQ-C3 — CRITICAL — the importer keeps the lane-minimal objective, so an imported programme opens
-worse than the same plan one press later.** That follows directly from the approved scope
-("Arrange button ONLY") and from ADR-0148, and it is a real cost: ADR-0069 exists _because_ an
-imported programme's first picture is a planner's first impression of a schedule they already know.
-**Default if unanswered:** accept the divergence, record it and its argument **in the ADR** (an
-unexplained divergence is what ADR-0065/0069/0121 all refuse), and file "offer `Arrange` after an
-import" as a candidate rather than building it.
+**CQ-C2 — ANSWERED: ship, report, file both.** Proceed; measure the real export and minimap figures;
+raise both as their own `docs/TECH_DEBT.md` rows. **Do not cap rows in the packer.** FC-C7 keeps its
+withdrawal clause pointing at the export and the minimap rather than at the packer, which is now the
+decision rather than the default.
+
+**CQ-C3 — ANSWERED, with a third option I had not offered: _offer `Arrange` after an import._** The
+import stays **byte-identical** (`packLanes` unchanged at `interchange.service.ts:1096`) and the cost
+of the divergence is paid by a one-press offer that states the row cost. §4.7a designs it — and
+records the two structural findings that moved it off the surface the answer named: **the import
+report is pre-commit** so it cannot know the row count, and **the dialog closes and navigates on
+success** so there is no post-commit report to hang it on (§0.10). It lands in the canvas dock
+instead, on the screen the `navigate` arrives at.
+
+**CQ-C4 — NEW, CRITICAL, and it is a named departure from an instruction.** The band default was
+asked for as **on**. §4.7a ships it as **derived** — on where the plan's lanes already support it,
+off where they do not, with the offer in between — because the literal flip exposes 364 px of blank
+rows on every load to **every reader who cannot press `Arrange`**, which is Viewers, Contributors
+without the lock, and guests (§0.9 point 3), and toggles are not persisted so they cannot opt out.
+The four alternatives are costed in §4.7a and the unconditional flip is the only one that ships a
+defect.
+**What is being asked:** confirm the derived default, or overrule it and accept that a Viewer meets
+the blank rows until a Planner presses `Arrange` on that plan.
+**Default if unanswered:** the derived default, because it is the only option under which no reader
+meets the defect at all, and it delivers the 420 px everywhere it is correct to deliver it.
 
 **Defaults stated rather than asked — no answer needed:**
 

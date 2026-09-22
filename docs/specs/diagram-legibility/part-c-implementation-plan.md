@@ -5,24 +5,28 @@
 - **Status:** Draft — awaiting approval before implementation
 - **Owner:** web
 
-> **Read §0 of the spec first.** Two claims the brief carried are stale, one of which
-> ([§0.1](./part-c-feature-spec.md)) invalidates every height figure in the epic's own measurement
-> file; four things nobody had reported were found. Three of them change this plan's shape: the
-> complaint has changed quantity (§0.4), no instrument here measures the new one (§4.5), and
-> `web-v0.140.1` may have made it worse while measurably improving something else (§0.5).
+> **Read §0 of the spec first.** Six things change this plan's shape. The complaint has changed
+> quantity (§0.4) and **no instrument here measures the new one** (§4.5). **Every figure in the
+> epic's measurement files needs its configuration attached** — §0.1 records this spec's own first
+> draft getting that wrong, and is kept in place because the way it was wrong is the failure the
+> whole section is about. Compressing the diagram may cost crossings, which is now a headline
+> measurement rather than a note (§0.5). The band default cannot simply be flipped, because the
+> defect it exposes is clearable only with a permission most readers lack (§0.9). And the import
+> report is **pre-commit**, so the offer CQ-C3's answer asks for cannot live there (§0.10).
 
 ## Breakdown
 
 ```mermaid
 flowchart LR
   E["Part C"] --> M0["M-C0 · Measure<br/>DARK · can say NO"]
-  M0 --> G1{"CQ-C1<br/>product owner picks"}
   M0 --> M1["M-C1 · The gutter<br/>(if FC-C3)"]
-  G1 -->|"a rule"| M2["M-C2 · The layout rule<br/>+ ADR"]
-  G1 -->|"declined"| SKIP["withdrawn — recorded<br/>as a withdrawal, not a deferral"]
+  M0 --> M2["M-C2 · Band default + Arrange offer<br/>+ the journey · closes #363"]
   M0 --> M3["M-C3 · Crossing-aware router<br/>(if it earns its cost)"]
-  M2 --> M4["M-C4 · The Arrange journey<br/>closes #363"]
+  M0 --> G1{"CQ-C1<br/>product owner picks"}
+  G1 -->|"a rule"| M4["M-C4 · The layout rule<br/>+ ADR · extends M-C2's journey"]
+  G1 -->|"declined"| SKIP["withdrawn — a withdrawal,<br/>not a deferral. #363 already closed"]
   M1 --> M5
+  M2 --> M5
   M3 --> M5
   M4 --> M5["M-C5 · Gate pass"]
 ```
@@ -30,22 +34,30 @@ flowchart LR
 ### Epic
 
 **Part C of `diagram-legibility`** — make the TSLD's logic lines cross rarely, at whatever vertical
-cost reads best, by measuring three candidate rules and a gutter change against a metric that does
-not yet exist, and letting the product owner pick from numbers and pictures.
+cost reads best; deliver the 420 px #364 already earned and has never shipped; and let the product
+owner pick the layout rule from numbers and pictures.
 
-**On the ordering, and it is not the obvious one.** The instinct is to build the layout rule first —
-it is the headline. It goes **last of the three product changes**, because:
+**On the ordering — the router now precedes the layout rule, and that follows this plan's own
+rationale rather than overruling it.** The first draft numbered the layout rule M-C2 and the router
+M-C3 while arguing in the same paragraph that the layout rule should go last. The argument was right
+and the numbering was not; they agree now.
 
-1. it is the only one that needs a decision nobody can make yet (CQ-C1) and an ADR;
-2. it is the only one that can be **withdrawn** on its own condition (FC-C2), and everything built
-   before a withdrawal is wasted — which is exactly the sequencing lesson Part A already paid for
-   and then profited from (`m0-measurement.md`: deferring M0-T4 _"would have been the largest single
-   piece of wasted work in the epic"_, and FC-2 then withdrew M3);
-3. the **gutter** is one constant and is nearly free today at Unit 300's 12 rows
-   (spec §4.6: 96 px on a ~816 px canvas), so it can ship alone and be judged alone;
-4. and the **router** is independent of both and composes with either, so measuring it first tells
-   the product owner how much of the complaint a change costing **no height at all** can absorb —
-   which is information they should have before being asked to spend height.
+1. The **layout rule goes last** because it is the only one needing a decision nobody can make yet
+   (CQ-C1) and an ADR, and the only one withdrawable on its own condition (FC-C2) — and everything
+   built before a withdrawal is wasted. That is the sequencing lesson Part A paid for and then
+   profited from (`m0-measurement.md`: deferring M0-T4 _"would have been the largest single piece of
+   wasted work in the epic"_, and FC-2 then withdrew M3).
+2. The **router goes before it** because it tells the product owner how much of the complaint a
+   change costing **no height at all** absorbs — information they should have _before_ being asked
+   to spend height. If it absorbs most of it, CQ-C1 becomes cheap.
+3. The **gutter** is one constant and ships alone. Note the corrected arithmetic: at the state the
+   reader is in it is 27 rows, not 12 (spec §0.1), so the diagram already fills ~93 % of the canvas
+   and the gutter is **not** the nearly-free change the first draft called it.
+4. **M-C2 is new and is inserted ahead of the router**, which departs from the milestone list I was
+   handed. Three reasons: nothing in this part gates it; it delivers #364's 420 px, which has never
+   reached a user (spec §0.1); and **its own content is an offer to press `Arrange`, so its journey
+   must press `Arrange`** — which is exactly `docs/TECH_DEBT.md` #363's content, so that row closes
+   at M-C2 rather than surviving to the end and dying with a milestone CQ-C1 can cancel.
 
 ---
 
@@ -121,25 +133,58 @@ only. Every candidate lives **behind the probe** and is deleted at the end.
   5. Run FC-C1. **If it fails, stop and replace the metric** — nothing else in this milestone is
      worth running.
 
-##### M-C0-T3 — Re-baseline on the tree the product owner is using
+##### M-C0-T3 — The four configurations, and which one the reader is in
 
-- **Description:** every figure this epic inherits describes `web-v0.140.0`. Re-run
-  `measure-lane-travel.mjs` and the new crossing harness against the released `web-v0.140.1` tree
-  and record the post-#364 baseline (spec §0.1).
-- **Complexity:** S · **Dependencies:** M-C0-T2
-- **Risks:** quoting `cheap-levers.md`'s 27 / 1.78 / 14 forward → those are pre-#364. The harness
-  prints the commit it ran against, and this task's output supersedes that table's "shipped" row
-  **in place** rather than beside it.
+- **Description:** measure spec §0.1's table directly — band on/off × packed/un-packed — on lanes,
+  drawn extent, mean |Δlane|, >5-lane links **and crossings per link**. This is a **headline result**,
+  not a baseline: it decides whether compressing the diagram helps or hurts the thing that was
+  actually complained about (spec §0.5).
+- **Complexity:** M · **Dependencies:** M-C0-T2
+- **Risks:**
+  - **Labelling a band-on-after-Arrange figure as "current"** — which this spec's first draft did,
+    and which is the whole reason this task exists in this shape. Every row names its configuration;
+    the harness prints which one it ran and the commit it ran against.
+  - Quoting `cheap-levers.md`'s 27 / 1.78 / 14 forward without its configuration → those are the
+    **band-off / packed** numbers and remain correct as such.
 - **Testing:** determinism — two runs agree exactly.
 - **Development steps:**
-  1. Re-run both harnesses on the released commit; record lanes, drawn extent, mean |Δlane|, >5-lane
-     links **and** crossings per link.
-  2. Withdraw `cheap-levers.md`'s CQ-4 note in place (spec §0.2) — the screenshot's plan **is** the
-     fixture, on the plan name and an exact 144 activity count.
-  3. **Test §0.5's hypothesis**: measure crossings per link on the pre-#364 layout (27 rows) and the
-     post-#364 layout (12 rows) on the same plan at the same framing. If density rose, file it as a
-     register row. **It is not an argument for reverting #364** — those 15 rows painted nothing — and
-     the row must say so.
+  1. Run all four configurations; label every figure with the one it came from.
+  2. **Judge spec §0.5**: does crossings-per-link rise as the diagram compresses 27 → 12? If it does,
+     file it as a register row. **It is not an argument for reverting #364** — those 13 rows paint
+     nothing at all — and the row must say so, and must not be read as an argument against the band
+     flip either.
+  3. Withdraw `cheap-levers.md`'s CQ-4 note in place (spec §0.2) — the screenshot's plan **is** the
+     fixture, on the plan name and an exact 144-activity count — and label that file's "shipped" row
+     with its configuration rather than leaving it to read as the current state.
+
+##### M-C0-T3a — Does a freshly imported plan report "already arranged"? (M-C2's predicate)
+
+- **Description:** M-C2's derived default rests on `computeArrangeChanges()` being **empty** exactly
+  when the lanes are already scene-first. Band **off**, an imported plan should report empty — the
+  importer ran the same `packLanes` with the same hint. **Established by running it, not by reading
+  it**, because two differences are visible in the code and neither is obviously inert.
+- **Complexity:** S · **Dependencies:** M-C0-T3
+- **Risks:** assuming equivalence → two known divergences: the importer derives day offsets as
+  `Math.round(getTime() / DAY_MS)` (`interchange.service.ts:1080-1081`) while `arrange-lanes.ts:73-74`
+  uses `daysBetween(dataDate, …)` (offset-invariant, so expected to be inert); and the importer
+  **skips** an activity whose `earlyFinish` is null (`:1075`) where `arrange-lanes` substitutes
+  `earlyStart` (`:74`) — so a milestone with no finish is packed by one and not the other. If that
+  makes the predicate non-empty on a fresh import band-off, the derived default still behaves
+  correctly (it would default the band off, which is safe) but the **strip would offer a press that
+  moves nothing**, which is a dead end.
+- **Testing:** run it on the Unit 300 import; report the change count in both band states.
+- **Development steps:** compute and print `computeArrangeChanges()` band-off and band-on on a
+  freshly imported plan; if band-off is non-empty, identify which activities move and why, and record
+  whether the strip's predicate needs the band-on form specifically.
+
+##### M-C0-T3b — The cost of deriving the default (FC-C8's third limb)
+
+- **Complexity:** S · **Dependencies:** M-C0-T3
+- **Risks:** shipping a per-load `packLanes` without a number → FC-C8 sets a one-frame (16 ms) bar at
+  `scale-2000` and names the fallback in advance.
+- **Testing:** the measurement is the deliverable.
+- **Development steps:** time the derivation at 540 and 2,160 activities; report against the 16 ms
+  bar; state which fallback fires if it is over.
 
 ##### M-C0-T4 — The three candidates, behind the probe
 
@@ -168,6 +213,9 @@ only. Every candidate lives **behind the probe** and is deleted at the end.
      `devicePixelRatio = 1.75`** — their own display, not 1. The raster is `size × dpr`
      (`use-diagram-image.ts:218`), so measuring at 1 overstates the headroom by 75 % and the first
      draft of the spec did exactly that (§0.8).
+     2a. Sweep the **four gutter candidates against BOTH the 27-row and the 12-row configurations**
+     (spec §4.6), because the pitch is comfortable in one and pushes past a screen in the other. A
+     single-configuration sweep is what produced the first draft's "the gutter is nearly free".
   3. Assert the control's identity with M-C0-T3 first.
   4. Delete the chooser at the end of the milestone.
 
@@ -217,7 +265,15 @@ questions are asked.
 
 ---
 
-## Milestone 1 — The gutter _(conditional on FC-C3)_
+## Milestone 1 — The gutter _(conditional on FC-C3, and it may follow M-C2)_
+
+> **The gutter interacts with the band work and the first draft said it did not.** Spec §4.6's
+> corrected table: in the state the reader is in (27 rows) Unit 300 already fills ~93 % of the
+> canvas, so **any** pitch increase pushes it past one screen — where on a plan M-C2 has made compact
+> (12 rows) a 36 px pitch is comfortable. M-C0 therefore measures the pitch candidates **in both
+> configurations**, and the answer may legitimately be "34 after M-C2, 28 before it". If it is, this
+> milestone ships **after** M-C2 rather than before it; the plan says so here rather than letting a
+> task order decide it silently.
 
 **Outcome:** two relationships passing between the same two rows can be told apart.
 **Entry point:** the **TSLD canvas itself**, plus the exported PNG/PDF and the printed diagram — no
@@ -300,102 +356,138 @@ so a journey here would assert something adjacent and prove nothing.
 
 ---
 
-## Milestone 2 — The layout rule _(conditional on CQ-C1 and FC-C2)_
+## Milestone 2 — The band default, the `Arrange` offer, and the journey
 
-**Outcome:** `Arrange` lays activities out so relationships rarely cross, at the vertical cost the
-product owner chose.
-**Entry point:** the **`Arrange`** command on the plan command strip (accessible name `Arrange`,
-description "Auto-arrange lanes", pen-gated, `tsld-toolbar-items.tsx:2917-2933`).
-**Journey:** **M-C4** — this milestone's behaviour change is the reason it exists, and it closes
-`docs/TECH_DEBT.md` #363.
+**Outcome:** #364's 420 px reaches a user for the first time, on every plan where it is correct to
+deliver it — and on the plans where it is not, the planner is told in one line what one press would
+buy. Closes `docs/TECH_DEBT.md` **#363**.
+**Entry point:** the **"Arrange now" strip in the canvas dock** on
+`/orgs/:slug/plans/:planId` — the screen an import's `navigate` lands on
+(`ImportScheduleDialog.tsx:163-170`) — plus the WBS band itself.
+**Journey:** `apps/web/e2e-arrange/` lands **here** (ADR-0081: the first milestone adding a control
+a planner can reach), and it is the first thing in this repository ever to press `Arrange`.
 
-> **Gate M-C2-G: this milestone does not start until (a) at least one candidate cleared FC-C2's
-> floor and (b) CQ-C1 has an answer.** A rule chosen by the implementer is the failure §19.3 and
-> ADR-0105 both describe, and the product owner reserved this decision in writing.
+> **This milestone exists because the flip cannot ship alone.** Defaulting the band on before a plan
+> is re-arranged shows **13 blank rows, 364 px**, on every load — and the only remedy is `Arrange`,
+> which is pen-gated, so a Viewer, a Contributor without the lock and a guest **cannot clear it at
+> all** (spec §0.9). The design is spec §4.7a: the default is **derived**, not flipped, and the dock
+> carries the offer to whoever can take it.
 
-#### Feature: M-C2-F1 — the ADR
+#### Feature: M-C2-F1 — the derived default
 
-> **Description:** five reasons this is ADR-level (spec §4.9), the fifth being that it **deliberately
-> diverges the `Arrange` picture from the import picture** — ADR-0069's subject — and an unexplained
-> divergence is what ADR-0065/0069/0121 all refuse.
-> **Complexity:** M · **Dependencies:** M-C2-G, CQ-C3
-> **Risks:** pinning a number early → take the next free one **at filing** (ADR-0079).
-> **Testing:** `pnpm check:adr-coverage` (the index **and** `ROADMAP.md`, both directions — ADR-0110
-> D6) and **ADR-0147's assertions over `CLAUDE.md` §16**, which refuse an ADR whose register entry
-> does not land in the same commit.
-
-##### M-C2-T1 — Write and file it
-
-- **Complexity:** M · **Dependencies:** M-C2-G
-- **Development steps:** problem, options (spec §4.4's table, including the rejected sibling packer,
-  the rejected second command and the rejected per-plan setting), decision, trade-offs, consequences;
-  **the parity sentence in its honest form** — `computeSchedule` not imported, not reachable, no
-  migration, therefore nothing to hold parity _for_ (ADR-0125 D1's strong claim, explicitly not
-  ADR-0116 D7's weaker sibling); file; index; write the **§16 register entry in the same commit**.
-
-#### Feature: M-C2-F2 — the objective
-
-> **Description:** one optional parameter of `packLanes`; absent ⇒ byte-identical; one call site
-> passes it.
-> **Complexity:** L · **Dependencies:** M-C2-T1
+> **Description:** `wbsBand` defaults on exactly when `computeArrangeChanges()` is empty — i.e. when
+> the plan's lanes already are what the scene-first rule would produce, so there are no blank rows
+> to expose.
+> **Complexity:** M · **Dependencies:** M-C0-T3 (which establishes the predicate's behaviour on a
+> freshly imported plan) · **CQ-C4** should be answered, but its default is this design.
 > **Risks:**
 >
-> - **Losing determinism** → a property test across input permutations (FC-C5).
-> - **Losing "only placed predecessors steer"** (`pack-lanes.ts:94-109`) → reaching for unplaced ones
->   makes the result order-dependent; pinned by the same property test.
-> - **A second packer appearing** → structurally refused: one function, one parameter, one call site
->   (spec §4.7).
-> - **The importer picking it up by accident** → a structural test asserts `interchange.service.ts`'s
->   call passes no objective, because the scope decision is "Arrange only" and nothing else enforces
->   it.
->   **Testing requirements:** unit + property + **both callers' existing suites passing unedited** —
->   an invariant you must touch to make room for your feature was never an invariant.
+> - **The two declarations drifting.** `DEFAULT_VIEW_TOGGLES` has **no `wbsBand` key** and the panel
+>   writes `?? false` (spec §0.9) → one literal in the constant, the panel's fallback reads it, and a
+>   structural test asserts they resolve to one value.
+> - **Re-deriving under the reader.** A continuously-derived default would flip the band on the
+>   instant `Arrange` succeeds and off again on the next hand-edit → seed **once per plan id**,
+>   guarded by a ref, fired when the activities first resolve rather than at mount. That is the
+>   `useDurationSeed` stale-seed trap ADR-0070 M6 records closing.
+> - **A default pinned by nothing.** The three band suites set the toggle explicitly, so **no
+>   existing test would fail if the flip were wrong** (spec §0.9).
+>   **Testing requirements:** FC-C8's three limbs; the default asserted **as a fact**; the structural
+>   agreement test; the seed-once property.
 
-##### M-C2-T2 — The parameter and the choice
+##### M-C2-T1 — The one literal, and the gate that keeps it one
 
-- **Complexity:** L · **Dependencies:** M-C2-T1
-- **Risks:** the objective read as a module constant → make it a **required parameter of the internal
-  chooser** with the public default reproducing today (the `clampPxPerDay` / `maxPxPerDay` pattern,
-  `viewport.ts:130-131`).
-- **Testing:** byte-identity with the parameter **omitted** and with it set to the neutral value, as
-  **two separate cases** (FC-C6); the permutation property; `pack-lanes.spec.ts` passes **unedited**.
-- **Development steps:** extend the signature; implement insert-at-target with `laneEnds` as an
-  insertion structure; keep the total order and the tie-to-lower-lane rule; update the docblock with
-  **the numbers this epic measured**, replacing the 2026-07-31 figures the file still quotes forward.
+- **Complexity:** S · **Dependencies:** none
+- **Testing:** a structural test that `DEFAULT_VIEW_TOGGLES.wbsBand` and the panel's fallback resolve
+  to the same value, **verified red** by setting them to disagree — which is trivially producible and
+  is today's shape with the constant added.
+- **Development steps:** add `wbsBand` to `DEFAULT_VIEW_TOGGLES`; replace `TsldPanel.tsx:1100`'s
+  `?? false` with a read of that constant; update `view-toggles.ts:68-73`'s docblock, which currently
+  states "Default **off**" as the rule.
 
-##### M-C2-T3 — Wire the one call site
+##### M-C2-T2 — The derivation and the seed
 
-- **Complexity:** S · **Dependencies:** M-C2-T2 · **Testing:** `arrange-lanes` unit + the journey.
-- **Risks:** changing `computeLaneArrangement`'s #364 shape → the scene/band split is untouched; only
-  the `packLanes` call gains an argument. Band-off identity (`sceneActivities === activities`) must
-  still hold.
-- **Development steps:** pass the objective at `arrange-lanes.ts:95`; leave the band pack
-  (`:117-120`) calling `packLanes` unchanged, since a summary is never a dependency endpoint
-  (ADR-0038) and the objective is inert there — and say so, rather than passing it "for symmetry".
+- **Complexity:** M · **Dependencies:** M-C2-T1
+- **Risks:** computing `packLanes` on every plan load → **FC-C8's cost limb**, with the fallback
+  written down in advance (behind the on-demand path, default off, strip still offered), so a failure
+  has a landing rather than a redesign.
+- **Testing:** FC-C8 correctness limb, both branches, **verified red against a default that ignores
+  the predicate** — which is the shipped behaviour, so the red run costs nothing to produce; the
+  blank-row limb **verified red against the unconditional flip**, which must report 13 on Unit 300 or
+  the measurement is not discriminating between the two designs; the seed-once property.
+- **Development steps:** derive the predicate from the same inputs `computeArrangeChanges` uses;
+  seed once per plan id; assert the planner's manual toggle is never overwritten.
 
-##### M-C2-T4 — The confirm dialog tells the truth (US-2)
+#### Feature: M-C2-F2 — the dock strip
 
-- **Complexity:** S · **Dependencies:** M-C2-T3
-- **Risks:** leaving _"into the fewest lanes"_ in place (`TsldPanel.tsx:3342-3343`, **both**
-  branches) → it becomes a promise the packer no longer keeps, which is a false statement on screen;
-  this register records that class shipping repeatedly.
-- **Testing:** a unit assertion on the copy in **both** `UNDO_REDO_ENABLED` branches; a journey
-  assertion on the stated row cost.
-- **Development steps:** rewrite both branches to state the resulting row count against the current
-  one; keep the undo-caveat logic untouched.
+> **Description:** a fifth `DockStrip` member stating the row cost and offering the press.
+> **Complexity:** M · **Dependencies:** M-C2-T2
+> **Risks:**
+>
+> - **A fifth strip re-deriving the "at most one is up" invariant.** `resolveDockStrip`
+>   (`model/dock-strip.ts:53-70`) exists precisely because that invariant had been spelt three times
+>   in three shapes → the new member goes **into that function**, last in precedence, with its reason
+>   in the docblock beside the existing four.
+> - **Showing a Viewer an offer they cannot take** → **omitted, not shaded** (spec §4.7a): the
+>   strip's whole content is an offer to press a pen-gated command, and a permanent un-actionable
+>   notice is the lit-but-inert defect ADR-0059 M6 and ADR-0062 M6 both record.
+> - **Costing the canvas** → ADR-0092's docked guarantee, asserted as an **equality** and not a
+>   bound; ADR-0115 records a `<= 120 px` bound that could not tell the fixed state from the broken
+>   one.
+>   **Testing requirements:** the precedence asserted on the pure function, not the DOM (ADR-0093's
+>   rule); the 0 px equality; the omit case at every role.
 
-##### M-C2-T5 — Re-measure and judge
+##### M-C2-T3 — The strip, its precedence and its copy
 
-- **Complexity:** M · **Dependencies:** M-C2-T3
-- **Risks:** judging from the harness rather than from the product → the verdict needs the harness
-  numbers **and** a picture pair at 1646 **and** the product owner's look at the released build.
-  Re-run everything on **one** commit (ADR-0099's recorded finding: a sweep measures the tree it runs
-  against).
-- **Testing:** the harnesses' controls, again.
-- **Development steps:** re-run the crossing harness and `measure-lane-travel.mjs`; judge **FC-C2**
-  and **FC-C5**; request the ADR-0128 probe press and judge **FC-C4 limb A**, stating whether spec
-  §0.3's prediction (bars drawn falls) held; judge **FC-C7** and add the readings to
-  `docs/TECH_DEBT.md` #75 and #323; write `part-c-m2-verdict.md`.
+- **Complexity:** M · **Dependencies:** M-C2-T2
+- **Testing:** `resolveDockStrip` unit cases for the new member, including that it yields to all four
+  above it; the role-omit case; the 0 px equality in a browser.
+- **Development steps:** add the member and its precedence with the reason; render the strip stating
+  the resulting row count against the current one, from **the same derivation** M-C4-T4's confirm
+  dialog will use, so the two numbers cannot disagree; `Arrange` and `Dismiss`; dismissal is per plan
+  per session and never persisted (consistent with every other toggle on this surface, spec §0.9).
+
+#### Feature: M-C2-F3 — the journey (ADR-0081), closing #363
+
+> **Complexity:** L · **Dependencies:** M-C2-T3
+> **Risks:**
+>
+> - **A new Playwright config is not free** → `check:ci-roster` (ADR-0136) and `check:e2e-roster`
+>   (ADR-0138) both refuse a suite not declared in `ci.yml`, `package.json` and the rosters, and it
+>   takes a shard slot. **That refusal is the gate working; budget for it.**
+> - **Locating a control by its copy** → by role+name and `[data-toolbar-item]`
+>   (`docs/TECH_DEBT.md` #133).
+> - **Asserting on the canvas** → it is `aria-hidden`. The assertions are about the strip, the
+>   command, the dialog, the written rows and the undo.
+> - **A rate-limit bucket exhausted by seeding** (`docs/TECH_DEBT.md` #361).
+> - **A journey that passes alone and fails in the sweep** (#347's shape) → run it inside
+>   `scripts/e2e-sweep.sh`, not only alone.
+
+##### M-C2-T4 — `apps/web/e2e-arrange/`
+
+- **Complexity:** L · **Dependencies:** M-C2-T3
+- **Testing:** this is the test. **Verify red**: the row-count assertion against the pre-M-C2 commit,
+  and the undo assertion against a deliberately broken undo.
+- **Development steps:**
+  1. `apps/web/playwright.arrange.config.ts` + `apps/web/e2e-arrange/`.
+  2. Cover **#363's own list**: the "nothing to move" early return with no dialog; a plan where rows
+     genuinely change; the count in the confirmation matching the rows written; the pen gate; and
+     **undo restoring the prior lanes** — the one no unit test can reach.
+  3. Cover **this milestone's own**: an imported plan shows the strip and **no blank rows**; taking
+     the offer clears the strip and brings the band on; a role without the pen sees **neither** strip
+     nor blank rows.
+  4. Add the CI step, the `package.json` script, the roster entry and the duration entry; run
+     `pnpm check:e2e-roster` and `pnpm check:ci-roster` locally.
+  5. Run `scripts/e2e-local.sh web:arrange`, the base journey `scripts/e2e-local.sh web`, and the
+     full sweep.
+  6. **Close #363** with a ledger entry; the number is never reused.
+
+##### M-C2-T5 — Record it
+
+- **Complexity:** S · **Dependencies:** M-C2-T4
+- **Development steps:** the ADR or ADR section spec §4.9 requires (the derived default is a
+  mechanism, not a `DECISIONS.md` line); the register entry in `CLAUDE.md` §16 **in the same commit**
+  if an ADR is filed (ADR-0147); a changeset (minor — a new user-facing control); the measured
+  minimap and export figures into the rows CQ-C2 asked for.
 
 ---
 
@@ -405,9 +497,11 @@ description "Auto-arrange lanes", pen-gated, `tsld-toolbar-items.tsx:2917-2933`)
 **Entry point:** the **TSLD canvas itself**, plus the export and the print — no control.
 **Journey:** none, for M-C1's recorded reason.
 
-> **Measured before built, and it may not be built.** M-C0 reports how much of the complaint this
-> absorbs at **zero height cost**. If that is a large share, it may be the whole remedy and CQ-C1
-> becomes cheap. If it is negligible, it is withdrawn and recorded as measured-and-rejected.
+> **Measured before built, and it may not be built — and it comes BEFORE the layout rule on
+> purpose.** M-C0 reports how much of the complaint this absorbs at **zero height cost**. If that is
+> a large share, it may be the whole remedy and CQ-C1 becomes cheap; if it is negligible, it is
+> withdrawn and recorded as measured-and-rejected. Either answer is information the product owner
+> should have before being asked to spend vertical space.
 
 #### Feature: M-C3-F1 — a second obstacle class
 
@@ -440,56 +534,123 @@ description "Auto-arrange lanes", pen-gated, `tsld-toolbar-items.tsx:2917-2933`)
 
 - **Complexity:** S · **Dependencies:** M-C3-T1
 - **Development steps:** re-run the crossing harness; report the reduction at zero height cost;
-  request the ADR-0128 press for **FC-C4 limb B**; fold into M-C2's ADR or file its own per spec
+  request the ADR-0128 press for **FC-C4 limb B**; fold into M-C4's ADR or file its own per spec
   §4.9's discriminator.
 
 ---
 
-## Milestone 4 — The `Arrange` journey _(conditional on M-C2)_
+## Milestone 4 — The layout rule _(conditional on CQ-C1 and FC-C2)_
 
-**Outcome:** the command that writes `lane_index` on every activity it moves is driven end to end for
-the first time. Closes `docs/TECH_DEBT.md` **#363**.
-**Ships dark:** a test. No product code.
-**Journey:** this **is** the journey.
+**Outcome:** `Arrange` lays activities out so relationships rarely cross, at the vertical cost the
+product owner chose.
+**Entry point:** the **`Arrange`** command on the plan command strip (accessible name `Arrange`,
+description "Auto-arrange lanes", pen-gated, `tsld-toolbar-items.tsx:2917-2933`) — and **M-C2's dock
+strip**, whose stated row cost now describes the new rule.
+**Journey:** **M-C2's**, extended. It exists already, which is the practical gain from moving it.
 
-> **Why here and not at M-C1** — spec §4.8. And **if CQ-C1 declines the layout rule, this milestone
-> does not happen and #363 stays open**, which is stated so a cancelled milestone does not silently
-> take a filed obligation with it.
+> **Gate M-C4-G: this milestone does not start until (a) at least one candidate cleared FC-C2's
+> floor and (b) CQ-C1 has an answer.** A rule chosen by the implementer is the failure §19.3 and
+> ADR-0105 both describe, and the product owner reserved this decision in writing.
 
-#### Feature: M-C4-F1 — `apps/web/e2e-arrange/`
+#### Feature: M-C4-F1 — the ADR
 
-> **Complexity:** L · **Dependencies:** M-C2-T4
+> **Description:** five reasons this is ADR-level (spec §4.9), the fifth being that it **deliberately
+> diverges the `Arrange` picture from the import picture** — ADR-0069's subject — and an unexplained
+> divergence is what ADR-0065/0069/0121 all refuse.
+> **Complexity:** M · **Dependencies:** M-C4-G. **CQ-C3 is answered** (the offer, not a second
+> objective), so the ADR records that decision rather than posing it.
+> **Risks:** pinning a number early → take the next free one **at filing** (ADR-0079).
+> **Testing:** `pnpm check:adr-coverage` (the index **and** `ROADMAP.md`, both directions — ADR-0110
+> D6) and **ADR-0147's assertions over `CLAUDE.md` §16**, which refuse an ADR whose register entry
+> does not land in the same commit.
+
+##### M-C4-T1 — Write and file it
+
+- **Complexity:** M · **Dependencies:** M-C4-G
+- **Development steps:** problem, options (spec §4.4's table, including the rejected sibling packer,
+  the rejected second command and the rejected per-plan setting), decision, trade-offs, consequences;
+  **the parity sentence in its honest form** — `computeSchedule` not imported, not reachable, no
+  migration, therefore nothing to hold parity _for_ (ADR-0125 D1's strong claim, explicitly not
+  ADR-0116 D7's weaker sibling); file; index; write the **§16 register entry in the same commit**.
+
+#### Feature: M-C4-F2 — the objective
+
+> **Description:** one optional parameter of `packLanes`; absent ⇒ byte-identical; one call site
+> passes it.
+> **Complexity:** L · **Dependencies:** M-C4-T1
 > **Risks:**
 >
-> - **A new Playwright config is not free** → `check:ci-roster` (ADR-0136) and `check:e2e-roster`
->   (ADR-0138) both refuse a suite not declared in `ci.yml`, `package.json` and the rosters, and it
->   takes a shard slot. **That refusal is the gate working; budget for it.**
-> - **Locating a control by its copy** → locate by `[data-toolbar-item]` and by role+name
->   (`docs/TECH_DEBT.md` #133's rule).
-> - **Asserting on the canvas** → it is `aria-hidden`. The assertions are about the **command**: the
->   dialog, the counts, the pen gate, the written rows and the undo.
-> - **A rate-limit bucket exhausted by seeding** (`docs/TECH_DEBT.md` #361) → seed through the API
->   with that row's mitigation in mind.
-> - **A journey that passes alone and fails in the sweep** (#347's shape) → run it inside
->   `scripts/e2e-sweep.sh`, not only alone.
-> - **The base journey not run** → ADR-0096 records the base suite being the one thing the documented
->   pre-push gate could not run.
+> - **Losing determinism** → a property test across input permutations (FC-C5).
+> - **Losing "only placed predecessors steer"** (`pack-lanes.ts:94-109`) → reaching for unplaced ones
+>   makes the result order-dependent; pinned by the same property test.
+> - **A second packer appearing** → structurally refused: one function, one parameter, one call site
+>   (spec §4.7).
+> - **The importer picking it up by accident** → a structural test asserts `interchange.service.ts`'s
+>   call passes no objective, because the scope decision is "Arrange only" and nothing else enforces
+>   it.
+>   **Testing requirements:** unit + property + **both callers' existing suites passing unedited** —
+>   an invariant you must touch to make room for your feature was never an invariant.
 
-- **Testing:** this is the test. **Verify it red** against the pre-M-C2 commit for the row-count
-  assertion, and against a deliberately broken undo for the undo assertion.
-- **Development steps:**
-  1. `apps/web/playwright.arrange.config.ts` + `apps/web/e2e-arrange/`.
-  2. Cover **#363's own list**: the "nothing to move" early return with no dialog; a plan where rows
-     genuinely change; the count in the confirmation matching the rows written; the pen gate; and
-     **undo restoring the prior lanes** — the one no unit test can reach.
-  3. Add the CI step, the `package.json` script, the roster entry and the duration entry; run
-     `pnpm check:e2e-roster` and `pnpm check:ci-roster` locally.
-  4. Run `scripts/e2e-local.sh web:arrange`, the base journey `scripts/e2e-local.sh web`, and the
-     full sweep.
-  5. Close #363 with a ledger entry; the register's rule is that rows are deleted and the number
-     never reused.
+##### M-C4-T2 — The parameter and the choice
+
+- **Complexity:** L · **Dependencies:** M-C4-T1
+- **Risks:** the objective read as a module constant → make it a **required parameter of the internal
+  chooser** with the public default reproducing today (the `clampPxPerDay` / `maxPxPerDay` pattern,
+  `viewport.ts:130-131`).
+- **Testing:** byte-identity with the parameter **omitted** and with it set to the neutral value, as
+  **two separate cases** (FC-C6); the permutation property; `pack-lanes.spec.ts` passes **unedited**.
+- **Development steps:** extend the signature; implement insert-at-target with `laneEnds` as an
+  insertion structure; keep the total order and the tie-to-lower-lane rule; update the docblock with
+  **the numbers this epic measured**, replacing the 2026-07-31 figures the file still quotes forward.
+
+##### M-C4-T3 — Wire the one call site
+
+- **Complexity:** S · **Dependencies:** M-C4-T2 · **Testing:** `arrange-lanes` unit + M-C2's journey,
+  extended.
+- **Risks:** changing `computeLaneArrangement`'s #364 shape → the scene/band split is untouched; only
+  the `packLanes` call gains an argument. Band-off identity (`sceneActivities === activities`) must
+  still hold.
+- **Development steps:** pass the objective at `arrange-lanes.ts:95`; leave the band pack
+  (`:117-120`) calling `packLanes` unchanged, since a summary is never a dependency endpoint
+  (ADR-0038) and the objective is inert there — and say so, rather than passing it "for symmetry".
+
+##### M-C4-T4 — The confirm dialog tells the truth (US-2)
+
+- **Complexity:** S · **Dependencies:** M-C4-T3
+- **Risks:**
+  - Leaving _"into the fewest lanes"_ in place (`TsldPanel.tsx:3342-3343`, **both** branches) → it
+    becomes a promise the packer no longer keeps, which is a false statement on screen; this register
+    records that class shipping repeatedly.
+  - **The dialog and M-C2's strip stating different numbers** → both read **one** derivation of the
+    resulting row count. Two derivations of "how tall will this be" is the drift argument inside one
+    screen, and a planner who saw the strip and then the dialog is the only person who would notice.
+- **Testing:** a unit assertion on the copy in **both** `UNDO_REDO_ENABLED` branches; a journey
+  assertion that the strip's number and the dialog's number agree.
+- **Development steps:** rewrite both branches to state the resulting row count against the current
+  one; keep the undo-caveat logic untouched.
+
+##### M-C4-T5 — Re-measure and judge
+
+- **Complexity:** M · **Dependencies:** M-C4-T3
+- **Risks:** judging from the harness rather than from the product → the verdict needs the harness
+  numbers **and** a picture pair at 1646 **and** the product owner's look at the released build.
+  Re-run everything on **one** commit (ADR-0099's recorded finding: a sweep measures the tree it runs
+  against).
+- **Testing:** the harnesses' controls, again.
+- **Development steps:** re-run the crossing harness and `measure-lane-travel.mjs`; judge **FC-C2**
+  and **FC-C5**; request the ADR-0128 probe press and judge **FC-C4 limb A**, stating whether spec
+  §0.3's prediction (bars drawn falls) held; judge **FC-C7** and add the readings to
+  `docs/TECH_DEBT.md` #75 and #323; write `part-c-m4-verdict.md`.
 
 ---
+
+> **The standalone "`Arrange` journey" milestone the first draft carried here is GONE, folded into
+> M-C2-F3.** It was written when nothing else in this part added a reachable control, so the journey
+> had nowhere earlier to land. M-C2 now adds one, and its content is an offer to press `Arrange` —
+> so the journey belongs there, **#363 closes there**, and M-C4-T3 extends it rather than a
+> cancellable milestone owning a filed obligation. Recorded as a fold rather than deleted silently,
+> because a milestone that disappears between drafts is how a task list comes to describe work
+> nobody did (ADR-0090 M5's finding).
 
 ## Milestone 5 — The gate pass
 
@@ -513,10 +674,17 @@ epic and CI, not the author, found each.
   measured quantity in #75); **accessibility-reviewer** (a repack changes what every moved row
   announces, and the ADR-0063 §4 count invariant must be asserted across it);
   **component-reviewer** (§19.13 — canvas geometry that four glyph families depend on);
-  **ux-reviewer** (the confirm copy, and whether the taller diagram reads as intended);
-  **test-engineer** on the coverage. **`api-reviewer` and `backend-performance-reviewer` are not run,
-  because `apps/api` contributes zero files** — recorded so it does not read as an oversight.
-  **`database-architect` is not run, because there is no schema change to design** — likewise.
+  **ux-reviewer** (the dock strip's copy and its dismissal, the confirm copy, and whether the taller
+  diagram reads as intended); **test-engineer** on the coverage. **`api-reviewer` and
+  `backend-performance-reviewer` are not run, because `apps/api` contributes zero files** — which
+  CQ-C3's answer confirms rather than assumes (the import stays byte-identical) — recorded so it does
+  not read as an oversight. **`database-architect` is not run, because there is no schema change to
+  design** — likewise, and §4.7a records that a per-plan stored fact was _considered_ and rejected,
+  so the absence is a decision.
+- **One thing to put in front of the accessibility review by name:** the dock strip is **omitted**
+  for a reader who cannot press `Arrange` (spec §4.7a). That is ADR-0082's omit clause rather than
+  its shade clause, and this register has overstated an ADR-0082 citation once — so the reviewer is
+  asked to confirm the discriminator rather than the conclusion.
 - **Testing:** each fold-in verified red first.
 
 ##### M-C5-T2 — Count the findings, and close the paperwork
@@ -534,22 +702,30 @@ epic and CI, not the author, found each.
 
 ## Sequencing & slices
 
-| #        | Slice                     | Releasable alone?              | Can be withdrawn?                                          |
-| -------- | ------------------------- | ------------------------------ | ---------------------------------------------------------- |
-| M-C0     | Measurement + conditions  | yes (no product code)          | —                                                          |
-| **M-C1** | **The gutter**            | **yes — and should be, alone** | **yes — FC-C3**                                            |
-| M-C2     | The layout rule           | yes                            | **yes — FC-C2 or CQ-C1 can withdraw it**                   |
-| M-C3     | The crossing-aware router | yes                            | **yes — M-C0's measurement, or FC-C4 limb B**              |
-| M-C4     | The `Arrange` journey     | yes                            | not independently — it dies with M-C2, and #363 stays open |
-| M-C5     | Gate pass                 | yes                            | —                                                          |
+| #        | Slice                                      | Releasable alone?              | Can be withdrawn?                                                        |
+| -------- | ------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------ |
+| M-C0     | Measurement + conditions                   | yes (no product code)          | —                                                                        |
+| **M-C1** | **The gutter**                             | **yes — and should be, alone** | **yes — FC-C3**                                                          |
+| **M-C2** | **Band default + Arrange offer + journey** | **yes**                        | **no — it is the remedy for a defect the flip would otherwise ship**     |
+| M-C3     | The crossing-aware router                  | yes                            | **yes — M-C0's measurement, or FC-C4 limb B**                            |
+| M-C4     | The layout rule                            | yes                            | **yes — FC-C2 or CQ-C1 can withdraw it; #363 is already closed by M-C2** |
+| M-C5     | Gate pass                                  | yes                            | —                                                                        |
+
+**M-C2 is the one slice with no withdrawal clause, and that is deliberate.** Its two halves are a
+defect and its remedy: the band flip alone ships 364 px of blank rows to every reader who cannot
+press `Arrange`, and the derived default alone is a change nobody asked for. Shipping either without
+the other is the failure; shipping neither is simply today. **So the flip may never land before the
+derivation, and the plan states that as an ordering rule rather than leaving it to a task sequence.**
 
 **No feature flag** (ADR-0088 D1). The rollback is a **commit boundary**, which each slice is shaped
-to make real: M-C1 is one constant, M-C2's objective is an optional parameter whose absence is
-byte-identical, M-C3's is the same shape as the existing obstacle parameter.
+to make real: M-C1 is one constant, M-C2 is one predicate plus one strip, M-C4's objective is an
+optional parameter whose absence is byte-identical, M-C3's is the same shape as the existing obstacle
+parameter.
 
 **Three milestones can end this part early**, and that is the design rather than a caveat: FC-C1 can
-stop everything before a candidate is measured, FC-C2 can withdraw M-C2 (and M-C4 with it), and
-M-C0's measurement can withdraw M-C3.
+stop everything before a candidate is measured, M-C0's measurement can withdraw M-C3, and FC-C2 or
+CQ-C1 can withdraw M-C4 — which now costs less than it did, because #363 and the journey no longer
+die with it.
 
 ## Definition of Done (per task)
 
@@ -570,18 +746,24 @@ Five that bite here:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                     | Likelihood  | Impact       | Mitigation                                                                                                                                                           |
-| ------------------------------------------------------------------------------------- | ----------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The crossing metric does not discriminate, or counts the shipped design as the defect | med         | **high**     | FC-C1 runs before any candidate is measured; three exclusions each with a unit case; the control throws                                                              |
-| The measured plan is not the product owner's after all                                | low         | med          | Name and exact activity count both match (spec §0.2); the residual — that they imported a different export, or have edited it — is cheap to close and is not assumed |
-| Row spending costs more than the product owner expects once they see it               | **high**    | med          | CQ-C1 is theirs, taken on **pictures** and on cost in **screens**; M-C0 can return NO                                                                                |
-| The export and the minimap degrade and nobody asked                                   | **med**     | **high**     | CQ-C2, with both numbers measured rather than argued; FC-C7's withdrawal clause points at the export and the minimap, never at a row cap                             |
-| The import picture diverges from the Arrange picture                                  | **certain** | med          | CQ-C3; the divergence is answered in the ADR, because an unexplained one is what ADR-0065/0069/0121 all refuse                                                       |
-| §0.3's paint prediction is wrong and more rows **do** cost frames                     | med         | med          | FC-C4 limb A, on the product owner's hardware; the prediction is committed so either outcome is a finding                                                            |
-| The crossing-aware router becomes an unbounded search                                 | med         | **high**     | `paint.routing-budget.test.ts` green **unedited**; bounded candidate list unchanged; FC-C4 limb B withdraws it                                                       |
-| Bundling reverts the router                                                           | med         | med          | Measured with bundling on and off; the choice goes in the ADR rather than being made quietly (spec §0.6)                                                             |
-| The router is non-deterministic across refetches                                      | med         | **high**     | FC-C5, verified red against array-order routing (spec §0.7)                                                                                                          |
-| The golden log is re-baselined with `-u` and hides a real change                      | med         | high         | M-C1-T3's written expectation list first; a pitch change moves every y, which is when `-u` is most tempting                                                          |
-| A repack changes what an AT user hears                                                | **certain** | low          | `a11y.ts` speaks the lane number; the ADR-0063 §4 count invariant is asserted and the text change is expected and announced                                          |
-| The new journey's config is not declared in CI                                        | med         | low          | `check:e2e-roster` + `check:ci-roster` refuse the PR — the gate working, budgeted for                                                                                |
-| §0.5's hypothesis is right and #364 made crossings worse                              | med         | **positive** | M-C0-T3 tests it; it is a finding about a shipped change either way, and it is **not** an argument for reverting #364 — those 15 rows painted nothing                |
+| Risk / assumption                                                                                              | Likelihood  | Impact       | Mitigation                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------- | ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The crossing metric does not discriminate, or counts the shipped design as the defect                          | med         | **high**     | FC-C1 runs before any candidate is measured; three exclusions each with a unit case; the control throws                                                                        |
+| The measured plan is not the product owner's after all                                                         | low         | med          | Name and exact activity count both match (spec §0.2); the residual — that they imported a different export, or have edited it — is cheap to close and is not assumed           |
+| Row spending costs more than the product owner expects once they see it                                        | **high**    | med          | CQ-C1 is theirs, taken on **pictures** and on cost in **screens**; M-C0 can return NO                                                                                          |
+| The export and the minimap degrade and nobody asked                                                            | **med**     | **high**     | CQ-C2, with both numbers measured rather than argued; FC-C7's withdrawal clause points at the export and the minimap, never at a row cap                                       |
+| The import picture diverges from the Arrange picture                                                           | **certain** | med          | **CQ-C3 answered:** the import stays byte-identical and M-C2's dock strip offers the press; the divergence and the answer both go in M-C4's ADR                                |
+| **Flipping the band exposes blank rows to readers who cannot clear them**                                      | **certain** | **high**     | **The flip is not a flip** — the default is derived (spec §4.7a), so no reader meets the defect; FC-C8's second limb is verified red against the unconditional flip            |
+| **The derived default costs a `packLanes` run per plan load**                                                  | med         | med          | FC-C8's third limb, 16 ms at `scale-2000`, measured at M-C0-T3b; the fallback (on-demand, default off, strip still offered) is named **before** the measurement                |
+| **The band predicate is non-empty on a fresh import band-off, so the strip offers a press that moves nothing** | med         | med          | **M-C0-T3a runs it** rather than reading it; two concrete divergences are already identified (`earlyFinish` null handling, day-offset derivation) and neither is assumed inert |
+| **The two `wbsBand` defaults drift** (`DEFAULT_VIEW_TOGGLES` has no key; the panel writes `?? false`)          | med         | med          | One literal, the panel reads it, a structural test asserts they agree — and **no existing test would have caught it** (spec §0.9)                                              |
+| **The derivation re-fires and moves the band under the reader**                                                | med         | med          | Seed once per plan id, guarded by a ref, fired when activities first resolve — the ADR-0070 M6 stale-seed trap, with a seed-once property test                                 |
+| §0.3's paint prediction is wrong and more rows **do** cost frames                                              | med         | med          | FC-C4 limb A, on the product owner's hardware; the prediction is committed so either outcome is a finding                                                                      |
+| The crossing-aware router becomes an unbounded search                                                          | med         | **high**     | `paint.routing-budget.test.ts` green **unedited**; bounded candidate list unchanged; FC-C4 limb B withdraws it                                                                 |
+| Bundling reverts the router                                                                                    | med         | med          | Measured with bundling on and off; the choice goes in the ADR rather than being made quietly (spec §0.6)                                                                       |
+| The router is non-deterministic across refetches                                                               | med         | **high**     | FC-C5, verified red against array-order routing (spec §0.7)                                                                                                                    |
+| The golden log is re-baselined with `-u` and hides a real change                                               | med         | high         | M-C1-T3's written expectation list first; a pitch change moves every y, which is when `-u` is most tempting                                                                    |
+| A repack changes what an AT user hears                                                                         | **certain** | low          | `a11y.ts` speaks the lane number; the ADR-0063 §4 count invariant is asserted and the text change is expected and announced                                                    |
+| The new journey's config is not declared in CI                                                                 | med         | low          | `check:e2e-roster` + `check:ci-roster` refuse the PR — the gate working, budgeted for                                                                                          |
+| §0.5 holds and compressing the diagram costs crossings                                                         | med         | **positive** | M-C0-T3 measures all four configurations; a finding either way, and **not** an argument for reverting #364 (those 13 rows paint nothing) nor against the band flip             |
+| **A figure is quoted without its configuration**                                                               | **high**    | **high**     | This spec's first draft did exactly that (spec §0.1) and it is preserved rather than deleted. Every row in M-C0-T3 names band on/off and packed/un-packed                      |
