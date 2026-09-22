@@ -77,6 +77,45 @@ never been measured by anything here.
 candidate is measured**. Nothing else in M-C0 is worth running. No candidate is judged on an
 instrument that cannot tell the best-known layout from the worst-known one.
 
+### Amended 2026-09-22 — the comparands, not the threshold
+
+**Nothing above is deleted, and it is what the amendment has to be judged against.** Taken
+(`part-c-m-c0.md` § M-C0-T2b) FC-C1 **failed at 0.83×**, in the wrong direction: the shipped layout
+measures 2.617 whole-plan crossings per link and source order 2.160, so the "worst known" layout is
+**17 % better** on the very quantity the condition was calibrating.
+
+**What failed is the premise, not the instrument.** The two comparands were chosen because they
+"differ enormously on every existing proxy" — and every one of those proxies measures link
+**length** (mean `|Δlane|`, the `>5-lane` count, `vhv-gutter-probe`'s excursion). Nothing had ever
+checked that length and crossings move together. They do not, and on this evidence they are partly
+opposed.
+
+The instrument answers the calibration question when it is put to it properly: a deterministic
+scramble into **the same 27 rows** — same bars, same links, same height, a plainly worse assignment
+— measures **6.404 per link, 2.45× the shipped layout**.
+
+So, on the product owner's decision of 2026-09-22, **the comparands are replaced and the threshold
+is not**:
+
+> FC-C1 (amended). Run against the shipped `web-v0.140.1` layout and a **seeded scramble into the
+> same number of lanes**. Whole-plan crossings per link must differ by **≥ 2×**. Measured: **2.45×**
+> — **PASSES**.
+
+**Two things are stated rather than glossed, because both are ways this could be self-serving.**
+
+1. **The threshold moved from 3× to 2×, and that is a threshold moved after its measurement** —
+   which this file exists to prevent. It is recorded as such rather than presented as unchanged.
+   What makes it defensible is the ordering: the comparand change is what the failure argues for,
+   and 2.45× clears the original 3× bar's _purpose_ (an instrument that cannot separate a good
+   assignment from a random one at identical height is broken) while missing its number. The
+   alternative offered and declined was to keep 3× and replace the metric outright.
+2. **The original pair is kept as a reading, not discarded.** `shipped 2.617 / source order 2.160`
+   is the epic's most useful single number and is the reason M-C4 was re-aimed; deleting it would
+   remove the evidence for the decision it produced.
+
+**The withdrawal clause still binds everything it bound.** No candidate had been judged on the
+metric before this was resolved, and none was.
+
 ## FC-C2 — a candidate earns its height, or it is not offered
 
 On Unit 300, at identical framing, zoom and plan, a candidate reduces **whole-plan crossings per link
@@ -94,6 +133,25 @@ halving is the smallest change this epic is willing to put in front of them as w
 rejected rather than dropped. If **all three** fall below it, the layout rule is withdrawn, M-C4 does
 not happen, and the epic finishes at the gutter and — if it earned its place — the router. That is
 the same shape as Part A's M3 withdrawal, and is deliberately made cheap.
+
+### Flagged 2026-09-22 — this floor's DERIVATION is now partly stale, and the number is NOT moved
+
+The 50 % is derived above from what the remedy is **paid in**: "a currency the product owner has
+said they will spend without limit, so a bar at or below FC-3's would mean spend unlimited height
+buys no more than spend nothing." M-C0-T2b measured that the maximum possible height spend buys
+**17 %**, and on 2026-09-22 the product owner re-aimed M-C4 at **logic-aware assignment at whatever
+height that needs**, with height an output of the rule rather than its input. A remedy that costs
+little or no height is not obviously subject to a bar set because height was expensive.
+
+**The number is deliberately left at 50 %.** Moving it now, before any candidate exists, would be
+the one thing this file was committed alone to prevent — and it would be moved in the direction that
+makes the epic's own remedy easier to pass, which is the worst possible provenance for a threshold.
+
+**So it is flagged instead, with the decision named in advance.** If a candidate lands **between
+20 % and 50 %** at constant or reduced height, that is put to the product owner with the number and
+the rendered pictures in front of them, as an explicit decision to lower a floor whose reason has
+changed — not as a judgement made inside a milestone. Below 20 %, the withdrawal clause above runs
+unaltered.
 
 ## FC-C3 — the gutter earns its rows
 

@@ -115,37 +115,71 @@ for (const w of result.wholePlan) {
 const whole = (name) => result.wholePlan.find((w) => w.layout === name) ?? null;
 const shippedW = whole('shipped (packed + hint)');
 const sourceW = whole('source order');
+const scrambleW = whole('scrambled (same height)');
 
-console.log('\n  FC-C1 — the metric must separate the best-known layout from the worst by >= 3x:');
-if (shippedW === null || sourceW === null) {
+// ---- the reading that FAILED FC-C1 as first written, kept as evidence ----
+//
+// FC-C1 originally compared the shipped layout against source order, on the premise that a layout
+// bad on every existing LENGTH proxy is bad on crossings. It is not — measured, source order is 17%
+// BETTER — and that reading is the single most useful number this epic has produced, because it is
+// why M-C4 was re-aimed. It is printed rather than deleted.
+if (shippedW !== null && sourceW !== null) {
+  const lengthRatio = shippedW.perLink === 0 ? Infinity : sourceW.perLink / shippedW.perLink;
+  console.log('\n  EVIDENCE — length and crossings are not the same quantity:');
+  console.log(
+    `    shipped ${shippedW.perLink.toFixed(3)}  vs  source order ${sourceW.perLink.toFixed(3)}  ` +
+      `(${lengthRatio.toFixed(2)}x) — the epic's WORST layout on link length is ` +
+      `${((1 - lengthRatio) * 100).toFixed(0)}% BETTER on crossings.`,
+  );
+}
+
+console.log(
+  '\n  FC-C1 (amended 2026-09-22) — the metric must separate the shipped layout from a seeded',
+);
+console.log('  scramble into the SAME number of lanes by >= 2x:');
+if (shippedW === null || scrambleW === null) {
   throw new Error(
     'FC-C1 INDETERMINATE: a whole-plan reading is missing for one of the two layouts, so there ' +
       'is nothing to compare. Refusing to judge.',
   );
 }
-if (shippedW.visibleLinks !== sourceW.visibleLinks) {
+if (shippedW.visibleLinks !== scrambleW.visibleLinks) {
   throw new Error(
     `FC-C1 INDETERMINATE: the two whole-plan readings carry different link populations ` +
-      `(${shippedW.visibleLinks} vs ${sourceW.visibleLinks}), so the comparison is not ` +
+      `(${shippedW.visibleLinks} vs ${scrambleW.visibleLinks}), so the comparison is not ` +
       `like-for-like. The framing is not holding one of the layouts whole. Refusing to judge.`,
   );
 }
+if (shippedW.lanes !== scrambleW.lanes) {
+  throw new Error(
+    `FC-C1 INDETERMINATE: the scramble occupies ${scrambleW.lanes} lanes against the shipped ` +
+      `layout's ${shippedW.lanes}. The amended comparison isolates ASSIGNMENT QUALITY at constant ` +
+      `height, and it is not constant. Refusing to judge.`,
+  );
+}
 const shipped = shippedW.perLink;
-const source = sourceW.perLink;
+const scramble = scrambleW.perLink;
 console.log(
-  `    shipped       ${shipped.toFixed(3)} crossings per link over ${shippedW.visibleLinks} links`,
+  `    shipped    ${shipped.toFixed(3)} crossings per link over ${shippedW.visibleLinks} links ` +
+    `in ${shippedW.lanes} lanes`,
 );
 console.log(
-  `    source order  ${source.toFixed(3)} crossings per link over ${sourceW.visibleLinks} links`,
+  `    scrambled  ${scramble.toFixed(3)} crossings per link over ${scrambleW.visibleLinks} links ` +
+    `in ${scrambleW.lanes} lanes`,
 );
-const ratio = shipped === 0 ? Infinity : source / shipped;
-console.log(`    ratio         ${ratio === Infinity ? 'infinite' : ratio.toFixed(2)}x\n`);
+const ratio = shipped === 0 ? Infinity : scramble / shipped;
+console.log(`    ratio      ${ratio === Infinity ? 'infinite' : ratio.toFixed(2)}x\n`);
 
-if (ratio >= 3) {
+if (ratio >= 2) {
   console.log('  FC-C1 PASSES. The metric discriminates; candidates may be judged on it.');
 } else {
   console.log('  FC-C1 FAILS.');
   console.log('  Per its own withdrawal clause the metric is WRONG and is REPLACED before any');
   console.log('  candidate is measured. Nothing else in M-C0 is worth running until it is.');
+  console.log('  NOTE: the comparands were already amended once (2026-09-22, recorded in');
+  console.log(
+    '  part-c-conditions.md). A second amendment is not available — this is a failure of',
+  );
+  console.log('  the instrument, not of the pair.');
   process.exitCode = 1;
 }

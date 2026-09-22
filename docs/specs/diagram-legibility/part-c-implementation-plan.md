@@ -358,14 +358,18 @@ so a journey here would assert something adjacent and prove nothing.
 
 ## Milestone 2 — The band default, the `Arrange` offer, and the journey
 
-**Outcome:** #364's 420 px reaches a user for the first time, on every plan where it is correct to
-deliver it — and on the plans where it is not, the planner is told in one line what one press would
-buy. Closes `docs/TECH_DEBT.md` **#363**.
-**Entry point:** the **"Arrange now" strip in the canvas dock** on
-`/orgs/:slug/plans/:planId` — the screen an import's `navigate` lands on
-(`ImportScheduleDialog.tsx:163-170`) — plus the WBS band itself.
-**Journey:** `apps/web/e2e-arrange/` lands **here** (ADR-0081: the first milestone adding a control
-a planner can reach), and it is the first thing in this repository ever to press `Arrange`.
+**Outcome:** the planner is told in one line what one press of `Arrange` would buy, on the plans
+where it would buy something. Closes `docs/TECH_DEBT.md` **#363**.
+
+> **Amended 2026-09-22.** This read "#364's 420 px reaches a user for the first time, on every plan
+> where it is correct to deliver it" — which assumed the band default would flip. M-C0-T3 measured
+> that it should not (M-C2-F1 below), so what this milestone delivers is the **offer**, not the
+> default. The 420 px still reaches a user, on the plans where a planner presses the button.
+> **Entry point:** the **"Arrange now" strip in the canvas dock** on
+> `/orgs/:slug/plans/:planId` — the screen an import's `navigate` lands on
+> (`ImportScheduleDialog.tsx:163-170`) — plus the WBS band itself.
+> **Journey:** `apps/web/e2e-arrange/` lands **here** (ADR-0081: the first milestone adding a control
+> a planner can reach), and it is the first thing in this repository ever to press `Arrange`.
 
 > **This milestone exists because the flip cannot ship alone.** Defaulting the band on before a plan
 > is re-arranged shows **13 blank rows, 364 px**, on every load — and the only remedy is `Arrange`,
@@ -373,7 +377,26 @@ a planner can reach), and it is the first thing in this repository ever to press
 > all** (spec §0.9). The design is spec §4.7a: the default is **derived**, not flipped, and the dock
 > carries the offer to whoever can take it.
 
-#### Feature: M-C2-F1 — the derived default
+#### Feature: M-C2-F1 — the derived default — **WITHDRAWN 2026-09-22 on M-C0-T3's measurement**
+
+> **The flip does not land, and the text below is kept rather than deleted** because the reasoning
+> is what makes the withdrawal checkable. CQ-C4 held this feature until M-C0-T3 reported whether 12
+> rows genuinely reads better than 27. It does not: **crossings per link rise 10.9 %–11.7 % across
+> the 27 → 12 compression, at 3 of 3 measured zooms**
+> (`part-c-m-c0.md` § M-C0-T3). The condition's withdrawal clause is explicit — the band default
+> stays **off**, the dock still offers the press, and the finding is filed.
+>
+> **What M-C2 still builds:** the `Arrange` offer in the canvas dock (M-C2-F2 onwards), the
+> post-import offer, and the `apps/web/e2e-arrange/` journey. Only the **default** goes.
+>
+> **What goes with it, recorded rather than dropped:** **FC-C8 is not judged** — all three of its
+> limbs are properties of a derived default that is not shipping — and **M-C0-T3b** (the cost of
+> deriving it, FC-C8's third limb) is **withdrawn for the same reason**: there is nothing to cost.
+> If the default is ever revisited, both come back with it.
+>
+> **It is not an argument for reverting `#364`.** Those 13 rows paint nothing whatever the band
+> does, and band-on-arranged draws a strictly better picture than band-on-unarranged: the routed
+> polylines are byte-identical and one uses 12 rows where the other uses 27.
 
 > **Description:** `wbsBand` defaults on exactly when `computeArrangeChanges()` is empty — i.e. when
 > the plan's lanes already are what the scene-first rule would produce, so there are no blank rows
@@ -472,9 +495,18 @@ a planner can reach), and it is the first thing in this repository ever to press
   2. Cover **#363's own list**: the "nothing to move" early return with no dialog; a plan where rows
      genuinely change; the count in the confirmation matching the rows written; the pen gate; and
      **undo restoring the prior lanes** — the one no unit test can reach.
-  3. Cover **this milestone's own**: an imported plan shows the strip and **no blank rows**; taking
-     the offer clears the strip and brings the band on; a role without the pen sees **neither** strip
-     nor blank rows.
+  3. Cover **this milestone's own**, amended 2026-09-22 by M-C0-T3a and M-C0-T3 — this step read
+     "an imported plan shows the strip and no blank rows; taking the offer clears the strip and
+     brings the band on", and **both halves are now wrong**:
+     - **A healthy import shows NO strip**, and that is the correct behaviour: ADR-0069 phase 3 has
+       already packed the plan and `packLanes` is idempotent, so `computeArrangeChanges()` is empty.
+       Assert the absence.
+     - **The phase-3-prevented import DOES show it**, and is the negative control **without which
+       this journey passes against a strip that can never render** — ADR-0081's defect with a green
+       test on top of it.
+     - **Taking the offer does not bring the band on.** The derived default is withdrawn (M-C2-F1);
+       assert the strip clears and the rows move, and nothing about the band's state.
+     - A role without the pen sees **no strip**.
   4. Add the CI step, the `package.json` script, the roster entry and the duration entry; run
      `pnpm check:e2e-roster` and `pnpm check:ci-roster` locally.
   5. Run `scripts/e2e-local.sh web:arrange`, the base journey `scripts/e2e-local.sh web`, and the
@@ -541,8 +573,26 @@ a planner can reach), and it is the first thing in this repository ever to press
 
 ## Milestone 4 — The layout rule _(conditional on CQ-C1 and FC-C2)_
 
-**Outcome:** `Arrange` lays activities out so relationships rarely cross, at the vertical cost the
-product owner chose.
+> **Re-aimed 2026-09-22, on M-C0-T2b's measurement and the product owner's decision.** This
+> milestone was framed as _spend rows to buy fewer crossings_, with CQ-C1 choosing how many. That
+> framing is falsified on their own plan: **the maximum possible height spend — one bar per row,
+> 144 rows against 27 — buys a 17 % crossing reduction**, against FC-C2's 50 % floor, while
+> **assignment quality at constant height moves the same number by 2.45×**. Compression is not
+> free either, and not the dominant term: 27 → 12 rows costs 11 %.
+>
+> So the rule's subject is now **how rows are assigned, not how many there are**: follow the logic
+> — chains together, a successor near its predecessors — at **whatever height that needs**. Height
+> becomes an **output** of the rule rather than its input. The no-ceiling decision stands
+> unchanged; what goes is spending height for its own sake.
+>
+> **What this changes downstream.** CQ-C1 stops being "which of three height budgets" and becomes
+> "which of three assignment rules, and here is the height each one happens to need". FC-C2's floor
+> is untouched, and its derivation is flagged in `part-c-conditions.md` as partly stale — that is
+> the product owner's to move, with a number in front of them, if a candidate lands between 20 %
+> and 50 %.
+
+**Outcome:** `Arrange` lays activities out so relationships rarely cross, at whatever vertical cost
+the chosen assignment rule turns out to need.
 **Entry point:** the **`Arrange`** command on the plan command strip (accessible name `Arrange`,
 description "Auto-arrange lanes", pen-gated, `tsld-toolbar-items.tsx:2917-2933`) — and **M-C2's dock
 strip**, whose stated row cost now describes the new rule.

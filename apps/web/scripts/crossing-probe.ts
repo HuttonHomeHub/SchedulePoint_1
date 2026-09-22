@@ -37,6 +37,8 @@
  * shipped line carries small rounded elbows. Rounding moves the corner arcs; it cannot move a
  * segment's interior, and two segments that cross still cross. Stated rather than left implicit.
  */
+import { createHash } from 'node:crypto';
+
 import { packLanes, type PackItem } from '@repo/layout';
 
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
@@ -365,14 +367,24 @@ export interface Layout {
   name: string;
   laneOf: ReadonlyMap<string, number>;
   lanes: number;
+  /**
+   * What the SCENE paints, when that is narrower than the plan — the WBS band lifts its summaries
+   * out (`wbs-band-source.ts`), so band-on configurations paint a subset. `undefined` means every
+   * activity, which is what every band-off layout wants and is byte-identically today's path.
+   */
+  sceneIds?: ReadonlySet<string>;
 }
 
 /** The Unit 300 programme as the painter wants it, under a given lane assignment. */
-function sceneFor(
+export function sceneFor(
   asap: ReturnType<typeof unit300Asap>,
   layout: Layout,
+  options: { linkRouting?: boolean } = {},
 ): { scene: TsldScene; edges: number } {
-  const activities = (asap.activities as { key: string; type: string }[]).map((a) => ({
+  const painted = (asap.activities as { key: string; type: string }[]).filter(
+    (a) => layout.sceneIds === undefined || layout.sceneIds.has(a.key),
+  );
+  const activities = painted.map((a) => ({
     id: a.key,
     type: a.type as never,
     laneIndex: layout.laneOf.get(a.key) ?? 0,
@@ -400,7 +412,11 @@ function sceneFor(
       dataDate: DATA_DATE,
       visualRefresh: true,
       timeTrueLinks: true,
-      linkRouting: true,
+      // `scene.linkRouting` is the ONE gate on the obstacle index and the corridor bundler
+      // (`paint.ts:1091-1098`, `:1184-1189`, `:1211`): false takes the pre-ADR-0065 route. Exposed
+      // so a reading can establish that the obstacle-aware branch is the one being measured,
+      // rather than assuming it from the flag being set.
+      linkRouting: options.linkRouting ?? true,
     },
     edges: edges.length,
   };
@@ -490,6 +506,15 @@ export interface CrossingReading {
   perLink: number;
   segments: number;
   diagonal: number;
+  /**
+   * A digest of every routed link polyline, in scene order, rounded to 0.01 px.
+   *
+   * Two readings that agree on a crossing count have not necessarily drawn the same picture, and
+   * two that disagree have not necessarily drawn a different one. This says which — and it is the
+   * only thing that can distinguish "this change did not affect the routes" from "this change
+   * moved the routes and the count happened to land in the same place".
+   */
+  fingerprint: string;
 }
 
 /**
@@ -519,6 +544,11 @@ export function read(
   );
   const links = linkPaths(paths);
   const { crossings, segments, diagonal } = countCrossings(links);
+  const digest = createHash('sha256');
+  for (const link of links) {
+    for (const pt of link.pts) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
+    digest.update('|');
+  }
   return {
     layout: layout.name,
     lanes: layout.lanes,
@@ -530,6 +560,7 @@ export function read(
     perLink: links.length === 0 ? 0 : crossings / links.length,
     segments,
     diagonal,
+    fingerprint: digest.digest('hex').slice(0, 12),
   };
 }
 
@@ -595,4 +626,284 @@ export function fc1(path: string): Fc1Result {
     wholePlan,
     readings,
   };
+}
+
+// ── M-C0-T3: does compressing the diagram raise crossings per link? ──────────────────────────────
+
+/**
+ * The summaries the ADR-0063 band actually **draws**, and therefore lifts out of the scene
+ * (`wbs-band-source.ts:78`).
+ *
+ * **Not every summary.** The band depth-caps what it draws (`isWithinBandDepth`,
+ * `WBS_BAND_MAX_DEPTH = 2`), and `wbs-band-source.ts` records a shipped defect from lifting them
+ * all out unconditionally: a depth-3 summary vanished from both surfaces at once.
+ *
+ * Depth here is the activity's depth in the `parentKey` tree, which **approximates** the band's own
+ * group depth rather than reproducing it — `wbsBandGroups` is a feature-tier derivation this pure
+ * harness does not import. The approximation is `lane-travel-probe.ts`'s, stated the same way:
+ * measured on this fixture all 18 summaries sit at depth 0-2, so the two agree here; on an unusual
+ * tree they could differ by a level.
+ */
+export function bandDrawnKeys(asap: ReturnType<typeof unit300Asap>): Set<string> {
+  const acts = asap.activities as { key: string; type: string; parentKey: string | null }[];
+  const parentOf = new Map(acts.map((a) => [a.key, a.parentKey]));
+  const depthOf = (key: string): number => {
+    let d = 0;
+    let at = parentOf.get(key) ?? null;
+    while (at !== null && d < 50) {
+      d += 1;
+      at = parentOf.get(at) ?? null;
+    }
+    return d;
+  };
+  return new Set(
+    acts.filter((a) => a.type === 'WBS_SUMMARY' && depthOf(a.key) <= 2).map((a) => a.key),
+  );
+}
+
+/**
+ * The five configurations M-C0-T3 reads, and why there are five rather than the four the plan names.
+ *
+ * The plan asks for band on/off × packed/un-packed. Those four answer the **decision** (CQ-C4:
+ * should the band default on, i.e. is 12 rows better than 27?) and cannot answer the **mechanism**,
+ * because band-on differs from band-off in two ways at once: it compresses the rows AND it stops
+ * painting 18 summary bars. Summary bars are obstacles the router steers around
+ * (ADR-0065's `LaneIntervalIndex`), so removing them changes the lines independently of the height.
+ *
+ * The fifth isolates it, and it is not a contrivance — it is **the shipped behaviour before #364**:
+ * band on, lanes packed for the band-off scene, so the summaries' rows are still reserved and paint
+ * nothing. `E → D` is therefore identical bars, identical links, identical relative order, with the
+ * 13 blank rows squeezed out — compression and nothing else, between two states this product has
+ * really been in.
+ */
+export interface BandConfig {
+  layout: Layout;
+  band: 'on' | 'off';
+  arrangement: string;
+  /** Bars the scene paints — 144 band off, 126 band on. */
+  bars: number;
+  /**
+   * Lanes holding **nothing but** band-drawn summaries: the rows that go empty when the band comes
+   * on, and the only rows whose obstacles band-on removes.
+   */
+  summaryOnlyLanes: number;
+  /**
+   * Links whose endpoints are more than one lane apart — `routeOrthogonal` returns today's elbow
+   * unexamined when `crossedLanes` is empty (`link-routing.ts:191-193`), so only these can consult
+   * an obstacle at all.
+   */
+  spanningLinks: number;
+  /**
+   * …and of those, how many cross a summary-only lane. **This is the number that explains why
+   * removing the summary bars moves no line**, and it is measured rather than reasoned: the
+   * obstacle sets genuinely differ (27 occupied lanes against 14), and almost no link's crossed set
+   * contains one of the lanes that differ.
+   */
+  spanningLinksOverSummaryOnlyLane: number;
+}
+
+export function unit300BandConfigs(path: string): {
+  asap: ReturnType<typeof unit300Asap>;
+  configs: BandConfig[];
+  maxDay: number;
+} {
+  const asap = unit300Asap(path);
+  const acts = asap.activities as { key: string }[];
+  const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
+  const bandDrawn = bandDrawnKeys(asap);
+  const sceneIds = new Set(acts.map((a) => a.key).filter((k) => !bandDrawn.has(k)));
+
+  const sourceLane = new Map(acts.map((a, i) => [a.key, i]));
+  const predecessorsOf = new Map<string, string[]>();
+  for (const d of deps) {
+    const list = predecessorsOf.get(d.successorKey) ?? [];
+    list.push(d.predecessorKey);
+    predecessorsOf.set(d.successorKey, list);
+  }
+  const itemFor = (key: string): PackItem => ({
+    id: key,
+    startDay: asap.start.get(key) ?? 0,
+    endDay: asap.finish.get(key) ?? 0,
+    laneIndex: sourceLane.get(key) ?? 0,
+  });
+
+  // Band off, arranged: the pack over EVERY activity — `computeLaneArrangement`'s band-off path,
+  // which that file's own docblock calls "the pre-#364 call over the pre-#364 items".
+  const allLane = new Map(sourceLane);
+  for (const c of packLanes(
+    acts.map((a) => itemFor(a.key)),
+    predecessorsOf,
+  )) {
+    allLane.set(c.id, c.laneIndex);
+  }
+
+  // Band on, arranged (#364): the pack over what the SCENE paints. The band's own summaries are
+  // appended above the scene's range by `computeLaneArrangement` and are not painted in the scene,
+  // so their lanes cannot reach a line and are left at source order here.
+  const sceneLane = new Map(sourceLane);
+  for (const c of packLanes(
+    acts.filter((a) => sceneIds.has(a.key)).map((a) => itemFor(a.key)),
+    predecessorsOf,
+  )) {
+    sceneLane.set(c.id, c.laneIndex);
+  }
+
+  // The DRAWN extent is `worldExtent`'s rule: the max lane among the activities it is given, which
+  // band on is `sceneActivities`. Computing it over the painted set rather than over the whole map
+  // is why configuration E reports 27 and not 12.
+  const extent = (
+    laneOf: ReadonlyMap<string, number>,
+    painted: ReadonlySet<string> | null,
+  ): number =>
+    Math.max(
+      ...acts
+        .filter((a) => painted === null || painted.has(a.key))
+        .map((a) => laneOf.get(a.key) ?? 0),
+    ) + 1;
+
+  const bars = (painted: ReadonlySet<string> | null): number =>
+    painted === null ? acts.length : acts.filter((a) => painted.has(a.key)).length;
+
+  const laneDiagnostics = (
+    laneOf: ReadonlyMap<string, number>,
+  ): Pick<
+    BandConfig,
+    'summaryOnlyLanes' | 'spanningLinks' | 'spanningLinksOverSummaryOnlyLane'
+  > => {
+    const owners = new Map<number, string[]>();
+    for (const a of acts) {
+      const lane = laneOf.get(a.key) ?? 0;
+      const list = owners.get(lane);
+      if (list) list.push(a.key);
+      else owners.set(lane, [a.key]);
+    }
+    const summaryOnly = new Set(
+      [...owners.entries()]
+        .filter(([, keys]) => keys.every((k) => bandDrawn.has(k)))
+        .map(([lane]) => lane),
+    );
+    let spanning = 0;
+    let over = 0;
+    for (const d of deps) {
+      const a = laneOf.get(d.predecessorKey) ?? 0;
+      const b = laneOf.get(d.successorKey) ?? 0;
+      if (Math.abs(a - b) <= 1) continue;
+      spanning += 1;
+      for (let lane = Math.min(a, b) + 1; lane <= Math.max(a, b) - 1; lane += 1) {
+        if (summaryOnly.has(lane)) {
+          over += 1;
+          break;
+        }
+      }
+    }
+    return {
+      summaryOnlyLanes: summaryOnly.size,
+      spanningLinks: spanning,
+      spanningLinksOverSummaryOnlyLane: over,
+    };
+  };
+
+  const make = (
+    name: string,
+    laneOf: ReadonlyMap<string, number>,
+    painted: ReadonlySet<string> | null,
+    band: 'on' | 'off',
+    arrangement: string,
+  ): BandConfig => ({
+    layout: {
+      name,
+      laneOf,
+      lanes: extent(laneOf, painted),
+      ...(painted === null ? {} : { sceneIds: painted }),
+    },
+    band,
+    arrangement,
+    bars: bars(painted),
+    ...laneDiagnostics(laneOf),
+  });
+
+  const maxDay = Math.max(...acts.map((a) => asap.finish.get(a.key) ?? 0));
+
+  return {
+    asap,
+    maxDay,
+    configs: [
+      make('A band off · as imported', sourceLane, null, 'off', 'source order'),
+      make('B band off · arranged', allLane, null, 'off', 'packed (all bars)'),
+      make('C band on · as imported', sourceLane, sceneIds, 'on', 'source order'),
+      make('E band on · arranged pre-#364', allLane, sceneIds, 'on', 'packed (all bars)'),
+      make('D band on · arranged (#364)', sceneLane, sceneIds, 'on', 'packed (scene bars)'),
+    ],
+  };
+}
+
+export interface T3Reading extends CrossingReading {
+  band: 'on' | 'off';
+  arrangement: string;
+  bars: number;
+  /**
+   * How many activities the PAINTER was handed — the control that separates "the band changed
+   * nothing" from "the band never reached the painter". Without it a filter that silently failed
+   * to apply would report the band-on and band-off readings as identical, which is exactly what a
+   * genuine null result looks like.
+   */
+  paintedActivities: number;
+}
+
+export interface T3Result {
+  edges: number;
+  /** The configurations themselves, so a runner can print the lane diagnostics beside the counts. */
+  configs: BandConfig[];
+  /** Whole-plan readings, one per configuration per zoom. Nothing is culled at any of them. */
+  readings: T3Reading[];
+  /**
+   * The same configurations painted with `scene.linkRouting` **off** — the pre-ADR-0065 route.
+   *
+   * This is the discriminator the band readings need. If band on and band off produce identical
+   * routes, there are two explanations — the obstacle index is inert on this plan, or it was never
+   * consulted — and only a reading with the gate deliberately off can tell them apart. Without it
+   * a harness that had silently lost obstacle awareness would report exactly the same identity and
+   * read as a finding about the band.
+   */
+  routingOff: T3Reading[];
+  zooms: number[];
+}
+
+/**
+ * M-C0-T3. Every configuration read **whole-plan**, for FC-C1's own reason: a framing that culls
+ * hands the win to whichever layout shows less of the plan at a time, and these configurations
+ * differ by a factor of twelve in height, so that trap is at its widest here.
+ *
+ * Swept over three zooms because a crossing is a property of the picture and the picture's aspect
+ * changes with `pxPerDay`: at 1 px/day the programme is a narrow column and corridors are forced
+ * together horizontally; at 12 it is a wide ribbon. A finding that holds at one zoom and reverses
+ * at another is a finding about the zoom.
+ */
+export function t3(path: string): T3Result {
+  const { asap, configs, maxDay } = unit300BandConfigs(path);
+  const zooms = [1, 4, 12];
+  const readings: T3Reading[] = [];
+  const routingOff: T3Reading[] = [];
+  const sweep = (into: T3Reading[], config: BandConfig, linkRouting: boolean): void => {
+    const { scene } = sceneFor(asap, config.layout, { linkRouting });
+    for (const pxPerDay of zooms) {
+      // Wide and tall enough for the WORST case at this zoom, so nothing is culled in any
+      // configuration and every reading carries the same 188 links.
+      const vp = {
+        label: 'whole-plan',
+        width: (maxDay + 4) * pxPerDay + 400,
+        height: 145 * 28 + 200,
+      };
+      into.push({
+        ...read(scene, config.layout, vp, pxPerDay, 32),
+        band: config.band,
+        arrangement: config.arrangement,
+        bars: config.bars,
+        paintedActivities: scene.activities.length,
+      });
+    }
+  };
+  for (const config of configs) sweep(readings, config, true);
+  for (const config of configs) sweep(routingOff, config, false);
+  return { edges: (asap.dependencies as unknown[]).length, configs, readings, routingOff, zooms };
 }
