@@ -70,7 +70,7 @@ import { paintScene, type TsldPalette, type TsldScene } from '../src/features/ts
 import type { Point, Viewport } from '../src/features/tsld/render/render-model';
 import { ELAPSED_DAY_WALK } from '../src/features/tsld/render/working-time';
 
-import { unit300Asap } from './lane-travel-probe';
+import { reorderLanes, statsFor, unit300Asap } from './lane-travel-probe';
 export { smallPlanLayouts } from './small-plan-fixture';
 
 export interface Pt {
@@ -1380,6 +1380,24 @@ export function assignmentCandidates(path: string): {
       build('A chain rows', chainRows()),
       build('B near predecessors', nearPredecessors()),
       build('C depth-first pack', depthFirst()),
+      /**
+       * **Candidate D — lane re-indexing** (`cheap-levers.md` Finding 4, logic-legibility M4-T2).
+       *
+       * Not a packing rule at all: it takes the SHIPPED packing and permutes which row index each
+       * lane gets, so the bars in a row, the row count and every bar's x are untouched and only
+       * the vertical distance a link travels changes. Measured at −7.5 % mean and −14.3 % long
+       * links on travel and **never on occlusion or crossings**, which is what this run supplies.
+       *
+       * It is the one candidate whose row count is structurally guaranteed not to move, and that
+       * is asserted below rather than inherited from the file that argues it.
+       */
+      build(
+        'D lane re-indexing',
+        reorderLanes(
+          shipped.laneOf,
+          deps.map((d) => ({ from: d.predecessorKey, to: d.successorKey })),
+        ),
+      ),
     ],
   };
 }
@@ -2380,4 +2398,142 @@ export function rowCosts(
       windowRectHeight: rect.true.h,
     };
   });
+}
+
+/**
+ * **The M4 vector: occlusion, crossings and travel from one paint, with the H1/H2 split**
+ * (logic-legibility M4, FC-L6).
+ *
+ * FC-L6 judges a candidate on three numbers — `occl/link`, `x/link` and mean |Δlane| — and its
+ * chain-rows clause demands a **decomposition** on top, because the aggregate structurally cannot
+ * tell H1 from H2:
+ *
+ * - **H1**: a chain drawn on one row needs no traversal, so its links should be occlusion-free.
+ * - **H2**: a chain on one row puts more bars in that row, and occlusion is a leg meeting a bar in
+ *   **its own lane**, so every link _out_ of the chain has a leg in a crowded row.
+ *
+ * The split is by **geometry, not by edge identity**: a link is same-row when its polyline's first
+ * and last point share a y, which is exactly `routeOrthogonal`'s own same-lane condition
+ * (`link-routing.ts:346`). Deriving it from the drawn line rather than from an assumed
+ * index-to-edge correspondence means the classification cannot silently disagree with the picture
+ * — and there is no correspondence to assume, since the painter is free to reorder or omit.
+ *
+ * Travel comes from `statsFor`, the function `lane-travel-probe.ts` already uses for the figures
+ * `cheap-levers.md` quotes, rather than a second mean-|Δlane| written here.
+ */
+export function readVector(
+  asap: ReturnType<typeof unit300Asap>,
+  layout: Layout,
+  pxPerDay = 4,
+): {
+  name: string;
+  lanes: number;
+  visibleLinks: number;
+  crossings: number;
+  perLink: number;
+  foreignLinks: number;
+  occlPerLink: number;
+  meanDelta: number;
+  overFive: number;
+  sameRow: { links: number; foreignLinks: number };
+  crossRow: { links: number; foreignLinks: number };
+  /**
+   * The same-row count derived from the **layout** (`lane(pred) === lane(succ)`) rather than from
+   * the drawn polyline — a second opinion sharing no code with the first.
+   *
+   * It exists because the first run of M4 reported chain rows and the shipped packing with an
+   * **identical** 68/120 split, which is exactly what a classifier that is not seeing the candidate
+   * would report. It is not: the two agree, and the coincidence is a real fact about the shipped
+   * packer's predecessor hint. A control that had not been run would have left that unknowable.
+   */
+  sameRowByLane: number;
+  fingerprint: string;
+} {
+  const acts = asap.activities as { key: string }[];
+  const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
+  const maxDay = Math.max(...acts.map((a) => asap.finish.get(a.key) ?? 0));
+  const worstLanes = Math.max(layout.lanes, 145);
+  const size = {
+    width: (maxDay + 4) * pxPerDay + 400,
+    height: worstLanes * LANE_HEIGHT + 200,
+  };
+  const { scene } = sceneFor(asap, layout);
+  const view: Viewport = { pxPerDay, originX: 40, originY: 32 };
+
+  const { ctx, paths } = recordingCtx();
+  paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+  const links = linkPaths(paths);
+  const { crossings } = countCrossings(links);
+  const occl = countOcclusions(links, scene, view);
+
+  const occlusion = occlusionContext(scene, view);
+  const sameRow = { links: 0, foreignLinks: 0 };
+  const crossRow = { links: 0, foreignLinks: 0 };
+  for (const link of links) {
+    const first = link.pts[0]!;
+    const last = link.pts[link.pts.length - 1]!;
+    const bucket = Math.abs(first.y - last.y) < 0.001 ? sameRow : crossRow;
+    bucket.links += 1;
+    if (lineOcclusion(link.pts, occlusion).foreign > 0) bucket.foreignLinks += 1;
+  }
+  if (sameRow.foreignLinks + crossRow.foreignLinks !== occl.foreignLinks) {
+    throw new Error(
+      `M4 INDETERMINATE: the decomposition counts ${String(sameRow.foreignLinks + crossRow.foreignLinks)} ` +
+        `foreign links and the aggregate counts ${String(occl.foreignLinks)}. The two are reading ` +
+        'different things, so H1 and H2 cannot be told apart. Refusing to judge.',
+    );
+  }
+
+  let sameRowByLane = 0;
+  for (const d of deps) {
+    const a = layout.laneOf.get(d.predecessorKey);
+    const b = layout.laneOf.get(d.successorKey);
+    if (a !== undefined && b !== undefined && a === b) sameRowByLane += 1;
+  }
+
+  const travel = statsFor(
+    layout.laneOf,
+    deps.map((d) => ({ from: d.predecessorKey, to: d.successorKey })),
+  );
+  const digest = createHash('sha256');
+  for (const link of links) {
+    for (const pt of link.pts) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
+    digest.update('|');
+  }
+
+  return {
+    name: layout.name,
+    lanes: layout.lanes,
+    visibleLinks: links.length,
+    crossings,
+    perLink: links.length === 0 ? 0 : crossings / links.length,
+    foreignLinks: occl.foreignLinks,
+    occlPerLink: links.length === 0 ? 0 : occl.foreignLinks / links.length,
+    meanDelta: travel.meanDelta,
+    overFive: travel.overFive,
+    sameRow,
+    crossRow,
+    sameRowByLane,
+    fingerprint: digest.digest('hex').slice(0, 12),
+  };
+}
+
+/**
+ * **The shipped packing and every assignment candidate as scenes** (logic-legibility M4).
+ *
+ * FC-L6's clause says a qualifying candidate goes to the product owner **with a rendered picture**,
+ * not with a table — the epic's founding observation is that a diagram satisfying every number was
+ * still hard to read, so a verdict taken on the vector alone would be the same mistake one metric
+ * further on. The sibling of `layoutScenes`, which serves the same purpose for Part C's three.
+ */
+export function candidateScenes(path: string): { name: string; scene: TsldScene; lanes: number }[] {
+  const { asap, shipped, candidates } = assignmentCandidates(path);
+  return [
+    { name: shipped.name, scene: sceneFor(asap, shipped).scene, lanes: shipped.lanes },
+    ...candidates.map((c) => ({
+      name: c.name,
+      scene: sceneFor(asap, { name: c.name, laneOf: c.laneOf, lanes: c.lanes }).scene,
+      lanes: c.lanes,
+    })),
+  ];
 }

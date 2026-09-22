@@ -107,7 +107,16 @@ export interface FixtureResult {
   leverDrawnMaxLane: number | null;
 }
 
-function statsFor(
+/**
+ * Mean |Δlane| per link, the long-link count and the row count for one assignment.
+ *
+ * **Exported for M4's vector** (logic-legibility, FC-L6), which needs the travel component beside
+ * occlusion and crossings. Exported rather than re-derived in the harness: two implementations of
+ * "how far does a link travel" would drift, and the drift would be invisible — each looks right
+ * alone and only somebody comparing this file's output against M4's would ever see one (ADR-0065's
+ * recorded argument, one metric along).
+ */
+export function statsFor(
   laneOf: ReadonlyMap<string, number>,
   links: readonly { from: string; to: string }[],
 ): Stats {
@@ -164,7 +173,12 @@ function applied(
  * argument about a route that varies between frames applies with more force to a lane that varies
  * between presses of the same button.
  */
-function reorderLanes(
+/**
+ * **Exported for M4-T2** (logic-legibility, FC-L6), which measures this on the vector before it is
+ * built in the product — `cheap-levers.md` Finding 4 measured it on travel alone and never on
+ * occlusion or crossings, and that file's own status line says it is not built.
+ */
+export function reorderLanes(
   laneOf: ReadonlyMap<string, number>,
   links: readonly { from: string; to: string }[],
 ): Map<string, number> {
