@@ -317,6 +317,26 @@ keep `main` releasable.
   than the packer that ships. `Arrange` also stops being a button nobody knew to press: where one
   press would tidy the rows, the canvas says so and says what it would cost.
 
+- **A logic line no longer disappears behind a bar** (ADR-0150 and ADR-0151, amending
+  ADR-0026/0052/0065/0069). The product owner used the release above and reported the same
+  complaint in different words — _"the logic is still difficult to read. even for a simple plan the
+  logic is mapping across other bars."_ Both things were true at once: crossings really had fallen
+  by a fifth, and **a link vanishing behind a bar is a different defect that no crossing count can
+  see**. Links paint under bars, so a line running through a bar in its own row did not overlap it,
+  it disappeared behind it — and the router's own last-resort route ran along the bar edge it was
+  meant to avoid, on **58 of one imported programme's 68 gutter runs**. Lines now step around the
+  bars in their own row and the gutter between two rows carries **channels**, so two runs sharing it
+  read as two lines: **105 hidden links become 47** on that programme, and the rest is not a routing
+  problem but a room one.
+  So the row gives the bar back most of its height: an activity is a **thin bar with a node at each
+  end, its name above it and its dates below** — the treatment the product owner chose from the
+  diagrams they supplied — and the row grows from 28 px to 52. That is not decoration. The old row
+  left five pixels of clear space above a bar, which is why four of the diagram's seventeen cues
+  were already drawing **into the row above** without anything reporting it, and why the links had
+  nowhere to go. Three things go to the product owner rather than being settled here: where a
+  progress bar lives on a 5 px bar, how criticality reads without relying on colour, and whether to
+  spend a further 8 px a row to remove the last of the bunching they reported.
+
 - **A plan has one planning surface** (ADR-0148, amending ADR-0033/0041/0052/0054/0126/0134). A plan
   used to be in one of two **scheduling modes**, and the mode decided where every bar was drawn.
   Dragging a bar on an `Early` plan did not move it — it wrote an invisible _start no earlier than_

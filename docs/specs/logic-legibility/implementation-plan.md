@@ -1,11 +1,11 @@
 # Implementation Plan: Logic legibility — a link that can be followed
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval before
-  implementation** (the same state this file holds; `check:spec-status` refuses a plan that disagrees
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Accepted — shipped (ADR-0150,
+  ADR-0151)** (the same state this file holds; `check:spec-status` refuses a plan that disagrees
   with its spec)
 - **Conditions:** [`./conditions.md`](./conditions.md) — **committed alone, in its own commit, before
   M0-T1 touches anything**
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Accepted — shipped (ADR-0150 routing, ADR-0151 the row)
 - **Owner:** _(unassigned)_
 - **Amended 2026-09-22** after the product owner answered all four critical questions and supplied
   the NetPoint reference. **The milestone order changed**: Part B is no longer a conditional late

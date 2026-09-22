@@ -11488,3 +11488,61 @@ whose subject is relationships"_): the relationship is not the quietest thing, t
 
 **The trigger to pick it up** is the next theme pass on the canvas, or a report that bars are hard
 to see — not a milestone that happens to be nearby.
+
+### 369. `NODE_RADIUS` and `LAG_HANDLE_R_ACTIVE` are both 5, and nothing couples them
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M6 gate
+pass, component review) · **Size:** S · **Owner:** web
+
+ADR-0151 sets `NODE_RADIUS = Math.max(2, BAR_HEIGHT)`, which is **5** at the shipped row.
+`LAG_HANDLE_R_ACTIVE` is a hard-coded **5** that predates the epic and is unrelated to `BAR_HEIGHT`.
+Both are traced as a square with a half-side radius (how a circle is drawn without widening
+`Ctx2D`), so an **active lag-drag handle and a bar-end node glyph are now pixel-identical in shape
+and size** — and at zero lag they sit at the same point.
+
+`paint.test.ts` already records the collision, because it had to change its own discriminator when
+the node arrived: it can no longer tell the two apart by radius and asks instead for a **positive
+property of a handle** (a handle is traced twice, core then halo). That is the right test and it is
+not the product: nothing in the painter distinguishes them for a planner mid-drag.
+
+**This is the `CONSTRAINT_PIN_H` shape this same epic fixed one file over** — two numbers equal by
+an arithmetic nobody chose, where nothing would have reported it had they differed. It is filed
+rather than fixed because the remedy is a design question (does the active handle grow, change
+shape, or keep a halo the node never has?) and M6 is a gate pass, not a design pass.
+
+**Re-open trigger:** a planner reports losing the handle mid-drag, or the next canvas epic touches
+either constant.
+
+### 370. No call-count budget names the epic's new per-frame passes
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M6 gate
+pass, performance review) · **Size:** S · **Owner:** web
+
+This repository prefers a **counting-stub gate** to a millisecond gate on the canvas (ADR-0054: a CI
+runner's absolute timings are noise, so the assertions pin the SHAPE of the per-frame cost).
+ADR-0150 and ADR-0151 added three things to that path and named none of them in such a gate:
+`isLegClear` per routed edge, `packGutterChannels` per frame, and the row's two node draws plus its
+name and date runs per visible bar.
+
+`paint.routing-budget.test.ts` still covers the _shape_ of the new routing work incidentally — it
+bounds the painter's total emitted segment count, and `packGutterChannels` only moves an existing
+point's `y` — so this is a naming and coverage gap rather than an unbounded-search risk. The
+performance review confirmed each pass is bounded by the **culled** set and not the plan
+(`laneIntervalIndex` is built from `visibleIds`; `rowSlots` is called per visible bar).
+
+**What to write:** a sibling `paint.*-budget.test.ts` asserting a ceiling on canvas calls per
+visible bar for the glyph and label work, which would also have made #371's owed reading partly
+answerable without waiting on hardware.
+
+### 371. Twenty-three measurement scripts repeat the same esbuild-to-tempdir block
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M6 gate
+pass, component review) · **Size:** S · **Owner:** web
+
+Every harness in `apps/web/scripts/` that bundles a probe repeats the same ~15 lines of
+`mkdtempSync` + `execFileSync('pnpm', ['exec', 'esbuild', …])` verbatim. It is a **pre-existing**
+convention rather than a regression — the older scripts do it too — but the logic-legibility epic
+added about eleven more instances rather than extracting a `bundleProbe(entry)` helper.
+
+Filed rather than fixed because a shared helper under `scripts/` is a shared-mechanism change and
+folding one into an epic's last milestone is what ADR-0105 exists to stop.

@@ -1,6 +1,6 @@
 # Feature Spec: Logic legibility — a link that can be followed
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Accepted — shipped (ADR-0150 routing, ADR-0151 the row)
 - **Author(s):** feature-analyst (Claude Opus 5)
 - **Date:** 2026-09-22 · **amended 2026-09-22** (§0.8–§0.11, §2.7, §4.4 D8–D11) after the product
   owner answered all four critical questions and supplied the NetPoint reference. One answer —

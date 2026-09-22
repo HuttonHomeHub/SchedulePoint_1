@@ -245,6 +245,13 @@ relaxed**, exactly as its own docblock said it would be.
 the router, the probe and four suites. It takes a per-frame memoised pass off the draw path that
 was measured at **5–11 ms alone** at 2,000 activities / 4,000 edges.
 
+**That figure is smaller than it looks, and the M6 performance review established it.** The pass was
+memoised on `scene.edges` array identity (ADR-0052 M5), and `scene.edges` is reference-stable across
+pan and zoom, so its per-frame cost was already a `WeakMap.get`. Retiring it reclaims that lookup
+per frame plus the 5–11 ms **once per edge-list change** — real, and not a per-frame saving. Written
+down because the un-qualified number appeared in two docblocks, this file, the ADR and the register,
+and every one of them read as "5–11 ms off every frame".
+
 ### M1's own docblock predicted seven channels, and T3 falsified it
 
 `gutterChannels` took `(laneHeight, barHeight)` and its docblock said a NetPoint-thin bar would
