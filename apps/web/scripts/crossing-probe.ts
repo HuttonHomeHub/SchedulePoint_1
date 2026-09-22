@@ -48,6 +48,7 @@ import {
   activityRect,
   BAR_HEIGHT,
   LANE_HEIGHT,
+  rectsIntersect,
   rowSlots,
   worldExtent,
 } from '../src/features/tsld/render/geometry';
@@ -2536,4 +2537,132 @@ export function candidateScenes(path: string): { name: string; scene: TsldScene;
       lanes: c.lanes,
     })),
   ];
+}
+
+/**
+ * **How much of the picture is bar and how much is link?** (logic-legibility M5-T1)
+ *
+ * M5's first development step is "measure the ink distribution between bars and links … **then**
+ * design", because Part A §4.5 listed four candidate terms and said the design picks from the
+ * measurement rather than from the list. This supplies the measurement.
+ *
+ * ## What is counted, and why it is not a pixel count
+ *
+ * The obvious instrument — render with a mask palette and count pixels — **cannot work here**, and
+ * the reason is worth recording: `TsldPalette` has ONE `critical` field, read both by a critical
+ * bar's fill and by a critical link's stroke. In the recording context the two are separable by
+ * flush kind (`linkPaths` filters on `stroke`), and in a rendered image they are the same colour.
+ * A mask would therefore attribute every critical bar to the link total, silently, and report a
+ * flattering number for exactly the plans where criticality matters most.
+ *
+ * So ink is derived instead, in px², from the two sources this epic already trusts:
+ *
+ * - **links** — `linkPaths`, the epic's own link extractor, summing each polyline's length times
+ *   the `lineWidth` it was flushed with. Solid and dashed are reported **apart**, because a dashed
+ *   line's ink is a fraction of its length and the fraction is not recoverable from the recording
+ *   (`RecordedPath.dashed` is a boolean; the pattern is not captured). Reporting one number that
+ *   silently treated a dashed line as solid would overstate exactly the links — the non-driving
+ *   ones — that this milestone is about.
+ * - **bars** — `activityRect`, the painter's own rect source, which is the same function
+ *   `gutterStats` measures bars with, so the two cannot disagree about where a bar is.
+ *
+ * **Text is NOT counted and that is a gap, not an omission by design**: `fillText` records no
+ * geometry, so a label's ink is unmeasurable here. Names sit in the row above the bar after M3, so
+ * they are a real part of the picture's weight and the figures below are a bar-versus-link ratio
+ * rather than a share of all ink. Said plainly so nobody quotes it as the latter.
+ */
+export function inkDistribution(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): {
+  barCount: number;
+  barInkPx2: number;
+  linkCount: number;
+  linkInkPx2: number;
+  solidLinkCount: number;
+  solidLinkInkPx2: number;
+  dashedLinkCount: number;
+  dashedLinkInkPx2: number;
+  linkLengthPx: number;
+  ratio: number;
+  /**
+   * **Per-mark weight, which is what "quiet" actually means.** Total ink says how much of the
+   * picture a layer occupies; it says nothing about whether one link is easy to follow. A 1 px
+   * grey line is quiet whether there are five of them or five hundred. The weight ratio is the
+   * figure M5's premise is really about, and M3 moved it by construction when it took the bar from
+   * 18 px to 5.
+   */
+  linkWidths: Record<string, number>;
+  barHeightPx: number;
+  weightRatio: number;
+} {
+  const { ctx, paths } = recordingCtx();
+  paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+  const links = linkPaths(paths);
+
+  let linkInk = 0;
+  let linkLength = 0;
+  let solidInk = 0;
+  let solidCount = 0;
+  let dashedInk = 0;
+  let dashedCount = 0;
+  for (const link of links) {
+    let length = 0;
+    for (let i = 1; i < link.pts.length; i += 1) {
+      const a = link.pts[i - 1]!;
+      const b = link.pts[i]!;
+      length += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    const ink = length * link.lineWidth;
+    linkLength += length;
+    linkInk += ink;
+    if (link.dashed) {
+      dashedInk += ink;
+      dashedCount += 1;
+    } else {
+      solidInk += ink;
+      solidCount += 1;
+    }
+  }
+
+  const linkWidths: Record<string, number> = {};
+  for (const link of links) {
+    const key = link.lineWidth.toFixed(2);
+    linkWidths[key] = (linkWidths[key] ?? 0) + 1;
+  }
+
+  let barInk = 0;
+  let barCount = 0;
+  let barHeightSum = 0;
+  for (const activity of scene.activities) {
+    const rect = activityRect(activity, view, scene.dataDate);
+    if (rect === null) continue;
+    // Culled exactly as the painter culls, so this is the ink of the picture rather than of the plan.
+    if (!rectsIntersect(rect, { x: 0, y: 0, w: size.width, h: size.height })) continue;
+    barCount += 1;
+    barInk += rect.w * rect.h;
+    barHeightSum += rect.h;
+  }
+  // The mean, not the constant: a milestone's diamond and a summary's bracket are not `BAR_HEIGHT`,
+  // and quoting the constant would describe a picture made only of tasks.
+  const barHeightPx = barCount === 0 ? 0 : barHeightSum / barCount;
+  const meanLinkWidth =
+    links.length === 0 ? 0 : links.reduce((sum, l) => sum + l.lineWidth, 0) / links.length;
+
+  return {
+    barCount,
+    barInkPx2: barInk,
+    linkCount: links.length,
+    linkInkPx2: linkInk,
+    solidLinkCount: solidCount,
+    solidLinkInkPx2: solidInk,
+    dashedLinkCount: dashedCount,
+    dashedLinkInkPx2: dashedInk,
+    linkLengthPx: linkLength,
+    ratio: barInk === 0 ? 0 : linkInk / barInk,
+    linkWidths,
+    barHeightPx,
+    weightRatio: barHeightPx === 0 ? 0 : meanLinkWidth / barHeightPx,
+  };
 }

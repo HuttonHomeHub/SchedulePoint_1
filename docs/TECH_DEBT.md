@@ -11425,3 +11425,66 @@ and not its neighbour" shape, with the offer now being the neighbour that has it
 **Trigger:** (a) and (c) on the next epic that touches this dock or the command's copy; (b) with
 #114.1, which it should be folded into rather than solved separately; (d) on the next change to the
 toolbar context's gating.
+
+---
+
+### 367. The relationship's ink is the page's secondary TEXT colour, and nothing ever chose it
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M5-T1b) ·
+**Size:** M · **Owner:** web
+
+`palette.ts:161` resolves the link's colour from `--muted-foreground`, which under
+`[data-surface="canvas"]` is `--plot-muted-foreground`, which `globals.css:799` declares as
+`var(--page-muted-foreground)`. So the ink the TSLD draws every dependency with is, by construction,
+**whatever the page uses for secondary text** — on the one surface in the product whose subject is
+dependencies. Nothing decided it; it arrived by aliasing.
+
+That is ADR-0102's own finding one field along. That epic found `resolveTsldPalette` reading
+`@theme inline` aliases a surface rebind could never reach, and gave the diagram a surface scope;
+what it did not do is ask whether each aliased value is the right value **for a diagram**. Nine
+`--plot-*` members are the painter's, and this one is a text colour doing a line's job.
+
+**Measured, resolved in Chromium under the canvas scope** (`measure-link-distinctness.mjs`):
+`--muted-foreground` is `oklch(0.5 0 0)` → `rgb(99, 99, 99)` → **5.31:1 against the ground**. So the
+accidental value is not a bad one, and that is exactly why this is debt rather than a defect: it is
+correct today by luck, and the next time somebody re-values the page's secondary text — a page
+concern, judged against page backgrounds — the diagram's relationship ink moves with it, silently,
+with no gate able to report it because the contrast matrix follows the alias and finds it fine.
+
+**The remedy is a `--plot-edge` of its own**, valued for a 1–2 px line on `--canvas` rather than for
+text on `--page-background`, added to the canvas scope's rebind set with the contrast pair it must
+clear. **Not done here** because M5's measurement found no legibility case for changing the value
+(see 368), and changing a token nobody has a reason to change is how a theme acquires drift.
+
+---
+
+### 368. The work is fainter than the relationship between work
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M5-T1b) ·
+**Size:** M · **Owner:** web
+
+Measured in Chromium under `[data-surface="canvas"]` on the shipped theme:
+
+| token                | what the painter draws with it | vs the ground |
+| -------------------- | ------------------------------ | ------------- |
+| `--foreground`       | the data-date rule, label ink  | 11.17:1       |
+| `--destructive`      | a critical bar                 | 7.57:1        |
+| `--muted-foreground` | **every dependency line**      | **5.31:1**    |
+| `--warning`          | a near-critical bar            | 4.88:1        |
+| `--primary`          | **an on-schedule bar**         | **3.14:1**    |
+| `--border`           | day/month/year gridlines       | 1.17:1        |
+| `--canvas-lane-rule` | the lane rule                  | 1.07:1        |
+
+**The commonest bar in any programme is the faintest coloured thing on the diagram**, at 1.69× less
+contrast than the lines that join them. Whether that is wrong is a question about the theme rather
+than about the diagram's geometry, which is why it is filed rather than fixed: `--primary` is
+ADR-0102's recovered corporate blue, it is the page's primary too, and re-valuing it for the canvas
+is a plot-palette decision with a contrast matrix behind it (and see 367 — the canvas scope has no
+`--plot-bar` of its own either).
+
+It is recorded because it inverts the assumption every document about this surface has made,
+including this epic's own M5 outcome (_"the relationship stops being the quietest thing on a surface
+whose subject is relationships"_): the relationship is not the quietest thing, the **work** is.
+
+**The trigger to pick it up** is the next theme pass on the canvas, or a report that bars are hard
+to see — not a milestone that happens to be nearby.
