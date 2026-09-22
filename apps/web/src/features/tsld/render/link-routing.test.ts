@@ -17,13 +17,16 @@ import {
   isLaneFreeBetween,
   laneIntervalIndex,
   laneOverlapBetween,
+  GUTTER_CHANNEL_PITCH_PX,
+  gutterChannels,
+  packGutterChannels,
   MAX_CORRIDOR_CANDIDATES,
   routeOrthogonal,
   type LaneIntervalIndex,
 } from './link-routing';
 // The two render types stay on the barrel: they are geometry, re-exported, and importing them
 // from `./geometry` here would say the test knows where they live rather than that it uses them.
-import type { RenderActivity, Viewport } from './render-model';
+import type { Point, RenderActivity, Viewport } from './render-model';
 
 /**
  * **Obstacle-aware link routing** (ADR-0064 M2). A link that runs straight through an unrelated
@@ -340,26 +343,53 @@ describe('routeOrthogonal — obstacle awareness', () => {
    * across a sweep of two plans, two viewports and two zooms, and panned down on a
    * 2,160-activity plan **58 of 60 fired legs were drawn off-canvas**.
    */
-  it.each([0, 32, -500, 1500])('puts the gutter leg in screen space at originY %i', (originY) => {
-    const view: Viewport = { ...VIEW, originY };
-    const fromLane = 0;
-    const toLane = 2;
-    // Bar centres, in screen space, for the two endpoint lanes.
-    const centreOf = (lane: number): number => screenYOfLane(lane, view) + LANE_HEIGHT / 2;
-    const from = { x: 100, y: centreOf(fromLane) };
-    const to = { x: 400, y: centreOf(toLane) };
-    const index: LaneIntervalIndex = new Map([[1, { spans: [[-10_000, 10_000]] }]]);
+  it.each([0, 32, -500, -1500, 1500])(
+    'puts the gutter leg on the lane boundary, clear of both bars, at originY %i',
+    (originY) => {
+      const view: Viewport = { ...VIEW, originY };
+      const fromLane = 0;
+      const toLane = 2;
+      // Bar centres, in screen space, for the two endpoint lanes.
+      const centreOf = (lane: number): number => screenYOfLane(lane, view) + LANE_HEIGHT / 2;
+      const from = { x: 100, y: centreOf(fromLane) };
+      const to = { x: 400, y: centreOf(toLane) };
+      const index: LaneIntervalIndex = new Map([[1, { spans: [[-10_000, 10_000]] }]]);
 
-    const routed = routeOrthogonal(from, to, 'FS', view, 0, obstaclesWith(index, fromLane, toLane));
+      const routed = routeOrthogonal(
+        from,
+        to,
+        'FS',
+        view,
+        0,
+        obstaclesWith(index, fromLane, toLane),
+      );
 
-    expect(routed).toHaveLength(6);
-    // The inter-lane gutter between lane 0 and lane 1: the band under one lane's bar bottom, which
-    // is the next lane's top minus the lane's spare height.
-    const gutterY =
-      screenYOfLane(Math.min(fromLane, toLane) + 1, view) - (LANE_HEIGHT - BAR_HEIGHT) / 2;
-    expect(routed[2]!.y).toBeCloseTo(gutterY, 6);
-    expect(routed[3]!.y).toBeCloseTo(gutterY, 6);
-  });
+      expect(routed).toHaveLength(6);
+
+      /**
+       * **The DATUM is the lane boundary** (logic-legibility M1-T1), not the upper lane's bar
+       * bottom. This expression used to subtract `pad`, and `laneTop + pad + barHeight` IS
+       * `screenYOfLane(L + 1) - pad` — so the gutter leg was drawn along the bar's bottom edge
+       * exactly, which is why M-C0-T4 measured **58 of Unit 300's 68 gutter legs lying inside a
+       * painted bar at 0.0 px clearance**. The router's last structured escape ran through the
+       * obstacles it exists to avoid.
+       */
+      const boundary = screenYOfLane(Math.min(fromLane, toLane) + 1, view);
+      expect(routed[2]!.y).toBeCloseTo(boundary, 6);
+      expect(routed[3]!.y).toBeCloseTo(boundary, 6);
+
+      /**
+       * And the invariant as an INEQUALITY rather than a restatement of the formula: the leg is
+       * strictly clear of both adjacent lanes' bar extents. Derived from the same arithmetic
+       * `activityRect` uses, so this cannot pass by agreeing with a wrong formula twice.
+       */
+      const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
+      const barBottomAbove = screenYOfLane(Math.min(fromLane, toLane), view) + pad + BAR_HEIGHT;
+      const barTopBelow = screenYOfLane(Math.min(fromLane, toLane) + 1, view) + pad;
+      expect(routed[2]!.y).toBeGreaterThan(barBottomAbove);
+      expect(routed[2]!.y).toBeLessThan(barTopBelow);
+    },
+  );
 
   it('tries no more than the documented number of corridors', () => {
     // The bound is the contract: an unbounded search on the per-frame paint path is how a draw
@@ -634,5 +664,178 @@ describe('chooseCorridorsByCrossing', () => {
       ),
     ).toBe(0);
     expect([a, b]).toEqual(before);
+  });
+});
+
+describe('packGutterChannels', () => {
+  /** A VHV route in gutter `y`, spanning `[x0, x1]`. Its two verticals are what the pass ignores. */
+  const vhv = (
+    y: number,
+    x0: number,
+    x1: number,
+  ): { line: Point[]; fromLane: number; toLane: number } => ({
+    line: [
+      { x: x0, y: y - 100 },
+      { x: x0, y: y - 100 },
+      { x: x0, y },
+      { x: x1, y },
+      { x: x1, y: y + 100 },
+      { x: x1, y: y + 100 },
+    ],
+    fromLane: 0,
+    toLane: 3,
+  });
+  const legYs = (cs: { line: Point[] }[]): number[] => cs.map((c) => c.line[2]!.y);
+
+  /**
+   * **Capacity is DERIVED, and that is what stops M3 rebuilding this** (FC-L3's amended clause).
+   *
+   * `pad` is `(laneHeight - barHeight) / 2` and the usable half-band is `pad - 1` — one pixel inside
+   * each bar edge. A constant here would have to be re-chosen the moment decision 5 thins the bar,
+   * which is precisely the edit a later reader would not know to make.
+   */
+  it('derives its channel count from the geometry, at two bar heights', () => {
+    // Today: 28/18 -> pad 5 -> usable +/- 4 -> floor(4/3) = 1 step either side -> 3 channels.
+    expect(gutterChannels(LANE_HEIGHT, BAR_HEIGHT)).toEqual([0, -3, 3]);
+    // A NetPoint-thin 5 px bar in the same pitch -> pad 11.5 -> usable 10.5 -> 3 steps -> 7.
+    expect(gutterChannels(28, 5)).toEqual([0, -3, 3, -6, 6, -9, 9]);
+    // Centre-out, so a gutter carrying one run draws it on the boundary.
+    expect(gutterChannels(28, 5)[0]).toBe(0);
+    // A pitch with no room at all yields one channel and the pass becomes a no-op.
+    expect(gutterChannels(20, 18)).toEqual([0]);
+  });
+
+  /**
+   * **The geometry inequality, at every pitch and every bar height** — the property M1-T1's datum
+   * and this pass's capacity have to satisfy TOGETHER, because a channel is only safe if the datum
+   * is the boundary AND the offset stays inside the band.
+   */
+  it('never places a channel inside a bar, at any pitch or bar height', () => {
+    for (const laneHeight of [20, 24, 28, 36, 44, 64]) {
+      for (const barHeight of [3, 5, 8, 12, 18]) {
+        if (barHeight >= laneHeight) continue;
+        const pad = (laneHeight - barHeight) / 2;
+        for (const k of gutterChannels(laneHeight, barHeight)) {
+          // The boundary is 0 in this frame; the bar above ends at -pad, the one below starts at +pad.
+          expect(Math.abs(k)).toBeLessThanOrEqual(pad - 1);
+          expect(k).toBeGreaterThan(-pad);
+          expect(k).toBeLessThan(pad);
+        }
+      }
+    }
+  });
+
+  it('leaves one run on the boundary and moves nothing', () => {
+    const cs = [vhv(100, 0, 50)];
+    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(legYs(cs)).toEqual([100]);
+  });
+
+  it('leaves runs in the SAME gutter that do not overlap in x on the boundary', () => {
+    const cs = [vhv(100, 0, 40), vhv(100, 60, 90), vhv(100, 200, 260)];
+    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(legYs(cs)).toEqual([100, 100, 100]);
+  });
+
+  /**
+   * **Touching is not overlapping, and this pins which.** Two runs meeting at a single x share a
+   * channel — they draw as one continuous line, which is what they are. Separating them would put a
+   * 3 px step in the middle of a straight run for no reason a reader could use.
+   *
+   * It earns its place because `packLanes` packs activities EDGE TO EDGE in a lane, so a run ending
+   * exactly where the next begins is a common shape here rather than a contrived one; and because a
+   * mutation sweep found the `<` / `>` comparison undiscriminated without it, which is an untested
+   * boundary rather than a genuine no-op (ADR-0110 D5).
+   */
+  it('treats runs that merely touch at one x as sharing a channel', () => {
+    const cs = [vhv(100, 0, 50), vhv(100, 50, 120)];
+    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(legYs(cs)).toEqual([100, 100]);
+  });
+
+  it('separates runs that overlap in x, and leaves different gutters independent', () => {
+    const cs = [vhv(100, 0, 100), vhv(100, 50, 150), vhv(200, 0, 100), vhv(200, 50, 150)];
+    expect(packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT)).toBe(2);
+    expect(legYs(cs)).toEqual([
+      100,
+      100 - GUTTER_CHANNEL_PITCH_PX,
+      200,
+      200 - GUTTER_CHANNEL_PITCH_PX,
+    ]);
+  });
+
+  /**
+   * **Permutation independence, and the named mutation it guards.** The pass sorts by a total order
+   * over the geometry — never the order `scene.edges` happened to arrive in, which is a server
+   * response. Sorting by candidate index instead would make the picture a function of the API's
+   * row order, and a line would move while the viewport stood still (FC-L9).
+   */
+  it('produces the same picture whatever order the runs arrive in', () => {
+    const spans: [number, number][] = [
+      [0, 100],
+      [50, 150],
+      [120, 200],
+      [10, 30],
+      [140, 260],
+      [0, 400],
+    ];
+    const run = (order: number[]): Map<string, number> => {
+      const cs = order.map((i) => vhv(100, spans[i]![0], spans[i]![1]));
+      packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT);
+      return new Map(
+        cs.map((c, j) => [
+          `${String(spans[order[j]!]![0])}-${String(spans[order[j]!]![1])}`,
+          c.line[2]!.y,
+        ]),
+      );
+    };
+    const forward = run([0, 1, 2, 3, 4, 5]);
+    for (const order of [
+      [5, 4, 3, 2, 1, 0],
+      [2, 0, 5, 1, 4, 3],
+      [3, 1, 4, 0, 2, 5],
+    ]) {
+      expect(run(order)).toEqual(forward);
+    }
+  });
+
+  /**
+   * **Surplus SPREADS, and never into a bar.** Seven mutually overlapping runs in a three-channel
+   * gutter cannot be separated; what the pass controls is whether the excess piles onto one line or
+   * is shared. FC-L3's second limb asks for `max legs on one y <= ceil(peak overlap / channels)`,
+   * and the first version of this pass sent every surplus run to the outermost offset — missing
+   * that bound by the whole surplus, which the M1 re-measurement caught.
+   *
+   * The inequality is asserted rather than the arrangement, so the case survives a change of
+   * geometry: with 7 runs over 3 channels no channel may carry more than `ceil(7 / 3) = 3`.
+   */
+  it('spreads surplus runs across channels rather than piling them on one', () => {
+    const cs = Array.from({ length: 7 }, (_, i) => vhv(100, i * 5, 200 + i * 5));
+    packGutterChannels(cs, LANE_HEIGHT, BAR_HEIGHT);
+    const channels = gutterChannels(LANE_HEIGHT, BAR_HEIGHT).length;
+    const perY = new Map<number, number>();
+    for (const y of legYs(cs)) perY.set(y, (perY.get(y) ?? 0) + 1);
+    expect(Math.max(...perY.values())).toBeLessThanOrEqual(Math.ceil(cs.length / channels));
+    expect(perY.size).toBe(channels);
+    // And every one of them is still inside the clear band — the property never traded.
+    const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
+    for (const y of legYs(cs)) expect(Math.abs(y - 100)).toBeLessThan(pad);
+  });
+
+  /** FC-L10: a scene with no gutter run is byte-identical. */
+  it('is a no-op on a scene whose routes are all four-point elbows', () => {
+    const elbow = {
+      line: [
+        { x: 0, y: 0 },
+        { x: 20, y: 0 },
+        { x: 20, y: 60 },
+        { x: 80, y: 60 },
+      ] as Point[],
+      fromLane: 0,
+      toLane: 2,
+    };
+    const before = JSON.stringify(elbow.line);
+    expect(packGutterChannels([elbow], LANE_HEIGHT, BAR_HEIGHT)).toBe(0);
+    expect(JSON.stringify(elbow.line)).toBe(before);
   });
 });

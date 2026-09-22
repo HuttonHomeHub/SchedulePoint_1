@@ -119,8 +119,8 @@ console.log(
 );
 console.log(
   `    ${'zoom'.padStart(5)} ${'pan'.padStart(6)} ${'links'.padStart(5)} ${'occl/link'.padStart(9)} ` +
-    `${'x/link'.padStart(6)} ${'maxLegs/y'.padStart(9)} ${'gutter'.padStart(6)} ` +
-    `${'touching'.padStart(8)} ${'band'.padStart(6)} ${'fingerprint'.padStart(12)}`,
+    `${'x/link'.padStart(6)} ${'legs/y'.padStart(6)} ${'overlap/y'.padStart(9)} ${'gutter'.padStart(6)} ` +
+    `${'touching'.padStart(8)} ${'peak/ch'.padStart(7)} ${'band'.padStart(6)} ${'fingerprint'.padStart(12)}`,
 );
 
 const vector = [];
@@ -146,8 +146,9 @@ for (const pxPerDay of [1, 4, 12]) {
     console.log(
       `    ${String(pxPerDay).padStart(5)} ${String(originY).padStart(6)} ${String(r.visibleLinks).padStart(5)} ` +
         `${(r.foreignLinks / r.visibleLinks).toFixed(3).padStart(9)} ${r.perLink.toFixed(3).padStart(6)} ` +
-        `${String(r.maxLegsOnOneY).padStart(9)} ${String(r.gutterLegs).padStart(6)} ` +
-        `${String(r.legsTouchingABar).padStart(8)} ${`${String(r.clearBandPx)}/${String(r.usableBandPx)}`.padStart(6)} ` +
+        `${String(r.maxLegsOnOneY).padStart(6)} ${String(r.maxOverlappingOnOneY).padStart(9)} ${String(r.gutterLegs).padStart(6)} ` +
+        `${String(r.legsTouchingABar).padStart(8)} ${`${String(r.peakGutterOverlap)}/${String(r.channels)}`.padStart(7)} ` +
+        `${`${String(r.clearBandPx)}/${String(r.usableBandPx)}`.padStart(6)} ` +
         `${r.fingerprint.padStart(12)}`,
     );
   }

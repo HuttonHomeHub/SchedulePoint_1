@@ -41,6 +41,7 @@ import {
   bundleCorridors,
   chooseCorridorsByCrossing,
   corridorGap,
+  packGutterChannels,
   ARROWHEAD_ROUTED_PX,
   ELAPSED_DAY_WALK,
   EMPHASIS_STROKE_W,
@@ -1230,6 +1231,15 @@ export function paintScene(
       // trunk. Rides the SAME flag as the routing it bundles — a comb is only worth merging once
       // the corridors are chosen deliberately, and the free-check it does needs that index anyway.
       bundleCorridors(corridors, laneIndex);
+      /**
+       * **Gutter channels LAST** (logic-legibility M1-T3), and the ordering is the decision.
+       *
+       * A gutter run's x-extent is set by the two verticals either side of it, and
+       * `bundleCorridors` moves verticals. Packing channels before it would assign them against x
+       * values that then change — ADR-0090's recorded oscillation with a third subject — so this
+       * runs after every x is final and moves y only.
+       */
+      packGutterChannels(corridors, LANE_HEIGHT, BAR_HEIGHT);
     }
     const drawEdges = (driving: boolean, highlighted = false): void => {
       const heads: [Point, Point, Point][] = [];

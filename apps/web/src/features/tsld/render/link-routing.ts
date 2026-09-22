@@ -337,11 +337,23 @@ export function routeOrthogonal(
    * call: the two are the same value at the one real call site (`paint.ts:1185-1190` passes
    * `LANE_HEIGHT`), and the parameter exists so this module does not depend on that constant.
    * Swapping it would be a second change riding along with a one-character fix.
+   *
+   * **The DATUM is the lane boundary, not the upper lane's bar bottom** (logic-legibility M1-T1).
+   * This expression used to subtract `pad`, and `laneTop + pad + barHeight` IS
+   * `screenYOfLane(L + 1) - pad`, so the gutter leg was drawn along the upper bar's bottom edge
+   * **exactly** — ADR-0149 D3's arithmetic, and M-C0-T4 measured **58 of Unit 300's 68 gutter legs
+   * lying inside a painted bar at 0.0 px clearance**. The router's last structured escape ran
+   * through the obstacles it exists to avoid.
+   *
+   * The invariant, as an inequality rather than a sentence: lane `L`'s bar occupies
+   * `[laneTop + pad, laneTop + pad + barHeight]` and lane `L + 1`'s occupies the same band one
+   * pitch down, so the clear band is `[boundary - pad, boundary + pad]` where
+   * `boundary = originY + (L + 1) * laneHeight`. A channel at `boundary + k` enters **no** bar's
+   * extent for any `|k| <= pad - 1`, **at any pitch and any bar height** — which is what lets
+   * {@link packGutterChannels} derive its capacity instead of carrying a constant, and what lets M3
+   * thin the bar without rebuilding either.
    */
-  const gutterY =
-    view.originY +
-    (gutterLane + 1) * obstacles.laneHeight -
-    (obstacles.laneHeight - obstacles.barHeight) / 2;
+  const gutterY = view.originY + (gutterLane + 1) * obstacles.laneHeight;
   // Each leg only has to clear the lanes IT crosses, which is why this can succeed where a single
   // corridor could not: the near leg runs from the source lane down to the gutter, the far leg from
   // the gutter to the target lane, and neither spans the blocked middle.
@@ -355,6 +367,141 @@ export function routeOrthogonal(
     { x: far, y: to.y },
     to,
   ];
+}
+
+// ── Gutter channels (logic-legibility M1) ───────────────────────────────────────────────────────
+
+/**
+ * How far apart two channels sit in a gutter, in CSS px.
+ *
+ * Three, the same step {@link FAN_OUT_STEP_PX} uses, because the question is the same one: how far
+ * apart must two parallel lines be before a reader sees two lines? It is NOT a capacity — capacity
+ * is derived from the geometry in {@link gutterChannels}, so a thinner bar widens the band and
+ * yields more channels with no edit here.
+ */
+export const GUTTER_CHANNEL_PITCH_PX = 3;
+
+/**
+ * The channel offsets available in a gutter, **derived from the geometry and ordered centre-out**.
+ *
+ * `pad` is `(laneHeight - barHeight) / 2`, so the usable half-band is `pad - 1` — one pixel inside
+ * each bar edge, which is what makes "a channel never enters a bar's extent" true rather than
+ * nearly true. At the shipped 28/18 that is +/- 4 px and **3 channels**; at a NetPoint-thin 5 px bar
+ * in the same pitch it is +/- 10 px and **7 channels**, with nothing here changed.
+ *
+ * Centre-out, so a gutter carrying one run draws it on the boundary — the tidiest answer — and the
+ * picture degrades gracefully as a gutter fills rather than starting off-centre.
+ */
+export function gutterChannels(laneHeight: number, barHeight: number): number[] {
+  const pad = (laneHeight - barHeight) / 2;
+  const usable = Math.max(0, pad - 1);
+  const steps = Math.floor(usable / GUTTER_CHANNEL_PITCH_PX);
+  const offsets = [0];
+  for (let k = 1; k <= steps; k += 1) {
+    offsets.push(-k * GUTTER_CHANNEL_PITCH_PX, k * GUTTER_CHANNEL_PITCH_PX);
+  }
+  return offsets;
+}
+
+/**
+ * Spread the frame's gutter runs across channels so two runs sharing a gutter sit at different y
+ * **where they overlap in x**, in place. Returns the number of runs moved.
+ *
+ * ## Why this cannot live inside `routeOrthogonal`
+ *
+ * That function sees one link. Whether two runs need different channels is a question about the
+ * whole frame — the same reason ADR-0065 M3 moved bundling out of the draw passes, and the reason
+ * ADR-0149 D3 could measure **13 legs on a single y, identically at pitch 28, 36 and 44**:
+ * `gutterY` has no per-link term, so no pitch can separate them and only a pass over all of them
+ * can.
+ *
+ * ## Four properties, in the order they matter
+ *
+ * 1. **It never measures its own output.** Channels are assigned against x-intervals that are
+ *    already final, which is why it runs LAST — after `bundleCorridors`, which moves verticals and
+ *    therefore moves the x-extent of the horizontal between them. Running it earlier would pack
+ *    against x values that then change, which is ADR-0090's recorded oscillation with a third
+ *    subject.
+ * 2. **It moves y only.** Lag anchors, drag handles and hit zones keep today's geometry — they are
+ *    computed before this runs and are not passed in. Structural, not remembered: the
+ *    {@link BundleCandidate} argument shape cannot reach them.
+ * 3. **It is deterministic and permutation-independent.** Runs are sorted by (gutter y, left x,
+ *    right x, candidate index) — a total order over the geometry, never the order `scene.edges`
+ *    happened to arrive in, which is a server response. A channel that varied between frames would
+ *    move a line while the viewport stood still.
+ * 4. **Surplus spreads to the LEAST-LOADED channel, never into a bar.** A gutter carrying more
+ *    simultaneous runs than it has channels cannot separate them all; the rest go to whichever
+ *    channel already carries the fewest runs overlapping them, so the excess is shared evenly
+ *    rather than piled on one line. That is not tidiness — FC-L3's second limb asks for
+ *    `max legs on one y <= ceil(peak overlap / channels)`, and dumping every surplus run on one
+ *    offset misses it by the whole surplus. Either way the run stays inside the clear band, which
+ *    is the property that must not be traded for a cosmetic gain.
+ */
+export function packGutterChannels(
+  candidates: readonly BundleCandidate[],
+  laneHeight: number,
+  barHeight: number,
+): number {
+  const offsets = gutterChannels(laneHeight, barHeight);
+  if (offsets.length < 2) return 0;
+
+  // A gutter run is the horizontal leg of a VHV route: a 6-point line's middle segment. Its y is a
+  // lane boundary by construction (M1-T1), so grouping by that y groups by gutter.
+  type Run = { candidate: number; at: number; y: number; x0: number; x1: number };
+  const runs: Run[] = [];
+  candidates.forEach((candidate, c) => {
+    const line = candidate.line;
+    if (line.length !== 6) return;
+    const a = line[2]!;
+    const b = line[3]!;
+    if (a.y !== b.y) return;
+    runs.push({ candidate: c, at: 2, y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
+  });
+  if (runs.length < 2) return 0;
+
+  runs.sort((p, q) => p.y - q.y || p.x0 - q.x0 || p.x1 - q.x1 || p.candidate - q.candidate);
+
+  let moved = 0;
+  let start = 0;
+  while (start < runs.length) {
+    let end = start + 1;
+    while (end < runs.length && runs[end]!.y === runs[start]!.y) end += 1;
+
+    // First fit: the lowest channel whose occupants do not overlap this run in x. Occupancy is a
+    // list per channel rather than a single "rightmost x", because a run may sit entirely to the
+    // LEFT of one already placed there — sorting by x0 makes that rare, not impossible.
+    const occupied: { x0: number; x1: number }[][] = offsets.map(() => []);
+    for (let i = start; i < end; i += 1) {
+      const run = runs[i]!;
+      const clashesIn = (k: number): number =>
+        occupied[k]!.filter((o) => o.x0 < run.x1 && o.x1 > run.x0).length;
+      let channel = 0;
+      let fewest = Number.POSITIVE_INFINITY;
+      for (let k = 0; k < offsets.length; k += 1) {
+        const clashes = clashesIn(k);
+        // First fit while a channel is free; least-loaded once none is. Strict `<` keeps the search
+        // stable and centre-out, so a quiet gutter still draws on the boundary.
+        if (clashes === 0) {
+          channel = k;
+          fewest = 0;
+          break;
+        }
+        if (clashes < fewest) {
+          fewest = clashes;
+          channel = k;
+        }
+      }
+      occupied[channel]!.push({ x0: run.x0, x1: run.x1 });
+      const offset = offsets[channel]!;
+      if (offset === 0) continue;
+      const line = candidates[run.candidate]!.line;
+      line[run.at] = { x: line[run.at]!.x, y: run.y + offset };
+      line[run.at + 1] = { x: line[run.at + 1]!.x, y: run.y + offset };
+      moved += 1;
+    }
+    start = end;
+  }
+  return moved;
 }
 
 // ── Trunk/branch bundling of co-linear corridors (ADR-0065 M3, the SAME flag) ────────────────────

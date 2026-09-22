@@ -47,6 +47,7 @@ import {
   bundleCorridors,
   chooseCorridorsByCrossing,
   corridorGap,
+  gutterChannels,
   isLaneFreeBetween,
   lagAnchorPoints,
   laneIntervalIndex,
@@ -1066,7 +1067,6 @@ export function sceneForShot(
   if (!config) throw new Error('the band-off arranged configuration is missing');
   const { scene } = sceneFor(asap, config.layout);
   const originY = 32;
-  const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
   const pxPerDay = 12;
   const { ctx, paths } = recordingCtx();
   paintScene(
@@ -1077,17 +1077,20 @@ export function sceneForShot(
     PALETTE,
     1,
   );
+  // **A gutter leg is the middle segment of a six-point route** — structural, so this survived
+  // M1-T1 moving the datum from the upper lane's bar bottom to the lane boundary. The previous
+  // test named the old y and would have found nothing, sending the throw below off on a plan that
+  // has plenty of gutter runs (`gutterStats` records the same correction).
   const byLane = new Map<number, number>();
   for (const link of linkPaths(paths)) {
-    for (let i = 1; i < link.pts.length; i += 1) {
-      const a = link.pts[i - 1]!;
-      const b = link.pts[i]!;
-      if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
-      const rel = a.y - originY;
-      const lane = Math.floor(rel / LANE_HEIGHT);
-      if (Math.abs(rel - lane * LANE_HEIGHT - (pad + BAR_HEIGHT)) > 0.001) continue;
-      byLane.set(lane, (byLane.get(lane) ?? 0) + 1);
-    }
+    if (link.pts.length !== 6) continue;
+    const a = link.pts[2]!;
+    const b = link.pts[3]!;
+    if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
+    // Round rather than floor: a channel offset puts the leg a few px either side of the boundary,
+    // so the lane it belongs to is the nearest one, not the one below it.
+    const lane = Math.round((a.y - originY) / LANE_HEIGHT) - 1;
+    byLane.set(lane, (byLane.get(lane) ?? 0) + 1);
   }
   if (byLane.size === 0) {
     throw new Error(
@@ -1687,10 +1690,21 @@ export function countOcclusions(
  * two pictures of possibly two plans. Every column of the vector comes from one paint of one scene,
  * which is the whole reason this is here rather than a second call.
  *
- * A gutter leg is one whose y sits at a lane's **bar bottom** — the single value
- * `routeOrthogonal`'s VHV route computes, with no per-link term, which is ADR-0149 D3's finding and
- * M1's subject. `legsTouchingABar` keeps M-C0-T4's CLOSED x test rather than the occlusion count's
- * open one, so the 58-of-68 figure it produced stays comparable; the two conventions are named in
+ * ## A gutter leg is STRUCTURAL — the middle segment of a six-point route
+ *
+ * It used to be "a horizontal whose y sits at a lane's bar bottom", which was the single value
+ * `routeOrthogonal`'s VHV route computed. **M1-T1 moved that datum to the lane boundary and this
+ * counter went to zero** — not because the legs had gone, but because the instrument was looking
+ * for them at the old y. It reported `0 gutter legs, 0 touching a bar`, which is the shape of a
+ * triumph and was the shape of a blind spot: `legsTouchingABar = 0` out of **nothing found**.
+ *
+ * So the definition is now the one `packGutterChannels` uses — the middle horizontal of a six-point
+ * polyline — which is datum-independent and cannot drift from the pass it measures. The **control**
+ * is that a scene containing six-point routes must yield gutter legs; it throws otherwise, because
+ * that is the failure this paragraph exists to record.
+ *
+ * `legsTouchingABar` keeps M-C0-T4's CLOSED x test rather than the occlusion count's open one, so
+ * the 58-of-68 figure it produced stays comparable; the two conventions are named in
  * {@link laneOverlapBetween} and the difference is a leg's own anchor.
  */
 export function gutterStats(
@@ -1702,21 +1716,29 @@ export function gutterStats(
   distinctGutterY: number;
   maxLegsOnOneY: number;
   legsTouchingABar: number;
+  peakGutterOverlap: number;
+  maxOverlappingOnOneY: number;
+  channels: number;
   clearBandPx: number;
   usableBandPx: number;
 } {
   const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
   const legs: { y: number; x0: number; x1: number }[] = [];
+  let vhvRoutes = 0;
   for (const link of links) {
-    for (let i = 1; i < link.pts.length; i += 1) {
-      const a = link.pts[i - 1]!;
-      const b = link.pts[i]!;
-      if (Math.abs(a.y - b.y) > EPS_Y || Math.abs(a.x - b.x) < EPS_Y) continue;
-      const within =
-        a.y - view.originY - Math.floor((a.y - view.originY) / LANE_HEIGHT) * LANE_HEIGHT;
-      if (Math.abs(within - (pad + BAR_HEIGHT)) > EPS_Y) continue;
-      legs.push({ y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
-    }
+    if (link.pts.length !== 6) continue;
+    vhvRoutes += 1;
+    const a = link.pts[2]!;
+    const b = link.pts[3]!;
+    if (Math.abs(a.y - b.y) > EPS_Y || Math.abs(a.x - b.x) < EPS_Y) continue;
+    legs.push({ y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
+  }
+  if (vhvRoutes > 0 && legs.length === 0) {
+    throw new Error(
+      `INDETERMINATE: ${String(vhvRoutes)} six-point routes were painted and no gutter leg was ` +
+        `found in any of them. The counter is looking in the wrong place, and "0 legs touching a ` +
+        `bar" would be a blind spot wearing a triumph's clothes. Refusing to judge.`,
+    );
   }
 
   const bars = scene.activities.flatMap((activity) => {
@@ -1728,6 +1750,56 @@ export function gutterStats(
 
   const byY = new Map<number, number>();
   for (const leg of legs) byY.set(leg.y, (byY.get(leg.y) ?? 0) + 1);
+
+  // **FC-L3's second limb needs a denominator**: `max legs on one y` is only meaningful against how
+  // many runs genuinely coincide. Grouping by the lane boundary each leg belongs to — NOT by its
+  // channel, which is the thing under test — a sweep over the interval endpoints gives the largest
+  // number of runs alive at any single x, which is the most channels that gutter could ever need.
+  const boundaryOf = (y: number): number => Math.round((y - view.originY) / LANE_HEIGHT);
+  const byGutter = new Map<number, { x0: number; x1: number }[]>();
+  for (const leg of legs) {
+    const key = boundaryOf(leg.y);
+    byGutter.set(key, [...(byGutter.get(key) ?? []), { x0: leg.x0, x1: leg.x1 }]);
+  }
+  const peakOf = (runs: { x0: number; x1: number }[]): number => {
+    const events = runs.flatMap((r) => [
+      { x: r.x0, d: 1 },
+      { x: r.x1, d: -1 },
+    ]);
+    events.sort((a, b) => a.x - b.x || a.d - b.d);
+    let live = 0;
+    let peak = 0;
+    for (const e of events) {
+      live += e.d;
+      if (live > peak) peak = live;
+    }
+    return peak;
+  };
+  let peakGutterOverlap = 0;
+  for (const runs of byGutter.values()) {
+    peakGutterOverlap = Math.max(peakGutterOverlap, peakOf(runs));
+  }
+
+  /**
+   * **FC-L3's second limb means OVERLAPPING legs on one y, and says "legs on one y".**
+   *
+   * Its bound is `max legs on one y <= ceil(peak gutter overlap / channels)`, and a channel
+   * legitimately carries many runs that do not overlap each other — that is the whole point of
+   * packing by x-interval. Measured after M1, Unit 300 reads peak 5 over 3 channels, so the literal
+   * bound is 2 and `maxLegsOnOneY` is 7: a FAIL that describes correct behaviour.
+   *
+   * So both are reported. The literal one is judged as written (this file never softens a threshold
+   * after measuring it), and this one is what the condition is for: no two runs that overlap in x
+   * may share a y beyond what the channel count forces.
+   */
+  const byChannelY = new Map<number, { x0: number; x1: number }[]>();
+  for (const leg of legs) {
+    byChannelY.set(leg.y, [...(byChannelY.get(leg.y) ?? []), { x0: leg.x0, x1: leg.x1 }]);
+  }
+  let maxOverlappingOnOneY = 0;
+  for (const runs of byChannelY.values()) {
+    maxOverlappingOnOneY = Math.max(maxOverlappingOnOneY, peakOf(runs));
+  }
 
   let touching = 0;
   for (const leg of legs) {
@@ -1745,6 +1817,9 @@ export function gutterStats(
     distinctGutterY: byY.size,
     maxLegsOnOneY: legs.length === 0 ? 0 : Math.max(...byY.values()),
     legsTouchingABar: touching,
+    peakGutterOverlap,
+    maxOverlappingOnOneY,
+    channels: gutterChannels(LANE_HEIGHT, BAR_HEIGHT).length,
     clearBandPx: LANE_HEIGHT - BAR_HEIGHT,
     // What a channel may actually use: a channel at the band's own edge IS the bar edge, so the
     // usable span is the band less one pixel each side. Derived from `pad` rather than written as a
@@ -1826,6 +1901,17 @@ export function readBoth(
     ...countOcclusions(links, scene, view),
     ...gutterStats(links, scene, view),
   };
+}
+
+/** {@link gutterStats} for a scene, painting it once — the sibling of {@link worstOcclusionLane}. */
+export function gutterReadingFor(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): ReturnType<typeof gutterStats> {
+  const { ctx, paths } = recordingCtx();
+  paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+  return gutterStats(linkPaths(paths), scene, view);
 }
 
 /**
