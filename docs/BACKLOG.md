@@ -121,9 +121,13 @@ a product idea that has not yet earned a roadmap line:
   `add-note` is gone from that registry entirely, with a journey pinning its
   absence, and `clear-visual-placement` was narrowed out on 2026-08-14.
   **What is actually left**, all named by the ADR rather than discovered here:
-  the **start-edge resize** (D4 — it carries a mode-dependent meaning, and
-  shipping it without the mode statement the canvas has beside it would leave a
-  planner unable to tell which of two writes their drag just made), the columns
+  the **start-edge resize** (D4 — it carried a mode-dependent meaning, and
+  shipping it without the mode statement the canvas has beside it would have left
+  a planner unable to tell which of two writes their drag just made. **That reason
+  lapsed on 2026-09-21**: ADR-0148 deleted the modes, and the canvas start-edge
+  now has one write — `visualStart` + `durationDays`,
+  `use-plan-workspace-model.ts:1284` — so the Gantt resize is unbuilt rather than
+  blocked. Noted by the 2026-09-23 reconciliation pass), the columns
   **chooser's** grid-width memory (T6 names it; the grid has no resize handle,
   so nothing can set it yet), and a **coarse-pointer** pass _(the citation here
   read `docs/TECH_DEBT.md` #133 and is corrected 2026-09-11: that row **closed

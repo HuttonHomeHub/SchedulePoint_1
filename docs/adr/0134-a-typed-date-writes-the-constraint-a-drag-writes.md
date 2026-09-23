@@ -8,6 +8,9 @@
   resize, which made this same decision for the drag and needed an ADR then), ADR-0033 (Early and
   Visual modes, and `visualStart` as an advisory placement), ADR-0048 (the undo stack)
 - **Supersedes:** nothing.
+- **Amended by:** ADR-0148 (2026-09-21) — the `SNET` branch for a typed `Start` is deleted with
+  the scheduling modes; a typed start always hand-places. (Header note added by the 2026-09-23
+  reconciliation pass; ADR-0148 recorded the amendment and this file did not.)
 - **Spec:** [`docs/specs/gantt-editing-gaps/`](../specs/gantt-editing-gaps/) — Milestone 3
 
 ## Context

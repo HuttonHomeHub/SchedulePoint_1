@@ -4588,6 +4588,10 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   _for_. The Visual-mode journey earns its place for a reason beyond symmetry — barely any journey
   in this repository runs in Visual mode, and ADR-0092 records that gap being exactly where a defect
   was hiding.
+  **The Early branch no longer exists** (ADR-0148, 2026-09-21, which lists ADR-0134 in its
+  _Amends_): with the modes collapsed a typed `Start` always hand-places and writes no constraint
+  (`apps/web/src/features/gantt/model/cell-commit.ts`, the D1 docblock above its final `write`).
+  This entry described the `SNET` branch as live until the 2026-09-23 pass.
 
 - **ADR-0135** _(Accepted 2026-09-11)_ — A container hands focus back when somebody else removes the
   control you were on. A second Planner changing a plan-level setting while you hold the pen takes a
