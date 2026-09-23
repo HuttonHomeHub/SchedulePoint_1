@@ -115,10 +115,12 @@ export function routeOne(model: Model, e: number): Point[] | null {
 }
 
 /** The three whole-set passes, in the painter's order, over COPIES of the raw routes. */
-function postPasses(model: Model): { lines: Point[][]; fromLane: number[] } {
+function postPasses(model: Model): { lines: Point[][]; fromLane: number[]; edges: number[] } {
   const corridors: { line: Point[]; fromLane: number; toLane: number }[] = [];
+  const edges: number[] = [];
   model.raw.forEach((line, e) => {
     if (!line) return;
+    edges.push(e);
     const edge = model.scene.edges[e]!;
     corridors.push({
       line: line.map((p) => ({ x: p.x, y: p.y })),
@@ -131,7 +133,20 @@ function postPasses(model: Model): { lines: Point[][]; fromLane: number[] } {
     bundleCorridors(corridors, model.index);
     packGutterChannels(corridors, rowSlots(0).clearHalfBandPx);
   }
-  return { lines: corridors.map((c) => c.line), fromLane: corridors.map((c) => c.fromLane) };
+  return {
+    lines: corridors.map((c) => c.line),
+    fromLane: corridors.map((c) => c.fromLane),
+    edges,
+  };
+}
+
+/** The drawn lines, each with the ids of the two activities it connects. */
+export function linesWithEdges(model: Model): { line: Point[]; pred: string; succ: string }[] {
+  const { lines, edges } = postPasses(model);
+  return lines.map((line, i) => {
+    const edge = model.scene.edges[edges[i]!]!;
+    return { line, pred: edge.predecessorId, succ: edge.successorId };
+  });
 }
 
 export function buildModel(asap: Asap, layout: Layout, pxPerDay = 4): Model {
@@ -172,6 +187,77 @@ export function setCounters(mode: 'naive' | 'fast'): void {
 }
 
 const EPS = 0.001;
+
+/**
+ * **How a leg's "own" bar is decided (M0-T4 finding).** `position` is `crossing-probe.ts`'s
+ * `lineOcclusion`: it recovers a link's own bars from WHERE its polyline starts and ends, via
+ * `barAt`, which returns the first bar in list order within 0.5 px. Where two bars touch end to end —
+ * `packLanes` packs them exactly so — an anchor sits on both, the neighbour can be taken for the link's
+ * own bar, and a leg running behind that neighbour is not counted. It is therefore **order-dependent**:
+ * Unit 300 reads 49 in fixture order and 54 with the activity list reversed, over byte-identical lines.
+ * `identity` excludes the link's two endpoint bars **by id**, which the product counter will do because
+ * it has the ids, and reads 58 in either order. The recorder-based harness cannot do this, because a
+ * recorded path carries no link identity (ADR-0149 D1); this evaluator can, because its lines are the
+ * painter's digest-verified set built with the edge in hand.
+ */
+let attribution: 'position' | 'identity' = 'position';
+export function setAttribution(mode: 'position' | 'identity'): void {
+  attribution = mode;
+}
+
+const EPS_Y = 0.01;
+const EPS_X = 0.5;
+
+export interface BarIndex {
+  /** lane → bars in that lane, with their ids. */
+  byLane: Map<number, { id: string; x0: number; x1: number }[]>;
+  /** lane → the lane's bar extent (every bar in a lane shares it). */
+  extent: Map<number, { top: number; bottom: number }>;
+}
+export function barIndex(model: Model, lanes?: readonly number[], base?: BarIndex): BarIndex {
+  const byLane = new Map(base?.byLane);
+  const extent = new Map(base?.extent);
+  if (lanes)
+    for (const lane of lanes) {
+      byLane.delete(lane);
+      extent.delete(lane);
+    }
+  for (const scene of model.scene.activities) {
+    const a = model.byId.get(scene.id)!;
+    if (lanes && !lanes.includes(a.laneIndex)) continue;
+    const rect = activityRect(a, model.view, model.scene.dataDate);
+    if (rect === null) continue;
+    const list = byLane.get(a.laneIndex);
+    const bar = { id: a.id, x0: rect.x, x1: rect.x + rect.w };
+    if (list) list.push(bar);
+    else byLane.set(a.laneIndex, [bar]);
+    if (!extent.has(a.laneIndex)) extent.set(a.laneIndex, { top: rect.y, bottom: rect.y + rect.h });
+  }
+  return { byLane, extent };
+}
+/** Does any horizontal leg of `line` run over a bar that is neither of its endpoints? */
+export function identityForeign(
+  line: readonly Point[],
+  pred: string,
+  succ: string,
+  bars: BarIndex,
+): boolean {
+  for (let i = 0; i + 1 < line.length; i += 1) {
+    const a = line[i]!;
+    const b = line[i + 1]!;
+    if (Math.abs(a.y - b.y) > EPS_Y) continue;
+    const lo = Math.min(a.x, b.x);
+    const hi = Math.max(a.x, b.x);
+    for (const [lane, ext] of bars.extent) {
+      if (a.y < ext.top - EPS_Y || a.y > ext.bottom + EPS_Y) continue;
+      for (const bar of bars.byLane.get(lane) ?? []) {
+        if (bar.id === pred || bar.id === succ) continue;
+        if (Math.min(hi, bar.x1) - Math.max(lo, bar.x0) > EPS_X) return true;
+      }
+    }
+  }
+  return false;
+}
 
 /** One link's axis-aligned segments, tagged with the link — `segmentsOf`'s definition exactly. */
 export interface Seg {
@@ -304,14 +390,23 @@ export function overlapsFast(
 function score(
   model: Model,
   lines: Point[][],
+  edges: number[],
   laneOf: ReadonlyMap<string, number>,
   asap: Asap,
   t: Partial<Stages>,
 ): Objective {
   let s = performance.now();
-  const ctx = occlusionContext(model.scene, model.view);
   let occluded = 0;
-  for (const line of lines) if (lineOcclusion(line, ctx).foreign > 0) occluded += 1;
+  if (attribution === 'identity') {
+    const bars = barIndex(model);
+    lines.forEach((line, i) => {
+      const edge = model.scene.edges[edges[i]!]!;
+      if (identityForeign(line, edge.predecessorId, edge.successorId, bars)) occluded += 1;
+    });
+  } else {
+    const ctx = occlusionContext(model.scene, model.view);
+    for (const line of lines) if (lineOcclusion(line, ctx).foreign > 0) occluded += 1;
+  }
   t.occlusion = performance.now() - s;
   s = performance.now();
   const crossings =
@@ -371,9 +466,9 @@ export function evaluateFull(
   model.raw = scene.edges.map((_, e) => routeOne(model, e));
   t.route = performance.now() - s;
   s = performance.now();
-  const { lines } = postPasses(model);
+  const { lines, edges } = postPasses(model);
   t.post = performance.now() - s;
-  const objective = score(model, lines, layout.laneOf, asap, t);
+  const objective = score(model, lines, edges, layout.laneOf, asap, t);
   t.total = performance.now() - t0;
   return { objective, digest: sortedDigest(lines), stages: t as Stages, model };
 }
@@ -434,9 +529,9 @@ export function applyMoveIncremental(
   });
   t.route = performance.now() - s;
   s = performance.now();
-  const { lines } = postPasses(model);
+  const { lines, edges } = postPasses(model);
   t.post = performance.now() - s;
-  const objective = score(model, lines, laneOf, asap, t);
+  const objective = score(model, lines, edges, laneOf, asap, t);
   t.total = performance.now() - t0;
   return { objective, digest: sortedDigest(lines), stages: t as Stages, rerouted };
 }

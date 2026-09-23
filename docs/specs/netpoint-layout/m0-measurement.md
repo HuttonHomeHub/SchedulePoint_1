@@ -66,7 +66,11 @@ on one y.
 - **FC-N1: MET.** `chain-3-placed` after Arrange shows **0** overlaps. The red run against the pre-fix
   code is the `e2e-arrange` case in PR #663, which was verified red on that code before the fix. This
   table repeats the same result through the painter.
-- **FC-N4's denominator.** Unit 300 at pitch 60 and 4 px/day, `packLanes`: `occluded` **49**,
+- **CORRECTED at M0-T4, see "The occlusion counter decided a link's own bar by position" below:
+  every `occl` figure in this table uses the order-dependent positional counter. The denominator
+  FC-N4 is judged against is the identity count, 58, not 49.** The original bullet is kept below
+  as it was written, because the correction is the finding.
+- **FC-N4's denominator (as first written — superseded).** Unit 300 at pitch 60 and 4 px/day, `packLanes`: `occluded` **49**,
   `x/link` **1.915**. Re-layout passes if it reaches **≤ 29 occluded** (60 % of 49, rounded down)
   with `x/link` **≤ 2.106** (+10 %). A cut of less than 15 %, i.e. **42 or more**, withdraws
   Re-layout.
@@ -157,3 +161,117 @@ Equivalence is shown on Unit 300 only (144 bars), not at `scale-2000`, where 1,0
 evaluations would take about ten minutes; M4's delta objective will need the larger check. Node
 figures bound the algorithm and say nothing about the product owner's hardware (conditions.md; #75).
 The p95 is taken over nine runs.
+
+## M0-T4 — the prototype search, and the CQ-1 frontier (FC-N10)
+
+**Harness:** `apps/web/scripts/netpoint-search.ts` (the prototype, which never becomes product code:
+M4 writes that and this file then imports it) run by `measure-netpoint-search.mjs`. Pitch 60,
+4 px/day, fast counters. The search is spec §4.5 as written: repair, adjacent-row swaps, single-bar
+moves to {link neighbours' rows, ± 1, ± 2, one new row}, compaction; strict lexicographic
+improvement of (overlaps, occluded, crossings, −sameRow, travel, rows); pass cap P = 8.
+
+### Two instruments were checked before any search result was trusted
+
+- **The fast counters equal the pairwise ones** on seven layouts, including the scale generator's
+  2,532 overlaps and 4,695 crossings (`PART=control`).
+- **The occlusion counter decided a link's own bar by position, and that is order-dependent.**
+  `lineOcclusion` (`crossing-probe.ts`) recovers a link's own bars from where its polyline starts
+  and ends, via `barAt`, which returns the first bar in list order within 0.5 px. `packLanes` puts
+  bars end to end, so a link's anchor sits on its own bar **and** the neighbour it touches, and the
+  neighbour can be taken as "own". A leg running behind that neighbour then goes uncounted.
+  Reversing Unit 300's activity list leaves the line set **byte-identical** (same digest) and moves
+  the count from **49 to 54**. Counting by the link's two endpoint **ids** reads **58 in either
+  order**:
+
+  | plan (pitch 60) | px/day | position (fixture / reversed) | identity (fixture / reversed) |
+  | --------------- | -----: | ----------------------------: | ----------------------------: |
+  | `small-17`      |      1 |                        8 / 13 |                       10 / 10 |
+  | `small-17`      |      4 |                         8 / 6 |                       10 / 10 |
+  | Unit 300        |      1 |                       77 / 73 |                       78 / 78 |
+  | **Unit 300**    |  **4** |                   **49 / 54** |                   **58 / 58** |
+  | Unit 300        |     12 |                       45 / 51 |                       55 / 55 |
+  | `scale-2000`    |      4 |                 1,273 / 1,175 |                 1,253 / 1,253 |
+
+  Pitch 52 reads identically, and the positional counter is wrong **in both directions**, not just
+  low. The product counter M4 builds has the ids and counts by identity, and FC-N0 requires the two
+  to agree exactly. So from here on the harness counts by identity, and **FC-N4's denominator is
+  58**: Re-layout passes at **≤ 34** occluded (60 %) and is withdrawn at **≥ 50** (a cut under
+  15 %). Against the old denominator the bar would have been ≤ 29, and every result below also
+  clears that, so the correction decides nothing about the verdict. It is recorded rather than
+  quietly used because it makes the bar easier.
+  **The same counter produced ADR-0150's and ADR-0151's published occlusion figures** (0.250 and
+  0.261 per link). Those are positional counts in fixture order. Filed as `docs/TECH_DEBT.md` #373.
+
+- **The picture depends on dependency order, and the search does not.** Reversing the dependency
+  list changes the painter's line digest (the three post-passes run in a fixed order), while the
+  counts happen to agree here. Under identity counting the search returns **byte-identical rows**
+  for two runs and for fully reversed input (`PART=determinism`). M4 must still sort edges before
+  routing, or FC-N3's "byte-identical across permuted input" holds of the rows and not of the
+  picture drawn from them.
+
+### Small plans
+
+| run                           |   B | seed (ovl/occl/cross/same/travel/rows) | → result         |
+| ----------------------------- | --: | -------------------------------------- | ---------------- |
+| `chain-3` Tidy (pre-fix seed) |   5 | 1/0/0/2/0/1                            | 0/0/0/1/1/2      |
+| `chain-3` Re-layout           |   6 | 0/0/0/1/1/2                            | 0/0/0/1/1/2      |
+| `small-17` Re-layout (+50 %)  |   8 | 0/10/3/16/23/4                         | **0/0/2/9/32/6** |
+
+`small-17` loses every hidden link for two rows, at the price of seven same-row links and nine rows
+of travel. That trade is what the product owner's priority order asks for, and it is also the trade
+that shows most in a picture.
+
+### The Unit 300 frontier (seed 21 rows: 58 occluded, 360 crossings, 68 same-row, travel 502)
+
+| budget B       | mode     | rows | occluded | crossings | same-row | travel | full evals | ms (node) |
+| -------------- | -------- | ---: | -------: | --------: | -------: | -----: | ---------: | --------: |
+| seed (21)      | exact    |   21 |       17 |       208 |       58 |    555 |      1,702 |     3,909 |
+| +25 % (27)     | exact    |   27 |        2 |       210 |       44 |    739 |      2,120 |     5,240 |
+| **+50 % (32)** | exact    |   31 |    **3** |   **142** |       40 |    725 |      2,982 |     7,525 |
+| +100 % (42)    | exact    |   35 |        0 |       111 |       51 |    825 |      3,846 |     9,630 |
+| ∞              | exact    |   38 |        0 |       109 |       47 |    878 |      4,081 |    11,635 |
+| seed (21)      | filtered |   21 |       21 |       217 |       58 |    548 |        183 |     1,489 |
+| +25 % (27)     | filtered |   27 |        4 |       177 |       52 |    663 |        360 |     3,080 |
+| +50 % (32)     | filtered |   32 |        3 |       161 |       40 |    833 |        451 |     3,917 |
+| +100 % (42)    | filtered |   34 |        0 |       178 |       41 |    828 |        474 |     4,735 |
+| ∞              | filtered |   36 |        0 |       173 |       42 |    844 |        467 |     4,601 |
+
+**What it says:**
+
+- **The search buys what it is for, and most of it costs no rows at all.** At the seed's own 21
+  rows, exact search takes occluded 58 → 17 (−71 %) and crossings 360 → 208 (−42 %). At the
+  approved +50 % it reaches 3 and 142 (−95 %, −61 %). FC-N4's prototype read: **pass at every
+  budget**, including B = seed (17 ≤ 34; `x/link` 208/188 = 1.11 against a ceiling of 2.11).
+- **It is a local search, and the frontier is not monotone.** +25 % ends with fewer occluded (2)
+  than +50 % (3), and +100 % reaches the same crossings as ∞ with three fewer rows. Every exact run
+  but one hit the pass cap still improving, so these are readings at P = 8, not optima.
+- **The filter costs quality.** It is 2–3× faster, but at +50 % it ends at 161 crossings against
+  exact's 142, and at +100 % 178 against 111. M4's product module should score exactly wherever
+  FC-N2 permits.
+- **The price is chains and travel.** Same-row links fall from 68 to 40 at +50 %, and travel rises
+  from 502 to 725. The lexicographic order puts occlusion and crossings first, and the search spends
+  the later terms to buy them.
+- **FC-N2(b), the run limb: the prototype FAILS the 2,000 ms bar already on Unit 300** (3.9–11.6 s
+  exact, 1.5–4.7 s filtered, 144 bars) and the `scale-2000` reading follows. This is an
+  unoptimised prototype (each accepted move rebuilds the whole model), so the product module
+  re-judges it at M4. What is settled is the direction: the committed rule's worker or size-cap
+  branch applies, never the main thread.
+
+### The pictures, and what they do not show
+
+`frontier-today.png`, `frontier-search-seed.png`, `frontier-search-50.png` and
+`frontier-search-unbounded.png`, all by `shoot-netpoint-frontier.mjs`: the real painter in Chromium
+at pitch 60, tall enough to show every row.
+
+**The numbers improve more than the pictures do**, and this is said here so the product owner does
+not have to find it. At B = seed the left half is visibly less tangled. At +50 % and ∞ the search
+has bought its occlusion and crossing counts by **spreading the plan out**: activities move to the
+bottom of the diagram and are linked back to the top by long verticals (A1030 and A12500 at +50 %
+climb about 25 rows), and the WBS summary rows are pushed down. It reads as more spread out rather
+than calmer. None of the three looks like the NetPoint example. Unit 300 is a torture fixture of
+dense cross-linked logic, and a layout alone cannot make it read like a hand-drawn plan.
+
+That is the CQ-1 question, and it is the product owner's. The objective as ordered has no term that
+objects to a link spanning 25 rows, because travel ranks below both counts. A budget smaller than
++50 %, or travel promoted above crossings, would trade some of the count reduction for a more
+compact picture.

@@ -30,31 +30,30 @@
  *
  * Unit 300 is run in both modes, so the filter's cost in quality is measured, not assumed.
  */
-import { activityRect } from '../src/features/tsld/render/geometry';
 import { laneIntervalIndex } from '../src/features/tsld/render/link-routing';
 import type { Point } from '../src/features/tsld/render/render-model';
 
-import { type Layout, lineOcclusion, occlusionContext } from './crossing-probe';
+import type { Layout } from './crossing-probe';
 import type { unit300Asap } from './lane-travel-probe';
 import {
   type Model,
   type Objective,
   applyMoveIncremental,
+  barIndex,
+  type BarIndex,
   buildModel,
   crossAgainst,
   evaluateFull,
+  identityForeign,
   routeOne,
   segIndex,
   type SegIndex,
   segmentsOfLines,
+  setAttribution,
   setCounters,
 } from './netpoint-evaluate';
 
 type Asap = ReturnType<typeof unit300Asap>;
-type Ctx = ReturnType<typeof occlusionContext>;
-
-const EPS_Y = 0.01;
-const EPS_X = 0.5;
 
 /** −1 / 0 / 1 for a lexicographically smaller / equal / larger objective. */
 export function lexCompare(a: Objective, b: Objective): number {
@@ -134,43 +133,9 @@ function compacted(laneOf: ReadonlyMap<string, number>): Map<string, number> | n
   return new Map([...laneOf].map(([k, lane]) => [k, to.get(lane)!]));
 }
 
-/** The occlusion context with two lanes rebuilt — `occlusionContext`'s construction, per lane. */
-function patchCtx(ctx: Ctx, model: Model, lanes: readonly number[]): Ctx {
-  const barsOfLane = new Map(ctx.barsOfLane);
-  const extentOfLane = new Map(ctx.extentOfLane);
-  for (const lane of lanes) {
-    barsOfLane.delete(lane);
-    extentOfLane.delete(lane);
-  }
-  const members = model.scene.activities.filter((a) =>
-    lanes.includes(model.byId.get(a.id)!.laneIndex),
-  );
-  for (const scene of members) {
-    const activity = model.byId.get(scene.id)!;
-    const rect = activityRect(activity, model.view, model.scene.dataDate);
-    if (rect === null) continue;
-    const lane = activity.laneIndex;
-    const bars = barsOfLane.get(lane);
-    if (bars) bars.push({ x0: rect.x, x1: rect.x + rect.w });
-    else barsOfLane.set(lane, [{ x0: rect.x, x1: rect.x + rect.w }]);
-    if (!extentOfLane.has(lane)) extentOfLane.set(lane, { top: rect.y, bottom: rect.y + rect.h });
-  }
-  const barAt = (x: number, y: number): string | null => {
-    for (const [lane, extent] of extentOfLane) {
-      if (y < extent.top - EPS_Y || y > extent.bottom + EPS_Y) continue;
-      const bars = barsOfLane.get(lane) ?? [];
-      for (let i = 0; i < bars.length; i += 1) {
-        if (x >= bars[i]!.x0 - EPS_X && x <= bars[i]!.x1 + EPS_X) return `${lane}:${i}`;
-      }
-    }
-    return null;
-  };
-  return { index: model.index, barsOfLane, extentOfLane, barAt };
-}
-
 /** Everything the filter needs about the current state, rebuilt after each accepted move. */
 interface Cache {
-  ctx: Ctx;
+  bars: BarIndex;
   occl: boolean[];
   index: SegIndex;
   segsOf: {
@@ -179,21 +144,22 @@ interface Cache {
   }[];
 }
 function buildCache(model: Model): Cache {
-  const ctx = occlusionContext(
-    { ...model.scene, activities: model.scene.activities.map((a) => model.byId.get(a.id)!) },
-    model.view,
-  );
-  const occl = model.raw.map((line) => (line ? lineOcclusion(line, ctx).foreign > 0 : false));
+  const bars = barIndex(model);
+  const occl = model.raw.map((line, e) => {
+    const edge = model.scene.edges[e]!;
+    return line ? identityForeign(line, edge.predecessorId, edge.successorId, bars) : false;
+  });
   const segsOf = model.raw.map((line, e) => segmentsOfLines(line ? [line] : [], [e]));
   const index = segIndex(
     segsOf.flatMap((s) => s.h),
     segsOf.flatMap((s) => s.v),
   );
-  return { ctx, occl, index, segsOf };
+  return { bars, occl, index, segsOf };
 }
 
 export function search(asap: Asap, seedLayout: Layout, options: SearchOptions): SearchResult {
   setCounters('fast');
+  setAttribution('identity');
   const t0 = performance.now();
   const passesCap = options.passes ?? 8;
   const confirms = options.confirms ?? 3;
@@ -379,7 +345,7 @@ function localDelta(
   next.delete(to);
   for (const [lane, spans] of patch) next.set(lane, spans);
   model.index = next;
-  const ctx = patchCtx(cache.ctx, model, [from, to]);
+  const bars = barIndex(model, [from, to], cache.bars);
 
   const affected: number[] = [];
   model.scene.edges.forEach((edge, e) => {
@@ -397,7 +363,8 @@ function localDelta(
   let dOccl = 0;
   for (let i = 0; i < affected.length; i += 1) {
     const line = newLines[i];
-    const now = line ? lineOcclusion(line, ctx).foreign > 0 : false;
+    const edge = model.scene.edges[affected[i]!]!;
+    const now = line ? identityForeign(line, edge.predecessorId, edge.successorId, bars) : false;
     dOccl += Number(now) - Number(cache.occl[affected[i]!]);
   }
   const oldSegs = segmentsOfLines(
@@ -433,14 +400,17 @@ function localDelta(
   return [dOccl, dCross, -dSame, dTravel, dRows];
 }
 
-export { chainPlacedLayouts, smallPlanLayouts, drawnOverlaps } from './crossing-probe';
+export { chainPlacedLayouts, drawnOverlaps, sceneFor, smallPlanLayouts } from './crossing-probe';
+export { activityRect as rectOf } from '../src/features/tsld/render/geometry';
 export {
   countCrossingsFast,
+  linesWithEdges,
   evaluateFull,
   objectiveKey,
   overlapsFast,
   packedOnDrawn,
   scalePlan,
+  setAttribution,
   setCounters,
   unit300Layouts,
 } from './netpoint-evaluate';

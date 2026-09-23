@@ -34,7 +34,8 @@ execFileSync(
 const src = readFileSync(file, 'utf8');
 if ((src.match(/\bvar LANE_HEIGHT = \d+;/g) ?? []).length !== 1)
   throw new Error('INDETERMINATE: pitch');
-writeFileSync(file, src.replace(/\bvar LANE_HEIGHT = \d+;/, 'var LANE_HEIGHT = 60;'));
+const PITCH = Number(process.env.PITCH ?? 60);
+writeFileSync(file, src.replace(/\bvar LANE_HEIGHT = \d+;/, `var LANE_HEIGHT = ${String(PITCH)};`));
 const m = await import(pathToFileURL(file).href);
 
 const rowsOf = (laneOf) => Math.max(...laneOf.values()) + 1;
@@ -112,6 +113,43 @@ if (PART === 'control') {
       `${name.padEnd(22)} naive ${vec(naive).padEnd(28)} fast ${vec(fast).padEnd(28)} ${same ? 'EQUAL' : 'DIFFER'}`,
     );
     if (!same) throw new Error(`INDETERMINATE: fast counters differ on ${name}`);
+  }
+} else if (PART === 'identity') {
+  // M0-T4 finding: both attributions, per plan and zoom, and whether each survives reversed input.
+  m.setCounters('fast');
+  const chain = m.chainPlacedLayouts();
+  const small = m.smallPlanLayouts();
+  const u = unit();
+  const s2000 = m.scalePlan(2000);
+  const cases = [
+    ['chain-3 packed', chain.asap, chain.shipped],
+    ['small-17', small.asap, small.shipped],
+    ['Unit 300', u.asap, u.shipped],
+    ['scale-2000 packed', s2000.asap, m.packedOnDrawn(s2000.asap, 'p')],
+  ];
+  console.log(
+    `pitch ${String(PITCH)}: plan, px/day, position (fixture / reversed), identity (fixture / reversed)`,
+  );
+  for (const [name, asap, layout] of cases) {
+    const reversed = { ...asap, activities: [...asap.activities].reverse() };
+    for (const pxPerDay of [1, 4, 12]) {
+      const read = (mode, a) => {
+        m.setAttribution(mode);
+        return m.evaluateFull(a, layout, pxPerDay).objective.occluded;
+      };
+      const row = {
+        plan: name,
+        pxPerDay,
+        position: [read('position', asap), read('position', reversed)],
+        identity: [read('identity', asap), read('identity', reversed)],
+      };
+      console.log(
+        `${name.padEnd(18)} ${String(pxPerDay).padStart(3)}  position ${String(row.position[0]).padStart(5)} / ${String(row.position[1]).padStart(5)}   identity ${String(row.identity[0]).padStart(5)} / ${String(row.identity[1]).padStart(5)}`,
+      );
+      console.log(`JSON ${JSON.stringify(row)}`);
+      if (row.identity[0] !== row.identity[1])
+        throw new Error(`identity attribution is order-dependent on ${name}`);
+    }
   }
 } else if (PART === 'small') {
   const chain = m.chainPlacedLayouts();
