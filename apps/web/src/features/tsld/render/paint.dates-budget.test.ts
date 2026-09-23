@@ -144,16 +144,21 @@ function paint(dates: boolean, pxPerDay: number) {
 }
 
 describe('flanking dates — draw-budget gate at 2,000 activities (ADR-0054 §3 / M3-T5)', () => {
-  it('costs nothing at all below the LOD threshold', () => {
-    const below = DATE_LABEL_MIN_PX_PER_DAY - 1;
-    const off = paint(false, below);
-    const on = paint(true, below);
-    // Not one extra DRAW: the zoom check precedes every measurement and every date.
-    expect(on.fillText).toBe(off.fillText);
-    // …and never more measurement. (Not strict equality: the width memo is module-scope and warms
-    // across paints, so the second run legitimately measures fewer — which is the memo working,
-    // not the toggle costing something.)
-    expect(on.measureText).toBeLessThanOrEqual(off.measureText);
+  /**
+   * **Below the old threshold the dates are fitted per bar, not switched off** (`docs/TECH_DEBT.md`
+   * #378). This case was "costs nothing at all below the LOD threshold", and after the gate was
+   * lifted it still passed — by coincidence: in this fixture a five-day bar at 5 px/day is 25 px
+   * and two dates need ~72, so nothing fits and nothing is drawn. A case that passes for a reason
+   * other than its name is a false statement, so it now pins the bound that does matter at
+   * whole-plan zoom, where nothing is culled: never more than two dates per bar, and measurement
+   * that does not scale with the bars drawn.
+   */
+  it('at whole-plan zoom draws at most two dates per bar and measures each date at most once', () => {
+    const whole = 1;
+    const off = paint(false, whole);
+    const on = paint(true, whole);
+    expect(on.fillText - off.fillText).toBeLessThanOrEqual(COUNT * 2);
+    expect(on.measureText).toBeLessThanOrEqual(Math.max(on.fillText, COUNT));
   });
 
   it('adds at most two text draws per VISIBLE bar above the threshold, never per activity', () => {

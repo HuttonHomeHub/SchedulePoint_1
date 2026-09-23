@@ -896,18 +896,79 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     expect(ctx.fillText).not.toHaveBeenCalled();
   });
 
-  it('suppresses labels below the legibility zoom threshold', () => {
+  /**
+   * **A name that fits is drawn at whole-plan zoom** (`docs/TECH_DEBT.md` #378). This case asserted
+   * the opposite until the NetPoint reference plan showed what it cost: at NetPoint's own scale
+   * (~1 px/day) the picture names every bar and ours named none, because a zoom gate written for
+   * names INSIDE a bar still applied after the name moved to its own row above it.
+   */
+  it('names a long bar at whole-plan zoom, where the old zoom gate named nothing (#378)', () => {
     const ctx = mockCtx();
-    // pxPerDay 1 is below LABEL_MIN_PX_PER_DAY (4) — no labels drawn.
     const zoomedOut: Viewport = { ...VIEW, pxPerDay: 1 };
+    const year = task({
+      id: 'y',
+      label: 'A1020 Erect steel',
+      earlyStart: '2026-01-02',
+      earlyFinish: '2026-12-31',
+    });
     paintNames(
       ctx,
-      { activities: [wide()], edges: [], dataDate: DATA_DATE },
+      { activities: [year], edges: [], dataDate: DATA_DATE },
       zoomedOut,
       SIZE,
       PALETTE,
     );
-    expect(ctx.fillText).not.toHaveBeenCalled();
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    expect(ctx.fillText.mock.calls[0]![0]).toBe('A1020 Erect steel');
+  });
+
+  it('still names nothing at whole-plan zoom where not one character fits (#378 control)', () => {
+    // Two one-day bars one day apart at 1 px/day: the first's budget is its 2 px plus half of a
+    // 1 px gap, which holds no character. The per-bar room test, not the zoom, is what refuses it.
+    const ctx = mockCtx();
+    const zoomedOut: Viewport = { ...VIEW, pxPerDay: 1 };
+    paintNames(
+      ctx,
+      {
+        activities: [
+          task({ id: 'a', label: 'Alpha', earlyStart: '2026-01-02', earlyFinish: '2026-01-02' }),
+          task({ id: 'b', label: 'Bravo', earlyStart: '2026-01-04', earlyFinish: '2026-01-04' }),
+        ],
+        edges: [],
+        dataDate: DATA_DATE,
+      },
+      zoomedOut,
+      SIZE,
+      PALETTE,
+    );
+    const drawn = ctx.fillText.mock.calls.map((c) => c[0] as string);
+    expect(drawn.some((t) => t.startsWith('Alpha') || t.startsWith('A…'))).toBe(false);
+  });
+
+  /**
+   * **A long bar's name follows the part of the bar on screen** (`docs/TECH_DEBT.md` #380). The
+   * name was centred on the whole bar, so a bar running off the right edge had its name off screen
+   * too — the NetPoint plan's year-long boiler fabrication read as a red line with no name.
+   */
+  it("keeps a long bar's name on screen when the bar runs past the edge (#380)", () => {
+    const ctx = mockCtx();
+    const long = task({
+      id: 'l',
+      label: 'Long bar',
+      earlyStart: '2026-01-02',
+      earlyFinish: '2026-06-30',
+    });
+    paintNames(ctx, { activities: [long], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
+    const x = ctx.fillText.mock.calls[0]![1] as number;
+    const textW = 'Long bar'.length * 6;
+    // As close to the bar's (off-screen) centre as the screen allows: flush with the right edge.
+    expect(x).toBe(SIZE.width - textW / 2);
+  });
+
+  it('centres a name on its bar when the whole bar is on screen (#380 control)', () => {
+    const ctx = mockCtx();
+    paintNames(ctx, { activities: [wide()], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
+    expect(ctx.fillText.mock.calls[0]![1]).toBe(BAR_X + BAR_W / 2);
   });
 
   /**
@@ -1978,6 +2039,55 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     ]) {
       expect(crowded).not.toContain(x);
     }
+  });
+
+  /**
+   * **One date per node** (`docs/TECH_DEBT.md` #379). Two bars that meet in a lane each wrote a date
+   * at the shared node, and they ran together ("31 Jan1 Feb"). The NetPoint reference writes the
+   * node once, with the next activity's start. The controls pin the edges of the rule: a visible
+   * gap keeps both dates, and a next bar too narrow to write its start keeps the finish, so a node
+   * never ends up with no date at all.
+   */
+  it('writes one date at a node where two bars meet, and both where they do not (#379)', () => {
+    const datesOnly = {
+      dayGrid: false,
+      monthGrid: false,
+      yearGrid: false,
+      today: false,
+      nonWorking: false,
+      labels: false,
+      lateOverlay: false,
+      dates: true,
+    } as const;
+    const textsBelow = (activities: RenderActivity[]): string[] => {
+      const r = recordingCtx();
+      paintScene(r.ctx, refreshScene({ view: { ...datesOnly }, activities }), VIEW, SIZE, PALETTE);
+      const below = rowSlots(screenYOfLane(0, VIEW)).belowY;
+      return r.log
+        .map((e) => /^fillText\(\["([^"]*)",([-\d.]+),([-\d.]+)\]\)$/.exec(e))
+        .filter((m): m is RegExpExecArray => m !== null && Number(m[3]) === below)
+        .map((m) => m[1]!);
+    };
+    const first = task({ id: 'a', earlyStart: '2026-01-02', earlyFinish: '2026-01-07' });
+    // Abutting, and wide enough (72 px) to write both of its own dates.
+    const meets = textsBelow([
+      first,
+      task({ id: 'b', earlyStart: '2026-01-08', earlyFinish: '2026-01-13' }),
+    ]);
+    expect(meets).toEqual(['2 Jan', '8 Jan', '13 Jan']);
+    // A visible gap: the node is two nodes, each with its date.
+    const apart = textsBelow([
+      first,
+      // 84 px: "10 Jan" + "16 Jan" + the gap is 76 px, so both of its own dates fit inside.
+      task({ id: 'b', earlyStart: '2026-01-10', earlyFinish: '2026-01-16' }),
+    ]);
+    expect(apart).toEqual(['2 Jan', '7 Jan', '10 Jan', '16 Jan']);
+    // Abutting, but the next bar is too narrow to write its start: the finish keeps the node.
+    const narrowNext = textsBelow([
+      first,
+      task({ id: 'b', earlyStart: '2026-01-08', earlyFinish: '2026-01-09' }),
+    ]);
+    expect(narrowNext).toContain('7 Jan');
   });
 
   it('draws the in-bar progress band + hairline front divider in the bar’s paired ink', () => {
