@@ -2314,6 +2314,11 @@ export function TsldPanel({
   // because Tidy can improve a diagram the pack would leave alone, and only the search can say so.
   const openAutoArrange = (): void => {
     if (!onAutoArrange || dataDate === null) return;
+    // The dialog returns focus to the DIAGRAM on confirm, cancel and close, from either entry point
+    // (ADR-0149 D8, NetPoint-layout M5): a native `<dialog>` restores focus to whatever held it when
+    // `showModal()` ran, so the listbox takes it first. After arranging, the next thing a planner
+    // does is on the diagram, and from the toolbar the old restore target was the Arrange button.
+    listboxRef.current?.focus();
     setArrangeError(null);
     setArrangeInput({
       activities: renderActivities,
@@ -3095,13 +3100,12 @@ export function TsldPanel({
                 // and by then the write has landed, the overlaps are gone and this
                 // strip has gone: focus would be handed back to a button that no longer exists.
                 // Moving it first makes the listbox the restore target, so the dialog returns the
-                // planner to the diagram it just rearranged. Deliberately NOT inside
-                // `openAutoArrange`, which the toolbar shares and whose own trigger is stable.
+                // planner to the diagram it just rearranged. Since NetPoint-layout M5 that move is
+                // inside `openAutoArrange`, so the toolbar's entry does the same.
                 //
-                // Proven in a browser rather than reasoned about: removing this one line turns
-                // `e2e-arrange`'s step (5) red with focus on <body>. The accessibility review
-                // raised it as a RISK it could not settle from source, and it is real.
-                listboxRef.current?.focus();
+                // Proven in a browser rather than reasoned about: without it `e2e-arrange`'s step
+                // (5) goes red with focus on <body>. The accessibility review raised it as a RISK it
+                // could not settle from source, and it is real.
                 openAutoArrange();
               }}
             >
