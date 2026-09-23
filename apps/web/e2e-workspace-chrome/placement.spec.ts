@@ -7,7 +7,9 @@ import {
   ensurePen,
   findBar,
   isoDay,
+  linkActivities,
   newPlan,
+  openPlanId,
   onboard,
   placeOnDay,
   placements,
@@ -93,6 +95,73 @@ test.describe('Visual placement rolls forward, on the server', () => {
         { message: 'the recalculation never landed', timeout: 15_000 },
       )
       .toBe('2026-01-12');
+  });
+
+  test('a finish milestone reads the day its predecessor ends, and a nudge stores exactly one day later (#381)', async ({
+    page,
+  }) => {
+    // #381 (ADR-0155): a finish milestone is dated by the day it closes. Before, after a task ending
+    // Friday it read the following Monday, so a planner who put it on the task's last day was told
+    // it was early. This drives the three halves no unit suite can join: the engine's reading, the
+    // status bar's Finish, and the canvas nudge's write — which turns an AXIS day back into a date,
+    // one day earlier for a finish milestone. Without that inversion the nudge stores two days on.
+    const orgSlug = await onboard(page, STAMP + 2);
+    await createHierarchy(page);
+    await newPlan(page, 'Milestone');
+    await ensurePen(page);
+
+    const [frame] = await seedActivities(page, orgSlug, [
+      { name: 'Frame', laneIndex: 0, durationDays: 5 },
+    ]);
+    if (!frame) throw new Error('seeding returned no activity');
+    // Frame runs Mon 5 – Fri 9 Jan; the milestone is placed on Friday, its last day.
+    const planId = openPlanId(page);
+    const milestoneId = await page.evaluate(
+      async ({ org, id }: { org: string; id: string }) => {
+        const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Frame complete',
+            type: 'FINISH_MILESTONE',
+            durationDays: 0,
+            laneIndex: 1,
+            visualStart: '2026-01-09',
+          }),
+        });
+        if (!response.ok) throw new Error(`milestone ${String(response.status)}`);
+        return ((await response.json()) as { data: { id: string } }).data.id;
+      },
+      { org: orgSlug, id: planId },
+    );
+    await linkActivities(page, orgSlug, frame.id, milestoneId);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    const placed = requirePlacement(await placements(page, orgSlug), 'Frame complete');
+    expect(isoDay(placed.visualEffectiveStart)).toBe('2026-01-09');
+    expect(placed.visualConflict).toBe(false);
+    // The old rule made this Monday the 12th: the milestone was the plan's last event.
+    await expect(page.getByLabel('Finish: 09 Jan 2026')).toBeVisible();
+
+    // Nudge the diamond one day right from the keyboard.
+    // Focus the diagram's listbox (e2e-edit's pattern) and arrow to the milestone.
+    const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+    await diagram.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+    const selected = diagram.getByRole('option', { selected: true });
+    for (let i = 0; i < 3 && !/Frame complete/.test((await selected.textContent()) ?? ''); i += 1) {
+      await page.keyboard.press('ArrowDown');
+    }
+    await expect(selected).toContainText('Frame complete');
+    await page.keyboard.press('Alt+ArrowRight');
+    await expect
+      .poll(
+        async () =>
+          isoDay(requirePlacement(await placements(page, orgSlug), 'Frame complete').visualStart),
+        { message: 'the nudge never reached the server', timeout: 15_000 },
+      )
+      .toBe('2026-01-10');
   });
 
   test('the Snap to grid control is gone from every toolbar, including the overflow', async ({

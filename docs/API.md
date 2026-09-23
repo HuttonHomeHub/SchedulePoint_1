@@ -205,6 +205,13 @@ after pushing successors and applying the data-date floor. Clearing a placement 
 constraint written anywhere. `PATCH …/plans/:planId/activities/placements` (documented under **Batch
 mutations**) is the plural form.
 
+**A finish milestone's dates mean the END of their day** (ADR-0155). For a `FINISH_MILESTONE`, every
+date a client sends (`visualStart`, `constraintDate`, `secondaryConstraintDate`, the external dates)
+is read as the end of that day, and every date it reads back (`earlyStart`/`Finish`,
+`lateStart`/`Finish`, `visualEffective*`) is the day that closes at its instant. After a task ending
+Friday, a finish milestone reads Friday, and sending that Friday as its placement is not a conflict.
+Every other activity type, and every actual date, is unchanged.
+
 **Two engine-owned read fields carry what a placement costs:**
 
 | Field                  | On             | Meaning                                                                                                                                                                                      |
