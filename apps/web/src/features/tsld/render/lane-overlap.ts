@@ -22,11 +22,13 @@ export interface LaneSpan {
 }
 
 /**
- * The ids of activities that share a lane with at least one time-overlapping neighbour. Both sides of
- * every overlapping pair are returned (each overlapping bar carries the cue). O(n log n) — bucket by
- * lane, sort each lane by start, then sweep keeping the still-open intervals.
+ * Every unordered pair of activities that share a lane and overlap in time, each as `[a, b]` with
+ * `a < b`, sorted — so a pair has one spelling and the list has one order. This is **the** sweep; the
+ * NetPoint-layout auto-resolve (ADR-0153) reasons about which bar of a pair caused it, so it needs the
+ * pairs, and {@link laneOverlapIds} is derived from them rather than being a second predicate.
+ * O(n log n + k) — bucket by lane, sort each lane by start, then sweep keeping the still-open spans.
  */
-export function laneOverlapIds(spans: readonly LaneSpan[]): Set<string> {
+export function laneOverlapPairs(spans: readonly LaneSpan[]): [string, string][] {
   const byLane = new Map<number, LaneSpan[]>();
   for (const span of spans) {
     if (span.start === null || span.finish === null) continue; // not drawn → can't overlap
@@ -35,25 +37,40 @@ export function laneOverlapIds(spans: readonly LaneSpan[]): Set<string> {
     else byLane.set(span.laneIndex, [span]);
   }
 
-  const overlapping = new Set<string>();
+  const pairs: [string, string][] = [];
   for (const lane of byLane.values()) {
     if (lane.length < 2) continue;
     const sorted = [...lane].sort((a, b) =>
       a.start! < b.start! ? -1 : a.start! > b.start! ? 1 : a.finish! < b.finish! ? -1 : 1,
     );
-    // Sweep: `active` holds spans that haven't finished before the current one starts. Any that
-    // remain when a new span arrives overlap it (and it overlaps them).
+    // Sweep: `active` holds spans that haven't finished before the current one starts. Every one
+    // that remains when a new span arrives overlaps it.
     const active: LaneSpan[] = [];
     for (const span of sorted) {
       for (let i = active.length - 1; i >= 0; i -= 1) {
         if (active[i]!.finish! < span.start!) active.splice(i, 1); // finished strictly before → clear
       }
-      if (active.length > 0) {
-        overlapping.add(span.id);
-        for (const open of active) overlapping.add(open.id);
+      for (const open of active) {
+        pairs.push(open.id < span.id ? [open.id, span.id] : [span.id, open.id]);
       }
       active.push(span);
     }
+  }
+  return pairs.sort((p, q) =>
+    p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : p[1] < q[1] ? -1 : p[1] > q[1] ? 1 : 0,
+  );
+}
+
+/**
+ * The ids of activities that share a lane with at least one time-overlapping neighbour. Both sides of
+ * every overlapping pair are returned (each overlapping bar carries the cue). Derived from
+ * {@link laneOverlapPairs}, so the cue and the auto-resolve cannot disagree about what overlaps.
+ */
+export function laneOverlapIds(spans: readonly LaneSpan[]): Set<string> {
+  const overlapping = new Set<string>();
+  for (const [a, b] of laneOverlapPairs(spans)) {
+    overlapping.add(a);
+    overlapping.add(b);
   }
   return overlapping;
 }

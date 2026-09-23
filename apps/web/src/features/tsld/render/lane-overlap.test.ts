@@ -1,7 +1,7 @@
 import { packLanes } from '@repo/layout';
 import { describe, expect, it } from 'vitest';
 
-import { laneOverlapIds, type LaneSpan } from './lane-overlap';
+import { laneOverlapIds, laneOverlapPairs, type LaneSpan } from './lane-overlap';
 
 /** A whole-day offset from 2026-01-01 as a `YYYY-MM-DD` string, to bridge the packer's day-number
  * spans to this module's date-string spans in the cross-consistency test below. */
@@ -103,5 +103,56 @@ describe('laneOverlapIds', () => {
       finish: dayToIso(it.endDay),
     }));
     expect(laneOverlapIds(spans).size).toBe(0);
+  });
+});
+
+describe('laneOverlapPairs', () => {
+  it('names each overlapping pair once, and not the pairs that do not overlap', () => {
+    // a spans both b and c; b and c are disjoint, so there is no (b, c) pair.
+    const pairs = laneOverlapPairs([
+      span('a', 0, '2026-01-01', '2026-01-20'),
+      span('b', 0, '2026-01-02', '2026-01-05'),
+      span('c', 0, '2026-01-10', '2026-01-12'),
+    ]);
+    expect(pairs).toEqual([
+      ['a', 'b'],
+      ['a', 'c'],
+    ]);
+  });
+
+  it('counts two bars sharing a day as a pair (inclusive finish)', () => {
+    expect(
+      laneOverlapPairs([
+        span('x', 1, '2026-01-01', '2026-01-10'),
+        span('y', 1, '2026-01-10', '2026-01-12'),
+      ]),
+    ).toEqual([['x', 'y']]);
+  });
+
+  it('spells a pair and orders the list the same way whatever the input order', () => {
+    const spans = [
+      span('d', 0, '2026-01-01', '2026-01-09'),
+      span('b', 0, '2026-01-05', '2026-01-15'),
+      span('c', 2, '2026-01-01', '2026-01-09'),
+      span('a', 2, '2026-01-03', '2026-01-04'),
+    ];
+    const expected: [string, string][] = [
+      ['a', 'c'],
+      ['b', 'd'],
+    ];
+    expect(laneOverlapPairs(spans)).toEqual(expected);
+    expect(laneOverlapPairs([...spans].reverse())).toEqual(expected);
+  });
+
+  it('is what laneOverlapIds is made of', () => {
+    const spans = [
+      span('a', 0, '2026-01-01', '2026-01-20'),
+      span('b', 0, '2026-01-02', '2026-01-05'),
+      span('e', 0, '2026-02-01', '2026-02-05'),
+      span('u', 3, null, null),
+    ];
+    const fromPairs = new Set(laneOverlapPairs(spans).flat());
+    expect(laneOverlapIds(spans)).toEqual(fromPairs);
+    expect(fromPairs).toEqual(new Set(['a', 'b']));
   });
 });
