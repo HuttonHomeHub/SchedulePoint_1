@@ -280,7 +280,7 @@ describe('TsldPanel editing (M2, flag on)', () => {
     );
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
-    // Grab the lane-0 bar and drag straight down one row (LANE_HEIGHT = 28, fixed — no y zoom).
+    // Grab the lane-0 bar and drag straight down one row (`LANE_HEIGHT` is fixed — no y zoom).
     fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
     fireEvent.pointerMove(canvas, { clientX: 60, clientY: LANE_MID_1, pointerId: 1 });
     fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_1, pointerId: 1 });

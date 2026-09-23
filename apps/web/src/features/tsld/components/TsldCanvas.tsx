@@ -1956,7 +1956,7 @@ export function TsldCanvas({
           if (rect && mapping && (movedThisFrame || rebuilt)) {
             const v = viewRef.current;
             // The scene viewport, expressed in minimap coordinates: x through the SHARED
-            // day→px transform, y through the scene's fixed 28px lane rows compressed onto
+            // day→px transform, y through the scene's fixed `LANE_HEIGHT` lane rows compressed onto
             // the box's lane scale (the deliberate axis asymmetry — ADR-0100 decision 4).
             const leftDay = -v.originX / v.pxPerDay;
             const topLane = -v.originY / LANE_HEIGHT;

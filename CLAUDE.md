@@ -5600,7 +5600,9 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   **stated guarantee going false** in a file the row does not obviously touch, `LAG_ANCHOR_PX`'s zone
   claiming to _"meet WCAG 2.5.8 outright"_ on a vertical tolerance of `BAR_HEIGHT / 2` justified two
   ways that **expired at once**.
-  **The pitch is 52 and it is derived rather than preferred.** Seven pitches × two zooms, the bundle
+  **The pitch is 52 and it is derived rather than preferred** — and it is **60 since NetPoint-layout
+  M1** (2026-09-23, `render/geometry.ts:53`), the product owner's answer to the owed item below; no
+  ADR records that milestone, which this entry did not say until the 2026-09-23 pass. Seven pitches × two zooms, the bundle
   rewritten rather than a tracked file, two controls — the second per-pitch, added because the first
   only fires when every row is empty. Three candidates buy nothing over their neighbours; FC-L11
   removes 40 and 44 (net clear band 3 px and 7 px against today's 10 — the row treatment would have

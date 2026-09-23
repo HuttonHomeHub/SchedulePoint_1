@@ -13,7 +13,9 @@ import { fitToContent, pan, revealOffset } from './viewport';
  * 274-lane plan).
  */
 describe('revealOffset', () => {
-  const MARGIN = 28; // LANE_HEIGHT — the margin both call sites pass.
+  // Any positive margin exercises this pure function; the call sites pass `LANE_HEIGHT`, which is
+  // 60 today — this comment called 28 `LANE_HEIGHT` until the 2026-09-23 reconciliation pass.
+  const MARGIN = 28;
 
   it('returns 0 for a target already inside the margins', () => {
     expect(revealOffset(100, 50, 900, MARGIN)).toBe(0);
