@@ -11667,3 +11667,59 @@ raised and did not block on.
 7. **Nothing couples the link's rung to the words for criticality** (accessibility). `linkRung`
    and `describeActivity` agree today because they read the same `isCritical` and `isNearCritical`
    fields. A structural pin would stop a later change to one silently disagreeing with the other.
+
+### 378. Canvas names and dates are withheld below 4 and 6 px per day, however wide the bar
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint reference plan) ·
+**Size:** M · **Owner:** web
+
+Seeding `plan:reference-netpoint-power-plant` and framing the whole programme put it at about
+0.94 px per day, almost exactly the scale of the NetPoint picture it was transcribed from
+(~1.04 px per day). NetPoint labels every bar, date and milestone there. Our canvas labels
+nothing — not even a 900 px bar — because `LABEL_MIN_PX_PER_DAY = 4` and
+`DATE_LABEL_MIN_PX_PER_DAY = 6` (`render/geometry.ts:149`, `:191`) gate the whole layer on zoom.
+Their stated reason is that "bars are too narrow for legible text". Since ADR-0151 the name sits
+above the bar rather than inside it, and the painter already fits text per bar, so the zoom gate
+now withholds labels that would fit. Two zoom steps in (~3.5 px per day, about 107 px per month)
+there is still no text anywhere; labels appear at the third step.
+
+Replacing a blanket zoom gate with a per-bar room test changes the painter's per-frame text cost at
+whole-plan scale, so it needs a measurement at 2,000 activities (the `paint.dates-budget` family)
+before it ships. It is the largest single difference between the two pictures.
+
+### 379. Two bars that meet print both their dates on one node
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint reference plan) ·
+**Size:** S · **Owner:** web
+
+Where one bar ends and the next begins on the following day, the canvas prints the first bar's
+finish and the second bar's start side by side under the shared node, touching: "31 Jan1 Feb",
+"28 Feb1 Mar", "31 Dec1 Jan" in the reference plan, at every zoom where dates show. NetPoint
+prints one date on the node. ADR-0151's rule that "a gap is shared, so each side claims half of
+it" was written for names; the flanking dates have no equivalent. Either collapse the pair to
+one date at an abutting node or apply the half-gap rule to dates.
+
+### 380. A long bar's name is drawn at its middle, so it vanishes when the middle is off-screen
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint reference plan) ·
+**Size:** S · **Owner:** web
+
+The name is centred over the bar. For a bar longer than the viewport — Fab/Del Boiler and Erect
+Boiler in the reference plan, each over a year — the name is only on screen when the bar's
+middle is, so a planner panning along the critical path sees red lines with no names. A name
+clamped to the visible part of its bar (the sticky treatment the ruler's month labels already
+use) would keep it readable.
+
+### 381. The project finish reads a day later than NetPoint and P6 print it, by design
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint reference plan) ·
+**Size:** S · **Owner:** product
+
+ADR-0023 §4 dates a finish milestone at the boundary instant, so it "reads one calendar day later
+than a task ending at T". In the reference plan the picture's Guaranteed Commercial Operation is
+"2/28" and ours is 1 Mar 2031, and the status bar's **Finish** reads 01 Mar 2031 — the most
+prominent date on the screen differs from the tool it is compared with. Every finish milestone
+does the same (First Fire, Turbine Roll, DEL STG). The same rule is also why a placed finish
+milestone has to be placed on the next day to avoid a false visual conflict
+(`apps/seed-cli/src/references/netpoint-power-plant.ts`, `milestone`). Changing it is a
+convention change to a decided ADR, so it is a product decision, not a fix.

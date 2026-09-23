@@ -16,6 +16,7 @@ import {
 import { parseArgs, USAGE } from './args.js';
 import { coverageReport, formatCoverage } from './capabilities/coverage.js';
 import { capabilityFamilyKeys, capabilitySpecs } from './capabilities/index.js';
+import { referenceSpecs } from './references/index.js';
 import { KNOWN_TIERS, loadSpecs } from './specs.js';
 
 /**
@@ -40,9 +41,12 @@ import { KNOWN_TIERS, loadSpecs } from './specs.js';
  * infinite family — the playbook documents the tier, not each possible count.
  */
 function planInventory(): string[] {
-  const rows = [fixtureSpec(), ...capabilitySpecs(), scaleSpec({ activities: 500 })].map(
-    (spec) => `${spec.tier}\t${spec.seedName}\t${spec.plan.name}`,
-  );
+  const rows = [
+    fixtureSpec(),
+    ...capabilitySpecs(),
+    ...referenceSpecs(),
+    scaleSpec({ activities: 500 }),
+  ].map((spec) => `${spec.tier}\t${spec.seedName}\t${spec.plan.name}`);
   // The negative tier's hosts are throwaway and named per run, so the inventory lists the CASES —
   // which is what a playbook row about hostile input would name.
   for (const negative of negativeCases()) {

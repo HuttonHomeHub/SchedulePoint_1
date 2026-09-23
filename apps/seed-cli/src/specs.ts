@@ -1,6 +1,7 @@
 import { fixtureSpec, scaleSpec, type SeedSpec } from '@repo/seed';
 
 import { capabilitySpecs } from './capabilities/index.js';
+import { referenceSpecs } from './references/index.js';
 
 /** How many activities `--tier scale` generates when `--activities` is not given. */
 export const DEFAULT_SCALE_ACTIVITIES = 500;
@@ -27,6 +28,8 @@ export function loadSpecs(tier: string, options: LoadOptions = {}): SeedSpec[] {
       return [fixtureSpec()];
     case 'capability':
       return capabilitySpecs(options.family);
+    case 'reference':
+      return referenceSpecs();
     case 'scale': {
       // `Number('lots')` is NaN, and NaN would flow through every count in the generator and come
       // out as a plan with no activities in it — a run that looks like it worked. Fall back loudly.
@@ -46,11 +49,24 @@ export function loadSpecs(tier: string, options: LoadOptions = {}): SeedSpec[] {
       // interrupted halfway has still produced the broadest thing the catalogue offers. Scale is
       // deliberately NOT included: it is thousands of requests and tens of minutes, so it is
       // something an operator asks for, never something `all` does to them by surprise.
-      return [fixtureSpec(), ...capabilitySpecs(options.family)];
+      // References last, and only when no family is asked for: a family filters capabilities, and a
+      // reference plan belongs to none, so `--family cost` must not quietly add a 60-activity plan.
+      return [
+        fixtureSpec(),
+        ...capabilitySpecs(options.family),
+        ...(options.family === undefined ? referenceSpecs() : []),
+      ];
     default:
       return [];
   }
 }
 
 /** The tiers `--tier` accepts today, for the CLI's usage text and its error message. */
-export const KNOWN_TIERS = ['fixture', 'capability', 'scale', 'negative', 'all'] as const;
+export const KNOWN_TIERS = [
+  'fixture',
+  'capability',
+  'reference',
+  'scale',
+  'negative',
+  'all',
+] as const;

@@ -10,6 +10,29 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-23 — The seed catalogue gains a sixth tier: reference programmes
+
+**What was decided.** A `reference` tier joins ADR-0066's five, holding whole programmes transcribed
+from a published source. Its first plan is PMA's NetPoint power-plant example
+(`apps/seed-cli/src/references/netpoint-power-plant.ts`), supplied by the product owner to answer
+"does our app align with NetPoint?". `SeedActivity` gains an optional `laneIndex`, forwarded on
+create only when stated, so every other tier still leaves the row to the server.
+
+**Why a tier and not a capability family.** The capability tier caps a plan at fifteen activities so
+a person can check it by hand (`capabilities/coverage.spec.ts`), and that cap is right. This plan has
+58 and demonstrates no single feature; it is checked against its source picture. Exempting it from
+the cap would have weakened the one rule that keeps that tier readable.
+
+**What it found on first seeding.** The critical set matched the picture's red chain exactly and no
+placement conflicted, so the model agrees. The **picture** did not: at the zoom NetPoint labels
+everything, ours labels nothing (`docs/TECH_DEBT.md` #378), with three smaller differences
+(#379–#381). The comparison exists to produce findings like these.
+
+**Consequence.** `--tier all` includes reference plans only when no `--family` is given, because a
+family filters capabilities and a reference plan belongs to none.
+
+---
+
 ## 2026-09-23 — Reconciliation pass: the pitch moved, the modes went, and the docs kept both
 
 **What was decided.** The pass `check:reconcile-due` asked for — nine ADRs since 2026-09-17
