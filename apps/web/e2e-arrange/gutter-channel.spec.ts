@@ -74,6 +74,9 @@ test('a link forced into the gutter is painted there, clear of the bar borders',
   // saturated pixels as BAR: a driving gutter leg would read as a bar band and this test would
   // measure the wrong thing. A non-driving link is the 1 px `--canvas-link-minor` grey the
   // classifier reads as link; its waiting run is dashed, which `linkRun` bridges.
+  // The anchor has no drawn start until the plan is computed.
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
   await placeRelativeTo(page, orgSlug, 'Pour', 'Mobilise', 10);
   await recalculate(page, orgSlug);
   await ensurePen(page);

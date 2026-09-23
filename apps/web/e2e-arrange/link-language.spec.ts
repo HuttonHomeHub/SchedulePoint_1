@@ -36,7 +36,7 @@ async function sceneCanvasToken(page: Page, name: string): Promise<string> {
   }, name);
 }
 
-/** A token resolved to `rgb(...)` inside the canvas scope, the way the legend's swatch resolves it. */
+/** A token resolved to a computed colour inside the canvas scope, the way the legend's swatch resolves it. */
 async function resolvedInCanvasScope(page: Page, name: string): Promise<string> {
   return page.evaluate((token) => {
     const canvases = [...document.querySelectorAll('canvas')];
@@ -65,6 +65,9 @@ test('the non-driving link ink is a real token on the canvas and in its key', as
   if (!from || !to) throw new Error('the fixture did not seed the two activities it links');
   await seedDependency(page, orgSlug, from.id, to.id);
   // Placed well after its only predecessor, so the link does not drive it: it waits.
+  // The anchor has no drawn start until the plan is computed.
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
   await placeRelativeTo(page, orgSlug, 'Pour', 'Excavate', 20);
   await recalculate(page, orgSlug);
   await expect(page.locator('canvas').first()).toBeAttached();
@@ -86,6 +89,8 @@ test('the non-driving link ink is a real token on the canvas and in its key', as
     const line = label.closest('li')!.querySelector('span > span') as HTMLElement;
     return getComputedStyle(line).borderTopColor;
   });
-  expect(swatch).toMatch(/^rgb/);
+  // A real colour, not the transparent a missing alias computes to. Chromium keeps an `oklch()`
+  // value in that space, so the form is not asserted; the equality below is the load-bearing check.
+  expect(swatch).not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))?$/);
   expect(swatch).toBe(await resolvedInCanvasScope(page, '--canvas-link-minor'));
 });
