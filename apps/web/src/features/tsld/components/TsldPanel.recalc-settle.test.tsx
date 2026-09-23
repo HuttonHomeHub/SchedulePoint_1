@@ -24,7 +24,17 @@ vi.mock('@/config/env', async (importOriginal) => ({
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
+import { BAR_HEIGHT, BAR_PAD, LANE_HEIGHT } from '../render/geometry';
+import { DEFAULT_VIEWPORT } from '../render/viewport';
+
 import { TsldPanel } from './TsldPanel';
+
+/**
+ * The screen y of lane 0's bar centre-line in the default viewport. Derived, not written as a
+ * number: it was the literal 54, the top edge of the old row's 24 px pointer target, and fell
+ * outside the target when the row grew to 60 (NetPoint-layout M1).
+ */
+const LANE0_Y = DEFAULT_VIEWPORT.originY + BAR_PAD + BAR_HEIGHT / 2;
 
 /** The manual Recalculate button's confirmation (`use-tsld-toolbar-context.tsx`), for the
  * distinguishability assertion below — a settle must never speak this generic sentence. */
@@ -161,16 +171,16 @@ function focusedListbox(): HTMLElement {
 
 /** Drag the lane-0 bar's body to the right — the canonical reposition-in-time gesture. */
 function dragBarRight(canvas: Element): void {
-  fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
-  fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
-  fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+  fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE0_Y, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 110, clientY: LANE0_Y, pointerId: 1 });
+  fireEvent.pointerUp(canvas, { clientX: 110, clientY: LANE0_Y, pointerId: 1 });
 }
 
 /** Drag the lane-0 bar straight down — a lane-only move, which triggers no recalculation. */
 function dragBarDown(canvas: Element): void {
-  fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
-  fireEvent.pointerMove(canvas, { clientX: 60, clientY: 82, pointerId: 1 });
-  fireEvent.pointerUp(canvas, { clientX: 60, clientY: 82, pointerId: 1 });
+  fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE0_Y, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 60, clientY: LANE0_Y + LANE_HEIGHT, pointerId: 1 });
+  fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE0_Y + LANE_HEIGHT, pointerId: 1 });
 }
 
 beforeEach(() => announceSpy.mockClear());

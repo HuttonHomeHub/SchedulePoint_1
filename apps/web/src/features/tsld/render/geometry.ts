@@ -44,8 +44,13 @@ import type { ConstraintAnchor } from '@/lib/constraint-format';
  * the product owner's "as many rows as it takes — readability is the deal breaker" is what makes
  * spending it allowed. See {@link rowSlots} for how the row divides, and FC-L11 for the condition
  * the division is judged against.
+ *
+ * **60, not 52, since NetPoint-layout M1** — the product owner's answer to ADR-0151's owed item 3
+ * ("spend a further 8 px a row to remove the last of the bunching"). The extra 8 px goes to the
+ * gutter channels, not to text: {@link rowSlots}' clear half-band grows 7.5 → 11.5 px while every
+ * text row keeps its size (M0-T2 measured the pitch-60 baselines the later conditions read against).
  */
-export const LANE_HEIGHT = 52;
+export const LANE_HEIGHT = 60;
 /**
  * Activity bar height — **a thin line, in the tradition of the reference the product owner chose**.
  *

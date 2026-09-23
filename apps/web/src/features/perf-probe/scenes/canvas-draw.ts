@@ -36,10 +36,14 @@ import type { Viewport } from '@/features/tsld/render/render-model';
  *
  * | scene | preset | total | on screen | px/day | span   |
  * | ----- | ------ | ----- | --------- | ------ | ------ |
- * | 500   | week   | 540   | **196**   | 12.00  | 362 d  |
- * | 500   | fit    | 540   | 311       | 4.55   | 362 d  |
- * | 2,000 | week   | 2,160 | **224**   | 12.00  | 1,150 d|
- * | 2,000 | fit    | 2,160 | 914       | 1.43   | 1,150 d|
+ * | 500   | week   | 540   | **200**   | 12.00  | 362 d  |
+ * | 500   | fit    | 540   | 276       | 4.55   | 362 d  |
+ * | 2,000 | week   | 2,160 | **218**   | 12.00  | 1,150 d|
+ * | 2,000 | fit    | 2,160 | 812       | 1.43   | 1,150 d|
+ *
+ * **Re-derived 2026-09-23 against the 60 px row** (NetPoint-layout M1). Week again barely moves
+ * (196 → 200, 224 → 218); Fit falls again (311 → 276, 914 → 812), for the reason the paragraph
+ * below gives for 52: a 900 px viewport holds 15 lanes at 60 px where it held 17 at 52.
  *
  * **Re-derived 2026-09-22 against the 52 px row** (logic-legibility M3-T3, ADR-0151). Week barely
  * moves — 192 → 196 and 222 → 224, which is the cull doing its job on a time axis the row never

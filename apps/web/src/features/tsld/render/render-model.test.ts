@@ -765,10 +765,12 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
   });
 
   it('anchors the SS/SF zone on the predecessor bar', () => {
-    // SS+2 embeds two working days into the predecessor: walk(0, 2) = day 2 → x=120, pred lane 0
-    // centre y = 50 + 5 + 9 = 64.
+    // SS+2 embeds two working days into the predecessor: walk(0, 2) = day 2 → x=120, at the
+    // predecessor's (lane 0) bar centre-line. It was the literal y=64, derived in its comment from
+    // an 18 px bar in a 28 px lane — two geometries ago — and landed outside the anchor's vertical
+    // tolerance the moment the row grew to 60 (NetPoint-layout M1).
     const ss = [edge({ type: 'SS', lagDays: 2 })];
-    expect(classifyHit(acts, { x: 120, y: 64 }, VIEW, DATA_DATE, options(ss))).toEqual({
+    expect(classifyHit(acts, { x: 120, y: barMidY(0) }, VIEW, DATA_DATE, options(ss))).toEqual({
       kind: 'lagAnchor',
       id: 'p',
       dependencyId: 'd1',
