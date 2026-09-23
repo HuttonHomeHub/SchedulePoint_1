@@ -49,4 +49,5 @@ throwaway counting-context test painted the probe's own scene (`buildDrawScene` 
 calls carrying 1,082 subpaths); at Week/500, 226 centre items. At Fit/2000 it paints **no text at
 all** (below the label threshold), so the Fit figure measures bars and links only. The three budget
 tests above are still green on `main`. **FC-N8 PASSES.** Its stated limit stands: the pre-epic
-figure is from an earlier viewport and painter at pitch 52, so the pair spans the pitch change too.
+figure is from an earlier viewport and the pre-ADR-0151 painter at pitch 28, so the pair spans both
+row changes (28 → 52 → 60) as well as the new marks.
