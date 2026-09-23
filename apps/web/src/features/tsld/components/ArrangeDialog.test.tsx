@@ -100,6 +100,18 @@ describe('ArrangeDialog', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it('shades Confirm with a reason when the chosen option would move more than one write accepts', () => {
+    const many = Array.from({ length: 2001 }, (_, i) => ({ id: `x${String(i)}`, laneIndex: i }));
+    const onConfirm = renderDialog({ ...READY, tidy: { ...TIDY, changes: many } });
+    const confirm = confirmButton();
+    expect(confirm).toHaveAttribute('aria-disabled', 'true');
+    expect(confirm).toHaveAccessibleDescription(
+      'This would move 2001 activities, and one arrangement can move at most 2000.',
+    );
+    fireEvent.click(confirm);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it('says once that the diagram is already arranged when neither option would move anything', () => {
     renderDialog({
       kind: 'ready',

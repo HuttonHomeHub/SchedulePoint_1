@@ -33,6 +33,13 @@ export interface ArrangeDialogProps {
   error: string | null;
 }
 
+/**
+ * The positions batch accepts at most this many rows in one write
+ * (`apps/api/src/modules/activities/dto/update-positions.dto.ts`, `@ArrayMaxSize(2000)`), so an
+ * option that would move more is shaded with the reason rather than sent to fail.
+ */
+export const ARRANGE_BATCH_MAX = 2000;
+
 const count = (n: number, one: string, many: string): string =>
   `${String(n)} ${n === 1 ? one : many}`;
 
@@ -88,7 +95,9 @@ export function ArrangeDialog({
             ? 'This option is not available for this plan.'
             : moves === 0
               ? 'Nothing would move.'
-              : null;
+              : moves > ARRANGE_BATCH_MAX
+                ? `This would move ${String(moves)} activities, and one arrangement can move at most ${String(ARRANGE_BATCH_MAX)}.`
+                : null;
   const blocked = shadeReason !== null || pending;
 
   return (
