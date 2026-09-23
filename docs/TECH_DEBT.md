@@ -11664,3 +11664,54 @@ raised and did not block on.
 7. **Nothing couples the link's rung to the words for criticality** (accessibility). `linkRung`
    and `describeActivity` agree today because they read the same `isCritical` and `isNearCritical`
    fields. A structural pin would stop a later change to one silently disagreeing with the other.
+
+### 375. A WBS summary's centre item and Gantt Duration print the stored input duration, which is 0
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (the product owner's screenshot
+of `web` 0.146.0) · **Size:** S · **Owner:** web
+
+The XER importer creates every PROJWBS node as a `WBS_SUMMARY` with `durationMinutes: 0`
+(`packages/interchange/src/xer-adapter.ts:478`). Recalculation rolls up a summary's **dates**
+(`compute.ts:545-607`), but the write-back (`schedule.repository.ts:840-902`) never writes
+`duration_minutes`, so the stored duration stays 0. The canvas centre item (`render/a11y.ts:64`,
+`centreItemText`, painted at `render/paint.ts` ~2271-2278) prints `durationDays`, so an 11-month
+summary on the product owner's plan "EDF - Hynamics Proposal" reads **"0d · 0d float left"**. The
+Gantt Duration column (`formatDurationRead`, `grid-columns.ts:86` → `duration-field.ts:95-107`)
+prints the same 0. It states something untrue.
+
+The canvas half arrived with NetPoint-layout M1 (the centre item); the Gantt half predates it.
+**Remedy undecided**: omit the centre item for a summary, as for a milestone, and show "—" in the
+Gantt; or show the rolled-up span in working days. `LEVEL_OF_EFFORT` is a different case — it prints
+P6's target duration (`xer-adapter.ts:519-529`), which may also disagree with its drawn span.
+**Unverified.**
+
+### 376. The canvas label repeats the name when code equals name
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (the product owner's screenshot
+of `web` 0.146.0) · **Size:** S · **Owner:** web
+
+`activityLabel` (`render/a11y.ts:48-50`) returns `${code} ${name}` with no guard. The XER importer
+sets a WBS summary's `code = wbs_short_name ?? wbsId` and `name = wbs_name ?? wbs_short_name ?? wbsId`
+(`xer-adapter.ts:475-476`), and P6's project-root WBS node commonly carries the project's short name
+in both — so the product owner's plan draws **"EDF - Hynamics Proposal EDF - Hynamics Proposal"**.
+**Not confirmed against the XER file itself.** Remedy: return the name alone when `code === name`.
+The same label feeds the accessible listbox, so the fix reaches assistive technology too.
+
+### 377. The staff diagnostics call nine census counts "work that is wrong now"
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (the product owner's
+diagnostics press on the deployed host) · **Size:** S · **Owner:** web
+
+`natureSentence` (`apps/web/src/features/staff/model/diagnostics-report.ts:140-143`) renders
+`nature: 'prospective'` as _"Live: this sizes work that is wrong now."_ The registry
+(`staff-diagnostics.registry.ts:245`) marks the nine one-planning-surface readings `prospective`
+"while that epic is open". That epic (ADR-0148) closed 2026-09-21, and several of the nine are not
+defects at all: "Plans carrying a hand-placed activity" (5 of 6 on the deployed host, 2026-09-23
+press) and "Activities hand-placed" (15 of 570) are ordinary use. Only the two visual-conflict
+entries arguably size live defects.
+
+The function's own docblock (`diagnostics-report.ts:133-137`) predicted exactly this — _"the day a
+prospective diagnostic is added it would lie"_ — and the web type's docblock
+(`features/staff/api/staff-diagnostics.ts:9`) defines prospective as "sizes a defect that is still
+live". **Remedy undecided**: retire the M0 migration readings now the epic is closed, or reclassify
+with a third nature. A new nature changes the API DTO, so check ADR-0105's triggers before building.
