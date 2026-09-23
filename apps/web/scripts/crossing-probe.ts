@@ -1831,7 +1831,7 @@ export function gutterStats(
  * recorded points are the same numbers — which is what makes byte-identity the right control for
  * {@link avoidableOcclusions} rather than "close enough".
  */
-function sortedDigest(lines: readonly (readonly Point[])[]): string {
+export function sortedDigest(lines: readonly (readonly Point[])[]): string {
   const digest = createHash('sha256');
   for (const key of lines
     .map((pts) => pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';'))

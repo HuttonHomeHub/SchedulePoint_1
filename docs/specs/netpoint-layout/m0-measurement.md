@@ -97,3 +97,63 @@ spans it has **2,532** same-row overlaps. That is not a finding about the produc
 yardstick for `scale-2000` is `packedOnDrawn` (what Arrange would produce on that plan: 41 rows, 0
 overlaps) and never the generator. The generator's figures are in the harness output so the choice
 can be seen, and every condition's `scale-2000` limb reads the packed row.
+
+## M0-T3 — what one evaluation costs (FC-N2)
+
+**Harness:** `apps/web/scripts/measure-netpoint-cost.mjs` over `scripts/netpoint-evaluate.ts`, at
+pitch 60 and 4 px/day, node v22.22.2. It uses the painter's routing order: `laneIntervalIndex` →
+`lagAnchorPoints` → `routeOrthogonal` → `chooseCorridorsByCrossing` → `bundleCorridors` →
+`packGutterChannels`. It then counts foreign occlusion, crossings, drawn-span overlaps, same-row
+links, travel and rows. There are nine runs per size. **At n = 9, nearest-rank p95 is the slowest
+run**, so the p95 column below is a maximum and that is the conservative reading.
+
+**Controls, all of which held:**
+
+- **Agreement:** the evaluator's line set digests byte-identically to the painter's recorded links on
+  all three plans. The run refuses to print otherwise. Unit 300's objective (49 occluded, 68
+  same-row, travel 502, 21 rows) equals M0-T2's reading, which came from a different code path.
+- **Equivalence (FC-N2c):** 1,000 seeded moves on Unit 300. Each move is scored incrementally on a
+  live model and in full from scratch, and the objective **and** the line digest are compared.
+  **0 disagreements.**
+- **The equivalence check can fail:** the same 1,000 moves, with the destination lane's re-route
+  skipped (the plan's named mutation), disagree **119 times**, the first at move 0.
+
+| plan       |  bars | links | full p50 | **full p95** | index | route | post | occl | **cross** | ovlp | incr p50 | incr p95 |   re-routed |
+| ---------- | ----: | ----: | -------: | -----------: | ----: | ----: | ---: | ---: | --------: | ---: | -------: | -------: | ----------: |
+| Unit 300   |   144 |   188 |      5.0 |         15.9 |   0.6 |   1.4 |  1.1 |  0.7 |       0.9 |  0.3 |      3.5 |      7.4 |    57 / 188 |
+| scale-500  |   540 |   800 |     24.1 |         26.1 |   2.0 |   4.0 |  1.3 |  3.9 |       9.9 |  2.8 |     20.1 |     26.6 |    99 / 800 |
+| scale-2000 | 2,160 | 3,200 |    245.7 |    **259.1** |   7.7 |  16.6 |  6.4 | 18.9 | **144.5** | 49.3 |    214.6 |    240.9 | 292 / 3,200 |
+
+All times are in ms; the stage columns are medians. At scale-2000 the six stages sum to 243.4 ms of a
+245.7 ms median, so the cost is fully attributed.
+
+### Verdict
+
+- **FC-N2(a), the offer limb: FAIL, by 32×** (259 ms against ≤ 8 ms). The committed consequence
+  applies: **the offer states overlaps only**, not an occluded count.
+  **The verdict does not depend on the harness's slow counters, and that is why it is final.** Two
+  stages here are quadratic (crossings compares every horizontal with every vertical; overlaps
+  compares every pair of bars), and a product version would do both faster. But the stages no
+  counter touches (index, routing, the three post-passes and occlusion) already total **49.6 ms**,
+  six times the bar. The offer derivation already costs 8.15 ms (ADR-0149 D6), and no counter design
+  gets a whole-plan objective beside it inside a frame.
+- **FC-N2(b), the run limb: NOT YET JUDGEABLE**, because it is the wall time of a whole Tidy and M0-T4
+  builds the search. What this reading bounds is the budget. At about 250 ms per full evaluation,
+  2,000 ms buys **eight** evaluations at `scale-2000`, and even the counter-independent floor
+  (≈ 50 ms) buys forty. A local search over 2,160 bars cannot finish in either. So at that size T4's
+  prototype must either score moves by **delta** (only the links a move re-routes, which is 292 of
+  3,200 here) or fall to the rule's worker or size-cap branches. The rule's thresholds do not move.
+- **FC-N2(c), equivalence: PASS.** Incremental agrees with full on every one of 1,000 moves, so the
+  committed rule permits it as the evaluator rather than only a ranking filter.
+  **What it buys, though, is small:** 13 % at `scale-2000` (215 against 246 ms median) and 30 % on
+  Unit 300. Under the plan's definition it saves only the routing term, and the post-passes and
+  counters that dominate still run over the whole set. **This evaluator's incremental form is
+  correct but is not the remedy for (b).** The remedy is a delta objective, and M4 has to prove that
+  equivalent too. The control is written so it can be pointed at one.
+
+### Honest limits
+
+Equivalence is shown on Unit 300 only (144 bars), not at `scale-2000`, where 1,000 double
+evaluations would take about ten minutes; M4's delta objective will need the larger check. Node
+figures bound the algorithm and say nothing about the product owner's hardware (conditions.md; #75).
+The p95 is taken over nine runs.
