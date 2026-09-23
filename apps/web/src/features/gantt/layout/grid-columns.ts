@@ -8,8 +8,7 @@ import type { GanttColumnKey } from '../model/gantt-view-state';
 // the drift `bar-dates.ts` was created to end, one field along: this formatter already carries
 // ADR-0070 M4's rule that a whole-day value prints the row's OWN `durationDays` rather than
 // re-deriving it, and a fresh implementation would have re-learnt that by shipping `0 d`.
-import { formatDurationRead } from '@/features/activities/model/duration-field';
-import { isMilestoneType } from '@/features/activities/schemas/activity-schemas';
+import { formatDurationCell } from '@/features/activities/model/duration-field';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -81,9 +80,14 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
      * A milestone reads an em dash, not `0 d`. It genuinely has no duration, and ADR-0070 M4
      * records `0 d` being printed for real sub-day work — so the two states looked identical on the
      * one screen listing a plan's work. Printing `0 d` here would re-create that on a second screen.
+     *
+     * **A WBS summary reads an em dash too** (`docs/TECH_DEBT.md` #375), for a different reason: it
+     * HAS a duration, but not the one stored. Its dates are an engine rollup (ADR-0038) while its
+     * stored duration is whatever it was created with — `0` from the XER importer — and
+     * recalculation never writes it back. So `0 d` beside an eleven-month summary bar was a false
+     * statement, and the canvas's centre item withholds the same figure for the same reason.
      */
-    value: (a, _source, hoursPerDay) =>
-      isMilestoneType(a.type) ? '—' : formatDurationRead(a, hoursPerDay),
+    value: (a, _source, hoursPerDay) => formatDurationCell(a, hoursPerDay),
   },
   {
     key: 'earlyStart',

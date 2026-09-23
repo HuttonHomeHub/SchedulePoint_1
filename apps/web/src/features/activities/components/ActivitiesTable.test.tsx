@@ -224,6 +224,17 @@ describe('ActivitiesTable', () => {
     expect(screen.getByText('Not started')).toBeInTheDocument();
   });
 
+  it('shows an em dash duration for a WBS summary, not its stored input duration (#375)', () => {
+    // The control first: a zero-duration TASK does read `0 d`, so the query below can find it.
+    const zero = { ...ACTIVITY, durationDays: 0, durationMinutes: 0 };
+    const { unmount } = renderTable(true, [zero]);
+    expect(screen.getByText('0 d')).toBeInTheDocument();
+    unmount();
+    // An imported summary stores 0 while its rolled-up dates span months; `0 d` was false.
+    renderTable(true, [{ ...zero, type: 'WBS_SUMMARY' }]);
+    expect(screen.queryByText('0 d')).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when there are no activities', () => {
     renderTable(true, []);
     expect(screen.getByText(/No activities yet/)).toBeInTheDocument();

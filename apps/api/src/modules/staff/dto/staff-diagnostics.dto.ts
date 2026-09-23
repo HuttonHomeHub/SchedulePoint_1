@@ -53,7 +53,10 @@ export class StaffDiagnosticRowDto {
     description:
       'What a non-zero `affected` MEANS. `retrospective` sizes whose stored numbers changed ' +
       'meaning when a release landed — the work is not wrong now, and the count says who to tell. ' +
-      '`prospective` sizes a defect that is still live. A registry literal from a closed union, ' +
+      '`prospective` counts the installation as it stands now, and is not by itself a defect: ' +
+      'some entries count ordinary use (plans carrying a hand-placed activity), others count a ' +
+      'live fault (a placement earlier than its logic) — the label says which. A registry ' +
+      'literal from a closed union, ' +
       'never data: it is a property of the question, not of this installation.',
   })
   nature!: DiagnosticNature;
