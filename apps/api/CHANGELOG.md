@@ -1,5 +1,17 @@
 # @repo/api
 
+## 0.73.0
+
+### Minor Changes
+
+- [#679](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/679) [`e150358`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1503588ba19f654b3bebcdd269e721de78466e1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A finish milestone is now dated by the day it closes (ADR-0155). After a task ending Friday it reads
+  Friday, not the following Monday, which is how P6 and NetPoint print it. Every date given for a
+  finish milestone (its placement, constraints and external dates) means the end of that day, so
+  placing one on its predecessor's last day is no longer a conflict, and "finish no later than" on
+  that day gives zero float. A migration moves each stored finish-milestone placement one day earlier,
+  which keeps its instant unchanged, and records each row for the documented reverse. On first start
+  the API recalculates, once, every plan last computed under the old rule.
+
 ## 0.72.1
 
 ### Patch Changes
