@@ -66,8 +66,8 @@ export interface LaneArrangementInput {
  */
 export function arrangeOfferMessage(overlapping: number): string {
   return overlapping === 1
-    ? '1 activity overlaps another in its row.'
-    : `${String(overlapping)} activities overlap others in their rows.`;
+    ? '1 activity overlaps another in its lane.'
+    : `${String(overlapping)} activities overlap others in their lanes.`;
 }
 
 export function computeLaneArrangement(input: LaneArrangementInput): LaneChange[] {

@@ -154,7 +154,7 @@ describe('TsldPanel — the Arrange offer', () => {
   it('states how many activities overlap, from the plan it was given', () => {
     render(<Harness />);
     expect(screen.getByTestId('canvas-arrange-offer')).toHaveTextContent(
-      '2 activities overlap others in their rows.',
+      '2 activities overlap others in their lanes.',
     );
   });
 

@@ -23,7 +23,7 @@ This file records what M5 built, how it was checked, and where the build departe
 - **`use-arrange-search.ts`** runs Tidy, then Re-layout, in the M4 module worker while the dialog is
   open, and aborts when it closes. Each result is tagged with the input it answers, so a new opening
   reads as computing without an effect resetting state.
-- **The offer** (`arrangeOfferMessage`) now appears only when activities overlap in their rows and
+- **The offer** (`arrangeOfferMessage`) now appears only when activities overlap in their lanes and
   names the count. Its button reads **Arrange…** and opens the dialog.
 - **The write** sends exactly the moves the chosen option showed, through the existing positions
   batch, as one `autoArrangeCommand` and therefore one undo step. The announcement names the option
@@ -77,6 +77,15 @@ This file records what M5 built, how it was checked, and where the build departe
       a stop) but has no test.
     - The `→` in the figures is read by screen readers in ways that were reasoned from
       specification, not observed. `RevisionChangesView` already ships the same convention.
+
+## The M6 gate pass on this milestone's copy
+
+The M6 UX review read the whole epic together and found one word used two ways: M5's dialog and
+offer said **row**, while every other place in the product that names this concept says **lane**
+(the keyboard help, the move announcements, the M3 auto-resolve notice, the undo labels, the
+legend's "Lane overlap" and the screen-reader sentence). About fifteen strings said "lane" and six
+said "row", all of the six added by this milestone, so M5's copy now says **lane**. The design
+documents keep "row" where they discuss layout, because they are not on screen.
 
 ## Departures from the plan
 

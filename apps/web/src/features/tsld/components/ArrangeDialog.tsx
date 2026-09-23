@@ -58,7 +58,7 @@ export function arrangeFigures(outcome: ArrangeOutcome): RadioCardFigure[] {
   const a: LayoutObjective = outcome.after;
   return [
     { label: 'Activities moved', value: String(outcome.changes.length) },
-    { label: 'Rows', value: change(b.rows, a.rows) },
+    { label: 'Lanes', value: change(b.rows, a.rows) },
     { label: 'Overlaps', value: change(b.overlaps, a.overlaps) },
     { label: 'Links behind bars', value: change(b.occluded, a.occluded) },
     { label: 'Crossings', value: change(b.crossings, a.crossings) },
@@ -111,7 +111,7 @@ export function ArrangeDialog({
       open={open}
       onClose={onClose}
       title="Arrange the diagram"
-      description="Choose how to rearrange the rows. Dates do not change, only which row each activity is drawn in."
+      description="Choose how to rearrange the lanes. Dates do not change, only which lane each activity is drawn in."
     >
       <div className="flex flex-col gap-4">
         {search.kind === 'error' ? (
@@ -151,19 +151,19 @@ export function ArrangeDialog({
               value: 'tidy',
               title: 'Tidy',
               description:
-                'Improve the rows you have, in this order: remove overlaps, then links hidden behind bars, then crossings. It never adds rows.',
+                'Improve the lanes you have, in this order: remove overlaps, then links hidden behind bars, then crossings. It never adds lanes.',
               figures: ready?.tidy ? arrangeFigures(ready.tidy) : null,
               disabled: bounded !== null,
               disabledReason: bounded
-                ? `This plan draws ${String(bounded.drawn)} activities. Tidy is offered on plans of up to ${String(bounded.limit)}, because above that it takes too long to work out. Re-layout still packs the rows.`
+                ? `This plan draws ${String(bounded.drawn)} activities. Tidy is offered on plans of up to ${String(bounded.limit)}, because above that it takes too long to work out. Re-layout still packs the lanes.`
                 : null,
             },
             {
               value: 'relayout',
               title: 'Re-layout',
               description: bounded
-                ? 'Pack the rows again by time, so no two activities overlap in a row.'
-                : 'Start again from rows packed by time, then improve them the same way.',
+                ? 'Pack the lanes again by time, so no two activities overlap in a lane.'
+                : 'Start again from lanes packed by time, then improve them the same way.',
               figures: ready ? arrangeFigures(ready.relayout) : null,
             },
           ]}

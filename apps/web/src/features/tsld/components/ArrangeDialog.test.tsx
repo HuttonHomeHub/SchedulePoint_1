@@ -100,9 +100,9 @@ describe('ArrangeDialog', () => {
     expect(tidy).toHaveAttribute('aria-checked', 'true');
     expect(tidy).toHaveAccessibleDescription(/Links behind bars\s*58 → 17/);
     expect(tidy).toHaveAccessibleDescription(/Crossings\s*360 → 204/);
-    expect(tidy).toHaveAccessibleDescription(/Rows\s*21/);
+    expect(tidy).toHaveAccessibleDescription(/Lanes\s*21/);
     expect(screen.getByRole('radio', { name: 'Re-layout' })).toHaveAccessibleDescription(
-      /Rows\s*21 → 19/,
+      /Lanes\s*21 → 19/,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Tidy: move 2 activities' }));
     expect(onConfirm).toHaveBeenCalledWith('tidy', TIDY);

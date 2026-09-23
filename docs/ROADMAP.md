@@ -348,14 +348,14 @@ keep `main` releasable.
 
 - **Arrange shows what it would do before it does it** (ADR-0152, amending ADR-0069/0149).
   `Arrange` now offers two options side by side:
-  - **Tidy** improves the rows you have: it removes overlaps first, then links hidden behind bars,
-    then crossings, and it never adds rows.
-  - **Re-layout** starts again from rows packed by time, then improves them the same way.
+  - **Tidy** improves the lanes you have: it removes overlaps first, then links hidden behind bars,
+    then crossings, and it never adds lanes.
+  - **Re-layout** starts again from lanes packed by time, then improves them the same way.
 
-  Each option lists activities moved, rows, overlaps, hidden links and crossings, before and after.
+  Each option lists activities moved, lanes, overlaps, hidden links and crossings, before and after.
   Confirm writes exactly those moves, as one undo step. On the 144-activity Unit 300 plan, Tidy took
   hidden links from 58 to 17 and crossings from 360 to 204 without adding a row. The prompt at the
-  foot of the diagram now appears only when activities overlap.
+  foot of the diagram now appears only when activities overlap in a lane.
 
 - **A link says what drives, which way, and how long it waits** (ADR-0154, amending
   ADR-0054/0065/0151). This follows the NetPoint diagrams the product owner supplied:

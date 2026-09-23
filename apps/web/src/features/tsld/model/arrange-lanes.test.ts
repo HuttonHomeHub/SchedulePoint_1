@@ -165,7 +165,7 @@ describe('computeLaneArrangement', () => {
 
 describe('arrangeOfferMessage', () => {
   it('states the overlap count it is given, and nothing it has not computed', () => {
-    expect(arrangeOfferMessage(1)).toBe('1 activity overlaps another in its row.');
-    expect(arrangeOfferMessage(3)).toBe('3 activities overlap others in their rows.');
+    expect(arrangeOfferMessage(1)).toBe('1 activity overlaps another in its lane.');
+    expect(arrangeOfferMessage(3)).toBe('3 activities overlap others in their lanes.');
   });
 });

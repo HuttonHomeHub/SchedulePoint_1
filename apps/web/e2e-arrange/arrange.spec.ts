@@ -60,7 +60,7 @@ test('a planner is offered the press, takes Tidy, the overlap goes, and one undo
   // (1) The offer states what is wrong, which is a fact, not a result it has not worked out.
   const offer = page.getByTestId('canvas-arrange-offer');
   await expect(offer).toBeVisible();
-  await expect(offer).toContainText('2 activities overlap others in their rows.');
+  await expect(offer).toContainText('2 activities overlap others in their lanes.');
 
   // (2) The dialog works Tidy out in the worker and shows it before anything is written. The
   //     confirm's name carries the count, so finding it proves the worker returned a result.
@@ -259,7 +259,7 @@ test('a bar placed on top of its predecessor is moved to its own row (reported 2
 
   const offer = page.getByTestId('canvas-arrange-offer');
   await expect(offer).toBeVisible();
-  await expect(offer).toContainText('2 activities overlap others in their rows.');
+  await expect(offer).toContainText('2 activities overlap others in their lanes.');
   await offer.getByRole('button', { name: 'Arrange…' }).click();
   await page
     .getByRole('dialog', { name: 'Arrange the diagram' })
