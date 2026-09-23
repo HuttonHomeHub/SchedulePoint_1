@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.144.0
+
+### Minor Changes
+
+- [#667](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/667) [`39fcad3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/39fcad3b7c28e2f7d7a7d5d4cc0b8335e1854bba) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram's rows are taller (60 px). Each bar now shows its dates under its two ends by default,
+  and its duration and remaining float under its middle. The name above the bar shows the activity's
+  identity only.
+
 ## 0.143.0
 
 ### Minor Changes
