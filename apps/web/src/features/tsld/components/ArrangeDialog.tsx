@@ -112,9 +112,19 @@ export function ArrangeDialog({
           <NoticeStrip role="alert" tone="warning" message={search.message} />
         ) : null}
         {error ? <NoticeStrip role="alert" tone="warning" message={error} /> : null}
+        {/* The live region names the phase and nothing else. The running count changes every
+            25 evaluations, i.e. every 60–120 ms, and a polite region queues rather than
+            interrupts, so announcing it would leave a screen reader reading stale counts
+            seconds after the options were ready (WCAG 4.1.3). The count is shown beside it
+            as plain text, outside the region. */}
+        {search.kind === 'computing' ? (
+          <p className="text-muted-foreground text-sm" aria-hidden="true">
+            {count(search.evaluations, 'layout', 'layouts')} tried.
+          </p>
+        ) : null}
         <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
           {search.kind === 'computing'
-            ? `Working out the layouts… ${count(search.evaluations, 'layout', 'layouts')} tried.`
+            ? 'Working out the layouts…'
             : search.kind === 'ready'
               ? nothingToDo
                 ? bounded

@@ -56,15 +56,42 @@ const confirmButton = (): HTMLElement =>
 describe('ArrangeDialog', () => {
   it('while computing, says so politely and shades Confirm with the reason linked', () => {
     const onConfirm = renderDialog({ kind: 'computing', evaluations: 50 });
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Working out the layouts… 50 layouts tried.',
-    );
+    // The live region carries the phase only, so a run's hundreds of progress updates are not
+    // queued as announcements; the count is shown outside it.
+    expect(screen.getByRole('status')).toHaveTextContent(/^Working out the layouts…$/);
+    expect(screen.getByText('50 layouts tried.')).toBeInTheDocument();
     const confirm = confirmButton();
     expect(confirm).toHaveAttribute('aria-disabled', 'true');
     expect(confirm).not.toHaveAttribute('disabled');
     expect(confirm).toHaveAccessibleDescription('Working out the layouts.');
     fireEvent.click(confirm);
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('does not change the live region as the search makes progress', () => {
+    const { rerender } = render(
+      <ArrangeDialog
+        open
+        onClose={() => undefined}
+        search={{ kind: 'computing', evaluations: 25 }}
+        onConfirm={vi.fn()}
+        pending={false}
+        error={null}
+      />,
+    );
+    const before = screen.getByRole('status').textContent;
+    rerender(
+      <ArrangeDialog
+        open
+        onClose={() => undefined}
+        search={{ kind: 'computing', evaluations: 900 }}
+        onConfirm={vi.fn()}
+        pending={false}
+        error={null}
+      />,
+    );
+    expect(screen.getByRole('status').textContent).toBe(before);
+    expect(screen.getByText('900 layouts tried.')).toBeInTheDocument();
   });
 
   it('when ready, preselects Tidy, shows each option’s figures, and confirms the selected one', () => {

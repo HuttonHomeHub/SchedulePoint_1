@@ -57,7 +57,26 @@ This file records what M5 built, how it was checked, and where the build departe
   a comment on why a shaded card keeps pointer events. The roving-tabindex logic is **not** extracted
   and shared with `SegmentedControl` yet, because the two differ in a real way (a disabled stop needs
   separate focus state). Extract it when a third radiogroup needs it.
-- **Accessibility:** see the gate record below.
+- **Accessibility, two blocking findings, one folded and one declined:**
+  - **Folded: the progress count flooded the live region.** It changed every 25 evaluations,
+    about every 60–120 ms, and a polite region queues rather than interrupts, so a screen
+    reader could still be reading stale counts seconds after "Both options are ready" was true
+    (WCAG 4.1.3). The region now names the phase only. The count is shown beside it as plain text
+    outside the region, so there is no clock to throttle by. A test asserts the region's text
+    does not change as the count grows. It failed against the old dialog.
+  - **Declined: removing `pointer-events-none` from Confirm while it is shaded for a standing
+    reason.** The review cited a rule in `CLAUDE.md` that shading by a standing condition must
+    keep the control pointer-reachable. No such rule exists there (checked by searching the
+    file). `docs/DESIGN_SYSTEM.md`'s button ruling requires the class pair on every
+    `aria-disabled` button, because Tailwind's `disabled:` variant fires only on the native
+    attribute. The reason sits as visible text directly under the button and is linked to it, so
+    nothing is lost by the pointer passing through. `LinkChainDialog` does the same.
+  - **Suggestions noted, not built:**
+    - When a plan turns out to be over the size limit, the roving stop can stay on the now-shaded
+      Tidy card rather than follow the checked one. This matches ADR-0082 (a shaded option stays
+      a stop) but has no test.
+    - The `→` in the figures is read by screen readers in ways that were reasoned from
+      specification, not observed. `RevisionChangesView` already ships the same convention.
 
 ## Departures from the plan
 
