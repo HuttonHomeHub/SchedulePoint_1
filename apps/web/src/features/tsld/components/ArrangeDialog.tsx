@@ -2,7 +2,13 @@ import { useId, useState } from 'react';
 
 import type { LayoutObjective } from '../render/layout-objective';
 
-import type { ArrangeChoice, ArrangeOutcome, ArrangeSearchState } from './use-arrange-search';
+import {
+  useArrangeSearch,
+  type ArrangeChoice,
+  type ArrangeOutcome,
+  type ArrangeSearchInput,
+  type ArrangeSearchState,
+} from './use-arrange-search';
 
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -195,4 +201,20 @@ export function ArrangeDialog({
       </div>
     </Dialog>
   );
+}
+
+/**
+ * **The dialog with its search**, so the search's state lives in this subtree. A progress tick
+ * arrives every 25 evaluations, about every 60 ms on a 144-activity plan, and each one is a
+ * `setState`; held by `TsldPanel` it re-rendered the whole panel ~16 times a second for the length
+ * of the search (M6 performance review). Held here it re-renders the dialog and nothing else.
+ */
+export function ArrangeSearchDialog({
+  input,
+  ...rest
+}: Omit<ArrangeDialogProps, 'open' | 'search'> & {
+  input: ArrangeSearchInput | null;
+}): React.ReactElement {
+  const search = useArrangeSearch(input !== null, input);
+  return <ArrangeDialog open={input !== null} search={search} {...rest} />;
 }

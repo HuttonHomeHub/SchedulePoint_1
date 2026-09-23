@@ -87,7 +87,7 @@ import {
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 
-import { ArrangeDialog } from './ArrangeDialog';
+import { ArrangeSearchDialog } from './ArrangeDialog';
 import { BulkSelectionBar } from './BulkSelectionBar';
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -98,7 +98,6 @@ import { TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
 import {
-  useArrangeSearch,
   type ArrangeChoice,
   type ArrangeOutcome,
   type ArrangeSearchInput,
@@ -1686,7 +1685,6 @@ export function TsldPanel({
     () => renderActivities.filter((r) => r.laneOverlap === true).length,
     [renderActivities],
   );
-  const arrangeSearch = useArrangeSearch(arrangeInput !== null, arrangeInput);
   /**
    * Dismissed for this plan, for this session. **Not persisted**, consistent with every other
    * toggle on this surface (`use-tsld-canvas-ui-state.ts` holds them all in `useState`), and per
@@ -3509,11 +3507,10 @@ export function TsldPanel({
         error={bulkError}
       />
 
-      <ArrangeDialog
+      <ArrangeSearchDialog
         key={arrangeRun}
-        open={arrangeInput !== null}
+        input={arrangeInput}
         onClose={closeAutoArrange}
-        search={arrangeSearch}
         onConfirm={runAutoArrange}
         pending={arranging}
         error={arrangeError}
