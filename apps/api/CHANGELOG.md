@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.72.1
+
+### Patch Changes
+
+- [#675](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/675) [`3f4d2d5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3f4d2d5e316134ba42462830d597697efe58564e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff diagnostics API's description of `nature: prospective` now says it counts the installation as it stands now, not that it counts a defect. Several prospective diagnostics count ordinary use.
+
 ## 0.72.0
 
 ### Minor Changes
