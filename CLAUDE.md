@@ -5673,7 +5673,9 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   predicted the row treatment would be the largest of three cost limbs and required one press on the
   product owner's hardware; the last real fps reading (60.0 fps at Week, 0.00 pp, at 500 and 2,000)
   was taken on the **pre-epic** painter, so it is a genuine number about a different picture. The
-  epic claims neither that the painter is over budget nor that it is within one. Seven claims were
+  epic claims neither that the painter is over budget nor that it is within one. _(Taken
+  2026-09-23, combined only: 0.00 pp dropped at Week at 500 and 2,000, PASS; limb C's prediction is
+  unobservable at a vsync-capped 60 fps — `docs/TECH_DEBT.md` #75 item 9.)_ Seven claims were
   corrected on the way, each by reading or running rather than by accepting a review: the fan-out
   saving was overstated **in five places** (the 5–11 ms is what ADR-0052 M5's WeakMap memo had
   already removed from a pan frame, so the deletion reclaims a lookup per frame plus that figure
@@ -5720,6 +5722,8 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   toolbar item that opens the dialog, M3's auto-resolve notice, the legend and the screen-reader
   sentence — say **lane** for the same thing. Each milestone saw only its own half. M5's copy now
   says lane. The paint reading FC-N8 needs is **not taken** and is recorded as untaken, not met.
+  _(Taken 2026-09-23 and **passed**: 0.00 pp dropped at Week at 500 and 2,000, spread 0.00 pp, with
+  chevrons and centre items confirmed painted in the probe's own scene — #75 item 9.)_
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0153** _(Accepted; NetPoint-layout M3 landed 2026-09-23)_ — An edit moves only the bar that
@@ -6017,11 +6021,15 @@ A lighter-weight running log of smaller decisions is in
   both scales. So the **23.3 fps reading of 2026-09-08 remains the one figure
   in this row that nothing has reproduced**, and reading it alone is the
   specific error this bullet warns against.
-  **And every reading above pre-dates the painter that ships now**
-  (2026-09-23 pass): ADR-0151 (2026-09-22) and NetPoint-layout (2026-09-23)
-  redrew the bar, the row and the link after the sixth sitting, and both epics'
-  owed paint readings — FC-L5 and FC-N8 — are **untaken** (`docs/TECH_DEBT.md`
-  #75). "§9 is met" is a fact about the 2026-09-21 painter, not today's.
+  **Every reading above pre-dates the painter that ships now** — ADR-0151
+  (2026-09-22) and NetPoint-layout (2026-09-23) redrew the bar, the row and the
+  link — **and a seventh sitting the same evening measured today's** (#75 item 9,
+  the product owner's Surface Pro, DPR 1.5). Both epics' owed readings are taken:
+  **Week passes at 500 and 2,000** (60.0 fps, 0.00 pp; FC-N8 passes, FC-L5
+  passes combined). Fit/2,000 on that machine went **21.5 → 26.0 fps**, with
+  about half the bars on screen at the 60 px pitch — **still under §9's 30 fps
+  floor there**, in two sittings, while every Dell sitting since 2026-09-10
+  meets it. Whether that fires #75's trigger is the product owner's call.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 
