@@ -74,7 +74,7 @@ export interface Objective {
   rows: number;
 }
 
-interface Model {
+export interface Model {
   scene: TsldScene;
   view: Viewport;
   byId: Map<string, RenderActivity>;
@@ -85,7 +85,7 @@ interface Model {
 
 const VIEW = (pxPerDay: number): Viewport => ({ pxPerDay, originX: 40, originY: 32 });
 
-function routeOne(model: Model, e: number): Point[] | null {
+export function routeOne(model: Model, e: number): Point[] | null {
   const { scene, view, byId, index } = model;
   const edge = scene.edges[e]!;
   const pred = byId.get(edge.predecessorId);
@@ -160,6 +160,147 @@ export interface Stages {
   total: number;
 }
 
+/**
+ * **Which counters the objective uses.** `naive` is the harness's own all-pairs pair (what M0-T3's
+ * table was timed with, so that record stays reproducible); `fast` is a sort-and-sweep pair written
+ * for the M0-T4 search. They must return the same numbers — `measure-netpoint-search.mjs` checks
+ * that on every plan before it trusts a single search result.
+ */
+let counters: 'naive' | 'fast' = 'naive';
+export function setCounters(mode: 'naive' | 'fast'): void {
+  counters = mode;
+}
+
+const EPS = 0.001;
+
+/** One link's axis-aligned segments, tagged with the link — `segmentsOf`'s definition exactly. */
+export interface Seg {
+  link: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+export function segmentsOfLines(
+  lines: readonly (readonly Point[])[],
+  ids?: readonly number[],
+): {
+  h: Seg[];
+  v: Seg[];
+} {
+  const h: Seg[] = [];
+  const v: Seg[] = [];
+  lines.forEach((pts, i) => {
+    const link = ids ? ids[i]! : i;
+    for (let k = 1; k < pts.length; k += 1) {
+      const a = pts[k - 1]!;
+      const b = pts[k]!;
+      const horizontal = Math.abs(a.y - b.y) < EPS;
+      const vertical = Math.abs(a.x - b.x) < EPS;
+      if (!horizontal && !vertical) continue;
+      const seg = { link, x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+      // A zero-length segment is BOTH, exactly as `countCrossings` classifies it.
+      if (horizontal) h.push(seg);
+      if (vertical) v.push(seg);
+    }
+  });
+  return { h, v };
+}
+
+/** Verticals sorted by x and horizontals sorted by y, for range queries. */
+export interface SegIndex {
+  v: Seg[];
+  vx: Float64Array;
+  h: Seg[];
+  hy: Float64Array;
+}
+export function segIndex(h: Seg[], v: Seg[]): SegIndex {
+  const vs = [...v].sort((a, b) => a.x0 - b.x0);
+  const hs = [...h].sort((a, b) => a.y0 - b.y0);
+  return {
+    v: vs,
+    vx: Float64Array.from(vs.map((s) => s.x0)),
+    h: hs,
+    hy: Float64Array.from(hs.map((s) => s.y0)),
+  };
+}
+function lowerBound(arr: Float64Array, value: number): number {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid]! <= value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo; // first index with arr[i] > value
+}
+
+/**
+ * Crossings between the segments `h`/`v` (one link set) and an index (another), skipping any
+ * index segment whose link is in `exclude` and any pair sharing a link. `countCrossings`'s
+ * predicate exactly: the vertical's x strictly inside the horizontal, the horizontal's y strictly
+ * inside the vertical.
+ */
+export function crossAgainst(
+  h: readonly Seg[],
+  v: readonly Seg[],
+  index: SegIndex,
+  exclude?: ReadonlySet<number>,
+): number {
+  let n = 0;
+  for (const s of h) {
+    const lo = Math.min(s.x0, s.x1) + EPS;
+    const hi = Math.max(s.x0, s.x1) - EPS;
+    for (let i = lowerBound(index.vx, lo); i < index.v.length && index.vx[i]! < hi; i += 1) {
+      const t = index.v[i]!;
+      if (t.link === s.link || exclude?.has(t.link)) continue;
+      if (s.y0 > Math.min(t.y0, t.y1) + EPS && s.y0 < Math.max(t.y0, t.y1) - EPS) n += 1;
+    }
+  }
+  for (const s of v) {
+    const lo = Math.min(s.y0, s.y1) + EPS;
+    const hi = Math.max(s.y0, s.y1) - EPS;
+    for (let i = lowerBound(index.hy, lo); i < index.h.length && index.hy[i]! < hi; i += 1) {
+      const t = index.h[i]!;
+      if (t.link === s.link || exclude?.has(t.link)) continue;
+      if (s.x0 > Math.min(t.x0, t.x1) + EPS && s.x0 < Math.max(t.x0, t.x1) - EPS) n += 1;
+    }
+  }
+  return n;
+}
+
+/** Whole-set crossings by sweep: every horizontal against the x-sorted verticals. */
+export function countCrossingsFast(lines: readonly (readonly Point[])[]): number {
+  const { h, v } = segmentsOfLines(lines);
+  return crossAgainst(h, [], segIndex([], v));
+}
+
+/** Same-row drawn-span overlap pairs by a per-lane sort — `drawnOverlaps`'s predicate exactly. */
+export function overlapsFast(
+  laneOf: ReadonlyMap<string, number>,
+  start: ReadonlyMap<string, number>,
+  finish: ReadonlyMap<string, number>,
+): number {
+  const byLane = new Map<number, [number, number][]>();
+  for (const [key, lane] of laneOf) {
+    const span: [number, number] = [start.get(key) ?? 0, finish.get(key) ?? 0];
+    const list = byLane.get(lane);
+    if (list) list.push(span);
+    else byLane.set(lane, [span]);
+  }
+  let n = 0;
+  for (const spans of byLane.values()) {
+    spans.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < spans.length; i += 1) {
+      for (let j = i + 1; j < spans.length && spans[j]![0] <= spans[i]![1]; j += 1) {
+        // start_j >= start_i; the pair overlaps iff start_j <= finish_i AND start_i <= finish_j.
+        if (spans[i]![0] <= spans[j]![1]) n += 1;
+      }
+    }
+  }
+  return n;
+}
+
 function score(
   model: Model,
   lines: Point[][],
@@ -173,7 +314,10 @@ function score(
   for (const line of lines) if (lineOcclusion(line, ctx).foreign > 0) occluded += 1;
   t.occlusion = performance.now() - s;
   s = performance.now();
-  const { crossings } = countCrossings(lines.map((pts) => ({ pts })) as never);
+  const crossings =
+    counters === 'fast'
+      ? countCrossingsFast(lines)
+      : countCrossings(lines.map((pts) => ({ pts })) as never).crossings;
   t.crossings = performance.now() - s;
 
   const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
@@ -188,7 +332,10 @@ function score(
   let rows = 0;
   for (const lane of laneOf.values()) rows = Math.max(rows, lane + 1);
   s = performance.now();
-  const overlaps = drawnOverlaps(laneOf, asap.start, asap.finish);
+  const overlaps =
+    counters === 'fast'
+      ? overlapsFast(laneOf, asap.start, asap.finish)
+      : drawnOverlaps(laneOf, asap.start, asap.finish);
   t.overlaps = performance.now() - s;
   return {
     overlaps,
