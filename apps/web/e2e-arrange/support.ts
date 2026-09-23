@@ -58,8 +58,13 @@ export async function createPlan(page: Page, planName: string): Promise<void> {
  */
 export async function ensurePen(page: Page): Promise<void> {
   const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
+  const start = page.getByRole('button', { name: 'Start editing' });
+  // Wait for the pen control to render before deciding. `isVisible()` answers at once, so straight
+  // after a reload it saw neither button, took the "not held" branch, and then waited for a
+  // "Start editing" that never came, because this session still held the lease (PR #669, CI).
+  await expect(start.or(stop).first()).toBeVisible({ timeout: 15_000 });
+  if (await stop.isVisible()) return;
+  await start.click();
   await expect(stop).toBeVisible();
 }
 
