@@ -2,8 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-23
-- **Milestones:** NetPoint-layout M4 (the optimiser, dark) and M5 (Tidy and Re-layout) landed
-  2026-09-23
+- **Milestones:** NetPoint-layout M4 (the optimiser, dark), M5 (Tidy and Re-layout) and M6 (the
+  gate pass) landed 2026-09-23
 - **Supersedes:** nothing
 - **Amends:** ADR-0149 D6 (the Arrange offer's predicate and its dialog); ADR-0069 (`packLanes`
   stays the importer's packer and becomes Re-layout's seed)
@@ -12,7 +12,8 @@
   [conditions](../specs/netpoint-layout/conditions.md),
   [M0 measurement](../specs/netpoint-layout/m0-measurement.md),
   [M4 record](../specs/netpoint-layout/m4-the-optimiser.md),
-  [M5 record](../specs/netpoint-layout/m5-tidy-and-relayout.md)
+  [M5 record](../specs/netpoint-layout/m5-tidy-and-relayout.md),
+  [M6 gate pass](../specs/netpoint-layout/m6-gate-pass.md)
 
 ## Context
 

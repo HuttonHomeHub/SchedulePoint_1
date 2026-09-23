@@ -1,7 +1,7 @@
 # Implementation Plan: NetPoint layout — rows chosen for how the logic routes, and a diagram that reads like the reference
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner on 2026-09-23, with CQ-1 answered (see §0.11); not yet built
+- **Status:** Accepted — shipped (ADR-0152, ADR-0153, ADR-0154); approved by the product owner on 2026-09-23 with CQ-1 answered (see §0.11)
 - **Owner:** web
 
 ## Breakdown

@@ -5702,7 +5702,12 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   not guarantee — a card whose own figures could contradict its sentence — and it now states the
   order it works in. An already-arranged plan now **opens the dialog** rather than answering without
   one, because Tidy's "nothing to move" costs a search; US-2 is amended rather than quietly broken.
-  `RadioCardGroup` joins the primitives. **The CPM engine is not imported and no migration runs.**
+  `RadioCardGroup` joins the primitives. **The M6 gate pass read M1–M5 together and found the one
+  defect no milestone review could see**: M5 said **row** on screen while fifteen other strings — the
+  toolbar item that opens the dialog, M3's auto-resolve notice, the legend and the screen-reader
+  sentence — say **lane** for the same thing. Each milestone saw only its own half. M5's copy now
+  says lane. The paint reading FC-N8 needs is **not taken** and is recorded as untaken, not met.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0153** _(Accepted; NetPoint-layout M3 landed 2026-09-23)_ — An edit moves only the bar that
   caused an overlap. The product owner reported two activities drawn on top of each other after an
