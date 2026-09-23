@@ -1,5 +1,11 @@
 # @repo/seed
 
+## 0.4.0
+
+### Minor Changes
+
+- [#677](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/677) [`4eeef66`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4eeef6603282f9c193c1afa73f857484f7a76f22) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add a `reference` tier to the seed catalogue, and its first plan: PMA's NetPoint power-plant example, transcribed with its own rows and dates (`--tier reference`). A seed activity can now state its `laneIndex`; the runner forwards it on create only when stated, so every other tier still leaves the row to the server.
+
 ## 0.3.0
 
 ### Minor Changes

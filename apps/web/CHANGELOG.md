@@ -1,5 +1,19 @@
 # @repo/web
 
+## 0.147.0
+
+### Minor Changes
+
+- [#679](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/679) [`e150358`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e1503588ba19f654b3bebcdd269e721de78466e1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The canvas and the Gantt draw a finish milestone at the end of its dated day, where the task before
+  it ends, and dragging or nudging one stores the date it is dropped on. On a 24-hour calendar no
+  diamond moves.
+
+### Patch Changes
+
+- [#677](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/677) [`4eeef66`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4eeef6603282f9c193c1afa73f857484f7a76f22) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram now names its bars, dates and durations at whole-plan zoom, as NetPoint does. Each is drawn where it fits and left out where it does not, instead of all text disappearing below a fixed zoom. Where two bars meet, the node shows one date, the next activity's start, instead of two dates run together. A bar longer than the screen keeps its name on the part you can see.
+- Updated dependencies [[`4eeef66`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4eeef6603282f9c193c1afa73f857484f7a76f22)]:
+  - @repo/seed@0.4.0
+
 ## 0.146.1
 
 ### Patch Changes
