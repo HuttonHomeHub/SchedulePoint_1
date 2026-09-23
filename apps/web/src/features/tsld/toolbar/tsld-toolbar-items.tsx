@@ -2517,22 +2517,22 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       ),
     },
     // View-mode switch — the slot ADR-0031 §296 reserved, now filled (ADR-0059 §3). It follows the
-    // `mode-early`/`mode-visual` idiom: a segment is TWO registry items whose `isActive` reads the
-    // same state, not one item rendering a control, so overflow and the label policy treat each half
-    // like every other button.
+    // `mode-early`/`mode-visual` idiom (both deleted by ADR-0148): a segment is TWO registry items
+    // whose `isActive` reads the same state, not one item rendering a control, so overflow and the
+    // label policy treat each half like every other button.
     //
     // ADR-0055 §8.4 declined to ship this control while only one view existed, on the grounds that
     // half of it would be inert. That condition no longer holds for Gantt (`Network` remains unbuilt
     // and stays out). Flag-off both halves are invisible and the toolbar is byte-for-byte today's.
     //
     // View-only and offered to EVERY role: reading the schedule as bars is not an edit, so unlike
-    // the scheduling-mode selector these are never shaded for a viewer.
+    // the scheduling-mode selector ADR-0148 deleted, these are never shaded for a viewer.
     {
       id: 'view-tsld',
       group: 'lens',
       row: 'mode',
       tier: 1,
-      // Icon-only on the rail; see `mode-early` above (TECH_DEBT #61).
+      // TECH_DEBT #61 (the `mode-early` item this pointed at was deleted by ADR-0148).
       showLabel: 'always',
       order: 10,
       segment: 'view-mode',

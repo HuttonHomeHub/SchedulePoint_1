@@ -270,8 +270,8 @@ the pen, and your next refetch takes a control out from under your focus ring �
 landing on `<body>` (`docs/TECH_DEBT.md` #204(c)).
 
 **Authoring:** if an item's `isVisible` can flip because of somebody else's write, give it a
-`lostReason` — a **static** string about the CONDITION ("This action applies only while the plan is
-scheduled in Visual mode."), never a `(ctx) => string` like its neighbour `disabledReason`. A
+`lostReason` — a **static** string about the CONDITION ("This action applies only to a WBS summary.",
+`selection-actions.tsx`), never a `(ctx) => string` like its neighbour `disabledReason`. A
 function has no honest moment to run: at focus time it describes the world before the change, and
 afterwards the item it would read is gone. The field is optional, so a development-only warning marks
 each gap the first time it is reached; where a sentence would be a guess, **omit it** — the reader is

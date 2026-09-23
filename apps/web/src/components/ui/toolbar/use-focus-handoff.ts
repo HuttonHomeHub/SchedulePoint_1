@@ -160,7 +160,7 @@ function labelOf(element: Element): string | null {
  * The two sentence forms, as one pure function so both can be asserted without a DOM.
  *
  * The reason is a **condition**, so it reads as one: "… is no longer available: this action applies
- * only while the plan is scheduled in Visual mode." Without a reason the reader is still told what
+ * only to a WBS summary." Without a reason the reader is still told what
  * left and where they now are, which is the whole WCAG 2.4.3 obligation; the reason is the part
  * that turns a correct announcement into a useful one.
  */

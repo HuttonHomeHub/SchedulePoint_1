@@ -310,7 +310,8 @@ export interface ToolbarItem<Ctx> {
   priority?: number;
   /**
    * Items sharing a `segment` are **alternatives to one another** — one two-state switch, not two
-   * independent commands. `Early mode | Visual mode` is one segment; `Diagram | Gantt` is another.
+   * independent commands. `Diagram | Gantt` is one segment (`Early mode | Visual mode` was another
+   * until ADR-0148 deleted the scheduling modes).
    *
    * Declared on the item rather than special-cased by id in the primitive, which is TSLD knowledge
    * the primitive must not carry.
@@ -438,7 +439,7 @@ export interface ToolbarItem<Ctx> {
    * focus time it describes the world *before* the change, in the present tense, about a fact that
    * is about to stop being true; evaluated afterwards there is no item left to evaluate against —
    * it has left the resolved set, which is the premise of the whole mechanism. A sentence about the
-   * **condition** ("This action applies only while the plan is scheduled in Visual mode.") is true
+   * **condition** ("This action applies only to a WBS summary.") is true
    * in both worlds, which makes the trap unreachable instead of merely avoided.
    *
    * Optional, by product-owner decision: roughly forty registry items would each need a sentence
