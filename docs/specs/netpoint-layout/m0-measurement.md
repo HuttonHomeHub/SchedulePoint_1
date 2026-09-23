@@ -270,7 +270,11 @@ exact pass would take hours.
 | **+50 % (62)** |   62 |  **985** | **7,774** |    2,409 |  5,131 |      1,138 |   255,357 |
 | +100 % (82)    |   80 |      936 |     8,645 |    2,316 |  8,156 |      1,439 |   335,981 |
 
-The unbounded and Tidy rows are still running and are appended when they finish.
+**The unbounded and Tidy rows were not taken.** The run's `timeout 9000` fired (exit 124) after the
+four rows above had used 962 s of it, so the ∞ search ran for about 2.2 hours without finishing its
+eight passes and printed nothing. That is itself a reading: at this size an unbounded Re-layout is
+not a whole-plan command at all, and a Tidy row that waits behind it is owed at M4 rather than
+re-run here. The four bounded rows are the frontier CQ-1 is put on.
 
 **What it says:**
 
