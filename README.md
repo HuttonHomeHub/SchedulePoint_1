@@ -20,12 +20,13 @@
 > `CLAUDE.md`, which is drift control aimed at one of four copies (ADR-0076).
 > The CPM/GPM engine is
 > real and its conformance matrix is closed (ADR-0034), and the **application**
-> has its own test bed as of 2026-07-31 — 37 documented seeded plans and hostile
-> cases created through the public REST API (ADR-0066, and the
-> [test playbook](docs/TEST_PLAYBOOK.md)). The **Gantt view shipped** on 2026-07-28
-> (ADR-0059), substantially delivering the brief's last outstanding Must-have —
-> §8 words it "read-primary; edit supported", and Gantt editing stays deferred
-> (ADR-0059 M5). An **append-only audit log** shipped 2026-08-03 (ADR-0072/0073),
+> has its own test bed as of 2026-07-31 — a catalogue of documented seeded plans
+> and hostile cases (`pnpm check:playbook` prints the count) created through the
+> public REST API (ADR-0066, and the [test playbook](docs/TEST_PLAYBOOK.md)). The
+> **Gantt view shipped** on 2026-07-28 (ADR-0059) and became a working surface on
+> 2026-08-17 (ADR-0095), substantially delivering the brief's last outstanding
+> Must-have — §8 words it "read-primary; edit supported", and the start-edge resize
+> is deliberately absent (ADR-0095 D4). An **append-only audit log** shipped 2026-08-03 (ADR-0072/0073),
 > closing the register's oldest row. It runs on Docker Compose with releases
 > pulled automatically (ADR-0047) — hosting is settled, not open. See the
 > [roadmap](docs/ROADMAP.md) and [project brief](docs/PROJECT_BRIEF.md).

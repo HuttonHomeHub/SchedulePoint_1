@@ -36,19 +36,26 @@ browser-native team use. See the full product context in
 > opposite for months after it stopped being true, which is exactly the failure
 > it now warns against.
 >
-> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): 37
-> documented seeded plans and hostile cases created through the public REST API,
+> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): a
+> catalogue of documented seeded plans and hostile cases (37 at launch, 40 on
+> 2026-09-23 — `pnpm check:playbook` prints the current count, so this line does
+> not own it) created through the public REST API,
 > keyed to [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md), which says which plan
 > proves what and what _wrong_ looks like. Use it before hand-building a plan to
 > reproduce something — and note what it exists to cover: the conformance harness
 > proves the **engine**, never a write path, a DTO or a guard.
 >
 > The **Gantt view shipped** on 2026-07-28 (ADR-0059, `VITE_GANTT_VIEW`
-> default-on) — read-only by design, with WBS rows, the baseline variance bar and
-> a printed programme. It **substantially** delivers the last outstanding
-> Must-have in [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8, which words it
-> "read-primary; **edit supported**" — Gantt editing is deferred as ADR-0059 M5,
-> so that line is not yet closed. This banner and the PR that shipped it both said
+> default-on) — first read-only, with WBS rows, the baseline variance bar and
+> a printed programme — and **became a working surface on 2026-08-17** (ADR-0095:
+> in-cell editing with per-cell write scope, bar moves, dependency arrows behind a
+> default-off toggle; typed dates followed in ADR-0134). It **substantially**
+> delivers the last outstanding Must-have in
+> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8, which words it
+> "read-primary; **edit supported**" — "substantially" because the start-edge
+> resize is deliberately absent (ADR-0095 D4). This paragraph said "read-only by
+> design … Gantt editing is deferred as ADR-0059 M5" until the 2026-09-23 pass,
+> five weeks after ADR-0095 shipped. This banner and the PR that shipped it both said
 > "closing the last Must-have" until the brief was re-read: the same trust-the-
 > document failure the paragraph above warns about, one paragraph later. Hosting
 > is **settled** (Docker Compose + ADR-0047 auto-pull, `docs/TECH_DEBT.md` #5) —
