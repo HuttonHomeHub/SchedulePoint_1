@@ -2,7 +2,7 @@
   "name": "@repo/layout",
   "version": "0.0.0",
   "private": true,
-  "description": "Pure lane-layout substrate: the greedy first-fit lane packer shared by the TSLD canvas's Auto-arrange and the interchange importer. Knows how to ARRANGE bars; never how to draw or persist one.",
+  "description": "Pure lane-layout substrate: the greedy first-fit lane packer shared by the TSLD canvas's Auto-arrange and the interchange importer, and the nearest-free-row search used by an edit's overlap resolution and the Tidy optimiser (ADR-0153/0152). Knows how to ARRANGE bars; never how to draw or persist one.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
