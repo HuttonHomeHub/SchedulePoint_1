@@ -376,6 +376,11 @@ export function sceneFor(
     label: a.key,
     earlyStart: iso(asap.start.get(a.key) ?? 0),
     earlyFinish: iso(asap.finish.get(a.key) ?? 0),
+    // The span in days, standing in for the working-day duration so the centre item (NetPoint
+    // M1) is drawn and counted by FC-N6a; the harness has no calendar to give the real figure.
+    durationDays: a.type.endsWith('MILESTONE')
+      ? 0
+      : (asap.finish.get(a.key) ?? 0) - (asap.start.get(a.key) ?? 0) + 1,
     isCritical: false,
     isNearCritical: false,
   }));
@@ -585,7 +590,7 @@ export function fc1(path: string, options: { rollUpSummaries?: boolean } = {}): 
 
   // The control framing: every lane of the worst layout on screen, so nothing is culled.
   const whole = sceneFor(asap, sourceOrder);
-  const tall = { label: 'whole-plan', width: 4000, height: sourceOrder.lanes * 28 + 200 };
+  const tall = { label: 'whole-plan', width: 4000, height: sourceOrder.lanes * LANE_HEIGHT + 200 };
   const controlReading = read(whole.scene, sourceOrder, tall, 1, 32);
 
   for (const layout of [shipped, sourceOrder]) {
@@ -883,7 +888,7 @@ export function t3(path: string, options: { rollUpSummaries?: boolean } = {}): T
       const vp = {
         label: 'whole-plan',
         width: (maxDay + 4) * pxPerDay + 400,
-        height: 145 * 28 + 200,
+        height: 145 * LANE_HEIGHT + 200,
       };
       into.push({
         ...read(scene, config.layout, vp, pxPerDay, 32),

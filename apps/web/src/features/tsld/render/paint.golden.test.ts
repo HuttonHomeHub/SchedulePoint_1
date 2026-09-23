@@ -177,9 +177,22 @@ const EDGES: readonly RenderEdge[] = [
   { id: 'e4', predecessorId: 'progressed', successorId: 'milestone', type: 'FS', isDriving: false },
 ];
 
+/**
+ * {@link ACTIVITIES} with the two optional fields the centre item reads (NetPoint-layout M1) set on
+ * every bar. Kept off the shared list so MINIMAL stays the every-optional-field-absent picture.
+ * The durations are the working-day figures, deliberately not the calendar span (a 4-day span over
+ * a weekend is 2 working days), so a painter that re-derived the duration from the span would log
+ * a different string.
+ */
+const MAXIMAL_ACTIVITIES: readonly RenderActivity[] = ACTIVITIES.map((a, i) => ({
+  ...a,
+  durationDays: a.type === 'START_MILESTONE' ? 0 : 2,
+  remainingFloat: i % 3 === 0 ? null : i % 3,
+}));
+
 /** Every optional field the painter reads, set — the maximal frame. */
 const MAXIMAL: TsldScene = {
-  activities: ACTIVITIES,
+  activities: MAXIMAL_ACTIVITIES,
   edges: EDGES,
   dataDate: DATA_DATE,
   selectedId: 'critical',
@@ -191,6 +204,9 @@ const MAXIMAL: TsldScene = {
     today: true,
     nonWorking: true,
     labels: true,
+    // Added at NetPoint-layout M1: the maximal frame had never set `dates`, so the flanking dates,
+    // the milestone's single date and the centre item that shares their row were all unreached.
+    dates: true,
     lateOverlay: false,
   },
   isWorkingDay,

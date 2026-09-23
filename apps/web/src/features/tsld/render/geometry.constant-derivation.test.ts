@@ -92,10 +92,12 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
   it("reproduces the row treatment's values at the shipped geometry", () => {
     // Re-baselined at M3-T3 **by reading**, not with `-u`: the relationships asserted above are
     // what must still hold, and they are separate cases for exactly this moment.
+    // And again at NetPoint-layout M1, by reading: pitch 52 → 60 moves the pad and nothing the pad
+    // does not own. Every value below this line is the same as it was at 52.
     expect({ LANE_HEIGHT, BAR_HEIGHT, BAR_PAD }).toEqual({
-      LANE_HEIGHT: 52,
+      LANE_HEIGHT: 60,
       BAR_HEIGHT: 5,
-      BAR_PAD: 23.5,
+      BAR_PAD: 27.5,
     });
     expect({
       TAIL_HEIGHT,

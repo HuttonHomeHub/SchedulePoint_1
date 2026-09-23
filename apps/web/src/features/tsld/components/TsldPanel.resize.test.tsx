@@ -27,8 +27,17 @@ const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
 import { NUDGE_DEBOUNCE_MS } from '../interaction/use-coalesced-nudge';
+import { BAR_HEIGHT, BAR_PAD } from '../render/geometry';
+import { DEFAULT_VIEWPORT } from '../render/viewport';
 
 import { TsldPanel } from './TsldPanel';
+
+/**
+ * The screen y of lane 0's bar centre-line in the default viewport. Derived, not written as a
+ * number: it was the literal 54, the top edge of the old row's 24 px pointer target, and fell
+ * outside the target when the row grew to 60 (NetPoint-layout M1).
+ */
+const LANE0_Y = DEFAULT_VIEWPORT.originY + BAR_PAD + BAR_HEIGHT / 2;
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -129,9 +138,9 @@ describe('TsldPanel finish-edge resize (ADR-0052 M2, flag on)', () => {
     const { canvas, onResize } = renderPanel();
     // DEFAULT_VIEWPORT (pxPerDay 14, origin 40/40): the day-0..2 bar spans x 40..82 at lane 0; the
     // finish grab-zone is its last 8px. Drag right to day column 5 → duration 5 - 0 + 1 = 6.
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
 
     // The intent maps to onResize synchronously on drop…
     expect(onResize).toHaveBeenCalledWith({ activityId: 'a1', durationDays: 6 });
@@ -144,8 +153,8 @@ describe('TsldPanel finish-edge resize (ADR-0052 M2, flag on)', () => {
 
   it('a press-release on the finish zone without a real drag selects instead of resizing', () => {
     const { canvas, onResize } = renderPanel();
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
     // Selection is announced via the option description; no resize write is issued.
     expect(announceSpy).toHaveBeenCalled();
     expect(onResize).not.toHaveBeenCalled();
@@ -196,9 +205,9 @@ describe('TsldPanel finish-edge resize (ADR-0052 M2, flag on)', () => {
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
     // Drag the finish grab-zone right — the resize write is now in flight.
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
     expect(onResize).toHaveBeenCalledTimes(1);
     expect(utils.container.querySelector('[aria-busy="true"]')).not.toBeNull();
     // Pan the viewport 140px left while the write is pending.
@@ -206,8 +215,8 @@ describe('TsldPanel finish-edge resize (ADR-0052 M2, flag on)', () => {
     fireEvent.pointerMove(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
     fireEvent.pointerUp(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
     // The pan moved the bar off its old pixels: a click on its ORIGINAL body selects nothing.
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE0_Y, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE0_Y, pointerId: 3 });
     expect(utils.container.querySelector('[role="option"][aria-selected="true"]')).toBeNull();
     // Settle → the busy gate clears on the success path too.
     await act(async () => {
@@ -243,9 +252,9 @@ describe('TsldPanel finish-edge resize (flag OFF parity)', () => {
     expect(onResize).not.toHaveBeenCalled();
     // Pointer: with no link handler wired the end zone falls through to M1 select (today's
     // behaviour) — a finish-zone drag never emits a resize intent.
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 118, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });

@@ -91,6 +91,13 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   today: true,
   nonWorking: true,
   labels: true,
+  /**
+   * **On by default since NetPoint-layout M1** (spec §4.6, CQ-3). The row reserves a line under
+   * every bar for its dates, and the product owner chose the reference's treatment — dates under the
+   * nodes — as the picture a planner opens a plan to. Off, that line is empty space; the switch stays
+   * (`View ▾ ▸ Dates`), and it is still not persisted.
+   */
+  dates: true,
   lateOverlay: false,
   /**
    * **Off by default since the workspace redesign (M4-T1).**

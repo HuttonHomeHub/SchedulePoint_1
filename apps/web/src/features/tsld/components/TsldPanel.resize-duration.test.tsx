@@ -2,9 +2,18 @@ import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { BAR_HEIGHT, BAR_PAD } from '../render/geometry';
 import type { WorkingDayCalendar } from '../render/time-scale';
+import { DEFAULT_VIEWPORT } from '../render/viewport';
 
 import { TsldPanel } from './TsldPanel';
+
+/**
+ * The screen y of lane 0's bar centre-line in the default viewport. Derived, not written as a
+ * number: it was the literal 54, the top edge of the old row's 24 px pointer target, and fell
+ * outside the target when the row grew to 60 (NetPoint-layout M1).
+ */
+const LANE0_Y = DEFAULT_VIEWPORT.originY + BAR_PAD + BAR_HEIGHT / 2;
 
 /**
  * Regression, reported from the field: "I had an activity that was 4 working days but was drawn 6
@@ -112,9 +121,9 @@ function dragFinishOneColumnRight(calendar: WorkingDayCalendar | null): ReturnTy
   );
   const canvas = utils.container.querySelector('canvas');
   if (!canvas) throw new Error('canvas not rendered');
-  fireEvent.pointerDown(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
-  fireEvent.pointerMove(canvas, { clientX: 130, clientY: 54, pointerId: 1 });
-  fireEvent.pointerUp(canvas, { clientX: 130, clientY: 54, pointerId: 1 });
+  fireEvent.pointerDown(canvas, { clientX: 120, clientY: LANE0_Y, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE0_Y, pointerId: 1 });
+  fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE0_Y, pointerId: 1 });
   return onResize;
 }
 

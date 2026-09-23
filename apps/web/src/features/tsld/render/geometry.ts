@@ -44,8 +44,13 @@ import type { ConstraintAnchor } from '@/lib/constraint-format';
  * the product owner's "as many rows as it takes — readability is the deal breaker" is what makes
  * spending it allowed. See {@link rowSlots} for how the row divides, and FC-L11 for the condition
  * the division is judged against.
+ *
+ * **60, not 52, since NetPoint-layout M1** — the product owner's answer to ADR-0151's owed item 3
+ * ("spend a further 8 px a row to remove the last of the bunching"). The extra 8 px goes to the
+ * gutter channels, not to text: {@link rowSlots}' clear half-band grows 7.5 → 11.5 px while every
+ * text row keeps its size (M0-T2 measured the pitch-60 baselines the later conditions read against).
  */
-export const LANE_HEIGHT = 52;
+export const LANE_HEIGHT = 60;
 /**
  * Activity bar height — **a thin line, in the tradition of the reference the product owner chose**.
  *
@@ -537,10 +542,19 @@ export interface RenderActivity {
   id: string;
   type: ActivityType;
   laneIndex: number;
-  /** The on-canvas bar label (`{code} {name} · {n}d`), pre-built at the mapping seam from the
-   * shared `activityBarLabel` so the render model does no domain string logic and the visible
-   * label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). */
+  /** The on-canvas name row: the activity's identity (`{code} {name}`), pre-built at the mapping
+   * seam from the shared `activityLabel` so the render model does no domain string logic and the
+   * visible label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). The
+   * duration left it at NetPoint-layout M1 for the row below the bar ({@link durationDays}). */
   label: string;
+  /**
+   * The working-day duration the centre item prints under the bar (NetPoint-layout M1). Carried
+   * rather than re-derived because it is **not** the drawn span: a working-day figure differs from
+   * the calendar days between the two dates on any calendar with non-working days, which is why
+   * `a11y.ts` records it as not derivable from the spoken dates. Absent on scenes built before the
+   * field existed; the centre item then draws nothing.
+   */
+  durationDays?: number;
   /**
    * The inclusive dates (`YYYY-MM-DD`) the bar is **drawn** at, or null until the plan is
    * recalculated. Sourced per the active view at the mapping seam (ADR-0033): EARLY → the CPM

@@ -48,7 +48,10 @@ export function scaleScene(count: number): ScaleScene {
       id: activity.key,
       type: activity.type,
       laneIndex: bar.lane,
-      label: `${activity.code} ${activity.name} · ${String(activity.durationMinutes / 1440)}d`,
+      // Identity only since NetPoint-layout M1, like the product's name row; the duration rides
+      // under the bar as the centre item.
+      label: `${activity.code} ${activity.name}`,
+      durationDays: activity.durationMinutes / 1440,
       earlyStart: iso(bar.startDay),
       earlyFinish: iso(bar.finishDay),
       // The generator does not compute criticality (it does not schedule), so the flag is dealt to

@@ -2,7 +2,7 @@ import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@r
 import { describe, expect, it } from 'vitest';
 
 import {
-  activityBarLabel,
+  centreItemText,
   activityLabel,
   announceChainStep,
   baselineGhostClause,
@@ -103,7 +103,7 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   };
 }
 
-describe('activityLabel / activityBarLabel (shared identity)', () => {
+describe('activityLabel (shared identity) and centreItemText', () => {
   it('prefixes the code when set, else uses the name alone', () => {
     expect(activityLabel(activity({ code: 'A1020', name: 'Erect steel' }))).toBe(
       'A1020 Erect steel',
@@ -111,22 +111,30 @@ describe('activityLabel / activityBarLabel (shared identity)', () => {
     expect(activityLabel(activity({ code: null, name: 'Erect steel' }))).toBe('Erect steel');
   });
 
-  it('appends the working-day duration for a task, but not for a zero-duration milestone', () => {
-    expect(
-      activityBarLabel(activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 })),
-    ).toBe('A1020 Erect steel · 5d');
-    expect(
-      activityBarLabel(
-        activity({ code: 'M1', name: 'Handover', type: 'FINISH_MILESTONE', durationDays: 0 }),
-      ),
-    ).toBe('M1 Handover');
+  it('keeps the name row a leading substring of the accessible name (label-in-name)', () => {
+    const a = activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 });
+    expect(describeActivity(a).startsWith(activityLabel(a))).toBe(true);
   });
 
-  it('keeps the identity a leading substring of both the bar label and the accessible name (label-in-name)', () => {
-    const a = activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 });
-    const identity = activityLabel(a);
-    expect(activityBarLabel(a).startsWith(identity)).toBe(true);
-    expect(describeActivity(a).startsWith(identity)).toBe(true);
+  it('prints the duration and the float left in full, the duration alone short', () => {
+    const task = { durationDays: 5, remainingFloat: 3, milestone: false };
+    expect(centreItemText(task, 'full')).toBe('5d · 3d float left');
+    expect(centreItemText(task, 'short')).toBe('5d');
+  });
+
+  it('omits the float clause when the engine has not computed one, and states zero when it has', () => {
+    expect(
+      centreItemText({ durationDays: 5, remainingFloat: null, milestone: false }, 'full'),
+    ).toBe('5d');
+    expect(centreItemText({ durationDays: 5, remainingFloat: 0, milestone: false }, 'full')).toBe(
+      '5d · 0d float left',
+    );
+  });
+
+  it('draws nothing for a milestone, which has no bar to hold it', () => {
+    expect(
+      centreItemText({ durationDays: 0, remainingFloat: 4, milestone: true }, 'full'),
+    ).toBeNull();
   });
 });
 
@@ -541,10 +549,8 @@ describe('a11y-string parity across the M4 visual refresh', () => {
     );
   });
 
-  it('pins the shared bar-label identity byte-for-byte (visible label = accessible prefix)', () => {
-    expect(activityBarLabel({ code: 'A100', name: 'Excavate', durationDays: 3 })).toBe(
-      'A100 Excavate · 3d',
-    );
+  it('pins the shared name-row identity byte-for-byte (visible label = accessible prefix)', () => {
+    expect(activityLabel({ code: 'A100', name: 'Excavate' })).toBe('A100 Excavate');
   });
 });
 

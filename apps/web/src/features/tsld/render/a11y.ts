@@ -50,24 +50,31 @@ export function activityLabel(a: { code: string | null; name: string }): string 
 }
 
 /**
- * The full on-canvas bar label: the {@link activityLabel} identity plus the working-day
- * duration for a real task (`… · 5d`); a milestone (zero duration) carries the identity only.
- * The duration is supplementary *visual* detail — the identity stays the shared,
- * accessible-name-consistent prefix, so this remains label-in-name-safe.
+ * The **centre item** printed under a bar (NetPoint-layout M1, spec §4.6): the working-day duration,
+ * followed by the float left when the engine has computed one — `5d · 3d float left` in full,
+ * `5d` short. The duration used to ride the name row (`{identity} · 5d`); it moved here so the
+ * name row states identity and nothing else.
+ *
+ * **Null for a milestone.** The item never leaves its own bar, and a milestone has no bar to hold
+ * it — its float is spoken in the Tier-1 sentence and drawn by the feasible window.
+ *
+ * "float left" rather than "float" because the figure is `remainingFloat` on the placed basis
+ * (ADR-0148): the room from where the bar IS, not from where the network would put it.
  */
-export function activityBarLabel(a: {
-  code: string | null;
-  name: string;
-  durationDays: number;
-}): string {
-  const identity = activityLabel(a);
-  return a.durationDays > 0 ? `${identity} · ${a.durationDays}d` : identity;
+export function centreItemText(
+  a: { durationDays: number; remainingFloat: number | null | undefined; milestone: boolean },
+  form: 'full' | 'short',
+): string | null {
+  if (a.milestone) return null;
+  const duration = `${a.durationDays}d`;
+  if (form === 'short' || a.remainingFloat == null) return duration;
+  return `${duration} · ${a.remainingFloat}d float left`;
 }
 
 /**
  * **Tier 1** — the one lean sentence spoken on every navigation keystroke:
  * `{code name}, {n working days}, {start}–{finish}, lane N, {float|critical}`. The working-day
- * duration is spoken because it is the same datum the on-canvas bar label shows (`· Nd`) and is
+ * duration is spoken because it is the same datum the on-canvas centre item shows (`Nd`) and is
  * *not* derivable from the spoken calendar dates — working days skip weekends/holidays (WCAG
  * 1.1.1). Float is added where it informs: `critical` already implies zero float (so just
  * "critical"); `near-critical` states the days; otherwise the plain float; float is omitted when
