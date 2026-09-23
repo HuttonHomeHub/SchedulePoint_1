@@ -36,6 +36,7 @@ import {
 } from '../model/canvas-selection';
 import { planChain } from '../model/chain-order';
 import { resolveDockStrip } from '../model/dock-strip';
+import { drawnDaySpan } from '../model/drawn-span';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -106,6 +107,7 @@ import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/confi
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import { deriveWbsBandSource, wbsBandDescribedRows, wbsGroupAccessibleName } from '@/features/wbs';
+import { barDatesFor } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
@@ -1773,13 +1775,20 @@ export function TsldPanel({
   // (ADR-0054 §5), built from the one shared builder so the drawn number and the spoken one are the
   // same computation. Fed to the Tier-2 `Space` summary, which is the only way a non-sighted
   // planner can get it (WCAG 1.1.1). Empty (and the sentence unchanged) until the plan has dates.
-  const linkSlack = useMemo(
-    () =>
-      dataDate
-        ? slackByDependencyId({ dataDate, activities, dependencies })
-        : new Map<string, number>(),
-    [dataDate, activities, dependencies],
-  );
+  //
+  // **Same builder is not enough: it must be fed the same DATES.** The chip is computed from the
+  // render model, whose `earlyStart`/`earlyFinish` hold the drawn span; this was fed the API rows,
+  // whose fields of the same name hold the network's — so a hand-placed successor showed a gap on
+  // the canvas and was announced with none (reported 2026-09-23; `docs/TECH_DEBT.md` #372 is the
+  // naming trap that made the two lines look identical).
+  const linkSlack = useMemo(() => {
+    if (!dataDate) return new Map<string, number>();
+    const drawn = activities.map((a) => {
+      const { start, finish } = barDatesFor(a, barDateSource);
+      return { id: a.id, earlyStart: start, earlyFinish: finish };
+    });
+    return slackByDependencyId({ dataDate, activities: drawn, dependencies });
+  }, [dataDate, activities, dependencies, barDateSource]);
 
   /**
    * The resolved keyboard cursor. Flag-off it **is** `selectedId`, expression for expression, so
@@ -1959,6 +1968,7 @@ export function TsldPanel({
   // The full state machine + its correctness reasoning live in the hook (unit-tested there).
   const pointerRepositionBusyRef = useRef(false);
   const nudge = useCoalescedNudge({
+    barDateSource,
     onReposition: notedReposition,
     activities,
     dataDate,
@@ -1972,6 +1982,7 @@ export function TsldPanel({
   // the finish-edge resize drag, sharing the pointer-busy gate + ghost + banner seams with the
   // reposition nudge above. Inert unless the direct-manipulation flag armed the keyboard branch.
   const durationNudge = useCoalescedDurationNudge({
+    barDateSource,
     onResize: notedResize,
     activities,
     dataDate,
@@ -2203,7 +2214,7 @@ export function TsldPanel({
       event.preventDefault();
       const current = activities.find((a) => a.id === activeId);
       const startDay =
-        current?.earlyStart && dataDate ? daysBetween(dataDate, current.earlyStart) : 0;
+        current && dataDate ? (drawnDaySpan(current, barDateSource, dataDate)?.startDay ?? 0) : 0;
       clearConflict();
       createReturnFocusRef.current = listboxRef.current; // return focus to the list, not the toolbar
       setPendingCreate({
@@ -2417,8 +2428,11 @@ export function TsldPanel({
         CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
       if (bulk?.moveMany && pluralIds.includes(intent.activityId)) {
         const rows = activities.filter((a) => pluralIds.includes(a.id));
-        const originStart =
-          activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
+        // The gesture's `startDay` is measured off the DRAWN bar, so the delta must be too: from
+        // the early start, a placed primary shifted every selected bar by its own drift as well
+        // as by the drag (reported 2026-09-23).
+        const originSpan = dataDate ? drawnDaySpan(activity, barDateSource, dataDate) : null;
+        const originStart = originSpan?.startDay ?? 0;
         const delta = {
           dayDelta: intent.startDay === undefined ? 0 : intent.startDay - originStart,
           laneDelta: intent.laneIndex === undefined ? 0 : intent.laneIndex - activity.laneIndex,
@@ -2436,10 +2450,7 @@ export function TsldPanel({
         // Only the dragged bar gets a ghost. The other N-1 still jump on release; that is the
         // preview gap `docs/TECH_DEBT.md` #108 is narrowed to, and it has a painting cost to
         // measure against ADR-0026 §9 before it moves.
-        const span =
-          activity.earlyStart && activity.earlyFinish
-            ? daysBetween(activity.earlyStart, activity.earlyFinish)
-            : 0;
+        const span = originSpan ? originSpan.endDay - originSpan.startDay : 0;
         const ghostStart = originStart + delta.dayDelta;
         setPendingReposition({
           startDay: ghostStart,
@@ -2484,12 +2495,9 @@ export function TsldPanel({
           : intent.startDay;
       // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
       // activity's current geometry so the optimistic ghost sits at the resulting day+lane.
-      const span =
-        activity.earlyStart && activity.earlyFinish
-          ? daysBetween(activity.earlyStart, activity.earlyFinish)
-          : 0;
-      const currentStartDay =
-        activity.earlyStart && dataDate ? daysBetween(dataDate, activity.earlyStart) : 0;
+      const drawn = dataDate ? drawnDaySpan(activity, barDateSource, dataDate) : null;
+      const span = drawn ? drawn.endDay - drawn.startDay : 0;
+      const currentStartDay = drawn?.startDay ?? 0;
       const startDay = previewStartDay ?? currentStartDay;
       const laneIndex = intent.laneIndex ?? activity.laneIndex;
       setPendingReposition({ startDay, endDay: startDay + span, laneIndex });
@@ -2557,11 +2565,14 @@ export function TsldPanel({
       const activity = activities.find((a) => a.id === intent.activityId);
       if (!activity || !notedResize) return;
       clearConflict();
+      // A finish-edge drag keeps the start where the bar is DRAWN. From the early start, the
+      // working-day count below ran over a range the bar does not occupy, so a placed bar's resize
+      // could write a duration that differed from the one dragged (reported 2026-09-23).
       const startDay =
         intent.edge === 'start'
           ? intent.newStartDay
-          : activity.earlyStart && dataDate
-            ? daysBetween(dataDate, activity.earlyStart)
+          : dataDate
+            ? (drawnDaySpan(activity, barDateSource, dataDate)?.startDay ?? 0)
             : 0;
       // The gesture measures in CANVAS COLUMNS — the drag's whole-day geometry off the drawn bar —
       // but `durationDays` is a WORKING-day duration, the same unit mismatch the create path had.

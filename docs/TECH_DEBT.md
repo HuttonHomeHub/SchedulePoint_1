@@ -11546,3 +11546,28 @@ added about eleven more instances rather than extracting a `bundleProbe(entry)` 
 
 Filed rather than fixed because a shared helper under `scripts/` is a shared-mechanism change and
 folding one into an epic's last milestone is what ADR-0105 exists to stop.
+
+### 372. `RenderActivity.earlyStart` holds the DRAWN date, and looks exactly like the one that does not
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (the Arrange overlap the
+product owner reported) · **Size:** M · **Owner:** web
+
+`to-render-model.ts` maps each bar's **drawn** span (`barDatesFor(a, 'visual')`, the effective-Visual
+dates since ADR-0148) into fields named `earlyStart`/`earlyFinish` on `RenderActivity`. The API's
+`ActivitySummary` has fields with the same names meaning the **network's** early dates. So
+`daysBetween(dataDate, a.earlyStart)` is correct in `render/geometry.ts` and wrong in `TsldPanel.tsx`,
+and the two lines are character-for-character alike.
+
+That is how seven sites came to read the network date where the picture was meant — Arrange stacking
+a placed bar on its predecessor, `Alt+→` moving a placement by its drift plus one day, the plural drag
+and bulk move starting from the wrong origin, the finish-edge resize counting working days over a
+range the bar does not occupy, two previews drawn at the wrong x, and the spoken link slack
+disagreeing with the canvas chip it describes. All seven were fixed on
+2026-09-23 through `model/drawn-span.ts`, and `drawn-span.structural.test.ts` keeps the
+`ActivitySummary`-holding files from converting an early date to a canvas day. That gate is scoped by
+**file**, because a text scan cannot see a type — which is the whole problem.
+
+**The fix this row owes** is renaming the render model's pair to `drawnStart`/`drawnFinish`, so the
+type says what the value is and the gate's file scope stops being load-bearing. It touches every
+module under `render/` and most of the canvas components, which is why it was not folded into a defect
+fix: a rename across ~30 files is its own reviewable change.

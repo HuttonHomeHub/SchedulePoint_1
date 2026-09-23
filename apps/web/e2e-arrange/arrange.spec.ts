@@ -6,9 +6,11 @@ import {
   lanesByName,
   onboard,
   openProject,
+  placeRelativeTo,
   recalculate,
   releasePen,
   seedActivities,
+  seedDependency,
   validXerFile,
 } from './support';
 
@@ -153,4 +155,52 @@ test('a real .xer import lands with nothing to offer, because phase 3 already pa
 
   await ensurePen(page);
   await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
+});
+
+test('a bar placed on top of its predecessor is moved to its own row (reported 2026-09-23)', async ({
+  page,
+}) => {
+  /**
+   * **The shape the product owner hit.** `Frame` follows `Found` by logic, so their EARLY spans are
+   * end to end and fit one row; `Frame` is then hand-placed three days into `Found`, so the canvas
+   * draws them on top of each other. Arrange packed the early spans and so saw nothing to do — the
+   * offer never appeared, and a press through the toolbar left both bars in one row.
+   *
+   * A unit test pins `computeLaneArrangement`; only this can say that the real engine draws the
+   * placement where the fix now packs it, because the effective-Visual pass is the server's.
+   */
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  await createPlan(page, 'Placed on top');
+  await ensurePen(page);
+  const [found, frame] = await seedActivities(page, orgSlug, [
+    { name: 'Found', laneIndex: 0, durationDays: 10 },
+    { name: 'Frame', laneIndex: 0, durationDays: 10 },
+  ]);
+  await seedDependency(page, orgSlug, found!.id, frame!.id);
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+  // No offer yet, and that absence is the control: end to end, the two fit one row.
+  await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
+
+  await placeRelativeTo(page, orgSlug, 'Frame', 'Found', 3);
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+
+  const offer = page.getByTestId('canvas-arrange-offer');
+  await expect(offer).toBeVisible();
+  await expect(offer).toContainText('draw this plan in 2 rows instead of 1');
+  await offer.getByRole('button', { name: 'Arrange' }).click();
+  await page.getByRole('button', { name: 'Auto-arrange' }).click();
+
+  await expect
+    .poll(
+      async () => {
+        const lanes = await lanesByName(page, orgSlug);
+        return lanes.Found !== lanes.Frame;
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
 });

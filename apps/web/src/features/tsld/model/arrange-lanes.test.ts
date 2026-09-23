@@ -29,11 +29,17 @@ const TASKS = [
 ];
 
 function activity(over: Partial<ActivitySummary> & Pick<ActivitySummary, 'id'>): ActivitySummary {
+  // An UNPLACED bar is drawn at its early dates: the engine's effective-Visual pass writes them
+  // there (`lib/bar-dates.ts`). The effective dates default to the early ones so a fixture that
+  // names only `earlyStart` describes a state the engine can produce, and a placed bar overrides
+  // them explicitly.
   return {
     laneIndex: 0,
     type: 'TASK',
     earlyStart: null,
     earlyFinish: null,
+    visualEffectiveStart: over.earlyStart ?? null,
+    visualEffectiveFinish: over.earlyFinish ?? null,
     ...over,
   } as unknown as ActivitySummary;
 }
@@ -306,5 +312,52 @@ describe('arrangeOfferMessage', () => {
     ).toBe(
       'Arrange would move 2 activities to pack them by time and logic, still drawing this plan in 9 rows.',
     );
+  });
+});
+
+/**
+ * **Arrange packs the span the canvas DRAWS, not the early span** (reported 2026-09-23).
+ *
+ * The product owner pressed Arrange on a three-activity chain and two bars were drawn on top of
+ * each other. Since ADR-0148 the canvas draws a bar at its effective-Visual dates
+ * (`barDatesFor(a, 'visual')`), and a bar hand-placed earlier than its logic allows is drawn at
+ * that placement — while Arrange packed `earlyStart`/`earlyFinish`, where the same two bars do not
+ * touch. So Arrange judged one picture and the canvas painted another.
+ *
+ * The fixture is that shape exactly: `b` follows `a` by logic, so their EARLY spans are disjoint
+ * and a pack on them leaves both in lane 0; `b` is placed five days into `a`, so their DRAWN spans
+ * overlap and they must not share a row.
+ */
+describe('computeLaneArrangement — packs the drawn span', () => {
+  it('separates a bar placed before its predecessor finishes, though their early spans are disjoint', () => {
+    const a = activity({ id: 'a', earlyStart: '2026-01-01', earlyFinish: '2026-01-10' });
+    const b = activity({
+      id: 'b',
+      earlyStart: '2026-01-11',
+      earlyFinish: '2026-01-20',
+      visualEffectiveStart: '2026-01-06',
+      visualEffectiveFinish: '2026-01-15',
+    });
+    const changes = computeLaneArrangement({
+      activities: [a, b],
+      sceneActivities: [a, b],
+      dependencies: [],
+      dataDate: DATA_DATE,
+    });
+    const lane = (id: string): number => changes.find((c) => c.id === id)?.laneIndex ?? 0;
+    expect(lane('a')).not.toBe(lane('b'));
+  });
+
+  it('leaves an unplaced chain in one row, because its drawn spans are its early spans', () => {
+    // The control: without it, "never share a row" would pass the case above too.
+    const a = activity({ id: 'a', earlyStart: '2026-01-01', earlyFinish: '2026-01-10' });
+    const b = activity({ id: 'b', earlyStart: '2026-01-11', earlyFinish: '2026-01-20' });
+    const changes = computeLaneArrangement({
+      activities: [a, b],
+      sceneActivities: [a, b],
+      dependencies: [],
+      dataDate: DATA_DATE,
+    });
+    expect(changes).toEqual([]);
   });
 });

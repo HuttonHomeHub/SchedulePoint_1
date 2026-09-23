@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 
 import type { ActivityPlacement } from '@/features/undo-redo';
+import { barDatesFor } from '@/lib/bar-dates';
 
 /**
  * Turning a plural drag into the rows the batch endpoint takes
@@ -63,9 +64,12 @@ export function movedPlacement(activity: ActivitySummary, delta: BulkMoveDelta):
     current.laneIndex === null ? null : Math.max(0, current.laneIndex + delta.laneDelta);
   if (delta.dayDelta === 0) return { ...current, laneIndex };
 
-  // A move writes the placement and **nothing else**. The bar a planner sees is drawn from
-  // `visualStart` when it is set and from the computed early start when it is not — so a first
-  // drag seeds it from where the bar IS, rather than from a null.
+  // A move writes the placement and **nothing else**, starting from where the bar is DRAWN. That is
+  // `visualEffectiveStart` (`lib/bar-dates.ts`), not `visualStart ?? earlyStart` as this read until
+  // 2026-09-23: an unplaced bar pushed by a placed predecessor is drawn later than its early start,
+  // and the drag's delta is measured on the drawn picture, so seeding from `earlyStart` landed it
+  // short of where the planner dropped it. A bar with no drawn start is not on the canvas and so
+  // cannot be in a drag; its placement is left as it was.
   //
   // **The SNET branch is deleted rather than made conditional** (M-F-T3). Pinning a constraint was
   // never what a planner asked for by dragging; it was how an `EARLY` plan could be made to
@@ -76,7 +80,7 @@ export function movedPlacement(activity: ActivitySummary, delta: BulkMoveDelta):
   // complete placements — an omitted field there is a validation error, never a silent "leave it
   // alone" — so a bulk move now provably carries every existing constraint through UNCHANGED,
   // where before it overwrote twelve of them.
-  const from = current.visualStart ?? activity.earlyStart;
+  const from = barDatesFor(activity, 'visual').start;
   return {
     ...current,
     laneIndex,

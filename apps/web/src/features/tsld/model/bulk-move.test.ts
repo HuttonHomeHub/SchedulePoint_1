@@ -23,6 +23,8 @@ const activity = (over: Partial<ActivitySummary> = {}): ActivitySummary =>
     laneIndex: 2,
     version: 4,
     earlyStart: '2026-01-05',
+    // Unplaced, so drawn where the engine put it: its early start (`lib/bar-dates.ts`).
+    visualEffectiveStart: '2026-01-05',
     constraintType: null,
     constraintDate: null,
     visualStart: null,
@@ -30,6 +32,17 @@ const activity = (over: Partial<ActivitySummary> = {}): ActivitySummary =>
   }) as unknown as ActivitySummary;
 
 describe('movedPlacement', () => {
+  it('moves a bar from where it is DRAWN, not from its early start (reported 2026-09-23)', () => {
+    /**
+     * A bar pushed by a placed predecessor is drawn later than its early start: the engine's
+     * effective-Visual pass moves it, and the canvas draws `visualEffectiveStart`. The drag's delta
+     * is measured on that picture, so the move must start from it too — starting from `earlyStart`
+     * lands the bar `drift` days short of where the planner dropped it.
+     */
+    const pushed = activity({ earlyStart: '2026-01-05', visualEffectiveStart: '2026-01-12' });
+    expect(movedPlacement(pushed, { dayDelta: 3, laneDelta: 0 }).visualStart).toBe('2026-01-15');
+  });
+
   it('writes visualStart and pins NOTHING', () => {
     const result = movedPlacement(activity(), { dayDelta: 3, laneDelta: 0 });
     expect(result.visualStart).toBe('2026-01-08');

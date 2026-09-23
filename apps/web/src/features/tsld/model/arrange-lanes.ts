@@ -1,7 +1,7 @@
 import { packLanes, type LaneChange, type PackItem } from '@repo/layout';
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 
-import { daysBetween } from '../render/render-model';
+import { drawnDaySpan } from './drawn-span';
 
 /**
  * Auto-arrange's pure half (TSLD M4 4.3): given a plan, work out the minimal set of lane moves that
@@ -137,19 +137,20 @@ export function computeLaneArrangement(input: LaneArrangementInput): LaneChange[
   const { activities, sceneActivities, dependencies, dataDate } = input;
   if (dataDate === null) return [];
 
+  // Pack the span the canvas DRAWS (`drawnDaySpan`), never the early span: a bar hand-placed
+  // earlier than its logic allows is drawn at the placement, so packing its early dates put it in
+  // the same row as the predecessor it is drawn on top of (reported 2026-09-23). `'visual'` rather
+  // than the view's source because `lane_index` is the layout of the plan as placed; the Late
+  // overlay is a read-only lens over it and must not decide where anything lives.
+  //
   // Undated activities have no x-span, so there is nothing to pack them against — they keep their
   // lane, which is also what stops a never-scheduled plan being reshuffled by a button press.
-  const packItem = (a: ActivitySummary): PackItem[] =>
-    a.earlyStart === null
+  const packItem = (a: ActivitySummary): PackItem[] => {
+    const span = drawnDaySpan(a, 'visual', dataDate);
+    return span === null
       ? []
-      : [
-          {
-            id: a.id,
-            startDay: daysBetween(dataDate, a.earlyStart),
-            endDay: daysBetween(dataDate, a.earlyFinish ?? a.earlyStart),
-            laneIndex: a.laneIndex,
-          },
-        ];
+      : [{ id: a.id, startDay: span.startDay, endDay: span.endDay, laneIndex: a.laneIndex }];
+  };
 
   const sceneIds = new Set(sceneActivities.map((a) => a.id));
   const sceneItems = activities.flatMap((a) => (sceneIds.has(a.id) ? packItem(a) : []));
