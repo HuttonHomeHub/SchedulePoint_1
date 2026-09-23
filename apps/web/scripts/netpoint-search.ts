@@ -249,7 +249,7 @@ export function search(asap: Asap, seedLayout: Layout, options: SearchOptions): 
         const scored: { lane: number; vec: number[] }[] = [];
         for (const lane of candidates) {
           filterEvals += 1;
-          const vec = localDelta(model, cache, asap, laneOf, adjacency, deps, key, cur, lane);
+          const vec = localDelta(model, cache, laneOf, adjacency, deps, key, cur, lane);
           if (lexVec(vec, [0, 0, 0, 0, 0]) < 0) scored.push({ lane, vec });
         }
         scored.sort((a, b) => lexVec(a.vec, b.vec) || a.lane - b.lane);
@@ -325,7 +325,6 @@ export function search(asap: Asap, seedLayout: Layout, options: SearchOptions): 
 function localDelta(
   model: Model,
   cache: Cache,
-  asap: Asap,
   laneOf: Map<string, number>,
   adjacency: Map<string, number[]>,
   deps: { predecessorKey: string; successorKey: string }[],

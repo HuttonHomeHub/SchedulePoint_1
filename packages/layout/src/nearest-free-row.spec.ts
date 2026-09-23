@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nearestFreeRow } from './nearest-free-row.js';
+import { nearestFreeRow, rowOccupancy } from './nearest-free-row.js';
 import type { PackItem } from './pack-lanes.js';
 
 const item = (id: string, laneIndex: number, startDay: number, endDay: number): PackItem => ({
@@ -52,5 +52,23 @@ describe('nearestFreeRow', () => {
     const expected = nearestFreeRow(item('m', 3, 5, 12), others);
     expect(nearestFreeRow(item('m', 3, 5, 12), [...others].reverse())).toBe(expected);
     expect(expected).toBe(2);
+  });
+});
+
+describe('rowOccupancy', () => {
+  it('answers exactly as nearestFreeRow does for a single query', () => {
+    const others = [item('a', 3, 0, 20), item('b', 2, 0, 20), item('c', 4, 30, 40)];
+    const mover = item('m', 3, 5, 12);
+    expect(rowOccupancy(others).nearestFree(mover)).toBe(nearestFreeRow(mover, others));
+  });
+
+  it('sees a moved item in its new row, so a cascade cannot put two movers in one row', () => {
+    const occupancy = rowOccupancy([item('x', 0, 0, 10), item('y', 0, 5, 15), item('w', 1, 0, 20)]);
+    // y overlaps x in row 0 and w in row 1, so it goes to row 2 …
+    const y = occupancy.nearestFree(item('y', 0, 5, 15));
+    expect(y).toBe(2);
+    occupancy.move('y', y);
+    // … and a third bar over the same days now finds row 2 taken as well.
+    expect(occupancy.nearestFree(item('z', 0, 6, 9))).toBe(3);
   });
 });
