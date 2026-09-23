@@ -18,12 +18,11 @@ import {
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   TSLD_EDITING_ENABLED,
-  UNDO_REDO_ENABLED,
 } from '../../../config/env';
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
-import { arrangeOfferMessage, summariseLaneArrangement } from '../model/arrange-lanes';
+import { arrangeOfferMessage, computeLaneArrangement } from '../model/arrange-lanes';
 import {
   addAll,
   type CanvasSelection,
@@ -88,6 +87,7 @@ import {
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 
+import { ArrangeSearchDialog } from './ArrangeDialog';
 import { BulkSelectionBar } from './BulkSelectionBar';
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
@@ -97,6 +97,11 @@ import { sceneTopOffset, TsldCanvas, type PendingGhost, type SelectModifier } fr
 import { TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
+import {
+  type ArrangeChoice,
+  type ArrangeOutcome,
+  type ArrangeSearchInput,
+} from './use-arrange-search';
 
 import { CanvasDock } from '@/components/layout/workspace/canvas-dock';
 import { useAnnounce } from '@/components/ui/announcer';
@@ -735,11 +740,13 @@ export function TsldPanel({
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   // The moved bar's ghost while a reposition mutation is in flight (no popover, just the ghost).
   const [pendingReposition, setPendingReposition] = useState<PendingGhost | null>(null);
-  // Auto-arrange confirm dialog + in-flight state (a bulk, no-undo reorder — §5 of the M4 design).
-  // The pending lane changes are computed when the dialog opens, so confirm applies exactly them.
-  const [confirmArrange, setConfirmArrange] = useState(false);
-  const [arrangeChanges, setArrangeChanges] = useState<{ id: string; laneIndex: number }[]>([]);
+  // The Arrange dialog (NetPoint-layout M5). Its search input is captured ONCE, when it opens, so
+  // the layouts it works out and the moves its confirm writes are about the same diagram even if the
+  // plan refetches while the worker runs. `arrangeRun` remounts the dialog per opening.
+  const [arrangeInput, setArrangeInput] = useState<ArrangeSearchInput | null>(null);
+  const [arrangeRun, setArrangeRun] = useState(0);
   const [arranging, setArranging] = useState(false);
+  const [arrangeError, setArrangeError] = useState<string | null>(null);
   // A rejected-edit banner message. `refreshable` gates the "Refresh" action: most conflicts are a
   // stale server truth (refetch reconciles), but the local link-draw pre-check verdict comes from
   // the already-loaded graph, so Refresh can't change it — that path sets `refreshable: false`.
@@ -1657,15 +1664,26 @@ export function TsldPanel({
    * (`docs/TECH_DEBT.md` #364); band off, that field is `activities` by identity, so this is the
    * pre-#364 pack unchanged.
    */
-  const arrangeSummary = useMemo(
+  const arrangePack = useMemo(
     () =>
-      summariseLaneArrangement({
+      computeLaneArrangement({
         activities,
         sceneActivities: wbsBand.sceneActivities,
         dependencies,
         dataDate,
       }),
     [activities, wbsBand.sceneActivities, dependencies, dataDate],
+  );
+  /**
+   * How many drawn activities overlap another in their row (NetPoint-layout M5). The offer shows on
+   * this and only this: it is already computed per render (`laneOverlap`, the same flag the canvas
+   * badges and the listbox speaks), and it is a fact rather than a result the offer has not worked
+   * out. A hidden-link count was the other candidate and FC-N2's offer limb refused it: one whole-plan
+   * objective costs ~250 ms at 2,000 activities against an 8 ms bar.
+   */
+  const overlappingCount = useMemo(
+    () => renderActivities.filter((r) => r.laneOverlap === true).length,
+    [renderActivities],
   );
   /**
    * Dismissed for this plan, for this session. **Not persisted**, consistent with every other
@@ -1687,10 +1705,7 @@ export function TsldPanel({
    * trade is one shared gate against a fourth hand-assembled one.
    */
   const arrangeOfferAvailable =
-    onAutoArrange !== undefined &&
-    editingEnabled &&
-    !arrangeOfferDismissed &&
-    arrangeSummary.changes.length > 0;
+    onAutoArrange !== undefined && editingEnabled && !arrangeOfferDismissed && overlappingCount > 0;
 
   /**
    * Which strip the canvas dock shows. The rule and its reasoning live in
@@ -2288,44 +2303,57 @@ export function TsldPanel({
   // lanes: the summaries the band draws are appended above it rather than threaded through it
   // (`docs/TECH_DEBT.md` #364). Band off, that field is `activities` by identity, so this is the
   // pre-#364 pack unchanged.
-  // **The same derivation the dock's offer reads** (`arrangeSummary` above), so the rows the strip
-  // promises and the moves the dialog confirms can never be a version apart — the drift ADR-0065
-  // and ADR-0121 both record, where each number looks right alone.
-  const computeArrangeChanges = (): { id: string; laneIndex: number }[] => arrangeSummary.changes;
+  // This is Re-layout's SEED (NetPoint-layout M5): the dialog's search starts from it and improves
+  // it, so it is no longer what the confirm writes on its own.
+  const computeArrangeChanges = (): { id: string; laneIndex: number }[] => arrangePack;
 
-  // Toolbar click: compute the pack up front so an already-tidy diagram reports "nothing to move"
-  // immediately (no pointless confirm round-trip, and no dialog that could dead-end) — only open
-  // the confirm when there is actually something to reorder.
+  // Toolbar click, and the dock offer's button: open the dialog and let the worker work out what
+  // each option would do (NetPoint-layout M5). There is no early "nothing to move" return any more,
+  // because Tidy can improve a diagram the pack would leave alone, and only the search can say so.
   const openAutoArrange = (): void => {
-    if (!onAutoArrange) return;
-    const changes = computeArrangeChanges();
-    if (changes.length === 0) {
-      announce('Lanes are already arranged; nothing to move.');
-      return;
-    }
-    setArrangeChanges(changes);
-    setConfirmArrange(true);
+    if (!onAutoArrange || dataDate === null) return;
+    // The dialog returns focus to the DIAGRAM on confirm, cancel and close, from either entry point
+    // (ADR-0149 D8, NetPoint-layout M5): a native `<dialog>` restores focus to whatever held it when
+    // `showModal()` ran, so the listbox takes it first. After arranging, the next thing a planner
+    // does is on the diagram, and from the toolbar the old restore target was the Arrange button.
+    listboxRef.current?.focus();
+    setArrangeError(null);
+    setArrangeInput({
+      activities: renderActivities,
+      edges: renderEdges,
+      dataDate,
+      isWorkingDay: workingDayPredicate,
+      packChanges: computeArrangeChanges(),
+    });
+    setArrangeRun((n) => n + 1);
   };
 
-  // Confirm: persist exactly the changes shown to the user (the route owns the batch write).
-  const runAutoArrange = (): void => {
-    if (!onAutoArrange || arrangeChanges.length === 0) return;
+  const closeAutoArrange = (): void => {
+    setArrangeInput(null);
+    setArrangeError(null);
+  };
+
+  // Confirm: persist exactly the moves the dialog showed (the route owns the batch write, which is
+  // one `autoArrangeCommand` and therefore one undo step).
+  const runAutoArrange = (choice: ArrangeChoice, outcome: ArrangeOutcome): void => {
+    if (!onAutoArrange || outcome.changes.length === 0) return;
     clearConflict();
     setArranging(true);
-    void onAutoArrange(arrangeChanges)
-      .then((outcome) => {
+    void onAutoArrange(outcome.changes)
+      .then((result) => {
         setArranging(false);
-        setConfirmArrange(false);
-        if (outcome.conflict) showConflict(outcome.conflict);
-        if (outcome.applied) {
-          const n = arrangeChanges.length;
-          announce(`Lanes auto-arranged; ${n} ${n === 1 ? 'activity' : 'activities'} moved.`);
+        setArrangeInput(null);
+        if (result.conflict) showConflict(result.conflict);
+        if (result.applied) {
+          const n = outcome.changes.length;
+          announce(
+            `${choice === 'tidy' ? 'Tidied' : 'Re-laid out'} the diagram; ${n} ${n === 1 ? 'activity' : 'activities'} moved.`,
+          );
         }
       })
       .catch((err: unknown) => {
         setArranging(false);
-        setConfirmArrange(false);
-        showConflict(err instanceof Error ? err.message : 'Couldn’t auto-arrange the lanes.');
+        setArrangeError(err instanceof Error ? err.message : 'Couldn’t arrange the rows.');
       });
   };
 
@@ -3057,7 +3085,7 @@ export function TsldPanel({
           <NoticeStrip
             data-testid="canvas-arrange-offer"
             emphasis="dashed"
-            message={arrangeOfferMessage(arrangeSummary)}
+            message={arrangeOfferMessage(overlappingCount)}
           >
             <Button
               type="button"
@@ -3067,20 +3095,19 @@ export function TsldPanel({
                 // The SUCCESS path has the Dismiss hazard one step later, and only here — the
                 // toolbar's Arrange button survives its own press, this one does not. A native
                 // `<dialog>` restores focus on close to whatever held it when `showModal()` ran,
-                // and by then the write has landed, `arrangeSummary.changes` is empty and this
+                // and by then the write has landed, the overlaps are gone and this
                 // strip has gone: focus would be handed back to a button that no longer exists.
                 // Moving it first makes the listbox the restore target, so the dialog returns the
-                // planner to the diagram it just rearranged. Deliberately NOT inside
-                // `openAutoArrange`, which the toolbar shares and whose own trigger is stable.
+                // planner to the diagram it just rearranged. Since NetPoint-layout M5 that move is
+                // inside `openAutoArrange`, so the toolbar's entry does the same.
                 //
-                // Proven in a browser rather than reasoned about: removing this one line turns
-                // `e2e-arrange`'s step (5) red with focus on <body>. The accessibility review
-                // raised it as a RISK it could not settle from source, and it is real.
-                listboxRef.current?.focus();
+                // Proven in a browser rather than reasoned about: without it `e2e-arrange`'s step
+                // (5) goes red with focus on <body>. The accessibility review raised it as a RISK it
+                // could not settle from source, and it is real.
                 openAutoArrange();
               }}
             >
-              Arrange
+              Arrange…
             </Button>
             <Button
               type="button"
@@ -3480,22 +3507,13 @@ export function TsldPanel({
         error={bulkError}
       />
 
-      <ConfirmDialog
-        open={confirmArrange}
-        onClose={() => setConfirmArrange(false)}
+      <ArrangeSearchDialog
+        key={arrangeRun}
+        input={arrangeInput}
+        onClose={closeAutoArrange}
         onConfirm={runAutoArrange}
-        title="Auto-arrange lanes?"
-        description={
-          // The no-undo caveat is only true with undo/redo OFF; flag-on, auto-arrange records a
-          // reversible `autoArrangeCommand` (ADR-0048 M2.3), so drop the stale warning (B6).
-          UNDO_REDO_ENABLED
-            ? 'This repacks activities into the fewest lanes with no time-overlap. It changes only vertical layout, not dates.'
-            : 'This repacks activities into the fewest lanes with no time-overlap. It changes only vertical layout, not dates — but it can’t be undone yet.'
-        }
-        confirmLabel="Auto-arrange"
-        pendingLabel="Arranging…"
-        confirmVariant="default"
         pending={arranging}
+        error={arrangeError}
       />
 
       {/*

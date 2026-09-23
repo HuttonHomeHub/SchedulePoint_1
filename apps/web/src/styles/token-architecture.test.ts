@@ -657,11 +657,17 @@ describe('weight is a governed axis', () => {
    * It should come back DOWN when `Toolbar`'s ladder is deleted in the same epic — that file and
    * its overflow menu place weights of their own — so this number is expected to move twice, and
    * the second move is the one that matters.
+   *
+   * **25 → 26 (NetPoint-layout M5, 2026-09-23).** `RadioCardGroup` is a new primitive and places one
+   * weight, `font-medium` on each option's title. The title is the radio's whole accessible name and
+   * sits above a muted sentence and a figure list, so it is what the eye picks an option by. The
+   * figures were given a weight in the first draft too and it was removed: the muted label beside
+   * each one already sets it apart, so that one was decoration.
    */
-  it('no more than 25 weights placed inside the primitives', () => {
+  it('no more than 26 weights placed inside the primitives', () => {
     const sites = weightSites().filter((site) => site.startsWith('components/ui/'));
     expect(sites.length, `primitives placing weight rose to ${sites.length}`).toBeLessThanOrEqual(
-      25,
+      26,
     );
   });
 });

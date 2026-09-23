@@ -11568,3 +11568,37 @@ path carries no link id (ADR-0149 D1). The NetPoint evaluator (`scripts/netpoint
 edge in hand. That evaluator is what FC-N0 now compares the product counter against. What is left is
 to retire the positional counter, or label it at every call site, so a later reading does not quote a
 positional figure as a count.
+
+### 374. The NetPoint-layout gate pass's non-blocking findings
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint-layout M5 and M6
+reviews) · **Size:** S · **Owner:** web
+
+The M5 and M6 specialist reviews folded every blocking finding
+(`docs/specs/netpoint-layout/m5-tidy-and-relayout.md`, `m6-gate-pass.md`). These are what they
+raised and did not block on.
+
+1. **A dismissed Arrange offer does not come back when the overlap count grows** (UX).
+   `arrangeOfferDismissed` in `TsldPanel.tsx` is one boolean per plan. Dismissing at "1 activity
+   overlaps another in its lane" and then editing into fifteen overlaps offers nothing again. The
+   placement-migration notice that shares the rule is about a one-time fact, and this count is live.
+   Whether a materially larger count should re-arm the offer is a product decision.
+2. **Arrange can be opened while a write is still settling** (UX). `openAutoArrange` does not check
+   `writeBusy` or a pending recalculation. The positions batch is versioned, so a stale start
+   reports a conflict rather than writing over newer work. Nothing tests that path.
+3. **The roving stop can stay on a shaded Tidy card** (accessibility). When the search reports the
+   plan is over the size limit, Re-layout is checked while focus may remain on the now-shaded Tidy
+   card. That matches ADR-0082 (a shaded option stays a stop), but no test drives the
+   computing-to-bounded transition with focus inside the group.
+4. **`→` in the dialog's figures is read aloud in ways reasoned from specification, not observed**
+   (accessibility). `RevisionChangesView` ships the same convention. Check with a real screen reader.
+5. **The roving-tabindex logic is written twice** (component): `SegmentedControl` and
+   `RadioCardGroup`. They differ in a real way, since a disabled stop needs separate focus state.
+   Extract a shared hook when a third radiogroup needs it.
+6. **A zero-lag link's type is not spoken** (accessibility, pre-existing). `describeActivity`
+   names a relationship's type (FS, SS, FF, SF) only when it carries a lag (`a11y.ts`,
+   `lagSuffix`). ADR-0154 now draws a waiting dash whose meaning depends on the type, so the gap
+   between what is drawn and what is spoken is wider than it was.
+7. **Nothing couples the link's rung to the words for criticality** (accessibility). `linkRung`
+   and `describeActivity` agree today because they read the same `isCritical` and `isNearCritical`
+   fields. A structural pin would stop a later change to one silently disagreeing with the other.

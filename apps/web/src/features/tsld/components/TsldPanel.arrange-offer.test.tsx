@@ -7,15 +7,24 @@ import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { TsldPanel } from './TsldPanel';
 
 /**
- * **The `Arrange` offer in the canvas dock** (diagram-legibility M-C2), closing the second half of
- * `docs/TECH_DEBT.md` #363: the command existed and nothing ever told a planner it was worth
- * pressing.
+ * **The `Arrange` offer in the canvas dock** (diagram-legibility M-C2, NetPoint-layout M5), closing
+ * the second half of `docs/TECH_DEBT.md` #363: the command existed and nothing ever told a planner it
+ * was worth pressing.
  *
- * The **precedence** is asserted on `resolveDockStrip` and the **sentence** on
- * `arrangeOfferMessage`, both as values — this file covers only what neither can: that the panel
- * derives the offer from the plan it is given, that the pen decides whether it renders at all, and
- * that pressing it reaches the same confirmation the toolbar does.
+ * Since NetPoint-layout M5 the offer shows when activities **overlap in their row**, a fact every
+ * render already has, and no longer when the rows differ from a fresh pack. The **precedence** is
+ * asserted on `resolveDockStrip` and the **sentence** on `arrangeOfferMessage`, both as values; this
+ * file covers only what neither can: that the panel derives the offer from the plan it is given,
+ * that the pen decides whether it renders at all, and that pressing it reaches the Arrange dialog and
+ * writes the moves it showed.
+ *
+ * jsdom has no `Worker`, so the search runs in-process through the same `optimiseLayout` the worker
+ * calls. That the real worker loads under the site's CSP is `e2e-arrange`'s half.
  */
+vi.mock(
+  '../render/run-optimise-layout',
+  () => import('../render/test-support/in-process-optimise'),
+);
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -103,19 +112,22 @@ function activity(
   };
 }
 
-/** Two sequential bars parked six rows apart: the pack moves `b` to lane 0, 6 rows → 1. */
+/** Two bars drawn on top of each other in one row: the state the offer exists for. */
+const OVERLAPPING = [
+  activity('a', 0, '2026-01-01', '2026-01-05'),
+  activity('b', 0, '2026-01-03', '2026-01-07'),
+];
+/**
+ * Two bars parked six rows apart with nothing overlapping. Before M5 this was the offer's case (a pack
+ * would save five rows); now it is not, because the offer states what is wrong and this is not wrong.
+ */
 const SCATTERED = [
   activity('a', 0, '2026-01-01', '2026-01-03'),
   activity('b', 5, '2026-01-05', '2026-01-07'),
 ];
-/** The same two bars already packed — the state in which the offer must NOT appear. */
-const TIDY = [
-  activity('a', 0, '2026-01-01', '2026-01-03'),
-  activity('b', 0, '2026-01-05', '2026-01-07'),
-];
 
 function Harness({
-  activities = SCATTERED,
+  activities = OVERLAPPING,
   canEdit = true,
   onAutoArrange = () => Promise.resolve({ applied: true, conflict: null }),
 }: {
@@ -139,17 +151,18 @@ function Harness({
 }
 
 describe('TsldPanel — the Arrange offer', () => {
-  it('states what the press would do, from the plan it was given', () => {
+  it('states how many activities overlap, from the plan it was given', () => {
     render(<Harness />);
     expect(screen.getByTestId('canvas-arrange-offer')).toHaveTextContent(
-      'Arrange would move 1 activity and draw this plan in 1 row instead of 6.',
+      '2 activities overlap others in their lanes.',
     );
   });
 
-  it('is absent on a plan the packer would not touch', () => {
+  it('is absent when nothing overlaps, even on rows a pack would change', () => {
     // Not "the strip is broken" — `resolveDockStrip`'s own suite proves the rung works, so an
-    // absence here can only be the predicate. That split is why the precedence lives in a value.
-    render(<Harness activities={TIDY} />);
+    // absence here can only be the predicate. SCATTERED is the old predicate's case, so this is
+    // also the assertion that the offer no longer nags about rows it has not been asked to fix.
+    render(<Harness activities={SCATTERED} />);
     expect(screen.queryByTestId('canvas-arrange-offer')).not.toBeInTheDocument();
   });
 
@@ -163,20 +176,18 @@ describe('TsldPanel — the Arrange offer', () => {
     expect(screen.queryByTestId('canvas-arrange-offer')).not.toBeInTheDocument();
   });
 
-  it('confirms and writes exactly the move its sentence described', async () => {
+  it('opens the Arrange dialog and writes exactly the moves Tidy showed', async () => {
     /**
-     * The strip says "move 1 activity … in 1 row instead of 6", and this is what makes that a
-     * promise rather than a caption: the press goes through the SAME confirmation the toolbar
-     * opens and writes the one change `arrangeSummary` derived. `computeArrangeChanges` returns
-     * `arrangeSummary.changes`, so the two cannot be a version apart — the drift ADR-0065 and
-     * ADR-0121 both record, where each number looks right alone.
+     * The press goes through the SAME dialog the toolbar opens, and the confirm writes the moves the
+     * selected option's figures were computed from: `b` starts later, so the repair lifts it to the
+     * next free row and the overlap is gone.
      */
     const onAutoArrange = vi.fn(() => Promise.resolve({ applied: true, conflict: null }));
     render(<Harness onAutoArrange={onAutoArrange} />);
-    fireEvent.click(screen.getByTestId('canvas-arrange-offer').querySelector('button')!);
-    // The confirm button, which is how every other suite locates this dialog.
-    fireEvent.click(await screen.findByRole('button', { name: 'Auto-arrange' }));
-    expect(onAutoArrange).toHaveBeenCalledWith([{ id: 'b', laneIndex: 0 }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Arrange…' }));
+    expect(screen.getByRole('radio', { name: 'Tidy' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(await screen.findByRole('button', { name: 'Tidy: move 1 activity' }));
+    expect(onAutoArrange).toHaveBeenCalledWith([{ id: 'b', laneIndex: 1 }]);
   });
 
   it('stays dismissed for the session once dismissed', () => {

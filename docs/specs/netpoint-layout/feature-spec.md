@@ -1,6 +1,6 @@
 # Feature Spec: NetPoint layout — rows chosen for how the logic routes, and a diagram that reads like the reference
 
-- **Status:** Approved — by the product owner on 2026-09-23, with CQ-1 answered (see §0.11); not yet built
+- **Status:** Accepted — shipped (ADR-0152, ADR-0153, ADR-0154); approved by the product owner on 2026-09-23 with CQ-1 answered (see §0.11)
 - **Author(s):** feature-analyst agent
 - **Date:** 2026-09-23
 - **Tracking issue / epic:** _(none yet)_
@@ -313,6 +313,12 @@ Stated as falsification conditions in §5, each with a bar written before the bu
 >   current layout's, at the reference zoom.
 > - **Given** Tidy finds nothing, **then** "Already tidy — nothing to move" is announced and no dialog
 >   is left open with nothing to confirm (today's rule, `TsldPanel.tsx:2273-2282`).
+>   **Amended at M5 (2026-09-23): the dialog opens, and says "Already arranged".** Today's rule could
+>   answer before opening because "nothing to move" meant "the pack equals the rows", which is cheap.
+>   Tidy's "nothing to move" is the result of a search that takes 0.5–5 s in a worker, and the offer
+>   cannot afford it on the render path (FC-N2 (a), failed by 32×). So a planner who presses Arrange
+>   on an arranged plan waits for the search in a dialog that shows its progress, then reads the
+>   sentence with Confirm shaded. See the M5 record and ADR-0152.
 > - **Given** I confirm, **then** exactly the previewed moves are written in one all-or-nothing batch
 >   and recorded as one undo entry.
 
