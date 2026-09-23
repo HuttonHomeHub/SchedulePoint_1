@@ -242,7 +242,10 @@ const INHERITED_DAY_FACTOR: DiagnosticEntry = {
 };
 
 // ---------------------------------------------------------------------------------------------
-// The one-planning-surface readings (M0). `nature: 'prospective'` while that epic is open.
+// The one-planning-surface readings (M0). `nature: 'prospective'`: each counts the installation as
+// it stands now. The epic that commissioned them closed 2026-09-21 (ADR-0148); they stay because
+// they are still true questions, but most of them count ordinary use rather than a fault, which is
+// why `prospective` must never be rendered as "wrong now" (`docs/TECH_DEBT.md` #377).
 // ---------------------------------------------------------------------------------------------
 
 /**
