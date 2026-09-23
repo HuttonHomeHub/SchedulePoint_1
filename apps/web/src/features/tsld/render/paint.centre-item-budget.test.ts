@@ -102,7 +102,7 @@ function paint(withDuration: boolean, pxPerDay: number) {
       dates: false,
     },
   };
-  paintScene(ctx as unknown as CanvasRenderingContext2D, scene, view, SIZE, PALETTE, 1);
+  paintScene(ctx, scene, view, SIZE, PALETTE, 1);
   return ctx.calls;
 }
 
