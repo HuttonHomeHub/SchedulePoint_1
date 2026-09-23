@@ -860,6 +860,14 @@ describe('the diagram grid is readable on both of its grounds', () => {
     expect(value, `year gridline on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
   });
 
+  it.each(PLOT_GROUNDS)('a NON-DRIVING link is perceivable on %s (≥ 3:1)', (_name, ground) => {
+    // NetPoint-layout M2 (spec §4.7): a non-driving link is a 1 px solid line that carries a
+    // relationship a reader must be able to follow, so 1.4.11 applies to it as a graphical object.
+    // Before this token the link's ink was the page's secondary TEXT colour (TECH_DEBT #367).
+    const value = ratio(tokens, ground, '--canvas-link-minor');
+    expect(value, `non-driving link on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
   it('reports the day tier and the non-working hatch without asserting them', () => {
     // Deliberately unasserted — see the block comment above for why each is exempt. Reported so a
     // REGRESSION is still visible in the test output, which is the same contract the decorative

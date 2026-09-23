@@ -210,6 +210,8 @@ export const LINK_SENTINELS = {
   edge: '#010203',
   critical: '#040506',
   nearCritical: '#070809',
+  // NetPoint-layout M2: the non-driving link's own ink (`--canvas-link-minor`).
+  linkMinor: '#0a0b0c',
 } as const;
 
 export const PALETTE: TsldPalette = {
@@ -219,6 +221,7 @@ export const PALETTE: TsldPalette = {
   gridLineMonth: '#d7dbe0',
   gridLineYear: '#b9bfc7',
   laneRule: '#ececee',
+  linkMinor: LINK_SENTINELS.linkMinor,
   edge: LINK_SENTINELS.edge,
   bar: '#3b82f6',
   critical: LINK_SENTINELS.critical,

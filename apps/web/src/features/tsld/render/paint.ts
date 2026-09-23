@@ -178,6 +178,10 @@ export interface TsldPalette {
   gridLineYear: string;
   /** The per-lane horizontal hairline (workspace redesign M4-T2). */
   laneRule: string;
+  /** A NON-DRIVING link (NetPoint-layout M2, `--canvas-link-minor`): 1 px solid, quieter than a
+   * driving link by weight. Its own token rather than `edge`, which is the page's secondary text
+   * colour (TECH_DEBT #367). */
+  linkMinor: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */

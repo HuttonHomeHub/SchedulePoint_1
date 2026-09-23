@@ -49,6 +49,7 @@ const PALETTE: TsldPalette = {
   gridLineMonth: '#d7dbe0',
   gridLineYear: '#b9bfc7',
   laneRule: '#ececee',
+  linkMinor: '#80848b',
   edge: '#64748b',
   bar: '#3b82f6',
   critical: '#dc2626',

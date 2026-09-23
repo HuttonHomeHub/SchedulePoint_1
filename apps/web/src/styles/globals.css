@@ -646,6 +646,12 @@
      bar on, not a boundary to read, so 1.4.11's 3:1 does not apply: it carries no information a
      reader must perceive, and every bar it aligns is already a shape with its own contrast. */
   --canvas-lane-rule: oklch(0.936 0.004 250);
+  /* **The non-driving link** (NetPoint-layout M2, spec §4.7). Its own token, because the link used
+     to be drawn in `--muted-foreground` — the page's secondary TEXT colour, which nothing chose for
+     a line and which moves whenever the page's text is re-valued (TECH_DEBT #367). A 1 px line a
+     reader follows is a graphical object, so it clears 3:1 on both grounds; it stays quieter than a
+     driving link by WEIGHT, which is the channel that carries drivingness. */
+  --canvas-link-minor: oklch(0.61 0.008 252);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
