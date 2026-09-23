@@ -8,7 +8,7 @@ import {
   type MinimapMapping,
   type MinimapWindow,
 } from '../render/minimap';
-import { daysBetween } from '../render/working-time';
+import { axisDayOf } from '../render/geometry';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -131,11 +131,11 @@ export function TsldMinimap({
 
   const marker = useMemo(() => {
     if (mapping === null || selected === null || selected.earlyStart === null) return null;
-    const x0 = screenXOfDay(daysBetween(dataDate, selected.earlyStart), mapping.view);
+    const x0 = screenXOfDay(axisDayOf(selected.type, dataDate, selected.earlyStart), mapping.view);
     const x1 =
       selected.earlyFinish === null
         ? x0
-        : screenXOfDay(daysBetween(dataDate, selected.earlyFinish) + 1, mapping.view);
+        : screenXOfDay(axisDayOf(selected.type, dataDate, selected.earlyFinish) + 1, mapping.view);
     // ≥3×3px (spec AC-2.3): a 1px echo of the bar is invisible at exactly the moment the
     // marker exists to answer "where is my selection in the whole plan?".
     const w = Math.min(Math.max(3, x1 - x0), MINIMAP_BOX.width);

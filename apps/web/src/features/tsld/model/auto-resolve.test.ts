@@ -1,3 +1,4 @@
+import type { ActivityType } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import { laneOverlapPairs } from '../render/lane-overlap';
@@ -156,8 +157,10 @@ describe('laneSnapshotOf', () => {
     laneIndex: number,
     visualEffectiveStart: string | null,
     visualEffectiveFinish: string | null,
+    type: ActivityType = 'TASK',
   ) => ({
     id,
+    type,
     laneIndex,
     earlyStart: '2000-01-01',
     earlyFinish: '2000-01-02',
@@ -179,6 +182,18 @@ describe('laneSnapshotOf', () => {
     const s = laneSnapshotOf([row('M', 0, '2026-01-05', null), row('U', 0, null, null)]);
     expect(s.get('M')).toEqual(st(0, '2026-01-05', '2026-01-05'));
     expect(s.has('U')).toBe(false);
+  });
+
+  it('puts a finish milestone on the END of its dated day, clear of the task it follows (#381)', () => {
+    // The task ends 9 Jan and the finish milestone after it reads 9 Jan. Snapshotted at its date the
+    // diamond would share the task's last day and the resolver would move one of them out of a lane
+    // they share without touching; at the boundary it occupies the next day, as it is drawn.
+    const s = laneSnapshotOf([
+      row('A', 0, '2026-01-05', '2026-01-09'),
+      row('M', 0, '2026-01-09', '2026-01-09', 'FINISH_MILESTONE'),
+    ]);
+    expect(s.get('M')).toEqual(st(0, '2026-01-10', '2026-01-10'));
+    expect(resolveNewOverlaps(new Map(), s, new Set(['M']))).toEqual([]);
   });
 });
 

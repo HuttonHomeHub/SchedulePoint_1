@@ -7,7 +7,7 @@ import {
   type LayoutObjective,
   type LayoutScene,
 } from './layout-objective';
-import { daysBetween, type RenderActivity, type RenderEdge } from './render-model';
+import { axisDayOf, type RenderActivity, type RenderEdge } from './render-model';
 
 /**
  * **Tidy and Re-layout: a bounded search over lane layouts** (NetPoint-layout M4-T3, spec §4.5).
@@ -116,8 +116,9 @@ export function optimiseLayout(
   const bars: Bar[] = [];
   for (const a of activities) {
     if (a.earlyStart === null) continue;
-    const startDay = daysBetween(input.dataDate, a.earlyStart);
-    const endDay = a.earlyFinish === null ? startDay : daysBetween(input.dataDate, a.earlyFinish);
+    const startDay = axisDayOf(a.type, input.dataDate, a.earlyStart);
+    const endDay =
+      a.earlyFinish === null ? startDay : axisDayOf(a.type, input.dataDate, a.earlyFinish);
     bars.push({ id: a.id, startDay, endDay });
   }
   const order = [...bars].sort((a, b) => a.startDay - b.startDay || byKey(a.id, b.id));

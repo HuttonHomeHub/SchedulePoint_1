@@ -23,6 +23,23 @@ import type {
 import { daysBetween } from './working-time';
 
 import type { ConstraintAnchor } from '@/lib/constraint-format';
+import { finishMilestoneDayShift } from '@/lib/milestone-day';
+
+/**
+ * **An activity's date as a day on the time axis** — `daysBetween` plus the finish-milestone shift
+ * (#381, ADR-0155, `lib/milestone-day.ts`). A finish milestone is dated by the day it closes and
+ * drawn on that day's END boundary, so its day here is one later than its date. Every site that puts
+ * an activity's `earlyStart`/`earlyFinish` on the axis goes through this, which
+ * `finish-milestone-day.structural.test.ts` enforces; a bare `daysBetween` on one of those fields
+ * draws every finish milestone a day early on a 24-hour calendar and a weekend early after a Friday.
+ */
+export function axisDayOf(
+  type: ActivityType | undefined,
+  dataDateIso: string,
+  iso: string,
+): number {
+  return daysBetween(dataDateIso, iso) + finishMilestoneDayShift(type);
+}
 
 /**
  * The pure, renderer-agnostic TSLD render model (ADR-0026). It turns a plan's
@@ -235,7 +252,12 @@ export function edgeGapDays(args: {
  */
 export function slackByDependencyId(args: {
   dataDate: string;
-  activities: readonly { id: string; earlyStart: string | null; earlyFinish: string | null }[];
+  activities: readonly {
+    id: string;
+    type?: ActivityType;
+    earlyStart: string | null;
+    earlyFinish: string | null;
+  }[];
   dependencies: readonly {
     id: string;
     type: DependencyType;
@@ -255,10 +277,10 @@ export function slackByDependencyId(args: {
       edge.id,
       edgeGapDays({
         type: edge.type,
-        predStartDay: daysBetween(dataDate, pred.earlyStart),
-        predFinishDay: daysBetween(dataDate, pred.earlyFinish),
-        succStartDay: daysBetween(dataDate, succ.earlyStart),
-        succFinishDay: daysBetween(dataDate, succ.earlyFinish),
+        predStartDay: axisDayOf(pred.type, dataDate, pred.earlyStart),
+        predFinishDay: axisDayOf(pred.type, dataDate, pred.earlyFinish),
+        succStartDay: axisDayOf(succ.type, dataDate, succ.earlyStart),
+        succFinishDay: axisDayOf(succ.type, dataDate, succ.earlyFinish),
         lagDays: edge.lagDays,
       }),
     );
@@ -718,7 +740,7 @@ function computeActivityRect(
   dataDateIso: string,
 ): Rect | null {
   if (activity.earlyStart === null) return null;
-  const startDay = daysBetween(dataDateIso, activity.earlyStart);
+  const startDay = axisDayOf(activity.type, dataDateIso, activity.earlyStart);
   const top = screenYOfLane(activity.laneIndex, view) + BAR_PAD;
 
   if (isMilestone(activity.type)) {
@@ -732,7 +754,9 @@ function computeActivityRect(
   }
 
   const finishDay =
-    activity.earlyFinish === null ? startDay : daysBetween(dataDateIso, activity.earlyFinish);
+    activity.earlyFinish === null
+      ? startDay
+      : axisDayOf(activity.type, dataDateIso, activity.earlyFinish);
   const x1 = screenXOfDay(startDay, view);
   const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
   return { x: x1, y: top, w: Math.max(2, x2 - x1), h: BAR_HEIGHT };
@@ -865,8 +889,8 @@ export function worldExtent(
   let maxLane = 0;
   for (const a of activities) {
     if (a.earlyStart === null) continue;
-    const start = daysBetween(dataDateIso, a.earlyStart);
-    const finish = a.earlyFinish === null ? start : daysBetween(dataDateIso, a.earlyFinish);
+    const start = axisDayOf(a.type, dataDateIso, a.earlyStart);
+    const finish = a.earlyFinish === null ? start : axisDayOf(a.type, dataDateIso, a.earlyFinish);
     minDay = Math.min(minDay, start);
     maxDay = Math.max(maxDay, finish + 1);
     maxLane = Math.max(maxLane, a.laneIndex);

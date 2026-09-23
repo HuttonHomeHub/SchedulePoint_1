@@ -64,6 +64,7 @@ import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
 import { wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
+import { finishMilestoneDayShift } from '@/lib/milestone-day';
 import { cn } from '@/lib/utils';
 
 /**
@@ -757,7 +758,9 @@ export function GanttPanel({
       drag.announce('This activity has no scheduled start to move yet.');
       return true;
     }
-    const startDay = daysBetween(plannedStartIso, start) + deltaDays;
+    // An axis day, as the pointer path sends: a finish milestone's is one after its date (#381).
+    const startDay =
+      daysBetween(plannedStartIso, start) + finishMilestoneDayShift(activity.type) + deltaDays;
     drag.moveTo(activity.id, startDay);
     drag.announce(moveAnnouncement(activity.name, addCalendarDays(start, deltaDays)));
     return true;

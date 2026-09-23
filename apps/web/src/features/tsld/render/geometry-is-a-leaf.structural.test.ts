@@ -37,7 +37,14 @@ describe('the geometry core is a leaf', () => {
     // upstream of geometry, and it is itself a leaf.
     const geometry = readFileSync(join(RENDER, 'geometry.ts'), 'utf8');
     const specifiers = [...geometry.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
-    expect(specifiers.sort()).toEqual(['./working-time', '@/lib/constraint-format', '@repo/types']);
+    // `milestone-day` is here because where a finish milestone sits on the axis is a fact about the
+    // day (#381), and it is itself a leaf that imports only a type.
+    expect(specifiers.sort()).toEqual([
+      './working-time',
+      '@/lib/constraint-format',
+      '@/lib/milestone-day',
+      '@repo/types',
+    ]);
   });
 
   it('no extracted module imports the barrel', () => {

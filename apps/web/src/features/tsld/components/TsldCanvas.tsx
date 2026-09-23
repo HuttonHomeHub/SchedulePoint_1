@@ -54,7 +54,7 @@ import {
   addCalendarDays,
   classifyHit,
   dayCellRect,
-  daysBetween,
+  axisDayOf,
   DEFAULT_VIEWPORT,
   edgeAnchor,
   fitToContent,
@@ -597,9 +597,9 @@ function lagGrabOf(
   if (!pred || pred.earlyStart === null || !anchorBar) return undefined;
   const rect = activityRect(anchorBar, view, dataDate);
   if (!rect) return undefined;
-  const predStartDay = daysBetween(dataDate, pred.earlyStart);
+  const predStartDay = axisDayOf(pred.type, dataDate, pred.earlyStart);
   const predFinishDay =
-    pred.earlyFinish === null ? predStartDay : daysBetween(dataDate, pred.earlyFinish);
+    pred.earlyFinish === null ? predStartDay : axisDayOf(pred.type, dataDate, pred.earlyFinish);
   return {
     dependencyId,
     type: edge.type,
@@ -666,8 +666,8 @@ function bodyGrab(
 ): BodyGrab | undefined {
   const a = activities.find((x) => x.id === id);
   if (!a || a.earlyStart === null) return undefined;
-  const startDay = daysBetween(dataDate, a.earlyStart);
-  const endDay = a.earlyFinish === null ? startDay : daysBetween(dataDate, a.earlyFinish);
+  const startDay = axisDayOf(a.type, dataDate, a.earlyStart);
+  const endDay = a.earlyFinish === null ? startDay : axisDayOf(a.type, dataDate, a.earlyFinish);
   return { id, startDay, endDay, laneIndex: a.laneIndex };
 }
 

@@ -167,15 +167,32 @@ describe('activityRect', () => {
     expect(activityRect(activity({ earlyStart: null }), VIEW, DATA_DATE)).toBeNull();
   });
 
-  it('places a milestone as a diamond bounding box centred on its day', () => {
+  it('places a start milestone as a diamond bounding box centred on the start of its day', () => {
     const rect = activityRect(
-      activity({ type: 'FINISH_MILESTONE', earlyStart: '2026-01-03', earlyFinish: '2026-01-03' }),
+      activity({ type: 'START_MILESTONE', earlyStart: '2026-01-03', earlyFinish: '2026-01-03' }),
       VIEW,
       DATA_DATE,
     )!;
     // Centre x = day 2 → screen 120; the box straddles it.
     expect(rect.x + rect.w / 2).toBeCloseTo(120);
     expect(rect.w).toBe(rect.h); // square bounding box
+  });
+
+  it('places a finish milestone on the END of its dated day, where its predecessor ends (#381)', () => {
+    // A task dated 1–3 Jan ends at screen 130 (day 3's right edge). The finish milestone after it is
+    // dated 3 Jan too, and its diamond belongs on that same edge — one day right of a start milestone.
+    const task = activityRect(
+      activity({ earlyStart: '2026-01-01', earlyFinish: '2026-01-03' }),
+      VIEW,
+      DATA_DATE,
+    )!;
+    const rect = activityRect(
+      activity({ type: 'FINISH_MILESTONE', earlyStart: '2026-01-03', earlyFinish: '2026-01-03' }),
+      VIEW,
+      DATA_DATE,
+    )!;
+    expect(rect.x + rect.w / 2).toBeCloseTo(130);
+    expect(rect.x + rect.w / 2).toBeCloseTo(task.x + task.w);
   });
 });
 

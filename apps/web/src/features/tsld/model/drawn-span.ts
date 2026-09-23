@@ -3,6 +3,7 @@ import type { ActivitySummary } from '@repo/types';
 import { daysBetween } from '../render/render-model';
 
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
+import { finishMilestoneDayShift } from '@/lib/milestone-day';
 
 /**
  * **The day span a bar is DRAWN over, for anything that reasons about the picture.**
@@ -24,7 +25,9 @@ import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
  * looking at a result that does not match the screen.
  *
  * `endDay` is the day of the finish date, inclusive — the convention `packLanes` and the drag
- * ghosts already use — and a missing finish collapses to the start, as a milestone does.
+ * ghosts already use — and a missing finish collapses to the start, as a milestone does. Both are
+ * **axis days**: a finish milestone's are one later than its dates (#381), and a write converts back
+ * (`use-plan-workspace-model.ts`, `onTsldReposition`).
  */
 export interface DrawnDaySpan {
   readonly startDay: number;
@@ -38,6 +41,7 @@ export interface DrawnDaySpan {
 export function drawnDaySpan(
   activity: Pick<
     ActivitySummary,
+    | 'type'
     | 'earlyStart'
     | 'earlyFinish'
     | 'visualEffectiveStart'
@@ -50,6 +54,10 @@ export function drawnDaySpan(
 ): DrawnDaySpan | null {
   const { start, finish } = barDatesFor(activity, source);
   if (start === null) return null;
-  const startDay = daysBetween(dataDate, start);
-  return { startDay, endDay: finish === null ? startDay : daysBetween(dataDate, finish) };
+  // A finish milestone sits on the END of its dated day (#381, `lib/milestone-day.ts`), so its span
+  // is one day later than its dates — the same shift `activityRect` draws it with, or Arrange and
+  // the nudges would reason about a diamond a day from the one on screen.
+  const shift = finishMilestoneDayShift(activity.type);
+  const startDay = daysBetween(dataDate, start) + shift;
+  return { startDay, endDay: finish === null ? startDay : daysBetween(dataDate, finish) + shift };
 }
