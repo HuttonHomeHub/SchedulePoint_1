@@ -412,93 +412,18 @@ export class ScheduleService {
     }
     const dataDate = formatCalendarDate(plan.plannedStart);
 
-    const startedAt = Date.now();
-    let summary: EngineSummary;
-    let lagCalendarOverrideCount = 0;
-    let activityCalendarCount = 0;
-    let progressedActivityCount = 0;
-    // Live cross-plan derivation (F4, ADR-0045 §2): how many cross-plan edges pointed at a
-    // never-calculated upstream this recalc (N32). Undefined on the byte-parity path (no cross-plan
-    // edge), so the log field reads null and existing summaries/goldens do not move.
-    let crossPlanUpstreamMissingCount: number | undefined;
-    try {
-      summary = await this.prisma.$transaction(async (tx) => {
-        // Serialise with dependency creates and other recalcs on this plan, then
-        // read a consistent snapshot of the graph (ADR-0021/0022).
-        await this.schedule.lockPlanForWrite(planId, tx);
-        // Recalculate is a pen-gated plan mutation (ADR-0028, Q-B). Assert INSIDE the
-        // advisory lock so a steal can't slip between the check and the engine write.
-        await this.editLock.assertHoldsPen(principal, planId, organization.id, tx);
-        const graph = await this.buildEngineGraph(organization.id, plan, dataDate, tx);
-        lagCalendarOverrideCount = graph.meta.lagCalendarOverrideCount;
-        activityCalendarCount = graph.meta.activityCalendarCount;
-        progressedActivityCount = graph.meta.progressedActivityCount;
-        crossPlanUpstreamMissingCount = graph.meta.crossPlanUpstreamMissingCount;
-        const output = computeSchedule(graph.activities, graph.edges, graph.options);
-        // Resource levelling (ADR-0041): iff the plan opted in AND has assignments, run the pure
-        // second pass and persist its additive overlay. Off ⇒ the network `output.results` are written
-        // as-is and the leveled columns are cleared to null/false (byte-identical, the parity gate).
-        let results = output.results;
-        let summary: EngineSummary = output.summary;
-        if (graph.leveling) {
-          const leveled = levelSchedule(
-            graph.activities,
-            output,
-            graph.leveling.assignments,
-            graph.leveling.resources,
-            {
-              levelWithinFloatOnly: plan.levelWithinFloatOnly,
-              dataDate,
-              planCalendar: graph.options.calendar,
-            },
-          );
-          results = leveled.results;
-          summary = { ...output.summary, ...leveled.summary };
-        }
-        // Float and drift are persisted IN DAYS by this write, so they take the same factor the
-        // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
-        // float" for one span — not a smaller change than converting them, an incoherent one.
-        const dayFactorByActivity = await this.resolveDayFactors(
-          graph.dayFactorCalIdByActivity,
-          tx,
-        );
-        await this.schedule.writeResults(organization.id, planId, results, dayFactorByActivity, tx);
-        await this.schedule.writeDrivingFlags(organization.id, planId, output.edges, tx);
-        // Stamp this plan's schedule freshness cursor in the SAME engine-owned write path (F6, ADR-0045
-        // §5 / ADR-0035 §30.7): a raw UPDATE that touches ONLY `schedule_computed_at`, never
-        // version/updated_at (ADR-0022). Both the single-plan recalc and the programme solve (which loops
-        // this unit, upstream-first) stamp every plan they write, so a downstream can compare freshness on
-        // read and a programme recalc clears any staleness it introduced.
-        // …and the criticality rule the engine ABOVE actually ran with (ADR-0125 / CQ-1 Option B).
-        // `graph.criticality` is the very object spread into `graph.options`, not a re-read of the
-        // plan row: `plan` was loaded before this transaction opened and a settings PATCH takes no
-        // plan lock, so re-reading could stamp a rule this computation never used.
-        await this.schedule.stampScheduleComputedAt(planId, graph.criticality, tx);
-        return summary;
-      });
-    } catch (error) {
-      // The engine's walk-time horizon guard is a user-caused, user-fixable state
-      // (`docs/TECH_DEBT.md` #205(b)) — map it to a 422 naming the calendar where the plan has
-      // exactly one in play. `activityCalendarCount` was captured before the compute threw.
-      rejectIfWorkingTimeHorizonExceeded(error, {
-        planCalendarId: plan.calendarId ?? null,
-        activityCalendarCount,
-      });
-      // A residual cycle is a breach of the DAG invariant the write path
-      // guarantees (ADR-0021) — it should be unreachable. Log it distinctly and
-      // rethrow so the global filter returns an opaque 500 (no data persisted).
-      if (error instanceof ScheduleGraphNotADagError) {
-        this.logger.error(
-          {
-            organizationId: organization.id,
-            planId,
-            unresolvedActivityIds: error.unresolvedActivityIds,
-          },
-          'schedule DAG invariant breached',
-        );
-      }
-      throw error;
-    }
+    const {
+      summary,
+      startedAt,
+      lagCalendarOverrideCount,
+      activityCalendarCount,
+      progressedActivityCount,
+      crossPlanUpstreamMissingCount,
+    } = await this.recalculateInLock(organization.id, plan, dataDate, (tx) =>
+      // Recalculate is a pen-gated plan mutation (ADR-0028, Q-B). Asserted INSIDE the advisory
+      // lock so a steal can't slip between the check and the engine write.
+      this.editLock.assertHoldsPen(principal, planId, organization.id, tx),
+    );
 
     this.logger.info(
       {
@@ -564,6 +489,139 @@ export class ScheduleService {
       summary: planSummary,
       crossPlanUpstreamMissingCount: crossPlanUpstreamMissingCount ?? 0,
     };
+  }
+
+  /**
+   * The ADR-0022 single-plan recalculation transaction, without the caller's identity: the plan
+   * advisory lock, the engine, the engine-owned write and the freshness stamp. {@link recalculatePlan}
+   * reaches it with a principal already authorised and passes the pen assertion; the one-shot
+   * finish-milestone re-derivation at boot (#381, ADR-0155, `finish-milestone-rederive.service.ts`)
+   * passes `null`, because no user is acting and the write is engine-owned — the same columns the
+   * migration beside it cannot compute in SQL. Never exposed on a route: a caller holding no
+   * principal reaches this only from inside the API process.
+   */
+  private async recalculateInLock(
+    organizationId: string,
+    plan: NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdInOrg']>>>,
+    dataDate: string,
+    assertPen: ((tx: Prisma.TransactionClient) => Promise<unknown>) | null,
+  ): Promise<{
+    summary: EngineSummary;
+    startedAt: number;
+    lagCalendarOverrideCount: number;
+    activityCalendarCount: number;
+    progressedActivityCount: number;
+    crossPlanUpstreamMissingCount: number | undefined;
+  }> {
+    const planId = plan.id;
+    const startedAt = Date.now();
+    let summary: EngineSummary;
+    let lagCalendarOverrideCount = 0;
+    let activityCalendarCount = 0;
+    let progressedActivityCount = 0;
+    // Live cross-plan derivation (F4, ADR-0045 §2): how many cross-plan edges pointed at a
+    // never-calculated upstream this recalc (N32). Undefined on the byte-parity path (no cross-plan
+    // edge), so the log field reads null and existing summaries/goldens do not move.
+    let crossPlanUpstreamMissingCount: number | undefined;
+    try {
+      summary = await this.prisma.$transaction(async (tx) => {
+        // Serialise with dependency creates and other recalcs on this plan, then
+        // read a consistent snapshot of the graph (ADR-0021/0022).
+        await this.schedule.lockPlanForWrite(planId, tx);
+        if (assertPen) await assertPen(tx);
+        const graph = await this.buildEngineGraph(organizationId, plan, dataDate, tx);
+        lagCalendarOverrideCount = graph.meta.lagCalendarOverrideCount;
+        activityCalendarCount = graph.meta.activityCalendarCount;
+        progressedActivityCount = graph.meta.progressedActivityCount;
+        crossPlanUpstreamMissingCount = graph.meta.crossPlanUpstreamMissingCount;
+        const output = computeSchedule(graph.activities, graph.edges, graph.options);
+        // Resource levelling (ADR-0041): iff the plan opted in AND has assignments, run the pure
+        // second pass and persist its additive overlay. Off ⇒ the network `output.results` are written
+        // as-is and the leveled columns are cleared to null/false (byte-identical, the parity gate).
+        let results = output.results;
+        let summary: EngineSummary = output.summary;
+        if (graph.leveling) {
+          const leveled = levelSchedule(
+            graph.activities,
+            output,
+            graph.leveling.assignments,
+            graph.leveling.resources,
+            {
+              levelWithinFloatOnly: plan.levelWithinFloatOnly,
+              dataDate,
+              planCalendar: graph.options.calendar,
+            },
+          );
+          results = leveled.results;
+          summary = { ...output.summary, ...leveled.summary };
+        }
+        // Float and drift are persisted IN DAYS by this write, so they take the same factor the
+        // durations do (ADR-0068 §3a). Leaving them at 1440 would print "3 days duration, 1 day
+        // float" for one span — not a smaller change than converting them, an incoherent one.
+        const dayFactorByActivity = await this.resolveDayFactors(
+          graph.dayFactorCalIdByActivity,
+          tx,
+        );
+        await this.schedule.writeResults(organizationId, planId, results, dayFactorByActivity, tx);
+        await this.schedule.writeDrivingFlags(organizationId, planId, output.edges, tx);
+        // Stamp this plan's schedule freshness cursor in the SAME engine-owned write path (F6, ADR-0045
+        // §5 / ADR-0035 §30.7): a raw UPDATE that touches ONLY `schedule_computed_at`, never
+        // version/updated_at (ADR-0022). Both the single-plan recalc and the programme solve (which loops
+        // this unit, upstream-first) stamp every plan they write, so a downstream can compare freshness on
+        // read and a programme recalc clears any staleness it introduced.
+        // …and the criticality rule the engine ABOVE actually ran with (ADR-0125 / CQ-1 Option B).
+        // `graph.criticality` is the very object spread into `graph.options`, not a re-read of the
+        // plan row: `plan` was loaded before this transaction opened and a settings PATCH takes no
+        // plan lock, so re-reading could stamp a rule this computation never used.
+        await this.schedule.stampScheduleComputedAt(planId, graph.criticality, tx);
+        return summary;
+      });
+    } catch (error) {
+      // The engine's walk-time horizon guard is a user-caused, user-fixable state
+      // (`docs/TECH_DEBT.md` #205(b)) — map it to a 422 naming the calendar where the plan has
+      // exactly one in play. `activityCalendarCount` was captured before the compute threw.
+      rejectIfWorkingTimeHorizonExceeded(error, {
+        planCalendarId: plan.calendarId ?? null,
+        activityCalendarCount,
+      });
+      // A residual cycle is a breach of the DAG invariant the write path
+      // guarantees (ADR-0021) — it should be unreachable. Log it distinctly and
+      // rethrow so the global filter returns an opaque 500 (no data persisted).
+      if (error instanceof ScheduleGraphNotADagError) {
+        this.logger.error(
+          {
+            organizationId: organizationId,
+            planId,
+            unresolvedActivityIds: error.unresolvedActivityIds,
+          },
+          'schedule DAG invariant breached',
+        );
+      }
+      throw error;
+    }
+
+    return {
+      summary,
+      startedAt,
+      lagCalendarOverrideCount,
+      activityCalendarCount,
+      progressedActivityCount,
+      crossPlanUpstreamMissingCount,
+    };
+  }
+
+  /**
+   * Recalculate one plan as the system rather than as a member (#381, ADR-0155). Used only by the
+   * one-shot finish-milestone re-derivation at boot, before or while the API serves; no pen is
+   * asserted because nobody is editing, and the advisory lock still serialises it with any user
+   * recalculation of the same plan. Returns false (and writes nothing) for a plan that has since
+   * been deleted or lost its data date.
+   */
+  async recalculateAsSystem(organizationId: string, planId: string): Promise<boolean> {
+    const plan = await this.plans.findActiveByIdInOrg(planId, organizationId);
+    if (!plan?.plannedStart) return false;
+    await this.recalculateInLock(organizationId, plan, formatCalendarDate(plan.plannedStart), null);
+    return true;
   }
 
   /**
