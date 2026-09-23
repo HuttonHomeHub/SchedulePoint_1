@@ -1,6 +1,6 @@
 # Feature Spec: A finish milestone is dated by the day it closes
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — by the product owner in conversation, 2026-09-23 (Q1 A, Q2 A; Q3 moot, no baselines captured; Q4 default A). See `conditions.md` for the decisions and the two scope reductions they allow
 - **Author(s):** feature-analyst agent
 - **Date:** 2026-09-23
 - **Tracking issue / epic:** [`docs/TECH_DEBT.md`](../../TECH_DEBT.md) #381

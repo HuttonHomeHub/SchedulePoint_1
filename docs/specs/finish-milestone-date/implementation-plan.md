@@ -1,7 +1,7 @@
 # Implementation Plan: A finish milestone is dated by the day it closes
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Draft
+- **Status:** Approved 2026-09-23 — M1 and M0-T3 withdrawn; see `conditions.md`
 - **Owner:** product owner (approval); build by Claude Code
 
 ## Breakdown
