@@ -104,8 +104,24 @@ export interface RecordedPath {
  * known — "the painter batches every line of a layer into one path and sets the colour once" —
  * which is exactly why *batch* attribution can work where *per-polyline colour* attribution cannot.
  */
-export function recordingCtx(): { ctx: unknown; paths: RecordedPath[] } {
+/**
+ * One `fillText` call as the painter made it (NetPoint-layout M0-T5). Width is the recorder's own
+ * `measureText` — the metric the painter placed the text against — capped at `maxWidth` when the
+ * painter passed one, which is what the canvas does with it.
+ */
+export interface RecordedText {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  fontPx: number;
+  align: CanvasTextAlign;
+  baseline: CanvasTextBaseline;
+}
+
+export function recordingCtx(): { ctx: unknown; paths: RecordedPath[]; texts: RecordedText[] } {
   const paths: RecordedPath[] = [];
+  const texts: RecordedText[] = [];
   let pending: RecordedPath[] = [];
   let current: RecordedPath | null = null;
   let batch = 0;
@@ -156,7 +172,19 @@ export function recordingCtx(): { ctx: unknown; paths: RecordedPath[] } {
     setLineDash: (d: readonly number[]) => {
       dash = d;
     },
-    fillText: () => {},
+    fillText: (text: string, x: number, y: number, maxWidth?: number) => {
+      const measured = text.length * 6;
+      const px = /(\d+(?:\.\d+)?)px/.exec(ctx.font);
+      texts.push({
+        text,
+        x,
+        y,
+        width: maxWidth === undefined ? measured : Math.min(measured, maxWidth),
+        fontPx: px ? Number(px[1]) : 11,
+        align: ctx.textAlign,
+        baseline: ctx.textBaseline,
+      });
+    },
     measureText: (s: string) => ({ width: s.length * 6 }) as TextMetrics,
     fillStyle: '',
     strokeStyle: '',
@@ -167,7 +195,7 @@ export function recordingCtx(): { ctx: unknown; paths: RecordedPath[] } {
     textAlign: 'start' as CanvasTextAlign,
   };
 
-  return { ctx, paths };
+  return { ctx, paths, texts };
 }
 
 /**

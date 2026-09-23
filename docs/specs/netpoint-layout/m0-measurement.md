@@ -275,3 +275,51 @@ That is the CQ-1 question, and it is the product owner's. The objective as order
 objects to a link spanning 25 rows, because travel ranks below both counts. A budget smaller than
 +50 %, or travel promoted above crossings, would trade some of the count reduction for a more
 compact picture.
+
+## M0-T5 — text collisions and glyph contacts on today's row (FC-N6)
+
+**Harness:** `apps/web/scripts/measure-netpoint-row.mjs` over `scripts/netpoint-row-probe.ts`.
+The recorder now keeps every `fillText`: its text, position, width from the recorder's own
+`measureText` (the metric the painter places text against), font size, alignment and baseline.
+Two text runs collide when their boxes overlap by more than 0.5 px on both axes. **Control:** one
+label counts 0 and two stacked labels count exactly 1 (checked at both pitches before any reading).
+Pitch 52 and 60 read identically, so pitch 60 is shown. Dates are read off (today's default) and on
+(M1's default); the dates layer only draws at ≥ 6 px/day, so at 4 px/day the two are the same.
+
+| plan (pitch 60)  | px/day | text runs (dates on) | **collisions** | same-row rect overlaps | glyph contacts / adjacent pairs | of which **unlinked** |
+| ---------------- | -----: | -------------------: | -------------: | ---------------------: | ------------------------------: | --------------------: |
+| `chain-3` packed |      4 |                    3 |              0 |                      0 |                   1 / 1 (100 %) |               0 (0 %) |
+| `small-17`       |      4 |                   16 |              0 |                      0 |                10 / 13 (76.9 %) |             1 (7.7 %) |
+| `small-17`       |     12 |                   32 |              0 |                      0 |                10 / 13 (76.9 %) |             1 (7.7 %) |
+| **Unit 300**     |  **4** |                  141 |          **9** |                     11 |           **65 / 123 (52.8 %)** |       **19 (15.4 %)** |
+| Unit 300         |     12 |                  363 |              1 |                      4 |               60 / 123 (48.8 %) |           14 (11.4 %) |
+| `scale-2000`     |      4 |                1,909 |             75 |                    138 |          1,856 / 2,119 (87.6 %) |            50 (2.4 %) |
+| `scale-2000`     |     12 |                4,913 |             10 |                     69 |          1,857 / 2,119 (87.6 %) |            48 (2.3 %) |
+
+### Findings
+
+- **Today's name labels already collide, and the cause is a milestone's diamond, not the ladder's
+  arithmetic.** The ladder's halved-gap rule (`paint.ts`, "halving is what makes non-collision
+  provable") is sound **when a row's drawn rects are disjoint**. A milestone's diamond is
+  `2 × MILESTONE_RADIUS` = 14 px wide around a single day, so at 4 px/day it reaches over a
+  neighbour starting a day or two later, even though their day spans do not overlap. Every same-row
+  rect overlap on both plans involves a milestone: Unit 300 has 11 at 4 px/day and 9 collisions, 4
+  at 12 px/day and 1 collision. The colliding runs are truncated stubs such as `A…` × `A1…`. So the
+  "provable" claim holds for the shape it was written for (bars with disjoint rects) and not for the
+  milestone beside it. **FC-N6(a) requires 0 at M1, so M1 must close this**, either in the ladder
+  (take each neighbour's drawn extent rather than its rect) or in the layout (a milestone's drawn
+  extent counts as occupancy, the same as its day). The dates layer adds no collisions at 12 px/day.
+- **FC-N6(c) is already exceeded before M1 changes anything, ten times over as written.** 52.8 % of
+  Unit 300's adjacent same-row pairs touch glyphs at 4 px/day, against a 5 % bar. **Most of it is
+  intended:** 46 of the 65 contacts are between bars **joined by a link**. That is an FS chain packed
+  end to end, whose node discs meet at the shared day, which is the NetPoint chain the product owner
+  asked for. The 19 **unlinked** contacts (15.4 %) are the defect the condition is about, two
+  unrelated activities whose glyphs touch, and they still exceed 5 %.
+  **The committed consequence applies:** contact joins the objective after `crossings` (ADR-0152
+  amended). **Recommended, and put to the product owner with CQ-1 rather than decided here:** the
+  term counts **unlinked** contacts only. Counting linked ones would make the optimiser break chains
+  apart to separate their nodes, working against its own `sameRow` term and against the reference's
+  look.
+- **`scale-2000`'s unlinked rate is 2.4 %**, under the bar. Its bands are long linked chains, so
+  almost every contact is linked. The generator's shape, not the layout, explains the difference from
+  Unit 300.
