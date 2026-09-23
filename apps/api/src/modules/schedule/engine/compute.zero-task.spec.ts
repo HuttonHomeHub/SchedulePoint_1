@@ -49,10 +49,15 @@ describe('zero-duration task ≠ milestone (M4-F1, ADR-0035 §22)', () => {
   });
 
   it('schedules a trailing zero-duration task as a real activity — its finish carries the project finish, like a milestone', () => {
-    // A is a 5-day task: Mon 01-05 → its finish rolls to Mon 01-12 (across the weekend). A FINISH
-    // milestone and a zero-duration TASK FS-after A both sit at A's finish and carry the project finish
-    // to Mon 01-12 — a zero-work marker still has a real finish. The §22 task-vs-milestone distinction
-    // is kept by type in the engine and is date-neutral here (proven by the byte-identical golden suite).
+    // A is a 5-day task: Mon 01-05 → Fri 01-09, its working time ending at the weekend. A FINISH
+    // milestone and a zero-duration TASK FS-after A both sit at the same INSTANT (the next working
+    // minute, Mon 01-12) and both carry the project finish — a zero-work marker still has a real finish.
+    //
+    // **Since #381 they no longer print the same day, and that is the change.** A finish milestone is
+    // reported on the day it closes, its predecessor's last day (Fri 01-09), as P6 and NetPoint print
+    // it. A zero-duration TASK keeps the start-dated reading (Mon 01-12): it is a task (§22), and moving
+    // it too is a separate question, filed rather than folded in. This case said "both read Mon 01-12"
+    // until the change; the instant, and so every successor, is unchanged.
     const withMilestone = run(
       [act('A', 5 * DAY), act('M', 0, 'FINISH_MILESTONE')],
       [edge('A', 'M')],
@@ -60,7 +65,7 @@ describe('zero-duration task ≠ milestone (M4-F1, ADR-0035 §22)', () => {
     const withZeroTask = run([act('A', 5 * DAY), act('Z', 0, 'TASK')], [edge('A', 'Z')]);
 
     expect(withZeroTask.summary.projectFinish).toBe('2026-01-12');
-    expect(withZeroTask.summary.projectFinish).toBe(withMilestone.summary.projectFinish);
+    expect(withMilestone.summary.projectFinish).toBe('2026-01-09');
     // And the successor of a zero-duration task starts at its finish instant (it is a real activity).
     const chained = run(
       [act('A', 2 * DAY), act('Z', 0, 'TASK'), act('B', 1 * DAY)],

@@ -48,3 +48,31 @@ export function offsetFromDataDate(
 ): number {
   return cal.workingTimeBetween(absMinutesToInstant(dataDateAbs), absMinutesToInstant(abs));
 }
+
+/**
+ * **A date given for a `FINISH_MILESTONE` means the END of that day** (#381; amends ADR-0023 §4).
+ *
+ * A finish milestone marks the moment work finishes, and the work before it finishes at the END of
+ * its last day. Reading the milestone's own dates (placement, constraints, external dates) as the
+ * START of their day put it a day before that moment: a planner who dropped it on its predecessor's
+ * last day got "placed earlier than logic allows", and an `FNLT` on that day gave a false day of
+ * negative float. The end of day D is the start of day D+1, rolled forward to the next working minute
+ * — exactly where the engine puts a finish milestone after a task ending on D.
+ *
+ * A date carrying a time of day is already an instant and is read as one.
+ */
+export function finishMilestoneDateInstant(cal: WorkingTimeCalendar, date: string): number {
+  const abs = instantToAbsMinutes(date);
+  return rollForwardToWorking(cal, date.length > 10 ? abs : abs + MINUTES_PER_DAY);
+}
+
+/**
+ * The working-minute index a `FINISH_MILESTONE`'s instant is **reported** at: the minute before it,
+ * i.e. the day whose working time ends there (#381). Never before the data date, so a milestone that
+ * sits on the data date reads the data date rather than the day before it.
+ */
+export function finishMilestoneDisplayIndex(ownOffset: number): number {
+  return Math.max(ownOffset - 1, 0);
+}
+
+const MINUTES_PER_DAY = 1440;
