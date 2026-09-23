@@ -660,8 +660,22 @@ behaves against it, is still the row's actual subject and still nobody has measu
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-09-11 · **PARKED 2026-09-10** — see the
-box below. **No longer blocked on the product owner.** Five
+**Status:** deferred (on a trigger) · **Verified:** 2026-09-23 · **PARKED 2026-09-10** — see the
+box below.
+
+> **Every reading below pre-dates the painter that ships now (reconciliation pass, 2026-09-23).** The
+> sixth and last sitting was 2026-09-21; ADR-0151 (2026-09-22) replaced the bar with a 5 px line
+> plus node glyphs and three text rows, and NetPoint-layout (2026-09-23, ADR-0152/0154 and M1) added
+> chevrons, lag plates, waiting dashes, a centre item and a 60 px pitch. Both epics committed a paint
+> condition that needs one `canvas-draw` press on the product owner's hardware — **FC-L5**
+> (`docs/specs/logic-legibility/`) and **FC-N8**, whose record says in terms _"the owed reading stays
+> with #75"_ (`docs/specs/netpoint-layout/m6-gate-pass.md:33-42`) — and **neither is taken**. This
+> row did not know until this box: its status read as settled while two epics' owed readings pointed
+> at it. "§9 is met" below is a true statement about the **2026-09-21 painter** and nothing later;
+> the call-count budgets (`paint.link-marks-budget.test.ts`, `paint.dates-budget.test.ts`) pin the
+> cost's shape, not its milliseconds.
+
+**No longer blocked on the product owner.** Five
 sittings were taken 2026-09-10 (items 6, 6(e), 6(f)). §9's gate is **met at every judgeable point
 that reproduces**, at both scales and both framings. What remains is one attribution (the ~8 ms,
 which needs a DevTools recording) and one instrument gap (#283's unrecorded power state, now the
@@ -685,7 +699,9 @@ command-surface.spec.ts:35-40`). Nothing in the product is known to be failing f
 > ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
 > repeated it. **All of that is wrong on two counts, checked against the ADR's own text.**
 >
-> 1. **There is no §16 in ADR-0026.** Its sections run to §9a; the prototype gate is **§9**, the
+> 1. **There is no §16 in ADR-0026.** _(This point is **RETRACTED** — 2026-09-01, by ADR-0026 §9b;
+>    see the box of that date further down this row. §16 is `docs/PROJECT_BRIEF.md`'s, which is where
+>    the cross-reference resolves.)_ Its sections run to §9a; the prototype gate is **§9**, the
 >    result is **§9a**. Every "ADR-0026 §9" citation in this repository points at a section that
 >    does not exist. (ADR-0026 itself says "the §16 target hardware envelope", which is where the
 >    number was picked up and propagated.)
@@ -11505,10 +11521,13 @@ performance review confirmed each pass is bounded by the **culled** set and not 
 visible bar for the glyph and label work, which would also have made #371's owed reading partly
 answerable without waiting on hardware.
 
-### 371. Twenty-three measurement scripts repeat the same esbuild-to-tempdir block
+### 371. Thirty measurement scripts repeat the same esbuild-to-tempdir block
 
-**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M6 gate
-pass, component review) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-23 (reconciliation pass: **30** files under
+`apps/web/scripts/` contain both `mkdtemp` and an `'esbuild'` exec, against **23** at the commit that
+filed this row, `3c84bfc0` — the NetPoint-layout epic added seven more the day after it was filed,
+so the title said twenty-three while the count grew) · **Raised:** 2026-09-22 (logic-legibility M6
+gate pass, component review) · **Size:** S · **Owner:** web
 
 Every harness in `apps/web/scripts/` that bundles a probe repeats the same ~15 lines of
 `mkdtempSync` + `execFileSync('pnpm', ['exec', 'esbuild', …])` verbatim. It is a **pre-existing**

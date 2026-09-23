@@ -6013,6 +6013,11 @@ A lighter-weight running log of smaller decisions is in
   both scales. So the **23.3 fps reading of 2026-09-08 remains the one figure
   in this row that nothing has reproduced**, and reading it alone is the
   specific error this bullet warns against.
+  **And every reading above pre-dates the painter that ships now**
+  (2026-09-23 pass): ADR-0151 (2026-09-22) and NetPoint-layout (2026-09-23)
+  redrew the bar, the row and the link after the sixth sitting, and both epics'
+  owed paint readings — FC-L5 and FC-N8 — are **untaken** (`docs/TECH_DEBT.md`
+  #75). "§9 is met" is a fact about the 2026-09-21 painter, not today's.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 
