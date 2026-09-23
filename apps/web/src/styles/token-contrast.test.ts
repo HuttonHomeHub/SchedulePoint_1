@@ -860,6 +860,32 @@ describe('the diagram grid is readable on both of its grounds', () => {
     expect(value, `year gridline on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
   });
 
+  it.each(PLOT_GROUNDS)('a NON-DRIVING link is perceivable on %s (≥ 3:1)', (_name, ground) => {
+    // NetPoint-layout M2 (spec §4.7): a non-driving link is a 1 px solid line that carries a
+    // relationship a reader must be able to follow, so 1.4.11 applies to it as a graphical object.
+    // Before this token the link's ink was the page's secondary TEXT colour (TECH_DEBT #367).
+    const value = ratio(tokens, ground, '--canvas-link-minor');
+    expect(value, `non-driving link on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  // The three DRIVING-link inks (ADR-0154 decision 1). A link has no outline: its stroke is the whole
+  // graphical object, so each ink needs its own 3:1 floor on both grounds, as the non-driving one got.
+  // Before M2 every link was one grey; these tokens reached the link role here, and `--primary` has
+  // a thin margin (≈3.15:1) that a button or badge re-tune could erode without anyone looking here.
+  const DRIVING_INKS: ReadonlyArray<readonly [rung: string, token: string]> = [
+    ['an ordinary driving link', '--primary'],
+    ['a critical driving link', '--destructive'],
+    ['a near-critical driving link', '--warning'],
+  ];
+  it.each(
+    DRIVING_INKS.flatMap(([rung, ink]) =>
+      PLOT_GROUNDS.map(([name, ground]) => [rung, ink, name, ground] as const),
+    ),
+  )('%s (%s) is perceivable on %s (≥ 3:1)', (rung, ink, _name, ground) => {
+    const value = ratio(tokens, ground, ink);
+    expect(value, `${rung} on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
   it('reports the day tier and the non-working hatch without asserting them', () => {
     // Deliberately unasserted — see the block comment above for why each is exempt. Reported so a
     // REGRESSION is still visible in the test output, which is the same contract the decorative

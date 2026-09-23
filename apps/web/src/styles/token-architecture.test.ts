@@ -127,6 +127,9 @@ const OUTSIDE_THE_CLOSURE = {
     // carries no information a reader must perceive, so it is gated by neither a scope's
     // completeness nor a contrast floor — every bar it aligns is already a shape with its own.
     '--canvas-lane-rule',
+    // The non-driving link (NetPoint-layout M2): a diagram line with no meaning on a header and no
+    // semantic sibling, gated by its own pairs in token-contrast.test.ts rather than by completeness.
+    '--canvas-link-minor',
     // The minimap rectangle's two-tone frame (ADR-0100 decision 9): the same discriminator
     // as the gridline tiers — a viewport frame has no meaning on a header and no semantic
     // sibling in the base vocabulary, and its contrast is gated by its OWN pairs

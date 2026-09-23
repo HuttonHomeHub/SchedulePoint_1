@@ -26,7 +26,9 @@ import { cn } from '@/lib/utils';
 type LegendItem =
   | { label: string; swatch: React.CSSProperties }
   | { label: string; criticality: 'critical' | 'near' | 'none'; fill?: string }
-  | { label: string; line: 'solid' | 'dashed' }
+  | { label: string; line: 'solid' | 'dashed'; ink?: string; weight?: 1 | 2 }
+  | { label: string; chevron: true }
+  | { label: string; lagPlate: true }
   | { label: string; pin: true }
   | { label: string; today: true }
   | { label: string; dataDate: true }
@@ -79,10 +81,47 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // renders byte-identically (the parity gate).
   ...(CANVAS_DATA_DATE_ENABLED ? [{ label: 'Data date', dataDate: true } as const] : []),
   { label: 'Today', today: true },
-  // Logic ties, matching the canvas: a driving link (heavier solid) sets its
-  // successor's start; a non-driving link (thin dashed) carries slack (M3).
-  { label: 'Driving link', line: 'solid' },
-  { label: 'Non-driving link', line: 'dashed' },
+  // Logic ties, matching the canvas. **The link language** (NetPoint-layout M2, ADR-0154) is drawn
+  // only on the refreshed canvas, so its key rides the same flag; flag-off keeps the legacy pair
+  // byte for byte. Drivingness is WEIGHT, criticality the rung's ink plus the endpoints' nodes, and
+  // the dash means waiting time and nothing else — so the legacy "Non-driving link — dashed" row
+  // must not survive here: a key naming a mark the canvas no longer paints is the ADR-0151 M6 defect.
+  ...(CANVAS_DIRECT_MANIPULATION_ENABLED
+    ? [
+        {
+          label: 'Driving link — critical',
+          line: 'solid',
+          ink: 'var(--destructive)',
+          weight: 2,
+        } as const,
+        {
+          label: 'Driving link — near-critical',
+          line: 'solid',
+          ink: 'var(--warning)',
+          weight: 2,
+        } as const,
+        { label: 'Driving link', line: 'solid', ink: 'var(--primary)', weight: 2 } as const,
+        {
+          label: 'Non-driving link',
+          line: 'solid',
+          ink: 'var(--canvas-link-minor)',
+          weight: 1,
+        } as const,
+        {
+          label: 'Waiting time',
+          line: 'dashed',
+          ink: 'var(--canvas-link-minor)',
+          weight: 1,
+        } as const,
+        { label: 'Direction', chevron: true } as const,
+        { label: 'Lag on a link', lagPlate: true } as const,
+      ]
+    : [
+        // A driving link (heavier solid) sets its successor's start; a non-driving link (thin
+        // dashed) carries slack (M3).
+        { label: 'Driving link', line: 'solid' } as const,
+        { label: 'Non-driving link', line: 'dashed' } as const,
+      ]),
   // The M4/M5 visual-refresh shape vocabulary (ADR-0052, behind `VITE_CANVAS_DIRECT_MANIPULATION`):
   // the LOE bracketed span, the WBS-summary bracket/tab glyph, the in-bar progress band, and the
   // dashed lag (waiting-time) run — all shape cues, never colour alone (WCAG 1.4.1). Flag-off the
@@ -92,7 +131,7 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
         { label: 'Level of effort', loe: true } as const,
         { label: 'WBS summary', summary: true } as const,
         { label: 'Progress', progress: true } as const,
-        { label: 'Lag (waiting time)', lag: true } as const,
+        { label: 'Lag run (on the bar)', lag: true } as const,
       ]
     : []),
   // Placement-conflict cue (ADR-0033) — an outlined warning triangle on a bar placed outside its
@@ -181,7 +220,12 @@ export function TsldLegend({
 } = {}): React.ReactElement {
   const items = legendItems(lens);
   return (
+    // `role="list"`/`role="listitem"` are explicit: Tailwind v4's Preflight sets `list-style: none`,
+    // which is a documented cause of WebKit/VoiceOver dropping the implicit roles (ADR-0122, the same
+    // fix as `TsldPanel`'s band lists).
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
     <ul
+      role="list"
       aria-label="Legend"
       className={cn(
         'text-muted-foreground text-xs',
@@ -191,7 +235,8 @@ export function TsldLegend({
       )}
     >
       {items.map((item) => (
-        <li key={item.label} className="flex items-center gap-1.5">
+        // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the list above
+        <li key={item.label} role="listitem" className="flex items-center gap-1.5">
           {'criticality' in item ? (
             // A thin bar with its end node — the canvas's own pair. The node is `--foreground` at
             // both emphasised rungs and `--border` at rest, exactly as `resolveTsldPalette` maps
@@ -451,11 +496,45 @@ export function TsldLegend({
               <span
                 className="w-full"
                 style={{
-                  borderTopWidth: item.line === 'solid' ? 2 : 1.5,
+                  borderTopWidth: item.weight ?? (item.line === 'solid' ? 2 : 1.5),
                   borderTopStyle: item.line,
-                  borderTopColor: 'var(--muted-foreground)',
+                  // The painter reads the unprefixed token on the canvas element; the key reads the
+                  // same name inline, never through a Tailwind utility (ADR-0100 M4's trap).
+                  borderTopColor: item.ink ?? 'var(--muted-foreground)',
                 }}
               />
+            </span>
+          ) : 'chevron' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
+              {/* A link with one filled chevron along it, pointing the way the link runs. */}
+              <span
+                className="w-full"
+                style={{
+                  borderTopWidth: 1,
+                  borderTopStyle: 'solid',
+                  borderTopColor: 'var(--canvas-link-minor)',
+                }}
+              />
+              <svg
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+                width="6"
+                height="6"
+                viewBox="0 0 6 6"
+              >
+                <path d="M1 0 L5 3 L1 6 Z" style={{ fill: 'var(--canvas-link-minor)' }} />
+              </svg>
+            </span>
+          ) : 'lagPlate' in item ? (
+            <span
+              aria-hidden="true"
+              className="inline-flex h-3 items-center rounded-xs px-0.5 text-xs leading-none"
+              style={{
+                border: '1px solid var(--border)',
+                backgroundColor: 'var(--canvas)',
+                color: 'var(--foreground)',
+              }}
+            >
+              +2d
             </span>
           ) : (
             <span

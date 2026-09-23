@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1310 web
+> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1314 web
 > source files with 45 Playwright suites beside the base journey, and
-> 152 ADRs.
+> 153 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5705,6 +5705,29 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   `layout-exempt:` reason, with a pinned positive case. The journey `e2e-arrange/auto-resolve.spec.ts`
   asserts exactly one lane change through the pen-enforced API, and was verified red with the
   feature switched off. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0154** _(Accepted; NetPoint-layout M2 landed 2026-09-23)_ — A link says what drives, which
+  way, and how long it waits. The product owner asked for NetPoint-style links: chevrons along the
+  line, driving links coloured, the float gap shown, lag labelled. Before this, a link carried two
+  weak facts in one grey — and that grey was the page's secondary **text** colour, which nothing had
+  chosen for a line (`docs/TECH_DEBT.md` #367, closed here). **Drivingness is weight; criticality is
+  the rung's ink**: a driving link is 2 px in critical ink only when **both** ends are critical, since
+  a link from an ordinary activity into a critical one is not on the critical path. A non-driving link
+  is 1 px **solid** in its own token, `--canvas-link-minor`, gated at 3:1 on both grounds with the
+  pairs landing first and verified red. **The dash is given one meaning, waiting time**: only the part
+  of a non-driving route inside the relationship's drawn gap is dashed, its length in days is
+  `edgeGapDays` exactly, and **a driving link is never dashed** — measured, calendar days across a
+  weekend had been dashing driving links too. Direction is filled chevrons, capped at six a link; lag
+  is a plate on the link's longest segment, never on a bar. Links are batched by ink and weight, so
+  strokes are per bucket and never per link, pinned at 2,000 activities / 4,000 links. **The
+  measurement recorder was not taught to stitch, and that is the transferable finding**: the spec
+  asked for dashed runs to be stitched back to their link by shared endpoints, it was built, and the
+  recorder's own control refused it at 76 polylines against 188 links — links converge on node glyphs
+  by design, so the geometry is ambiguous at exactly the points NetPoint is about. Harnesses set
+  `scene.solidWaiting` instead, since a link's geometry does not depend on its dash. The same control
+  also exposed that the FC-C1 harness had not held the whole plan since ADR-0151 moved the row: its
+  "whole plan" framing still assumed a 28 px row, and it had been refusing to judge, unseen. Flag-off
+  keeps the legacy passes byte for byte. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -19,10 +19,21 @@ describe('TsldLegend — visual-refresh shape vocabulary (flag on, ADR-0052 M4/M
     expect(within(legend).getByText('Level of effort')).toBeInTheDocument();
     expect(within(legend).getByText('WBS summary')).toBeInTheDocument();
     expect(within(legend).getByText('Progress')).toBeInTheDocument();
-    expect(within(legend).getByText('Lag (waiting time)')).toBeInTheDocument();
+    expect(within(legend).getByText('Lag run (on the bar)')).toBeInTheDocument();
     // They sit with the shared shape cues; the default key is otherwise unchanged.
     expect(within(legend).getByText('Constraint')).toBeInTheDocument();
     expect(within(legend).getByText('Driving link')).toBeInTheDocument();
+  });
+
+  it('states the list roles explicitly, because Preflight strips the implicit ones in WebKit (ADR-0122)', () => {
+    // jsdom resolves `getByRole('list')` from the tag alone, so asserting the role by query passes
+    // with or without the attribute. The attribute is the fix, so the attribute is what is asserted.
+    render(<TsldLegend />);
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    expect(legend).toHaveAttribute('role', 'list');
+    for (const item of within(legend).getAllByRole('listitem')) {
+      expect(item).toHaveAttribute('role', 'listitem');
+    }
   });
 
   it('keeps the new rows in an active-lens legend too (shared cues survive a Colour-by mode)', () => {
@@ -37,6 +48,41 @@ describe('TsldLegend — visual-refresh shape vocabulary (flag on, ADR-0052 M4/M
     );
     const legend = screen.getByRole('list', { name: 'Legend' });
     expect(within(legend).getByText('Level of effort')).toBeInTheDocument();
-    expect(within(legend).getByText('Lag (waiting time)')).toBeInTheDocument();
+    expect(within(legend).getByText('Lag run (on the bar)')).toBeInTheDocument();
+  });
+
+  /**
+   * **The link language's key** (NetPoint-layout M2, spec §4.7). Every mark the refreshed canvas
+   * draws on a link has a row, and the legacy pair does not: the canvas no longer dashes a
+   * non-driving link, so a row saying it does would send a planner hunting for a mark that is not
+   * there (ADR-0151 M6).
+   */
+  it('keys the link language, and never the retired dashed non-driving link', () => {
+    render(<TsldLegend />);
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    for (const label of [
+      'Driving link — critical',
+      'Driving link — near-critical',
+      'Driving link',
+      'Non-driving link',
+      'Waiting time',
+      'Direction',
+      'Lag on a link',
+      'Lag run (on the bar)',
+    ]) {
+      expect(within(legend).getByText(label)).toBeInTheDocument();
+    }
+    expect(within(legend).queryByText('Non-driving link — dashed')).not.toBeInTheDocument();
+    expect(within(legend).queryByText('Lag (waiting time)')).not.toBeInTheDocument();
+  });
+
+  it('draws the non-driving and waiting rows in the link token, solid and dashed', () => {
+    render(<TsldLegend />);
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    const line = (label: string): HTMLElement =>
+      within(legend).getByText(label).closest('li')!.querySelector('span > span') as HTMLElement;
+    expect(line('Non-driving link').style.borderTopStyle).toBe('solid');
+    expect(line('Non-driving link').style.borderTopColor).toBe('var(--canvas-link-minor)');
+    expect(line('Waiting time').style.borderTopStyle).toBe('dashed');
   });
 });

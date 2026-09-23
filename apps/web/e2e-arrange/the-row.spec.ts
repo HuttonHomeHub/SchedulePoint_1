@@ -51,7 +51,13 @@ test('the dates and the duration are painted under a bar, and Dates is on by def
   await ensurePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Superstructure', laneIndex: 0, durationDays: 30 }]);
   await recalculate(page, orgSlug);
-  await expect(page.locator('canvas').first()).toBeAttached();
+  // `recalculate` reloads the page. Wait for the workspace the way every sibling journey does before
+  // asking for the canvas. On PR #669 this line failed on CI three times, and it was first read as a
+  // race after the reload. The cause was the API's global throttle: as the eleventh journey from one
+  // IP, every page load here got a 429 and the workspace never rendered. The harness now raises that
+  // limit (`playwright.arrange.config.ts`).
+  await ensurePen(page);
+  await expect(page.locator('canvas').first()).toBeAttached({ timeout: 15_000 });
 
   // (1) On by default, on first open (CQ-3).
   await page.getByRole('button', { name: 'View', exact: true }).click();

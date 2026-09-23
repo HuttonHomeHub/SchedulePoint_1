@@ -1160,6 +1160,21 @@ Each diagram row is **60 px** and carries three things, each with one job:
 A new cue for this row names which of the three rows it uses, and `paint.lane-containment.test.ts`
 gets a case for it. A cue that draws outside its lane is the defect that test was written to report.
 
+### The link on the diagram (NetPoint-layout M2, ADR-0154)
+
+A link carries four facts, and each has one channel:
+
+- **Drivingness is weight.** A driving link is 2 px, a non-driving link 1 px.
+- **Criticality is the driving link's ink**: `--destructive` when both ends are critical,
+  `--warning` when both are at least near-critical, otherwise `--primary`. A non-driving link is
+  `--canvas-link-minor`. The endpoints' node shapes say criticality too, so colour is never alone.
+- **Direction is shape**: filled chevrons along the line, plus the terminal head.
+- **Waiting time is the dash**, and the dash means nothing else. Only the part of a non-driving link
+  inside its drawn gap is dashed. A lag is text on a plate, `+2d` / `−1d`.
+
+A new link cue names which of these channels it uses. Two cues on one channel cannot be read apart,
+which is why the dash that used to mean "non-driving" was retired rather than kept beside the new one.
+
 ### The `…` convention on control labels (ADR-0091)
 
 An ellipsis means **activating this opens something that needs more input before anything happens** —

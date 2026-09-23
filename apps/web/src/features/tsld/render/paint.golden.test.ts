@@ -58,6 +58,23 @@ import { recordingCtx } from './test-support/recording-ctx';
  * | `moveTo` / `lineTo` | **−2 each** | fan-out is retired, so the routed links start and end on their bars' centre-lines rather than on spread anchors, and one elbow fewer is traced. |
  * | everything else | **0** | `beginPath`, `fill`, `fillText` and `stroke` are unchanged — every label still draws, every glyph still fills. |
  *
+ * ## Re-baselined at NetPoint-layout M2 (the link language), against a written prediction
+ *
+ * Predicted before regenerating, then checked by a script rather than by eye: the flag-off log is
+ * byte-identical; the maximal log differs in ONE contiguous block that starts at the edge layer's
+ * first style write (214 lines before it and 306 after are unchanged, so no bar, label, marker or
+ * date moved); inside it no `[4,3]` dash survives, and every ink is a link ink, the selection or
+ * the plate outline. The per-method deltas account exactly:
+ *
+ * | count | delta | why |
+ * | --- | --- | --- |
+ * | `moveTo` / `lineTo` | **+8 / +24** | 8 direction chevrons, each one filled triangle (1 `moveTo`, 3 `lineTo`). |
+ * | `fillRect` / `strokeRect` / `fillText` | **+2 each** | 2 lag plates: ground, hairline, text. |
+ * | `stroke` / `beginPath` / `setLineDash` | **−1 each** | the bucket passes replace the legacy fixed pair of dashed/solid passes; this scene's driving links are all incident to the selection, so they draw only in the highlight bucket and the base driving bucket is empty. |
+ *
+ * The maximal scene has **no waiting run**, so the dash's new meaning has no golden cover; it is
+ * pinned by `link-marks.test.ts` and `paint.link-marks.test.ts`, where it can be asserted exactly.
+ *
  * **The first re-baseline attempt was WRONG and the arithmetic is what said so.** `SIZE` was
  * 800×400, which held eleven lanes at the old 28 px pitch and eight at 52 — so `fillText` fell by
  * 3 and every other count with it, because three activities were culled. A shrinking golden log
@@ -72,6 +89,8 @@ const PALETTE: TsldPalette = {
   gridLineMonth: '#111111',
   gridLineYear: '#565656',
   laneRule: '#9c9c9c',
+  linkMinor: '#80848b',
+  linkDriving: '#3b6fbf',
   edge: '#333',
   bar: '#44f',
   critical: '#f00',

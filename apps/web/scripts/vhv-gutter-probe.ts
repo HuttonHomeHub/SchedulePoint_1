@@ -49,6 +49,8 @@ const PALETTE: TsldPalette = {
   gridLineMonth: '#d7dbe0',
   gridLineYear: '#b9bfc7',
   laneRule: '#ececee',
+  linkMinor: '#80848b',
+  linkDriving: '#3b6fbf',
   edge: '#64748b',
   bar: '#3b82f6',
   critical: '#dc2626',
@@ -219,6 +221,9 @@ export function probe(counts: number[]): ProbeResult {
       edges: source.edges,
       dataDate: '2026-01-01',
       visualRefresh: true,
+      // Waiting time drawn solid: a link's geometry does not depend on its dash, and a dashed run is a
+      // separate path this recorder could not tell apart from a neighbour's (NetPoint-layout M2-T2).
+      solidWaiting: true,
       timeTrueLinks: true,
       linkRouting: true,
     };

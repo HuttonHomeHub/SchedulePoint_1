@@ -346,6 +346,16 @@ keep `main` releasable.
   offers `Undo`, and is its own undo step. A bar dropped onto an occupied row goes on to the next
   free row in the direction it was moving, in the same write.
 
+- **A link says what drives, which way, and how long it waits** (ADR-0154, amending
+  ADR-0054/0065/0151). This follows the NetPoint diagrams the product owner supplied:
+  - a driving link is a heavier line, in the critical colour only when both of its ends are critical;
+  - any other link is a thin solid line;
+  - a dash means one thing only: time a successor spends waiting;
+  - small chevrons along every long link show which way it runs;
+  - a lag is written on the line (`+2d`).
+
+  Before this, every link was one grey, and that grey was the page's secondary text colour.
+
 - **A plan has one planning surface** (ADR-0148, amending ADR-0033/0041/0052/0054/0126/0134). A plan
   used to be in one of two **scheduling modes**, and the mode decided where every bar was drawn.
   Dragging a bar on an `Early` plan did not move it — it wrote an invisible _start no earlier than_
