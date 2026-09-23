@@ -15,6 +15,16 @@ where `seedRows` is the row count of the layout a search starts from (Unit 300: 
 shown to the product owner **before M4 is built**, and B may move on those numbers — as a dated
 amendment here, not an edit.
 
+**Amended 2026-09-23, on FC-N10's frontier (product owner):** `B = seedRows`: Re-layout adds **no
+rows**. At the seed budget the search already removes 71 % of hidden links (58 → 17) and 42 % of
+crossings (360 → 208) on Unit 300. At +50 % it goes further (3 and 142), but only by spreading the
+plan out, with links climbing about 25 rows, and the pictures showed that. On `scale-2000` every
+budget above the seed makes crossings worse. The product owner also added **one term**: `contacts`,
+the number of **unlinked** adjacent pairs whose node glyphs touch (FC-N6b's unlinked count), ranked
+directly below `crossings`. Touching glyphs read as a link that is not there. Unit 300 has 19 of
+123 adjacent pairs. The formula above is kept as it was approved, because this amendment is the
+record of the change.
+
 Every condition names its instrument, its bar, and what happens if it fails. Figures marked **M0**
 are formulas whose denominators M0 measures; the formula is committed first and cannot be adjusted
 afterwards (FC-L4's pattern).

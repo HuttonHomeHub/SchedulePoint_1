@@ -310,6 +310,14 @@ objects to a link spanning 25 rows, because travel ranks below both counts. A bu
 +50 %, or travel promoted above crossings, would trade some of the count reduction for a more
 compact picture.
 
+### The answer (2026-09-23)
+
+Put to the product owner with the two frontier tables and the four pictures, including the
+statement that the pictures improve less than the numbers. **Answer: no extra rows** (`B =
+seedRows`), and **avoid unlinked glyph contact** as a term below crossings. The seed-budget row is
+therefore the one M4 builds to: on Unit 300 that is 58 → 17 hidden links and 360 → 208 crossings,
+with the height unchanged. The amendment is in `conditions.md`.
+
 ## M0-T5 — text collisions and glyph contacts on today's row (FC-N6)
 
 **Harness:** `apps/web/scripts/measure-netpoint-row.mjs` over `scripts/netpoint-row-probe.ts`.

@@ -157,6 +157,8 @@ rather than folded silently into the sections they change:
 ⌈0.5 × seedRows⌉)` (Unit 300: 21 → 32). M0's FC-N10 frontier at {seed, +25 %, +50 %, +100 %, ∞}
   is shown to the product owner **before M4 is built**, and the budget can move on those numbers.
   Travel stays the proposed tiebreak after chains and before rows.
+  **Answered on the frontier (2026-09-23): no extra rows, `B = seedRows`, plus an unlinked
+  glyph-contact term below crossings.** See `conditions.md`'s amendment and the M0-T4 record.
 - **The precondition fix is PR #663**, and it went further than §0.6 anticipated: the same
   early-date read was in seven places, not one, including the spoken slack this spec assigned to M2.
   So M2-T4's slack half is already shipped; `docs/TECH_DEBT.md` #372 files the naming trap behind all
@@ -562,11 +564,12 @@ would fight the replay. The snapshot is taken only on a planner-originated comma
 | 1   | `overlaps`  | same-row drawn-span overlap pairs — **hard**: every accepted state is 0 once repair has run                      | `lane-overlap.ts` sweep                                    |
 | 2   | `occluded`  | links with ≥ 1 **foreign** occlusion incident (a horizontal leg inside a bar that is not one of its own anchors) | ADR-0150's `foreign` column, `measure-occlusion.mjs:26-28` |
 | 3   | `crossings` | horizontal meets vertical strictly interior to both, distinct links                                              | ADR-0149 D1, `crossing-probe.ts:269-294`                   |
+| 3b  | `contacts`  | **unlinked** adjacent same-row pairs whose node glyphs touch — **added on CQ-1's answer, 2026-09-23**            | FC-N6b's unlinked count, `measure-netpoint-row.mjs`        |
 | 4   | `−sameRow`  | links whose two endpoints share a row (chains read along one row)                                                | ADR-0150 D5's "same-row bucket"                            |
 | 5   | `travel`    | Σ \|Δlane\| over links — **proposed, CQ-1**                                                                      | ADR-0150 FC-L6 `mean                                       | Δlane | `   |
 | 6   | `rows`      | `worldExtent`'s rule: max lane among scene activities + 1                                                        | `arrange-lanes.ts:70-77`                                   |
 
-subject to `rows ≤ B` (CQ-1).
+subject to `rows ≤ B` (CQ-1; answered `B = seedRows`, 2026-09-23).
 
 **Evaluated on the router the painter uses, not on a proxy** (ADR-0149's lesson). `routeFrame(...)`
 is extracted from `paint.ts:1169-1298` — `lineOf`'s anchor mapping, `routeOrthogonal` with the leg
