@@ -1,5 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import {
+  createPlan,
+  ensurePen,
+  onboard,
+  openProject,
+  recalculate,
+  seedActivities,
+} from '../e2e-arrange/support';
+
 import { deployedCspPolicy } from './csp-policy';
 
 /**
@@ -155,6 +164,36 @@ test('the authenticated shell raises no CSP violation', async ({ page }) => {
   await page.getByRole('button', { name: /create organisation/i }).click();
   await expect(page).toHaveURL(/\/orgs\//);
   expectClean(await violations(page), 'the organisation home');
+});
+
+/**
+ * **The Arrange worker loads and runs under the deployed policy** (NetPoint-layout M5, ADR-0152).
+ *
+ * It is the first Web Worker in `apps/web`. The policy has no `worker-src`, so a worker falls back
+ * to `script-src 'self'`, which allows the same-origin module file Vite builds from
+ * `new Worker(new URL(…), { type: 'module' })` and would refuse an inline `blob:` worker. That was
+ * reasoned from the specification; this is where it is observed, on the production build the
+ * policy ships with. The dialog's status sentence only changes once the worker has posted its
+ * result, so reaching it proves the worker was created, loaded and ran.
+ */
+test('the Arrange worker loads and runs with no CSP violation', async ({ page }) => {
+  await armCspRecording(page);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  await createPlan(page, 'CSP worker');
+  await ensurePen(page);
+  await seedActivities(page, orgSlug, [{ name: 'Mobilise', laneIndex: 0 }]);
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+
+  await page.locator('[data-toolbar-item="auto-arrange"]').click();
+  const dialog = page.getByRole('dialog', { name: 'Arrange the diagram' });
+  await expect(dialog.getByRole('status')).toHaveText(
+    /^(Already arranged: neither option would move anything\.|Both options are ready\.)$/,
+    { timeout: 30_000 },
+  );
+  expectClean(await violations(page), 'the Arrange dialog and its worker');
 });
 
 /**
