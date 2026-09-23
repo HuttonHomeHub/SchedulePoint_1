@@ -51,8 +51,19 @@ export default defineConfig({
             url: 'http://localhost:3000/api/v1/health',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // The pen is ENFORCED, so the gate the offer depends on is the real one.
-            env: { LOG_LEVEL: 'silent', PLAN_EDIT_LOCK_ENFORCED: 'true' },
+            env: {
+              LOG_LEVEL: 'silent',
+              // The pen is ENFORCED, so the gate the offer depends on is the real one.
+              PLAN_EDIT_LOCK_ENFORCED: 'true',
+              // Eleven journeys from one IP, each onboarding, seeding through the API and reloading,
+              // run up against the global throttler (100/60s) that exists to deny abusive traffic.
+              // On CI the eleventh journey met a 429 on every page load after `recalculate`, so the
+              // workspace never rendered (PR #669, three runs). Lowering the limit to 50 locally
+              // reproduces that symptom exactly. Raised for this harness only, as the gantt, gantt
+              // editing, overview and measure harnesses do: the guard itself is untouched, and no
+              // other suite or environment sees this value.
+              RATE_LIMIT_LIMIT: '100000',
+            },
           },
           {
             command: 'pnpm dev',

@@ -52,8 +52,10 @@ test('the dates and the duration are painted under a bar, and Dates is on by def
   await seedActivities(page, orgSlug, [{ name: 'Superstructure', laneIndex: 0, durationDays: 30 }]);
   await recalculate(page, orgSlug);
   // `recalculate` reloads the page. Wait for the workspace the way every sibling journey does before
-  // asking for the canvas: a bare 5 s wait straight after a reload lost that race on a loaded CI
-  // shard (PR #669), and its retries then tripped the sign-up rate limit, which hid the cause.
+  // asking for the canvas. On PR #669 this line failed on CI three times, and it was first read as a
+  // race after the reload. The cause was the API's global throttle: as the eleventh journey from one
+  // IP, every page load here got a 429 and the workspace never rendered. The harness now raises that
+  // limit (`playwright.arrange.config.ts`).
   await ensurePen(page);
   await expect(page.locator('canvas').first()).toBeAttached({ timeout: 15_000 });
 
