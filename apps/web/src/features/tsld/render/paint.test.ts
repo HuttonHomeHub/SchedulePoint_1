@@ -38,6 +38,7 @@ const PALETTE: TsldPalette = {
   gridLineYear: '#565656',
   laneRule: '#9c9c9c',
   linkMinor: '#80848b',
+  linkDriving: '#3b6fbf',
   edge: '#333',
   bar: '#44f',
   critical: '#f00',
@@ -2624,12 +2625,14 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
       paintScene(r.ctx, refreshOn({ selectedId: 's1' }), VIEW, SIZE, PALETTE);
       return r;
     })();
-    // The incident non-driving tie re-draws in the selection colour at the next weight up,
-    // keeping its dash — a weight change with the colour, never colour alone (WCAG 1.4.1).
+    // The incident non-driving tie re-draws in the selection colour at the next weight up — a
+    // weight change with the colour, never colour alone (WCAG 1.4.1). The non-driving dash this
+    // case used to count is retired (NetPoint-layout M2): a dash now means waiting time only.
     expect(log).toContain(`strokeStyle=${PALETTE.selection}`);
-    expect(log.filter((e) => e === 'setLineDash([[4,3]])').length).toBe(2); // base + highlight
-    // Non-incident ties still stroke in the base edge colour.
-    expect(log).toContain(`strokeStyle=${PALETTE.edge}`);
+    expect(log).toContain('lineWidth=2');
+    expect(log).not.toContain('setLineDash([[4,3]])');
+    // Non-incident non-driving ties stroke in their own ink, not the page's text colour (#367).
+    expect(log).toContain(`strokeStyle=${PALETTE.linkMinor}`);
   });
 
   it('weights a highlighted DRIVING tie to 3px solid and tips it in the selection colour', () => {

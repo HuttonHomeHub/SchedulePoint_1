@@ -161,6 +161,7 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     // The non-driving link (NetPoint-layout M2). Unprefixed and resolved on the canvas element, like
     // every name here, so the canvas scope governs it (ADR-0102).
     linkMinor: token('--canvas-link-minor', '#8a8f98'),
+    linkDriving: token('--primary', '#3b6fbf'),
     edge: token('--muted-foreground', '#7a8090'),
     bar: token('--primary', '#3b6fbf'),
     critical: token('--destructive', '#c83c3c'),
@@ -258,6 +259,7 @@ export const PRINT_TOKEN_SOURCES = {
   gridLineYear: ['--canvas-grid-year', '#595e66'],
   laneRule: ['--canvas-lane-rule', '#e8eaec'],
   linkMinor: ['--canvas-link-minor', '#80848b'],
+  linkDriving: ['--primary', '#4b8cca'],
   edge: ['--muted-foreground', '#636363'],
   bar: ['--primary', '#4b8cca'],
   critical: ['--destructive', '#9c0711'],

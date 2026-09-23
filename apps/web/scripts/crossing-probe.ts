@@ -212,6 +212,7 @@ export const LINK_SENTINELS = {
   nearCritical: '#070809',
   // NetPoint-layout M2: the non-driving link's own ink (`--canvas-link-minor`).
   linkMinor: '#0a0b0c',
+  linkDriving: '#0d0e0f',
 } as const;
 
 export const PALETTE: TsldPalette = {
@@ -222,6 +223,7 @@ export const PALETTE: TsldPalette = {
   gridLineYear: '#b9bfc7',
   laneRule: '#ececee',
   linkMinor: LINK_SENTINELS.linkMinor,
+  linkDriving: LINK_SENTINELS.linkDriving,
   edge: LINK_SENTINELS.edge,
   bar: '#3b82f6',
   critical: LINK_SENTINELS.critical,
@@ -404,6 +406,11 @@ export function sceneFor(
       edges,
       dataDate: DATA_DATE,
       visualRefresh: true,
+      // Waiting time drawn solid: a link's geometry does not depend on its dash, and a dashed run is a
+      // separate path this recorder could not tell apart from a neighbour's (NetPoint-layout M2-T2).
+      // `WAITING_DASH=1` draws it dashed, for the ink harness's continuity count ONLY: the crossing
+      // controls would then count a link's dashed runs as extra links, and they refuse to judge.
+      solidWaiting: process.env.WAITING_DASH !== '1',
       timeTrueLinks: true,
       // `scene.linkRouting` is the ONE gate on the obstacle index and the corridor bundler
       // (`paint.ts:1091-1098`, `:1184-1189`, `:1211`): false takes the pre-ADR-0065 route. Exposed
@@ -2307,6 +2314,9 @@ export function rowCosts(
       edges: source.edges,
       dataDate: '2026-01-01',
       visualRefresh: true,
+      // Waiting time drawn solid: a link's geometry does not depend on its dash, and a dashed run is a
+      // separate path this recorder could not tell apart from a neighbour's (NetPoint-layout M2-T2).
+      solidWaiting: true,
       timeTrueLinks: true,
       linkRouting: true,
     };

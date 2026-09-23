@@ -34,6 +34,7 @@ export const PALETTE: TsldPalette = {
   gridLineYear: '#b9bfc7',
   laneRule: '#ececee',
   linkMinor: '#80848b',
+  linkDriving: '#3b6fbf',
   edge: '#64748b',
   bar: '#3b82f6',
   critical: '#dc2626',

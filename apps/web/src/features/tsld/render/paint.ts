@@ -10,6 +10,14 @@ import {
 } from './layers/shapes';
 import { labelWidths } from './layers/text-measure';
 import type { GhostBar, LevelledGhost } from './lenses';
+import {
+  chevronsAlong,
+  formatLag,
+  lagPlateAt,
+  linkRung,
+  splitRunsByX,
+  waitingSpanX,
+} from './link-marks';
 import { buildPaintFrame } from './paint-frame';
 import {
   arrowhead,
@@ -182,6 +190,10 @@ export interface TsldPalette {
    * driving link by weight. Its own token rather than `edge`, which is the page's secondary text
    * colour (TECH_DEBT #367). */
   linkMinor: string;
+  /** An ordinary (neither critical nor near-critical) DRIVING link — `--primary`, the on-schedule
+   * ink. Its own key rather than `bar`, which also fills every bar and LOE cap, so a measurement
+   * harness can tell a driving link from a bar by colour alone. */
+  linkDriving: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -349,6 +361,13 @@ export interface TsldScene {
    * and it is structural: there is one route function, not two.
    */
   linkRouting?: boolean | undefined;
+  /**
+   * Draw a link's WAITING time solid rather than dashed (NetPoint-layout M2). **Measurement harnesses
+   * only**: a dashed run is a separate stroke, and at a node glyph (where links converge by design)
+   * a recorder cannot tell which link a run continues. A link's geometry does not depend on its dash,
+   * so measuring it solid measures the same lines. Absent in the product.
+   */
+  solidWaiting?: boolean;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -428,6 +447,9 @@ function traceWindowCap(ctx: Ctx2D, x: number, band: Rect): void {
 
 /** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
 const SLACK_CHIP_H = 13;
+/** Waiting time on a link (NetPoint-layout M2): the dash's one meaning. Distinct from the lag run's
+ * `LAG_RUN_DASH`, which is on a bar rather than a link, so the legend can key the two apart. */
+const WAITING_DASH: readonly number[] = [3, 3];
 
 /**
  * Height (px) of the opaque plate drawn behind a flanking date when the float/drift tails are ALSO
@@ -1302,6 +1324,164 @@ export function paintScene(
        */
       packGutterChannels(corridors, rowSlots(0).clearHalfBandPx);
     }
+    /**
+     * **The link language** (NetPoint-layout M2, spec §4.7, ADR-0154) — the refreshed path only;
+     * flag-off keeps the legacy dashed/solid passes below byte for byte.
+     *
+     * - A **driving** link is 2 px solid in its rung's ink (`linkRung`): critical only when both
+     *   ends are critical. Drivingness is carried by WEIGHT, criticality also by the endpoints' node
+     *   shapes, so no fact here is colour-only (WCAG 1.4.1).
+     * - A **non-driving** link is 1 px SOLID in `linkMinor`. The dash that used to mean "non-driving"
+     *   is retired and given one meaning only:
+     * - **Waiting time** — the part of a NON-DRIVING route inside the relationship's drawn gap
+     *   (`waitingSpanX`, the same number `edgeGapDays` speaks) — is dashed, in the link's own ink.
+     *   A driving link has no waiting by definition, so it is never dashed, even where calendar
+     *   days put a weekend between its ends. `scene.solidWaiting` draws it solid instead; only a
+     *   measurement harness sets it (see that field).
+     * - **Direction**: filled chevrons along the line (`chevronsAlong`, capped per link) plus the
+     *   terminal head, filled in the link's ink in one batch per bucket.
+     * - **Lag**: a plate on the link's longest segment, drawn after every link so no line crosses it.
+     *
+     * Links are batched into buckets by (ink, width), drawn quietest first, so a critical link is
+     * never overdrawn by an ordinary one and each style is set once per bucket, not per link.
+     */
+    const paintLinkLanguage = (): void => {
+      interface Bucket {
+        ink: string;
+        width: number;
+        solid: Point[][];
+        waiting: Point[][];
+        marks: [Point, Point, Point][];
+      }
+      const order = ['minor', 'normal', 'near', 'critical'] as const;
+      const inkOf = (key: (typeof order)[number]): string =>
+        key === 'minor'
+          ? palette.linkMinor
+          : key === 'critical'
+            ? palette.critical
+            : key === 'near'
+              ? palette.nearCritical
+              : palette.linkDriving;
+      const base = new Map<string, Bucket>();
+      const lit = new Map<string, Bucket>();
+      const plates: { text: string; line: Point[] }[] = [];
+      const platesOn =
+        (toggles.labels ?? true) &&
+        view.pxPerDay >= LABEL_MIN_PX_PER_DAY &&
+        typeof ctx.fillText === 'function' &&
+        typeof ctx.measureText === 'function';
+      for (const edge of scene.edges) {
+        const line = lines.get(edge);
+        if (!line) continue;
+        const pred = byId.get(edge.predecessorId);
+        const succ = byId.get(edge.successorId);
+        if (!pred || !succ) continue;
+        const key = edge.isDriving ? linkRung(pred, succ) : 'minor';
+        const highlighted = highlightIds !== null && edgeTouches(edge, highlightIds);
+        const buckets = highlighted ? lit : base;
+        const bucketKey = highlighted ? (edge.isDriving ? 'driving' : 'minor') : key;
+        let bucket = buckets.get(bucketKey);
+        if (!bucket) {
+          bucket = {
+            ink: highlighted ? palette.selection : inkOf(key),
+            // The highlight is one weight step heavier than the link it lights (ADR-0052 M5).
+            width: (edge.isDriving ? 2 : 1) + (highlighted ? 1 : 0),
+            solid: [],
+            waiting: [],
+            marks: [],
+          };
+          buckets.set(bucketKey, bucket);
+        }
+        const predRect = activityRect(pred, view, scene.dataDate, rectCache);
+        const succRect = activityRect(succ, view, scene.dataDate, rectCache);
+        const waiting =
+          !edge.isDriving && scene.solidWaiting !== true && predRect && succRect
+            ? waitingSpanX({
+                type: edge.type,
+                pred: predRect,
+                succ: succRect,
+                lagPx: (edge.lagDays ?? 0) * view.pxPerDay,
+              })
+            : null;
+        if (waiting) {
+          const runs = splitRunsByX(line, waiting.x0, waiting.x1);
+          bucket.solid.push(...runs.solid);
+          bucket.waiting.push(...runs.waiting);
+        } else {
+          bucket.solid.push(line);
+        }
+        // Chevrons first and the terminal head last, so each link's head is the final subpath it
+        // emits — the same order the legacy pass gives, which is what a recorder reads a head by.
+        bucket.marks.push(...chevronsAlong(line));
+        if (workingWalk) {
+          const head = laneIndex
+            ? arrowhead(line, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
+            : arrowhead(line);
+          if (head) bucket.marks.push(head);
+        }
+        const lag = edge.lagDays ?? 0;
+        if (platesOn && lag !== 0) plates.push({ text: formatLag(lag), line });
+      }
+      const drawBucket = (bucket: Bucket): void => {
+        ctx.lineWidth = bucket.width;
+        ctx.strokeStyle = bucket.ink;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        for (const run of bucket.solid) drawRoundedPolyline(ctx, run);
+        ctx.stroke();
+        if (bucket.waiting.length > 0) {
+          ctx.setLineDash(WAITING_DASH as number[]);
+          ctx.beginPath();
+          for (const run of bucket.waiting) drawPolyline(ctx, run);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        if (bucket.marks.length > 0) {
+          ctx.fillStyle = bucket.ink;
+          ctx.beginPath();
+          for (const [tip, left, right] of bucket.marks) {
+            ctx.moveTo(tip.x, tip.y);
+            ctx.lineTo(left.x, left.y);
+            ctx.lineTo(right.x, right.y);
+            ctx.lineTo(tip.x, tip.y); // close manually (the Ctx2D surface has no closePath)
+          }
+          ctx.fill();
+        }
+      };
+      for (const key of order) {
+        const bucket = base.get(key);
+        if (bucket) drawBucket(bucket);
+      }
+      for (const key of ['minor', 'driving']) {
+        const bucket = lit.get(key);
+        if (bucket) drawBucket(bucket);
+      }
+      if (plates.length > 0) {
+        ctx.font = LABEL_FONT;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = palette.gridLine;
+        for (const { text, line } of plates) {
+          const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
+          const at = lagPlateAt(line, w, SLACK_CHIP_H);
+          if (!at) continue;
+          ctx.fillStyle = palette.canvasGround;
+          ctx.fillRect(at.x - w / 2, at.y - SLACK_CHIP_H / 2, w, SLACK_CHIP_H);
+          ctx.strokeRect(
+            at.x - w / 2 + 0.5,
+            at.y - SLACK_CHIP_H / 2 + 0.5,
+            w - 1,
+            SLACK_CHIP_H - 1,
+          );
+          ctx.fillStyle = palette.labelBeside;
+          ctx.fillText(text, at.x, at.y);
+        }
+        ctx.textAlign = 'left';
+      }
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = palette.edge;
+    };
     const drawEdges = (driving: boolean, highlighted = false): void => {
       const heads: [Point, Point, Point][] = [];
       ctx.beginPath();
@@ -1340,29 +1520,33 @@ export function paintScene(
         ctx.fill();
       }
     };
-    ctx.strokeStyle = palette.edge;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 3]);
-    drawEdges(false); // non-driving: thin, dashed
-    ctx.setLineDash([]);
-    ctx.lineWidth = 2;
-    drawEdges(true); // driving: heavier, solid
-    ctx.lineWidth = 1;
-    // Incident-link highlight passes (ADR-0052 M5): the selected/hovered bar's ties re-draw on
-    // top, one weight step heavier in the selection colour — a WEIGHT change with the colour, and
-    // each pass keeps its dash state, so neither the highlight nor the driving cue is colour-only
-    // (WCAG 1.4.1); the ring token clears the 3:1 non-text bar on the canvas ground (1.4.11).
-    // Selection is the keyboard/AT-reachable equivalent of the pointer hover (WCAG 2.1.1).
-    if (highlightIds) {
-      ctx.strokeStyle = palette.selection;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 3]);
-      drawEdges(false, true); // highlighted non-driving: heavier, still dashed
-      ctx.setLineDash([]);
-      ctx.lineWidth = 3;
-      drawEdges(true, true); // highlighted driving: heaviest, solid
-      ctx.lineWidth = 1;
+    if (refresh) {
+      paintLinkLanguage();
+    } else {
       ctx.strokeStyle = palette.edge;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      drawEdges(false); // non-driving: thin, dashed
+      ctx.setLineDash([]);
+      ctx.lineWidth = 2;
+      drawEdges(true); // driving: heavier, solid
+      ctx.lineWidth = 1;
+      // Incident-link highlight passes (ADR-0052 M5): the selected/hovered bar's ties re-draw on
+      // top, one weight step heavier in the selection colour — a WEIGHT change with the colour, and
+      // each pass keeps its dash state, so neither the highlight nor the driving cue is colour-only
+      // (WCAG 1.4.1); the ring token clears the 3:1 non-text bar on the canvas ground (1.4.11).
+      // Selection is the keyboard/AT-reachable equivalent of the pointer hover (WCAG 2.1.1).
+      if (highlightIds) {
+        ctx.strokeStyle = palette.selection;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        drawEdges(false, true); // highlighted non-driving: heavier, still dashed
+        ctx.setLineDash([]);
+        ctx.lineWidth = 3;
+        drawEdges(true, true); // highlighted driving: heaviest, solid
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = palette.edge;
+      }
     }
 
     /*

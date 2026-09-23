@@ -6,6 +6,7 @@ import {
   ensurePen,
   onboard,
   openProject,
+  placeRelativeTo,
   recalculate,
   seedActivities,
   seedDependency,
@@ -68,6 +69,12 @@ test('a link forced into the gutter is painted there, clear of the bar borders',
   const to = made.find((a) => a.name === 'Pour');
   if (!from || !to) throw new Error('the fixture did not seed the two activities it links');
   await seedDependency(page, orgSlug, from.id, to.id);
+  // **Placed so the link waits, which keeps it non-driving** (NetPoint-layout M2). A driving link
+  // now draws in its rung's ink, which is `--primary` and saturated, and `canvasInk` reads
+  // saturated pixels as BAR: a driving gutter leg would read as a bar band and this test would
+  // measure the wrong thing. A non-driving link is the 1 px `--canvas-link-minor` grey the
+  // classifier reads as link; its waiting run is dashed, which `linkRun` bridges.
+  await placeRelativeTo(page, orgSlug, 'Pour', 'Mobilise', 10);
   await recalculate(page, orgSlug);
   await ensurePen(page);
 

@@ -32,7 +32,8 @@ describe('TsldLegendPanel', () => {
     expect(screen.queryByText('Level of effort')).not.toBeInTheDocument();
     expect(screen.queryByText('WBS summary')).not.toBeInTheDocument();
     expect(screen.queryByText('Progress')).not.toBeInTheDocument();
-    expect(screen.queryByText('Lag (waiting time)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lag run (on the bar)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Waiting time')).not.toBeInTheDocument();
   });
 
   /**
