@@ -1,5 +1,14 @@
 # @repo/web
 
+## 0.145.0
+
+### Minor Changes
+
+- [#669](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/669) [`e091344`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e0913442035f86bfcc7254d513fd08655ecd5523) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Links on the diagram now say more at a glance. A driving link is drawn bolder in its criticality
+  colour, and a non-driving link is a thin solid line. Only the part of a link that is waiting time is
+  dashed. Small chevrons along each link show which way it runs, and a lag is labelled on the line.
+  The legend keys each of these.
+
 ## 0.144.0
 
 ### Minor Changes
