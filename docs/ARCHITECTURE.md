@@ -307,12 +307,15 @@ are listed here so nobody reads an ADR and assumes the capability exists:
 > been false since 2026-08-10.** ADR-0087 gave this application its first
 > scheduled work of any kind — `common/operational/retention-sweep.service.ts`,
 > an hourly `setInterval` that deletes expired `csp_reports`, `mail_events` and
-> `perf_probe_results` rows — beside `heartbeat.service.ts`'s own timer. ADR-0087 D2 **narrows**
+> `perf_probe_results` rows — beside `heartbeat.service.ts`'s own timer, and since
+> ADR-0096 a third, `common/hierarchy/hierarchy-expiry.service.ts` (off unless
+> `RETENTION_HIERARCHY_ENABLED`; this note named only two until the 2026-09-23
+> pass, while `BACKEND_ARCHITECTURE.md` named all three). ADR-0087 D2 **narrows**
 > ADR-0009 rather than superseding it, and names the trigger to reopen it
 > (durability across a restart, retries, exactly-once, fan-out,
 > enqueue-from-a-request, visible progress). So the accurate claim is the
 > narrow one: there is no **queue** and no Redis, and the background work that
-> does exist is a single unreffed timer per replica with no durability and no
+> does exist is one unreffed timer per job, per replica, with no durability and no
 > retry. The wrong reading is the expensive one in both directions — it invites
 > either "we have no scheduler, build one" or "we have a scheduler, put this
 > job on it".

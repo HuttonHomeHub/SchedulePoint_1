@@ -59,10 +59,12 @@ not edit code.
   same hole this pass found in `ARCHITECTURE.md` §10): ADR-0087 shipped
   `common/operational/retention-sweep.service.ts` — one `setInterval`,
   `.unref()`'d, no Redis, no dependency — which **narrows** ADR-0009 rather
-  than superseding it. It suits work that is idempotent and time-predicated,
-  because a second run finds nothing and a restart is repaired by the next
-  tick. It has **no durability, no retry and runs per replica**, so ADR-0009
-  D2 names the trigger to reopen the queue question: durability across a
+  than superseding it, and ADR-0096 added a second of the same shape,
+  `common/hierarchy/hierarchy-expiry.service.ts` (this bullet named only the
+  first until the 2026-09-23 pass). They suit work that is idempotent and
+  time-predicated, because a second run finds nothing and a restart is repaired
+  by the next tick. They have **no durability, no retry and run per replica**,
+  so ADR-0087 D2 (this said "ADR-0009 D2", which has no D2) names the trigger to reopen the queue question: durability across a
   restart, retries, exactly-once, fan-out, enqueue-from-a-request, or visible
   progress. Review a new periodic task against that list.
 - **Scalability:** stateless handlers; bounded connection use; backpressure
