@@ -11723,3 +11723,20 @@ does the same (First Fire, Turbine Roll, DEL STG). The same rule is also why a p
 milestone has to be placed on the next day to avoid a false visual conflict
 (`apps/seed-cli/src/references/netpoint-power-plant.ts`, `milestone`). Changing it is a
 convention change to a decided ADR, so it is a product decision, not a fix.
+
+### 382. Re-layout from scratch cannot find the layout a skilled planner drew
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint reference plan) ·
+**Size:** L · **Owner:** web
+
+`plan:reference-netpoint-power-plant` carries NetPoint's hand layout: 14 lanes, 1 link behind a
+bar, 3 crossings (the Arrange dialog's own scores). **Tidy** improves it to 0 hidden and 1 crossing
+on the same 14 lanes. **Re-layout** starts from `packLanes` and reaches 11 lanes, 3 hidden and
+**14 crossings**, and it splits the critical path across separate rows. The search never adds a
+lane, so it is bound by the packer's time-compact start. The product owner's rule (ADR-0149) puts
+readability ahead of rows, and the objective already orders rows last (ADR-0152), but a
+search that cannot add rows cannot spend them.
+
+The target is written down so it can be checked: on this plan, Re-layout from scratch should score
+no worse than the hand layout (1 hidden, 3 crossings). This is an optimiser change, and it needs its
+own measurement before it ships: search cost at 300 drawn activities (ADR-0152's offer limit).
