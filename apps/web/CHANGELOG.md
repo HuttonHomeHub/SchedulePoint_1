@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.142.1
+
+### Patch Changes
+
+- [#663](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/663) [`1f8e0f8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1f8e0f8f7275f5982ac1f399fff338954c1ab045) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Arrange no longer draws a hand-placed activity on top of its predecessor. Arrange, the keyboard
+  nudges, the plural drag, bulk move and the finish-edge resize all worked from an activity's early
+  dates while the diagram draws it where it was placed, so a placed bar could be packed into the same
+  row as the bar it overlaps, `Alt+→` could move a placement by several days rather than one, and a
+  resize could write a duration different from the one dragged. The spoken link slack in the logic
+  summary disagreed with the gap drawn on the canvas for the same reason. They now all work from where
+  the bar is drawn.
+
 ## 0.142.0
 
 ### Minor Changes
