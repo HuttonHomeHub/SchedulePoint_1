@@ -14,8 +14,12 @@ vi.mock('../../../config/env', async (importOriginal) => {
 // Capture live-region announcements so we can assert on (or the absence of) status messages.
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
+// jsdom has no Worker: the Arrange search runs in-process through the same optimiseLayout.
+vi.mock(
+  '../render/run-optimise-layout',
+  () => import('../render/test-support/in-process-optimise'),
+);
 
-import { UNDO_REDO_ENABLED } from '../../../config/env';
 import { BAR_HEIGHT, BAR_PAD, DEFAULT_VIEWPORT, LANE_HEIGHT } from '../render/render-model';
 
 import { TsldPanel } from './TsldPanel';
@@ -738,7 +742,7 @@ describe('TsldPanel editing (M2, flag on)', () => {
     activity({ id: 'a2', name: 'Pour', earlyStart: '2026-01-02', earlyFinish: '2026-01-04' }),
   ];
 
-  it('auto-arranges lanes: toolbar → confirm dialog → onAutoArrange with the minimal packed changes', async () => {
+  it('arranges from the toolbar: the dialog works out Tidy, and the confirm writes its moves', async () => {
     const onAutoArrange = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     render(
       <TsldPanel
@@ -751,24 +755,15 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
-    // A confirm dialog guards the bulk reorder. The "can’t be undone yet" caveat is shown only with
-    // undo/redo OFF (this file mocks the flag off); with it on, auto-arrange records a reversible
-    // command (ADR-0048 M2.3), so the caveat is dropped (B6).
-    const dialog = await screen.findByRole('alertdialog');
-    if (UNDO_REDO_ENABLED) {
-      expect(dialog).not.toHaveTextContent('can’t be undone');
-    } else {
-      expect(dialog).toHaveTextContent('can’t be undone');
-    }
-    fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange' }));
-    // Only the overlapping second bar moves — the minimal diff.
+    // Only the overlapping second bar moves: the repair lifts the later one to the next free row.
+    fireEvent.click(await screen.findByRole('button', { name: 'Tidy: move 1 activity' }));
     await waitFor(() => expect(onAutoArrange).toHaveBeenCalledWith([{ id: 'a2', laneIndex: 1 }]));
     await waitFor(() =>
-      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('auto-arranged')),
+      expect(announceSpy).toHaveBeenCalledWith('Tidied the diagram; 1 activity moved.'),
     );
   });
 
-  it('on an all-or-nothing 409 shows the auto-arrange conflict banner', async () => {
+  it('on an all-or-nothing 409 shows the arrange conflict banner and announces no success', async () => {
     const onAutoArrange = vi.fn().mockResolvedValue({
       applied: false,
       conflict:
@@ -785,12 +780,18 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Auto-arrange' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Tidy: move 1 activity' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('auto-arrange wasn’t applied');
-    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('auto-arranged'));
+    expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Tidied'));
   });
 
-  it('when lanes are already packed, the toolbar action says so immediately (no dialog, no batch call)', async () => {
+  it('on an already-arranged plan, the dialog says so and writes nothing', async () => {
+    /**
+     * This used to announce "already arranged" without opening a dialog, because the pack was
+     * instant. Tidy is a search that takes seconds in a worker and can improve a diagram the pack
+     * would leave alone, so only the search can say there is nothing to do: the dialog opens while
+     * it works, then says so once (NetPoint-layout M5, recorded in the M5 record).
+     */
     const onAutoArrange = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     render(
       <TsldPanel
@@ -803,11 +804,10 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Auto-arrange lanes' }));
-    // Nothing to pack → announce immediately, never open the confirm dialog or call the batch.
-    await waitFor(() =>
-      expect(announceSpy).toHaveBeenCalledWith(expect.stringContaining('already arranged')),
-    );
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('Already arranged: neither option would move anything.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Tidy' }));
     expect(onAutoArrange).not.toHaveBeenCalled();
   });
 });
