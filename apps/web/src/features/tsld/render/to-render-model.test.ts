@@ -170,11 +170,14 @@ describe('toRenderActivities', () => {
     expect(clear.map((r) => r.laneOverlap)).toEqual([false, false]);
   });
 
-  it('pre-builds the on-canvas label (code + name + duration) at the seam', () => {
-    expect(
-      toRenderActivities([activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 })])[0]!
-        .label,
-    ).toBe('A1020 Erect steel · 5d');
+  it('pre-builds the name row (code + name, no duration) and carries the duration beside it', () => {
+    // The duration left the name at NetPoint-layout M1 for the centre item under the bar; it is
+    // carried as the working-day figure, never re-derived from the drawn span.
+    const [row] = toRenderActivities([
+      activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 }),
+    ]);
+    expect(row!.label).toBe('A1020 Erect steel');
+    expect(row!.durationDays).toBe(5);
   });
 
   it('threads percentComplete through — the in-bar progress fill (ADR-0052 M4) reads the same value the row reports', () => {

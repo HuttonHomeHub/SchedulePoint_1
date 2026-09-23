@@ -1,3 +1,4 @@
+import { centreItemText } from './a11y';
 import { activityIndexFor } from './activity-index';
 import { axisMarkers } from './axis-markers';
 import type { Ctx2D } from './ctx-2d';
@@ -2033,8 +2034,16 @@ export function paintScene(
           // provable rather than likely — bar i may reach `(gap - LABEL_GAP_PX) / 2` right and bar
           // i+1 the same distance left, so the two are always `LABEL_GAP_PX` apart. Claiming the
           // WHOLE gap on each side, which is what the old right-only rule did, lets both do it.
+          //
+          // **And the half is NOT clamped at zero** (NetPoint-layout M1, FC-N6a). A milestone's
+          // diamond is a fixed glyph that is wider than a day at coarse zoom, so its rect can
+          // overlap its neighbour's even though their spans do not. Clamping each side's room at 0
+          // then left both names their whole rect width, and M0-T5 counted 9 collisions on Unit 300
+          // at 4 px/day, every one beside a milestone. A negative room shrinks the budget instead,
+          // so the boundary is the midpoint of the overlap and the non-collision argument above
+          // holds for overlapping rects too; a budget with no room left prints nothing.
           const halfGap = (raw: number): number =>
-            raw === Infinity ? size.width : Math.max(0, (raw - LABEL_GAP_PX) / 2);
+            raw === Infinity ? size.width : (raw - LABEL_GAP_PX) / 2;
           const rightRoom = halfGap(nextLeftX - (rect.x + rect.w));
           // **The left bound exists only where a previous name does.** With no neighbour behind
           // it, a first-in-row name keeps today's free centring — it overhangs into empty lane,
@@ -2045,7 +2054,9 @@ export function paintScene(
           const leftRoom = hasPrev
             ? halfGap(rect.x - (row[i - 1]!.rect.x + row[i - 1]!.rect.w))
             : 0;
-          const text = truncateToWidth(activity.label, rect.w + leftRoom + rightRoom, measure);
+          const budget = rect.w + leftRoom + rightRoom;
+          if (budget <= 0) continue;
+          const text = truncateToWidth(activity.label, budget, measure);
           if (!text || text === LABEL_ELLIPSIS) continue;
           // Centred on its bar where the room allows, then slid back inside whichever neighbour's
           // half it would otherwise cross. A milestone's 14 px box with a generous gap on one side
@@ -2084,6 +2095,18 @@ export function paintScene(
       }
     }
   }
+
+  /**
+   * Whether a bar's two dates fit inside its own ends (the dates ladder's first rung). One function
+   * because two passes ask it — the dates themselves and the centre item that shares their row —
+   * and two copies of the test would let the centre item believe the dates were outside the bar on
+   * exactly the bar where they were drawn inside it, and print over them.
+   */
+  const datesFitInside = (
+    startWidthPx: number,
+    finishWidthPx: number,
+    barWidthPx: number,
+  ): boolean => startWidthPx + finishWidthPx + LABEL_GAP_PX <= barWidthPx;
 
   // Layer 3.7: flanking start/finish DATES (ADR-0054 §3) — the start date left of the bar, the
   // finish date right of it, never inside (an inside date competes with the name label for the
@@ -2125,15 +2148,11 @@ export function paintScene(
         // with its own TWIN instead — see the fit test below, and read it before believing the
         // first draft of this sentence, which promised "both its dates at every density".
         //
-        // **The reference's third run — the duration — is deliberately NOT drawn here, and
-        // building it is what established why.** It is already on screen: `activityBarLabel`
-        // (`a11y.ts:58`) composes `{code} {name} · {n}d` into the name row above. Printing it again
-        // would be one fact drawn twice, which is the defect ADR-0093 records removing and which
-        // this epic's own feasible window exists to avoid. And it could not be honestly re-derived
-        // here even if it were absent: `durationDays` is a **working-day** figure that `a11y.ts`
-        // records as "not derivable from the spoken calendar dates", while the only duration this
-        // layer can reach is the drawn calendar span — a different number on any non-24-hour
-        // calendar, printed under a bar as if it were the same one.
+        // **The reference's third run — the duration — is drawn by the next layer, not this one**
+        // (NetPoint-layout M1). It used to be withheld here because it was already on screen in
+        // the name row (`{identity} · 5d`); M1 moved it out of the name so that it could live here,
+        // under its bar, beside the float left. It is the activity's `durationDays`, a working-day
+        // figure, never the drawn calendar span, which differs on any calendar with non-working days.
         if (reservesTextRows) {
           // **Both dates or neither, and only when the pair fits inside the bar's own width.**
           // The M6 UX review reproduced the defect against the real painter: this branch measured
@@ -2154,7 +2173,19 @@ export function paintScene(
           // blunt.
           const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
           ctx.fillStyle = palette.labelBeside;
-          if (startWidthPx + finishWidthPx + LABEL_GAP_PX <= rect.w) {
+          if (isMilestone(activity.type)) {
+            // **One date, centred under the diamond** (NetPoint-layout M1). A milestone's start and
+            // finish are the same day, so the ladder below printed that day twice, once either side
+            // of a 12 px glyph. It is judged against HALF of each neighbour gap plus half the
+            // glyph, the same sharing rule the flanking rung uses.
+            const halfText = startWidthPx / 2;
+            const roomLeft = Math.max(0, (rect.x - prevRight) / 2) + rect.w / 2;
+            const roomRight = Math.max(0, (nextLeft - (rect.x + rect.w)) / 2) + rect.w / 2;
+            if (halfText <= roomLeft && halfText <= roomRight) {
+              ctx.textAlign = 'center';
+              ctx.fillText(startText, rect.x + rect.w / 2, below);
+            }
+          } else if (datesFitInside(startWidthPx, finishWidthPx, rect.w)) {
             // **Inside its own ends**, which is the reference's placement and reaches nothing.
             ctx.textAlign = 'left';
             ctx.fillText(startText, rect.x, below);
@@ -2206,6 +2237,66 @@ export function paintScene(
       }
     }
     ctx.textAlign = 'left';
+  }
+
+  // Layer 3.8: the CENTRE ITEM under each bar (NetPoint-layout M1, spec §4.6) — `5d · 3d float
+  // left`, or `5d` where only that fits, or nothing. It rides `Labels` and its LOD, because it
+  // replaces the `· 5d` suffix `Labels` always governed. **It never leaves its own bar**: inside the
+  // gap between the two dates when the dates are drawn inside the bar, inside the whole bar
+  // otherwise. Bars in one row never overlap, so it cannot collide with a neighbour by construction
+  // — the same provability the halved-gap rule gives the dates. Absent `durationDays` (a scene built
+  // before the field existed) ⇒ not one call.
+  if (reservesTextRows && (toggles.labels ?? true) && view.pxPerDay >= LABEL_MIN_PX_PER_DAY) {
+    // **Every context write is lazy**, so a frame with nothing to print here costs nothing: the
+    // first draft set the font, baseline and alignment up front and the golden log caught three
+    // writes on a scene whose bars carry no duration — a per-frame cost for an empty layer.
+    let fontSet = false;
+    const measure = (t: string): number => {
+      if (!fontSet) {
+        ctx.font = LABEL_FONT;
+        ctx.textBaseline = 'middle';
+        fontSet = true;
+      }
+      return labelWidths.measure(t, (x) => ctx.measureText(x).width);
+    };
+    const datesDrawn = toggles.dates === true && view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY;
+    let styled = false;
+    for (const row of laneRows().values()) {
+      for (const { activity, rect } of row) {
+        if (activity.durationDays === undefined) continue;
+        if (!activity.earlyStart || !activity.earlyFinish) continue;
+        const item = {
+          durationDays: activity.durationDays,
+          remainingFloat: activity.remainingFloat,
+          milestone: isMilestone(activity.type),
+        };
+        const full = centreItemText(item, 'full');
+        if (full === null) continue;
+        let left = rect.x;
+        let right = rect.x + rect.w;
+        if (datesDrawn) {
+          const startWidthPx = measure(formatCanvasDate(activity.earlyStart));
+          const finishWidthPx = measure(formatCanvasDate(activity.earlyFinish));
+          if (datesFitInside(startWidthPx, finishWidthPx, rect.w)) {
+            left += startWidthPx + LABEL_GAP_PX;
+            right -= finishWidthPx + LABEL_GAP_PX;
+          }
+        }
+        const room = right - left;
+        const short = centreItemText(item, 'short');
+        const text =
+          measure(full) <= room ? full : short !== null && measure(short) <= room ? short : null;
+        if (text === null) continue;
+        if (!styled) {
+          ctx.fillStyle = palette.labelBeside;
+          ctx.textAlign = 'center';
+          styled = true;
+        }
+        const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
+        ctx.fillText(text, (left + right) / 2, below);
+      }
+    }
+    if (styled) ctx.textAlign = 'left';
   }
 
   // Layer 4: the selection ring on the selected activity (if visible), plus — when editing

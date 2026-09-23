@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   activityIndexFor,
+  DEFAULT_VIEW_TOGGLES,
   paintInteractionLayer,
   paintScene,
   type TsldPalette,
@@ -860,11 +861,19 @@ describe('paintInteractionLayer', () => {
 });
 
 describe('paintScene — activity labels (Layer 3.6)', () => {
+  // These cases are about the NAME row alone. Since NetPoint-layout M1 a scene with no `view` gets
+  // `Dates` on by default, whose text these `fillText` counts would otherwise include; the toggles
+  // are scoped so each case stays about the layer its name says.
+  const NAMES_ONLY = { ...DEFAULT_VIEW_TOGGLES, dates: false };
+  const paintNames = (...args: Parameters<typeof paintScene>): void => {
+    const [ctx, scene, ...rest] = args;
+    paintScene(ctx, { view: NAMES_ONLY, ...scene }, ...rest);
+  };
   const wide = () => task({ id: 'w', label: 'A1020 Erect steel · 4d' });
 
   it('draws an inside label on a wide task bar, setting the label font once', () => {
     const ctx = mockCtx();
-    paintScene(ctx, { activities: [wide()], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
+    paintNames(ctx, { activities: [wide()], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
     expect(ctx.fillText).toHaveBeenCalledTimes(1);
     // A non-empty label font (the fixed LABEL_FONT) is set before any glyph is drawn.
     expect(ctx.font).not.toBe('');
@@ -875,7 +884,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
 
   it('draws nothing when the labels toggle is off', () => {
     const ctx = mockCtx();
-    paintScene(
+    paintNames(
       ctx,
       { activities: [wide()], edges: [], dataDate: DATA_DATE, view: { ...ALL_ON, labels: false } },
       VIEW,
@@ -889,7 +898,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     const ctx = mockCtx();
     // pxPerDay 1 is below LABEL_MIN_PX_PER_DAY (4) — no labels drawn.
     const zoomedOut: Viewport = { ...VIEW, pxPerDay: 1 };
-    paintScene(
+    paintNames(
       ctx,
       { activities: [wide()], edges: [], dataDate: DATA_DATE },
       zoomedOut,
@@ -915,7 +924,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       earlyStart: '2026-01-06',
       earlyFinish: '2026-01-08',
     });
-    paintScene(
+    paintNames(
       ctx,
       { activities: [narrow, neighbour], edges: [], dataDate: DATA_DATE },
       VIEW,
@@ -937,7 +946,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
    */
   it('puts every name on one line, whatever glyph it names', () => {
     const ctx = mockCtx();
-    paintScene(
+    paintNames(
       ctx,
       {
         activities: [
@@ -959,7 +968,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
 
   it('centres the name in the row above the bar, never inside it', () => {
     const ctx = mockCtx();
-    paintScene(ctx, { activities: [wide()], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
+    paintNames(ctx, { activities: [wide()], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
     expect(ctx.fillText).toHaveBeenCalledTimes(1);
     const [, x, y] = ctx.fillText.mock.calls[0]!;
     expect(y).toBe(rowSlots(screenYOfLane(0, VIEW)).nameY);
@@ -987,7 +996,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
    */
   it('draws a milestone name ABOVE the diamond, in full when the lane is clear', () => {
     const ctx = mockCtx();
-    paintScene(
+    paintNames(
       ctx,
       { activities: [milestone()], edges: [], dataDate: DATA_DATE },
       VIEW,
@@ -1016,7 +1025,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       earlyStart: '2026-01-04',
       earlyFinish: '2026-01-04',
     });
-    paintScene(
+    paintNames(
       ctx,
       { activities: [left, right], edges: [], dataDate: DATA_DATE },
       VIEW,
@@ -1056,7 +1065,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       earlyStart: '2026-01-04',
       earlyFinish: '2026-01-04',
     });
-    paintScene(
+    paintNames(
       ctx,
       { activities: [left, right], edges: [], dataDate: DATA_DATE },
       VIEW,
@@ -1075,7 +1084,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     // truncates with an ellipsis; the right diamond (unbounded room) draws its label in full.
     const left = milestone({ id: 'l' });
     const right = milestone({ id: 'r', earlyStart: '2026-01-06', earlyFinish: '2026-01-06' });
-    paintScene(
+    paintNames(
       ctx,
       { activities: [left, right], edges: [], dataDate: DATA_DATE },
       VIEW,
@@ -1104,6 +1113,9 @@ describe('paintScene — insight lenses', () => {
   };
 
   it('is byte-for-byte identical whether the lens fields are absent or explicitly undefined (parity)', () => {
+    // Warm the module-scope `labelWidths` memo first (the golden suite's precedent): since `Dates`
+    // defaults on (NetPoint-layout M1) the first paint measures date strings the second does not.
+    paintScene(recordingCtx().ctx, lensScene, VIEW, SIZE, PALETTE);
     const a = recordingCtx();
     paintScene(a.ctx, lensScene, VIEW, SIZE, PALETTE);
     const b = recordingCtx();
@@ -1517,6 +1529,7 @@ describe('paintScene — time-true links', () => {
 
   it('is byte-for-byte today’s paint when the flag is off, absent, or explicitly undefined (parity)', () => {
     const base = recordingCtx();
+    paintScene(recordingCtx().ctx, linkScene(), VIEW, SIZE, PALETTE); // warm `labelWidths`, as above
     paintScene(base.ctx, linkScene(), VIEW, SIZE, PALETTE);
     const off = recordingCtx();
     paintScene(off.ctx, linkScene({ timeTrueLinks: false }), VIEW, SIZE, PALETTE);

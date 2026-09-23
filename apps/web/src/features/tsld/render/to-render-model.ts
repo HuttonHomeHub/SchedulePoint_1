@@ -1,6 +1,6 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 
-import { activityBarLabel } from './a11y';
+import { activityLabel } from './a11y';
 import { laneOverlapIds } from './lane-overlap';
 import type { RenderActivity, RenderEdge } from './render-model';
 
@@ -69,7 +69,8 @@ export function toRenderActivities(
     visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
     laneOverlap: overlapping.has(a.id),
     constraint: activeConstraintAnchor(a),
-    label: activityBarLabel(a),
+    label: activityLabel(a),
+    durationDays: a.durationDays,
     // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,
     // so the canvas and the table can never disagree on how complete an activity is.
     percentComplete: a.percentComplete,

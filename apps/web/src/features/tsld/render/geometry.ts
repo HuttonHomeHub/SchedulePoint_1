@@ -542,10 +542,19 @@ export interface RenderActivity {
   id: string;
   type: ActivityType;
   laneIndex: number;
-  /** The on-canvas bar label (`{code} {name} · {n}d`), pre-built at the mapping seam from the
-   * shared `activityBarLabel` so the render model does no domain string logic and the visible
-   * label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). */
+  /** The on-canvas name row: the activity's identity (`{code} {name}`), pre-built at the mapping
+   * seam from the shared `activityLabel` so the render model does no domain string logic and the
+   * visible label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). The
+   * duration left it at NetPoint-layout M1 for the row below the bar ({@link durationDays}). */
   label: string;
+  /**
+   * The working-day duration the centre item prints under the bar (NetPoint-layout M1). Carried
+   * rather than re-derived because it is **not** the drawn span: a working-day figure differs from
+   * the calendar days between the two dates on any calendar with non-working days, which is why
+   * `a11y.ts` records it as not derivable from the spoken dates. Absent on scenes built before the
+   * field existed; the centre item then draws nothing.
+   */
+  durationDays?: number;
   /**
    * The inclusive dates (`YYYY-MM-DD`) the bar is **drawn** at, or null until the plan is
    * recalculated. Sourced per the active view at the mapping seam (ADR-0033): EARLY → the CPM

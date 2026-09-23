@@ -376,6 +376,11 @@ export function sceneFor(
     label: a.key,
     earlyStart: iso(asap.start.get(a.key) ?? 0),
     earlyFinish: iso(asap.finish.get(a.key) ?? 0),
+    // The span in days, standing in for the working-day duration so the centre item (NetPoint
+    // M1) is drawn and counted by FC-N6a; the harness has no calendar to give the real figure.
+    durationDays: a.type.endsWith('MILESTONE')
+      ? 0
+      : (asap.finish.get(a.key) ?? 0) - (asap.start.get(a.key) ?? 0) + 1,
     isCritical: false,
     isNearCritical: false,
   }));
