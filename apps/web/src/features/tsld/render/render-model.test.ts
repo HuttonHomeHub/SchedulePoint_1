@@ -8,7 +8,6 @@ import {
   classifyActivityIndexFor,
   classifyHit,
   clampPxPerDay,
-  computeEdgeFanOut,
   cull,
   edgeTouches,
   elbowRadius,
@@ -18,18 +17,20 @@ import {
   lagFromAnchorDay,
   lagRunSegment,
   linkHighlightIds,
+  offsetEdgesFor,
   loeBracketRects,
   makeWorkingDayWalk,
-  offsetEdgesFor,
   progressGeometry,
   routeOrthogonal,
   summaryTabRects,
   truncateToWidth,
+  BAR_HEIGHT,
+  BAR_PAD,
   ELAPSED_DAY_WALK,
-  FAN_OUT_MAX_PX,
-  FAN_OUT_STEP_PX,
   LAG_ANCHOR_PX,
+  LAG_ANCHOR_VERTICAL_PX,
   LABEL_INSIDE_MIN_PX,
+  LABEL_INSIDE_MIN_HEIGHT_PX,
   LABEL_BESIDE_MIN_PX,
   dayAtScreenX,
   dayCellRect,
@@ -51,6 +52,7 @@ import {
   GLYPH_CAP_OVERHANG,
   GLYPH_CAP_W,
   PROGRESS_BAND_H,
+  PROGRESS_FRONT_PROUD_PX,
   PROGRESS_INSET_PX,
   PROGRESS_MIN_BAR_PX,
   SUMMARY_TAB_H,
@@ -70,6 +72,15 @@ import {
 
 const DATA_DATE = '2026-01-01';
 const VIEW: Viewport = { pxPerDay: 10, originX: 100, originY: 50 };
+
+/**
+ * The centre-line of a lane's bar under {@link VIEW} — what a pointer aims at.
+ *
+ * Derived rather than written. These probes were literal y values chosen when a bar was 18 px tall
+ * and sat 5 px inside its lane; the row treatment moves both numbers, and a suite that states a
+ * coordinate asserts where the bar WAS rather than that a press on it lands.
+ */
+const barMidY = (lane = 0): number => screenYOfLane(lane, VIEW) + BAR_PAD + BAR_HEIGHT / 2;
 
 function activity(overrides: Partial<RenderActivity> = {}): RenderActivity {
   return {
@@ -511,25 +522,25 @@ describe('classifyHit', () => {
   // Default activity: day 0..4 at lane 0 → rect { x:100, y:55, w:50, h:18 } under VIEW.
   it('routes the bar body, end grab-zones, and empty space (topmost first)', () => {
     const acts = [activity()];
-    expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE)).toEqual({
+    expect(classifyHit(acts, { x: 104, y: barMidY() }, VIEW, DATA_DATE)).toEqual({
       kind: 'startHandle',
       id: 'a1',
     });
-    expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE)).toEqual({
+    expect(classifyHit(acts, { x: 146, y: barMidY() }, VIEW, DATA_DATE)).toEqual({
       kind: 'finishHandle',
       id: 'a1',
     });
-    expect(classifyHit(acts, { x: 120, y: 60 }, VIEW, DATA_DATE)).toEqual({
+    expect(classifyHit(acts, { x: 120, y: barMidY() }, VIEW, DATA_DATE)).toEqual({
       kind: 'body',
       id: 'a1',
     });
-    expect(classifyHit(acts, { x: 250, y: 60 }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
+    expect(classifyHit(acts, { x: 250, y: barMidY() }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
     expect(classifyHit(acts, { x: 120, y: 200 }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
   });
 
   it('ignores activities without computed dates', () => {
     const acts = [activity({ earlyStart: null, earlyFinish: null })];
-    expect(classifyHit(acts, { x: 120, y: 60 }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
+    expect(classifyHit(acts, { x: 120, y: barMidY() }, VIEW, DATA_DATE)).toEqual({ kind: 'empty' });
   });
 });
 
@@ -538,20 +549,20 @@ describe('classifyHit — resize handles (ADR-0052 M2)', () => {
 
   it('classifies the end zones as resizeStart / resizeFinish, body between them', () => {
     const acts = [activity()];
-    expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+    expect(classifyHit(acts, { x: 104, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
       kind: 'resizeStart',
       id: 'a1',
     });
-    expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+    expect(classifyHit(acts, { x: 146, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
       kind: 'resizeFinish',
       id: 'a1',
     });
     // Zones keep their priority over the body, and empty space is untouched.
-    expect(classifyHit(acts, { x: 120, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+    expect(classifyHit(acts, { x: 120, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
       kind: 'body',
       id: 'a1',
     });
-    expect(classifyHit(acts, { x: 250, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+    expect(classifyHit(acts, { x: 250, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
       kind: 'empty',
     });
   });
@@ -561,11 +572,11 @@ describe('classifyHit — resize handles (ADR-0052 M2)', () => {
     // (`isResizeEligibleType`), so a bar-end press falls through to reposition/select.
     for (const type of ['LEVEL_OF_EFFORT', 'WBS_SUMMARY'] as const) {
       const acts = [activity({ type })];
-      expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      expect(classifyHit(acts, { x: 104, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
         kind: 'body',
         id: 'a1',
       });
-      expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE, RESIZE)).toEqual({
+      expect(classifyHit(acts, { x: 146, y: barMidY() }, VIEW, DATA_DATE, RESIZE)).toEqual({
         kind: 'body',
         id: 'a1',
       });
@@ -580,11 +591,11 @@ describe('classifyHit — resize handles (ADR-0052 M2)', () => {
 
   it('flag-off parity: without the option the zones keep their link-draw kinds', () => {
     const acts = [activity()];
-    expect(classifyHit(acts, { x: 104, y: 60 }, VIEW, DATA_DATE)).toEqual({
+    expect(classifyHit(acts, { x: 104, y: barMidY() }, VIEW, DATA_DATE)).toEqual({
       kind: 'startHandle',
       id: 'a1',
     });
-    expect(classifyHit(acts, { x: 146, y: 60 }, VIEW, DATA_DATE)).toEqual({
+    expect(classifyHit(acts, { x: 146, y: barMidY() }, VIEW, DATA_DATE)).toEqual({
       kind: 'finishHandle',
       id: 'a1',
     });
@@ -680,7 +691,7 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
     ...overrides,
   });
   const options = (edges: RenderEdge[]) => ({ lagAnchors: { edges, walk } });
-  const ANCHOR = { x: 140, y: 120 };
+  const ANCHOR = { x: 140, y: barMidY(2) };
 
   it('classifies a point near an offset anchor as lagAnchor, carrying the dependency id', () => {
     expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE, options([edge()]))).toEqual({
@@ -694,7 +705,9 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
     // The anchor sits ON the successor bar — without the zones that point is plain body.
     expect(classifyHit(acts, ANCHOR, VIEW, DATA_DATE)).toEqual({ kind: 'body', id: 's' });
     // Away from the anchor (outside LAG_ANCHOR_PX) the bar body still wins.
-    expect(classifyHit(acts, { x: 170, y: 120 }, VIEW, DATA_DATE, options([edge()]))).toEqual({
+    expect(
+      classifyHit(acts, { x: 170, y: barMidY(2) }, VIEW, DATA_DATE, options([edge()])),
+    ).toEqual({
       kind: 'body',
       id: 's',
     });
@@ -705,7 +718,7 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
     // both vocabularies on, the resize handle keeps the edge (the dialog sets a first lag).
     const zeroLag = [edge({ lagDays: 0 })];
     expect(
-      classifyHit(acts, { x: 104, y: 120 }, VIEW, DATA_DATE, {
+      classifyHit(acts, { x: 104, y: barMidY(2) }, VIEW, DATA_DATE, {
         resizeHandles: true,
         ...options(zeroLag),
       }),
@@ -766,11 +779,13 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
     // FS+3 elapsed from finish day 2 → day 3+3 = 6 (a non-working day the working walk would
     // skip) → x=160.
     const elapsed = [edge({ lagDays: 3, lagCalendar: 'TWENTY_FOUR_HOUR' })];
-    expect(classifyHit(acts, { x: 160, y: 120 }, VIEW, DATA_DATE, options(elapsed))).toEqual({
-      kind: 'lagAnchor',
-      id: 's',
-      dependencyId: 'd1',
-    });
+    expect(classifyHit(acts, { x: 160, y: barMidY(2) }, VIEW, DATA_DATE, options(elapsed))).toEqual(
+      {
+        kind: 'lagAnchor',
+        id: 's',
+        dependencyId: 'd1',
+      },
+    );
   });
 
   it('accepts a press up to LAG_ANCHOR_PX either side — a 24px target (WCAG 2.5.8)', () => {
@@ -791,16 +806,32 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
     expect(LAG_ANCHOR_PX * 2).toBeGreaterThanOrEqual(24);
   });
 
-  it('keeps the y tolerance to the bar the anchor sits on (covers the M5 fan-out spread)', () => {
+  /**
+   * **The lag anchor's vertical tolerance is symmetric with its horizontal one** (M3-T3).
+   *
+   * It was `BAR_HEIGHT / 2`, justified as "the bar the anchor sits on" and as covering fan-out's
+   * spread. Both halves expired at once: fan-out is retired, and a 5 px bar makes the half-height
+   * 2.5 — so a zone whose own docblock says it _"meets WCAG 2.5.8 outright"_ would have shipped at
+   * 24 x 5. The assertion is that the target is square, which is what that claim requires.
+   */
+  it('keeps the lag-anchor target square, so 24 x 24 holds at any bar height', () => {
     const zones = options([edge()]);
-    // Half a bar above/below the anchor still grabs it; beyond the bar it is empty canvas.
-    expect(classifyHit(acts, { x: ANCHOR.x, y: ANCHOR.y - 9 }, VIEW, DATA_DATE, zones).kind).toBe(
-      'lagAnchor',
-    );
-    expect(FAN_OUT_MAX_PX).toBeLessThanOrEqual(9);
-    expect(classifyHit(acts, { x: ANCHOR.x, y: ANCHOR.y - 12 }, VIEW, DATA_DATE, zones).kind).toBe(
-      'empty',
-    );
+    expect(LAG_ANCHOR_VERTICAL_PX).toBe(LAG_ANCHOR_PX);
+    expect(LAG_ANCHOR_VERTICAL_PX * 2).toBeGreaterThanOrEqual(24);
+    for (const dy of [-LAG_ANCHOR_VERTICAL_PX, 0, LAG_ANCHOR_VERTICAL_PX]) {
+      expect(
+        classifyHit(acts, { x: ANCHOR.x, y: ANCHOR.y + dy }, VIEW, DATA_DATE, zones).kind,
+      ).toBe('lagAnchor');
+    }
+    expect(
+      classifyHit(
+        acts,
+        { x: ANCHOR.x, y: ANCHOR.y - LAG_ANCHOR_VERTICAL_PX - 1 },
+        VIEW,
+        DATA_DATE,
+        zones,
+      ).kind,
+    ).not.toBe('lagAnchor');
   });
 
   it('flag-off parity: without the option no lagAnchor kind ever appears', () => {
@@ -811,7 +842,12 @@ describe('classifyHit — lag-anchor zones (ADR-0052 M3)', () => {
 
 describe('dayCellRect / dayColumnAt / laneRowAt (ghost + snap geometry)', () => {
   it('dayCellRect spans [leftDay, rightDay] inclusive with a +1-day right edge', () => {
-    expect(dayCellRect(2, 4, 1, VIEW)).toEqual({ x: 120, y: 83, w: 30, h: 18 });
+    expect(dayCellRect(2, 4, 1, VIEW)).toEqual({
+      x: 120,
+      y: screenYOfLane(1, VIEW) + BAR_PAD,
+      w: 30,
+      h: BAR_HEIGHT,
+    });
   });
 
   it('dayColumnAt floors to the whole day column', () => {
@@ -820,8 +856,9 @@ describe('dayCellRect / dayColumnAt / laneRowAt (ghost + snap geometry)', () => 
   });
 
   it('laneRowAt floors to the lane and clamps at zero', () => {
-    expect(laneRowAt(90, VIEW)).toBe(1);
-    expect(laneRowAt(40, VIEW)).toBe(0); // above lane 0 clamps to 0
+    expect(laneRowAt(screenYOfLane(1, VIEW) + 1, VIEW)).toBe(1);
+    expect(laneRowAt(screenYOfLane(2, VIEW) - 1, VIEW)).toBe(1);
+    expect(laneRowAt(screenYOfLane(0, VIEW) - 10, VIEW)).toBe(0); // above lane 0 clamps to 0
   });
 });
 
@@ -840,8 +877,8 @@ describe('centerOnWorld', () => {
     const v = centerOnWorld(VIEW_, SIZE, 100, 10);
     // day 100 lands at x = 500 (the centre): originX + 100*10 = 500.
     expect(v.originX).toBe(500 - 1000);
-    // lane 10's row centre lands at y = 280: originY + 10.5*28 = 280.
-    expect(v.originY).toBe(280 - 10.5 * 28);
+    // Lane 10's row centre lands at the surface's vertical centre.
+    expect(v.originY).toBe(280 - 10.5 * LANE_HEIGHT);
     expect(v.pxPerDay).toBe(10); // scale untouched — a pan, never a zoom
   });
 
@@ -940,28 +977,87 @@ describe('fitToContent', () => {
 describe('labelPlacement', () => {
   it('places inside a wide-enough task bar', () => {
     expect(
-      labelPlacement({ barWidth: LABEL_INSIDE_MIN_PX, isMilestone: false, besideRoomPx: 0 }),
+      labelPlacement({
+        barWidth: LABEL_INSIDE_MIN_PX,
+        // Tall enough to hold the line. It used to say `BAR_HEIGHT` and mean the same thing; at
+        // the row treatment's 5 px bar that names a configuration in which no inside label is
+        // possible, so the case would have been asserting the wrong branch's answer.
+        barHeight: LABEL_INSIDE_MIN_HEIGHT_PX,
+        isMilestone: false,
+        besideRoomPx: 0,
+        rowHasNameRow: false,
+      }),
     ).toBe('inside');
+  });
+
+  /**
+   * The height term (logic-legibility M3-T2), and **the only place the `inside` branch is
+   * reachable at all** since M3-T3.
+   *
+   * The painter always passes `rowHasNameRow: true` at the shipped pitch, so a painter test cannot
+   * exercise `inside` without mutating a module constant — its case there was deleted rather than
+   * skipped. The branch is not dead: `rowReservesTextRows()` is false at a pitch too small for the
+   * row treatment, which M3-T4's sweep visits, and this is where the rule is stated. `LABEL_INSIDE_MIN_PX` gates **width** and nothing
+   * gated height, so a bar wide enough took an inside label whatever its height — correct at
+   * `BAR_HEIGHT = 18` and, at a NetPoint-thin bar, an 11 px line painted outside a 5 px bar.
+   *
+   * `barHeight` is a **required** parameter rather than a module-level comparison so a milestone
+   * that thins the bar cannot leave this unconsidered (the ADR-0070 rule for `hoursPerDay`).
+   */
+  it('refuses an inside label on a bar too short to hold the line, however wide', () => {
+    expect(
+      labelPlacement({
+        barWidth: LABEL_INSIDE_MIN_PX * 10,
+        barHeight: LABEL_INSIDE_MIN_HEIGHT_PX - 1,
+        isMilestone: false,
+        besideRoomPx: LABEL_BESIDE_MIN_PX,
+        rowHasNameRow: false,
+      }),
+    ).toBe('beside');
+    // …and with no neighbourly room either, suppressed rather than drawn outside the bar.
+    expect(
+      labelPlacement({
+        barWidth: LABEL_INSIDE_MIN_PX * 10,
+        barHeight: LABEL_INSIDE_MIN_HEIGHT_PX - 1,
+        isMilestone: false,
+        besideRoomPx: 0,
+        rowHasNameRow: false,
+      }),
+    ).toBe('none');
   });
 
   it('falls back to beside when the bar is too narrow but the neighbour leaves room', () => {
     expect(
       labelPlacement({
         barWidth: LABEL_INSIDE_MIN_PX - 1,
+        barHeight: BAR_HEIGHT,
         isMilestone: false,
         besideRoomPx: LABEL_BESIDE_MIN_PX,
+        rowHasNameRow: false,
       }),
     ).toBe('beside');
   });
 
   it('never places a label inside a milestone (no width) — beside when there is room, else none', () => {
-    expect(labelPlacement({ barWidth: 14, isMilestone: true, besideRoomPx: 100 })).toBe('beside');
-    expect(labelPlacement({ barWidth: 14, isMilestone: true, besideRoomPx: 4 })).toBe('none');
+    const milestone = {
+      barWidth: 14,
+      barHeight: BAR_HEIGHT,
+      isMilestone: true,
+      rowHasNameRow: false,
+    };
+    expect(labelPlacement({ ...milestone, besideRoomPx: 100 })).toBe('beside');
+    expect(labelPlacement({ ...milestone, besideRoomPx: 4 })).toBe('none');
   });
 
   it('suppresses when the bar is narrow and the neighbour is too close', () => {
     expect(
-      labelPlacement({ barWidth: 10, isMilestone: false, besideRoomPx: LABEL_BESIDE_MIN_PX - 1 }),
+      labelPlacement({
+        barWidth: 10,
+        barHeight: BAR_HEIGHT,
+        isMilestone: false,
+        besideRoomPx: LABEL_BESIDE_MIN_PX - 1,
+        rowHasNameRow: false,
+      }),
     ).toBe('none');
   });
 });
@@ -995,7 +1091,8 @@ describe('truncateToWidth', () => {
 
 // ── Bar visual refresh geometry (ADR-0052 M4) ────────────────────────────────────────────
 describe('progressGeometry', () => {
-  const rect = { x: 100, y: 45, w: 60, h: 18 };
+  /** A bar tall enough for the inset band — i.e. tall enough to hold an inside label. */
+  const rect = { x: 100, y: 45, w: 60, h: LABEL_INSIDE_MIN_HEIGHT_PX + 4 };
 
   it('returns null for no progress (0, negative, NaN) and for a too-narrow bar', () => {
     expect(progressGeometry(rect, 0)).toBeNull();
@@ -1012,14 +1109,36 @@ describe('progressGeometry', () => {
       w: (rect.w - PROGRESS_INSET_PX * 2) / 2,
       h: PROGRESS_BAND_H,
     });
-    // The front divider sits at the band's end — the non-colour boundary cue.
-    expect(g.frontX).toBe(g.band.x + g.band.w);
+    // The front divider sits at the band's end — the non-colour boundary cue. Clamped to the
+    // band's own extent in the inset case, so it never slices through a centred inside label.
+    expect(g.front).toEqual({ x: g.band.x + g.band.w - 0.5, y: g.band.y, w: 1, h: g.band.h });
+  });
+
+  /**
+   * The thin-bar shape (logic-legibility M3-T3, CQ-6's default). A bar too short to hold the inset
+   * band gets the completed portion over its **whole height** — a second, shorter bar along the
+   * same line — with the divider standing proud, because a 1 px mark confined to 5 px of height is
+   * not a shape a reader can see.
+   *
+   * One function decides which shape, because the scene painter and the drag-ghost painter both
+   * draw this and two opinions would differ exactly while a planner was dragging a progressed bar.
+   */
+  it('gives a thin bar the whole-height shape and a proud divider', () => {
+    const thin = { x: 100, y: 45, w: 60, h: BAR_HEIGHT };
+    const g = progressGeometry(thin, 50)!;
+    expect(g.band).toEqual({ x: thin.x, y: thin.y, w: thin.w / 2, h: thin.h });
+    expect(g.front).toEqual({
+      x: g.band.x + g.band.w - 0.5,
+      y: thin.y - PROGRESS_FRONT_PROUD_PX,
+      w: 1,
+      h: thin.h + PROGRESS_FRONT_PROUD_PX * 2,
+    });
   });
 
   it('drops the front divider at 100% (the front coincides with the bar end)', () => {
     const g = progressGeometry(rect, 100)!;
     expect(g.band.w).toBe(rect.w - PROGRESS_INSET_PX * 2);
-    expect(g.frontX).toBeNull();
+    expect(g.front).toBeNull();
   });
 
   it('clamps over-100 to a full band (defensive — the API bounds the field)', () => {
@@ -1037,7 +1156,8 @@ describe('progressGeometry', () => {
 });
 
 describe('loeBracketRects / summaryTabRects (M4 glyph vertices)', () => {
-  const rect = { x: 100, y: 45, w: 60, h: 18 };
+  /** A bar tall enough for the inset band — i.e. tall enough to hold an inside label. */
+  const rect = { x: 100, y: 45, w: 60, h: LABEL_INSIDE_MIN_HEIGHT_PX + 4 };
 
   it('places the LOE bracket caps at the span ends, overhanging top and bottom', () => {
     const [left, right] = loeBracketRects(rect);
@@ -1104,8 +1224,8 @@ describe('elbowRadius (rounded link corners)', () => {
 
 describe('routeOrthogonal — elbow shift (fan-out de-crowding)', () => {
   // pxPerDay 10 → gap = min(12, max(4, 10)) = 10. Different y so the L-route keeps its elbow.
-  const from = { x: 200, y: 60 };
-  const to = { x: 300, y: 120 };
+  const from = { x: 200, y: barMidY() };
+  const to = { x: 300, y: barMidY(2) };
 
   it('keeps the legacy elbow byte-for-byte at the default shift of 0', () => {
     expect(routeOrthogonal(from, to, 'FS', VIEW)).toEqual(routeOrthogonal(from, to, 'FS', VIEW, 0));
@@ -1123,80 +1243,6 @@ describe('routeOrthogonal — elbow shift (fan-out de-crowding)', () => {
     // gap 10 → the shift clamps to ±9: the FS elbow stays strictly right of the finish edge.
     expect(routeOrthogonal(from, to, 'FS', VIEW, -20)[1]!.x).toBe(201);
     expect(routeOrthogonal(from, to, 'FS', VIEW, 20)[1]!.x).toBe(219);
-  });
-});
-
-describe('computeEdgeFanOut (deterministic de-crowding)', () => {
-  const edge = (
-    id: string,
-    predecessorId: string,
-    successorId: string,
-    type: DependencyType = 'FS',
-  ): RenderEdge => ({ id, predecessorId, successorId, type, isDriving: false });
-
-  it('leaves an uncrowded zero-lag FS chain untouched (every group is a singleton)', () => {
-    const chain = [edge('e1', 'a', 'b'), edge('e2', 'b', 'c'), edge('e3', 'c', 'd')];
-    expect(computeEdgeFanOut(chain).size).toBe(0);
-  });
-
-  it('spreads a crowded bar edge symmetrically about the centreline, in edge-id order', () => {
-    const edges = [edge('e1', 'p', 's1'), edge('e2', 'p', 's2'), edge('e3', 'p', 's3')];
-    const out = computeEdgeFanOut(edges);
-    // Three FS ends share p's finish edge → −step / 0 / +step by id order; the middle edge (and
-    // every singleton successor end) carries no offset, so it is omitted from the map entirely.
-    expect(out.get(edges[0]!)).toEqual({ pred: -FAN_OUT_STEP_PX, succ: 0 });
-    expect(out.get(edges[1]!)).toBeUndefined();
-    expect(out.get(edges[2]!)).toEqual({ pred: FAN_OUT_STEP_PX, succ: 0 });
-  });
-
-  it('is stable across input-array permutations (same offset per edge id — no jitter)', () => {
-    const build = (ids: string[]): Map<string, { pred: number; succ: number }> => {
-      const edges = ids.map((id) => edge(id, 'p', `s-${id}`));
-      const out = computeEdgeFanOut(edges);
-      const byId = new Map<string, { pred: number; succ: number }>();
-      for (const e of edges) byId.set(e.id!, out.get(e) ?? { pred: 0, succ: 0 });
-      return byId;
-    };
-    const a = build(['e1', 'e2', 'e3', 'e4']);
-    const b = build(['e4', 'e2', 'e1', 'e3']);
-    const c = build(['e3', 'e4', 'e2', 'e1']);
-    expect(Object.fromEntries(b)).toEqual(Object.fromEntries(a));
-    expect(Object.fromEntries(c)).toEqual(Object.fromEntries(a));
-  });
-
-  it('caps the spread so a very crowded edge saturates instead of leaving the bar', () => {
-    const edges = Array.from({ length: 9 }, (_, i) => edge(`e${i}`, 'p', `s${i}`));
-    const out = computeEdgeFanOut(edges);
-    for (const e of edges) {
-      const off = out.get(e);
-      if (!off) continue;
-      expect(Math.abs(off.pred)).toBeLessThanOrEqual(FAN_OUT_MAX_PX);
-    }
-    // The extremes are clamped to exactly the cap.
-    expect(out.get(edges[0]!)!.pred).toBe(-FAN_OUT_MAX_PX);
-    expect(out.get(edges[8]!)!.pred).toBe(FAN_OUT_MAX_PX);
-  });
-
-  it('groups by the bar edge the type anchors to, mixing pred and succ ends', () => {
-    // X→B (FS) lands on B's START; B→Y (SS) departs B's START — the same bar edge, so both
-    // spread; B→Z (FS) departs B's FINISH — a different edge, so it stays centred.
-    const inbound = edge('a', 'x', 'b', 'FS');
-    const outboundSS = edge('b', 'b', 'y', 'SS');
-    const outboundFS = edge('c', 'b', 'z', 'FS');
-    const out = computeEdgeFanOut([inbound, outboundSS, outboundFS]);
-    expect(out.get(inbound)).toEqual({ pred: 0, succ: -FAN_OUT_STEP_PX / 2 });
-    expect(out.get(outboundSS)).toEqual({ pred: FAN_OUT_STEP_PX / 2, succ: 0 });
-    expect(out.get(outboundFS)).toBeUndefined();
-  });
-
-  it('orders id-less edges by their (pred, succ, type) triple — still deterministic', () => {
-    const e1: RenderEdge = { predecessorId: 'p', successorId: 's1', type: 'FS', isDriving: false };
-    const e2: RenderEdge = { predecessorId: 'p', successorId: 's2', type: 'FS', isDriving: false };
-    const a = computeEdgeFanOut([e1, e2]);
-    const b = computeEdgeFanOut([e2, e1]);
-    expect(a.get(e1)).toEqual(b.get(e1));
-    expect(a.get(e2)).toEqual(b.get(e2));
-    expect(a.get(e1)!.pred).toBeLessThan(a.get(e2)!.pred);
   });
 });
 

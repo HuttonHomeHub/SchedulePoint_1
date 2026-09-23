@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { LANE_HEIGHT } from '../render/render-model';
 import { makeWorkingDayWalk, type Viewport } from '../render/render-model';
 
 import {
@@ -32,7 +33,10 @@ describe('gesture-machine: create-by-drag', () => {
   it('starts a create ghost at the pointer day/lane in add-activity mode', () => {
     const r = reduce(
       IDLE,
-      { type: 'pointerDown', point: { x: 25, y: 40 }, hit: { kind: 'empty' } },
+      // A y inside lane 1, derived rather than written — the row treatment changed the pitch and a
+      // literal 40 quietly became a point in lane 0, so the case would have asserted the wrong lane
+      // for a perfectly correct reducer.
+      { type: 'pointerDown', point: { x: 25, y: LANE_HEIGHT + 2 }, hit: { kind: 'empty' } },
       ctx('add-activity'),
     );
     expect(r.state).toEqual({ kind: 'creating', originDay: 2, laneIndex: 1, currentDay: 2 });

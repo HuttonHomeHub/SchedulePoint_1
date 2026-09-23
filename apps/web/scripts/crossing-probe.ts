@@ -38,15 +38,41 @@
  * segment's interior, and two segments that cross still cross. Stated rather than left implicit.
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 import { packLanes, type PackItem } from '@repo/layout';
 
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
-import { activityRect, BAR_HEIGHT, LANE_HEIGHT } from '../src/features/tsld/render/geometry';
+import { buildExportViewport } from '../src/features/tsld/export/export-image';
+import {
+  activityRect,
+  BAR_HEIGHT,
+  LANE_HEIGHT,
+  rectsIntersect,
+  rowSlots,
+  worldExtent,
+} from '../src/features/tsld/render/geometry';
+import {
+  bundleCorridors,
+  chooseCorridorsByCrossing,
+  corridorGap,
+  gutterChannels,
+  isLaneFreeBetween,
+  lagAnchorPoints,
+  laneIntervalIndex,
+  laneOverlapBetween,
+  type LaneIntervalIndex,
+  packGutterChannels,
+  MAX_CORRIDOR_CANDIDATES,
+  routeOrthogonal,
+} from '../src/features/tsld/render/link-routing';
+import { minimapViewport, sceneWindowRect } from '../src/features/tsld/render/minimap';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
-import type { Viewport } from '../src/features/tsld/render/render-model';
+import type { Point, Viewport } from '../src/features/tsld/render/render-model';
+import { ELAPSED_DAY_WALK } from '../src/features/tsld/render/working-time';
 
-import { unit300Asap } from './lane-travel-probe';
+import { reorderLanes, statsFor, unit300Asap } from './lane-travel-probe';
+export { smallPlanLayouts } from './small-plan-fixture';
 
 export interface Pt {
   x: number;
@@ -186,77 +212,6 @@ export const PALETTE: TsldPalette = {
   handleHalo: '#0f172a',
   monthBand: '#f8fafc',
 };
-
-/**
- * **Exploratory dump.** Prints every distinct (flush kind, strokeStyle, point-count) combination
- * the painter produced, so the attribution rule is written from what the painter emits rather than
- * from a belief about it.
- *
- * This exists because the plan's rule — "identify link batches by sentinel palette values" — is a
- * hypothesis about a painter nobody has interrogated this way, and §19.11 says a decision-bearing
- * claim names what established it.
- */
-export function dump(count: number, pxPerDay: number, originY: number): void {
-  const source = scaleScene(count);
-  const scene: TsldScene = {
-    activities: source.activities,
-    edges: source.edges,
-    dataDate: '2026-01-01',
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
-  };
-  const { ctx, paths } = recordingCtx();
-  const view: Viewport = { pxPerDay, originX: 40, originY };
-  paintScene(
-    ctx as Parameters<typeof paintScene>[0],
-    scene,
-    view,
-    { width: 1646, height: 857 },
-    PALETTE,
-    1,
-  );
-
-  const groups = new Map<string, { n: number; pts: Map<number, number>; batches: Set<number> }>();
-  for (const p of paths) {
-    const key = `${p.flush}\u0000${p.flush === 'fill' ? p.fillStyle : p.strokeStyle}\u0000dash=${p.dashed}\u0000lw=${p.lineWidth}`;
-    let g = groups.get(key);
-    if (!g) {
-      g = { n: 0, pts: new Map(), batches: new Set() };
-      groups.set(key, g);
-    }
-    g.n += 1;
-    g.pts.set(p.pts.length, (g.pts.get(p.pts.length) ?? 0) + 1);
-    g.batches.add(p.batch);
-  }
-
-  console.log(
-    `\n  scene ${count} act · ${source.edges.length} edges · ${pxPerDay}px/d · originY ${originY}`,
-  );
-  console.log(
-    `  ${paths.length} recorded paths in ${Math.max(...paths.map((p) => p.batch)) + 1} batches\n`,
-  );
-  const rows = [...groups.entries()].sort((a, b) => b[1].n - a[1].n);
-  for (const [key, g] of rows) {
-    const [flush, style, dashed, lw] = key.split('\u0000');
-    const shape = [...g.pts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([len, n]) => `${len}pt×${n}`)
-      .join(' ');
-    const sentinel =
-      style === LINK_SENTINELS.edge
-        ? ' ← LINK edge'
-        : style === LINK_SENTINELS.critical
-          ? ' ← LINK critical'
-          : style === LINK_SENTINELS.nearCritical
-            ? ' ← LINK near-critical'
-            : '';
-    console.log(
-      `    ${String(flush).padEnd(6)} ${String(style).padEnd(9)} ${String(dashed).padEnd(10)} ${String(lw).padEnd(6)} n=${String(g.n).padStart(5)} batches=${String(g.batches.size).padStart(4)}  ${shape}${sentinel}`,
-    );
-  }
-}
 
 // ── The metric ───────────────────────────────────────────────────────────────────────────────────
 
@@ -954,6 +909,22 @@ export interface GutterReading {
   legsTouchingABar: number;
   /** The smallest gap between a gutter leg and the nearest bar edge, in CSS px. */
   minClearancePx: number;
+  /** Channels available at this pitch, derived from the CLEAR band (M3-T3). */
+  channels: number;
+  /**
+   * The **net** band a channel may use, after the row's name and date rows have taken theirs —
+   * FC-L11's quantity, and the one the epic's verdict is read against.
+   */
+  clearBandPx: number;
+  /**
+   * The **gross** band the thin bar hands back, before the row spends any of it. **FC-L11 forbids
+   * quoting this without the net beside it**, which is why both are on every row.
+   */
+  grossBandPx: number;
+  /** The most runs simultaneously live in one gutter — the denominator of FC-L3's second limb. */
+  peakGutterOverlap: number;
+  /** The most runs that OVERLAP IN X and share a y — what that limb is really about. */
+  maxOverlappingOnOneY: number;
 }
 
 export function gutterReadings(
@@ -967,7 +938,6 @@ export function gutterReadings(
   if (!config) throw new Error('the band-off arranged configuration is missing');
   const { scene } = sceneFor(asap, config.layout);
   const originY = 32;
-  const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
 
   return pxPerDays.map((pxPerDay) => {
     const view: Viewport = { pxPerDay, originX: 40, originY };
@@ -976,17 +946,21 @@ export function gutterReadings(
     paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
     const links = linkPaths(paths);
 
-    const legs: { y: number; x0: number; x1: number }[] = [];
-    for (const link of links) {
-      for (let i = 1; i < link.pts.length; i += 1) {
-        const a = link.pts[i - 1]!;
-        const b = link.pts[i]!;
-        if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
-        const within = a.y - originY - Math.floor((a.y - originY) / LANE_HEIGHT) * LANE_HEIGHT;
-        if (Math.abs(within - (pad + BAR_HEIGHT)) > 0.001) continue;
-        legs.push({ y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
-      }
-    }
+    // **The legs come from `gutterStats`, not from a second search here** (logic-legibility M3-T4).
+    //
+    // This function found them by testing a leg's y against the BAR'S BOTTOM EDGE — M1-T1's datum
+    // before M1-T1 moved it to the lane boundary. `gutterStats` was corrected to the
+    // datum-independent definition (`packGutterChannels`'s own: the middle horizontal of a
+    // six-point polyline) and this was not, so two leg-finders diverged in the one direction that
+    // reports well.
+    //
+    // **Measured at the M3-T3 geometry before the fix: 103 six-point routes painted, 0 gutter legs
+    // found, `legsTouchingABar: 0`** — the "blind spot wearing a triumph's clothes" the other
+    // function's docblock records having fixed, reproduced here because the fix reached one of the
+    // two. `measure-gutter-pitch.mjs`'s control only fires when EVERY row is empty, so a sweep in
+    // which one pitch happened to work would have graded the rest on nothing.
+    const stats = gutterStats(links, scene, view);
+    const legs = stats.legs;
 
     // Bar extents from `activityRect` — the painter's own source, so this measures the picture.
     const bars = scene.activities.flatMap((activity) => {
@@ -1027,6 +1001,15 @@ export function gutterReadings(
       maxLegsOnOneY: legs.length === 0 ? 0 : Math.max(...byY.values()),
       legsTouchingABar: touching,
       minClearancePx: legs.length === 0 ? Number.NaN : minClearance,
+      // What FC-L3 and FC-L11 are judged on at each swept pitch (M3-T4). `clearBandPx` is the NET
+      // band — what a channel may use after the row's name and date rows have taken theirs — and
+      // `grossBandPx` is what the thin bar hands back before they do. FC-L11 forbids the second
+      // without the first beside it.
+      channels: stats.channels,
+      clearBandPx: stats.clearBandPx,
+      grossBandPx: stats.grossBandPx,
+      peakGutterOverlap: stats.peakGutterOverlap,
+      maxOverlappingOnOneY: stats.maxOverlappingOnOneY,
     };
   });
 }
@@ -1047,7 +1030,6 @@ export function sceneForShot(
   if (!config) throw new Error('the band-off arranged configuration is missing');
   const { scene } = sceneFor(asap, config.layout);
   const originY = 32;
-  const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
   const pxPerDay = 12;
   const { ctx, paths } = recordingCtx();
   paintScene(
@@ -1058,17 +1040,20 @@ export function sceneForShot(
     PALETTE,
     1,
   );
+  // **A gutter leg is the middle segment of a six-point route** — structural, so this survived
+  // M1-T1 moving the datum from the upper lane's bar bottom to the lane boundary. The previous
+  // test named the old y and would have found nothing, sending the throw below off on a plan that
+  // has plenty of gutter runs (`gutterStats` records the same correction).
   const byLane = new Map<number, number>();
   for (const link of linkPaths(paths)) {
-    for (let i = 1; i < link.pts.length; i += 1) {
-      const a = link.pts[i - 1]!;
-      const b = link.pts[i]!;
-      if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
-      const rel = a.y - originY;
-      const lane = Math.floor(rel / LANE_HEIGHT);
-      if (Math.abs(rel - lane * LANE_HEIGHT - (pad + BAR_HEIGHT)) > 0.001) continue;
-      byLane.set(lane, (byLane.get(lane) ?? 0) + 1);
-    }
+    if (link.pts.length !== 6) continue;
+    const a = link.pts[2]!;
+    const b = link.pts[3]!;
+    if (Math.abs(a.y - b.y) > 0.001 || Math.abs(a.x - b.x) < 0.001) continue;
+    // Round rather than floor: a channel offset puts the leg a few px either side of the boundary,
+    // so the lane it belongs to is the nearest one, not the one below it.
+    const lane = Math.round((a.y - originY) / LANE_HEIGHT) - 1;
+    byLane.set(lane, (byLane.get(lane) ?? 0) + 1);
   }
   if (byLane.size === 0) {
     throw new Error(
@@ -1325,6 +1310,24 @@ export function assignmentCandidates(path: string): {
       build('A chain rows', chainRows()),
       build('B near predecessors', nearPredecessors()),
       build('C depth-first pack', depthFirst()),
+      /**
+       * **Candidate D — lane re-indexing** (`cheap-levers.md` Finding 4, logic-legibility M4-T2).
+       *
+       * Not a packing rule at all: it takes the SHIPPED packing and permutes which row index each
+       * lane gets, so the bars in a row, the row count and every bar's x are untouched and only
+       * the vertical distance a link travels changes. Measured at −7.5 % mean and −14.3 % long
+       * links on travel and **never on occlusion or crossings**, which is what this run supplies.
+       *
+       * It is the one candidate whose row count is structurally guaranteed not to move, and that
+       * is asserted below rather than inherited from the file that argues it.
+       */
+      build(
+        'D lane re-indexing',
+        reorderLanes(
+          shipped.laneOf,
+          deps.map((d) => ({ from: d.predecessorKey, to: d.successorKey })),
+        ),
+      ),
     ],
   };
 }
@@ -1344,4 +1347,1251 @@ export function readWholePlan(
     4,
     32,
   );
+}
+
+// ── logic-legibility M0: link-over-bar OCCLUSION, which nothing in Part C ever counted ─────────
+
+/**
+ * How many of a plan's links have a horizontal leg running **through a bar**, and how many merely
+ * **touch** one.
+ *
+ * ## Why this is a different quantity from {@link countCrossings}
+ *
+ * `crossingsOf` counts segment-versus-segment against a `SegmentIndex` built from link polylines
+ * ONLY. Bars are not in it, and they structurally could not be: {@link recordingCtx} discards
+ * `fillRect` entirely (`fillRect: () => {}`), which is how a bar is painted. So the instrument Part
+ * C judged four milestones with was **incapable of seeing the thing the product owner was
+ * complaining about** — "the logic is mapping across other bars" — and ADR-0149's −20.8 % is a true
+ * statement about link-versus-link that says nothing at all about this.
+ *
+ * ## Why a leg can run through a bar at all
+ *
+ * `routeOrthogonal` applies its obstacle check to the vertical corridor only, and only across
+ * `crossedLanes(fromLane, toLane)` — the lanes strictly BETWEEN the two endpoints. The two
+ * horizontal legs run at `from.y` and `to.y`, the source and target bars' centre-lines, and are
+ * checked against nothing. A leg therefore runs straight through any bar sharing its lane between
+ * the anchor and the corridor. Links paint UNDER bars (`paint.ts` Layer 2 against Layer 3), so the
+ * line does not overlap the bar — it **disappears behind it**, which is worse for tracing.
+ *
+ * ## ONE predicate, imported rather than restated (M0-T1 step 4)
+ *
+ * The bars come from `laneIntervalIndex`, the same index `routeOrthogonal` consults, so what the
+ * router refuses and what this counts cannot drift into two opinions about where a bar is. The
+ * containment convention differs on purpose and is argued below.
+ * The lane index is `laneIntervalIndex`, likewise the router's own — and both derive from
+ * `activityRect`, the painter's own rect source, never from the routing formula. M-C0-T4 established
+ * that rule after measuring the gutter against the routing expression and getting an answer about
+ * the formula rather than about the picture.
+ *
+ * ## TANGENCY IS ITS OWN COLUMN, and that is the correction this function exists to carry
+ *
+ * The first version of this counter tested `a.y > r.y1 && a.y < r.y2` — strictly inside a bar's
+ * vertical extent. `gutterY` expands to **exactly** the upper lane's bar bottom at every pitch
+ * (ADR-0149 D3's arithmetic; at `originY = 32`, lane 0, both are 55.0), so **every gutter leg scored
+ * zero** — including the 58 of Unit 300's 68 that M-C0-T4 measured as lying _inside_ a painted bar
+ * at 0.0 px clearance. The relayed **77.1 %** was taken with that blind spot and is a FLOOR, never a
+ * measurement; `conditions.md` §0.2 binds every document that quotes it to say so.
+ *
+ * So a leg is classified three ways against each bar in its lane:
+ *   - `through`  — its y is strictly inside the bar's vertical extent.
+ *   - `tangent`  — its y is exactly on the bar's top or bottom edge. A gutter leg, by construction.
+ *   - neither    — it is in clear air.
+ *
+ * ## The endpoint problem, which the router's own predicate could not answer
+ *
+ * A recorded polyline carries no link identity, so a leg's OWN endpoint bars cannot be excluded by
+ * id here, and every leg begins on one by construction. The first version of this function used
+ * {@link isLaneFreeBetween} directly — the router's predicate, CLOSED at both ends, because a
+ * corridor sitting on a bar's edge is drawn on the bar and is unusable. Run, it reported **100 % of
+ * Unit 300's links occluded at both layouts, with 391 of 395 incidents self-anchored**: a number
+ * that is true of the predicate and says nothing about the picture.
+ *
+ * So the occlusion test is {@link laneOverlapBetween}, which is deliberately OPEN and returns a
+ * LENGTH — a leg that merely touches an edge hides nothing, and `buriedPx` separates a leg buried
+ * forty pixels inside a bar from one grazing it. Both functions read the same `laneIntervalIndex`,
+ * so they cannot disagree about where a bar IS; only about whether an edge counts, which is the
+ * caller's question and not the index's. `grazing` reports the excluded residue rather than
+ * dropping it silently, because its size is what justifies excluding it.
+ *
+ * An epsilon on the anchor would NOT have worked: an `SF` corridor at `(from.x + to.x) / 2` can
+ * fall well inside either bar, and a clamped lag anchor is placed **on** the bar deliberately
+ * (`lagAnchorPoints`) — neither is near an edge. The overlap-length rule handles both without
+ * knowing which link it is looking at.
+ */
+/**
+ * Where the bars are, in the two shapes the occlusion questions need. Built once per reading and
+ * passed to {@link lineOcclusion}, so the counter and the counterfactual cannot hold two opinions
+ * about the picture they are judging.
+ */
+export function occlusionContext(
+  scene: TsldScene,
+  view: Viewport,
+): {
+  index: LaneIntervalIndex;
+  barsOfLane: Map<number, { x0: number; x1: number }[]>;
+  extentOfLane: Map<number, { top: number; bottom: number }>;
+  barAt: (x: number, y: number) => string | null;
+} {
+  const index = laneIntervalIndex(scene.activities, view, scene.dataDate);
+
+  // **Per-bar, UNMERGED, and that is not a detail.** `laneIntervalIndex` merges spans that overlap
+  // OR TOUCH (`span[0] <= last[1]`), which is right for the router — it only ever asks whether a
+  // position is usable — and useless for attribution, because `packLanes` puts activities end to
+  // end in a lane and two touching bars become one span. Attributing against merged spans reports a
+  // leg crossing its neighbour as "its own bar", and measured, it undercounts foreign occlusion by
+  // 6.6x. Both this and the index read `activityRect`, the painter's own rect source, so they
+  // cannot disagree about where a bar is.
+  const barsOfLane = new Map<number, { x0: number; x1: number }[]>();
+  const extentOfLane = new Map<number, { top: number; bottom: number }>();
+  for (const activity of scene.activities) {
+    const rect = activityRect(activity, view, scene.dataDate);
+    if (rect === null) continue;
+    const lane = activity.laneIndex;
+    const bars = barsOfLane.get(lane);
+    if (bars) bars.push({ x0: rect.x, x1: rect.x + rect.w });
+    else barsOfLane.set(lane, [{ x0: rect.x, x1: rect.x + rect.w }]);
+    // Every bar in a lane shares one vertical extent (`activityRect`'s `top` depends on the lane
+    // and BAR_HEIGHT alone), so one (top, bottom) pair per lane is exact rather than an
+    // approximation — and it is why thinning the bar cannot reduce occlusion: a leg runs at its
+    // bar's CENTRE-LINE, so the question is pure x-overlap and the bar's height never enters it
+    // (spec decision D9).
+    if (!extentOfLane.has(lane)) extentOfLane.set(lane, { top: rect.y, bottom: rect.y + rect.h });
+  }
+
+  /** Which bar does the point `(x, y)` sit on the edge of? The signature of a link's own anchor. */
+  const barAt = (x: number, y: number): string | null => {
+    for (const [lane, extent] of extentOfLane) {
+      if (y < extent.top - EPS_Y || y > extent.bottom + EPS_Y) continue;
+      const bars = barsOfLane.get(lane) ?? [];
+      for (let i = 0; i < bars.length; i += 1) {
+        if (x >= bars[i]!.x0 - EPS_X && x <= bars[i]!.x1 + EPS_X) return `${lane}:${i}`;
+      }
+    }
+    return null;
+  };
+
+  return { index, barsOfLane, extentOfLane, barAt };
+}
+
+/**
+ * One polyline's occlusion, against one {@link occlusionContext}.
+ *
+ * **A link's own two anchors are recovered from the polyline's ends rather than from an id.** A
+ * recorded path carries no link identity (ADR-0149 D1 records why the recorder is built the way it
+ * is), but `routeOrthogonal`'s first and last points ARE the source and target anchors, and each
+ * sits on its bar's edge by construction. Running over your own bar is what a backward link does
+ * necessarily and is NOT the reported complaint — "the logic is mapping across other bars" — so the
+ * avoidable denominator (FC-L4) counts only the rest.
+ *
+ * The discriminator has an independent control rather than an argument: at ONE BAR PER LANE no lane
+ * holds a foreign bar at all, so `foreign` must read exactly ZERO. Predicted before the first run,
+ * asserted by `measure-occlusion.mjs`, which refuses to print otherwise.
+ */
+export function lineOcclusion(
+  pts: readonly Point[],
+  ctx: ReturnType<typeof occlusionContext>,
+  /**
+   * Optional: accumulate FOREIGN incidents by the lane they happened in, and each one's x. An
+   * optional out-parameter rather than a second walk of the same legs, because a second walk is a
+   * second opinion about which legs there are — the ADR-0065 `routeOrthogonal` argument, one level
+   * down.
+   */
+  foreignByLane?: Map<number, number[]>,
+): {
+  through: number;
+  tangent: number;
+  foreign: number;
+  grazing: number;
+  buriedPx: number;
+  horizontals: number;
+} {
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  const own = new Set<string>();
+  if (first) {
+    const id = ctx.barAt(first.x, first.y);
+    if (id !== null) own.add(id);
+  }
+  if (last) {
+    const id = ctx.barAt(last.x, last.y);
+    if (id !== null) own.add(id);
+  }
+
+  let through = 0;
+  let tangent = 0;
+  let foreign = 0;
+  let grazing = 0;
+  let buriedPx = 0;
+  let horizontals = 0;
+  for (let i = 0; i + 1 < pts.length; i += 1) {
+    const a = pts[i]!;
+    const b = pts[i + 1]!;
+    if (Math.abs(a.y - b.y) > EPS_Y) continue; // vertical corridors are already obstacle-checked
+    horizontals += 1;
+    const lo = Math.min(a.x, b.x);
+    const hi = Math.max(a.x, b.x);
+    for (const [lane, extent] of ctx.extentOfLane) {
+      const inside = a.y > extent.top + EPS_Y && a.y < extent.bottom - EPS_Y;
+      const onEdge = Math.abs(a.y - extent.top) <= EPS_Y || Math.abs(a.y - extent.bottom) <= EPS_Y;
+      if (!inside && !onEdge) continue;
+      // The shared predicate decides whether this lane is hit at all. It is OPEN and returns a
+      // length, unlike the router's closed `isLaneFreeBetween` — see that function's docblock.
+      if (laneOverlapBetween(ctx.index, lane, lo, hi) <= EPS_X) {
+        // Zero (or sub-pixel) length: the leg touches a bar edge and hides nothing. That is the
+        // signature of its own anchor, and it is COUNTED AND REPORTED rather than dropped.
+        if (!isLaneFreeBetween(ctx.index, lane, lo, hi)) grazing += 1;
+        continue;
+      }
+      const bars = ctx.barsOfLane.get(lane) ?? [];
+      for (let j = 0; j < bars.length; j += 1) {
+        const overlap = Math.min(hi, bars[j]!.x1) - Math.max(lo, bars[j]!.x0);
+        if (overlap <= EPS_X) continue;
+        buriedPx += overlap;
+        if (inside) through += 1;
+        else tangent += 1;
+        if (!own.has(`${lane}:${j}`)) {
+          foreign += 1;
+          if (foreignByLane) {
+            const at = foreignByLane.get(lane) ?? [];
+            at.push((Math.max(lo, bars[j]!.x0) + Math.min(hi, bars[j]!.x1)) / 2);
+            foreignByLane.set(lane, at);
+          }
+        }
+      }
+    }
+  }
+  return { through, tangent, foreign, grazing, buriedPx, horizontals };
+}
+
+/**
+ * How many of a plan's links have a horizontal leg running **through a bar**, how many merely
+ * **touch** one, and how many cross a bar that is not their own.
+ *
+ * ## Why this is a different quantity from {@link countCrossings}
+ *
+ * `crossingsOf` counts segment-versus-segment against a `SegmentIndex` built from link polylines
+ * ONLY. Bars are not in it, and they structurally could not be: {@link recordingCtx} discards
+ * `fillRect` entirely (`fillRect: () => {}`), which is how a bar is painted. So the instrument Part
+ * C judged four milestones with was **incapable of seeing the thing the product owner was
+ * complaining about** — "the logic is mapping across other bars" — and ADR-0149's −20.8 % is a true
+ * statement about link-versus-link that says nothing at all about this.
+ *
+ * ## Why a leg can run through a bar at all
+ *
+ * `routeOrthogonal` applies its obstacle check to the vertical corridor only, and only across
+ * `crossedLanes(fromLane, toLane)` — the lanes strictly BETWEEN the two endpoints. The two
+ * horizontal legs run at `from.y` and `to.y`, the source and target bars' centre-lines, and are
+ * checked against nothing. A leg therefore runs straight through any bar sharing its lane between
+ * the anchor and the corridor. Links paint UNDER bars (`paint.ts` Layer 2 against Layer 3), so the
+ * line does not overlap the bar — it **disappears behind it**, which is worse for tracing.
+ *
+ * ## Tangency is its own column, and that is a correction this function carries
+ *
+ * The first version tested `a.y > r.y1 && a.y < r.y2` — strictly inside a bar's vertical extent.
+ * `gutterY` expands to **exactly** the upper lane's bar bottom at every pitch (ADR-0149 D3's
+ * arithmetic; at `originY = 32`, lane 0, both are 55.0), so **every gutter leg scored zero**. The
+ * relayed **77.1 %** was taken with that blind spot and is a FLOOR, never a measurement — measured,
+ * the headroom is 6 links (3.2 pp).
+ */
+export function countOcclusions(
+  links: readonly RecordedPath[],
+  scene: TsldScene,
+  view: Viewport,
+): {
+  occluded: number;
+  tangentOnly: number;
+  incidents: number;
+  tangentIncidents: number;
+  horizontals: number;
+  grazing: number;
+  buriedPx: number;
+  foreign: number;
+  foreignLinks: number;
+  twoPointForeign: number;
+  twoPointLinks: number;
+} {
+  const ctx = occlusionContext(scene, view);
+  let occluded = 0;
+  let tangentOnly = 0;
+  let incidents = 0;
+  let tangentIncidents = 0;
+  let horizontals = 0;
+  let grazing = 0;
+  let buriedPx = 0;
+  let foreign = 0;
+  let foreignLinks = 0;
+  let twoPointForeign = 0;
+  let twoPointLinks = 0;
+  for (const link of links) {
+    if (link.pts.length === 2) twoPointLinks += 1;
+    const r = lineOcclusion(link.pts, ctx);
+    incidents += r.through;
+    tangentIncidents += r.tangent;
+    horizontals += r.horizontals;
+    grazing += r.grazing;
+    buriedPx += r.buriedPx;
+    foreign += r.foreign;
+    if (r.through > 0) occluded += 1;
+    else if (r.tangent > 0) tangentOnly += 1;
+    if (r.foreign > 0) {
+      foreignLinks += 1;
+      // **Spec §0.3's same-lane mechanism, counted apart from every other kind.** `routeOrthogonal`
+      // returns `[from, to]` before obstacles are consulted whenever the two anchors share a y
+      // (`link-routing.ts:182`), so a two-point polyline is a link that was never routed at all.
+      // `packLanes` packs by time, so A→C in one lane draws straight through the B between them —
+      // which is why the complaint arrived about "even a simple plan", where there are few lanes and
+      // most links are same-lane. It is a different defect from a long route meeting a far bar, and
+      // a single total would let M2 look effective while leaving the small-plan case untouched.
+      if (link.pts.length === 2) twoPointForeign += 1;
+    }
+  }
+  return {
+    occluded,
+    tangentOnly,
+    incidents,
+    tangentIncidents,
+    horizontals,
+    grazing,
+    buriedPx,
+    foreign,
+    foreignLinks,
+    twoPointForeign,
+    twoPointLinks,
+  };
+}
+
+/**
+ * Symptom **(d)** — how many horizontal legs share one y in a gutter, and how many of them run
+ * inside a bar.
+ *
+ * **M-C0-T4's definitions, reproduced exactly, on the SAME recorded paths as the occlusion count.**
+ * `gutterReadings` already measures this and reported 68 gutter legs, 12 distinct y, 13 on one y and
+ * 58 touching a bar — but it selects its own scene from `unit300BandConfigs` and pins `originY` at
+ * 32, so reading FC-L0's columns from it and the occlusion columns from {@link readBoth} would be
+ * two pictures of possibly two plans. Every column of the vector comes from one paint of one scene,
+ * which is the whole reason this is here rather than a second call.
+ *
+ * ## A gutter leg is STRUCTURAL — the middle segment of a six-point route
+ *
+ * It used to be "a horizontal whose y sits at a lane's bar bottom", which was the single value
+ * `routeOrthogonal`'s VHV route computed. **M1-T1 moved that datum to the lane boundary and this
+ * counter went to zero** — not because the legs had gone, but because the instrument was looking
+ * for them at the old y. It reported `0 gutter legs, 0 touching a bar`, which is the shape of a
+ * triumph and was the shape of a blind spot: `legsTouchingABar = 0` out of **nothing found**.
+ *
+ * So the definition is now the one `packGutterChannels` uses — the middle horizontal of a six-point
+ * polyline — which is datum-independent and cannot drift from the pass it measures. The **control**
+ * is that a scene containing six-point routes must yield gutter legs; it throws otherwise, because
+ * that is the failure this paragraph exists to record.
+ *
+ * `legsTouchingABar` keeps M-C0-T4's CLOSED x test rather than the occlusion count's open one, so
+ * the 58-of-68 figure it produced stays comparable; the two conventions are named in
+ * {@link laneOverlapBetween} and the difference is a leg's own anchor.
+ */
+export function gutterStats(
+  links: readonly RecordedPath[],
+  scene: TsldScene,
+  view: Viewport,
+): {
+  /** The pitch this reading was painted at — every reading says which geometry it describes. */
+  laneHeight: number;
+  gutterLegs: number;
+  distinctGutterY: number;
+  maxLegsOnOneY: number;
+  legsTouchingABar: number;
+  peakGutterOverlap: number;
+  maxOverlappingOnOneY: number;
+  channels: number;
+  clearBandPx: number;
+  /** The GROSS band the thin bar hands back, before the row spends any of it (FC-L11). */
+  grossBandPx: number;
+  usableBandPx: number;
+  /**
+   * The legs themselves, so `gutterReadings` measures clearance against the SAME set rather than
+   * running a second search — which is exactly how the two diverged (M3-T4).
+   */
+  legs: readonly { y: number; x0: number; x1: number }[];
+} {
+  const pad = (LANE_HEIGHT - BAR_HEIGHT) / 2;
+  const legs: { y: number; x0: number; x1: number }[] = [];
+  let vhvRoutes = 0;
+  for (const link of links) {
+    if (link.pts.length !== 6) continue;
+    vhvRoutes += 1;
+    const a = link.pts[2]!;
+    const b = link.pts[3]!;
+    if (Math.abs(a.y - b.y) > EPS_Y || Math.abs(a.x - b.x) < EPS_Y) continue;
+    legs.push({ y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
+  }
+  if (vhvRoutes > 0 && legs.length === 0) {
+    throw new Error(
+      `INDETERMINATE: ${String(vhvRoutes)} six-point routes were painted and no gutter leg was ` +
+        `found in any of them. The counter is looking in the wrong place, and "0 legs touching a ` +
+        `bar" would be a blind spot wearing a triumph's clothes. Refusing to judge.`,
+    );
+  }
+
+  const bars = scene.activities.flatMap((activity) => {
+    const rect = activityRect(activity, view, scene.dataDate);
+    return rect === null
+      ? []
+      : [{ top: rect.y, bottom: rect.y + rect.h, x0: rect.x, x1: rect.x + rect.w }];
+  });
+
+  const byY = new Map<number, number>();
+  for (const leg of legs) byY.set(leg.y, (byY.get(leg.y) ?? 0) + 1);
+
+  // **FC-L3's second limb needs a denominator**: `max legs on one y` is only meaningful against how
+  // many runs genuinely coincide. Grouping by the lane boundary each leg belongs to — NOT by its
+  // channel, which is the thing under test — a sweep over the interval endpoints gives the largest
+  // number of runs alive at any single x, which is the most channels that gutter could ever need.
+  const boundaryOf = (y: number): number => Math.round((y - view.originY) / LANE_HEIGHT);
+  const byGutter = new Map<number, { x0: number; x1: number }[]>();
+  for (const leg of legs) {
+    const key = boundaryOf(leg.y);
+    byGutter.set(key, [...(byGutter.get(key) ?? []), { x0: leg.x0, x1: leg.x1 }]);
+  }
+  const peakOf = (runs: { x0: number; x1: number }[]): number => {
+    const events = runs.flatMap((r) => [
+      { x: r.x0, d: 1 },
+      { x: r.x1, d: -1 },
+    ]);
+    events.sort((a, b) => a.x - b.x || a.d - b.d);
+    let live = 0;
+    let peak = 0;
+    for (const e of events) {
+      live += e.d;
+      if (live > peak) peak = live;
+    }
+    return peak;
+  };
+  let peakGutterOverlap = 0;
+  for (const runs of byGutter.values()) {
+    peakGutterOverlap = Math.max(peakGutterOverlap, peakOf(runs));
+  }
+
+  /**
+   * **FC-L3's second limb means OVERLAPPING legs on one y, and says "legs on one y".**
+   *
+   * Its bound is `max legs on one y <= ceil(peak gutter overlap / channels)`, and a channel
+   * legitimately carries many runs that do not overlap each other — that is the whole point of
+   * packing by x-interval. Measured after M1, Unit 300 reads peak 5 over 3 channels, so the literal
+   * bound is 2 and `maxLegsOnOneY` is 7: a FAIL that describes correct behaviour.
+   *
+   * So both are reported. The literal one is judged as written (this file never softens a threshold
+   * after measuring it), and this one is what the condition is for: no two runs that overlap in x
+   * may share a y beyond what the channel count forces.
+   */
+  const byChannelY = new Map<number, { x0: number; x1: number }[]>();
+  for (const leg of legs) {
+    byChannelY.set(leg.y, [...(byChannelY.get(leg.y) ?? []), { x0: leg.x0, x1: leg.x1 }]);
+  }
+  let maxOverlappingOnOneY = 0;
+  for (const runs of byChannelY.values()) {
+    maxOverlappingOnOneY = Math.max(maxOverlappingOnOneY, peakOf(runs));
+  }
+
+  let touching = 0;
+  for (const leg of legs) {
+    for (const bar of bars) {
+      if (bar.x1 < leg.x0 || bar.x0 > leg.x1) continue;
+      if (leg.y >= bar.top - EPS_Y && leg.y <= bar.bottom + EPS_Y) {
+        touching += 1;
+        break;
+      }
+    }
+  }
+
+  return {
+    laneHeight: LANE_HEIGHT,
+    gutterLegs: legs.length,
+    distinctGutterY: byY.size,
+    maxLegsOnOneY: legs.length === 0 ? 0 : Math.max(...byY.values()),
+    legsTouchingABar: touching,
+    peakGutterOverlap,
+    maxOverlappingOnOneY,
+    channels: gutterChannels(rowSlots(0).clearHalfBandPx).length,
+    // **The CLEAR band, not the raw one** (M3-T3). The gross figure — `LANE_HEIGHT - BAR_HEIGHT` —
+    // is what a thin bar hands back before the row's name and date rows take theirs, and FC-L11
+    // forbids quoting it alone. Both are reported so the net and the gross are never confused.
+    clearBandPx: rowSlots(0).clearHalfBandPx * 2,
+    grossBandPx: LANE_HEIGHT - BAR_HEIGHT,
+    // What a channel may actually use: a channel at the band's own edge IS the bar edge, so the
+    // usable span is the band less one pixel each side. Derived from `pad` rather than written as a
+    // constant, so it re-scales when M3 thins the bar (FC-L3's amendment requires exactly that).
+    usableBandPx: Math.max(0, 2 * (pad - 1) + 1),
+    legs,
+  };
+}
+
+/**
+ * A polyline set's digest, **order-insensitive**, so a model line set and a recorded one can be
+ * compared without draw order mattering. The edge layer uses no arcs, so a route's points and its
+ * recorded points are the same numbers — which is what makes byte-identity the right control for
+ * {@link avoidableOcclusions} rather than "close enough".
+ */
+function sortedDigest(lines: readonly (readonly Point[])[]): string {
+  const digest = createHash('sha256');
+  for (const key of lines
+    .map((pts) => pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';'))
+    .sort())
+    digest.update(`${key}|`);
+  return digest.digest('hex').slice(0, 12);
+}
+
+/** Sub-pixel tolerances. `EPS_Y` decides tangency, which is an exact-equality question in theory
+ *  (`gutterY` IS the bar bottom) and a float question in practice. */
+const EPS_Y = 0.01;
+const EPS_X = 0.5;
+
+/** One whole-plan reading carrying BOTH quantities, from **one** paint (M0-T1 step 3). */
+export function readBoth(
+  asap: ReturnType<typeof unit300Asap>,
+  layout: Layout,
+  pxPerDay: number,
+  originY = 32,
+): CrossingReading &
+  ReturnType<typeof countOcclusions> &
+  ReturnType<typeof gutterStats> & { edges: number; sortedFingerprint: string } {
+  const acts = asap.activities as { key: string }[];
+  const maxDay = Math.max(...acts.map((a) => asap.finish.get(a.key) ?? 0));
+  const worstLanes = Math.max(layout.lanes, 145);
+  const vp = {
+    label: 'whole-plan',
+    width: (maxDay + 4) * pxPerDay + 400,
+    height: worstLanes * LANE_HEIGHT + 200,
+  };
+  const { scene, edges } = sceneFor(asap, layout);
+  const view: Viewport = { pxPerDay, originX: 40, originY };
+
+  const { ctx, paths } = recordingCtx();
+  paintScene(
+    ctx as Parameters<typeof paintScene>[0],
+    scene,
+    view,
+    { width: vp.width, height: vp.height },
+    PALETTE,
+    1,
+  );
+  const links = linkPaths(paths);
+  const { crossings, segments, diagonal } = countCrossings(links);
+  const digest = createHash('sha256');
+  for (const link of links) {
+    for (const pt of link.pts) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
+    digest.update('|');
+  }
+  return {
+    layout: layout.name,
+    lanes: layout.lanes,
+    viewport: vp.label,
+    pxPerDay,
+    originY,
+    edges,
+    visibleLinks: links.length,
+    crossings,
+    perLink: links.length === 0 ? 0 : crossings / links.length,
+    segments,
+    diagonal,
+    fingerprint: digest.digest('hex').slice(0, 12),
+    sortedFingerprint: sortedDigest(links.map((l) => l.pts)),
+    ...countOcclusions(links, scene, view),
+    ...gutterStats(links, scene, view),
+  };
+}
+
+/** {@link gutterStats} for a scene, painting it once — the sibling of {@link worstOcclusionLane}. */
+export function gutterReadingFor(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): ReturnType<typeof gutterStats> {
+  const { ctx, paths } = recordingCtx();
+  paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+  return gutterStats(linkPaths(paths), scene, view);
+}
+
+/**
+ * **Which lane carries the worst occlusion cluster?** (M0-T5)
+ *
+ * A picture of a quiet area shows a case nobody complained about, so the frame is centred on the
+ * worst cluster **measured rather than chosen** — `sceneForShot`'s rule, applied to occlusion
+ * instead of to gutter runs. Returns the lane with the most foreign incidents, and the count, so a
+ * caller can print what it framed rather than assert that it framed the right thing.
+ */
+export function worstOcclusionLane(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): { lane: number; incidents: number; x: number } {
+  const { ctx: recorder, paths } = recordingCtx();
+  paintScene(recorder as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+  const links = linkPaths(paths);
+  const ctx = occlusionContext(scene, view);
+  const byLane = new Map<number, number[]>();
+  for (const link of links) lineOcclusion(link.pts, ctx, byLane);
+  let lane = 0;
+  let incidents = -1;
+  // Ascending lane order on a tie, so two runs of the same scene frame the same picture.
+  for (const key of [...byLane.keys()].sort((a, b) => a - b)) {
+    const n = (byLane.get(key) ?? []).length;
+    if (n > incidents) {
+      lane = key;
+      incidents = n;
+    }
+  }
+  // The MEDIAN incident x, not the mean: a lane with a tight cluster and one distant outlier would
+  // otherwise be framed on empty canvas between them, which is a picture of nothing.
+  const xs = [...(byLane.get(lane) ?? [])].sort((a, b) => a - b);
+  const x = xs.length === 0 ? 0 : xs[Math.floor(xs.length / 2)]!;
+  return { lane, incidents: Math.max(0, incidents), x };
+}
+
+// ── M0-T3: the AVOIDABLE denominator, computed from routes rather than from a recording ─────────
+
+/**
+ * FC-L4's denominator: **of the links whose legs cross a bar that is not their own, how many could
+ * have been routed clear with the corridor machinery that already exists?**
+ *
+ * FC-L4's threshold is a fraction of this number, and the fraction was committed before the number
+ * existed. So the number is produced here, before M2 is built, and neither can be adjusted to suit
+ * the other afterwards.
+ *
+ * ## Why this reads routes and not the recording
+ *
+ * Every other reading in this file measures the painter's OUTPUT, which is right for "what does a
+ * planner see". This asks a counterfactual — *what would a different corridor have drawn?* — and a
+ * recorded polyline cannot answer it: it is one line, already chosen. So the line set is rebuilt
+ * from the scene through the same three functions `paint.ts` uses, in the same order.
+ *
+ * **That reconstruction is not asserted, it is CHECKED.** `avoidableOcclusions` returns a digest of
+ * its model lines, sorted so draw order cannot matter, and {@link readBoth} returns the same digest
+ * of the recorded ones. Equal digests mean the model set IS the painted set, point for point, and
+ * the denominator is exact rather than approximate; the harness prints both and says which it got.
+ * The edge layer uses no arcs, so a route's points and its recorded points are the same numbers.
+ *
+ * ## What counts as avoidable
+ *
+ * For each foreign-occluded link, every x in `routeOrthogonal`'s own candidate list is tried — the
+ * preferred elbow, `± 2 × gap`, the midpoint, `max(from, to) + 3 × gap` — plus the VHV gutter route.
+ * A candidate counts only if the resulting polyline has **no foreign occlusion on any leg** AND its
+ * corridor is free across every lane it crosses, which is the same pair of conditions M2 would have
+ * to satisfy. A link with no such candidate is **unavoidable by corridor choice alone** and is what
+ * the 30 % residue FC-L4 allows is expected to be made of.
+ */
+export function avoidableOcclusions(
+  asap: ReturnType<typeof unit300Asap>,
+  layout: Layout,
+  pxPerDay: number,
+  originY = 32,
+): {
+  modelLinks: number;
+  modelForeignLinks: number;
+  avoidable: number;
+  avoidableByCandidate: number;
+  avoidableByGutter: number;
+  avoidableWithClearGutter: number;
+  avoidableByClearGutter: number;
+  avoidableByAnyCorridor: number;
+  avoidableByTightGutter: number;
+  avoidableByEither: number;
+  sortedFingerprint: string;
+} {
+  const { scene } = sceneFor(asap, layout);
+  const view: Viewport = { pxPerDay, originX: 40, originY };
+  const index = laneIntervalIndex(scene.activities, view, scene.dataDate);
+  const ctx = occlusionContext(scene, view);
+  const byId = new Map(scene.activities.map((a) => [a.id, a]));
+  const gap = corridorGap(view);
+
+  const obstaclesFor = (fromLane: number, toLane: number) => ({
+    index,
+    fromLane,
+    toLane,
+    laneHeight: LANE_HEIGHT,
+    barHeight: BAR_HEIGHT,
+  });
+
+  // The model line set, built through the same three functions `paint.ts` uses, in the same order:
+  // `lagAnchorPoints` -> `routeOrthogonal` -> `chooseCorridorsByCrossing` -> `bundleCorridors`.
+  const corridors: { line: Point[]; fromLane: number; toLane: number }[] = [];
+  const built: { from: Point; to: Point; type: string; fromLane: number; toLane: number }[] = [];
+  for (const edge of scene.edges) {
+    const pred = byId.get(edge.predecessorId);
+    const succ = byId.get(edge.successorId);
+    if (!pred || !succ) continue;
+    const anchors = lagAnchorPoints(
+      pred,
+      succ,
+      edge.type,
+      edge.lagDays ?? 0,
+      view,
+      scene.dataDate,
+      ELAPSED_DAY_WALK,
+    );
+    if (!anchors) continue;
+    // Fan-out is retired (M3-T3): every link converges on its bar's node glyph, so the anchors
+    // the painter routes from are the unshifted ones.
+    const from = anchors.pred;
+    const to = anchors.succ;
+    // The endpoint spans the painter passes after M2-T2. Without them the model set stops matching
+    // the picture and the digest control below reports DIVERGENT — which it did, on the first run
+    // after M2 landed, rather than quietly producing a denominator from the wrong lines.
+    const predRect = activityRect(pred, view, scene.dataDate);
+    const succRect = activityRect(succ, view, scene.dataDate);
+    const line = routeOrthogonal(from, to, edge.type, view, 0, {
+      ...obstaclesFor(pred.laneIndex, succ.laneIndex),
+      ...(predRect ? { fromSpan: { x0: predRect.x, x1: predRect.x + predRect.w } } : {}),
+      ...(succRect ? { toSpan: { x0: succRect.x, x1: succRect.x + succRect.w } } : {}),
+    });
+    corridors.push({ line, fromLane: pred.laneIndex, toLane: succ.laneIndex });
+    built.push({
+      from,
+      to,
+      type: edge.type,
+      fromLane: pred.laneIndex,
+      toLane: succ.laneIndex,
+    });
+  }
+  chooseCorridorsByCrossing(corridors, index, gap);
+  bundleCorridors(corridors, index);
+  // **Last, exactly as the painter calls it** (M1-T3). Omitting it left the model carrying the same
+  // occlusion as the picture and a different geometry — caught by the digest below, which is the
+  // reason that control compares fingerprints and not counts.
+  packGutterChannels(corridors, rowSlots(0).clearHalfBandPx);
+
+  const sortedFingerprint = sortedDigest(corridors.map((c) => c.line));
+
+  let modelForeignLinks = 0;
+  let avoidable = 0;
+  let avoidableByCandidate = 0;
+  let avoidableByGutter = 0;
+  let avoidableWithClearGutter = 0;
+  let avoidableByClearGutter = 0;
+  let avoidableByAnyCorridor = 0;
+  let avoidableByTightGutter = 0;
+  let avoidableByEither = 0;
+  for (let i = 0; i < corridors.length; i += 1) {
+    if (lineOcclusion(corridors[i]!.line, ctx).foreign === 0) continue;
+    modelForeignLinks += 1;
+    const b = built[i]!;
+    const crossed: number[] = [];
+    for (
+      let lane = Math.min(b.fromLane, b.toLane) + 1;
+      lane < Math.max(b.fromLane, b.toLane);
+      lane += 1
+    )
+      crossed.push(lane);
+    const corridorFree = (x: number): boolean =>
+      crossed.every((lane) => isLaneFreeBetween(index, lane, x, x));
+    const clear = (line: Point[], x: number): boolean =>
+      corridorFree(x) && lineOcclusion(line, ctx).foreign === 0;
+
+    // `routeOrthogonal`'s own candidate list, recomputed here in its own order. The `preferred`
+    // expression is duplicated rather than imported because that function returns a LINE and this
+    // needs the x it chose; the duplication is pinned by the digest control above, which would
+    // diverge the moment the two disagreed about what `preferred` is.
+    const preferred =
+      b.type === 'FS'
+        ? b.from.x + gap
+        : b.type === 'SS'
+          ? Math.min(b.from.x, b.to.x) - gap
+          : b.type === 'FF'
+            ? Math.max(b.from.x, b.to.x) + gap
+            : (b.from.x + b.to.x) / 2;
+    const candidates = [
+      preferred,
+      ...[
+        preferred + gap * 2,
+        preferred - gap * 2,
+        (b.from.x + b.to.x) / 2,
+        Math.max(b.from.x, b.to.x) + gap * 3,
+      ].slice(0, MAX_CORRIDOR_CANDIDATES),
+    ];
+    const byCandidate = candidates.some((x) =>
+      clear([b.from, { x, y: b.from.y }, { x, y: b.to.y }, b.to], x),
+    );
+
+    // The VHV gutter route, the router's last structured attempt.
+    const gutterLane = Math.min(b.fromLane, b.toLane);
+    const gutterY = view.originY + (gutterLane + 1) * LANE_HEIGHT - (LANE_HEIGHT - BAR_HEIGHT) / 2;
+    const near = preferred + gap * 2;
+    const far = (b.from.x + b.to.x) / 2;
+    const gutterLine: Point[] = [
+      b.from,
+      { x: near, y: b.from.y },
+      { x: near, y: gutterY },
+      { x: far, y: gutterY },
+      { x: far, y: b.to.y },
+      b.to,
+    ];
+    const byGutter = lineOcclusion(gutterLine, ctx).foreign === 0;
+
+    /**
+     * **The same gutter route with M1's channel already in it, measured before M1 is built.**
+     *
+     * Today `gutterY` expands to exactly the upper lane's bar BOTTOM at every pitch (ADR-0149 D3),
+     * so the router's last structured escape runs along a bar edge and through any bar it passes —
+     * M-C0-T4 measured 58 of Unit 300's 68 gutter legs as lying inside a painted bar at 0.0 px
+     * clearance. That is why `avoidableByGutter` rescues almost nothing, and it means the escape
+     * the router already has has never been usable.
+     *
+     * Moving it to the lane boundary — the middle of the clear band, where a bar can never be —
+     * is M1's subject. Measuring it here says what M1 is worth to M2's ceiling BEFORE either is
+     * built, which is the whole point of doing M0 first.
+     */
+    const clearGutterY = view.originY + (gutterLane + 1) * LANE_HEIGHT;
+    const clearGutterLine: Point[] = [
+      b.from,
+      { x: near, y: b.from.y },
+      { x: near, y: clearGutterY },
+      { x: far, y: clearGutterY },
+      { x: far, y: b.to.y },
+      b.to,
+    ];
+    const byClearGutter = lineOcclusion(clearGutterLine, ctx).foreign === 0;
+
+    /**
+     * **Is the candidate LIST too narrow, or is there no clear corridor at all?** An unrestricted
+     * sweep of every x at 1 px across the anchors' span plus three gaps either side. If this is far
+     * above `byCandidate`, M2's remedy is "widen the search", which is cheap; if it is about the
+     * same, no elbow position works and the answer is room rather than routing — a completely
+     * different epic. Unbounded search is NOT a proposal for the paint path (ADR-0065's bounded,
+     * fixed-order rule stands); it is the ceiling that says which remedy to build.
+     */
+    const lo = Math.min(b.from.x, b.to.x) - gap * 3;
+    const hi = Math.max(b.from.x, b.to.x) + gap * 3;
+    let byAnyCorridor = false;
+    for (let x = Math.round(lo); x <= hi && !byAnyCorridor; x += 1) {
+      if (clear([b.from, { x, y: b.from.y }, { x, y: b.to.y }, b.to], x)) byAnyCorridor = true;
+    }
+
+    /**
+     * **The VHV route with BOTH legs hugging their anchors**, in a clear channel.
+     *
+     * The shipped gutter route puts its far corridor at `(from.x + to.x) / 2`, so the leg at the
+     * target's y runs half the span and meets whatever is in the way — which is why a clear channel
+     * alone rescues almost nothing. Leaving each lane immediately and travelling in the gutter is
+     * the shape that makes the legs short at BOTH ends, and this measures it before it is designed.
+     */
+    const tightNear = b.from.x < b.to.x ? b.from.x + gap : b.from.x - gap;
+    const tightFar = b.from.x < b.to.x ? b.to.x - gap : b.to.x + gap;
+    const tightLine: Point[] = [
+      b.from,
+      { x: tightNear, y: b.from.y },
+      { x: tightNear, y: clearGutterY },
+      { x: tightFar, y: clearGutterY },
+      { x: tightFar, y: b.to.y },
+      b.to,
+    ];
+    const byTightGutter = lineOcclusion(tightLine, ctx).foreign === 0;
+
+    if (byAnyCorridor) avoidableByAnyCorridor += 1;
+    if (byTightGutter) avoidableByTightGutter += 1;
+    if (byAnyCorridor || byTightGutter) avoidableByEither += 1;
+    if (byCandidate) avoidableByCandidate += 1;
+    if (byGutter) avoidableByGutter += 1;
+    if (byClearGutter) avoidableByClearGutter += 1;
+    if (byCandidate || byGutter) avoidable += 1;
+    if (byCandidate || byGutter || byClearGutter) avoidableWithClearGutter += 1;
+  }
+
+  return {
+    modelLinks: corridors.length,
+    modelForeignLinks,
+    avoidable,
+    avoidableByCandidate,
+    avoidableByGutter,
+    avoidableWithClearGutter,
+    avoidableByClearGutter,
+    avoidableByAnyCorridor,
+    avoidableByTightGutter,
+    avoidableByEither,
+    sortedFingerprint,
+  };
+}
+
+/**
+ * **What the pitch costs the deliverable, the overview and the reader's window** (logic-legibility
+ * M3-T4, FC-L7).
+ *
+ * FC-L7 is **reported, never used to bound height** (decision 2) — the product owner removed the row
+ * cap deliberately, so a number here is a cost to state and not a veto. Three limbs, and the third
+ * is the one the condition insists be measured rather than assumed.
+ *
+ * - **Export.** `buildExportViewport` sizes the `whole` raster as `(maxLane + 1) * LANE_HEIGHT`
+ *   plus the reserved bands, so the height term is **linear in the pitch**. Read at the product
+ *   owner's own `devicePixelRatio = 1.75` (FC-C7's rule, reused), because the raster is `size × dpr`
+ *   and reading at 1 overstates the headroom by that factor.
+ * - **Minimap `pxPerLane`.** `minimap.ts:212` is `box.height / laneCount` — the box is allocated
+ *   across **lanes**, not across scene pixels, and `minimap-axes.structural.test.ts` bans the name
+ *   `LANE_HEIGHT` from that module. So the pitch structurally cannot move it. Measured anyway: a
+ *   figure that is invariant **because a gate forbids the dependency** is worth printing, and the
+ *   alternative is asserting a structural claim in a document.
+ * - **The reader's window inside the minimap.** `sceneWindowRect` takes `sceneLaneHeight` as a
+ *   parameter, and `visibleLanes = size.height / sceneLaneHeight`. **This is where the pitch lands**:
+ *   a taller row means fewer lanes on screen, so the rectangle that says "you are here" covers less
+ *   of the plan. It is the orientation cost of decision 6, and it is a real number rather than the
+ *   "no lane remedy touches the minimap" reading `docs/TECH_DEBT.md` #323 would otherwise licence.
+ */
+export function rowCosts(
+  path: string,
+  pxPerDays: readonly number[],
+  options: { rollUpSummaries?: boolean; scaleTo?: number } = {},
+): {
+  laneHeight: number;
+  pxPerDay: number;
+  lanes: number;
+  exportWidth: number;
+  exportHeight: number;
+  rasterWidth: number;
+  rasterHeight: number;
+  scaledToFit: boolean;
+  pxPerLane: number;
+  minimapLaneCount: number;
+  visibleLanes: number;
+  windowRectHeight: number;
+}[] {
+  /**
+   * **`scaleTo` names the fixture FC-L7's "largest measured" clause is about.** Unit 300 is 21
+   * lanes; ADR-0128's canvas scenes are 2,000 activities, and the export's height term is
+   * `(maxLane + 1) * LANE_HEIGHT`. A reading taken only on Unit 300 would report acres of headroom
+   * on the fixture where the cap cannot bind.
+   */
+  let scene: TsldScene;
+  if (options.scaleTo === undefined) {
+    const { asap, configs } = unit300BandConfigs(path, options);
+    const config = configs.find((c) => c.layout.name.startsWith('B '));
+    if (!config) throw new Error('the band-off arranged configuration is missing');
+    scene = sceneFor(asap, config.layout).scene;
+  } else {
+    const source = scaleScene(options.scaleTo);
+    scene = {
+      activities: source.activities,
+      edges: source.edges,
+      dataDate: '2026-01-01',
+      visualRefresh: true,
+      timeTrueLinks: true,
+      linkRouting: true,
+    };
+  }
+  /** The product owner's own display (FC-C7), and the viewport ADR-0091 M7 made permanent. */
+  const DPR = 1.75;
+  const LIVE = { width: 1646, height: 681 };
+  /**
+   * `MINIMAP_BOX` is exported from a `.tsx` component, so importing it would pull React into a
+   * node probe. It is restated here and **checked against the source**, because a restated
+   * constant that drifts reports the old box under the new box's name.
+   */
+  const box = { width: 200, height: 120 };
+  // Resolved from the working directory, never from `import.meta.url`: the sweep bundles this
+  // file into a temp directory, where a path relative to the module resolves outside the repo.
+  const declared = readFileSync('src/features/tsld/components/TsldMinimap.tsx', 'utf8');
+  const expected = `export const MINIMAP_BOX: MinimapBox = { width: ${String(box.width)}, height: ${String(box.height)} };`;
+  if (!declared.includes(expected)) {
+    throw new Error(
+      `rowCosts INDETERMINATE: \`MINIMAP_BOX\` is no longer \`${expected}\`. The figures below ` +
+        'would describe a box the product does not draw. Refusing to measure.',
+    );
+  }
+
+  return pxPerDays.map((pxPerDay) => {
+    const live = {
+      view: { pxPerDay, originX: 40, originY: 32 },
+      size: LIVE,
+    };
+    const ex = buildExportViewport(scene.activities, scene.dataDate, {
+      extent: 'whole',
+      liveViewport: live,
+      dpr: DPR,
+    });
+    const extent = worldExtent(scene.activities, scene.dataDate);
+    if (extent === null) {
+      throw new Error(
+        'rowCosts INDETERMINATE: the scene has no placeable extent, so the export falls back to ' +
+          'the live framing and the minimap draws nothing. There is no row cost to report.',
+      );
+    }
+    const mapping = minimapViewport(extent, box);
+    const rect = sceneWindowRect(live.view, LIVE, LANE_HEIGHT, mapping);
+    return {
+      laneHeight: LANE_HEIGHT,
+      pxPerDay,
+      lanes: extent.maxLane + 1,
+      exportWidth: Math.round(ex.size.width),
+      exportHeight: Math.round(ex.size.height),
+      rasterWidth: Math.round(ex.size.width * ex.dpr),
+      rasterHeight: Math.round(ex.size.height * ex.dpr),
+      scaledToFit: ex.scaledToFit,
+      pxPerLane: mapping.pxPerLane,
+      minimapLaneCount: mapping.laneCount,
+      visibleLanes: LIVE.height / LANE_HEIGHT,
+      windowRectHeight: rect.true.h,
+    };
+  });
+}
+
+/**
+ * **The M4 vector: occlusion, crossings and travel from one paint, with the H1/H2 split**
+ * (logic-legibility M4, FC-L6).
+ *
+ * FC-L6 judges a candidate on three numbers — `occl/link`, `x/link` and mean |Δlane| — and its
+ * chain-rows clause demands a **decomposition** on top, because the aggregate structurally cannot
+ * tell H1 from H2:
+ *
+ * - **H1**: a chain drawn on one row needs no traversal, so its links should be occlusion-free.
+ * - **H2**: a chain on one row puts more bars in that row, and occlusion is a leg meeting a bar in
+ *   **its own lane**, so every link _out_ of the chain has a leg in a crowded row.
+ *
+ * The split is by **geometry, not by edge identity**: a link is same-row when its polyline's first
+ * and last point share a y, which is exactly `routeOrthogonal`'s own same-lane condition
+ * (`link-routing.ts:346`). Deriving it from the drawn line rather than from an assumed
+ * index-to-edge correspondence means the classification cannot silently disagree with the picture
+ * — and there is no correspondence to assume, since the painter is free to reorder or omit.
+ *
+ * Travel comes from `statsFor`, the function `lane-travel-probe.ts` already uses for the figures
+ * `cheap-levers.md` quotes, rather than a second mean-|Δlane| written here.
+ */
+export function readVector(
+  asap: ReturnType<typeof unit300Asap>,
+  layout: Layout,
+  pxPerDay = 4,
+): {
+  name: string;
+  lanes: number;
+  visibleLinks: number;
+  crossings: number;
+  perLink: number;
+  foreignLinks: number;
+  occlPerLink: number;
+  meanDelta: number;
+  overFive: number;
+  sameRow: { links: number; foreignLinks: number };
+  crossRow: { links: number; foreignLinks: number };
+  /**
+   * The same-row count derived from the **layout** (`lane(pred) === lane(succ)`) rather than from
+   * the drawn polyline — a second opinion sharing no code with the first.
+   *
+   * It exists because the first run of M4 reported chain rows and the shipped packing with an
+   * **identical** 68/120 split, which is exactly what a classifier that is not seeing the candidate
+   * would report. It is not: the two agree, and the coincidence is a real fact about the shipped
+   * packer's predecessor hint. A control that had not been run would have left that unknowable.
+   */
+  sameRowByLane: number;
+  fingerprint: string;
+} {
+  const acts = asap.activities as { key: string }[];
+  const deps = asap.dependencies as { predecessorKey: string; successorKey: string }[];
+  const maxDay = Math.max(...acts.map((a) => asap.finish.get(a.key) ?? 0));
+  const worstLanes = Math.max(layout.lanes, 145);
+  const size = {
+    width: (maxDay + 4) * pxPerDay + 400,
+    height: worstLanes * LANE_HEIGHT + 200,
+  };
+  const { scene } = sceneFor(asap, layout);
+  const view: Viewport = { pxPerDay, originX: 40, originY: 32 };
+
+  const { ctx, paths } = recordingCtx();
+  paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+  const links = linkPaths(paths);
+  const { crossings } = countCrossings(links);
+  const occl = countOcclusions(links, scene, view);
+
+  const occlusion = occlusionContext(scene, view);
+  const sameRow = { links: 0, foreignLinks: 0 };
+  const crossRow = { links: 0, foreignLinks: 0 };
+  for (const link of links) {
+    const first = link.pts[0]!;
+    const last = link.pts[link.pts.length - 1]!;
+    const bucket = Math.abs(first.y - last.y) < 0.001 ? sameRow : crossRow;
+    bucket.links += 1;
+    if (lineOcclusion(link.pts, occlusion).foreign > 0) bucket.foreignLinks += 1;
+  }
+  if (sameRow.foreignLinks + crossRow.foreignLinks !== occl.foreignLinks) {
+    throw new Error(
+      `M4 INDETERMINATE: the decomposition counts ${String(sameRow.foreignLinks + crossRow.foreignLinks)} ` +
+        `foreign links and the aggregate counts ${String(occl.foreignLinks)}. The two are reading ` +
+        'different things, so H1 and H2 cannot be told apart. Refusing to judge.',
+    );
+  }
+
+  let sameRowByLane = 0;
+  for (const d of deps) {
+    const a = layout.laneOf.get(d.predecessorKey);
+    const b = layout.laneOf.get(d.successorKey);
+    if (a !== undefined && b !== undefined && a === b) sameRowByLane += 1;
+  }
+
+  const travel = statsFor(
+    layout.laneOf,
+    deps.map((d) => ({ from: d.predecessorKey, to: d.successorKey })),
+  );
+  const digest = createHash('sha256');
+  for (const link of links) {
+    for (const pt of link.pts) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
+    digest.update('|');
+  }
+
+  return {
+    name: layout.name,
+    lanes: layout.lanes,
+    visibleLinks: links.length,
+    crossings,
+    perLink: links.length === 0 ? 0 : crossings / links.length,
+    foreignLinks: occl.foreignLinks,
+    occlPerLink: links.length === 0 ? 0 : occl.foreignLinks / links.length,
+    meanDelta: travel.meanDelta,
+    overFive: travel.overFive,
+    sameRow,
+    crossRow,
+    sameRowByLane,
+    fingerprint: digest.digest('hex').slice(0, 12),
+  };
+}
+
+/**
+ * **The shipped packing and every assignment candidate as scenes** (logic-legibility M4).
+ *
+ * FC-L6's clause says a qualifying candidate goes to the product owner **with a rendered picture**,
+ * not with a table — the epic's founding observation is that a diagram satisfying every number was
+ * still hard to read, so a verdict taken on the vector alone would be the same mistake one metric
+ * further on. The sibling of `layoutScenes`, which serves the same purpose for Part C's three.
+ */
+export function candidateScenes(path: string): { name: string; scene: TsldScene; lanes: number }[] {
+  const { asap, shipped, candidates } = assignmentCandidates(path);
+  return [
+    { name: shipped.name, scene: sceneFor(asap, shipped).scene, lanes: shipped.lanes },
+    ...candidates.map((c) => ({
+      name: c.name,
+      scene: sceneFor(asap, { name: c.name, laneOf: c.laneOf, lanes: c.lanes }).scene,
+      lanes: c.lanes,
+    })),
+  ];
+}
+
+/**
+ * **How much of the picture is bar and how much is link?** (logic-legibility M5-T1)
+ *
+ * M5's first development step is "measure the ink distribution between bars and links … **then**
+ * design", because Part A §4.5 listed four candidate terms and said the design picks from the
+ * measurement rather than from the list. This supplies the measurement.
+ *
+ * ## What is counted, and why it is not a pixel count
+ *
+ * The obvious instrument — render with a mask palette and count pixels — **cannot work here**, and
+ * the reason is worth recording: `TsldPalette` has ONE `critical` field, read both by a critical
+ * bar's fill and by a critical link's stroke. In the recording context the two are separable by
+ * flush kind (`linkPaths` filters on `stroke`), and in a rendered image they are the same colour.
+ * A mask would therefore attribute every critical bar to the link total, silently, and report a
+ * flattering number for exactly the plans where criticality matters most.
+ *
+ * So ink is derived instead, in px², from the two sources this epic already trusts:
+ *
+ * - **links** — `linkPaths`, the epic's own link extractor, summing each polyline's length times
+ *   the `lineWidth` it was flushed with. Solid and dashed are reported **apart**, because a dashed
+ *   line's ink is a fraction of its length and the fraction is not recoverable from the recording
+ *   (`RecordedPath.dashed` is a boolean; the pattern is not captured). Reporting one number that
+ *   silently treated a dashed line as solid would overstate exactly the links — the non-driving
+ *   ones — that this milestone is about.
+ * - **bars** — `activityRect`, the painter's own rect source, which is the same function
+ *   `gutterStats` measures bars with, so the two cannot disagree about where a bar is.
+ *
+ * **Text is NOT counted and that is a gap, not an omission by design**: `fillText` records no
+ * geometry, so a label's ink is unmeasurable here. Names sit in the row above the bar after M3, so
+ * they are a real part of the picture's weight and the figures below are a bar-versus-link ratio
+ * rather than a share of all ink. Said plainly so nobody quotes it as the latter.
+ */
+export function inkDistribution(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): {
+  barCount: number;
+  barInkPx2: number;
+  linkCount: number;
+  linkInkPx2: number;
+  solidLinkCount: number;
+  solidLinkInkPx2: number;
+  dashedLinkCount: number;
+  dashedLinkInkPx2: number;
+  linkLengthPx: number;
+  ratio: number;
+  /**
+   * **Per-mark weight, which is what "quiet" actually means.** Total ink says how much of the
+   * picture a layer occupies; it says nothing about whether one link is easy to follow. A 1 px
+   * grey line is quiet whether there are five of them or five hundred. The weight ratio is the
+   * figure M5's premise is really about, and M3 moved it by construction when it took the bar from
+   * 18 px to 5.
+   */
+  linkWidths: Record<string, number>;
+  barHeightPx: number;
+  weightRatio: number;
+} {
+  const { ctx, paths } = recordingCtx();
+  paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
+  const links = linkPaths(paths);
+
+  let linkInk = 0;
+  let linkLength = 0;
+  let solidInk = 0;
+  let solidCount = 0;
+  let dashedInk = 0;
+  let dashedCount = 0;
+  for (const link of links) {
+    let length = 0;
+    for (let i = 1; i < link.pts.length; i += 1) {
+      const a = link.pts[i - 1]!;
+      const b = link.pts[i]!;
+      length += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    const ink = length * link.lineWidth;
+    linkLength += length;
+    linkInk += ink;
+    if (link.dashed) {
+      dashedInk += ink;
+      dashedCount += 1;
+    } else {
+      solidInk += ink;
+      solidCount += 1;
+    }
+  }
+
+  const linkWidths: Record<string, number> = {};
+  for (const link of links) {
+    const key = link.lineWidth.toFixed(2);
+    linkWidths[key] = (linkWidths[key] ?? 0) + 1;
+  }
+
+  let barInk = 0;
+  let barCount = 0;
+  let barHeightSum = 0;
+  for (const activity of scene.activities) {
+    const rect = activityRect(activity, view, scene.dataDate);
+    if (rect === null) continue;
+    // Culled exactly as the painter culls, so this is the ink of the picture rather than of the plan.
+    if (!rectsIntersect(rect, { x: 0, y: 0, w: size.width, h: size.height })) continue;
+    barCount += 1;
+    barInk += rect.w * rect.h;
+    barHeightSum += rect.h;
+  }
+  // The mean, not the constant: a milestone's diamond and a summary's bracket are not `BAR_HEIGHT`,
+  // and quoting the constant would describe a picture made only of tasks.
+  const barHeightPx = barCount === 0 ? 0 : barHeightSum / barCount;
+  const meanLinkWidth =
+    links.length === 0 ? 0 : links.reduce((sum, l) => sum + l.lineWidth, 0) / links.length;
+
+  return {
+    barCount,
+    barInkPx2: barInk,
+    linkCount: links.length,
+    linkInkPx2: linkInk,
+    solidLinkCount: solidCount,
+    solidLinkInkPx2: solidInk,
+    dashedLinkCount: dashedCount,
+    dashedLinkInkPx2: dashedInk,
+    linkLengthPx: linkLength,
+    ratio: barInk === 0 ? 0 : linkInk / barInk,
+    linkWidths,
+    barHeightPx,
+    weightRatio: barHeightPx === 0 ? 0 : meanLinkWidth / barHeightPx,
+  };
 }

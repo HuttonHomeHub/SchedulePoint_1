@@ -1,8 +1,8 @@
 import type { ActivityType } from '@repo/types';
 
 import {
+  activityHitRect,
   activityRect,
-  BAR_HEIGHT,
   isMilestone,
   type Point,
   type Rect,
@@ -40,12 +40,15 @@ export function hitTest(
   for (let i = activities.length - 1; i >= 0; i -= 1) {
     const activity = activities[i]!;
     const rect = activityRect(activity, view, dataDateIso);
+    // The row band, not the drawn line — the same separation `classifyHit` makes below, and it has
+    // to be made in both or the two disagree about which bar the pointer is over.
+    const target = rect ? activityHitRect(rect) : null;
     if (
-      rect &&
-      point.x >= rect.x &&
-      point.x <= rect.x + rect.w &&
-      point.y >= rect.y &&
-      point.y <= rect.y + rect.h
+      target &&
+      point.x >= target.x &&
+      point.x <= target.x + target.w &&
+      point.y >= target.y &&
+      point.y <= target.y + target.h
     ) {
       return activity.id;
     }
@@ -94,9 +97,19 @@ export function isResizeEligibleType(type: ActivityType): boolean {
  * exception the bar-end zones ({@link EDGE_HANDLE_PX}) take. It is deliberately wider than those
  * zones because the anchor is a *point* target with no bar edge to aim at, and because the anchor
  * now paints a visible handle (`TsldScene.lagHandles`) the user aims for: an under-sized target
- * around a drawn dot is the defect this widens away. The vertical tolerance stays `BAR_HEIGHT / 2`
- * (the bar the anchor sits on), which also covers the M5 fan-out offset (±`FAN_OUT_MAX_PX`). */
+ * around a drawn dot is the defect this widens away. */
 export const LAG_ANCHOR_PX = 12;
+
+/**
+ * Half-height (px) of that same grab zone.
+ *
+ * It was `BAR_HEIGHT / 2` — "the bar the anchor sits on", which also covered fan-out's ±6 spread.
+ * **Both halves of that justification expired at M3-T3** (logic-legibility): fan-out is retired,
+ * and a 5 px bar makes the half-height 2.5, so a zone the docblock above says _"meets WCAG 2.5.8
+ * outright"_ would have become 24 × 5. It is symmetric with {@link LAG_ANCHOR_PX} now, which is
+ * what that claim requires and what the row's ~23 px of clear pad makes available.
+ */
+export const LAG_ANCHOR_VERTICAL_PX = LAG_ANCHOR_PX;
 
 /**
  * Id→activity index for {@link classifyHit}'s lag branch, memoised on the activities ARRAY
@@ -212,7 +225,7 @@ export function classifyHit(
       const anchorBar = predFinish ? succ : pred;
       if (
         Math.abs(point.x - anchor.x) <= LAG_ANCHOR_PX &&
-        Math.abs(point.y - anchor.y) <= BAR_HEIGHT / 2
+        Math.abs(point.y - anchor.y) <= LAG_ANCHOR_VERTICAL_PX
       ) {
         return { kind: 'lagAnchor', id: anchorBar.id, dependencyId: edge.id! };
       }
@@ -222,11 +235,18 @@ export function classifyHit(
     const activity = activities[i]!;
     const rect = activityRect(activity, view, dataDateIso);
     if (!rect) continue;
+    // **The target is the row band, not the drawn line** (logic-legibility M3-T3). The bar is
+    // 5 px tall under the row treatment; asking the pointer question of the drawn rect would make
+    // selecting any activity a 5 px target, failing WCAG 2.2 §2.5.8 across the whole product.
+    // Vertical only — x is time here, so a wider target would claim days the activity does not
+    // occupy. The bar-end handle arithmetic below stays on the DRAWN rect, because those zones are
+    // about where the bar's ends are.
+    const target = activityHitRect(rect);
     if (
-      point.x < rect.x ||
-      point.x > rect.x + rect.w ||
-      point.y < rect.y ||
-      point.y > rect.y + rect.h
+      point.x < target.x ||
+      point.x > target.x + target.w ||
+      point.y < target.y ||
+      point.y > target.y + target.h
     ) {
       continue;
     }

@@ -16,8 +16,20 @@ const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
 
 import { UNDO_REDO_ENABLED } from '../../../config/env';
+import { BAR_HEIGHT, BAR_PAD, DEFAULT_VIEWPORT, LANE_HEIGHT } from '../render/render-model';
 
 import { TsldPanel } from './TsldPanel';
+
+/**
+ * The vertical centre of a lane's bar under `DEFAULT_VIEWPORT` — what a pointer aims at.
+ *
+ * Derived rather than written: these were literal `clientY` values chosen when a bar was 18 px
+ * tall and sat 5 px inside a 28 px lane, and the logic-legibility row treatment moves both.
+ */
+const laneMid = (lane: number): number =>
+  DEFAULT_VIEWPORT.originY + lane * LANE_HEIGHT + BAR_PAD + BAR_HEIGHT / 2;
+const LANE_MID_0 = laneMid(0);
+const LANE_MID_1 = laneMid(1);
 
 beforeEach(() => announceSpy.mockClear());
 
@@ -121,9 +133,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
 
     // Drag on the canvas to draw a bar, then release.
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 50, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 120, clientY: 50, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
 
     // The name popover opens; name it and commit.
     const input = await screen.findByLabelText('Name');
@@ -139,8 +151,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const onCreate = vi.fn().mockResolvedValue({ recalcConflict: 'Recalculating elsewhere.' });
     const { canvas } = renderEditable(onCreate);
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
     fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Pour slab' },
     });
@@ -156,8 +168,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const onCreate = vi.fn().mockRejectedValue(new Error('That name is taken'));
     const { canvas } = renderEditable(onCreate);
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
     fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Excavate' },
     });
@@ -183,9 +195,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
     // Default (select) mode: grab the bar body (day 0 at lane 0 sits near x≈60) and drag right.
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 1 });
     await waitFor(() =>
       expect(onReposition).toHaveBeenCalledWith(expect.objectContaining({ activityId: 'a1' })),
     );
@@ -210,9 +222,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     );
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 1 });
 
     // The conflict is surfaced in the alert banner…
     expect(await screen.findByRole('alert')).toHaveTextContent('wasn’t applied');
@@ -235,8 +247,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
     // Press and release on the bar body without moving → select, never a reposition.
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
     await waitFor(() =>
       expect(utils.container.querySelector('[role="option"][aria-selected="true"]')).not.toBeNull(),
     );
@@ -258,9 +270,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
     // Grab the lane-0 bar and drag straight down one row (LANE_HEIGHT = 28, fixed — no y zoom).
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 60, clientY: 82, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 82, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 60, clientY: LANE_MID_1, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_1, pointerId: 1 });
     await waitFor(() => expect(onReposition).toHaveBeenCalled());
     // Only the lane axis is reported — no startDay ⇒ the route takes the no-recalc lane path.
     expect(onReposition.mock.calls[0]?.[0]).toEqual({ activityId: 'a1', laneIndex: 1 });
@@ -297,9 +309,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
     // Start a reposition: grab the bar body (day 0..2 at lane 0 ⇒ x 40..82) and drop it right.
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 1 });
     expect(onReposition).toHaveBeenCalledTimes(1);
     return { ...utils, canvas, onReposition, write };
   }
@@ -313,8 +325,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
     fireEvent.pointerUp(canvas, { clientX: 160, clientY: 200, pointerId: 2 });
     // The pan moved the bar off its old pixels, so a click where it USED to sit selects nothing —
     // which is only possible if the viewport really moved during the write.
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 3 });
     expect(container.querySelector('[role="option"][aria-selected="true"]')).toBeNull();
     await act(async () => {
       write.resolve({ applied: true, conflict: null });
@@ -328,9 +340,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     // The busy state is stated to AT on the canvas container while the write is pending…
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
     // …and a second edit grab is refused BEFORE it starts: a body drag issues no second write.
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 2 });
-    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
-    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 2 });
     expect(onReposition).toHaveBeenCalledTimes(1);
     await act(async () => {
       write.resolve({ applied: true, conflict: null });
@@ -349,9 +361,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     // The banner explains, the busy gate clears, and a NEW edit grab starts a fresh write.
     expect(await screen.findByRole('alert')).toHaveTextContent('wasn’t applied');
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 2 });
-    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
-    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 2 });
     expect(onReposition).toHaveBeenCalledTimes(2);
   });
 
@@ -364,17 +376,17 @@ describe('TsldPanel editing (M2, flag on)', () => {
     });
     expect(await screen.findByRole('alert')).toHaveTextContent('locked by Dana');
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 2 });
-    fireEvent.pointerMove(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
-    fireEvent.pointerUp(canvas, { clientX: 110, clientY: 54, pointerId: 2 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 2 });
+    fireEvent.pointerUp(canvas, { clientX: 110, clientY: LANE_MID_0, pointerId: 2 });
     expect(onReposition).toHaveBeenCalledTimes(2);
   });
 
   it('the create popover still owns the canvas totally: no pan while it is open, and it is not "busy"', async () => {
     const { canvas, container } = renderEditable();
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
     await screen.findByLabelText('Name');
     // The popover is a held question, not a pending write — the busy state must not claim it.
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
@@ -386,8 +398,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
     // …proven by the bar still being selectable at its ORIGINAL pixels after the popover closes.
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select' })); // disarm the Add tool first
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 54, pointerId: 3 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 3 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 3 });
     await waitFor(() =>
       expect(container.querySelector('[role="option"][aria-selected="true"]')).not.toBeNull(),
     );
@@ -498,9 +510,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
     // Grab a1's finish handle (right end ≈ x78) and release over a2's body (lane 1 ≈ y82).
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
     await waitFor(() =>
       expect(onLink).toHaveBeenCalledWith({ predecessorId: 'a1', successorId: 'a2', type: 'FS' }),
     );
@@ -547,9 +559,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     );
     const canvas = utils.container.querySelector('canvas');
     if (!canvas) throw new Error('canvas not rendered');
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
     // The doomed POST is never made; the banner (and live region) explain why locally.
     expect(await screen.findByRole('alert')).toHaveTextContent(
       /already exists between these activities/i,
@@ -576,9 +588,24 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     const canvas = utils.container.querySelector('canvas')!;
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1, shiftKey: true });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1, shiftKey: true });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1, shiftKey: true });
+    fireEvent.pointerDown(canvas, {
+      clientX: 78,
+      clientY: LANE_MID_0,
+      pointerId: 1,
+      shiftKey: true,
+    });
+    fireEvent.pointerMove(canvas, {
+      clientX: 130,
+      clientY: LANE_MID_1,
+      pointerId: 1,
+      shiftKey: true,
+    });
+    fireEvent.pointerUp(canvas, {
+      clientX: 130,
+      clientY: LANE_MID_1,
+      pointerId: 1,
+      shiftKey: true,
+    });
     await waitFor(() =>
       expect(onLink).toHaveBeenCalledWith(expect.objectContaining({ type: 'SS' })),
     );
@@ -605,9 +632,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     const canvas = utils.container.querySelector('canvas')!;
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
     expect(await screen.findByRole('alert')).toHaveTextContent('create a cycle');
     expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Linked'));
   });
@@ -646,9 +673,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
     );
     const canvas = utils.container.querySelector('canvas')!;
     // Grab a1's finish handle (x≈78) and drag: without a link handler it must reposition, not link.
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 120, clientY: 54, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
     await waitFor(() =>
       expect(onReposition).toHaveBeenCalledWith(expect.objectContaining({ activityId: 'a1' })),
     );
@@ -677,9 +704,9 @@ describe('TsldPanel editing (M2, flag on)', () => {
       />,
     );
     const canvas = utils.container.querySelector('canvas')!;
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: 54, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: 82, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
     const refresh = await screen.findByRole('button', { name: 'Refresh' });
     fireEvent.click(refresh);
     expect(onRefresh).toHaveBeenCalledTimes(1);
@@ -689,8 +716,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
   it('cancels the create popover without calling onCreate', async () => {
     const { canvas, onCreate } = renderEditable();
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
-    fireEvent.pointerDown(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 60, clientY: 50, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 60, clientY: LANE_MID_0, pointerId: 1 });
 
     const cancel = await screen.findByRole('button', { name: 'Cancel' });
     fireEvent.click(cancel);

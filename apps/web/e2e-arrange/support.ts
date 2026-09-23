@@ -217,3 +217,108 @@ export function validXerFile(): { name: string; mimeType: string; buffer: Buffer
     buffer: Buffer.from(xer, 'utf8'),
   };
 }
+
+/** One dependency between two seeded activities, through the real REST API. */
+export async function seedDependency(
+  page: Page,
+  orgSlug: string,
+  predecessorId: string,
+  successorId: string,
+): Promise<void> {
+  const planId = openPlanId(page);
+  const error = await page.evaluate(
+    async ({ org, id, pred, succ }: { org: string; id: string; pred: string; succ: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ predecessorId: pred, successorId: succ, type: 'FS', lagDays: 0 }),
+      });
+      return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+    },
+    { org: orgSlug, id: planId, pred: predecessorId, succ: successorId },
+  );
+  if (error !== null) throw new Error(`seeding the dependency was rejected: ${error}`);
+}
+
+/**
+ * **Where the diagram's ink is, read from the painted canvas.**
+ *
+ * Returns, for each pixel row, how many pixels are bar-coloured, how many are link-coloured, and
+ * the LONGEST CONTIGUOUS run of link colour — which is enough to find the bar rows (long runs of
+ * bar colour) and therefore the gutters between them, without the test knowing the viewport's
+ * `originY` or pitch.
+ *
+ * **`linkRun` is what makes a gutter assertion discriminate, and it was added because the first
+ * version did not.** Every link that changes lane sends a VERTICAL corridor through the gutters
+ * between them, so "some link ink in a gutter" is true whatever the horizontal legs do — the test
+ * passed identically against the pre-M1 datum. A vertical crossing is one or two pixels wide; a
+ * gutter leg is tens or hundreds. The run length tells them apart; the pixel count cannot.
+ *
+ * Colour is classified by saturation rather than by a literal: a bar is a saturated plot fill and a
+ * link is a near-neutral grey, so a token re-value (ADR-0102 re-valued the whole canvas scope once)
+ * changes the numbers and not the classification. A hex literal here would be exactly the second
+ * opinion about a token that `resolveTsldPalette` exists to prevent.
+ */
+export async function canvasInk(
+  page: Page,
+): Promise<{ rows: { bar: number; link: number; linkRun: number }[]; height: number }> {
+  return page.evaluate(() => {
+    /** How long a background gap a dashed link may bridge before the run is over, in device px. */
+    const DASH_BRIDGE_PX = 10;
+    // **The SCENE canvas, chosen by area.** `TsldCanvas` mounts several siblings — the WBS band,
+    // the resource strip, the interaction layer — and `querySelector('canvas')` returns whichever
+    // is first in the DOM, which is not the one the bars and links are painted on.
+    const canvases = [...globalThis.document.querySelectorAll('canvas')];
+    if (canvases.length === 0) {
+      throw new Error('no canvas is mounted — there is no diagram to read');
+    }
+    const canvas = canvases.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) throw new Error('no 2D context — the read would be blank and look like one');
+    const { width, height } = canvas;
+    const data = ctx.getImageData(0, 0, width, height).data;
+    const rows: { bar: number; link: number; linkRun: number }[] = [];
+    for (let y = 0; y < height; y += 1) {
+      let bar = 0;
+      let link = 0;
+      let linkRun = 0;
+      let run = 0;
+      let gap = 0;
+      for (let x = 0; x < width; x += 1) {
+        const i = (y * width + x) * 4;
+        const r = data[i] ?? 0;
+        const g = data[i + 1] ?? 0;
+        const b = data[i + 2] ?? 0;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const chroma = max - min;
+        if (chroma > 40) {
+          bar += 1;
+          run = 0;
+          gap = 0;
+        } else if (max < 190 && max > 40) {
+          link += 1;
+          run += gap + 1;
+          gap = 0;
+          if (run > linkRun) linkRun = run;
+        } else {
+          // Background. A dashed link is a real line, so a gap shorter than a dash bridges rather
+          // than ending the run; anything longer ends it.
+          //
+          // The first version of this branch left `run` untouched, which never ends a run at all —
+          // so `linkRun` was just "link pixels since the last bar pixel", identical to the count it
+          // was added to replace. It is recorded because the test then passed against the very
+          // defect it was written to catch, twice, and only a deliberate red run said so.
+          gap += 1;
+          if (gap > DASH_BRIDGE_PX) {
+            run = 0;
+            gap = 0;
+          }
+        }
+      }
+      rows.push({ bar, link, linkRun });
+    }
+    return { rows, height };
+  });
+}

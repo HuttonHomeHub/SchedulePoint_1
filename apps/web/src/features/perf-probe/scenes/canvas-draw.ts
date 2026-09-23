@@ -4,7 +4,7 @@ import type { ScenarioPreset } from '../model/scenarios';
 
 import { scaleScene } from './scale-scene';
 
-import { cull } from '@/features/tsld/render/geometry';
+import { cull, LANE_HEIGHT } from '@/features/tsld/render/geometry';
 import { paintScene, type TsldPalette, type TsldScene } from '@/features/tsld/render/paint';
 import type { Viewport } from '@/features/tsld/render/render-model';
 
@@ -36,10 +36,19 @@ import type { Viewport } from '@/features/tsld/render/render-model';
  *
  * | scene | preset | total | on screen | px/day | span   |
  * | ----- | ------ | ----- | --------- | ------ | ------ |
- * | 500   | week   | 540   | **192**   | 12.00  | 362 d  |
- * | 500   | fit    | 540   | 540       | 4.55   | 362 d  |
- * | 2,000 | week   | 2,160 | **222**   | 12.00  | 1,150 d|
- * | 2,000 | fit    | 2,160 | 1,591     | 1.43   | 1,150 d|
+ * | 500   | week   | 540   | **196**   | 12.00  | 362 d  |
+ * | 500   | fit    | 540   | 311       | 4.55   | 362 d  |
+ * | 2,000 | week   | 2,160 | **224**   | 12.00  | 1,150 d|
+ * | 2,000 | fit    | 2,160 | 914       | 1.43   | 1,150 d|
+ *
+ * **Re-derived 2026-09-22 against the 52 px row** (logic-legibility M3-T3, ADR-0151). Week barely
+ * moves — 192 → 196 and 222 → 224, which is the cull doing its job on a time axis the row never
+ * touched. **Fit falls by nearly half** (1,591 → 914 at 2,000), because a 900 px viewport now holds
+ * 17 lanes at 52 px where it held 32 at 28 — and no zoom touches the lane axis, so at Fit the
+ * probe now frames a smaller share of the plan than it used to. The figures above were stale for
+ * one release and a performance review caught them; `minVisibleBarsFor`'s geometric cap was
+ * updated in the same epic and this table was not, which is a document and its own code
+ * disagreeing about a number they both compute.
  *
  * **At the Week framing the two limbs draw almost the same picture** — 192 bars against 222 — because
  * a working zoom frames roughly 137 days whatever the plan's size, and a bigger plan is mostly a
@@ -142,7 +151,7 @@ export function framingFor(
     preset,
     pxPerDay,
     visibleBars,
-    minVisibleBars: minVisibleBarsFor(preset, scene.totalActivities),
+    minVisibleBars: minVisibleBarsFor(preset, scene.totalActivities, laneCountOf(scene), size),
     spanDays,
   };
 }
@@ -158,14 +167,44 @@ export function framingFor(
  * The two presets mean different things, so one floor cannot serve both:
  *
  * - **Fit** frames the *whole plan*. If most of it is not on screen the framing has failed at its
- *   own job, so the floor is a majority of the scene.
+ *   own job — **subject to what the lane axis can physically hold**, see below.
  * - **Week** frames a *working window* — a slice by design — so the floor is a small fraction with
  *   an absolute guard underneath it, because 5 % of a tiny scene is not a measurement either.
+ *
+ * ## Fit's floor is capped by geometry, and that is a finding rather than a concession
+ *
+ * `fitToContent` shrinks `pxPerDay`, which is the **time** axis; the lane axis is fixed at
+ * `LANE_HEIGHT` and no zoom touches it. So "Fit frames the whole plan" was only ever true while a
+ * plan's lanes fitted the viewport — and at the logic-legibility row treatment's pitch they do
+ * not: a 2,000-activity scene needs roughly 1.9x the height it needed at 28 px, and a 900 px
+ * viewport holds 17 lanes instead of 32.
+ *
+ * Lowering the fraction until it passed would have been tuning a threshold to the answer, which is
+ * exactly what this floor exists to prevent. So the floor states the property instead — **Fit must
+ * show every bar in every lane it can fit** — and the cap makes it fail when the cull is doing more
+ * than geometry requires, which is the ADR-0066 shape it was written for.
+ *
+ * **The consequence for `docs/TECH_DEBT.md` #75/#261 is real and is stated rather than buried: a
+ * Fit reading at 2,000 activities is no longer a reading about the whole plan.** It was already a
+ * reading about "bars drawn rather than plan size" (#75 item 6); this makes the ceiling lower.
  */
-export function minVisibleBarsFor(preset: ScenarioPreset, totalActivities: number): number {
-  return preset === 'fit'
-    ? Math.floor(totalActivities * 0.5)
-    : Math.max(25, Math.floor(totalActivities * 0.05));
+export function minVisibleBarsFor(
+  preset: ScenarioPreset,
+  totalActivities: number,
+  laneCount: number,
+  size: { height: number },
+): number {
+  if (preset !== 'fit') return Math.max(25, Math.floor(totalActivities * 0.05));
+  const lanesThatFit = Math.max(1, Math.floor(size.height / LANE_HEIGHT));
+  const reachable = Math.min(1, lanesThatFit / Math.max(1, laneCount));
+  return Math.floor(totalActivities * Math.min(0.5, reachable));
+}
+
+/** How many lanes a scene occupies — the denominator Fit's geometric cap is taken against. */
+function laneCountOf(scene: DrawScene): number {
+  let max = 0;
+  for (const activity of scene.scene.activities) max = Math.max(max, activity.laneIndex);
+  return max + 1;
 }
 
 /**

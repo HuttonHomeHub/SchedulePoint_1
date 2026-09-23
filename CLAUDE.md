@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1291 web
+> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1295 web
 > source files with 45 Playwright suites beside the base journey, and
-> 149 ADRs.
+> 151 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5473,6 +5473,209 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   deliverable is as much those two negative results as the 20.8 %.** `apps/api` contributes zero
   files to the diff, so the CPM engine is not imported, no migration runs, and the ADR-0034 parity
   gate is untouched by construction.
+
+- **ADR-0150** _(Accepted; M0–M2 and M4 landed 2026-09-22; the M6 gate pass found nothing blocking in this half)_ — A leg is an obstacle, and the gutter is
+  a channel. ADR-0149 shipped a crossing-aware corridor chooser, measured **−20.8 % crossings per
+  link at zero vertical cost**, and closed; the product owner used the release and reported the same
+  complaint in different words — _"the logic is still difficult to read. even for a simple plan the
+  logic is mapping across other bars."_ **Both facts hold at once**, and the pair is the epic's most
+  transferable finding: crossings genuinely fell, and a link vanishing **behind** a bar is a
+  different defect that no crossing count can see. A measured improvement is not the reported
+  complaint, and nothing in the process was checking which of the two it had.
+  Reading the code found that the first symptom was not a tuning problem. `routeOrthogonal` applied
+  its obstacle check to the **vertical corridor only**, and only across the lanes strictly between
+  the endpoints; the two **horizontal legs** — which run at the source and target bars' centre-lines
+  — were checked against nothing, and because links paint **under** bars a leg through a bar sharing
+  its lane does not overlap it, it **disappears behind it**. And the router's last structured escape
+  ran through the same obstacles: its six-point fallback drew its horizontal leg at
+  `screenYOfLane(L + 1) − pad`, which **is** the upper lane's bar bottom to the pixel — measured,
+  **58 of Unit 300's 68 gutter legs lay inside a painted bar at 0.0 px clearance**.
+  **The decisions.** The gutter datum becomes the lane **boundary** (58 → 0 legs in bars at **zero**
+  crossing cost — `x/link` unchanged to three decimals with the channel pass disabled, so the two
+  halves are measured rather than apportioned). `packGutterChannels` spreads a frame's gutter runs so
+  two runs sharing a gutter sit at different y **where they overlap in x**, **after** `bundleCorridors`
+  because bundling moves the verticals that set a run's x-extent (ADR-0090's oscillation with a third
+  subject), with capacity **derived from the row's own clear band** — 3 channels at 28/18, **5** at
+  ADR-0151's row, with no edit. That pass costs **+11.4 % crossings** and the cost is stated rather
+  than folded into a total: `chooseCorridorsByCrossing` optimises against the pre-channel geometry and
+  the channel pass then moves legs it had placed, so the two are mutually ordered and this is the
+  price of separating the runs. **FC-L4's ceiling was not moved to accommodate it**, which is what
+  let M2 be judged honestly against the same number and pass **including M1's share** (+8.8 %).
+  Then `viable(x)` replaces `free(x)` — crossed lanes clear **and both legs clear in their own
+  lanes**, consulted by **both** early returns, candidate list and bound unchanged so a route with no
+  obstacle in reach is byte-identical. **The anchors come in as parameters, and that is the
+  load-bearing detail**: a leg begins on its anchor's edge, so a plain interval test reports every
+  link as blocked by itself, and `laneIntervalIndex` cannot supply the anchor's identity because it
+  merges spans that overlap **or touch** while `packLanes` puts activities end to end. Measured,
+  `occl/link` **0.559 → 0.250** at 4 px/day and **105 foreign-occluded links → 47**.
+  **Two things were built and withdrawn on their own measurement.** Extending the crossing pass with
+  the leg term — the plan's specific, reasonable concern that it could move a corridor onto an x
+  whose legs run through a bar — is a **wash on occlusion and worse at the middle zoom**, while
+  crossings rise at all three and take 4 px/day back outside the ceiling. And three of four lane
+  assignment rules are rejected **a second time, on a second metric**: ADR-0149 D5 rejected them on
+  crossings alone, which left open the reading that the crossing metric was the wrong question for
+  them, and on the vector built specifically to answer the complaint **chain rows — the reference's
+  own shape — is worse than shipped on every component** (+2.0 %, +87.1 %, +88.4 %) for seven extra
+  rows. FC-L6 required that reading **decomposed**, because a measurement framed only by its
+  favourable hypothesis would find it; both hypotheses are true and they cancel. **The finding nobody
+  was looking for is the stronger result**: chain rows and the shipped packing put **exactly the same
+  68 of 188 links in one row**, which looked like a classifier that could not see the candidate until
+  the split was re-derived a second way — one classifier reads the **drawn polyline**, the other the
+  **layout**, sharing no code and agreeing exactly on all five candidates. ADR-0069's predecessor hint
+  already places a successor in its predecessor's lane whenever that lane is free, so an explicit
+  longest-chain decomposition finds no more same-row links and spends seven rows finding them. **One
+  candidate qualifies and is offered rather than built**: lane re-indexing, a **relabelling** whose
+  same-row bucket is identical to shipped's to the occluded link, travel **−24.5 %**, long links
+  **30 → 19**, at **zero height cost**.
+  **Three instruments were wrong before the product was.** The M0 harness identified a gutter leg by
+  the **old datum**, so the moment the datum moved it reported `0 gutter legs, 0 touching a bar` — a
+  blind spot wearing a triumph's clothes; it is structural now and **throws** when a scene paints
+  six-point routes and yields no gutter leg. The whole-scene golden log **passed unedited and that is
+  not evidence** — probed by moving the gutter leg 1000 px it still passes, so its scene contains no
+  VHV route at all. And the browser journey **does not gate the datum**, by arithmetic: a channelled
+  leg can land 2 px from where the old datum put it; its three earlier versions each claimed more and
+  were each wrong in a way only a red run exposed, the last confound being a bar's own **1,575 px
+  outline**. What a journey does establish is what only a browser can — that the real product reaches
+  this code, takes the fallback, and paints a line. Separately the reconstruction control fired twice
+  and was right both times, the second time with the foreign-occluded **counts matching exactly**
+  (76/76, 47/47, 43/43) while the fingerprints differed: a control that compared counts would have
+  passed and the denominator would have been computed from a line set that was not the picture.
+  **The CPM engine is not imported and no migration runs**, so the ADR-0034 parity gate is untouched
+  by construction; `database-architect` is not engaged because there is no schema change to design.
+
+- **ADR-0151** _(Accepted; M3 and M5 landed 2026-09-22, M6's gate pass folded the same day)_ — The row is the unit, and a constant
+  carries its justification. ADR-0150 cleared every link routing could clear and its M0 had said in
+  advance what the residue would be: of the links still hidden, **4 could be rescued by a different
+  corridor and 13 by any orthogonal means at all**. The rest is a **room** problem, and the product
+  owner had already made room available — _"as many rows as it takes"_ — and chosen the treatment
+  from the NetPoint diagrams they supplied: a thin bar with a **node glyph at each end**, the name
+  **above**, the dates **below**. That is not a restyle: an 18 px bar in a 28 px lane leaves **5 px**
+  of pad and a 5 px bar in a 52 px lane leaves **23.5 px**, which is the room the links need, obtained
+  by giving the bar back most of the row.
+  **Costing it found what the ADR is really about.** Seven constants were literals whose entire reason
+  for being that number was **a sentence about `BAR_HEIGHT = 18`**, every one of which inverts at a
+  thin bar — `TAIL_HEIGHT = 6` _"thinner than the bar"_, `BAR_RADIUS = 3` _"subtle at 18"_,
+  `FAN_OUT_MAX_PX = 6` _"BAR_HEIGHT/2 = 9px"_, the last **in a module that did not import
+  `BAR_HEIGHT` at all**. The relationship existed only as prose. Every one becomes a derivation that
+  **reproduces the shipped value exactly at 18**, so the task is byte-identical apart from one
+  deliberate pixel; a gate asserts **the relationship, not the value**, because a value re-derived
+  without its justification written somewhere a machine reads is the same literal wearing a different
+  number. `link-routing.ts` **imports** `BAR_HEIGHT` now, and that import is the fix. `BAR_PAD` is
+  named for the first time — five sites recomputed it inline, and **every cue that draws above or
+  below a bar is asking for that number without being able to say so**.
+  **A containment gate written before any of this found that four of seventeen cues already drew
+  outside their lane**, every one above the bar where the pad is 5 px, every one sized without anybody
+  checking what it had. The constraint pin's case is the most instructive: it is marginal only by an
+  arithmetic nobody chose — `CONSTRAINT_PIN_H` lives in `paint.ts` and the pad is a function of two
+  constants in `geometry.ts`, and they **happen to be equal**, so nothing would have reported it if
+  they had not been. Which is exactly what the lane-overlap badge shows, its `lift` being correct
+  about the pin and never asked whether there was room for the result. Three badge offsets are a
+  fourth constant family the spec's table did not name, and they are deliberately **not** pad-derived:
+  **a badge's size is a legibility choice and the pad is a constraint it either satisfies or does
+  not**, and conflating them yields a 3 px smudge that passes a gate. The fix is the pad, and all
+  three close at the new row with **no change to any of them**, so the ratchet reaches zero and its
+  limb is **deleted, not relaxed**.
+  **`rowSlots(laneTop)` is the one derivation of the row's internal layout**, because four things have
+  to agree about where the text rows are — painter, export, hit-test, and ADR-0150's channel capacity
+  — and four opinions would drift in the one way nobody would ever see: a diagram and the PNG of it,
+  two pixels apart about where a date sits. **ADR-0150's own docblock predicted seven channels and is
+  falsified rather than deleted**: the band a thin bar hands back is **exactly where the name and date
+  rows now live**, so the old derivation would have claimed seven channels straight through a label.
+  Taking the **clear** half-band yields five. Fan-out is **retired with the premise that justified
+  it** — its step derives to 1 at a 5 px bar — and ADR-0065's coupling assertion is deleted with the
+  mechanism rather than relaxed, exactly as that case's own docblock said its lifetime would end,
+  taking a pass off the draw path whose saving is **smaller than the figure usually quoted with
+  it**: the 5–11 ms at 2,000 activities / 4,000 edges is what ADR-0052 M5's WeakMap memo had already
+  removed from a pan frame, so what the deletion reclaims is that lookup per frame plus the 5–11 ms
+  once per edge-list change — the M6 performance review found the un-qualified claim in five places. **The pointer target is the
+  row band, not the 5 px line**: without `activityHitRect` selecting any activity would be a 5 px-tall
+  target across the whole product, from a change to two constants — and the same question caught a
+  **stated guarantee going false** in a file the row does not obviously touch, `LAG_ANCHOR_PX`'s zone
+  claiming to _"meet WCAG 2.5.8 outright"_ on a vertical tolerance of `BAR_HEIGHT / 2` justified two
+  ways that **expired at once**.
+  **The pitch is 52 and it is derived rather than preferred.** Seven pitches × two zooms, the bundle
+  rewritten rather than a tracked file, two controls — the second per-pitch, added because the first
+  only fires when every row is empty. Three candidates buy nothing over their neighbours; FC-L11
+  removes 40 and 44 (net clear band 3 px and 7 px against today's 10 — the row treatment would have
+  spent the channel it was also meant to supply); FC-L4's ceiling removes 60. **60 is not rejected, it
+  is not a milestone's to take** — it removes the last layer of the fourth symptom reported (worst
+  overlapping-on-one-y 2 → 1) and goes to the product owner with both numbers. **And the crossing
+  metric rewards the defect, which is why the ceiling is used as a ceiling and never as a reason to
+  prefer a smaller pitch**: at one channel `x/link` is **1.181, 30 % _below_ the M0 baseline**, because
+  seven coincident legs on one y do not cross — they overlap, and `countCrossings` cannot see a line
+  hidden under another line. A reading taken at face value would ship the bunching the epic exists to
+  remove and report an improvement.
+  **The prediction committed before any of this was built is confirmed twice, in the discriminating
+  form**: `occl/link` constant to three decimals across seven pitches **and** three bar heights
+  **while every fingerprint differs** — the routes genuinely moved and the count did not follow —
+  because a horizontal leg runs at the bar's **centre-line**, so whether it meets a bar is an
+  x-overlap question the bar's height does not enter. The residual it does not explain (0.250 → 0.261)
+  is **attributed rather than waved through**: measured at the earlier tip in a worktree the harness
+  reproduces those figures exactly, and the change is **two-point links 25 → 55**, fan-out having been
+  offsetting endpoint y and keeping thirty links out of the same-lane branch — within which the
+  foreign rate **falls**. **FC-L7's own expectation is falsified**: the export's binding term is
+  **width**, which no pitch touches, and `scaledToFit` already fired before the epic. Where the pitch
+  lands is the minimap's viewport rectangle, **139.0 → 74.8 px in a 120 px box** — at pitch 28 it was
+  **larger than the box**, delimiting everything and therefore saying nothing.
+  **M5 is withdrawn on a falsified premise**: link ink is **58–114 % of bar ink** by area, the row
+  change already **tripled** the link's share by weight, and the link sits at **5.31:1** against the
+  bar's **3.14:1** — it is already the louder mark, and making it louder would make the picture
+  noisier. What the measurement points at is **continuity, not contrast** (124 of 187 links are 1 px
+  dashed, about 214 marks over a 1,500 px run), and the driving cue rides on **weight**, so dropping
+  the dash survives WCAG 1.4.1 — a cue that goes is a product-owner decision, so the rendered pair is
+  offered and nothing is changed. **No new colour value exists**, so FC-L8's three canvas traps do not
+  fire, structurally rather than by inspection.
+  **Two instruments lost coverage silently and both are fixed rather than re-baselined.** The golden
+  log's canvas was a fixed 800 × 400 — eleven lanes at 28 px and **eight** at 52 — so the maximal
+  scene quietly stopped exercising three glyph families and every per-method count fell: **a shrinking
+  golden log reads exactly like a painter doing less work**. And ADR-0128's Fit non-vacuity floor
+  stopped being satisfiable, because `fitToContent` shrinks `pxPerDay` — the **time** axis — and no
+  zoom touches the lane axis; the floor states the property instead of being tuned to the answer, and
+  the consequence for `docs/TECH_DEBT.md` #75/#261 is real: **a Fit reading at 2,000 activities is no
+  longer a reading about the whole plan**. **And the picture found a defect the numbers could not** —
+  the milestone's own write-up claimed a planner "never loses an activity's identity to density", and
+  in the rendered frame two milestones were labelled **`…` and nothing else**, the claim having been
+  asserted about the branch above it and never checked against the branch below.
+  **The M6 gate pass earned its place, and all four of its blocking findings are the row.** Four
+  specialists over the combined diff; the routing half (ADR-0150) came through clean. The largest is
+  this epic's own subject landing on it: **criticality shipped as a BOOLEAN**, so near-critical
+  became separable from critical by **hue alone** — the most important distinction in the product,
+  unconditionally, against a cue that had carried three states for a year — with the epic's own test
+  asserting the two paint identically and a docblock claiming the channel survived. It is a
+  three-value rung now, and its **legend was describing the retired dashed outline**: a key naming a
+  mark that is not on the canvas, which is worse than no key because a planner hunts for it, and
+  which no amount of reading the painter would have found. Next, the node glyph **painted out** an
+  LOE bracket cap and a WBS-summary tab — the milestone branch's own stated rule ("the diamond is
+  already a terminal glyph") written for one glyph family and not its two neighbours, the tenth
+  recorded instance of that shape. Third, the flanking dates did **no measurement at all**, so a bar
+  narrower than its two dates printed them over each other and spilled past both ends, under a
+  comment promising "both its dates at every density" — a vertical **row** being reserved and read
+  as a guarantee about horizontal **room**; the first fix suppressed outright and
+  `paint.dates-budget.test.ts` refused it for making that gate vacuous, so suppression became the
+  ladder's last rung rather than its first. Fourth, the centred name spent half its overhang in the
+  **previous neighbour's** room — a residual this layer's own comment had left as "a judgement for
+  that review", judged against a rendered picture where two labels read as one garbled string, and
+  closed by the rule that **a gap is shared, so each side claims half of it**.
+  **FC-L5's paint reading was never taken and is recorded as untaken.** The epic's own condition
+  predicted the row treatment would be the largest of three cost limbs and required one press on the
+  product owner's hardware; the last real fps reading (60.0 fps at Week, 0.00 pp, at 500 and 2,000)
+  was taken on the **pre-epic** painter, so it is a genuine number about a different picture. The
+  epic claims neither that the painter is over budget nor that it is within one. Seven claims were
+  corrected on the way, each by reading or running rather than by accepting a review: the fan-out
+  saving was overstated **in five places** (the 5–11 ms is what ADR-0052 M5's WeakMap memo had
+  already removed from a pan frame, so the deletion reclaims a lookup per frame plus that figure
+  once per edge-list change); `canvas-draw.ts`'s visible-bar table was stale and re-derived
+  independently (**Fit falls by nearly half**, 1,591 → 914 at 2,000, because a 900 px viewport holds
+  17 lanes at 52 px where it held 32 at 28); three line citations in a harness had moved ~300 lines
+  and pointed at a different function; `ARROWHEAD_HALF_W_PX`'s only justification named a constant
+  this epic deleted; a dead `dump()` export; and `NODE_RADIUS` had no symbolic bound while every
+  sibling carries one. The golden log was re-baselined **twice, by hand against a written
+  prediction** (ADR-0034 forbids `-u`), both times matching exactly — and the audit established that
+  the maximal scene holds no critical or near-critical **milestone**, so the new dash branch has no
+  golden cover and is pinned only by the cases written for it. Three findings are filed rather than
+  rushed: `docs/TECH_DEBT.md` #369/#370/#371.
+  **The CPM engine is not imported and no migration runs**; `apps/api` contributes zero files to the
+  diff.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

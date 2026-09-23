@@ -2,15 +2,27 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   activityIndexFor,
-  edgeFanOutFor,
   paintInteractionLayer,
   paintScene,
   type TsldPalette,
   type TsldScene,
 } from './paint';
 import {
+  BAR_HEIGHT,
+  BAR_PAD,
+  BAR_RADIUS,
+  EMPHASIS_STROKE_W,
+  LABEL_GAP_PX,
+  GLYPH_CAP_OVERHANG,
+  GLYPH_CAP_W,
   lagAnchorPoints,
   makeWorkingDayWalk,
+  NODE_RADIUS,
+  PROGRESS_FRONT_PROUD_PX,
+  rowSlots,
+  screenYOfLane,
+  SUMMARY_TAB_H,
+  SUMMARY_TAB_W,
   type RenderActivity,
   type RenderEdge,
   type Viewport,
@@ -60,6 +72,18 @@ const ALL_ON = {
   lateOverlay: false,
 } as const;
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
+
+/**
+ * The `task()` bar's drawn rect under {@link VIEW} — day 1..4 at 12 px/day from `originX` 60, in
+ * lane 0.
+ *
+ * Derived, because these characterisations used to state its four numbers inline and the row
+ * treatment (M3-T3) changed two of them. A suite that writes `45` and `18` asserts where the bar
+ * WAS; one that writes `BAR_Y` and `BAR_HEIGHT` asserts the shape the painter draws.
+ */
+const BAR_X = 72;
+const BAR_W = 48;
+const BAR_Y = screenYOfLane(0, VIEW) + BAR_PAD;
 const SIZE = { width: 800, height: 400 };
 const DATA_DATE = '2026-01-01';
 
@@ -875,15 +899,73 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     expect(ctx.fillText).not.toHaveBeenCalled();
   });
 
-  it('truncates an inside label that does not fit the bar (ends with an ellipsis)', () => {
+  /**
+   * **The name sits ABOVE its bar** (M3-T3) — the reference's own placement, and what the shipped
+   * row geometry always produces, since `rowReservesTextRows()` is true at the shipped pitch.
+   *
+   * It is truncated to the bar's width plus the room its same-lane neighbour leaves, because the
+   * name row carries no other bar's ink and the next name is the only thing it can meet.
+   */
+  it('truncates a name above a bar whose neighbour leaves too little room', () => {
     const ctx = mockCtx();
-    // A 3-day bar is 36px wide — wide enough to place the label inside, but far narrower than the
-    // full label (22 glyphs × 6px), so it must truncate with an ellipsis.
     const narrow = task({ id: 'n', label: 'A1020 Erect steel · 3d', earlyFinish: '2026-01-04' });
-    paintScene(ctx, { activities: [narrow], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
+    const neighbour = task({
+      id: 'x',
+      label: 'B',
+      earlyStart: '2026-01-06',
+      earlyFinish: '2026-01-08',
+    });
+    paintScene(
+      ctx,
+      { activities: [narrow, neighbour], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const drawn = ctx.fillText.mock.calls.map((c) => c[0] as string);
+    expect(drawn.some((t) => t.endsWith('…'))).toBe(true);
+  });
+
+  /**
+   * **Every name in a row sits on the same line, whatever glyph it names.**
+   *
+   * Verified red against the first version of the row painter, which recovered the lane's top as
+   * `rect.y - BAR_PAD`. That is right for a task bar, which is padded into its lane, and wrong for
+   * a **milestone**, whose rect is centred on the lane — so a milestone's name drew 4.5 px above
+   * its neighbours' and the text row was ragged. Nothing but a rendered picture would have shown
+   * it, which is why the painter reads the lane rather than inferring it from a rect.
+   */
+  it('puts every name on one line, whatever glyph it names', () => {
+    const ctx = mockCtx();
+    paintScene(
+      ctx,
+      {
+        activities: [
+          task({ id: 'bar', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
+          milestone({ id: 'ms', earlyStart: '2026-01-08', earlyFinish: '2026-01-08' }),
+        ],
+        edges: [],
+        dataDate: DATA_DATE,
+      },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const ys = ctx.fillText.mock.calls.map((c) => c[2]);
+    expect(ys).toHaveLength(2);
+    expect(new Set(ys).size).toBe(1);
+    expect(ys[0]).toBe(rowSlots(screenYOfLane(0, VIEW)).nameY);
+  });
+
+  it('centres the name in the row above the bar, never inside it', () => {
+    const ctx = mockCtx();
+    paintScene(ctx, { activities: [wide()], edges: [], dataDate: DATA_DATE }, VIEW, SIZE, PALETTE);
     expect(ctx.fillText).toHaveBeenCalledTimes(1);
-    const drawn = ctx.fillText.mock.calls[0]![0] as string;
-    expect(drawn.endsWith('…')).toBe(true);
+    const [, x, y] = ctx.fillText.mock.calls[0]!;
+    expect(y).toBe(rowSlots(screenYOfLane(0, VIEW)).nameY);
+    expect(y as number).toBeLessThan(BAR_Y);
+    // Centred on the bar, so the pair reads as one object.
+    expect(x).toBe(BAR_X + BAR_W / 2);
   });
 
   // A zero-width milestone (a diamond, not a bar) can never hold text inside, so its label — when
@@ -897,9 +979,14 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       ...over,
     });
 
-  it('draws a milestone label BESIDE the diamond (to its right) with the beside colour', () => {
+  /**
+   * A milestone's name goes above it like every other, **untruncated in a clear lane** — which is
+   * the case that removed an arbitrary overhang cap from the painter. The first version bounded a
+   * centred name at 48 px either side; a milestone's box is 14 px wide, so every milestone in the
+   * product truncated its name in a row that was otherwise empty.
+   */
+  it('draws a milestone name ABOVE the diamond, in full when the lane is clear', () => {
     const ctx = mockCtx();
-    // Alone in its lane → unbounded room to the right → the full label is placed beside, untruncated.
     paintScene(
       ctx,
       { activities: [milestone()], edges: [], dataDate: DATA_DATE },
@@ -908,19 +995,20 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       PALETTE,
     );
     expect(ctx.fillText).toHaveBeenCalledTimes(1);
-    const [text, x] = ctx.fillText.mock.calls[0]!;
+    const [text, , y] = ctx.fillText.mock.calls[0]!;
     expect(text).toBe('M1 Handover');
-    // The diamond is centred on day-offset 1 (cx=72, radius 7): its bounding box is x 65–79. The
-    // label sits to the right of that edge (beside, never inside/over it), in the beside colour.
-    expect(x as number).toBeGreaterThan(79);
+    expect(y).toBe(rowSlots(screenYOfLane(0, VIEW)).nameY);
     expect(ctx.fillStyle).toBe(PALETTE.labelBeside);
   });
 
-  it('suppresses a label whose same-lane neighbour leaves too little room (placement "none")', () => {
+  /**
+   * **Crowding truncates a name; it no longer suppresses one.** The `none` branch existed because
+   * a beside label had nowhere to go — it would have been drawn over its neighbour's bar. A name
+   * above the bar always has its own row, so the honest degradation is a shorter name rather than
+   * no name, and a planner never loses an activity's identity to density.
+   */
+  it('truncates rather than suppresses a name whose same-lane neighbour crowds it', () => {
     const ctx = mockCtx();
-    // Two same-lane milestones two days apart: the LEFT one has < LABEL_BESIDE_MIN_PX of clear
-    // room before the right diamond, so its label is suppressed; only the right (unbounded room)
-    // draws. One fillText, not two — proving the "none" branch fired for the crowded bar.
     const left = milestone({ id: 'l' });
     const right = milestone({
       id: 'r',
@@ -935,9 +1023,49 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       SIZE,
       PALETTE,
     );
-    expect(ctx.fillText).toHaveBeenCalledTimes(1);
-    // Only the right diamond's label drew — the left ('M1 Handover') was suppressed by its neighbour.
-    expect(ctx.fillText.mock.calls[0]![0]).toBe('M2 Done');
+    const drawn = ctx.fillText.mock.calls.map((c) => c[0] as string);
+    expect(drawn).toHaveLength(2);
+    // **One character shorter than it was**, and that is M6's half-gap rule showing its price: the
+    // crowded name used to claim the WHOLE 10 px between the two boxes and now claims half, so it
+    // keeps `M…` where it kept `M1…`. Still a name rather than a suppression, which is the claim
+    // this case exists to pin; the assertion said `M1` and was pinning the arithmetic by accident.
+    expect(drawn.some((t) => t.startsWith('M') && t.endsWith('…'))).toBe(true);
+    expect(drawn).toContain('M2 Done');
+  });
+
+  /**
+   * **…and a lone ellipsis is not a shorter name.** The case above is the claim the milestone
+   * above it makes; this is the branch that claim did not cover. `truncateToWidth` returns a bare
+   * `LABEL_ELLIPSIS` when not even one character fits (`geometry.ts:824`), so a hard-crowded name
+   * drew one glyph that names nothing and reads as content — found in the M3-T4 picture, where a
+   * milestone beside a close neighbour was labelled `…` and nothing else.
+   *
+   * The 6 px-per-glyph stub cannot reach it (a milestone's box is 14 px, wider than `'M…'` at
+   * 12), which is why the width function is widened here rather than the fixture crowded further:
+   * the real canvas font is what makes the branch reachable in the product, and a test that can
+   * only be written by pretending otherwise is testing the stub. At 14 px per glyph the ellipsis
+   * fits and one character does not — exactly the branch.
+   */
+  it('draws no name at all when the room fits nothing but the ellipsis', () => {
+    const ctx = mockCtx();
+    ctx.measureText = vi.fn((s: string) => ({ width: s.length * 14 }) as TextMetrics);
+    const left = milestone({ id: 'l' });
+    const right = milestone({
+      id: 'r',
+      label: 'M2 Done',
+      earlyStart: '2026-01-04',
+      earlyFinish: '2026-01-04',
+    });
+    paintScene(
+      ctx,
+      { activities: [left, right], edges: [], dataDate: DATA_DATE },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const drawn = ctx.fillText.mock.calls.map((c) => c[0] as string);
+    expect(drawn).toContain('M2 Done');
+    expect(drawn).not.toContain('…');
   });
 
   it('truncates a beside label when the neighbour leaves only partial room', () => {
@@ -1256,11 +1384,14 @@ describe('paintScene — insight lenses', () => {
       paintScene(
         r.ctx,
         {
-          activities: [task({ id: 'w', label: 'A1020 Erect steel · 4d' })],
+          activities: [task({ id: 'w', label: 'A1020 Erect steel · 4d', percentComplete: 50 })],
           edges: [],
           dataDate: DATA_DATE,
           barFill: new Map([['w', '#fill']]),
           barInk: new Map([['w', '#ink']]),
+          // The refresh is what draws progress, and progress is now the only thing `barInk`
+          // governs — see below.
+          visualRefresh: true,
         },
         VIEW,
         SIZE,
@@ -1268,9 +1399,14 @@ describe('paintScene — insight lenses', () => {
       );
       return r;
     })();
-    // The bar paints the override fill and its inside label paints the paired override ink.
+    // The bar paints the override fill, and the paired ink still governs what is drawn ON the
+    // bar — the progress band. **It no longer governs the NAME**, and that is a consequence of
+    // the row treatment rather than a regression: the pairing existed so a label stayed legible
+    // over a lens-recoloured bar, and the name is now above the bar on the canvas ground, where
+    // `labelBeside` is the right token. Stated here so the narrowing is recorded, not discovered.
     expect(log).toContain('fillStyle=#fill');
     expect(log).toContain('fillStyle=#ink');
+    expect(log).toContain(`fillStyle=${PALETTE.labelBeside}`);
   });
 });
 
@@ -1591,47 +1727,242 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     expect(rounded.roundRect).toHaveBeenCalled();
     expect(rounded.fill).toHaveBeenCalled();
     expect(rounded.fillRect).not.toHaveBeenCalled();
-    // The task() bar rect: day 1..4 at 12px/day, originX 60 → x 72, w 48; lane 0 → y 45, h 18.
-    expect(rounded.roundRect.mock.calls[0]).toEqual([72, 45, 48, 18, 3]);
+    expect(rounded.roundRect.mock.calls[0]).toEqual([BAR_X, BAR_Y, BAR_W, BAR_HEIGHT, BAR_RADIUS]);
     // …while a minimal context (no roundRect) degrades to the square fill, never throwing.
     const square = mockCtx();
     paintScene(square, refreshScene(), VIEW, SIZE, PALETTE);
-    expect(square.fillRect).toHaveBeenCalledWith(72, 45, 48, 18);
+    expect(square.fillRect).toHaveBeenCalledWith(BAR_X, BAR_Y, BAR_W, BAR_HEIGHT);
   });
 
-  it('strokes a calm hairline (barStroke, 1px) around a non-critical bar', () => {
-    const { ctx, log } = recordingCtx();
+  /**
+   * **The bar's own outline is gone; the NODE carries the definition** (M3-T3).
+   *
+   * This case used to assert that a non-critical bar gained a 1 px inset hairline, and it asked
+   * the question as _"was any `strokeRect` emitted?"_ — which the node satisfies. So it kept
+   * passing after the bar's outline was removed, describing something the painter had stopped
+   * doing. It now asks about the bar's own extent, which is the thing that changed.
+   */
+  it('strokes the nodes in the calm hairline, and no longer outlines the bar itself', () => {
+    const ctx = mockCtx();
     paintScene(ctx, refreshScene(), VIEW, SIZE, PALETTE);
-    expect(log).toContain(`strokeStyle=${PALETTE.barStroke}`);
-    expect(log).toContain('lineWidth=1');
-    // Legacy left a non-critical bar strokeless; the refresh gives it the definition stroke.
-    expect(log.some((e) => e.startsWith('strokeRect('))).toBe(true);
+    const rects = ctx.strokeRect.mock.calls;
+    // Two nodes, each a square of `NODE_RADIUS * 2` centred on the bar's own ends.
+    expect(rects).toHaveLength(2);
+    for (const [, , w, h] of rects) {
+      expect(w).toBe(NODE_RADIUS * 2);
+      expect(h).toBe(NODE_RADIUS * 2);
+    }
+    // Nothing is stroked on the bar's own extent any more.
+    expect(rects.some(([, , w]) => w === BAR_W || w === BAR_W - 1)).toBe(false);
   });
 
-  it('emphasises critical/near-critical (2px outline) while retaining the solid/dashed cue', () => {
-    const critical = recordingCtx();
-    paintScene(
-      critical.ctx,
-      refreshScene({ activities: [task({ isCritical: true })] }),
+  /**
+   * **Criticality's non-colour channel moved from a dashed bar outline to the NODE — and it keeps
+   * all THREE of its states** (M3-T3, CQ-6's default; the three-rung repair is M6's).
+   *
+   * A dash on a 5 px outline is not a channel a reader can use — the dash period is wider than the
+   * shape being dashed — so the shape difference goes where there is room for one. What M3-T3 then
+   * got wrong, and the accessibility gate caught, is the COUNT: it shipped `isCritical ||
+   * isNearCritical`, so critical and near-critical became distinguishable by **hue alone**, on the
+   * most important distinction in the product, against a cue that had carried three states for a
+   * year. This case asserts the new channel exists, that the old one is gone, and — the part the
+   * boolean version could not — that **no two rungs paint the same picture**.
+   */
+  it('separates critical, near-critical and neither by SHAPE, not only by hue', () => {
+    // On a context WITH `roundRect` — the branch that ships. A minimal mock takes the documented
+    // square fallback, which is a real path but not the one a browser draws (ADR-0103).
+    const paintWith = (activity: RenderActivity): string[] => {
+      const r = recordingCtx({ ...mockCtx(), roundRect: vi.fn() });
+      paintScene(r.ctx, refreshScene({ activities: [activity] }), VIEW, SIZE, PALETTE);
+      return r.log;
+    };
+    const fills = (log: string[]): number => log.filter((e) => e === 'fill([])').length;
+
+    // **Critical — the node is FILLED.** Bar body + two filled nodes = three `fill()`s.
+    const critical = paintWith(task({ isCritical: true }));
+    expect(critical).toContain(`strokeStyle=${PALETTE.outline}`);
+    expect(fills(critical)).toBe(3);
+
+    // **Near-critical — a heavy RING.** Emphasised like critical and hollow like neither, which is
+    // what makes it a third shape rather than a second colour.
+    const near = paintWith(task({ isNearCritical: true }));
+    expect(near).toContain(`strokeStyle=${PALETTE.outline}`);
+    expect(near).toContain(`lineWidth=${EMPHASIS_STROKE_W}`);
+    expect(fills(near)).toBe(1);
+
+    // **Neither — the calm hairline, hollow.**
+    const plain = paintWith(task());
+    expect(plain).toContain(`strokeStyle=${PALETTE.barStroke}`);
+    expect(plain).not.toContain(`strokeStyle=${PALETTE.outline}`);
+    expect(fills(plain)).toBe(1);
+
+    // The retired cue: no dashed emphasis outline on the BAR, at any rung.
+    for (const log of [critical, near, plain]) expect(log).not.toContain('setLineDash([[3,2]])');
+
+    // **The property the boolean could not have**: all three pictures differ from each other.
+    const pictures = [critical.join('|'), near.join('|'), plain.join('|')];
+    expect(new Set(pictures).size).toBe(3);
+  });
+
+  /**
+   * **A milestone has no nodes, so its own outline carries the rung** — and the dash comes back,
+   * because the reason it was retired is about the 5 px bar and not about the cue: a 14 px
+   * diamond's perimeter has room for a `[3, 2]` period and a 5 px outline has none.
+   */
+  it('separates the three rungs on a milestone by outline weight and dash', () => {
+    const paintWith = (activity: RenderActivity): string[] => {
+      const r = recordingCtx({ ...mockCtx(), roundRect: vi.fn() });
+      paintScene(r.ctx, refreshScene({ activities: [activity] }), VIEW, SIZE, PALETTE);
+      return r.log;
+    };
+    const ms = { type: 'START_MILESTONE' as const };
+
+    const critical = paintWith(task({ ...ms, isCritical: true }));
+    expect(critical).toContain(`lineWidth=${EMPHASIS_STROKE_W}`);
+    expect(critical).not.toContain('setLineDash([[3,2]])');
+
+    const near = paintWith(task({ ...ms, isNearCritical: true }));
+    expect(near).toContain(`lineWidth=${EMPHASIS_STROKE_W}`);
+    expect(near).toContain('setLineDash([[3,2]])');
+
+    const plain = paintWith(task({ ...ms }));
+    expect(plain).toContain(`strokeStyle=${PALETTE.barStroke}`);
+    expect(plain).not.toContain('setLineDash([[3,2]])');
+
+    expect(new Set([critical.join('|'), near.join('|'), plain.join('|')]).size).toBe(3);
+  });
+
+  /**
+   * **A bracketed span draws no node** — the M6 component review found the milestone branch's own
+   * rule ("the diamond is already a terminal glyph") written for one glyph family and not its two
+   * neighbours. An LOE cap is 2 px wide and a summary tab 3 px, both at the bar's ends; a node is
+   * a 10 px disc centred on that same end, so it paints the identity glyph out entirely.
+   */
+  it('draws no node on a bracketed span — the cap or tab IS its terminal glyph', () => {
+    const nodes = (activity: RenderActivity): number => {
+      const r = recordingCtx();
+      paintScene(r.ctx, refreshScene({ activities: [activity] }), VIEW, SIZE, PALETTE);
+      // The documented square fallback: a node is a `NODE_RADIUS * 2` box at each bar end.
+      const box = new RegExp(
+        `^strokeRect\\(\\[[-\\d.]+,[-\\d.]+,${NODE_RADIUS * 2},${NODE_RADIUS * 2}\\]\\)$`,
+      );
+      return r.log.filter((e) => box.test(e)).length;
+    };
+    expect(nodes(task())).toBe(2);
+    expect(nodes(task({ type: 'LEVEL_OF_EFFORT' }))).toBe(0);
+    expect(nodes(task({ type: 'WBS_SUMMARY' }))).toBe(0);
+  });
+
+  /**
+   * **Two centred names in one lane never touch** — the M6 UX review found the residual this
+   * layer's own comment had left for review, and judged it against a rendered picture: two
+   * adjacent labels read as one garbled string. A gap is shared, so each bar claims half of it.
+   */
+  it('keeps adjacent above-bar names apart, sharing the gap between the bars', () => {
+    const ALL_OFF = {
+      dayGrid: false,
+      monthGrid: false,
+      yearGrid: false,
+      today: false,
+      nonWorking: false,
+      labels: false,
+      lateOverlay: false,
+    } as const;
+    // Centred text: the log carries the CENTRE x; the stub measures 6 px per glyph.
+    const separation = (secondStart: string): number => {
+      const r = recordingCtx();
+      paintScene(
+        r.ctx,
+        refreshScene({
+          view: { ...ALL_OFF, labels: true },
+          activities: [
+            task({ id: 'a', label: 'AAAAAAAAAAAAAAAA', earlyFinish: '2026-01-05' }),
+            task({
+              id: 'b',
+              label: 'BBBBBBBBBBBBBBBB',
+              earlyStart: secondStart,
+              earlyFinish: '2026-01-14',
+            }),
+          ],
+        }),
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      const drawn = r.log
+        .map((e) => /^fillText\(\["([^"]*)",([-\d.]+),([-\d.]+)\]\)$/.exec(e))
+        .filter((m): m is RegExpExecArray => m !== null)
+        .map((m) => ({ cx: Number(m[2]), w: m[1]!.length * 6 }));
+      expect(drawn.length).toBe(2);
+      const [left, right] = [...drawn].sort((x, y) => x.cx - y.cx);
+      return right!.cx - right!.w / 2 - (left!.cx + left!.w / 2);
+    };
+    // A real gap between the bars is SHARED: each name takes half, so the two keep `LABEL_GAP_PX`.
+    expect(separation('2026-01-09')).toBeGreaterThanOrEqual(LABEL_GAP_PX);
+    // Bars that touch leave nothing to share, so each name is confined to its own bar — which is
+    // the honest floor: they abut rather than overlapping, where the old rule let them cross.
+    expect(separation('2026-01-06')).toBeGreaterThanOrEqual(0);
+  });
+
+  /**
+   * **The date ladder: inside the bar's own ends, else flanking them, else nothing.** The M6 UX
+   * review reproduced the defect against the real painter — this branch measured nothing, so on a
+   * bar narrower than its two dates the start (left-aligned at the bar's left edge) and the finish
+   * (right-aligned at its right edge) overprinted each other and spilled past both ends into the
+   * neighbours' gaps, under a comment promising "both its dates at every density".
+   *
+   * The first fix suppressed outright and `paint.dates-budget.test.ts` refused it: at the LOD
+   * threshold every date in that fixture vanished and the budget gate measured nothing. So the
+   * bottom rung is kept and a flanking rung sits above it.
+   */
+  it('draws the dates inside a bar that holds them, and nothing on one crowded from both sides', () => {
+    const datesOn = {
+      dayGrid: false,
+      monthGrid: false,
+      yearGrid: false,
+      today: false,
+      nonWorking: false,
+      labels: false,
+      lateOverlay: false,
+      dates: true,
+    } as const;
+    const drawnBelow = (activities: RenderActivity[], view: Viewport): number[] => {
+      const r = recordingCtx();
+      paintScene(r.ctx, refreshScene({ view: { ...datesOn }, activities }), view, SIZE, PALETTE);
+      const below = rowSlots(screenYOfLane(0, view)).belowY;
+      return r.log
+        .map((e) => /^fillText\(\["[^"]*",([-\d.]+),([-\d.]+)\]\)$/.exec(e))
+        .filter((m): m is RegExpExecArray => m !== null && Number(m[2]) === below)
+        .map((m) => Number(m[1]));
+    };
+    // **Wide enough**: both dates sit on the bar's own ends, reaching nothing.
+    const wide = { ...VIEW, pxPerDay: 60 };
+    const inside = drawnBelow([task()], wide);
+    expect(inside).toHaveLength(2);
+    const rect = { x: 60 + 1 * wide.pxPerDay, w: 4 * wide.pxPerDay };
+    expect(Math.min(...inside)).toBe(rect.x);
+    expect(Math.max(...inside)).toBe(rect.x + rect.w);
+    // **Crowded from both sides**: nothing fits inside and there is no room beside, so the row
+    // shows the bar alone rather than two dates printed over each other. Asserted on the MIDDLE
+    // bar, because the last bar in a lane always has the rest of the canvas to its right and
+    // legitimately flanks into it — a count over the whole row would be a test of that instead.
+    const crowded = drawnBelow(
+      [
+        task({ id: 'p', earlyStart: '2026-01-01', earlyFinish: '2026-01-01' }),
+        task({ id: 'c', earlyStart: '2026-01-02', earlyFinish: '2026-01-02' }),
+        task({ id: 'n', earlyStart: '2026-01-03', earlyFinish: '2026-01-03' }),
+      ],
       VIEW,
-      SIZE,
-      PALETTE,
     );
-    expect(critical.log).toContain('lineWidth=2');
-    expect(critical.log).toContain(`strokeStyle=${PALETTE.outline}`);
-    expect(critical.log).toContain('setLineDash([[]])');
-    // The critical bar never gets the calm hairline — emphasis replaces it, so it pops.
-    expect(critical.log).not.toContain(`strokeStyle=${PALETTE.barStroke}`);
-    const near = recordingCtx();
-    paintScene(
-      near.ctx,
-      refreshScene({ activities: [task({ isNearCritical: true })] }),
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    expect(near.log).toContain('setLineDash([[3,2]])');
-    expect(near.log).toContain('lineWidth=2');
+    const middle = { x: 60 + 1 * VIEW.pxPerDay, w: Math.max(2, VIEW.pxPerDay) };
+    for (const x of [
+      middle.x - LABEL_GAP_PX,
+      middle.x,
+      middle.x + middle.w,
+      middle.x + middle.w + LABEL_GAP_PX,
+    ]) {
+      expect(crowded).not.toContain(x);
+    }
   });
 
   it('draws the in-bar progress band + hairline front divider in the bar’s paired ink', () => {
@@ -1643,13 +1974,20 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       SIZE,
       PALETTE,
     );
-    // Square-fallback ctx: bar body + band + divider = 3 fillRects.
+    // Square-fallback ctx: bar body + band + divider = 3 fillRects. The two HOLLOW nodes take the
+    // fallback's `strokeRect`, not a fill — only a critical bar's filled nodes add fills here.
     expect(ctx.fillRect).toHaveBeenCalledTimes(3);
-    // Band: inset 2 inside the 72..120 × 45..63 bar, along the bottom → x 74, y 57, w 22, h 4.
-    expect(ctx.fillRect).toHaveBeenCalledWith(74, 57, 22, 4);
-    // Divider: a 1px hairline at the progress front (x 96), clamped to the band's own vertical
-    // extent (y 57..61) so it never slices through the centred inside label (ux review).
-    expect(ctx.fillRect).toHaveBeenCalledWith(95.5, 57, 1, 4);
+    // **The band is the bar's WHOLE height** under the row treatment (M3-T3): the inset shape
+    // exists to sit below a centred inside label, and a 5 px bar holds neither.
+    expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, BAR_Y, BAR_W / 2, BAR_HEIGHT);
+    // The divider stands PROUD of the bar, because a 1 px mark confined to 5 px of height is not
+    // a shape a reader can see — the cue's whole purpose (WCAG 1.4.1).
+    expect(ctx.fillRect).toHaveBeenCalledWith(
+      BAR_X + BAR_W / 2 - 0.5,
+      BAR_Y - PROGRESS_FRONT_PROUD_PX,
+      1,
+      BAR_HEIGHT + PROGRESS_FRONT_PROUD_PX * 2,
+    );
   });
 
   it('draws no divider at 100% and no band at 0%/absent', () => {
@@ -1662,7 +2000,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       PALETTE,
     );
     expect(done.fillRect).toHaveBeenCalledTimes(2); // body + full band, no divider
-    expect(done.fillRect).toHaveBeenCalledWith(74, 57, 44, 4);
+    expect(done.fillRect).toHaveBeenCalledWith(BAR_X, BAR_Y, BAR_W, BAR_HEIGHT);
     const zero = mockCtx();
     paintScene(
       zero,
@@ -1741,7 +2079,9 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     // The band paints between the dim and the restore — it recedes with its bar.
     const dimAt = log.indexOf('globalAlpha=0.3');
     const restoreAt = log.indexOf('globalAlpha=1');
-    const bandAt = log.findIndex((e) => e === 'fillRect([74,57,22,4])');
+    const bandAt = log.findIndex(
+      (e) => e === `fillRect([${BAR_X},${BAR_Y},${BAR_W / 2},${BAR_HEIGHT}])`,
+    );
     expect(dimAt).toBeGreaterThanOrEqual(0);
     expect(bandAt).toBeGreaterThan(dimAt);
     expect(restoreAt).toBeGreaterThan(bandAt);
@@ -1751,10 +2091,18 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     for (const type of ['LEVEL_OF_EFFORT', 'HAMMOCK'] as const) {
       const ctx = mockCtx();
       paintScene(ctx, refreshScene({ activities: [task({ type })] }), VIEW, SIZE, PALETTE);
-      // Body + two bracket caps (overhanging the bar by 3px top and bottom).
+      // Body + two bracket caps, overhanging the bar by `GLYPH_CAP_OVERHANG` top and bottom —
+      // derived from the bar since M3-T2, so this states the shape rather than four numbers.
       expect(ctx.fillRect).toHaveBeenCalledTimes(3);
-      expect(ctx.fillRect).toHaveBeenCalledWith(72, 42, 2, 24);
-      expect(ctx.fillRect).toHaveBeenCalledWith(118, 42, 2, 24);
+      const capY = BAR_Y - GLYPH_CAP_OVERHANG;
+      const capH = BAR_HEIGHT + GLYPH_CAP_OVERHANG * 2;
+      expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, capY, GLYPH_CAP_W, capH);
+      expect(ctx.fillRect).toHaveBeenCalledWith(
+        BAR_X + BAR_W - GLYPH_CAP_W,
+        capY,
+        GLYPH_CAP_W,
+        capH,
+      );
     }
   });
 
@@ -1768,8 +2116,14 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       PALETTE,
     );
     expect(ctx.fillRect).toHaveBeenCalledTimes(3);
-    expect(ctx.fillRect).toHaveBeenCalledWith(72, 63, 3, 4);
-    expect(ctx.fillRect).toHaveBeenCalledWith(117, 63, 3, 4);
+    const tabY = BAR_Y + BAR_HEIGHT;
+    expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, tabY, SUMMARY_TAB_W, SUMMARY_TAB_H);
+    expect(ctx.fillRect).toHaveBeenCalledWith(
+      BAR_X + BAR_W - SUMMARY_TAB_W,
+      tabY,
+      SUMMARY_TAB_W,
+      SUMMARY_TAB_H,
+    );
   });
 
   it('gives a non-critical milestone the hairline diamond outline (consistent glyph language)', () => {
@@ -1803,7 +2157,9 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     );
     expect(critical.log).toContain(`strokeStyle=${PALETTE.outline}`);
     expect(critical.log).toContain('lineWidth=2');
-    expect(critical.log).toContain('setLineDash([[]])');
+    // No dash: a milestone's criticality outline stopped being dashed with the bar's at M3-T3,
+    // for the same reason — the cue moved to the node/outline weight where there is room for it.
+    expect(critical.log).not.toContain('setLineDash([[3,2]])');
   });
 
   it('composes with a Colour-by barFill override — the lens still decides the base colour', () => {
@@ -1842,6 +2198,10 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
   it('preserves the conflict / lane-overlap / over-allocation badges byte-for-byte in shape count', () => {
     // The three warning badges are restyle-exempt (already outlined, one family): the refresh
     // must not change their draw-call counts relative to a legacy paint of the same scene.
+    //
+    // **The refresh now draws two NODE glyphs the legacy path does not** (M3-T3), so the counts
+    // differ by exactly that and the assertion says so rather than being relaxed to an
+    // inequality. A hollow node is one `strokeRect` on the fallback context this case uses.
     const scene = (visualRefresh: boolean): TsldScene => ({
       activities: [task({ visualConflict: true, laneOverlap: true })],
       edges: [],
@@ -1854,12 +2214,13 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     paintScene(legacy, scene(false), VIEW, SIZE, PALETTE);
     const refreshed = mockCtx();
     paintScene(refreshed, scene(true), VIEW, SIZE, PALETTE);
-    // Badge fills: conflict triangle path (fill) is unchanged; the squares + histogram fillRects
-    // are unchanged; the refreshed bar adds exactly one hairline strokeRect over the legacy count
-    // (the legacy non-critical bar had none) and no extra path fills.
+    // Badge fills: the conflict triangle path (fill) is unchanged, and so are the squares and the
+    // histogram fillRects — the badges themselves are untouched by the row treatment.
     expect(refreshed.fill.mock.calls.length).toBe(legacy.fill.mock.calls.length);
     expect(refreshed.fillRect.mock.calls.length).toBe(legacy.fillRect.mock.calls.length);
-    expect(refreshed.strokeRect.mock.calls.length).toBe(legacy.strokeRect.mock.calls.length + 1);
+    // The refreshed bar adds exactly TWO hollow node glyphs, each one `strokeRect` on this
+    // fallback context. It adds no bar outline: M3-T3 removed that in favour of the node.
+    expect(refreshed.strokeRect.mock.calls.length).toBe(legacy.strokeRect.mock.calls.length + 2);
   });
 
   it('marks the BREACHED edge: a start conflict at the start, an overrun bound at the finish', () => {
@@ -1935,35 +2296,12 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     const scene = refreshScene({ selectedId: 't' });
     const rounded = roundedCtx();
     paintScene(rounded, scene, VIEW, SIZE, PALETTE);
-    // The ring is the outermost rounded path: rect ± 2 with radius BAR_RADIUS + 2.
-    expect(rounded.roundRect).toHaveBeenCalledWith(70, 43, 52, 22, 5);
+    // The ring is the bar's rect ± 2, with a radius that tracks the bar's.
+    const ring = [BAR_X - 2, BAR_Y - 2, BAR_W + 4, BAR_HEIGHT + 4] as const;
+    expect(rounded.roundRect).toHaveBeenCalledWith(...ring, BAR_RADIUS + 2);
     const square = mockCtx();
     paintScene(square, scene, VIEW, SIZE, PALETTE);
-    expect(square.strokeRect).toHaveBeenCalledWith(70, 43, 52, 22);
-  });
-
-  it('nudges an inside label clear of the rounded corner (pad +2) under the refresh', () => {
-    const label = 'A1020 Erect steel · 4d';
-    const legacy = mockCtx();
-    paintScene(
-      legacy,
-      { activities: [task({ label })], edges: [], dataDate: DATA_DATE },
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    const refreshed = mockCtx();
-    paintScene(
-      refreshed,
-      { activities: [task({ label })], edges: [], dataDate: DATA_DATE, visualRefresh: true },
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    const legacyX = legacy.fillText.mock.calls[0]![1] as number;
-    const refreshedX = refreshed.fillText.mock.calls[0]![1] as number;
-    expect(legacyX).toBe(72 + 3); // LABEL_PAD_PX
-    expect(refreshedX).toBe(72 + 5); // LABEL_PAD_PX + 2
+    expect(square.strokeRect).toHaveBeenCalledWith(...ring);
   });
 
   it('leaves beside labels (milestones) at their legacy position — only inside pad changes', () => {
@@ -2183,24 +2521,36 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
     expect(square.lineTo).toHaveBeenCalled();
   });
 
-  it('fans out crowded finish-edge anchors symmetrically and deterministically', () => {
-    // p's bar: x 72..120, lane-0 centre y 54. Three FS ends share the finish edge → the edge
-    // starts draw at 54 − 3 / 54 / 54 + 3 in edge-id order.
+  /**
+   * **Crowded ends CONVERGE on the node now; they do not fan out** (M3-T3, spec D10).
+   *
+   * Fan-out spread several ends along a bar edge by `FAN_OUT_STEP_PX`, which needs the bar's
+   * half-height to spread within — 2.5 px at the row treatment's bar, which the step alone
+   * exceeded. The reference solves the same crowding the other way, and the node glyph at each
+   * bar end is what a reader's eye lands on instead.
+   *
+   * The case is kept and inverted rather than deleted, because "every end leaves from the same
+   * point" is the property that replaced the one it used to assert — and its permutation limb
+   * still guards determinism, which is the half fan-out was really for.
+   */
+  it('converges crowded finish-edge ends on ONE point, deterministically', () => {
     const startsAtFinishEdge = (scene: TsldScene): number[] => {
       const ctx = mockCtx();
       paintScene(ctx, scene, VIEW, SIZE, PALETTE);
       return ctx.moveTo.mock.calls
-        .filter((c) => c[0] === 120)
+        .filter((c) => c[0] === BAR_X + BAR_W)
         .map((c) => c[1] as number)
         .sort((a, b) => a - b);
     };
+    const centre = BAR_Y + BAR_HEIGHT / 2;
     const ys = startsAtFinishEdge(refreshOn());
-    expect(ys).toEqual([51, 54, 57]);
-    // Deterministic across an input-order permutation: the same three anchors, regardless.
+    expect(ys.length).toBeGreaterThan(1);
+    expect(new Set(ys)).toEqual(new Set([centre]));
+    // Deterministic across an input-order permutation.
     const permuted = refreshOn({
       edges: [fs('e3', 's3'), fs('e1', 's1'), crowded().edges[3]!, fs('e2', 's2', true)],
     });
-    expect(startsAtFinishEdge(permuted)).toEqual([51, 54, 57]);
+    expect(startsAtFinishEdge(permuted)).toEqual(ys);
   });
 
   it('leaves an uncrowded zero-lag FS tie exactly on the bar centreline (clean chains)', () => {
@@ -2212,7 +2562,9 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
       SIZE,
       PALETTE,
     );
-    expect(ctx.moveTo.mock.calls.filter((c) => c[0] === 120)[0]![1]).toBe(54);
+    expect(ctx.moveTo.mock.calls.filter((c) => c[0] === BAR_X + BAR_W)[0]![1]).toBe(
+      BAR_Y + BAR_HEIGHT / 2,
+    );
   });
 
   it('draws the lag run as a dashed hairline OVER the bars (the waiting-time depiction)', () => {
@@ -2227,8 +2579,9 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
     );
     const dashAt = log.indexOf('setLineDash([[2,2]])');
     expect(dashAt).toBeGreaterThan(-1);
-    expect(log.indexOf('moveTo([72,54])')).toBeGreaterThan(dashAt);
-    expect(log.indexOf('lineTo([108,54])')).toBeGreaterThan(dashAt);
+    const runY = BAR_Y + BAR_HEIGHT / 2;
+    expect(log.indexOf(`moveTo([${BAR_X},${runY}])`)).toBeGreaterThan(dashAt);
+    expect(log.indexOf(`lineTo([108,${runY}])`)).toBeGreaterThan(dashAt);
     // Painted after the bar bodies, so the run reads on the bar, not under it.
     const lastBarFill = log.reduce((acc, e, i) => (e.startsWith('fillRect(') ? i : acc), -1);
     expect(dashAt).toBeGreaterThan(lastBarFill);
@@ -2274,21 +2627,6 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
     expect(log).toContain('lineWidth=3');
     // The highlighted driving tie's arrowhead fills in the selection colour, batched like M1.
     expect(log).toContain(`fillStyle=${PALETTE.selection}`);
-  });
-
-  it('memoises the fan-out on the edges array identity (same array ⇒ === map; new array ⇒ recompute)', () => {
-    // The painter calls `edgeFanOutFor(scene.edges)` every frame; `scene.edges` is reference-
-    // stable across pan/zoom frames, so the SAME array must return the IDENTICAL map (no per-
-    // frame recompute — the ADR-0026 draw-budget fix), while a rebuilt array (a data change)
-    // must recompute to equivalent offsets.
-    const edges = crowded().edges;
-    const first = edgeFanOutFor(edges);
-    expect(edgeFanOutFor(edges)).toBe(first);
-    const rebuilt = [...edges]; // same edge objects, new array identity
-    const second = edgeFanOutFor(rebuilt);
-    expect(second).not.toBe(first);
-    expect(second.size).toBe(first.size);
-    for (const edge of rebuilt) expect(second.get(edge)).toEqual(first.get(edge));
   });
 
   it('memoises the activity index on the activities array identity (same array ⇒ === map)', () => {
@@ -2371,12 +2709,30 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
    * The recorded handle discs (square boxes whose corner radius is half the side), de-duplicated
    * in first-drawn order — each disc is traced twice, once for the core fill and once for the
    * halo stroke (two batched paths, one per colour).
+   *
+   * **Separating a handle from a bar's NODE glyph is the part that needed thought** (M3-T3). A
+   * node is traced exactly the same way — a square box with a half-side radius, which is how a
+   * circle is drawn without widening the `Ctx2D` surface — so the shape alone cannot tell them
+   * apart. Nor can the radius: `NODE_RADIUS` derives to 5 and the ACTIVE handle's radius is also
+   * 5, so excluding by size silently dropped the one disc two of these cases are about.
+   *
+   * The discriminator is a **positive property of a handle**: it is traced TWICE, once for the
+   * core fill and once for the halo stroke, while a node is traced once and then filled and/or
+   * stroked on the same path. So a box that appears twice is a handle, whatever its size or where
+   * it sits — and that stays true if either radius changes.
    */
   const handles = (ctx: ReturnType<typeof roundedCtx>): number[][] => {
-    const seen = new Set<string>();
-    return ctx.roundRect.mock.calls
+    const boxes = ctx.roundRect.mock.calls
       .map((c) => c.map(Number))
-      .filter(([, , w, h, r]) => w === h && w === (r ?? 0) * 2)
+      .filter(([, , w, h, r]) => w === h && w === (r ?? 0) * 2);
+    const counts = new Map<string, number>();
+    for (const box of boxes) {
+      const key = JSON.stringify(box);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const seen = new Set<string>();
+    return boxes
+      .filter((box) => (counts.get(JSON.stringify(box)) ?? 0) >= 2)
       .filter((box) => {
         const key = JSON.stringify(box);
         if (seen.has(key)) return false;
@@ -2399,9 +2755,10 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
 
   it('pins the SS embed handle to its known screen point (guards a helper-wide drift)', () => {
     const ctx = roundedCtx();
-    // p starts day 1 (x 72); +3 working days embeds at day 4 (x 108), on its lane-0 centre (54).
+    // p starts day 1 (x 72); +3 working days embeds at day 4 (x 108), on its own lane centre.
     paintScene(ctx, scene({ edges: [edge({ type: 'SS', lagDays: 3 })] }), VIEW, SIZE, PALETTE);
-    expect(handles(ctx)).toEqual([[104.5, 50.5, 7, 7, 3.5]]);
+    const cy = BAR_Y + BAR_HEIGHT / 2;
+    expect(handles(ctx)).toEqual([[104.5, cy - 3.5, 7, 7, 3.5]]);
   });
 
   it('draws the core in the outline colour ringed by the contrasting halo, above the bars', () => {
@@ -2414,10 +2771,11 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
     const halo = log.lastIndexOf(`strokeStyle=${PALETTE.handleHalo}`);
     expect(core).toBeGreaterThan(-1);
     expect(halo).toBeGreaterThan(core);
-    // Painted after every bar body (the refreshed bars trace at BAR_RADIUS 3) — an on-bar
-    // affordance drawn under the bars would be exactly as invisible as no affordance at all.
+    // Painted after every bar body — an on-bar affordance drawn under the bars would be exactly
+    // as invisible as no affordance at all. The bar traces at `BAR_RADIUS`, read from the module
+    // rather than written, since M3-T2 derives it from the bar's height.
     const lastBar = log.reduce(
-      (acc, e, i) => (e.startsWith('roundRect(') && e.endsWith(',3])') ? i : acc),
+      (acc, e, i) => (e.startsWith('roundRect(') && e.endsWith(`,${BAR_RADIUS}])`) ? i : acc),
       -1,
     );
     expect(lastBar).toBeGreaterThan(-1);

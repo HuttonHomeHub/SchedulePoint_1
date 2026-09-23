@@ -11425,3 +11425,124 @@ and not its neighbour" shape, with the offer now being the neighbour that has it
 **Trigger:** (a) and (c) on the next epic that touches this dock or the command's copy; (b) with
 #114.1, which it should be folded into rather than solved separately; (d) on the next change to the
 toolbar context's gating.
+
+---
+
+### 367. The relationship's ink is the page's secondary TEXT colour, and nothing ever chose it
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M5-T1b) ·
+**Size:** M · **Owner:** web
+
+`palette.ts:161` resolves the link's colour from `--muted-foreground`, which under
+`[data-surface="canvas"]` is `--plot-muted-foreground`, which `globals.css:799` declares as
+`var(--page-muted-foreground)`. So the ink the TSLD draws every dependency with is, by construction,
+**whatever the page uses for secondary text** — on the one surface in the product whose subject is
+dependencies. Nothing decided it; it arrived by aliasing.
+
+That is ADR-0102's own finding one field along. That epic found `resolveTsldPalette` reading
+`@theme inline` aliases a surface rebind could never reach, and gave the diagram a surface scope;
+what it did not do is ask whether each aliased value is the right value **for a diagram**. Nine
+`--plot-*` members are the painter's, and this one is a text colour doing a line's job.
+
+**Measured, resolved in Chromium under the canvas scope** (`measure-link-distinctness.mjs`):
+`--muted-foreground` is `oklch(0.5 0 0)` → `rgb(99, 99, 99)` → **5.31:1 against the ground**. So the
+accidental value is not a bad one, and that is exactly why this is debt rather than a defect: it is
+correct today by luck, and the next time somebody re-values the page's secondary text — a page
+concern, judged against page backgrounds — the diagram's relationship ink moves with it, silently,
+with no gate able to report it because the contrast matrix follows the alias and finds it fine.
+
+**The remedy is a `--plot-edge` of its own**, valued for a 1–2 px line on `--canvas` rather than for
+text on `--page-background`, added to the canvas scope's rebind set with the contrast pair it must
+clear. **Not done here** because M5's measurement found no legibility case for changing the value
+(see 368), and changing a token nobody has a reason to change is how a theme acquires drift.
+
+---
+
+### 368. The work is fainter than the relationship between work
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M5-T1b) ·
+**Size:** M · **Owner:** web
+
+Measured in Chromium under `[data-surface="canvas"]` on the shipped theme:
+
+| token                | what the painter draws with it | vs the ground |
+| -------------------- | ------------------------------ | ------------- |
+| `--foreground`       | the data-date rule, label ink  | 11.17:1       |
+| `--destructive`      | a critical bar                 | 7.57:1        |
+| `--muted-foreground` | **every dependency line**      | **5.31:1**    |
+| `--warning`          | a near-critical bar            | 4.88:1        |
+| `--primary`          | **an on-schedule bar**         | **3.14:1**    |
+| `--border`           | day/month/year gridlines       | 1.17:1        |
+| `--canvas-lane-rule` | the lane rule                  | 1.07:1        |
+
+**The commonest bar in any programme is the faintest coloured thing on the diagram**, at 1.69× less
+contrast than the lines that join them. Whether that is wrong is a question about the theme rather
+than about the diagram's geometry, which is why it is filed rather than fixed: `--primary` is
+ADR-0102's recovered corporate blue, it is the page's primary too, and re-valuing it for the canvas
+is a plot-palette decision with a contrast matrix behind it (and see 367 — the canvas scope has no
+`--plot-bar` of its own either).
+
+It is recorded because it inverts the assumption every document about this surface has made,
+including this epic's own M5 outcome (_"the relationship stops being the quietest thing on a surface
+whose subject is relationships"_): the relationship is not the quietest thing, the **work** is.
+
+**The trigger to pick it up** is the next theme pass on the canvas, or a report that bars are hard
+to see — not a milestone that happens to be nearby.
+
+### 369. `NODE_RADIUS` and `LAG_HANDLE_R_ACTIVE` are both 5, and nothing couples them
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M6 gate
+pass, component review) · **Size:** S · **Owner:** web
+
+ADR-0151 sets `NODE_RADIUS = Math.max(2, BAR_HEIGHT)`, which is **5** at the shipped row.
+`LAG_HANDLE_R_ACTIVE` is a hard-coded **5** that predates the epic and is unrelated to `BAR_HEIGHT`.
+Both are traced as a square with a half-side radius (how a circle is drawn without widening
+`Ctx2D`), so an **active lag-drag handle and a bar-end node glyph are now pixel-identical in shape
+and size** — and at zero lag they sit at the same point.
+
+`paint.test.ts` already records the collision, because it had to change its own discriminator when
+the node arrived: it can no longer tell the two apart by radius and asks instead for a **positive
+property of a handle** (a handle is traced twice, core then halo). That is the right test and it is
+not the product: nothing in the painter distinguishes them for a planner mid-drag.
+
+**This is the `CONSTRAINT_PIN_H` shape this same epic fixed one file over** — two numbers equal by
+an arithmetic nobody chose, where nothing would have reported it had they differed. It is filed
+rather than fixed because the remedy is a design question (does the active handle grow, change
+shape, or keep a halo the node never has?) and M6 is a gate pass, not a design pass.
+
+**Re-open trigger:** a planner reports losing the handle mid-drag, or the next canvas epic touches
+either constant.
+
+### 370. No call-count budget names the epic's new per-frame passes
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M6 gate
+pass, performance review) · **Size:** S · **Owner:** web
+
+This repository prefers a **counting-stub gate** to a millisecond gate on the canvas (ADR-0054: a CI
+runner's absolute timings are noise, so the assertions pin the SHAPE of the per-frame cost).
+ADR-0150 and ADR-0151 added three things to that path and named none of them in such a gate:
+`isLegClear` per routed edge, `packGutterChannels` per frame, and the row's two node draws plus its
+name and date runs per visible bar.
+
+`paint.routing-budget.test.ts` still covers the _shape_ of the new routing work incidentally — it
+bounds the painter's total emitted segment count, and `packGutterChannels` only moves an existing
+point's `y` — so this is a naming and coverage gap rather than an unbounded-search risk. The
+performance review confirmed each pass is bounded by the **culled** set and not the plan
+(`laneIntervalIndex` is built from `visibleIds`; `rowSlots` is called per visible bar).
+
+**What to write:** a sibling `paint.*-budget.test.ts` asserting a ceiling on canvas calls per
+visible bar for the glyph and label work, which would also have made #371's owed reading partly
+answerable without waiting on hardware.
+
+### 371. Twenty-three measurement scripts repeat the same esbuild-to-tempdir block
+
+**Status:** open · **Verified:** 2026-09-22 · **Raised:** 2026-09-22 (logic-legibility M6 gate
+pass, component review) · **Size:** S · **Owner:** web
+
+Every harness in `apps/web/scripts/` that bundles a probe repeats the same ~15 lines of
+`mkdtempSync` + `execFileSync('pnpm', ['exec', 'esbuild', …])` verbatim. It is a **pre-existing**
+convention rather than a regression — the older scripts do it too — but the logic-legibility epic
+added about eleven more instances rather than extracting a `bundleProbe(entry)` helper.
+
+Filed rather than fixed because a shared helper under `scripts/` is a shared-mechanism change and
+folding one into an epic's last milestone is what ADR-0105 exists to stop.

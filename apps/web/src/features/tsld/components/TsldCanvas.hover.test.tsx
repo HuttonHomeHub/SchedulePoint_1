@@ -39,9 +39,27 @@ vi.mock('../render/paint', async (importOriginal) => ({
 }));
 
 import type { InteractionOverlay, TsldScene } from '../render/paint';
-import type { RenderActivity } from '../render/render-model';
+import {
+  BAR_HEIGHT,
+  BAR_PAD,
+  DEFAULT_VIEWPORT,
+  LANE_HEIGHT,
+  type RenderActivity,
+} from '../render/render-model';
 
 import { TsldCanvas } from './TsldCanvas';
+
+/**
+ * The vertical centre of a lane's bar under `DEFAULT_VIEWPORT` — what a pointer aims at.
+ *
+ * Derived rather than written. These were literal `clientY` values chosen when a bar was 18 px
+ * tall and sat 5 px inside a 28 px lane; the logic-legibility row treatment moves both, and a
+ * literal asserts where the bar WAS rather than that a press on it lands.
+ */
+const laneMid = (lane: number): number =>
+  DEFAULT_VIEWPORT.originY + lane * LANE_HEIGHT + BAR_PAD + BAR_HEIGHT / 2;
+const LANE_MID_0 = laneMid(0);
+const LANE_MID_1 = laneMid(1);
 
 const ACTIVITIES: RenderActivity[] = [
   {
@@ -104,7 +122,7 @@ describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
   it('publishes the hover ring + hovered id over a bar, and clears both on pointer-leave', async () => {
     const { canvas } = renderCanvas();
     // The a1 bar body at the default viewport (same coordinates the select-click tests use).
-    fireEvent.pointerMove(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
     await waitFor(() => {
       expect(lastOverlay().hover).toBeTruthy(); // the ring rect reached the interaction layer
       expect(lastScene().hoverId).toBe('a1'); // the incident-link highlight id rode the scene
@@ -127,7 +145,7 @@ describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
 
   it('suppresses the hover ring on the SELECTED bar (no stacked double outline)', async () => {
     const { canvas } = renderCanvas({ selectedId: 'a1' });
-    fireEvent.pointerMove(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
     // The incident-link hover highlight still publishes (it merely mirrors the selection's)…
     await waitFor(() => expect(lastScene().hoverId).toBe('a1'));
     // …but the ring never does — the ±2px selection ring already outlines this bar.
@@ -171,7 +189,7 @@ describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
     });
     // a1 finishes day 4; FS+2 walks (no calendar ⇒ elapsed) to day 7 → x 138, on a2's lane-1
     // centre line (y 82) at the default viewport.
-    fireEvent.pointerMove(canvas, { clientX: 138, clientY: 82, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 138, clientY: LANE_MID_1, pointerId: 1 });
     await waitFor(() => expect(lastScene().activeLagId).toBe('d1'));
     fireEvent.pointerLeave(canvas);
     await waitFor(() => expect(lastScene().activeLagId).toBeNull());
@@ -192,20 +210,20 @@ describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
       ],
       canLag: true,
     });
-    fireEvent.pointerDown(canvas, { clientX: 138, clientY: 82, pointerId: 1 });
+    fireEvent.pointerDown(canvas, { clientX: 138, clientY: LANE_MID_1, pointerId: 1 });
     await waitFor(() => expect(lastScene().activeLagId).toBe('d1'));
     // The idle-hover branch is skipped while a gesture runs, so the emphasis must survive moves…
-    fireEvent.pointerMove(canvas, { clientX: 180, clientY: 82, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 180, clientY: LANE_MID_1, pointerId: 1 });
     expect(lastScene().activeLagId).toBe('d1');
     // …and drop on release, so the next hover decides afresh.
-    fireEvent.pointerUp(canvas, { clientX: 180, clientY: 82, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 180, clientY: LANE_MID_1, pointerId: 1 });
     await waitFor(() => expect(lastScene().activeLagId).toBeNull());
   });
 
   it('publishes nothing when the flag is off (the parity gate)', async () => {
     flags.directManipulation = false;
     const { canvas } = renderCanvas();
-    fireEvent.pointerMove(canvas, { clientX: 70, clientY: 54, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
     await waitFor(() => expect(paintMocks.paintScene).toHaveBeenCalled());
     for (const call of paintMocks.paintScene.mock.calls) {
       expect((call[1] as TsldScene).hoverId).toBeNull();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { LANE_HEIGHT } from './geometry';
 import { paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, RenderEdge, Viewport } from './render-model';
 import { recordingCtx } from './test-support/recording-ctx';
@@ -42,6 +43,26 @@ import { recordingCtx } from './test-support/recording-ctx';
  * critical bar's `lineWidth=` entries change); swapping the bar and edge layer order reddens the
  * `layer ordering` assertion below. Neither was committed — the discipline is what distinguishes a
  * characterisation test from a test that agrees with whatever the code currently does.
+ *
+ * ## Re-baselined at logic-legibility M3-T3, by reading
+ *
+ * The row treatment changes what the painter draws, so the log moves. It was re-baselined against
+ * a written list of expected deltas and every one of them accounts EXACTLY, which is the only
+ * thing that separates a re-baseline from `-u`:
+ *
+ * | count | delta | why |
+ * | --- | --- | --- |
+ * | `strokeRect` | **+10** | 10 non-milestone bars × 2 hollow node glyphs (**+20**), less the 10 bar outlines the row treatment removes. A milestone draws no nodes — its diamond is already a terminal glyph. |
+ * | `fillRect` | **+4** | the critical and the near-critical bar each draw 2 **filled** nodes — criticality's new non-colour channel — and a filled node falls back to `fillRect` on a context without `roundRect`. |
+ * | `setLineDash` | **−4** | the two emphasis dashes (one critical, one near-critical), each a set and a reset. A dash on a 5 px outline is not a channel a reader can use, so the cue moved to the node. |
+ * | `moveTo` / `lineTo` | **−2 each** | fan-out is retired, so the routed links start and end on their bars' centre-lines rather than on spread anchors, and one elbow fewer is traced. |
+ * | everything else | **0** | `beginPath`, `fill`, `fillText` and `stroke` are unchanged — every label still draws, every glyph still fills. |
+ *
+ * **The first re-baseline attempt was WRONG and the arithmetic is what said so.** `SIZE` was
+ * 800×400, which held eleven lanes at the old 28 px pitch and eight at 52 — so `fillText` fell by
+ * 3 and every other count with it, because three activities were culled. A shrinking golden log
+ * reads exactly like a painter doing less work; the right response is to ask what stopped being
+ * painted. `SIZE` is derived from the lane count now, so the maximal scene stays maximal.
  */
 
 const PALETTE: TsldPalette = {
@@ -75,7 +96,6 @@ const PALETTE: TsldPalette = {
 };
 
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
-const SIZE = { width: 800, height: 400 };
 const DATA_DATE = '2026-01-01';
 
 /** Mon–Fri worked, weekends not — so the non-working layer has something to draw. */
@@ -125,6 +145,16 @@ const ACTIVITIES: readonly RenderActivity[] = [
   activity({ id: 'loe', laneIndex: 9, type: 'LEVEL_OF_EFFORT', label: 'LOE Supervision' }),
   activity({ id: 'summary', laneIndex: 10, type: 'WBS_SUMMARY', label: 'Substructure' }),
 ];
+
+/**
+ * Tall enough to hold every one of {@link ACTIVITIES}' eleven lanes at the shipped pitch.
+ *
+ * It was 400, which held eleven lanes at the old 28 px pitch and **eight** at M3-T3's 52 px one —
+ * so the maximal scene quietly stopped exercising three glyph families and the log's per-method
+ * totals fell. That reads exactly like a painter that does less work, and the right response to a
+ * shrinking golden log is to ask what stopped being painted rather than to re-baseline it.
+ */
+const SIZE = { width: 800, height: 40 + ACTIVITIES.length * LANE_HEIGHT + LANE_HEIGHT };
 
 const EDGES: readonly RenderEdge[] = [
   { id: 'e1', predecessorId: 'plain', successorId: 'critical', type: 'FS', isDriving: true },
