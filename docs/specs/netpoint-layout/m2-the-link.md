@@ -50,6 +50,13 @@ This file records what M2 changed, what was measured, and where the build depart
   dates per link, and `paint.rect-cache-budget.test.ts` refused it: adding links must add no date
   parsing. `waitingSpanX` reads the rects, and its length in days is `edgeGapDays` exactly.
 
+## The accessibility review (§19.13)
+
+The review passed with nits. It checked by derivation, not by assertion, that the waiting dash's length equals the spoken slack for all four link types. It also checked that a driving link's rung can be recovered from its two endpoints' node shapes. Two findings were folded in:
+
+- **The legend's list roles are now explicit.** It is a `<ul>` under Preflight's `list-style: none`, which WebKit/VoiceOver treats as no list at all (ADR-0122). This defect predates M2, but M2 adds seven rows to that list. The fix follows `TsldPanel`'s band lists. The test asserts the attribute, not the role: jsdom infers the role from the tag, so a role query passes either way. Verified red without the fix.
+- **The three driving-link inks are gated at 3:1 on both grounds.** `--canvas-link-minor` already had this gate. A link has no outline, so its stroke is the whole mark. `--primary` is 3.15:1 against the ground, with little margin, and nothing pinned it in the link role. Verified red at a 3.2 floor.
+
 ## The journey
 
 `e2e-arrange/link-language.spec.ts` reads `--canvas-link-minor` on the scene canvas, where the

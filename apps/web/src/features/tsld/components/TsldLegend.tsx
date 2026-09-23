@@ -220,7 +220,12 @@ export function TsldLegend({
 } = {}): React.ReactElement {
   const items = legendItems(lens);
   return (
+    // `role="list"`/`role="listitem"` are explicit: Tailwind v4's Preflight sets `list-style: none`,
+    // which is a documented cause of WebKit/VoiceOver dropping the implicit roles (ADR-0122, the same
+    // fix as `TsldPanel`'s band lists).
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
     <ul
+      role="list"
       aria-label="Legend"
       className={cn(
         'text-muted-foreground text-xs',
@@ -230,7 +235,8 @@ export function TsldLegend({
       )}
     >
       {items.map((item) => (
-        <li key={item.label} className="flex items-center gap-1.5">
+        // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the list above
+        <li key={item.label} role="listitem" className="flex items-center gap-1.5">
           {'criticality' in item ? (
             // A thin bar with its end node — the canvas's own pair. The node is `--foreground` at
             // both emphasised rungs and `--border` at rest, exactly as `resolveTsldPalette` maps

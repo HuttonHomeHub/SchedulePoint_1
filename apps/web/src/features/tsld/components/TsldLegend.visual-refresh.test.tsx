@@ -25,6 +25,17 @@ describe('TsldLegend — visual-refresh shape vocabulary (flag on, ADR-0052 M4/M
     expect(within(legend).getByText('Driving link')).toBeInTheDocument();
   });
 
+  it('states the list roles explicitly, because Preflight strips the implicit ones in WebKit (ADR-0122)', () => {
+    // jsdom resolves `getByRole('list')` from the tag alone, so asserting the role by query passes
+    // with or without the attribute. The attribute is the fix, so the attribute is what is asserted.
+    render(<TsldLegend />);
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    expect(legend).toHaveAttribute('role', 'list');
+    for (const item of within(legend).getAllByRole('listitem')) {
+      expect(item).toHaveAttribute('role', 'listitem');
+    }
+  });
+
   it('keeps the new rows in an active-lens legend too (shared cues survive a Colour-by mode)', () => {
     render(
       <TsldLegend
