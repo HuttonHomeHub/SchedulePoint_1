@@ -125,6 +125,16 @@ So FC-L5 joins the list owed to the product owner rather than being quietly trea
 epic does not claim the painter is over budget and does not claim it is within one**; it claims the
 reading has not been taken, which is what ADR-0128 built the panel to make cheap.
 
+**Taken 2026-09-23 — combined only** (product owner, `web` 0.146.0, Surface Pro, DPR 1.5,
+1912×1114 CSS; `docs/TECH_DEBT.md` #75 item 9). The three limbs shipped across consecutive releases
+with no sitting between them, so one sitting can judge only their **sum**. At Week the sum is
+**0.00 pp dropped at 500 and 2,000, spread 0.00 pp, against 0.00 pp on the same machine class before
+the epic** (#75 item 7) — delta 0.00, **PASS**. Limb C's committed prediction ("> 0, and the largest
+of the three") is **not observable at Week**: 60 fps is vsync-capped, so a painter comfortably
+inside the frame reads 0.00 pp before and after. That is a floor effect, recorded as such and not as
+a falsification. At Fit, which is reported and never graded, Fit/2000 went 21.5 → 26.0 fps with
+1,892 → 1,015 bars on screen — limb B (the pitch; prediction ≤ 0) is what dominates there.
+
 ## 4. Seven claims corrected, one number re-derived
 
 - **The fan-out saving was overstated in five places** — two docblocks, `m3-the-row.md`, ADR-0151 and
