@@ -37,8 +37,11 @@ export interface LaneArrangementInput {
  * exactly the summaries the band draws — so band on, the rows reserved for those summaries painted
  * nothing. A lane's index fixes its y, so they are not spare capacity: measured on the 144-bar
  * Unit 300 programme, **13 of 27 lanes held nothing but band-drawn summaries**, scattered through
- * the diagram, and the highest drawn bar sat in lane 26. At `LANE_HEIGHT` 28 that is 420 px of
- * blank rows inside the picture (`docs/specs/diagram-legibility/cheap-levers.md`, Finding 1).
+ * the diagram, and the highest drawn bar sat in lane 26. At the then `LANE_HEIGHT` of 28 that is
+ * 420 px of blank rows inside the picture (`docs/specs/diagram-legibility/cheap-levers.md`,
+ * Finding 1). **Those figures are in question** (`docs/TECH_DEBT.md` #365): the harness put every
+ * summary at day 0, and re-taken with the rollup the same fixture reads 4 summary-only lanes of 21.
+ * The split is right either way; only the size of the prize moved.
  *
  * ## Why appended rather than left alone
  *

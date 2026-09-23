@@ -36,19 +36,26 @@ browser-native team use. See the full product context in
 > opposite for months after it stopped being true, which is exactly the failure
 > it now warns against.
 >
-> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): 37
-> documented seeded plans and hostile cases created through the public REST API,
+> Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): a
+> catalogue of documented seeded plans and hostile cases (37 at launch, 40 on
+> 2026-09-23 — `pnpm check:playbook` prints the current count, so this line does
+> not own it) created through the public REST API,
 > keyed to [`docs/TEST_PLAYBOOK.md`](docs/TEST_PLAYBOOK.md), which says which plan
 > proves what and what _wrong_ looks like. Use it before hand-building a plan to
 > reproduce something — and note what it exists to cover: the conformance harness
 > proves the **engine**, never a write path, a DTO or a guard.
 >
 > The **Gantt view shipped** on 2026-07-28 (ADR-0059, `VITE_GANTT_VIEW`
-> default-on) — read-only by design, with WBS rows, the baseline variance bar and
-> a printed programme. It **substantially** delivers the last outstanding
-> Must-have in [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8, which words it
-> "read-primary; **edit supported**" — Gantt editing is deferred as ADR-0059 M5,
-> so that line is not yet closed. This banner and the PR that shipped it both said
+> default-on) — first read-only, with WBS rows, the baseline variance bar and
+> a printed programme — and **became a working surface on 2026-08-17** (ADR-0095:
+> in-cell editing with per-cell write scope, bar moves, dependency arrows behind a
+> default-off toggle; typed dates followed in ADR-0134). It **substantially**
+> delivers the last outstanding Must-have in
+> [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md) §8, which words it
+> "read-primary; **edit supported**" — "substantially" because the start-edge
+> resize is deliberately absent (ADR-0095 D4). This paragraph said "read-only by
+> design … Gantt editing is deferred as ADR-0059 M5" until the 2026-09-23 pass,
+> five weeks after ADR-0095 shipped. This banner and the PR that shipped it both said
 > "closing the last Must-have" until the brief was re-read: the same trust-the-
 > document failure the paragraph above warns about, one paragraph later. Hosting
 > is **settled** (Docker Compose + ADR-0047 auto-pull, `docs/TECH_DEBT.md` #5) —
@@ -4581,6 +4588,10 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   _for_. The Visual-mode journey earns its place for a reason beyond symmetry — barely any journey
   in this repository runs in Visual mode, and ADR-0092 records that gap being exactly where a defect
   was hiding.
+  **The Early branch no longer exists** (ADR-0148, 2026-09-21, which lists ADR-0134 in its
+  _Amends_): with the modes collapsed a typed `Start` always hand-places and writes no constraint
+  (`apps/web/src/features/gantt/model/cell-commit.ts`, the D1 docblock above its final `write`).
+  This entry described the `SNET` branch as live until the 2026-09-23 pass.
 
 - **ADR-0135** _(Accepted 2026-09-11)_ — A container hands focus back when somebody else removes the
   control you were on. A second Planner changing a plan-level setting while you hold the pen takes a
@@ -5593,7 +5604,9 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   **stated guarantee going false** in a file the row does not obviously touch, `LAG_ANCHOR_PX`'s zone
   claiming to _"meet WCAG 2.5.8 outright"_ on a vertical tolerance of `BAR_HEIGHT / 2` justified two
   ways that **expired at once**.
-  **The pitch is 52 and it is derived rather than preferred.** Seven pitches × two zooms, the bundle
+  **The pitch is 52 and it is derived rather than preferred** — and it is **60 since NetPoint-layout
+  M1** (2026-09-23, `render/geometry.ts:53`), the product owner's answer to the owed item below; no
+  ADR records that milestone, which this entry did not say until the 2026-09-23 pass. Seven pitches × two zooms, the bundle
   rewritten rather than a tracked file, two controls — the second per-pitch, added because the first
   only fires when every row is empty. Three candidates buy nothing over their neighbours; FC-L11
   removes 40 and 44 (net clear band 3 px and 7 px against today's 10 — the row treatment would have
@@ -6004,6 +6017,11 @@ A lighter-weight running log of smaller decisions is in
   both scales. So the **23.3 fps reading of 2026-09-08 remains the one figure
   in this row that nothing has reproduced**, and reading it alone is the
   specific error this bullet warns against.
+  **And every reading above pre-dates the painter that ships now**
+  (2026-09-23 pass): ADR-0151 (2026-09-22) and NetPoint-layout (2026-09-23)
+  redrew the bar, the row and the link after the sixth sitting, and both epics'
+  owed paint readings — FC-L5 and FC-N8 — are **untaken** (`docs/TECH_DEBT.md`
+  #75). "§9 is met" is a fact about the 2026-09-21 painter, not today's.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 

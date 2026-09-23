@@ -32,8 +32,9 @@ export interface ToolbarProps<Ctx> {
   /**
    * Render a taxonomy group as **N named sub-groups**, keyed by {@link ToolbarItem.segment}.
    *
-   * The problem it solves (`docs/TECH_DEBT.md` #201): the plan's mode row holds
-   * `Early mode | Visual mode | Diagram | Gantt` — **two independent two-way switches** — and the
+   * The problem it solves (`docs/TECH_DEBT.md` #201): the plan's mode row held
+   * `Early mode | Visual mode | Diagram | Gantt` until ADR-0148 deleted the scheduling modes (it
+   * now holds the one `Diagram | Gantt` segment) — **two independent two-way switches** — and the
    * taxonomy puts all four in one `lens` group. One `role="group"`, one accessible name, four
    * identical `gap-1` gaps: nothing in the markup or on the screen says where one switch ends and
    * the next begins, so it reads as one four-way choice. A reader who picks `Gantt` expecting it to

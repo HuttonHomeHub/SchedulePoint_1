@@ -38,7 +38,8 @@ import { daysBetween } from './working-time';
  * (`minimap-axes.structural.test.ts`): **x goes through {@link screenXOfDay}** — the one
  * day→px transform, so the minimap cannot disagree with the scene about where a day is —
  * while **y deliberately does NOT go through `screenYOfLane`**, which hardcodes
- * `LANE_HEIGHT` (28 px): the minimap's whole point on the lane axis is to compress it, so
+ * the fixed `LANE_HEIGHT` row (60 px since NetPoint-layout M1; this said 28 until the 2026-09-23
+ * reconciliation pass): the minimap's whole point on the lane axis is to compress it, so
  * `y = laneIndex × boxHeight / (maxLane + 1)`.
  *
  * **Layers omitted, each with its reason** (the scene painter draws ~15; this draws 3):

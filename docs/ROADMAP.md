@@ -690,7 +690,7 @@ discriminators. Each becomes a spec/plan before build:
   between a planner's two clicks, and keyboard pick parity seeded into the canvas gesture. Then
   orthogonal corridors that step **around** bars, with near-identical runs bundled onto one trunk.
   The routing measurement re-opened the draw budget rather than passing it (TECH_DEBT #75).
-- **The seed catalogue** — **shipped** (ADR-0066): 37 documented plans and hostile cases created
+- **The seed catalogue** — **shipped** (ADR-0066): documented plans and hostile cases (37 at launch; `pnpm check:playbook` prints the current count) created
   through the **public REST API** in five tiers, keyed to [`TEST_PLAYBOOK.md`](TEST_PLAYBOOK.md)
   and gated by `pnpm check:playbook`. The conformance harness proves the **engine**; this proves
   the **application** — the write paths, DTOs and guards no pure-function gate can reach.

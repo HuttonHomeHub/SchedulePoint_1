@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
  * disagree with the scene, the ruler or the export about where a day is (the ADR-0059
  * "the time axis is shared, not reimplemented" rule).
  *
- * y MUST NOT go through `screenYOfLane` or `LANE_HEIGHT`: both hardcode the 28 px lane row,
+ * y MUST NOT go through `screenYOfLane` or `LANE_HEIGHT`: both hardcode the fixed `LANE_HEIGHT` row,
  * and the minimap's whole point on the lane axis is to compress it. The same pin refuses
  * `cull()`/`activityRect()` — measured to return 255 of 2,160 bars at a whole-plan viewport
  * (input-performance §5), because `Viewport` can pan Y but never compress lane spacing.

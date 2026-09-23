@@ -29,9 +29,14 @@ review; you do not edit code.
 - **Copy has to be honest about scheduling.** The constraint selector lists only
   constraints the engine applies exactly as named; "Schedule settings" is not
   "Calendar"; a flag-off placeholder says "Coming soon" rather than pretending.
-- **Two planning modes exist** (ADR-0033): Early (computed) and Visual
-  (hand-placed), with a separate data date and an ephemeral "Go to date". Copy that
-  conflates them is a real defect, not a nit.
+- **There is one planning surface, not two modes** (ADR-0148, 2026-09-21 —
+  this bullet described ADR-0033's Early/Visual modes as live until the
+  2026-09-23 reconciliation pass). A bar is drawn where it is placed; the network's
+  early dates, the feasible window and the levelled ghost are **overlays**, never
+  an authority. Screen float is `remainingFloat`, worded **"float left"** — copy
+  that says bare "float" about a placed bar, or offers an Early/Visual choice, is a
+  real defect, not a nit. The data date and the ephemeral "Go to date" stay
+  separate (ADR-0033 decision 1 survives the collapse; ADR-0148 amends its 3, 5 and 6).
 
 ## Review checklist
 

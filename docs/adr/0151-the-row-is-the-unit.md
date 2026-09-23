@@ -8,6 +8,11 @@
   hit-test and the channel capacity all read); ADR-0065 (fan-out is retired with the premise that
   justified it, and its coupling assertion is deleted with the mechanism rather than relaxed);
   ADR-0052 (the lag anchor's vertical tolerance no longer derives from the bar's height)
+- **Amended by:** NetPoint-layout M1 (2026-09-23), which took the pitch this ADR left to the
+  product owner: `LANE_HEIGHT` is **60**, not the 52 derived below (`render/geometry.ts:53`,
+  [`m1-the-row.md`](../specs/netpoint-layout/m1-the-row.md)). No ADR records that milestone — ADR-0152–0154
+  cover M2–M5 — so this line was added by the 2026-09-23 reconciliation pass; until then the record
+  of the amendment was the milestone file and the constant's own docblock.
 - **Spec:** [`docs/specs/logic-legibility/`](../specs/logic-legibility/) —
   [spec](../specs/logic-legibility/feature-spec.md),
   [conditions](../specs/logic-legibility/conditions.md),

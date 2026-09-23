@@ -10,6 +10,64 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-23 — Reconciliation pass: the pitch moved, the modes went, and the docs kept both
+
+**What was decided.** The pass `check:reconcile-due` asked for — nine ADRs since 2026-09-17
+(ADR-0146 … ADR-0154), threshold eight. Every computed gate was green before it started
+(`check:counts`, `check:claims` at 114 claims, `check:adr-coverage` 154 of 154 in §16,
+`check:debt-status` 149 rows), so every finding below is prose those gates cannot read.
+
+**The pass's shape: two decisions landed in code and not in the documents describing them.**
+
+1. **The lane pitch is 60 and nothing but the constant said so.** NetPoint-layout M1 took the pitch
+   ADR-0151 had left to the product owner (`render/geometry.ts:53`, `LANE_HEIGHT = 60`), and no ADR
+   records M1 — ADR-0152–0154 cover M2–M5. ADR-0151's file and §16 entry still read "the pitch is 52",
+   and **five** web comments still called the lane row **28 px** (`minimap.ts`,
+   `minimap-axes.structural.test.ts`, `TsldCanvas.tsx`, `TsldPanel.editing.test.tsx`,
+   `viewport.reveal.test.ts`) — two geometries stale. Comments corrected, an _Amended by_ line added
+   to ADR-0151, and `arrange-lanes.ts`'s "13 of 27 … 420 px" now points at `#365`, which had
+   questioned that figure without listing the docblock carrying it.
+2. **ADR-0148 deleted the scheduling modes and the docs kept describing them as live.**
+   `ux-reviewer.md` still instructed every UX review that "two planning modes exist" — so the agent
+   would have flagged copy that correctly omits a choice the product no longer has.
+   `COMPONENT_LIBRARY.md` presented `Early mode | Visual mode` as the live mode row; the §16 ADR-0134
+   entry described its `SNET` branch as live (`cell-commit.ts` deleted it — ADR-0148 lists ADR-0134 in
+   its _Amends_, and ADR-0134's own header did not know); and `BACKLOG.md` still withheld the Gantt
+   start-edge resize for a mode-dependent meaning that stopped existing on 2026-09-21. Five toolbar
+   docblocks pointed at a `mode-early` item that is gone.
+
+**Older drift the same reading found.** The `CLAUDE.md` §1 banner and `README.md` called the Gantt
+"read-only by design … editing deferred" **five weeks** after ADR-0095 made it a working surface —
+`ROADMAP.md` had been corrected, the two front doors had not. Both quoted **37** seeded plans against
+`pnpm check:playbook`'s **40**; the copies now point at the command rather than restating a number
+they do not own (ADR-0076's standing instruction). `ARCHITECTURE.md` §10 and
+`backend-performance-reviewer.md` named one or two background timers where there are three
+(`hierarchy-expiry.service.ts`, ADR-0096), and the agent cited "ADR-0009 D2", which does not exist —
+the triggers are ADR-0087 D2.
+
+**The register.** `#75` — the row two epics' owed paint readings point at (`m6-gate-pass.md:42`
+says in terms "the owed reading stays with #75") — did not mention either reading: FC-L5 and FC-N8
+are untaken, and every fps figure in the row pre-dates ADR-0151's row and NetPoint's links. It now
+says so at its head, and so do §17 and `performance-reviewer.md`, which were teaching "MET" about a
+painter that no longer ships. `#75`'s 2026-08-03 "there is no §16 in ADR-0026" point now carries a
+pointer to its own 2026-09-01 retraction, four hundred lines below it. `#371` recounted: **30**
+scripts against the **23** at the commit that filed it — the next epic added seven the next day.
+Rows `#342`, `#363`–`#367` and `#369`–`#374` spot-checked against the code and accurate.
+
+**Negative results.** The three `REFERENCE_FEATURE.md` exemplars exist; no manifest names an absent
+library, and no manifest installs `bullmq`/`ioredis`/`redis`/S3/OpenTelemetry/CASL; §16's entries
+for ADR-0146–0154 match their files' status lines. Step 7 was **not** run: the NetPoint-layout epic
+had four specialist reviews at its M6 gate pass today (`docs/specs/netpoint-layout/m6-gate-pass.md`)
+and nothing else unreviewed has landed.
+
+**Could not be verified here:** FC-L5/FC-N8 themselves (product-owner hardware), and whether
+NetPoint-layout M1's other decisions — `Dates` on by default, the centre item — amend an ADR (the
+`Dates` toggle is ADR-0054's). The spec's "amends ADR-0054 §5" is ADR-0154's, and is recorded in
+that file's _Amends_ line; nothing records M1's, which is the same gap as the pitch, one decision
+along, and is left for the owner of that epic rather than guessed at here.
+
+---
+
 ## 2026-09-21 — The screenshot fixture could not exhibit the defect it was built to show
 
 **What was decided.** `seedDense` (`apps/web/scripts/shoot.mjs`) ties each phase's **first** task back

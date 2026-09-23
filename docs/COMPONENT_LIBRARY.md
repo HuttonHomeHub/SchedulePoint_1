@@ -306,8 +306,12 @@ nothing about Tuesday, so "one of a set of N" would misdescribe it.
 `Toolbar` renders a {@link ToolbarItem} registry as an APG `role="toolbar"`, with items
 partitioned into the **closed seven-group taxonomy** (ADR-0031) and one `role="group"` per
 taxonomy group. Sometimes one taxonomy group holds **two unrelated things**: the plan header's
-mode row holds `Early mode | Visual mode` (a scheduling mode) and `Diagram | Gantt` (a view), all
-four declared `group: 'lens'`.
+mode row held `Early mode | Visual mode` (a scheduling mode) and `Diagram | Gantt` (a view), all
+four declared `group: 'lens'` — until ADR-0148 deleted the scheduling modes (2026-09-21). The row
+now carries the one `view-mode` segment, which is still fully partitioned; the example below keeps
+the two-switch shape because that is the case the rule exists for, and is **illustrative, not the
+live host** (`plan-workspace-toolbar.tsx` passes `groupLabels={{ lens: 'Plan view' }}` and
+`PLAN_MODE_SEGMENT_LABELS`, which names `view-mode` alone).
 
 Left alone that renders as one region, one accessible name and four identical gaps — so nothing
 says where one switch ends and the next begins, in either channel (ADR-0119, `docs/TECH_DEBT.md`
@@ -357,7 +361,8 @@ regresses with nothing saying so.
 
 **Segments are not radio buttons.** `SegmentedControl` above is the APG radiogroup, where focus
 follows selection. That is wrong here: arrowing through the mode row would _change the plan's
-scheduling mode_ on the way past, on a control that recalculates. Toolbar items stay
+scheduling mode_ on the way past, on a control that recalculates (the scheduling-mode switch this
+was written about is gone, and the rule still holds for any segment whose press writes). Toolbar items stay
 `aria-pressed` toggle buttons — a weaker description than a radiogroup, not an incorrect one.
 
 Two invariants in `defineToolbar` guard the field: a segment may not span a `tier` or a `row`. The
