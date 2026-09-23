@@ -34,7 +34,7 @@ const LANE_MID_1 = laneMid(1);
 beforeEach(() => announceSpy.mockClear());
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
-  return {
+  const row: ActivitySummary = {
     drivingResourceCalendarId: null,
     id: 'a1',
     planId: 'p1',
@@ -98,6 +98,13 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
+  };
+  // Unplaced unless the case says otherwise, so drawn at the early dates the case chose — the state a
+  // recalculation writes, and the span Arrange packs (`model/drawn-span.ts`).
+  return {
+    ...row,
+    visualEffectiveStart: overrides.visualEffectiveStart ?? row.earlyStart,
+    visualEffectiveFinish: overrides.visualEffectiveFinish ?? row.earlyFinish,
   };
 }
 

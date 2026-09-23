@@ -52,8 +52,9 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    // Unplaced, so drawn at its early dates — the state a recalculation writes (`lib/bar-dates.ts`).
+    visualEffectiveStart: '2026-01-01',
+    visualEffectiveFinish: '2026-01-03',
     visualConflict: false,
     visualConflictReason: null,
     visualDriftDays: null,
@@ -85,6 +86,7 @@ function makeDeps(over: Partial<CoalescedNudgeDeps> = {}): CoalescedNudgeDeps {
     setConflict: vi.fn(),
     announce: vi.fn(),
     isPointerBusy: () => false,
+    barDateSource: 'visual',
     ...over,
   };
 }
@@ -93,6 +95,25 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('useCoalescedNudge', () => {
+  it('nudges a PLACED bar from where it is drawn, not from its early start (reported 2026-09-23)', async () => {
+    /**
+     * The bar is hand-placed ten days LATER than its early start, so the canvas draws it at day 10.
+     * `Alt+→` means "one day later than it is", i.e. day 11. Starting from `earlyStart` wrote day 1
+     * — a single keypress throwing the placement nine days the wrong way.
+     */
+    const placed = activity({
+      visualStart: '2026-01-11',
+      visualEffectiveStart: '2026-01-11',
+      visualEffectiveFinish: '2026-01-13',
+    });
+    const deps = makeDeps({ activities: [placed] });
+    const { result } = renderHook(() => useCoalescedNudge(deps));
+    act(() => result.current(placed, 'time', 1));
+    await act(() => vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS));
+    expect(deps.onReposition).toHaveBeenCalledWith({ activityId: 'a1', startDay: 11 });
+    expect(deps.setGhost).toHaveBeenCalledWith({ startDay: 11, endDay: 13, laneIndex: 0 });
+  });
+
   it('coalesces a burst into a single net write', async () => {
     const deps = makeDeps();
     const a = deps.activities[0]!;

@@ -78,8 +78,10 @@ function activity(
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    // Unplaced, so drawn at its early dates — the state a recalculation writes, and the span Arrange
+    // packs (`model/drawn-span.ts`). Null here described a row the engine never produces.
+    visualEffectiveStart: earlyStart,
+    visualEffectiveFinish: earlyFinish,
     visualConflict: false,
     visualConflictReason: null,
     visualDriftDays: null,

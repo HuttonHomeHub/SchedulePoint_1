@@ -322,3 +322,79 @@ export async function canvasInk(
     return { rows, height };
   });
 }
+
+/**
+ * Hand-place one activity (by name) at `offsetDays` calendar days after ANOTHER activity's drawn
+ * start, through the same batch endpoint a plural drag writes — so the placement is a real one the
+ * engine's effective-Visual pass will draw, not a fixture value.
+ *
+ * Offset from another bar rather than from a literal date because the plan's data date is "today"
+ * when the journey runs, and a literal would drift out of the plan's span.
+ */
+export async function placeRelativeTo(
+  page: Page,
+  orgSlug: string,
+  name: string,
+  anchorName: string,
+  offsetDays: number,
+): Promise<void> {
+  const planId = openPlanId(page);
+  const error = await page.evaluate(
+    async ({
+      org,
+      id,
+      target,
+      anchor,
+      offset,
+    }: {
+      org: string;
+      id: string;
+      target: string;
+      anchor: string;
+      offset: number;
+    }) => {
+      const list = await fetch(`/api/v1/organizations/${org}/plans/${id}/activities?limit=100`, {
+        credentials: 'include',
+      });
+      if (!list.ok) return `activities ${String(list.status)}`;
+      const rows = (
+        (await list.json()) as {
+          data: {
+            id: string;
+            name: string;
+            version: number;
+            visualEffectiveStart: string | null;
+          }[];
+        }
+      ).data;
+      const row = rows.find((r) => r.name === target);
+      const from = rows.find((r) => r.name === anchor)?.visualEffectiveStart;
+      if (!row || !from) return `no ${target} or no drawn start on ${anchor}`;
+      const at = new Date(`${from}T00:00:00Z`);
+      at.setUTCDate(at.getUTCDate() + offset);
+      const response = await fetch(
+        `/api/v1/organizations/${org}/plans/${id}/activities/placements`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            placements: [
+              {
+                id: row.id,
+                version: row.version,
+                constraintType: null,
+                constraintDate: null,
+                visualStart: at.toISOString().slice(0, 10),
+                laneIndex: null,
+              },
+            ],
+          }),
+        },
+      );
+      return response.ok ? null : `${String(response.status)} ${await response.text()}`;
+    },
+    { org: orgSlug, id: planId, target: name, anchor: anchorName, offset: offsetDays },
+  );
+  if (error !== null) throw new Error(`placing ${name} was rejected: ${error}`);
+}

@@ -52,8 +52,9 @@ function activity(over: Partial<ActivitySummary> = {}): ActivitySummary {
     durationType: 'FIXED_DURATION_AND_UNITS_TIME',
     parentId: null,
     visualStart: null,
-    visualEffectiveStart: null,
-    visualEffectiveFinish: null,
+    // Unplaced, so drawn at its early dates — the state a recalculation writes (`lib/bar-dates.ts`).
+    visualEffectiveStart: '2026-01-05',
+    visualEffectiveFinish: '2026-01-07',
     visualConflict: false,
     visualConflictReason: null,
     visualDriftDays: null,
@@ -85,6 +86,7 @@ function makeDeps(over: Partial<CoalescedDurationNudgeDeps> = {}): CoalescedDura
     setConflict: vi.fn(),
     announce: vi.fn(),
     isPointerBusy: () => false,
+    barDateSource: 'visual',
     ...over,
   };
 }
@@ -93,6 +95,23 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('useCoalescedDurationNudge (ADR-0052 M2)', () => {
+  it('draws the ghost where a PLACED bar is drawn, not at its early start (reported 2026-09-23)', () => {
+    /**
+     * Only the preview was wrong here — the duration written is the row's own — but a ghost that
+     * appears somewhere the bar is not tells the planner the edit went somewhere else.
+     */
+    const placed = activity({
+      visualStart: '2026-01-15',
+      visualEffectiveStart: '2026-01-15',
+      visualEffectiveFinish: '2026-01-17',
+    });
+    const deps = makeDeps({ activities: [placed] });
+    const { result } = renderHook(() => useCoalescedDurationNudge(deps));
+    act(() => result.current(placed, 1));
+    const ghost = vi.mocked(deps.setGhost).mock.calls.at(-1)?.[0];
+    expect(ghost?.startDay).toBe(14);
+  });
+
   it('coalesces a held-key burst into one net absolute write', async () => {
     const deps = makeDeps();
     const a = deps.activities[0]!;

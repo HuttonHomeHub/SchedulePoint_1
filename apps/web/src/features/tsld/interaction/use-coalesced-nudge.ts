@@ -3,7 +3,9 @@ import { useEffect, useRef } from 'react';
 
 import type { PendingGhost } from '../components/TsldCanvas';
 import type { TsldEditOutcome, TsldRepositionInput } from '../components/TsldPanel';
-import { daysBetween } from '../render/render-model';
+import { drawnDaySpan } from '../model/drawn-span';
+
+import type { BarDateSource } from '@/lib/bar-dates';
 
 /** Debounce (ms) that coalesces a held Alt+arrow key-repeat into one nudge write (M5 5.2 §4). */
 export const NUDGE_DEBOUNCE_MS = 150;
@@ -28,10 +30,12 @@ function buildReposition(
   t: NudgeTarget,
   activities: readonly ActivitySummary[],
   dataDate: string,
+  source: BarDateSource,
 ): TsldRepositionInput | null {
   const persisted = activities.find((a) => a.id === t.activityId);
   if (!persisted) return null; // the activity was deleted elsewhere — nothing to write
-  const persistedStart = persisted.earlyStart ? daysBetween(dataDate, persisted.earlyStart) : 0;
+  // Compared against where the bar is DRAWN, the same origin the target was seeded from.
+  const persistedStart = drawnDaySpan(persisted, source, dataDate)?.startDay ?? 0;
   const laneChanged = t.laneIndex !== persisted.laneIndex;
   const timeChanged = t.startDay !== persistedStart;
   if (!laneChanged && !timeChanged) return null; // props caught up to the target — no-op
@@ -51,6 +55,12 @@ export interface CoalescedNudgeDeps {
   announce: (message: string) => void;
   /** True while a pointer-drag reposition is committing — a keyboard nudge must not race it. */
   isPointerBusy: () => boolean;
+  /**
+   * Which dates the canvas is drawing bars from — the panel's `barDateSource`. A nudge means "one
+   * day later than the bar IS", so it seeds from the drawn span; required rather than defaulted,
+   * because the default that shipped (the early start) is the defect it exists to prevent.
+   */
+  barDateSource: BarDateSource;
 }
 
 /**
@@ -102,7 +112,7 @@ export function useCoalescedNudge(
       timerRef.current = setTimeout(commit, SERIALIZE_RETRY_MS);
       return;
     }
-    const input = buildReposition(t, activities, dataDate);
+    const input = buildReposition(t, activities, dataDate, depsRef.current.barDateSource);
     if (!input) {
       targetRef.current = null;
       setGhost(null);
@@ -157,7 +167,7 @@ export function useCoalescedNudge(
         const t = targetRef.current;
         const { onReposition, activities, dataDate } = depsRef.current;
         if (!t || !onReposition || dataDate === null) return;
-        const input = buildReposition(t, activities, dataDate);
+        const input = buildReposition(t, activities, dataDate, depsRef.current.barDateSource);
         targetRef.current = null;
         if (input) void onReposition(input).catch(() => {});
       };
@@ -182,11 +192,11 @@ export function useCoalescedNudge(
         if (timerRef.current) clearTimeout(timerRef.current);
         commit();
       }
-      const startDay = activity.earlyStart ? daysBetween(dataDate, activity.earlyStart) : 0;
-      const span =
-        activity.earlyStart && activity.earlyFinish
-          ? daysBetween(activity.earlyStart, activity.earlyFinish)
-          : 0;
+      // Seeded from where the bar is DRAWN: a placed bar's early start can be days from it, and
+      // `Alt+→` from there threw the placement the wrong way (reported 2026-09-23).
+      const drawn = drawnDaySpan(activity, depsRef.current.barDateSource, dataDate);
+      const startDay = drawn?.startDay ?? 0;
+      const span = drawn ? drawn.endDay - drawn.startDay : 0;
       t = {
         activityId: activity.id,
         name: activity.name,

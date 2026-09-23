@@ -3,9 +3,11 @@ import { useEffect, useRef } from 'react';
 
 import type { PendingGhost } from '../components/TsldCanvas';
 import type { TsldEditOutcome, TsldResizeInput } from '../components/TsldPanel';
-import { daysBetween } from '../render/render-model';
+import { drawnDaySpan } from '../model/drawn-span';
 
 import { NUDGE_DEBOUNCE_MS } from './use-coalesced-nudge';
+
+import type { BarDateSource } from '@/lib/bar-dates';
 
 /** Serialize retry interval (ms): re-attempt the commit while a prior write is still in flight. */
 const SERIALIZE_RETRY_MS = 40;
@@ -46,6 +48,8 @@ export interface CoalescedDurationNudgeDeps {
   announce: (message: string) => void;
   /** True while a pointer edit is committing — a keyboard nudge must not race it. */
   isPointerBusy: () => boolean;
+  /** Which dates the canvas draws bars from — the ghost starts where the bar is drawn. */
+  barDateSource: BarDateSource;
 }
 
 /**
@@ -160,7 +164,9 @@ export function useCoalescedDurationNudge(
       t = {
         activityId: activity.id,
         name: activity.name,
-        startDay: activity.earlyStart ? daysBetween(dataDate, activity.earlyStart) : 0,
+        // The ghost's origin only (the duration written is the row's own), but a preview drawn
+        // somewhere the bar is not says the edit went somewhere else — so from the DRAWN span.
+        startDay: drawnDaySpan(activity, depsRef.current.barDateSource, dataDate)?.startDay ?? 0,
         laneIndex: activity.laneIndex,
         durationDays: activity.durationDays,
       };
