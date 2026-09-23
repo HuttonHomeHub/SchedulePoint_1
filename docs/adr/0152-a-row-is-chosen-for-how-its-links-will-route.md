@@ -86,7 +86,9 @@ row count and added unlinked glyph contact directly below crossings.
 - An already-arranged plan opens the dialog and says "Already arranged", where the spec (US-2) said
   there would be no dialog. Finding out takes a search the render path cannot afford (decision 7).
 - The search's figures are node timings. They bound the algorithm, not the product owner's hardware
-  (`docs/TECH_DEBT.md` #75). The after-epic paint reading is owed at M6.
+  (`docs/TECH_DEBT.md` #75). The after-epic paint reading is owed at M6. _(Taken 2026-09-23:
+  FC-N8 passes — 0.00 pp dropped at Week at 500 and 2,000, spread 0.00 pp, with the new layers
+  confirmed painted in the probe's own scene; #75 item 9.)_
 - The CPM engine is not imported and no migration runs.
 
 ## Alternatives considered

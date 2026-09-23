@@ -663,17 +663,16 @@ behaves against it, is still the row's actual subject and still nobody has measu
 **Status:** deferred (on a trigger) · **Verified:** 2026-09-23 · **PARKED 2026-09-10** — see the
 box below.
 
-> **Every reading below pre-dates the painter that ships now (reconciliation pass, 2026-09-23).** The
-> sixth and last sitting was 2026-09-21; ADR-0151 (2026-09-22) replaced the bar with a 5 px line
-> plus node glyphs and three text rows, and NetPoint-layout (2026-09-23, ADR-0152/0154 and M1) added
-> chevrons, lag plates, waiting dashes, a centre item and a 60 px pitch. Both epics committed a paint
-> condition that needs one `canvas-draw` press on the product owner's hardware — **FC-L5**
-> (`docs/specs/logic-legibility/`) and **FC-N8**, whose record says in terms _"the owed reading stays
-> with #75"_ (`docs/specs/netpoint-layout/m6-gate-pass.md:33-42`) — and **neither is taken**. This
-> row did not know until this box: its status read as settled while two epics' owed readings pointed
-> at it. "§9 is met" below is a true statement about the **2026-09-21 painter** and nothing later;
-> the call-count budgets (`paint.link-marks-budget.test.ts`, `paint.dates-budget.test.ts`) pin the
-> cost's shape, not its milliseconds.
+> **Items 1–8 pre-date the painter that ships now; item 9 does not (updated 2026-09-23).** The
+> sixth sitting was 2026-09-21; ADR-0151 (2026-09-22) replaced the bar with a 5 px line plus node
+> glyphs and three text rows, and NetPoint-layout (2026-09-23, ADR-0152/0154 and M1) added chevrons,
+> lag plates, waiting dashes, a centre item and a 60 px pitch. Both epics committed a paint condition
+> needing one `canvas-draw` press on the product owner's hardware — **FC-L5**
+> (`docs/specs/logic-legibility/`) and **FC-N8** (`docs/specs/netpoint-layout/m6-gate-pass.md`) — and
+> **both were taken that evening: item 9.** FC-N8 passes; FC-L5 passes combined, its three limbs not
+> separable. Until then this box said _"neither is taken"_, which was true when the reconciliation
+> pass wrote it. "§9 is met" in the box below is a fact about the Dell and the 2026-09-21 painter;
+> **on the product owner's Surface, Fit/2000 is still under the floor** (item 9).
 
 **No longer blocked on the product owner.** Five
 sittings were taken 2026-09-10 (items 6, 6(e), 6(f)). §9's gate is **met at every judgeable point
@@ -1287,6 +1286,50 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
    where the machine could carry the explanation. 74.44 pp against 99.63 pp cannot: same GPU, same
    thread count, same DPR. Power state is the leading unrecorded variable and the probe still does
    not capture it.
+
+9. **Item 9 — a SEVENTH sitting, 2026-09-23 19:17–19:19 UTC (product owner, `web` 0.146.0, `api`
+   0.72.0), the SECOND on the Surface, and the first on today's painter.**
+
+   Same machine class as item 7, not the Dell of items 5/6/8: ANGLE Qualcomm Adreno X1-85 D3D11,
+   12 threads, ~16 GiB, **DPR 1.5, 1912×1114 CSS** (item 7: 1912×1148), Edge 153, idle interval
+   16.60–16.70 ms, attention held throughout, no motion preference. Power state unrecorded (#283).
+
+   | scenario        | framing | scale | on screen                 | result                                                                                     |
+   | --------------- | ------- | ----- | ------------------------- | ------------------------------------------------------------------------------------------ |
+   | `canvas-draw`   | Week    | 500   | 246 bars                  | **60.0 fps, 0.00 pp**, worst p95 16.80 ms — PASS (45)                                      |
+   | `canvas-draw`   | Week    | 2000  | 270 bars                  | **60.0 fps, 0.00 pp**, worst p95 16.90 ms — PASS (30)                                      |
+   | `canvas-draw`   | Fit     | 500   | 345 bars at 5.28 px/day   | 59.3 fps (57.8–60.0), 1.30 pp, p95 20.40 ms — ungraded                                     |
+   | `canvas-draw`   | Fit     | 2000  | 1,015 bars at 1.66 px/day | **26.0 fps (25.5–26.5), 98.33 pp**, p95 50.40 ms — ungraded                                |
+   | `revision-diff` | Week    | 2000  | 264 bars                  | baseline 0.37 pp (spread 1.11), treatment 0.00 pp at 60.0 fps, **delta −0.37 pp** — PASS   |
+   | `revision-diff` | Fit     | 2000  | 2,160 bars                | baseline 97.41 pp (spread 0.56), treatment 98.33 pp at 25.9 fps, delta +0.93 pp — ungraded |
+
+   **(a) FC-N8 and FC-L5 are taken, and Week passes.** Both owed readings (see the head box) are
+   judged in their own records: FC-N8 **PASSES** with non-vacuity checked by running the probe's
+   scene, not by reading; FC-L5 **passes combined only**, and its limb C prediction is unobservable
+   at a vsync-capped 60 fps (a floor effect, not a falsification). `revision-diff` at Week confirms
+   ADR-0129 P3 a fourth time, the overlay drawing 37/264 bars and 49/372 links.
+
+   **(b) Fit/2000 on this machine: 21.5 fps with 1,892 bars (item 7, pre-ADR-0151 painter) → 26.0
+   fps with 1,015 bars (today's painter).** Faster, with about half the bars on screen, because the
+   60 px pitch puts fewer lanes in the viewport (ADR-0151's Fit bar-count finding). **Still below
+   §9's 30 fps floor on this machine**, as in item 7.
+
+   **(c) Call count did not predict frame time here.** The same throwaway counting test, Fit/2000 at
+   1912×1114: a worktree at `fb1c3f50` (the last commit before ADR-0151) makes 1,861 `fill` + 1,863
+   `stroke` calls for 1,859 bars; `main` makes 2,802 + 1,829 for 1,015 bars — about 24 % more calls
+   for about 55 % of the bars, yet faster in frames. On this machine Fit cost tracks device pixels
+   (7(c)). **A datum against using call counts as a proxy for Fit cost, not an attribution**: the ~8
+   ms rule stands, and a DevTools recording is still the instrument.
+
+   **(d) `revision-diff` at Fit is barely capable of failing**: baseline 97.41 pp leaves 2.59 pp of
+   headroom against the 2.00 pp bar (7(d) had 0.37). The +0.93 pp delta exceeds the 0.56 pp spread
+   and sits under the bar; ungraded by policy.
+
+   **(e) The trigger question is recorded, not decided.** This row's trigger is _"a reading that
+   misses §9's floor and reproduces"_. Fit/2000 on the product owner's own machine has now missed
+   the floor in **two** sittings (21.5, 26.0 fps), across two painters, while every Dell sitting
+   since 2026-09-10 meets it. Whether that fires the trigger is **the product owner's call**. Power
+   state is unrecorded again, and on a Surface that matters (7(f)).
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 

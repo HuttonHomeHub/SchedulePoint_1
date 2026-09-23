@@ -238,7 +238,10 @@ changed.
   (ADR-0150 D5's one qualifier), dropping the non-driving dash, and **FC-L5's paint reading**, which
   the epic's own condition required on the product owner's hardware and which **was never taken** —
   recorded as untaken rather than treated as met, because the last real fps reading was taken on the
-  pre-epic painter and is a genuine number about a different picture.
+  pre-epic painter and is a genuine number about a different picture. _(Taken 2026-09-23, combined
+  only — the three limbs shipped with no sitting between them: 0.00 pp dropped at Week at 500 and
+  2,000 against 0.00 pp before, PASS; limb C's "> 0" prediction is unobservable at a vsync-capped
+  60 fps, a floor effect rather than a falsification. `docs/TECH_DEBT.md` #75 item 9.)_
 - **Criticality's channel has THREE rungs, and shipping two was the gate pass's largest finding.**
   M3-T3 replaced a solid/dashed/absent bar outline with `isCritical || isNearCritical`, so critical
   and near-critical became separable by **hue alone** — on the most important distinction in the
