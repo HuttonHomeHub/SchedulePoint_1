@@ -37,6 +37,7 @@ import {
 import { planChain } from '../model/chain-order';
 import { resolveDockStrip } from '../model/dock-strip';
 import { drawnDaySpan } from '../model/drawn-span';
+import { repositionAnnouncement } from '../model/reposition-announcement';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -164,6 +165,13 @@ export interface TsldRepositionInput {
 export interface TsldEditOutcome {
   applied: boolean;
   conflict: string | null;
+  /**
+   * The lane the bar actually landed in, when that is not the lane the gesture asked for — a drop
+   * onto an occupied lane goes on to the next free one (NetPoint-layout M3, `resolveLaneDrop`).
+   * Absent means "where you asked". The announcements read this rather than the request, or they
+   * would name a lane the bar is not in.
+   */
+  laneIndex?: number;
 }
 
 export type TsldRepositionOutcome = TsldEditOutcome;
@@ -361,6 +369,11 @@ export interface TsldPanelProps {
    * It is the dock's LOWEST rung — see `resolveDockStrip`, the one place the ordering is decided.
    */
   placementMigrationNotice?: React.ReactNode | null | undefined;
+  /**
+   * What an edit's automatic overlap resolution did (NetPoint-layout M3), built by the host because
+   * the undo step and its lifetime belong to the workspace model. Null when there is nothing to say.
+   */
+  layoutResolvedNotice?: React.ReactNode | null | undefined;
   /**
    * The plan's auto-recalculation coalescer's hold seam (ADR-0064 T7), supplied by the host that
    * owns it. While a two-click pick is open the panel takes a hold, so a coalesced recalculation
@@ -596,6 +609,7 @@ export function TsldPanel({
   onLink,
   onUndoLastEdit,
   placementMigrationNotice,
+  layoutResolvedNotice,
   recalcHold,
   dropLinkPickSignal = 0,
   recalcPending = false,
@@ -1692,6 +1706,7 @@ export function TsldPanel({
     authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
     hasPlacementMigrationNotice: placementMigrationNotice != null,
     hasArrangeOffer: arrangeOfferAvailable,
+    hasLayoutResolvedNotice: layoutResolvedNotice != null,
   });
 
   // The docked selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
@@ -2538,12 +2553,18 @@ export function TsldPanel({
               snappedDay !== null && dataDate
                 ? formatCalendarDate(addCalendarDays(dataDate, snappedDay))
                 : null;
+            // One sentence builder for every move (`reposition-announcement.ts`), so this path and
+            // the keyboard nudge cannot state the landed lane differently.
             announce(
-              snappedDate
-                ? `Moved “${activity.name}” to ${snappedDate}, the next working day${laneChanged ? ` in lane ${laneIndex + 1}` : ''}.`
-                : laneChanged
-                  ? `Moved “${activity.name}” to lane ${laneIndex + 1}${timeChanged ? '; dates will update' : ''}.`
-                  : `Moved “${activity.name}”; dates will update.`,
+              repositionAnnouncement({
+                name: activity.name,
+                snappedDate,
+                timeChanged,
+                laneChanged,
+                requested: laneIndex,
+                landed: outcome.laneIndex ?? laneIndex,
+                original: activity.laneIndex,
+              }),
             );
           }
         })
@@ -3030,6 +3051,8 @@ export function TsldPanel({
 
           Omitted rather than shaded without the pen — see `arrangeOfferAvailable`.
         */}
+        {dockStrip === 'layout-resolved' ? layoutResolvedNotice : null}
+
         {dockStrip === 'arrange-offer' ? (
           <NoticeStrip
             data-testid="canvas-arrange-offer"

@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import type { PendingGhost } from '../components/TsldCanvas';
 import type { TsldEditOutcome, TsldRepositionInput } from '../components/TsldPanel';
 import { drawnDaySpan } from '../model/drawn-span';
+import { repositionAnnouncement } from '../model/reposition-announcement';
 
 import type { BarDateSource } from '@/lib/bar-dates';
 
@@ -121,6 +122,9 @@ export function useCoalescedNudge(
     const laneChanged = input.laneIndex !== undefined;
     const timeChanged = input.startDay !== undefined;
     const finalLane = t.laneIndex;
+    // The lane the bar is persisted in, so the announcement can tell "went on past an occupied
+    // lane" from "found no free lane at all" (`reposition-announcement.ts`).
+    const originalLane = activities.find((a) => a.id === t.activityId)?.laneIndex ?? finalLane;
     const { name } = t;
     busyRef.current = true;
     inFlightRef.current = onReposition(input)
@@ -131,15 +135,27 @@ export function useCoalescedNudge(
           setConflict(outcome.conflict);
           targetRef.current = null; // truth wins — re-seed from props on the next nudge
         }
+        // The bar went on past an occupied lane (NetPoint-layout M3), or could not move at all:
+        // the next nudge must extend from where it IS, not from the lane that was asked for.
+        const landed = outcome.laneIndex ?? finalLane;
+        if (outcome.laneIndex !== undefined && targetRef.current?.activityId === input.activityId) {
+          targetRef.current = { ...targetRef.current, laneIndex: outcome.laneIndex };
+        }
         if (outcome.applied) {
           // NB: deliberately do NOT null targetRef here. It's the absolute target and must survive
           // the window before `activities` refetches, so a fast follow-up nudge extends from it
           // rather than re-seeding from a stale prop (that would re-introduce the cross-burst
           // clobber this hook fixes). Once props catch up, the next commit's caught-up check no-ops.
           announce(
-            laneChanged
-              ? `Moved “${name}” to lane ${finalLane + 1}${timeChanged ? '; dates will update' : ''}.`
-              : `Moved “${name}”; dates will update.`,
+            repositionAnnouncement({
+              name,
+              snappedDate: null,
+              timeChanged,
+              laneChanged,
+              requested: finalLane,
+              landed,
+              original: originalLane,
+            }),
           );
         }
       })

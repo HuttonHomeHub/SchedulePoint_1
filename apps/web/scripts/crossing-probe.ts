@@ -73,6 +73,7 @@ import { ELAPSED_DAY_WALK } from '../src/features/tsld/render/working-time';
 
 import { reorderLanes, statsFor, unit300Asap } from './lane-travel-probe';
 export { smallPlanLayouts } from './small-plan-fixture';
+export { chainPlacedLayouts, drawnOverlaps } from './chain-placed-fixture';
 
 export interface Pt {
   x: number;
@@ -103,8 +104,24 @@ export interface RecordedPath {
  * known — "the painter batches every line of a layer into one path and sets the colour once" —
  * which is exactly why *batch* attribution can work where *per-polyline colour* attribution cannot.
  */
-export function recordingCtx(): { ctx: unknown; paths: RecordedPath[] } {
+/**
+ * One `fillText` call as the painter made it (NetPoint-layout M0-T5). Width is the recorder's own
+ * `measureText` — the metric the painter placed the text against — capped at `maxWidth` when the
+ * painter passed one, which is what the canvas does with it.
+ */
+export interface RecordedText {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  fontPx: number;
+  align: CanvasTextAlign;
+  baseline: CanvasTextBaseline;
+}
+
+export function recordingCtx(): { ctx: unknown; paths: RecordedPath[]; texts: RecordedText[] } {
   const paths: RecordedPath[] = [];
+  const texts: RecordedText[] = [];
   let pending: RecordedPath[] = [];
   let current: RecordedPath | null = null;
   let batch = 0;
@@ -155,7 +172,19 @@ export function recordingCtx(): { ctx: unknown; paths: RecordedPath[] } {
     setLineDash: (d: readonly number[]) => {
       dash = d;
     },
-    fillText: () => {},
+    fillText: (text: string, x: number, y: number, maxWidth?: number) => {
+      const measured = text.length * 6;
+      const px = /(\d+(?:\.\d+)?)px/.exec(ctx.font);
+      texts.push({
+        text,
+        x,
+        y,
+        width: maxWidth === undefined ? measured : Math.min(measured, maxWidth),
+        fontPx: px ? Number(px[1]) : 11,
+        align: ctx.textAlign,
+        baseline: ctx.textBaseline,
+      });
+    },
     measureText: (s: string) => ({ width: s.length * 6 }) as TextMetrics,
     fillStyle: '',
     strokeStyle: '',
@@ -166,7 +195,7 @@ export function recordingCtx(): { ctx: unknown; paths: RecordedPath[] } {
     textAlign: 'start' as CanvasTextAlign,
   };
 
-  return { ctx, paths };
+  return { ctx, paths, texts };
 }
 
 /**
@@ -1830,7 +1859,7 @@ export function gutterStats(
  * recorded points are the same numbers — which is what makes byte-identity the right control for
  * {@link avoidableOcclusions} rather than "close enough".
  */
-function sortedDigest(lines: readonly (readonly Point[])[]): string {
+export function sortedDigest(lines: readonly (readonly Point[])[]): string {
   const digest = createHash('sha256');
   for (const key of lines
     .map((pts) => pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';'))
@@ -2355,10 +2384,20 @@ export function readVector(
   asap: ReturnType<typeof unit300Asap>,
   layout: Layout,
   pxPerDay = 4,
+  /**
+   * The pan (NetPoint-layout M0-T2). Default 32 is what every earlier caller measured at, so they
+   * are unchanged; the baseline sweeps {0, 32, 200, 500} to ESTABLISH pan invariance rather than
+   * assume it (`measure-occlusion.mjs`'s reason for sweeping pans at all).
+   */
+  originY = 32,
 ): {
   name: string;
   lanes: number;
   visibleLinks: number;
+  /** Worst count of gutter legs overlapping in x on one y — ADR-0151's "stacked lines" figure. */
+  maxOverlappingOnOneY: number;
+  /** The pitch the painter actually used — so a pitch substitution that did not take is visible. */
+  laneHeight: number;
   crossings: number;
   perLink: number;
   foreignLinks: number;
@@ -2385,16 +2424,19 @@ export function readVector(
   const worstLanes = Math.max(layout.lanes, 145);
   const size = {
     width: (maxDay + 4) * pxPerDay + 400,
-    height: worstLanes * LANE_HEIGHT + 200,
+    // + originY: a positive pan moves the scene DOWN, so the canvas must grow with it or the
+    // bottom lanes are culled and the reading covers less than the plan.
+    height: worstLanes * LANE_HEIGHT + 200 + originY,
   };
   const { scene } = sceneFor(asap, layout);
-  const view: Viewport = { pxPerDay, originX: 40, originY: 32 };
+  const view: Viewport = { pxPerDay, originX: 40, originY };
 
   const { ctx, paths } = recordingCtx();
   paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
   const links = linkPaths(paths);
   const { crossings } = countCrossings(links);
   const occl = countOcclusions(links, scene, view);
+  const gutter = gutterStats(links, scene, view);
 
   const occlusion = occlusionContext(scene, view);
   const sameRow = { links: 0, foreignLinks: 0 };
@@ -2435,6 +2477,8 @@ export function readVector(
     name: layout.name,
     lanes: layout.lanes,
     visibleLinks: links.length,
+    maxOverlappingOnOneY: gutter.maxOverlappingOnOneY,
+    laneHeight: gutter.laneHeight,
     crossings,
     perLink: links.length === 0 ? 0 : crossings / links.length,
     foreignLinks: occl.foreignLinks,
@@ -2594,4 +2638,84 @@ export function inkDistribution(
     barHeightPx,
     weightRatio: barHeightPx === 0 ? 0 : meanLinkWidth / barHeightPx,
   };
+}
+
+/**
+ * **A plan in the shape `readVector` reads, from `scaleScene`** (NetPoint-layout M0-T2).
+ *
+ * `scale-2000` is a drawn scene, not a plan: the generator lays bars out without scheduling them
+ * (`scale-scene.ts`), so its `earlyStart`/`earlyFinish` ARE its drawn spans. They are converted to
+ * whole days from the same `DATA_DATE` the scene uses, and its own lanes become a layout — the
+ * generator's, which is NOT a `packLanes` result, so {@link packedOnDrawn} gives the one that is.
+ */
+export function scalePlan(count: number): {
+  asap: ReturnType<typeof unit300Asap>;
+  generator: Layout;
+} {
+  const source = scaleScene(count);
+  const dayOf = (isoDate: string): number =>
+    Math.round(
+      (Date.parse(`${isoDate}T00:00:00Z`) - Date.parse(`${DATA_DATE}T00:00:00Z`)) / 86_400_000,
+    );
+  const start = new Map<string, number>();
+  const finish = new Map<string, number>();
+  for (const a of source.activities) {
+    if (a.earlyStart === null) continue;
+    start.set(a.id, dayOf(a.earlyStart));
+    finish.set(a.id, dayOf(a.earlyFinish ?? a.earlyStart));
+  }
+  const asap = {
+    activities: source.activities.map((a) => ({ key: a.id, type: a.type })),
+    dependencies: source.edges.map((e) => ({
+      predecessorKey: e.predecessorId,
+      successorKey: e.successorId,
+      type: e.type,
+      lagDays: 0,
+    })),
+    start,
+    finish,
+  } as unknown as ReturnType<typeof unit300Asap>;
+  const laneOf = new Map(source.activities.map((a) => [a.id, a.laneIndex]));
+  return {
+    asap,
+    generator: {
+      name: `scale-${String(count)} (generator lanes)`,
+      laneOf,
+      lanes: Math.max(...laneOf.values()) + 1,
+    },
+  };
+}
+
+/**
+ * **Today's Arrange on any plan in this directory's shape** — `packLanes` over the DRAWN spans with
+ * the predecessor hint, exactly as `computeLaneArrangement` calls it since PR #663. This is
+ * Re-layout's seed (spec §4.5), so a baseline taken on it is the number Re-layout must not lose to.
+ */
+export function packedOnDrawn(
+  asap: {
+    activities: readonly { key: string }[];
+    dependencies: readonly { predecessorKey: string; successorKey: string }[];
+    start: ReadonlyMap<string, number>;
+    finish: ReadonlyMap<string, number>;
+  },
+  name: string,
+): Layout {
+  const items: PackItem[] = asap.activities.map((a) => ({
+    id: a.key,
+    startDay: asap.start.get(a.key) ?? 0,
+    endDay: asap.finish.get(a.key) ?? 0,
+    laneIndex: -1,
+  }));
+  const predecessorsOf = new Map<string, string[]>();
+  for (const d of asap.dependencies) {
+    predecessorsOf.set(d.successorKey, [
+      ...(predecessorsOf.get(d.successorKey) ?? []),
+      d.predecessorKey,
+    ]);
+  }
+  const laneOf = new Map<string, number>();
+  // A sentinel current lane no pack produces, so every item comes back — the same device
+  // `computeLaneArrangement` uses to read a full assignment out of the one packer.
+  for (const c of packLanes(items, predecessorsOf)) laneOf.set(c.id, c.laneIndex);
+  return { name, laneOf, lanes: Math.max(...laneOf.values()) + 1 };
 }

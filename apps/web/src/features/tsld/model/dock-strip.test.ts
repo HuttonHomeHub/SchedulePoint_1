@@ -19,6 +19,7 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     authoringFlowEnabled: true,
     hasPlacementMigrationNotice: false,
     hasArrangeOffer: false,
+    hasLayoutResolvedNotice: false,
     ...overrides,
   };
 }
@@ -143,6 +144,28 @@ describe('resolveDockStrip', () => {
       // One boolean carries both — see the field's docblock for why the pen is a precondition here
       // rather than a shading, which is the opposite of how every command on this surface is gated.
       expect(resolveDockStrip(input({ hasArrangeOffer: false }))).toBeNull();
+    });
+  });
+
+  /** The overlap-resolved notice (NetPoint-layout M3): below the planner's live act, above standing facts. */
+  describe('the layout-resolved notice', () => {
+    const resolved = { hasLayoutResolvedNotice: true };
+
+    it('shows on an otherwise settled canvas', () => {
+      expect(resolveDockStrip(input(resolved))).toBe('layout-resolved');
+    });
+
+    it('beats the Arrange offer and the migration notice — both are standing facts that wait', () => {
+      expect(
+        resolveDockStrip(
+          input({ ...resolved, hasArrangeOffer: true, hasPlacementMigrationNotice: true }),
+        ),
+      ).toBe('layout-resolved');
+    });
+
+    it('loses to a conflict and to an armed tool', () => {
+      expect(resolveDockStrip(input({ ...resolved, hasConflict: true }))).toBe('conflict');
+      expect(resolveDockStrip(input({ ...resolved, modeStatement: ARMED }))).toBe('mode');
     });
   });
 });

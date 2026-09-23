@@ -114,6 +114,15 @@ entry stops being needed.
   (dissolve vs. delete), the confirmation is the right place to point at it.
   Derive the count from data already loaded, and when it is not available say
   what happens without inventing a number — a wrong count is worse than none.
+- **A change the product makes on the planner's behalf moves as little as it can,
+  says so, and is its own undo step** (ADR-0153). An edit that leaves two activities
+  overlapping moves **only the bar that caused it**, to the nearest free row, never
+  its neighbour and never the rest of the plan. The move is announced once, shown
+  once in the dock with `Undo`, and is the first `Ctrl+Z` — the edit itself is the
+  second. The notice goes as soon as anything else is on top of the undo stack, so
+  its `Undo` can never reverse an edit its sentence does not describe. A bar the
+  planner **moved** onto an occupied row goes on in the direction it was moving; a
+  bar the engine **pushed** has no direction, so it takes the nearest free row.
 - **Forms:** inline validation on blur/submit (not on every keystroke), a clear
   error summary, disabled+busy submit while pending, and preserved input on
   error. Never lose a user's work.

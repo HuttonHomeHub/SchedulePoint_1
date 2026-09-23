@@ -337,6 +337,15 @@ keep `main` releasable.
   progress bar lives on a 5 px bar, how criticality reads without relying on colour, and whether to
   spend a further 8 px a row to remove the last of the bunching they reported.
 
+- **An edit never leaves two activities drawn on top of each other** (ADR-0153, amending
+  ADR-0048/0092). The product owner reported two bars drawn in one place after an edit. Part of that
+  was a defect, fixed in `web-v0.142.1`: `Arrange` packed on the wrong dates. The rest was a rule the
+  product never had. Now, when an edit makes two bars overlap — a planner stretching a bar into its
+  neighbour, or a recalculation pushing an untouched successor into a third bar — **only the bar that
+  caused it moves**, to the nearest free row, and nothing else shifts. It says so in one sentence,
+  offers `Undo`, and is its own undo step. A bar dropped onto an occupied row goes on to the next
+  free row in the direction it was moving, in the same write.
+
 - **A plan has one planning surface** (ADR-0148, amending ADR-0033/0041/0052/0054/0126/0134). A plan
   used to be in one of two **scheduling modes**, and the mode decided where every bar was drawn.
   Dragging a bar on an `Early` plan did not move it — it wrote an invisible _start no earlier than_

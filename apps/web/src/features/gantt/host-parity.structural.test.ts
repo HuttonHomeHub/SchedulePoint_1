@@ -198,9 +198,27 @@ describe('the two plan hosts receive the same facts about the plan', () => {
       source.indexOf('    ) : ('),
     );
     expect(ganttBranch.length, 'could not locate the Gantt branch').toBeGreaterThan(200);
+    // Rendered alone, or as the fallback of the overlap notice that outranks it (NetPoint M3).
     expect(
-      ganttBranch.includes('{placementMigrationNotice}'),
+      /\{(?:layoutResolvedNotice \?\? )?placementMigrationNotice\}/.test(ganttBranch),
       'the Gantt view no longer renders the placement-migration notice',
+    ).toBe(true);
+  });
+
+  /**
+   * **The overlap-resolved notice is a plan fact in both views** (NetPoint-layout M3, ADR-0153). A
+   * Gantt edit can resolve an overlap as readily as a canvas drag, and the undo step it offers is
+   * the same step; a notice rendered by one host only would hide it on the other.
+   */
+  it('renders the overlap-resolved notice in both the canvas and the Gantt', () => {
+    expect(tsld.has('layoutResolvedNotice'), 'TsldPanel no longer receives it').toBe(true);
+    const ganttBranch = source.slice(
+      source.indexOf("ctx.planView === 'gantt'"),
+      source.indexOf('    ) : ('),
+    );
+    expect(
+      ganttBranch.includes('layoutResolvedNotice'),
+      'the Gantt view no longer renders it',
     ).toBe(true);
   });
 });

@@ -13,4 +13,5 @@
  * only someone comparing an imported plan against the same plan after pressing Auto-arrange would
  * ever see them disagree. That is the ADR-0065 `routeOrthogonal` rule applied one layer up.
  */
+export { nearestFreeRow, rowOccupancy, type RowOccupancy } from './nearest-free-row.js';
 export { packLanes, type LaneChange, type PackItem } from './pack-lanes.js';

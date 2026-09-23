@@ -33,6 +33,7 @@ const err = (status: number, details?: unknown): ApiFetchError =>
 function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
   return {
     record: vi.fn(),
+    isTop: vi.fn().mockReturnValue(false),
     undo: vi.fn().mockResolvedValue('Move activity'),
     redo: vi.fn().mockResolvedValue('Add link'),
     clear: vi.fn(),

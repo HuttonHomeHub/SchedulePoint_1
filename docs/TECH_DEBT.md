@@ -11571,3 +11571,29 @@ disagreeing with the canvas chip it describes. All seven were fixed on
 type says what the value is and the gate's file scope stops being load-bearing. It touches every
 module under `render/` and most of the canvas components, which is why it was not folded into a defect
 fix: a rename across ~30 files is its own reviewable change.
+
+### 373. The harness's occlusion counter decides a link's own bar by position, so it depends on list order
+
+**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint-layout M0-T4) ·
+**Size:** S · **Owner:** web
+
+`lineOcclusion` in `apps/web/scripts/crossing-probe.ts` works out which bars are a link's **own**
+from where the polyline starts and ends. It does this through `barAt`, which returns the **first**
+bar in list order within 0.5 px. `packLanes` puts bars end to end, so an anchor sits on its own bar
+and on the neighbour it touches. The neighbour can then be taken as "own", and a leg that genuinely
+runs behind it goes uncounted. Reversing Unit 300's activity list leaves the drawn lines
+byte-identical and moves the count from 49 to 54. Counting by the link's two endpoint ids reads 58
+either way. At other zooms and plans the positional count is wrong in **both** directions
+(`docs/specs/netpoint-layout/m0-measurement.md`, M0-T4).
+
+The figures ADR-0150 and ADR-0151 publish for foreign occlusion (0.250 and 0.261 per link) came from
+this counter in fixture order. Their **conclusions** compare layouts measured with the same counter
+in the same order, so they are unlikely to invert. The absolute numbers, though, are not what
+identity attribution reads.
+
+**The fix this row owes:** the recorder-based harness cannot count by identity, because a recorded
+path carries no link id (ADR-0149 D1). The NetPoint evaluator (`scripts/netpoint-evaluate.ts`,
+`setAttribution('identity')`) can, because it builds the painter's digest-verified line set with the
+edge in hand. That evaluator is what FC-N0 now compares the product counter against. What is left is
+to retire the positional counter, or label it at every call site, so a later reading does not quote a
+positional figure as a count.

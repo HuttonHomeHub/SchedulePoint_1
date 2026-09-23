@@ -1,5 +1,8 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
@@ -85,6 +88,7 @@ import {
   type TsldResizeInput,
   type TsldEditOutcome,
 } from '@/features/tsld';
+import { dayOf, laneSnapshotOf, resolveLaneDrop } from '@/features/tsld/model/auto-resolve';
 import { bulkMoveSnapshots, isLaneOnly, isNoOp } from '@/features/tsld/model/bulk-move';
 import {
   activityDefinitionInput,
@@ -119,6 +123,7 @@ import {
   useOrgRole,
 } from '@/hooks/use-org-role';
 import { ApiFetchError } from '@/lib/api/client';
+import { activityKeys } from '@/lib/query/hierarchy-keys';
 
 /**
  * What a duplicate attempt did. Three distinguishable outcomes, because a planner needs to know
@@ -557,7 +562,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // the success announcements. Shared by the toolbar controls + keybindings (the SAME store the
   // recording seams above push onto). Inert unless `VITE_UNDO_REDO` is on — the wrapper only acts when
   // the user invokes undo/redo, which the flag-gated surface never does when off, so byte-identical.
-  const undoRedo = usePlanUndoRedo({
+  const plainUndoRedo = usePlanUndoRedo({
     history: editHistory,
     orgSlug,
     planId,
@@ -581,6 +586,55 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       );
     },
   });
+  const batchPositions = useBatchPositions(orgSlug, planId);
+  const queryClient = useQueryClient();
+  /**
+   * **An edit moves only the bar that caused it** (NetPoint-layout M3, ADR-0153). Every planner
+   * command that can change a drawn span calls `autoResolve.begin(subjects)` BEFORE its write; the
+   * hook resolves any overlap the edit created once the recalculation settles, as its own undo step.
+   * `use-auto-resolve.census.structural.test.ts` holds every command constructor to that.
+   *
+   * It reads the activities list from the query cache rather than `activities.data`: the settle it
+   * reacts to is the moment the recalculation's refetch has landed IN THE CACHE, and a render that
+   * has not caught up yet would hand it the dates the recalculation replaced.
+   */
+  const autoResolve = useAutoResolveOverlaps({
+    enabled: CANVAS_AUTHORING_ENABLED && UNDO_REDO_ENABLED && canEditSchedule,
+    settled: autoRecalc.settled,
+    pendingEdits: autoRecalc.pendingEdits,
+    readActivities: () =>
+      queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
+      activities.data,
+    isWriting: () => queryClient.isMutating() > 0,
+    batchPositions: batchPositions.mutateAsync,
+    history: editHistory,
+    announce,
+    onWriteRejected: pen.onWriteRejected,
+  });
+  const beginLayoutEdit = autoResolve.begin;
+  const resolveLayoutNow = autoResolve.resolveNow;
+  /**
+   * The undo/redo every surface calls, with the replay noted first. A replay restores a recorded
+   * state; resolving an overlap against it would move a bar the planner has just asked to have
+   * back (spec §4.4, "never during replay"). Wrapped HERE, once, because the toolbar, the
+   * keybindings and the dock notices all reach undo through `model.undoRedo` — a guard inside one
+   * of them is how the others come to resolve against a replay.
+   */
+  const noteReplay = autoResolve.noteReplay;
+  const undoRedo = useMemo(
+    () => ({
+      ...plainUndoRedo,
+      undo: () => {
+        noteReplay();
+        plainUndoRedo.undo();
+      },
+      redo: () => {
+        noteReplay();
+        plainUndoRedo.redo();
+      },
+    }),
+    [plainUndoRedo, noteReplay],
+  );
   // Any structural edit — from the canvas, the activities table, or the logic editor — should
   // auto-recalc. Watching only the row *count* misses in-place edits that change the schedule
   // without adding/removing a row (a duration or constraint edit from the table — ux review), so we
@@ -679,7 +733,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       laneIndex: input.laneIndex,
       visualStart: dropDate,
     };
+    // Before the write, so the new bar is "not in S0" and rule 1 can move it (ADR-0153).
+    beginLayoutEdit([]);
     const created = await createPlacedActivity.mutateAsync(placedInput);
+    autoResolve.addSubjects([created.id]);
     // Record the create for undo (ADR-0048 M2) — the single user edit, NOT the follow-up recalc.
     // Undo deletes the created activity; redo re-creates it from the same placement input. Guarded on
     // the flag so behaviour is byte-identical when off.
@@ -766,6 +823,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       deleteMany: async (rows: readonly ActivitySummary[]): Promise<void> => {
         if (rows.length === 0) return;
         const activities = rows.map((a) => ({ id: a.id, version: a.version }));
+        // A delete takes logic with it, so successors can fall earlier into a neighbour.
+        beginLayoutEdit([]);
         const result = await bulkDelete({ activities });
         // ONE reversible step for the whole gesture, and its undo is the id-stable batch restore
         // (CQ-4) — re-creating N activities would silently lose the links BETWEEN them.
@@ -810,6 +869,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // recalculation for the session with no error and no surface (ADR-0064).
         const holdToken = Symbol('bulk-move');
         autoRecalc.hold(holdToken);
+        beginLayoutEdit(rows.map((a) => a.id));
         try {
           const saved = await batchPlacements({
             placements: after.flatMap((placement) => {
@@ -851,8 +911,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           autoRecalc.release(holdToken);
         }
         // A lane-only move changes no date, so it needs no recalculation — the same minimal-write
-        // rule the single-bar drag already follows.
+        // rule the single-bar drag already follows. It will therefore never SETTLE either, so an
+        // overlap it dropped the selection into is resolved now rather than on a settle that is not
+        // coming (ADR-0153).
         if (!isLaneOnly(delta)) autoRecalc.notify();
+        else resolveLayoutNow();
         return { conflict: null };
       },
       linkChain: async (
@@ -862,6 +925,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // mid-loop failure would otherwise leave a partial chain — half a sequence is worse than
         // none, because the plan then looks finished (the `createLoeSpanCommand` precedent).
         const created: string[] = [];
+        beginLayoutEdit(edges.flatMap((e) => [e.predecessorId, e.successorId]));
         try {
           for (const edge of edges) {
             const dependency = await createLink({
@@ -919,6 +983,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       editHistory,
       autoRecalc,
       planId,
+      // Both stable `useCallback`s over refs (`use-auto-resolve-overlaps.ts`), so listing them
+      // costs this memo nothing — which is why they are destructured rather than `autoResolve`,
+      // whose identity changes whenever its notice does.
+      beginLayoutEdit,
+      resolveLayoutNow,
       // `moveMany`'s own two, below. **This named a third, `isVisualMode`, and explained at length
       // why omitting it would leave the memo writing `SNET` constraints on a plan switched to
       // Visual** — a hazard M-F removed along with the mode and the branch, so the paragraph
@@ -941,9 +1010,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const recordActivityUpdate = useCallback(
     (before: ActivitySummary, after: ActivitySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
+      // AFTER the dialog's write, unlike the canvas handlers, and still a true "before": the write
+      // changed an input, and a bar is drawn from what the engine computes from its inputs, so no
+      // drawn span moves until the recalculation this edit triggers (ADR-0153).
+      beginLayoutEdit([after.id]);
       editHistory.record(updateCommand({ update: updateActivity.mutateAsync, before, after }));
     },
-    [editHistory, updateActivity.mutateAsync],
+    [editHistory, updateActivity.mutateAsync, beginLayoutEdit],
   );
   /**
    * Record an activity DELETE on the undo stack (ADR-0048 M2, amended). Called by
@@ -970,6 +1043,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const recordActivityDelete = useCallback(
     (activity: ActivitySummary, deleteBatchId: string): void => {
       if (!UNDO_REDO_ENABLED) return;
+      // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
+      beginLayoutEdit([]);
       editHistory.record(
         deleteActivityCommand({
           activity,
@@ -979,7 +1054,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }),
       );
     },
-    [editHistory, restoreBatch, deleteActivity.mutateAsync],
+    [editHistory, restoreBatch, deleteActivity.mutateAsync, beginLayoutEdit],
   );
   /**
    * Record a summary **dissolve** as a non-undoable boundary (WBS improvements M2). Dissolve is one
@@ -999,6 +1074,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const recordDependencyRemove = useCallback(
     (dependency: DependencySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
+      // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
+      beginLayoutEdit([dependency.predecessor.id, dependency.successor.id]);
       editHistory.record(
         dependencyRemoveCommand({
           dependency,
@@ -1007,7 +1084,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }),
       );
     },
-    [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
+    [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync, beginLayoutEdit],
   );
   // Record a dependency ADD on the undo stack (ADR-0048 M2), the mirror of `recordDependencyRemove`.
   // Called by the Logic panel after a successful add — the canvas link path records its own inline
@@ -1017,6 +1094,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const recordDependencyAdd = useCallback(
     (dependency: DependencySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
+      // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
+      beginLayoutEdit([dependency.predecessor.id, dependency.successor.id]);
       editHistory.record(
         dependencyAddCommand({
           dependency,
@@ -1025,7 +1104,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }),
       );
     },
-    [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync],
+    [editHistory, createDependency.mutateAsync, deleteDependency.mutateAsync, beginLayoutEdit],
   );
   // A day-drag hand-places `visualStart` (no constraint of any kind), then the effective-Visual
   // recalc pins the bar and pushes its unplaced successors.
@@ -1048,10 +1127,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Pure lane move: the cheap, layout-only PATCH — no constraint change, no recalc.
     if (startDay === undefined) {
       if (laneIndex === undefined) return { applied: false, conflict: null };
+      // **A lane drop resolves BEFORE it writes** (spec §4.2, ADR-0153): one write, one undo step,
+      // to the next free lane in the direction of travel. A drop that would overlap is never
+      // written and then corrected — a second write would be a second undo step for one gesture.
+      // layout-exempt: resolved here rather than by `beginLayoutEdit`, which waits for a settle a
+      // lane move never produces.
+      const landed = resolveLaneDrop(laneSnapshotOf(activities.data ?? []), activityId, laneIndex);
+      if (landed === activity.laneIndex) {
+        announce(`No free lane above “${activity.name}”; it stays in lane ${landed + 1}.`);
+        return { applied: false, conflict: null, laneIndex: landed };
+      }
       try {
         const saved = await repositionLane.mutateAsync({
           activityId,
-          laneIndex,
+          laneIndex: landed,
           version: activity.version,
         });
         // Record the lane move for undo (ADR-0048, dark M1) — only the user edit, never the recalc
@@ -1062,12 +1151,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
               repositionLane: repositionLane.mutateAsync,
               activityId,
               fromLaneIndex: activity.laneIndex,
-              toLaneIndex: laneIndex,
+              toLaneIndex: landed,
               version: saved.version,
             }),
           );
         }
-        return { applied: true, conflict: null };
+        return landed === laneIndex
+          ? { applied: true, conflict: null }
+          : { applied: true, conflict: null, laneIndex: landed };
       } catch (err) {
         if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
         if (err instanceof ApiFetchError && err.status === 409) {
@@ -1090,12 +1181,32 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     const plannedStart = plan.data?.plannedStart;
     if (!plannedStart) return { applied: false, conflict: null };
     const droppedDate = addCalendarDays(plannedStart, startDay);
+    beginLayoutEdit([activityId]);
+    // A drag that also changes lane is resolved at the drop like a pure lane move, against the span
+    // the bar is being dropped AT — its current drawn length from the dropped day. Left to the
+    // settle instead, rule 1 would send it to the NEAREST free lane, which is usually the one it
+    // was dragged out of. The engine may still move it in time; any overlap THAT makes is the
+    // settle's to resolve.
+    let landed = laneIndex;
+    if (laneIndex !== undefined) {
+      const snapshot = new Map(laneSnapshotOf(activities.data ?? []));
+      const self = snapshot.get(activityId);
+      if (self !== undefined) {
+        const length = dayOf(self.finish) - dayOf(self.start);
+        snapshot.set(activityId, {
+          ...self,
+          start: droppedDate,
+          finish: addCalendarDays(droppedDate, length),
+        });
+      }
+      landed = resolveLaneDrop(snapshot, activityId, laneIndex);
+    }
     try {
       const saved = await setVisualStart.mutateAsync({
         activityId,
         visualStart: droppedDate,
         version: activity.version,
-        ...(laneIndex !== undefined ? { laneIndex } : {}),
+        ...(landed !== undefined ? { laneIndex: landed } : {}),
       });
       // Record the Visual-mode placement for undo (ADR-0048 M2) — the single user edit, NOT the
       // follow-up recalc. The inverse restores the prior `visualStart` (and lane); a drag/nudge
@@ -1106,7 +1217,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
             setVisualStart: setVisualStart.mutateAsync,
             activityId,
             before: { visualStart: activity.visualStart, laneIndex: activity.laneIndex },
-            after: { visualStart: droppedDate, laneIndex: laneIndex ?? activity.laneIndex },
+            after: { visualStart: droppedDate, laneIndex: landed ?? activity.laneIndex },
             version: saved.version,
           }),
         );
@@ -1122,7 +1233,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // The move landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
     if (CANVAS_AUTHORING_ENABLED) {
       autoRecalc.notify();
-      return { applied: true, conflict: null };
+      return landed !== undefined && landed !== laneIndex
+        ? { applied: true, conflict: null, laneIndex: landed }
+        : { applied: true, conflict: null };
     }
     try {
       await recalculate.mutateAsync();
@@ -1165,6 +1278,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     }
     const plannedStart = plan.data?.plannedStart;
     if (startDay !== undefined && !plannedStart) return { applied: false, conflict: null };
+    beginLayoutEdit([activityId]);
     try {
       if (startDay !== undefined) {
         // VISUAL start-edge: hand-place the new start + duration in ONE minimal PATCH — the
@@ -1293,6 +1407,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     if (write.kind === 'noop') return { applied: false, conflict: null };
     const lagFields =
       write.kind === 'minutes' ? { lagMinutes: write.lagMinutes } : { lagDays: write.lagDays };
+    beginLayoutEdit([dependency.predecessor.id, dependency.successor.id]);
     try {
       const saved = await updateDependency.mutateAsync({
         dependencyId,
@@ -1367,6 +1482,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     (before: DependencySummary, after: DependencySummary): void => {
       if (!UNDO_REDO_ENABLED) return;
       if (!dependencyEditChanged(before, after)) return;
+      // After the dialog's write and still a true "before" — see `recordActivityUpdate` (ADR-0153).
+      beginLayoutEdit([after.predecessor.id, after.successor.id]);
       editHistory.record(
         dependencyEditCommand({
           updateDependency: updateDependency.mutateAsync,
@@ -1375,7 +1492,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }),
       );
     },
-    [editHistory, updateDependency.mutateAsync],
+    [editHistory, updateDependency.mutateAsync, beginLayoutEdit],
   );
   // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
   // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
@@ -1385,6 +1502,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     successorId,
     type,
   }: TsldLinkInput): Promise<TsldLinkOutcome> => {
+    beginLayoutEdit([predecessorId, successorId]);
     try {
       const created = await createDependency.mutateAsync({
         planId,
@@ -1433,7 +1551,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // TSLD auto-arrange (M4 4.3): persist the packed lane changes through the batch positions
   // endpoint — all-or-nothing, no recalc (lane is layout). The panel computed the moves with the
   // pure packer; here we attach each row's live version and surface the batch's N-row 409.
-  const batchPositions = useBatchPositions(orgSlug, planId);
+  // (`batchPositions` is declared beside `autoResolve`, which writes through it too.)
   const onTsldAutoArrange = async (
     changes: readonly { id: string; laneIndex: number }[],
   ): Promise<TsldEditOutcome> => {
@@ -1452,6 +1570,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       return laneIndex === undefined ? [] : [{ id: p.id, laneIndex }];
     });
     const after: LanePlacement[] = positions.map((p) => ({ id: p.id, laneIndex: p.laneIndex }));
+    // layout-exempt: Arrange packs with `packLanes`, which refuses same-lane overlap, so its result
+    // has no overlap to resolve — and it writes lanes only, so it would never settle anyway.
     try {
       const saved = await batchPositions.mutateAsync({ positions });
       // Record the whole batch as ONE reversible step (ADR-0048 M2.3): undo restores every prior
@@ -1516,6 +1636,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     async (activityId: string, version: number): Promise<void> => {
       const activity = (activitiesRef.current ?? []).find((a) => a.id === activityId);
       const name = activity?.name ?? 'the activity';
+      beginLayoutEdit([activityId]);
       try {
         const saved = await setVisualStartAsync({ activityId, visualStart: null, version });
         // Record the clear for undo (ADR-0048) — the single user edit, NOT the follow-up recalc. The
@@ -1553,7 +1674,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       announce(`Cleared the visual placement for “${name}”; dates will update.`);
       notifyRecalc();
     },
-    [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce],
+    [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce, beginLayoutEdit],
   );
 
   // Compose a **Level of Effort span** from two driver activities (Stage D, spec
@@ -1586,9 +1707,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       laneIndex,
     };
     // Step 1 — create the LOE. A failure here leaves nothing to roll back.
+    beginLayoutEdit([startDriverId, finishDriverId]);
     let loe: ActivitySummary;
     try {
       loe = await createPlacedActivity.mutateAsync(placedInput);
+      autoResolve.addSubjects([loe.id]);
     } catch (err) {
       if (pen.onWriteRejected(err).kind === 'lock') return { applied: false, conflict: null };
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 422)) {
@@ -1715,6 +1838,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // creates — released in `finally`, never on the happy path alone (ADR-0064).
     const holdToken = Symbol('duplicate');
     autoRecalc.hold(holdToken);
+    // A copy is not in S0, so a copy dropped onto an occupied lane is the bar that moves (rule 1).
+    beginLayoutEdit([]);
     const created: { id: string; version: number }[] = [];
     // The clones with no cloned parent. A band's undo deletes these and lets the ADR-0038 cascade
     // take the subtree, because `bulkDelete` refuses a batch containing a summary by design.
@@ -1832,6 +1957,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       autoRecalc.release(holdToken);
     }
 
+    autoResolve.addSubjects(created.map((c) => c.id));
     if (UNDO_REDO_ENABLED) {
       editHistory.record(
         pasteActivitiesCommand({
@@ -2170,6 +2296,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.
     undoRedo,
+    /**
+     * What the dock says after an edit moved a bar clear of an overlap (NetPoint-layout M3), or
+     * null. Its `Undo` is `undoRedo.undo`, and it is withdrawn the moment anything else is on top of
+     * the stack — see `use-auto-resolve-overlaps.ts`.
+     */
+    layoutResolved: autoResolve.notice,
+    dismissLayoutResolved: autoResolve.dismissNotice,
     /** The canvas's plural-selection operations (`docs/specs/canvas-multi-select/` M4). */
     bulkOperations,
     /** The ADR-0064 T7 quiescence seam + its drop signal, handed to the canvas by the workspace. */
