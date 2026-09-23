@@ -175,3 +175,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0149](0149-a-corridor-is-chosen-for-what-it-crosses.md)                                        | A corridor is chosen for what it crosses, and height was never the currency     | Accepted           |
 | [0150](0150-a-leg-is-an-obstacle-and-the-gutter-is-a-channel.md)                                | A leg is an obstacle, and the gutter is a channel                               | Accepted           |
 | [0151](0151-the-row-is-the-unit.md)                                                             | The row is the unit, and a constant carries its justification                   | Accepted           |
+| [0153](0153-an-edit-moves-only-the-bar-that-caused-an-overlap.md)                               | An edit moves only the bar that caused an overlap                               | Accepted           |

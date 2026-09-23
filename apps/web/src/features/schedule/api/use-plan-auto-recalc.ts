@@ -62,6 +62,17 @@ export interface PlanAutoRecalc {
    * not make the failure untrue.
    */
   failed: boolean;
+  /**
+   * How many times the schedule has **settled**: a recalculation succeeded, every edit it was
+   * asked to compute is computed, and no further run is queued behind it.
+   *
+   * A counter rather than a flag for the reason `dropLinkPickSignal` is one: a consumer needs "this
+   * is a new settle", and two settles in a row with nothing between them must still read as two.
+   * It moves only once the recalculate mutation has resolved, and that mutation's own `onSuccess`
+   * awaits the activities-list refetch — so a consumer reacting to a new value reads the dates the
+   * recalculation wrote, not the ones it replaced (NetPoint-layout M3, `auto-resolve.ts`).
+   */
+  settled: number;
 }
 
 /**
@@ -128,6 +139,7 @@ export function usePlanAutoRecalc(
    */
   const [pendingEdits, setPendingEdits] = useState(0);
   const [failed, setFailed] = useState(false);
+  const [settled, setSettled] = useState(0);
   /**
    * The same count, live, for the fire path to read.
    *
@@ -175,6 +187,10 @@ export function usePlanAutoRecalc(
         const announce = manualSuccessRef.current;
         manualSuccessRef.current = null;
         announce?.();
+        // Settled only when nothing is owed and nothing is queued: an edit made while this run was
+        // in flight is not in the dates it wrote, and a consumer comparing them against a snapshot
+        // taken before that edit would be reasoning about a picture the planner never saw.
+        if (pendingEditsRef.current === 0 && !queuedRef.current) setSettled((n) => n + 1);
         drain();
       },
       onError: (message) => {
@@ -317,10 +333,21 @@ export function usePlanAutoRecalc(
     };
   }, []);
 
-  // Stable identity except when `isPending` flips, so a consumer can safely depend on it (the toolbar
-  // context memo) without churning every render (notify/flush are already stable).
+  // Stable identity except when a reported fact changes — `isPending`, `pendingEdits`, `failed` or
+  // `settled` — so a consumer can depend on it (the toolbar context memo) without churning on
+  // unrelated renders; the callbacks are already stable. This said "except when `isPending` flips"
+  // until NetPoint-layout M3, which was already false before `settled` joined the list.
   return useMemo(
-    () => ({ notify, flush, hold, release, isPending: recalc.isPending, pendingEdits, failed }),
-    [notify, flush, hold, release, recalc.isPending, pendingEdits, failed],
+    () => ({
+      notify,
+      flush,
+      hold,
+      release,
+      isPending: recalc.isPending,
+      pendingEdits,
+      failed,
+      settled,
+    }),
+    [notify, flush, hold, release, recalc.isPending, pendingEdits, failed, settled],
   );
 }

@@ -104,7 +104,7 @@ import {
   useScheduleHealth,
   useScheduleHealthPanelPrefs,
 } from '@/features/schedule-health';
-import { TsldPanel, barDateSourceFor } from '@/features/tsld';
+import { LayoutResolvedStrip, TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
 import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
@@ -823,6 +823,19 @@ export function ToolbarPlanWorkspace({
         }}
       />
     ) : null;
+  // What an edit's automatic overlap resolution did (NetPoint-layout M3, ADR-0153). Built here, not
+  // in the canvas, for the migration notice's reason: it renders in BOTH views' docks, and a table
+  // or Gantt edit can resolve an overlap as readily as a canvas drag. Focus goes to the plan
+  // surface first, because both buttons unmount the strip that holds them.
+  const layoutResolvedNotice =
+    model.layoutResolved === null ? null : (
+      <LayoutResolvedStrip
+        message={model.layoutResolved.message}
+        onUndo={model.undoRedo.undo}
+        onDismiss={model.dismissLayoutResolved}
+        restoreFocus={focusPlanSurface}
+      />
+    );
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -1034,6 +1047,7 @@ export function ToolbarPlanWorkspace({
       }
       hasRevisionPair={hasRevisionPair}
       placementMigrationNotice={placementMigrationNotice}
+      layoutResolvedNotice={layoutResolvedNotice}
       dataDate={plan.plannedStart}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}
@@ -1428,15 +1442,17 @@ export function ToolbarPlanWorkspace({
             their plan had been converted — and the Gantt is where the consequence is most visible,
             because its Float column shows the number that moves.
 
-            It needs no precedence decision here, unlike the canvas: this view has exactly one other
-            strip, and the dock's standing rule is at most one TRANSIENT strip **plus** one
-            selection bar, which these two are. The `resolveDockStrip` ladder exists because the
-            canvas has four transient strips competing for one row; the Gantt has none.
+            Beside the selection bar it needed no precedence decision until NetPoint-layout M3 gave
+            the Gantt a second transient strip; the two now follow the canvas ladder's order, below.
 
             Dismissal is per plan per user rather than per view, so dismissing it here dismisses it
             on the diagram too — which is right: it is one fact about one plan, not two notices.
           */}
-          {placementMigrationNotice}
+          {/* **One transient strip at a time, in the canvas's order** (`resolveDockStrip`): an
+              overlap resolved by the planner's last edit outranks the migration notice, which is a
+              standing fact and waits. Stacking both, as the first version did, gave the same pair
+              of facts one strip on the diagram and two on the Gantt (component review). */}
+          {layoutResolvedNotice ?? placementMigrationNotice}
         </CanvasDock>
       </>
     ) : (

@@ -21,6 +21,13 @@ export interface PlanEditHistory {
   /** Push a just-applied edit's inverse onto the undo stack; clears the redo branch (linear history). */
   record: (command: Command) => void;
   /**
+   * Whether `command` is the step the next undo would run. A notice that offers `Undo` beside a
+   * sentence about ONE edit asks this before it keeps showing: once anything else is on top, its
+   * button would undo a different edit from the one its sentence names — the ADR-0064 §7 defect,
+   * where a confirmation outlived the edit its Undo was bound to.
+   */
+  isTop: (command: Command) => boolean;
+  /**
    * Run the top undo command's inverse, then move it to the redo stack. Resolves with the executed
    * command's {@link Command.label} (for the M3 success announcement), or `null` when there is nothing
    * to undo or a replay is already in flight. Rejects if the inverse throws — the stacks are left
@@ -131,6 +138,12 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
     [sync],
   );
 
+  const isTop = useCallback(
+    (command: Command): boolean =>
+      undoStackRef.current[undoStackRef.current.length - 1] === command,
+    [],
+  );
+
   const undo = useCallback(async (): Promise<string | null> => {
     if (runningRef.current) return null;
     const command = undoStackRef.current[undoStackRef.current.length - 1];
@@ -179,7 +192,18 @@ export function usePlanEditHistory(planId: string): PlanEditHistory {
   // settle) and defeating the documented perf invariant — mirroring `usePlanAutoRecalc`'s memoised
   // return.
   return useMemo(
-    () => ({ record, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel }),
-    [record, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel],
+    () => ({
+      record,
+      isTop,
+      undo,
+      redo,
+      clear,
+      clearRedo,
+      canUndo,
+      canRedo,
+      undoLabel,
+      redoLabel,
+    }),
+    [record, isTop, undo, redo, clear, clearRedo, canUndo, canRedo, undoLabel, redoLabel],
   );
 }

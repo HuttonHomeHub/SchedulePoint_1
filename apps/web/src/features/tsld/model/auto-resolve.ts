@@ -1,6 +1,9 @@
 import { rowOccupancy, type PackItem } from '@repo/layout';
+import type { ActivitySummary } from '@repo/types';
 
 import { laneOverlapPairs, type LaneSpan } from '../render/lane-overlap';
+
+import { barDatesFor } from '@/lib/bar-dates';
 
 /**
  * **An edit moves only the bar that caused it** (NetPoint-layout M3, spec §4.4, ADR-0153).
@@ -162,4 +165,70 @@ export function resolveNewOverlaps(
     resolutions.push({ id, from, to });
   }
   return resolutions;
+}
+
+/**
+ * The snapshot the rule compares: every activity the diagram **draws**, keyed by id, with its lane
+ * and the inclusive span it is drawn over on the `visual` basis.
+ *
+ * Always `visual`, never the Late overlay's basis, and that is what makes the spec's "suppressed
+ * under the Late overlay" hold by construction rather than by a gate the workspace would have to
+ * remember: a layout is only ever reasoned about on the dates the bars are placed at (spec §4.5
+ * D-B). A milestone draws at a point, so a missing finish is its start; an activity with no drawn
+ * start is not on the diagram and is absent, as it is from `laneOverlapIds`.
+ */
+export function laneSnapshotOf(
+  activities: readonly Pick<
+    ActivitySummary,
+    | 'id'
+    | 'laneIndex'
+    | 'earlyStart'
+    | 'earlyFinish'
+    | 'visualEffectiveStart'
+    | 'visualEffectiveFinish'
+    | 'lateStart'
+    | 'lateFinish'
+  >[],
+): LaneSnapshot {
+  const snapshot = new Map<string, LaneState>();
+  for (const a of activities) {
+    const { start, finish } = barDatesFor(a, 'visual');
+    if (start == null) continue; // undefined too: a partially-loaded row is undrawn, not a crash
+    snapshot.set(a.id, { laneIndex: a.laneIndex, start, finish: finish ?? start });
+  }
+  return snapshot;
+}
+
+/**
+ * Where a bar dropped onto `target` lands (spec §4.2, "a lane drop resolves before writing").
+ *
+ * The target itself when it is free. Otherwise the next free lane **further in the direction the
+ * bar was travelling**, which is a deliberate departure from `nearestFreeRow`'s "nearest, ties to
+ * the lower index", recorded in `docs/specs/netpoint-layout/m3-auto-resolve.md`. The nearest rule
+ * is right for a bar the engine pushed, which has no direction; it is wrong for a bar the planner
+ * moved, because the lane it came from is always free to it — so `Alt+↓` onto an occupied lane
+ * would put the bar straight back where it started, and a keyboard user would press a key that
+ * does nothing, every time, on exactly the plans where they are trying to make room.
+ *
+ * Moving up can run out of lanes. Then the bar stays where it was (`fromLane`), which the caller
+ * reports rather than writes.
+ */
+export function resolveLaneDrop(snapshot: LaneSnapshot, id: string, target: number): number {
+  const self = snapshot.get(id);
+  if (self === undefined) return target; // undrawn: occupies no span, nothing to collide with
+  const start = dayOf(self.start);
+  const end = dayOf(self.finish);
+  const free = (lane: number): boolean => {
+    for (const [otherId, other] of snapshot) {
+      if (otherId === id || other.laneIndex !== lane) continue;
+      if (!(dayOf(other.finish) < start || end < dayOf(other.start))) return false;
+    }
+    return true;
+  };
+  if (free(target)) return target;
+  const step = target >= self.laneIndex ? 1 : -1;
+  for (let lane = target + step; lane >= 0; lane += step) {
+    if (free(lane)) return lane;
+  }
+  return self.laneIndex;
 }

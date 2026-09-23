@@ -257,6 +257,36 @@ that shows most in a picture.
   re-judges it at M4. What is settled is the direction: the committed rule's worker or size-cap
   branch applies, never the main thread.
 
+### The `scale-2000` frontier (filtered, P = 8; seed 41 rows: 1,253 occluded, 7,282 crossings)
+
+`PART=scale` of `measure-netpoint-search.mjs`, identity attribution, 2,160 bars and 3,200 links. Only
+the filtered mode was run: exact scoring is roughly 250 ms per candidate here (M0-T3), so a single
+exact pass would take hours.
+
+| budget B       | rows | occluded | crossings | same-row | travel | full evals | ms (node) |
+| -------------- | ---: | -------: | --------: | -------: | -----: | ---------: | --------: |
+| seed (41)      |   41 |    1,060 |     7,118 |    2,517 |  2,759 |        827 |   153,347 |
+| +25 % (52)     |   51 |    1,000 |     7,863 |    2,434 |  4,630 |        968 |   217,515 |
+| **+50 % (62)** |   62 |  **985** | **7,774** |    2,409 |  5,131 |      1,138 |   255,357 |
+| +100 % (82)    |   80 |      936 |     8,645 |    2,316 |  8,156 |      1,439 |   335,981 |
+
+The unbounded and Tidy rows are still running and are appended when they finish.
+
+**What it says:**
+
+- **At scale the search barely moves occlusion, and above the seed budget it makes crossings WORSE.**
+  With no extra rows it cuts occluded 1,253 → 1,060 (−15 %) and crossings 7,282 → 7,118 (−2 %). Every
+  larger budget cuts occlusion a little more and pays for it in crossings (+6.8 % at +50 %, +18.7 % at
+  +100 %) and travel (+86 % at +50 %). Lexicographic order explains it: a move that removes one
+  hidden link is accepted however many crossings it adds.
+- **It does not reach FC-N4's 40 % occlusion cut here**, but FC-N4 is judged on Unit 300, not
+  `scale-2000`. The synthetic plan's long linked bands (2,914 same-row links in the seed) leave the
+  search little to reorder without breaking chains.
+- **FC-N2(b), the run limb, FAILS by two orders of magnitude**: 153–336 s against 2,000 ms, and it is
+  over 10,000 ms. By the committed rule the optimiser is **offered only below a measured plan size,
+  with the dialog saying why** (FC-N2 (b), third branch). M4 measures that size on the product
+  module, not on this prototype.
+
 ### The pictures, and what they do not show
 
 `frontier-today.png`, `frontier-search-seed.png`, `frontier-search-50.png` and

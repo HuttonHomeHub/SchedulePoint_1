@@ -2,7 +2,13 @@ import type { CanvasModeStatement } from '../components/CanvasModeBand';
 
 /** Which of the canvas dock's mutually-exclusive strips is showing, or none. */
 export type DockStrip =
-  'conflict' | 'mode' | 'empty' | 'arrange-offer' | 'placement-migration' | null;
+  | 'conflict'
+  | 'mode'
+  | 'layout-resolved'
+  | 'empty'
+  | 'arrange-offer'
+  | 'placement-migration'
+  | null;
 
 /** What the precedence is decided from. Booleans, so the rule has no opinion about their sources. */
 export interface DockStripInput {
@@ -33,6 +39,11 @@ export interface DockStripInput {
    * ADR-0062 M6 both record shipping.
    */
   readonly hasArrangeOffer: boolean;
+  /**
+   * Whether an edit just moved a bar clear of an overlap and the notice saying so is still bound to
+   * the top undo step (NetPoint-layout M3). Precedence only; the sentence is the host's.
+   */
+  readonly hasLayoutResolvedNotice: boolean;
 }
 
 /**
@@ -65,6 +76,16 @@ export interface DockStripInput {
 export function resolveDockStrip(input: DockStripInput): DockStrip {
   if (input.hasConflict) return 'conflict';
   if (input.modeStatement) return 'mode';
+  /**
+   * **Directly below `mode`, above everything that is not about the planner's last act.** It reports
+   * the consequence of the edit they just made — a bar they did not touch changed lane — and its
+   * Undo is the one route to reversing that without hunting for which step it was. It yields to a
+   * conflict (a write FAILED, which outranks one that succeeded) and to an armed tool (the planner
+   * has already moved on to their next act, and the step stays one `Ctrl+Z` away). Everything below
+   * it waits: the empty notice cannot co-occur (a plan with an overlap has activities), and the
+   * Arrange offer and the migration notice are both standing facts that do not expire.
+   */
+  if (input.hasLayoutResolvedNotice) return 'layout-resolved';
   if (
     input.authoringFlowEnabled &&
     input.showDiagram &&

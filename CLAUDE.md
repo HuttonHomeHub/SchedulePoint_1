@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1299 web
+> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1308 web
 > source files with 45 Playwright suites beside the base journey, and
-> 151 ADRs.
+> 152 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5676,6 +5676,35 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   rushed: `docs/TECH_DEBT.md` #369/#370/#371.
   **The CPM engine is not imported and no migration runs**; `apps/api` contributes zero files to the
   diff.
+
+- **ADR-0153** _(Accepted; NetPoint-layout M3 landed 2026-09-23)_ — An edit moves only the bar that
+  caused an overlap. The product owner reported two activities drawn on top of each other after an
+  edit. PR #663 fixed the half that was a defect (`Arrange` packed on early dates while the canvas
+  draws the placed ones). The other half was a rule the product never had: nothing stopped an
+  ordinary edit from putting two bars in one lane at once. Their rule was **move only the offending
+  bar, to the nearest free row; nothing else shifts.** So the workspace snapshots every drawn span
+  and lane **before** a planner command writes, and compares after the recalculation it triggers
+  has **settled**. Only overlaps new to that command are resolved. The mover is the one bar that
+  changed, or the non-subject when both did, or the later start. It moves as **its own undo step**,
+  said in one sentence in the live region and a new `layout-resolved` dock strip, directly below the
+  armed-tool rung.
+  **Three departures from the approved plan, each forced by the code.** The write is the
+  `autoArrangeCommand` shape, never `relaneCommand`, which coalesces on `relane:{id}` and would have
+  folded the planner's next nudge into the move. A **lane drop** goes to the next free lane **in the
+  direction of travel**, not the nearest: the lane a moved bar left is always free to it, so the
+  nearest-lane rule would have put every `Alt+↓` straight back where it started. A drag that changes
+  date and lane together is resolved at the drop for the same reason. The resolution also runs in an
+  **idle callback**, which FC-N5b's committed consequence required (8.8 ms p95 for a 50-bar cascade
+  at `scale-2000`, against 2 ms).
+  **The unit suite caught a real defect first run, and then caught its own harness.** The wait for
+  an in-flight write re-used the `isWriting` it captured before waiting, so it could never see the
+  write finish; the edit-lock heartbeat is exactly such a write, and it never settles. The fix then
+  passed a mutation that reintroduced the defect, because the harness handed the first render the
+  live state object, so every stale closure saw fresh values. Both are recorded where they happened.
+  A census gate holds every `editHistory.record` in the model to `beginLayoutEdit` or a written
+  `layout-exempt:` reason, with a pinned positive case. The journey `e2e-arrange/auto-resolve.spec.ts`
+  asserts exactly one lane change through the pen-enforced API, and was verified red with the
+  feature switched off. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

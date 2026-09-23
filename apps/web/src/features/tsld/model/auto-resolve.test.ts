@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { laneOverlapPairs } from '../render/lane-overlap';
 
-import { dayOf, type LaneSnapshot, type LaneState, resolveNewOverlaps } from './auto-resolve';
+import {
+  dayOf,
+  laneSnapshotOf,
+  type LaneSnapshot,
+  type LaneState,
+  resolveLaneDrop,
+  resolveNewOverlaps,
+} from './auto-resolve';
 
 const st = (laneIndex: number, start: string, finish: string): LaneState => ({
   laneIndex,
@@ -140,5 +147,82 @@ describe('dayOf', () => {
     ]) {
       expect(dayOf(iso)).toBe(Date.parse(`${iso}T00:00:00Z`) / 86_400_000);
     }
+  });
+});
+
+describe('laneSnapshotOf', () => {
+  const row = (
+    id: string,
+    laneIndex: number,
+    visualEffectiveStart: string | null,
+    visualEffectiveFinish: string | null,
+  ) => ({
+    id,
+    laneIndex,
+    earlyStart: '2000-01-01',
+    earlyFinish: '2000-01-02',
+    visualEffectiveStart,
+    visualEffectiveFinish,
+    lateStart: '2099-01-01',
+    lateFinish: '2099-01-02',
+  });
+
+  it('reads the drawn (visual) span, never the early or late one', () => {
+    // Early and late dates are deliberately far away: a snapshot built from either would put these
+    // bars decades from where the planner sees them, which is the #663 defect in a new place.
+    expect(laneSnapshotOf([row('A', 3, '2026-01-05', '2026-01-09')])).toEqual(
+      new Map([['A', st(3, '2026-01-05', '2026-01-09')]]),
+    );
+  });
+
+  it('draws a milestone at its start and leaves an undrawn activity out', () => {
+    const s = laneSnapshotOf([row('M', 0, '2026-01-05', null), row('U', 0, null, null)]);
+    expect(s.get('M')).toEqual(st(0, '2026-01-05', '2026-01-05'));
+    expect(s.has('U')).toBe(false);
+  });
+});
+
+describe('resolveLaneDrop', () => {
+  it('lands on the target when it is free', () => {
+    const s = snap({ X: st(0, '2026-01-01', '2026-01-05'), Y: st(1, '2026-02-01', '2026-02-05') });
+    expect(resolveLaneDrop(s, 'X', 1)).toBe(1);
+  });
+
+  it('moving down onto an occupied lane goes on down, never back to the lane it left', () => {
+    // The nearest-free rule would answer 0 here — the lane X came from, free to X by definition —
+    // so Alt+↓ would do nothing. The direction of travel is the planner's, and it wins.
+    const s = snap({
+      X: st(0, '2026-01-01', '2026-01-05'),
+      Y: st(1, '2026-01-03', '2026-01-08'),
+      Z: st(2, '2026-01-04', '2026-01-04'),
+    });
+    expect(resolveLaneDrop(s, 'X', 1)).toBe(3);
+  });
+
+  it('moving up onto an occupied lane goes on up', () => {
+    const s = snap({
+      X: st(3, '2026-01-01', '2026-01-05'),
+      Y: st(2, '2026-01-03', '2026-01-08'),
+    });
+    expect(resolveLaneDrop(s, 'X', 2)).toBe(1);
+  });
+
+  it('moving up with no free lane above stays where it was', () => {
+    const s = snap({
+      X: st(2, '2026-01-01', '2026-01-05'),
+      Y: st(1, '2026-01-03', '2026-01-08'),
+      Z: st(0, '2026-01-02', '2026-01-02'),
+    });
+    expect(resolveLaneDrop(s, 'X', 1)).toBe(2);
+  });
+
+  it('touching end to start is an overlap (inclusive spans, the lane-overlap convention)', () => {
+    const s = snap({ X: st(0, '2026-01-05', '2026-01-09'), Y: st(1, '2026-01-01', '2026-01-05') });
+    expect(resolveLaneDrop(s, 'X', 1)).toBe(2);
+  });
+
+  it('an activity the diagram does not draw lands where it was asked to', () => {
+    const s = snap({ Y: st(1, '2026-01-01', '2026-01-05') });
+    expect(resolveLaneDrop(s, 'U', 1)).toBe(1);
   });
 });
