@@ -271,6 +271,24 @@ const CASES: readonly Case[] = [
     }),
   },
   {
+    // NetPoint-layout M1: the row under the bar now carries text — both dates and the centre
+    // item. `dates` is not in `sceneOf`'s view block (it is a default-on toggle there is no reason
+    // to pin elsewhere), so it is set here; without it this case draws only the centre item.
+    name: 'dates and centre item under the bar',
+    scene: sceneOf([activity({ id: 'row', durationDays: 5, remainingFloat: 3 })], {
+      view: {
+        dayGrid: true,
+        monthGrid: true,
+        yearGrid: true,
+        today: true,
+        nonWorking: true,
+        labels: true,
+        lateOverlay: false,
+        dates: true,
+      },
+    }),
+  },
+  {
     name: 'selection ring',
     scene: sceneOf([activity({ id: 'sel' })], { selectedId: 'sel' }),
   },
@@ -390,7 +408,7 @@ describe('FC-6 — every glyph and decoration draws inside its own lane', () => 
    * Seventeen is what M3-T1 enumerated; a case removed rather than replaced fails here.
    */
   it('the enumeration is not silently shrinking', () => {
-    expect(CASES.length).toBe(16);
+    expect(CASES.length).toBe(17);
     expect(new Set(CASES.map((c) => c.name)).size).toBe(CASES.length);
   });
 

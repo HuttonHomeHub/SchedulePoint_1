@@ -1142,6 +1142,24 @@ field hint says so in a sentence.
 - Microcopy: plain, concise, sentence case; consistent terminology; actionable
   error and empty-state text.
 
+### The activity row on the diagram (NetPoint-layout M1)
+
+Each diagram row is **60 px** and carries three things, each with one job:
+
+- **Above the bar: identity only** — `{code} {name}`. The duration used to ride here as a `· 5d`
+  suffix. It moved because a name is what a reader scans for and a number is what they compare,
+  and a label doing both is shortened first at exactly the zooms where it is needed most.
+- **Under the bar's ends: its dates** (`View ▾ ▸ Dates`, **on by default**): the start under the
+  start node and the finish under the finish node. A milestone has one date, centred under the
+  diamond.
+- **Under the bar's middle: the centre item** — `5d · 3d float left`, or `5d` alone where only that
+  fits, or nothing. It never leaves its own bar and never reaches the dates. It rides
+  `View ▾ ▸ Labels` and that toggle's zoom threshold, because it replaces a suffix `Labels` always
+  governed. The float wording is the one the rest of the product uses (`remainingFloat`, ADR-0148).
+
+A new cue for this row names which of the three rows it uses, and `paint.lane-containment.test.ts`
+gets a case for it. A cue that draws outside its lane is the defect that test was written to report.
+
 ### The `…` convention on control labels (ADR-0091)
 
 An ellipsis means **activating this opens something that needs more input before anything happens** —
