@@ -51,7 +51,11 @@ test('the dates and the duration are painted under a bar, and Dates is on by def
   await ensurePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Superstructure', laneIndex: 0, durationDays: 30 }]);
   await recalculate(page, orgSlug);
-  await expect(page.locator('canvas').first()).toBeAttached();
+  // `recalculate` reloads the page. Wait for the workspace the way every sibling journey does before
+  // asking for the canvas: a bare 5 s wait straight after a reload lost that race on a loaded CI
+  // shard (PR #669), and its retries then tripped the sign-up rate limit, which hid the cause.
+  await ensurePen(page);
+  await expect(page.locator('canvas').first()).toBeAttached({ timeout: 15_000 });
 
   // (1) On by default, on first open (CQ-3).
   await page.getByRole('button', { name: 'View', exact: true }).click();
