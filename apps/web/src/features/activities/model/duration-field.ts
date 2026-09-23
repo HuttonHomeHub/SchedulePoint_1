@@ -108,6 +108,37 @@ export function formatDurationRead(
 }
 
 /**
+ * **The one Duration cell, for every table that lists activities** (`docs/TECH_DEBT.md` #375).
+ *
+ * An em dash where the stored duration is not the activity's duration:
+ *
+ * - a **milestone** has none at all, and `0 d` there read exactly like real sub-day work rounded
+ *   down (ADR-0070 M4);
+ * - a **WBS summary** has one, but not the one stored. Its dates are an engine rollup of its
+ *   children (ADR-0038) while its stored duration is whatever it was created with — `0` from the
+ *   XER importer — and recalculation never writes it back, so `0 d` beside an eleven-month summary
+ *   was a false statement. The canvas's centre item withholds the same figure (`centreItemText`).
+ *
+ * One function because the rule had two copies — the activities table and the Gantt column — and
+ * the summary half had to be added to both; a third table would have had to know to add it too.
+ * The types are listed here rather than read from `isMilestoneType`, because `activity-schemas`
+ * imports this module and the reverse import would be a cycle.
+ */
+export function formatDurationCell(
+  activity: { type: string; durationDays: number; durationMinutes: number },
+  hoursPerDay: number | undefined,
+): string {
+  if (
+    activity.type === 'START_MILESTONE' ||
+    activity.type === 'FINISH_MILESTONE' ||
+    activity.type === 'WBS_SUMMARY'
+  ) {
+    return '—';
+  }
+  return formatDurationRead(activity, hoursPerDay);
+}
+
+/**
  * The write-DTO fragment a submit sends. Exactly one of the two mutually-exclusive fields — sending
  * both is a 422 by design (the API's `@IsMutuallyExclusiveWith`), which is why this returns a
  * union rather than an object with two optional keys.

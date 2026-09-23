@@ -107,6 +107,33 @@ describe('paintScene — the centre item (NetPoint-layout M1)', () => {
     }
   });
 
+  it('draws nothing under a WBS summary, whose stored duration is not its span (#375)', () => {
+    // An imported summary: stored duration 0, dates rolled up across a wide span. Before #375 the
+    // painter printed "0d · 0d float left" here. The TASK beside it is the control — the same scene
+    // must still produce ITS item, so an empty result cannot mean the layer drew nothing at all.
+    const summary = bar({
+      id: 's',
+      type: 'WBS_SUMMARY',
+      label: 'EDF - Hynamics Proposal',
+      durationDays: 0,
+      remainingFloat: 0,
+      earlyFinish: '2026-01-30',
+    });
+    const task = bar({
+      id: 't',
+      laneIndex: 0,
+      earlyStart: '2026-02-09',
+      earlyFinish: '2026-02-20',
+    });
+    const texts = centreItems(
+      withToggles([summary, task], { dates: true, labels: true }),
+      VIEW,
+    ).map((item) => item.text);
+    expect(texts).not.toContain('0d · 0d float left');
+    expect(texts).not.toContain('0d');
+    expect(texts).toContain('5d · 3d float left');
+  });
+
   it('falls back to the duration alone where the full form does not fit', () => {
     // A 4-day bar is 80 px: the full form (108) does not fit, `5d` (12) does.
     const a = bar({ id: 'a', earlyFinish: '2026-01-08' });

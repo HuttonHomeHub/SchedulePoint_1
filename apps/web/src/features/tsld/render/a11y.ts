@@ -46,7 +46,12 @@ function plainDays(n: number): string {
  * on *which* activity a bar is (WCAG 2.5.3 label-in-name). Kept as a leading substring of both.
  */
 export function activityLabel(a: { code: string | null; name: string }): string {
-  return a.code ? `${a.code} ${a.name}` : a.name;
+  // **A code identical to the name is printed once** (`docs/TECH_DEBT.md` #376). The XER importer
+  // gives a WBS summary `code = wbs_short_name` and `name = wbs_name ?? wbs_short_name`
+  // (`packages/interchange/src/xer-adapter.ts:475-476`), and P6's project-root node commonly holds
+  // the project's short name in both — so the label read "EDF - Hynamics Proposal EDF - Hynamics
+  // Proposal". The second copy carries nothing, and this string is also the accessible name.
+  return a.code && a.code !== a.name ? `${a.code} ${a.name}` : a.name;
 }
 
 /**
@@ -58,14 +63,27 @@ export function activityLabel(a: { code: string | null; name: string }): string 
  * **Null for a milestone.** The item never leaves its own bar, and a milestone has no bar to hold
  * it — its float is spoken in the Tier-1 sentence and drawn by the feasible window.
  *
+ * **Null for a WBS summary too** (`docs/TECH_DEBT.md` #375). A summary's dates are an engine rollup
+ * of its children (ADR-0038) but its stored duration is not: the importer writes `0`
+ * (`xer-adapter.ts:478`) and recalculation never writes a summary's duration back
+ * (`apps/api/src/modules/schedule/schedule.repository.ts:840-902`). So the item printed "0d · 0d
+ * float left" under a bar spanning eleven months. The honest rolled-up figure needs the span in
+ * working days on the right calendar, which the engine would have to write; until it does, the
+ * item says nothing rather than something false.
+ *
  * "float left" rather than "float" because the figure is `remainingFloat` on the placed basis
  * (ADR-0148): the room from where the bar IS, not from where the network would put it.
  */
 export function centreItemText(
-  a: { durationDays: number; remainingFloat: number | null | undefined; milestone: boolean },
+  a: {
+    durationDays: number;
+    remainingFloat: number | null | undefined;
+    milestone: boolean;
+    summary: boolean;
+  },
   form: 'full' | 'short',
 ): string | null {
-  if (a.milestone) return null;
+  if (a.milestone || a.summary) return null;
   const duration = `${a.durationDays}d`;
   if (form === 'short' || a.remainingFloat == null) return duration;
   return `${duration} · ${a.remainingFloat}d float left`;

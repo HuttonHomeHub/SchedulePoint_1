@@ -128,19 +128,24 @@ export function formatDiagnosticsReport(result: StaffDiagnostics): string {
  * **What a non-zero count means, which is the sentence the M4 UX review found missing everywhere.**
  *
  * "17 of 1,284" reads as "17 activities are broken right now" to anybody who has not read ADR-0139
- * — which is nearly everybody who will later read the pasted block. Both of today's diagnostics are
- * **retrospective**: they size whose stored numbers changed meaning when a release landed, so the
- * count says who to tell rather than what to fix.
+ * — which is nearly everybody who will later read the pasted block. A **retrospective** entry sizes
+ * whose stored numbers changed meaning when a release landed, so the count says who to tell rather
+ * than what to fix.
  *
  * Driven off `row.nature` rather than written as one sentence on the panel, because a global
  * sentence is true only by coincidence: the day a prospective diagnostic is added it would lie, and
- * nothing would fail.
+ * nothing would fail. **That prediction came true one level down** (`docs/TECH_DEBT.md` #377): the
+ * `prospective` branch read "this sizes work that is wrong now", and the nine one-planning-surface
+ * counts that arrived are mostly ordinary use — "Plans carrying a hand-placed activity" was being
+ * called a fault on the live panel. A prospective count describes the installation now; only its
+ * question says whether that is a problem, so the sentence says exactly that and no more.
  */
 export function natureSentence(row: StaffDiagnosticRow): string {
   return row.nature === 'retrospective'
     ? 'Retrospective: this sizes work whose stored numbers changed meaning when a past release ' +
         'landed. A count here is who to tell, not what is broken now.'
-    : 'Live: this sizes work that is wrong now.';
+    : 'Live: this counts the installation as it stands now. Whether a count is a problem ' +
+        'depends on the question — some count ordinary use.';
 }
 
 /**

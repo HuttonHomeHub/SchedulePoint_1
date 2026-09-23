@@ -124,6 +124,14 @@ describe('natureSentence', () => {
     expect(natureSentence(row({ nature: 'prospective' }))).toMatch(/Live/);
     expect(natureSentence(row({ nature: 'prospective' }))).not.toMatch(/Retrospective/);
   });
+
+  it('does not call a live count a fault, because most live counts are ordinary use (#377)', () => {
+    // "Plans carrying a hand-placed activity" is prospective and is not a defect; the sentence
+    // used to say "work that is wrong now" about it and eight siblings on the deployed panel.
+    const sentence = natureSentence(row({ nature: 'prospective' }));
+    expect(sentence).not.toMatch(/wrong|broken|defect|fault/i);
+    expect(sentence).toMatch(/as it stands now/);
+  });
 });
 
 describe('diagnosticsStatus', () => {

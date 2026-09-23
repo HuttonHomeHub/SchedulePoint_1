@@ -2274,6 +2274,7 @@ export function paintScene(
           durationDays: activity.durationDays,
           remainingFloat: activity.remainingFloat,
           milestone: isMilestone(activity.type),
+          summary: activity.type === 'WBS_SUMMARY',
         };
         const full = centreItemText(item, 'full');
         if (full === null) continue;

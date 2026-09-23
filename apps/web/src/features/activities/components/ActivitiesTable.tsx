@@ -7,7 +7,7 @@ import { useActivities, useDeleteActivity, useDissolveSummary } from '../api/use
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
 import type { ActivityEditorPurpose } from '../lib/activity-editor-intent';
 import { deleteActivityDescription, dissolveSummaryDescription } from '../lib/delete-activity-copy';
-import { formatDurationRead } from '../model/duration-field';
+import { formatDurationCell } from '../model/duration-field';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
@@ -54,13 +54,15 @@ const VARIANCE_TONE_CLASS: Record<FinishVariance['tone'], string> = {
 };
 
 /**
- * "5 d" for a task; an em dash for a milestone (which has no duration).
+ * "5 d" for a task; an em dash for a milestone (which has no duration) and for a WBS summary (whose
+ * stored duration is not its rolled-up span — `docs/TECH_DEBT.md` #375). The rule lives in
+ * `formatDurationCell`, shared with the Gantt's Duration column.
  *
  * With the activity's working-hours factor in hand a sub-day duration reads exactly ("4h", "2d 4h")
  * instead of rounding to "0 d" — which looked identical to a milestone (ADR-0070 M4).
  */
 function formatDuration(activity: ActivitySummary, hoursPerDay: number | undefined): string {
-  return isMilestoneType(activity.type) ? '—' : formatDurationRead(activity, hoursPerDay);
+  return formatDurationCell(activity, hoursPerDay);
 }
 
 /** Status label, plus the percentage while an activity is partway through. */

@@ -56,6 +56,12 @@ describe('the Duration column', () => {
     expect(durationColumn?.value(twoDays, 'early', EIGHT_HOUR)).toBe('2 d');
   });
 
+  it('reads a WBS summary as an em dash, not as its stored input duration (#375)', () => {
+    // An imported summary stores 0 while its rolled-up bar spans months; `0 d` was false.
+    const summary = activity({ type: 'WBS_SUMMARY', durationDays: 0, durationMinutes: 0 });
+    expect(durationColumn?.value(summary, 'early', EIGHT_HOUR)).toBe('—');
+  });
+
   it('reads a milestone as an em dash, not as zero duration', () => {
     const milestone = activity({ type: 'START_MILESTONE', durationDays: 0, durationMinutes: 0 });
     expect(durationColumn?.value(milestone, 'early', EIGHT_HOUR)).toBe('—');

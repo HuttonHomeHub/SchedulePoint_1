@@ -6,7 +6,11 @@ import { apiFetch } from '@/lib/api/client';
  * What a non-zero count means. A closed vocabulary, mirroring the server registry's.
  *
  * `retrospective` sizes whose stored numbers changed meaning when a release landed — the work is
- * not wrong now. `prospective` sizes a defect that is still live. This is a field rather than a
+ * not wrong now. `prospective` counts the installation as it stands now, which is NOT the same as
+ * a defect: "Plans carrying a hand-placed activity" is ordinary use, "Placements the engine says
+ * are earlier than their logic allows" is a fault, and both are prospective (`docs/TECH_DEBT.md`
+ * #377 — this line said "a defect that is still live" and the panel repeated it as "work that is
+ * wrong now" about all nine one-planning-surface counts). This is a field rather than a
  * sentence on the panel because a global sentence would be true only by coincidence — which the
  * registry has since proved: when this was written every entry was retrospective, and the registry
  * now holds both kinds, so that sentence would by now be lying on most rows with nothing failing.

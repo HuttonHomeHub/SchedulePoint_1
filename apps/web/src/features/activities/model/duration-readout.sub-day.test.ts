@@ -12,7 +12,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   SUB_DAY_DURATIONS_ENABLED: true,
 }));
 
-const { formatDurationRead } = await import('./duration-field');
+const { formatDurationCell, formatDurationRead } = await import('./duration-field');
 
 /** An eight-hour working day — so a day is 480 minutes and not 1440 (ADR-0068). */
 const EIGHT = 8;
@@ -40,5 +40,21 @@ describe('formatDurationRead', () => {
     // The degraded path and the flag-off path are the same output, deliberately.
     expect(formatDurationRead({ durationDays: 5, durationMinutes: 2400 }, undefined)).toBe('5 d');
     expect(formatDurationRead({ durationDays: 0, durationMinutes: 240 }, undefined)).toBe('0 d');
+  });
+});
+
+describe('formatDurationCell (the one Duration cell, #375)', () => {
+  const zero = { durationDays: 0, durationMinutes: 0 };
+  it('reads an em dash for both milestone types and a WBS summary', () => {
+    expect(formatDurationCell({ ...zero, type: 'START_MILESTONE' }, EIGHT)).toBe('—');
+    expect(formatDurationCell({ ...zero, type: 'FINISH_MILESTONE' }, EIGHT)).toBe('—');
+    expect(formatDurationCell({ ...zero, type: 'WBS_SUMMARY' }, EIGHT)).toBe('—');
+  });
+
+  it('reads every other type exactly as formatDurationRead does', () => {
+    for (const type of ['TASK', 'LEVEL_OF_EFFORT', 'RESOURCE_DEPENDENT']) {
+      expect(formatDurationCell({ type, durationDays: 0, durationMinutes: 240 }, EIGHT)).toBe('4h');
+      expect(formatDurationCell({ type, ...zero }, EIGHT)).toBe('0 d');
+    }
   });
 });

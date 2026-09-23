@@ -111,29 +111,63 @@ describe('activityLabel (shared identity) and centreItemText', () => {
     expect(activityLabel(activity({ code: null, name: 'Erect steel' }))).toBe('Erect steel');
   });
 
+  it('prints a code identical to the name once (#376: an imported P6 root WBS node)', () => {
+    expect(
+      activityLabel(activity({ code: 'EDF - Hynamics Proposal', name: 'EDF - Hynamics Proposal' })),
+    ).toBe('EDF - Hynamics Proposal');
+    // A code that merely STARTS the name is still a code, and is still printed.
+    expect(activityLabel(activity({ code: 'A', name: 'A frame' }))).toBe('A A frame');
+  });
+
   it('keeps the name row a leading substring of the accessible name (label-in-name)', () => {
     const a = activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 });
     expect(describeActivity(a).startsWith(activityLabel(a))).toBe(true);
   });
 
   it('prints the duration and the float left in full, the duration alone short', () => {
-    const task = { durationDays: 5, remainingFloat: 3, milestone: false };
+    const task = { durationDays: 5, remainingFloat: 3, milestone: false, summary: false };
     expect(centreItemText(task, 'full')).toBe('5d · 3d float left');
     expect(centreItemText(task, 'short')).toBe('5d');
   });
 
   it('omits the float clause when the engine has not computed one, and states zero when it has', () => {
     expect(
-      centreItemText({ durationDays: 5, remainingFloat: null, milestone: false }, 'full'),
+      centreItemText(
+        { durationDays: 5, remainingFloat: null, milestone: false, summary: false },
+        'full',
+      ),
     ).toBe('5d');
-    expect(centreItemText({ durationDays: 5, remainingFloat: 0, milestone: false }, 'full')).toBe(
-      '5d · 0d float left',
-    );
+    expect(
+      centreItemText(
+        { durationDays: 5, remainingFloat: 0, milestone: false, summary: false },
+        'full',
+      ),
+    ).toBe('5d · 0d float left');
+  });
+
+  it('draws nothing for a WBS summary, whose stored duration is not its rolled-up span (#375)', () => {
+    // The importer writes 0 and recalculation never writes a summary's duration back, so this is
+    // exactly the "0d · 0d float left" printed under an eleven-month summary bar.
+    expect(
+      centreItemText(
+        { durationDays: 0, remainingFloat: 0, milestone: false, summary: true },
+        'full',
+      ),
+    ).toBeNull();
+    expect(
+      centreItemText(
+        { durationDays: 0, remainingFloat: 0, milestone: false, summary: true },
+        'short',
+      ),
+    ).toBeNull();
   });
 
   it('draws nothing for a milestone, which has no bar to hold it', () => {
     expect(
-      centreItemText({ durationDays: 0, remainingFloat: 4, milestone: true }, 'full'),
+      centreItemText(
+        { durationDays: 0, remainingFloat: 4, milestone: true, summary: false },
+        'full',
+      ),
     ).toBeNull();
   });
 });
