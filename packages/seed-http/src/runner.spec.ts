@@ -300,6 +300,28 @@ describe('the payload contracts the real API enforces', () => {
     expect(unplaced?.body).not.toHaveProperty('visualStart');
   });
 
+  /**
+   * `laneIndex` is optional on the spec, so the discriminating case is the omission: a runner that
+   * sent `laneIndex: undefined` or `0` for every unstated row would pin every other tier's
+   * activities to the top lane rather than leaving the server's default in charge.
+   */
+  it('sends laneIndex on the activity create when the spec sets one, and omits it otherwise', async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    globalThis.fetch = recordingFetch(calls);
+    await seedPlan(
+      new SeedClient({ baseUrl: 'http://x' }),
+      target,
+      minimalSpec({
+        activities: [{ ...activity('A1'), laneIndex: 7 }, activity('A2')],
+      }),
+    );
+    const creates = calls.filter((c) => c.url.endsWith('/activities'));
+    const laned = creates.find((c) => c.body.name === 'A1');
+    const unlaned = creates.find((c) => c.body.name === 'A2');
+    expect(laned?.body.laneIndex).toBe(7);
+    expect(unlaned?.body).not.toHaveProperty('laneIndex');
+  });
+
   it('sends the working week as Monday-indexed shift rows, windows and all', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;

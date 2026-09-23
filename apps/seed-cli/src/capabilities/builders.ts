@@ -156,6 +156,12 @@ export interface CapabilityPlanInput {
   resources?: readonly SeedResource[];
   assignments?: readonly SeedAssignment[];
   defaultCalendarKey?: string | null;
+  /**
+   * Overrides the shared `DATA_DATE`, and only for a plan transcribed from somewhere else. The
+   * shared anchor exists so capability plans compare against each other; a reference transcription
+   * compares against its SOURCE, whose own start date is the one a reader will look for.
+   */
+  dataDate?: string;
   currencyCode?: string | null;
   options?: Partial<SeedSpec['plan']['options']>;
 }
@@ -167,7 +173,7 @@ export function capabilityPlan(input: CapabilityPlanInput): SeedSpec {
     plan: {
       name: input.name,
       description: input.description,
-      dataDate: DATA_DATE,
+      dataDate: input.dataDate ?? DATA_DATE,
       defaultCalendarKey: input.defaultCalendarKey ?? null,
       currencyCode: input.currencyCode ?? null,
       options: { ...DEFAULT_SEED_PLAN_OPTIONS, ...input.options },

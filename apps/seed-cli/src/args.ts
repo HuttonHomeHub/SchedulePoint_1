@@ -33,7 +33,7 @@ Required
   --password <pass>   Their password
 
 Optional
-  --tier <name>       fixture | capability | scale | negative | all   (default: fixture)
+  --tier <name>       fixture | capability | reference | scale | negative | all   (default: fixture)
   --family <name>     Capability tier only: seed just one family (see --coverage for the list)
   --activities <n>    Scale tier only: activities to generate (default 500). A generated plan is
                       deterministic, so the same count always produces the same plan.

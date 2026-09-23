@@ -283,6 +283,7 @@ export async function seedPlan(
             // did not. Omitted here, FC-1's own "zero placements in the estate" prediction would have
             // been true of the catalogue by construction, not by measurement.
             ...(activity.visualStart === null ? {} : { visualStart: activity.visualStart }),
+            ...(activity.laneIndex === undefined ? {} : { laneIndex: activity.laneIndex }),
             ...(activity.levelingPriority === null
               ? {}
               : { levelingPriority: activity.levelingPriority }),

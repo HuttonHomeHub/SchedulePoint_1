@@ -1970,13 +1970,20 @@ export function paintScene(
   const laneRows = frame.laneRows;
 
   // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting
-  // (ADR-0026 D1). Gated by the toggle and a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
+  // (ADR-0026 D1). Gated by the toggle and, off the reserved-row path, a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
   // a wide-enough task bar (truncated + ellipsised to fit, so no clip needed), beside a short bar or
   // milestone when the same-lane neighbour leaves clear room, else suppressed. The visible set is
   // bucketed by lane and x-sorted once (O(v log v)) so each label's right-neighbour is known without
   // a per-label scan; widths are memoised (font fixed) so a label measures at most once ever.
   const reservesTextRows = rowReservesTextRows();
-  if ((toggles.labels ?? true) && view.pxPerDay >= LABEL_MIN_PX_PER_DAY) {
+  // **The zoom gate applies only where the row has no text rows** (`docs/TECH_DEBT.md` #378). It
+  // was written when a name lived INSIDE its bar, where a narrow bar genuinely had no room. On the
+  // reserved-row path the name sits in its own row above the bar and is fitted per bar below
+  // (budget = the bar plus half of each neighbour gap, truncated to fit, nothing when nothing
+  // fits), so the gate withheld names that fit — a 900 px bar at whole-plan zoom had no name. The
+  // NetPoint reference plan found it: at NetPoint's own scale (~1 px/day) its picture labels every
+  // bar and ours labelled none.
+  if ((toggles.labels ?? true) && (reservesTextRows || view.pxPerDay >= LABEL_MIN_PX_PER_DAY)) {
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -2070,7 +2077,20 @@ export function paintScene(
           const textW = measure(text);
           const minCx = hasPrev ? rect.x - leftRoom + textW / 2 : -Infinity;
           const maxCx = rect.x + rect.w + rightRoom - textW / 2;
-          const centreX = rect.x + rect.w / 2;
+          // **Centred on the part of the bar that is on screen** (`docs/TECH_DEBT.md` #380). A bar
+          // longer than the viewport — a year-long fabrication on the critical path — had its name
+          // at its middle, so panning along it showed a red line with no name for most of its
+          // length. Clamping the centre into the visible span keeps the name on the bar the reader
+          // is looking at; a bar wholly on screen is unaffected, since its visible span is itself.
+          const visibleLeft = Math.max(rect.x, 0);
+          const visibleRight = Math.min(rect.x + rect.w, size.width);
+          const centreX =
+            visibleRight - visibleLeft >= textW
+              ? Math.min(
+                  Math.max(rect.x + rect.w / 2, visibleLeft + textW / 2),
+                  visibleRight - textW / 2,
+                )
+              : rect.x + rect.w / 2;
           ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'center';
           ctx.fillText(
@@ -2118,7 +2138,10 @@ export function paintScene(
   // same pixels and vanishes on any bar narrower than its text). Gated by the `dates` toggle AND
   // a zoom well above the label LOD, because this is two strings + two measurements per bar
   // against the ADR-0026 draw budget. Absent toggle ⇒ not one call ⇒ byte-for-byte parity.
-  if (toggles.dates === true && view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY) {
+  // Same rule as the names above (#378): the reserved-row branch below fits both dates inside the
+  // bar, or flanks each end on its half of the gap, or draws nothing, so the zoom gate only ever
+  // withheld dates that fit. It still guards the centre-line path, which has no such room test.
+  if (toggles.dates === true && (reservesTextRows || view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY)) {
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'middle';
     const measure = (t: string): number => labelWidths.measure(t, (x) => ctx.measureText(x).width);
@@ -2130,6 +2153,30 @@ export function paintScene(
     // true, and the tail visibly passes behind it. One extra fillRect per drawn date, and only
     // when both toggles are on — with tails off, the draw is byte-for-byte the M3 pass.
     const plated = toggles.floatTails === true;
+    /**
+     * Whether the bar after `i` starts at `i`'s end AND will write its own start date there —
+     * i.e. whether the node already has its one date. "At the end" means closer than
+     * {@link LABEL_GAP_PX}, the separation the date layer keeps everywhere else, so any gap a
+     * reader could see two dates in is left alone. It asks the same question the next bar's own
+     * pass will ask ({@link datesFitInside}), so the two cannot disagree about whether the start
+     * is drawn and leave the node empty.
+     */
+    const nextDrawsStartAtNode = (
+      row: readonly { activity: RenderActivity; rect: Rect }[],
+      i: number,
+      rect: Rect,
+    ): boolean => {
+      const next = row[i + 1];
+      if (!next) return false;
+      if (next.rect.x - (rect.x + rect.w) >= LABEL_GAP_PX) return false;
+      const a = next.activity;
+      if (isMilestone(a.type) || !a.earlyStart || !a.earlyFinish) return false;
+      return datesFitInside(
+        measure(formatCanvasDate(a.earlyStart)),
+        measure(formatCanvasDate(a.earlyFinish)),
+        next.rect.w,
+      );
+    };
     for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
         const { activity, rect } = row[i]!;
@@ -2194,8 +2241,15 @@ export function paintScene(
             // **Inside its own ends**, which is the reference's placement and reaches nothing.
             ctx.textAlign = 'left';
             ctx.fillText(startText, rect.x, below);
-            ctx.textAlign = 'right';
-            ctx.fillText(finishText, rect.x + rect.w, below);
+            // **One date per node** (`docs/TECH_DEBT.md` #379). Where the next bar in the lane
+            // starts at this bar's end, its start date is written at the same node, and the two ran
+            // together ("31 Jan1 Feb"). NetPoint writes the node once, with the next activity's
+            // start, so the finish is withheld exactly when the next bar will draw its start there.
+            // The finish is still on the bar's option in the parallel listbox (ADR-0026 D7).
+            if (!nextDrawsStartAtNode(row, i, rect)) {
+              ctx.textAlign = 'right';
+              ctx.fillText(finishText, rect.x + rect.w, below);
+            }
           } else {
             // **Otherwise flank the ends it has room beside**, each end judged on its own HALF of
             // the gap — the same sharing rule the name row uses one line up, and for the same
@@ -2251,7 +2305,9 @@ export function paintScene(
   // otherwise. Bars in one row never overlap, so it cannot collide with a neighbour by construction
   // — the same provability the halved-gap rule gives the dates. Absent `durationDays` (a scene built
   // before the field existed) ⇒ not one call.
-  if (reservesTextRows && (toggles.labels ?? true) && view.pxPerDay >= LABEL_MIN_PX_PER_DAY) {
+  // No zoom gate (#378): this layer exists only on the reserved-row path, and it never leaves its
+  // own bar — the room test below is the whole of its legibility rule.
+  if (reservesTextRows && (toggles.labels ?? true)) {
     // **Every context write is lazy**, so a frame with nothing to print here costs nothing: the
     // first draft set the font, baseline and alignment up front and the golden log caught three
     // writes on a scene whose bars carry no duration — a per-frame cost for an empty layer.
@@ -2264,7 +2320,8 @@ export function paintScene(
       }
       return labelWidths.measure(t, (x) => ctx.measureText(x).width);
     };
-    const datesDrawn = toggles.dates === true && view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY;
+    // Must agree with the dates layer's own condition, which on this path is the toggle alone.
+    const datesDrawn = toggles.dates === true;
     let styled = false;
     for (const row of laneRows().values()) {
       for (const { activity, rect } of row) {

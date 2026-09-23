@@ -308,6 +308,14 @@ export const seedActivitySchema = z
     /** The advisory hand-placement read in VISUAL mode (ADR-0033). */
     visualStart: isoDateSchema.nullable(),
     /**
+     * The TSLD row to create the activity in. **Optional, unlike its neighbours**: absent leaves the
+     * server's default (lane 0, where the canvas's auto-resolve and Arrange take over), which is what
+     * every tier before the NetPoint reference plan wanted. A plan transcribed from a reference
+     * picture wants the picture's own rows, because comparing a layout needs the same layout — so it
+     * states them. Bounded as `CreateActivityDto.laneIndex` is.
+     */
+    laneIndex: z.number().int().min(0).max(10000).optional(),
+    /**
      * The conformance `test_tags` this activity carries, so a coverage report can say which of the
      * fixture's 117 capability keys a seeded plan actually reaches. Empty for hand-authored plans
      * that claim nothing.
@@ -404,7 +412,11 @@ export const seedSpecSchema = z
     /** Stable identity for this seed, used to detect a re-run rather than duplicating. */
     seedName: z.string().min(1),
     /** Which tier produced it — for the report and the playbook's grouping. */
-    tier: z.enum(['fixture', 'capability', 'pairwise', 'scale', 'negative']),
+    /**
+     * `reference` is a whole programme transcribed from a published source (the NetPoint example),
+     * compared against its source picture rather than against one capability's expected outcome.
+     */
+    tier: z.enum(['fixture', 'capability', 'pairwise', 'scale', 'negative', 'reference']),
     plan: seedPlanSchema,
     calendars: z.array(seedCalendarSchema),
     resources: z.array(seedResourceSchema),
