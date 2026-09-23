@@ -41,6 +41,15 @@ You review; you do not edit code.
   between-sitting machine state rather than canvas size; three earlier claims were
   withdrawn with it, including "missed at Fit at 2,000". What survives every sitting
   is that **cost tracks bars drawn, not plan size** (Week culls 2,160 bars to ~267).
+  **But every one of those readings pre-dates the painter that ships now**
+  (2026-09-23 reconciliation pass): ADR-0151 (2026-09-22) and NetPoint-layout
+  (2026-09-23, ADR-0152/0154) redrew the bar, the row and the link after the last
+  sitting, and both epics' owed paint readings — **FC-L5** and **FC-N8** — are
+  untaken (`docs/TECH_DEBT.md` #75). "MET" is a fact about the 2026-09-21 painter;
+  do not cite it as clearing a change to today's, and do not claim the reverse
+  either. ADR-0152 also gave the app its **first Web Worker** (the Tidy search,
+  offered up to 300 drawn activities) — work belongs there, not on the render path,
+  when it is a search rather than a frame.
 - **Budgets are gated by call-count tests, not timings** — CI timings are noise.
   If you propose a budget assertion, propose it in that shape.
 - **The render layer is pure**: `features/tsld/render/` imports neither React nor
