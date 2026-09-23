@@ -130,7 +130,7 @@ function paint(pxPerDay: number, edges?: RenderEdge[]) {
     linkRouting: true,
     isWorkingDay: () => true,
   };
-  paintScene(ctx as unknown as CanvasRenderingContext2D, scene, view, SIZE, PALETTE, 1);
+  paintScene(ctx, scene, view, SIZE, PALETTE, 1);
   return ctx.calls;
 }
 
