@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1314 web
+> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1330 web
 > source files with 45 Playwright suites beside the base journey, and
-> 153 ADRs.
+> 154 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5676,6 +5676,33 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   rushed: `docs/TECH_DEBT.md` #369/#370/#371.
   **The CPM engine is not imported and no migration runs**; `apps/api` contributes zero files to the
   diff.
+
+- **ADR-0152** _(Accepted; NetPoint-layout M4 and M5 landed 2026-09-23)_ — A row is chosen for how
+  its links will route. Three epics routed links around rows a rule had already chosen, and ADR-0150's
+  M0 measured the residue as a **row** problem: most still-hidden links could not be rescued by any
+  corridor. Three assignment **rules** were then measured and rejected (ADR-0149 D5, ADR-0150 D5).
+  So this is a **search**, not a rule. A layout is scored **lexicographically in the product owner's
+  order** — overlaps, links hidden behind bars, crossings, unlinked glyph contacts (CQ-1), then
+  same-row links, travel and rows as tie-breaks — with **no weights**, because the product owner gave
+  an order and any weights would be tuned to the fixtures. The score is computed on the **painter's
+  own routes**: Layer 2's routing moved verbatim into `render/route-frame.ts` (the golden log passed
+  unedited, the ADR-0078 oracle), and the product counters were checked against the M0 harness's
+  independent recorder-based ones on seven layouts (FC-N0), verified red twice. The search accepts a
+  move only on **strict improvement**, with **count caps, never time**, so Tidy is never worse than
+  its seed and the answer does not depend on the machine (FC-N3: 0 violations over 200 seeded plans).
+  **Tidy** seeds from the planner's rows; **Re-layout** seeds from `packLanes`, so Re-layout can score
+  worse than the current layout, and the dialog shows both against the current layout before anything
+  moves. A whole Tidy measured **4.2 s** on the 144-activity Unit 300 plan, so it runs in the
+  application's **first Web Worker**, offered only up to **300 drawn activities**; it loads under the
+  production CSP unchanged because the policy has no `worker-src` and falls back to `script-src
+'self'`, proved by an `e2e-csp` case. The offer counts **overlaps only**: counting hidden links on
+  the render path measured 259 ms against an 8 ms bar (FC-N2 (a), failed by 32×). On Unit 300 Tidy
+  takes hidden links **58 → 17** and crossings **360 → 204** at the same 21 rows. The UX review before
+  release caught Tidy's description **promising fewer crossings**, which a lexicographic search does
+  not guarantee — a card whose own figures could contradict its sentence — and it now states the
+  order it works in. An already-arranged plan now **opens the dialog** rather than answering without
+  one, because Tidy's "nothing to move" costs a search; US-2 is amended rather than quietly broken.
+  `RadioCardGroup` joins the primitives. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0153** _(Accepted; NetPoint-layout M3 landed 2026-09-23)_ — An edit moves only the bar that
   caused an overlap. The product owner reported two activities drawn on top of each other after an
