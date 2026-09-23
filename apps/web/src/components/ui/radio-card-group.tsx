@@ -126,6 +126,8 @@ export function RadioCardGroup<T extends string>({
               'border-input flex cursor-pointer flex-col gap-2 rounded-md border p-3 text-sm',
               'focus-visible:ring-ring outline-none focus-visible:ring-2',
               'aria-checked:border-primary aria-checked:ring-primary aria-checked:ring-1',
+              // No `pointer-events-none`, unlike a shaded Button (ADR-0145): a shaded option is still
+              // a stop, so a click moves focus to it and its reason is read, exactly as arrowing does.
               'aria-disabled:cursor-not-allowed aria-disabled:opacity-60',
             )}
           >

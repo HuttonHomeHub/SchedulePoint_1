@@ -146,6 +146,25 @@ describe('ArrangeDialog', () => {
     );
   });
 
+  it('when bounded and already packed, does not claim Tidy would find nothing', () => {
+    renderDialog({
+      kind: 'ready',
+      tidy: null,
+      relayout: { ...RELAYOUT, changes: [], after: RELAYOUT.before },
+      bounded: { drawn: 450, limit: 300 },
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Already packed: Re-layout would move nothing.',
+    );
+  });
+
+  it('describes Tidy by what it guarantees, overlaps first, and never a promise of fewer crossings', () => {
+    renderDialog(READY);
+    const tidy = screen.getByRole('radio', { name: 'Tidy' });
+    expect(tidy).toHaveAccessibleDescription(/remove overlaps, then links hidden behind bars/);
+    expect(tidy).not.toHaveAccessibleDescription(/fewer crossings/);
+  });
+
   it('reports a failed search as an alert, with Confirm shaded', () => {
     renderDialog({ kind: 'error', message: 'The worker stopped.' });
     expect(screen.getByRole('alert')).toHaveTextContent('The worker stopped.');

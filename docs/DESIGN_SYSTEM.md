@@ -884,6 +884,10 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
 - **Segmented control** — `SegmentedControl` (`components/ui/segmented-control.tsx`), the APG
   `radiogroup`: a **mutually-exclusive** choice from a known set (Diagram _or_ Activities),
   roving tabindex, Arrow/Home/End, focus follows selection.
+- **Radio card group** — `RadioCardGroup` (`components/ui/radio-card-group.tsx`), the same APG
+  `radiogroup` as stacked cards, for a choice where each option needs its own explanation and
+  figures (Arrange's Tidy _or_ Re-layout). A shaded option stays an arrow-key stop and keeps its
+  reason reachable (ADR-0082). See [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md).
 - **Toggle chip** — `ToggleChip` (`components/ui/toggle-chip.tsx`), an `aria-pressed` button for
   an **independent boolean** ("also show this"). Pressed state changes fill **and** border, never
   hue alone. Pair it with an announced result count — a chip that filters silently is a WCAG 4.1.3

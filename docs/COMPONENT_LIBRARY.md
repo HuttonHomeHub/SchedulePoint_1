@@ -256,11 +256,12 @@ search params, which is the route's job (`hooks/use-url-filter-state.ts`).
 Two controls that look similar and mean different things. The choice is **semantic**, not
 visual, and getting it backwards misdescribes the control even when it renders correctly.
 
-| Use                | When                                                                                                 | Semantics                             |
-| ------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `SegmentedControl` | A **mutually-exclusive** choice from a known set — Diagram _or_ Activities, Day _or_ Month _or_ Year | APG `radiogroup`: "one of a set of N" |
-| `ToggleChip`       | An **independent boolean** — Critical, Chain, Non-working. Each stands alone                         | `aria-pressed` button: "this is on"   |
-| `Badge`            | Output, not a control                                                                                | Plain text                            |
+| Use                | When                                                                                                            | Semantics                             |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `SegmentedControl` | A **mutually-exclusive** choice from a known set — Diagram _or_ Activities, Day _or_ Month _or_ Year            | APG `radiogroup`: "one of a set of N" |
+| `ToggleChip`       | An **independent boolean** — Critical, Chain, Non-working. Each stands alone                                    | `aria-pressed` button: "this is on"   |
+| `RadioCardGroup`   | A mutually-exclusive choice where **each option carries its own explanation and figures** — Tidy _or_ Re-layout | APG `radiogroup` of stacked cards     |
+| `Badge`            | Output, not a control                                                                                           | Plain text                            |
 
 `SegmentedControl` (`components/ui/segmented-control.tsx`) implements the APG radiogroup:
 roving `tabindex`, Arrow/Home/End with wraparound, `aria-checked`, and **focus follows
@@ -275,6 +276,17 @@ so an unanswered group is still reachable. Deriving the tab stop from `value ===
 would give every option `tabIndex={-1}` and make it keyboard-unreachable — a WCAG 2.1.1 failure
 that renders perfectly. Do **not** reach for `null` to express a default; if one of the options is
 the safe answer, pass it.
+
+`RadioCardGroup` (`components/ui/radio-card-group.tsx`, NetPoint-layout M5, ADR-0152) is the same
+APG radiogroup drawn as stacked cards, for a choice a reader cannot make from a label alone. Each
+card's **name is its title** and its **description is its sentence plus a `<dl>` of figures**, both
+linked by `aria-describedby`, so a screen reader hears what the option would do before choosing it.
+Two differences from `SegmentedControl` are deliberate. **Focus does not follow selection onto a
+disabled option**: a shaded option (ADR-0082) is still an arrow-key stop, so its reason can be
+reached, but arrowing onto it does not select it. That needs separate `focused` state, which is why
+the roving logic is not yet shared with `SegmentedControl`; extract it when a third radiogroup needs
+it. And its `disabledReason` **replaces the figures** in the description, because an option that
+cannot run has no figures worth reading. The first consumer is `ArrangeDialog`.
 
 `ToggleChip` (`components/ui/toggle-chip.tsx`) is a CVA `aria-pressed` button. Its pressed
 state changes **fill and border**, so it never signals state by hue alone (WCAG 1.4.1).

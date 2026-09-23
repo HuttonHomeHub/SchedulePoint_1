@@ -86,6 +86,19 @@ describe('RadioCardGroup', () => {
     expect(relayout).toHaveFocus();
   });
 
+  it('selects with Enter and Space, and Home returns to the first option', () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    const tidy = screen.getByRole('radio', { name: 'Tidy' });
+    const relayout = screen.getByRole('radio', { name: 'Re-layout' });
+    fireEvent.keyDown(relayout, { key: 'Enter' });
+    expect(onChange).toHaveBeenLastCalledWith('relayout');
+    fireEvent.keyDown(relayout, { key: 'Home' });
+    expect(tidy).toHaveFocus();
+    fireEvent.keyDown(tidy, { key: ' ' });
+    expect(onChange).toHaveBeenLastCalledWith('tidy');
+  });
+
   it('keeps a disabled option reachable, shows its reason, and never selects it', () => {
     const onChange = vi.fn();
     const shaded: RadioCardOption<V>[] = [

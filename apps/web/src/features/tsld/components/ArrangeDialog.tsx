@@ -68,7 +68,7 @@ export function ArrangeDialog({
   error,
 }: ArrangeDialogProps): React.ReactElement {
   // Only an explicit pick is held; the caller remounts the dialog per opening, so it starts empty.
-  const [picked, setChoice] = useState<ArrangeChoice | null>(null);
+  const [picked, setPicked] = useState<ArrangeChoice | null>(null);
   const reasonId = useId();
   const bounded = search.kind === 'ready' ? search.bounded : null;
   // Tidy is preselected unless it is bounded, in which case the option that can run is.
@@ -117,21 +117,25 @@ export function ArrangeDialog({
             ? `Working out the layouts… ${count(search.evaluations, 'layout', 'layouts')} tried.`
             : search.kind === 'ready'
               ? nothingToDo
-                ? 'Already arranged: neither option would move anything.'
-                : 'Both options are ready.'
+                ? bounded
+                  ? 'Already packed: Re-layout would move nothing.'
+                  : 'Already arranged: neither option would move anything.'
+                : bounded
+                  ? 'Re-layout is ready.'
+                  : 'Both options are ready.'
               : ''}
         </p>
 
         <RadioCardGroup<ArrangeChoice>
           label="How to arrange"
           value={choice}
-          onChange={setChoice}
+          onChange={setPicked}
           options={[
             {
               value: 'tidy',
               title: 'Tidy',
               description:
-                'Improve the rows you have: fewer links hidden behind bars and fewer crossings, without adding rows.',
+                'Improve the rows you have, in this order: remove overlaps, then links hidden behind bars, then crossings. It never adds rows.',
               figures: ready?.tidy ? arrangeFigures(ready.tidy) : null,
               disabled: bounded !== null,
               disabledReason: bounded
