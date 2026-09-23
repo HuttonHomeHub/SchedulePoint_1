@@ -69,22 +69,15 @@ function bar(key: string, name: string, lane: number, start: string, finish: str
   });
 }
 
-/** The calendar day after a picture date. */
-function nextDay(pictureDate: string): string {
-  return new Date(Date.parse(`${pictureDate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-}
-
 /**
- * A milestone triangle (or hourglass), placed on the **boundary** the picture draws it on.
+ * A milestone triangle (or hourglass), placed on the date the picture labels it with.
  *
- * NetPoint labels a finish milestone with the last day of the work before it ("First Fire 4/30") and
- * draws it on the node where that day ends. SchedulePoint reads a placement as the START of its day
- * (`compute.ts:337-338`), so placing First Fire on 30 Apr would put it a day before the instant its
- * predecessors finish — and the engine would flag it as placed earlier than logic allows. The
- * boundary is the start of the NEXT day, so a finish milestone is placed there. A start milestone
- * (NTP) already names a boundary and is placed on its own date. The consequence worth knowing when
- * comparing the two pictures: where our canvas prints a placed finish milestone's date, it may read
- * one day later than the picture's label for the same point in time.
+ * NetPoint labels a finish milestone with the last day of the work before it ("First Fire 4/30"),
+ * and since #381 SchedulePoint reads a finish milestone's date the same way: as the END of that day,
+ * where its predecessors finish. Before #381 this helper had to place every finish milestone on the
+ * NEXT day, or the engine read it as a day early and flagged a false conflict. That workaround is
+ * gone because the engine no longer needs it. A start milestone (NTP) names the start of its day and
+ * always did.
  */
 function milestone(
   key: string,
@@ -97,7 +90,7 @@ function milestone(
     name,
     type,
     durationMinutes: 0,
-    visualStart: shifted(type === 'FINISH_MILESTONE' ? nextDay(date) : date),
+    visualStart: shifted(date),
     laneIndex: lane,
   });
 }

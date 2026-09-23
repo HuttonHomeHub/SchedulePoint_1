@@ -17,9 +17,13 @@ const byKey = new Map(spec.activities.map((a) => [a.key, a]));
 
 const MS_PER_DAY = 86_400_000;
 
-/** Day number of an activity's placed start. */
+/**
+ * Day number of an activity's placed start, as the engine reads it: a finish milestone's date is the
+ * END of that day (#381), so it sits at the start of the next.
+ */
 function startDay(a: SeedActivity): number {
-  return Date.parse(`${a.visualStart}T00:00:00Z`) / MS_PER_DAY;
+  const day = Date.parse(`${a.visualStart}T00:00:00Z`) / MS_PER_DAY;
+  return a.type === 'FINISH_MILESTONE' ? day + 1 : day;
 }
 
 /** The day AFTER an activity's last day — a continuous finish, so FS reads `succ.start >= pred.end`. */
@@ -61,6 +65,15 @@ describe('the NetPoint reference plan', () => {
     // 29 Feb exists in both 2016 and 2028 — the reason the shift is twelve years, not eleven.
     expect(endDay(get('S_FAB')) - 1).toBe(Date.parse('2028-02-29T00:00:00Z') / MS_PER_DAY);
     expect(endDay(get('TURNOVER')) - 1).toBe(Date.parse('2031-02-28T00:00:00Z') / MS_PER_DAY);
+  });
+
+  it('places every finish milestone on the date the picture labels it with (#381, FC-3)', () => {
+    // Before #381 these were placed a day late to dodge a false conflict. The picture's labels are
+    // the placements now, which is the whole point of the change.
+    expect(get('M_GCO').visualStart).toBe('2031-02-28');
+    expect(get('M_FIRST_FIRE').visualStart).toBe('2030-04-30');
+    expect(get('M_TURB_ROLL').visualStart).toBe('2030-06-30');
+    expect(get('M_TOWER').visualStart).toBe('2028-02-29');
   });
 
   it('never draws two activities over each other on one row', () => {
