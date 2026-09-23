@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.143.0
+
+### Minor Changes
+
+- [#665](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/665) [`d9ccedf`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9ccedfa5ad084069019c1030ae7596382d28593) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An edit never leaves two activities drawn on top of each other. When a stretch, a drag or a
+  recalculation makes two bars overlap, only the bar that caused it moves, to the nearest free row. The
+  move is announced, shown in the dock with Undo, and is its own undo step. A bar dropped onto an
+  occupied row goes on to the next free row in the direction it was moving, in the same write
+  (ADR-0153).
+
 ## 0.142.1
 
 ### Patch Changes
