@@ -9,6 +9,7 @@ import { drawnDaySpan } from './drawn-span';
  * pair would pass any case where two of them coincide.
  */
 const row = {
+  type: 'TASK',
   earlyStart: '2026-01-11',
   earlyFinish: '2026-01-20',
   visualEffectiveStart: '2026-01-06',
@@ -38,6 +39,22 @@ describe('drawnDaySpan', () => {
         '2026-01-01',
       ),
     ).toBeNull();
+  });
+
+  it('puts a finish milestone on the END of its dated day: both days one later (#381)', () => {
+    // A task ending 9 Jan and the finish milestone after it both read 9 Jan; the diamond belongs on
+    // the boundary the task's bar ends at, which is day 10's start. A start milestone does not move.
+    const milestone = {
+      ...row,
+      visualEffectiveStart: '2026-01-09',
+      visualEffectiveFinish: '2026-01-09',
+    } as const;
+    expect(
+      drawnDaySpan({ ...milestone, type: 'FINISH_MILESTONE' }, 'visual', '2026-01-01'),
+    ).toEqual({ startDay: 9, endDay: 9 });
+    expect(drawnDaySpan({ ...milestone, type: 'START_MILESTONE' }, 'visual', '2026-01-01')).toEqual(
+      { startDay: 8, endDay: 8 },
+    );
   });
 
   it('collapses a missing finish to the start, as a milestone is drawn', () => {

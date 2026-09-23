@@ -1,17 +1,18 @@
 import {
+  axisDayOf,
   BAR_HEIGHT,
   dayAtScreenX,
   LANE_HEIGHT,
   laneAtScreenY,
   MIN_PX_PER_DAY,
-  screenXOfDay,
-  screenYOfLane,
-  worldExtent,
-  ZOOM_STOPS,
   type Rect,
   type RenderActivity,
+  screenXOfDay,
+  screenYOfLane,
   type Size,
   type Viewport,
+  worldExtent,
+  ZOOM_STOPS,
 } from './geometry';
 import { addCalendarDays, daysBetween } from './working-time';
 
@@ -173,9 +174,11 @@ export function withMinimumSpan(
   minDays: number,
 ): RenderActivity[] {
   if (activity.earlyStart === null) return [];
-  const start = daysBetween(dataDateIso, activity.earlyStart);
+  const start = axisDayOf(activity.type, dataDateIso, activity.earlyStart);
   const finish =
-    activity.earlyFinish === null ? start : daysBetween(dataDateIso, activity.earlyFinish);
+    activity.earlyFinish === null
+      ? start
+      : axisDayOf(activity.type, dataDateIso, activity.earlyFinish);
   const span = finish - start;
   if (span >= minDays) return [activity];
   // Grow symmetrically about the midpoint, so a short task stays where the planner is looking rather

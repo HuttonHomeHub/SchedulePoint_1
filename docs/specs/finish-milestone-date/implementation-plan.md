@@ -1,7 +1,7 @@
 # Implementation Plan: A finish milestone is dated by the day it closes
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Approved 2026-09-23 — M1 and M0-T3 withdrawn; see `conditions.md`
+- **Status:** Approved 2026-09-23 — M1 and M0-T3 withdrawn; see `conditions.md`. Shipped as ADR-0155, with one task the plan did not have: the boot re-derivation of plans computed under the old rule (ADR-0155 D9)
 - **Owner:** product owner (approval); build by Claude Code
 
 ## Breakdown

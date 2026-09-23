@@ -8,6 +8,7 @@ import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
 
 import { CrossPlanRevisionCompareController } from './cross-plan-revision-compare.controller';
+import { FinishMilestoneRederiveService } from './finish-milestone-rederive.service';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleRepository } from './schedule.repository';
 import { ScheduleService } from './schedule.service';
@@ -34,7 +35,14 @@ import { ScheduleService } from './schedule.service';
   controllers: [ScheduleController, CrossPlanRevisionCompareController],
   // CalendarRepository: the recalculation persists float in DAYS, and the factor comes from
   // each activity's own calendar (ADR-0068 §3a).
-  providers: [ScheduleService, ScheduleRepository, CalendarRepository],
+  // FinishMilestoneRederiveService: the one-shot boot recalculation of plans computed under the old
+  // finish-milestone rule (#381, ADR-0155 D5).
+  providers: [
+    ScheduleService,
+    ScheduleRepository,
+    CalendarRepository,
+    FinishMilestoneRederiveService,
+  ],
   // ScheduleRepository is exported so the External-Guest read path (ADR-0051 F-M3) can read a
   // plan's persisted schedule summary (`summarise`) without a Principal — a pure persisted-column
   // read, no engine invocation.

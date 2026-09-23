@@ -1,13 +1,13 @@
 import type { Ctx2D } from './ctx-2d';
 import {
-  screenXOfDay,
-  worldExtent,
+  axisDayOf,
   type RenderActivity,
+  screenXOfDay,
   type Size,
   type Viewport,
+  worldExtent,
 } from './geometry';
 import { calendarBoundaries } from './time-scale';
-import { daysBetween } from './working-time';
 
 /**
  * **The minimap's pure render core** (minimap epic M1-T2; ADR reference filed at M1-T5).
@@ -308,9 +308,11 @@ export function minimapRects(
   const rects: MinimapRect[] = [];
   for (const a of activities) {
     if (a.earlyStart === null) continue;
-    const x0 = screenXOfDay(daysBetween(dataDate, a.earlyStart), view);
+    const x0 = screenXOfDay(axisDayOf(a.type, dataDate, a.earlyStart), view);
     const x1 =
-      a.earlyFinish === null ? x0 : screenXOfDay(daysBetween(dataDate, a.earlyFinish) + 1, view);
+      a.earlyFinish === null
+        ? x0
+        : screenXOfDay(axisDayOf(a.type, dataDate, a.earlyFinish) + 1, view);
     rects.push({
       x: x0,
       y: a.laneIndex * pxPerLane,

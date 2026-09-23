@@ -2,14 +2,15 @@ import type { DependencyType } from '@repo/types';
 
 import {
   activityRect,
-  screenXOfDay,
+  axisDayOf,
   type Point,
   type RectCache,
   type RenderActivity,
   type RenderEdge,
+  screenXOfDay,
   type Viewport,
 } from './geometry';
-import { daysBetween, lagAnchorDay, type DayWalk } from './working-time';
+import { lagAnchorDay, type DayWalk } from './working-time';
 
 /**
  * **Link routing** (ADR-0078 S8; ADR-0065 for the corridors themselves).
@@ -792,11 +793,11 @@ export function lagAnchorPoints(
   let predX = predFinish ? from.x + from.w : from.x;
   let succX = succStart ? to.x : to.x + to.w;
   if (lagDays !== 0) {
-    const startDay = daysBetween(dataDateIso, predecessor.earlyStart);
+    const startDay = axisDayOf(predecessor.type, dataDateIso, predecessor.earlyStart);
     const finishDay =
       predecessor.earlyFinish === null
         ? startDay
-        : daysBetween(dataDateIso, predecessor.earlyFinish);
+        : axisDayOf(predecessor.type, dataDateIso, predecessor.earlyFinish);
     // The one shared forward mapping (ADR-0052 M3) — the lag drag's inverse reads the same fn.
     const day = lagAnchorDay(startDay, finishDay, type, lagDays, walk);
     if (predFinish) {

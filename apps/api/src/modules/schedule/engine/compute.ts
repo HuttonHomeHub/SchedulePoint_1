@@ -13,6 +13,8 @@ import {
 import { buildGraph } from './graph';
 import {
   advanceWorking,
+  finishMilestoneDateInstant,
+  finishMilestoneDisplayIndex,
   offsetFromDataDate,
   rollBackwardToWorking,
   rollForwardToWorking,
@@ -333,10 +335,14 @@ export function computeSchedule(
         dataDateAbs,
       ),
     );
+    // A finish milestone's placement means the END of its day (#381): dropped on its predecessor's
+    // last day, it sits exactly where logic puts it rather than a day early.
     const placed =
-      activity.visualStart != null
-        ? rollForwardToWorking(cal, instantToAbsMinutes(activity.visualStart))
-        : null;
+      activity.visualStart == null
+        ? null
+        : activity.type === 'FINISH_MILESTONE'
+          ? finishMilestoneDateInstant(cal, activity.visualStart)
+          : rollForwardToWorking(cal, instantToAbsMinutes(activity.visualStart));
     const display = placed ?? logicEarliest;
     const prop = placed !== null ? Math.max(placed, logicEarliest) : logicEarliest;
     visualDisplayStart.set(id, display);
@@ -843,14 +849,28 @@ export function computeSchedule(
     // "actuals never move" (ADR-0035 §1). Computed endpoints (≥ the data date) use the normal mapping.
     const started = progress.actualStartInst !== null;
     const isComplete = progress.status === 'COMPLETE';
-    const earlyStartDate = started ? activity.actualStart! : workingIndexDate(cal, dataDate, esOwn);
+    /**
+     * **A finish milestone is reported on the day it closes** (#381; amends ADR-0023 §4). It sits on
+     * the boundary its predecessor finishes at, which is the start of the NEXT working minute, and
+     * ADR-0023 dated a zero-duration node by that minute's day — so it read the day after (after a
+     * Friday finish, the Monday). P6 and NetPoint print the predecessor's last day, and so does a
+     * task's finish here. Only the reported day moves: the instant, the float and every successor
+     * are unchanged. A start milestone keeps its start's day, which is already right.
+     */
+    const reportIndex = (ownOffset: number): number =>
+      activity.type === 'FINISH_MILESTONE' ? finishMilestoneDisplayIndex(ownOffset) : ownOffset;
+    const earlyStartDate = started
+      ? activity.actualStart!
+      : workingIndexDate(cal, dataDate, reportIndex(esOwn));
     const earlyFinishDate = isComplete
       ? activity.actualFinish!
-      : workingIndexDate(cal, dataDate, inclusiveFinishOwn);
-    const lateStartDate = started ? activity.actualStart! : workingIndexDate(cal, dataDate, lsOwn);
+      : workingIndexDate(cal, dataDate, reportIndex(inclusiveFinishOwn));
+    const lateStartDate = started
+      ? activity.actualStart!
+      : workingIndexDate(cal, dataDate, reportIndex(lsOwn));
     const lateFinishDate = isComplete
       ? activity.actualFinish!
-      : workingIndexDate(cal, dataDate, inclusiveLateFinishOwn);
+      : workingIndexDate(cal, dataDate, reportIndex(inclusiveLateFinishOwn));
     // Pass 2 defers to Pass 1 wherever an actual froze an endpoint (M-P) — see the two
     // `visualEffective*` fields below for why this is one predicate and not two.
     const frozenByActuals = started || isComplete;
@@ -921,10 +941,10 @@ export function computeSchedule(
        */
       visualEffectiveStart: frozenByActuals
         ? earlyStartDate
-        : workingIndexDate(cal, dataDate, vDisplayOwn),
+        : workingIndexDate(cal, dataDate, reportIndex(vDisplayOwn)),
       visualEffectiveFinish: frozenByActuals
         ? earlyFinishDate
-        : workingIndexDate(cal, dataDate, vInclusiveFinishOwn),
+        : workingIndexDate(cal, dataDate, reportIndex(vInclusiveFinishOwn)),
       // Two-sided now (M-D): the flag fires for a placement earlier than logic allows AND for one
       // past an explicit ceiling. A plan with a breaching placement newly reports a conflict and
       // newly appears in the ADR-0094 cycle — a deliberate change to a shipped flag, which is what

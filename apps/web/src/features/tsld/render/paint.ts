@@ -22,6 +22,7 @@ import { buildPaintFrame } from './paint-frame';
 import {
   arrowhead,
   barGlyphKind,
+  axisDayOf,
   daysBetween,
   edgeTouches,
   isMilestone,
@@ -1934,10 +1935,10 @@ export function paintScene(
       if (!predRect || !succRect) continue; // both ends culled off-screen ⇒ nothing to annotate
       const gap = edgeGapDays({
         type: edge.type,
-        predStartDay: daysBetween(scene.dataDate, pred.earlyStart),
-        predFinishDay: daysBetween(scene.dataDate, pred.earlyFinish),
-        succStartDay: daysBetween(scene.dataDate, succ.earlyStart),
-        succFinishDay: daysBetween(scene.dataDate, succ.earlyFinish),
+        predStartDay: axisDayOf(pred.type, scene.dataDate, pred.earlyStart),
+        predFinishDay: axisDayOf(pred.type, scene.dataDate, pred.earlyFinish),
+        succStartDay: axisDayOf(succ.type, scene.dataDate, succ.earlyStart),
+        succFinishDay: axisDayOf(succ.type, scene.dataDate, succ.earlyFinish),
         lagDays: edge.lagDays ?? 0,
       });
       if (gap <= 0) continue; // driving / binding: no slack to report

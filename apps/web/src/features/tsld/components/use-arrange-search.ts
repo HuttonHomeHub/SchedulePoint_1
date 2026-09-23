@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { LayoutObjective } from '../render/layout-objective';
 import { OPTIMISE_MAX_ACTIVITIES } from '../render/optimise-layout';
 import { workingDaySpanOf, type OptimiseRequest } from '../render/optimise-layout-protocol';
-import { daysBetween, type RenderActivity, type RenderEdge } from '../render/render-model';
+import { axisDayOf, type RenderActivity, type RenderEdge } from '../render/render-model';
 import { runOptimiseLayout } from '../render/run-optimise-layout';
 
 /**
@@ -58,8 +58,8 @@ export function arrangeRequest(
   let to = 0;
   for (const a of input.activities) {
     if (a.earlyStart === null) continue;
-    from = Math.min(from, daysBetween(input.dataDate, a.earlyStart));
-    to = Math.max(to, daysBetween(input.dataDate, a.earlyFinish ?? a.earlyStart));
+    from = Math.min(from, axisDayOf(a.type, input.dataDate, a.earlyStart));
+    to = Math.max(to, axisDayOf(a.type, input.dataDate, a.earlyFinish ?? a.earlyStart));
   }
   return {
     activities: input.activities.map((a) => ({ ...a, laneIndex: seed.get(a.id) ?? a.laneIndex })),

@@ -123,6 +123,7 @@ import {
   useOrgRole,
 } from '@/hooks/use-org-role';
 import { ApiFetchError } from '@/lib/api/client';
+import { finishMilestoneDayShift } from '@/lib/milestone-day';
 import { activityKeys } from '@/lib/query/hierarchy-keys';
 
 /**
@@ -725,7 +726,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // at the start day is deleted with the mode: pinning a constraint was never what a planner
     // asked for by drawing a bar, it was how a plan with no placement column could remember a
     // position at all.
-    const dropDate = addCalendarDays(plannedStart, input.startDay);
+    // `startDay` is an AXIS day; a finish milestone's date is the day before the boundary it is
+    // drawn on (#381, `lib/milestone-day.ts`), so a click lands the diamond where it was clicked.
+    const dropDate = addCalendarDays(
+      plannedStart,
+      input.startDay - finishMilestoneDayShift(input.type),
+    );
     const placedInput = {
       name: input.name,
       type: input.type,
@@ -1180,7 +1186,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // PATCH carries none of that risk because it touches one column.
     const plannedStart = plan.data?.plannedStart;
     if (!plannedStart) return { applied: false, conflict: null };
-    const droppedDate = addCalendarDays(plannedStart, startDay);
+    // `startDay` is an AXIS day — where the bar was dropped on screen. A finish milestone is drawn
+    // on the END of its dated day (#381, `lib/milestone-day.ts`), so its date is one day earlier
+    // than the day it was dropped at. The lane snapshot below is in axis dates, the write in dates.
+    const axisDate = addCalendarDays(plannedStart, startDay);
+    const droppedDate = addCalendarDays(
+      plannedStart,
+      startDay - finishMilestoneDayShift(activity.type),
+    );
     beginLayoutEdit([activityId]);
     // A drag that also changes lane is resolved at the drop like a pure lane move, against the span
     // the bar is being dropped AT — its current drawn length from the dropped day. Left to the
@@ -1195,8 +1208,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         const length = dayOf(self.finish) - dayOf(self.start);
         snapshot.set(activityId, {
           ...self,
-          start: droppedDate,
-          finish: addCalendarDays(droppedDate, length),
+          start: axisDate,
+          finish: addCalendarDays(axisDate, length),
         });
       }
       landed = resolveLaneDrop(snapshot, activityId, laneIndex);
@@ -1285,7 +1298,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // effective-Visual pass then pins the bar (ADR-0033), exactly like a reposition drop.
         const saved = await setVisualStart.mutateAsync({
           activityId,
-          visualStart: addCalendarDays(plannedStart!, startDay),
+          visualStart: addCalendarDays(
+            plannedStart!,
+            startDay - finishMilestoneDayShift(activity.type),
+          ),
           durationDays,
           version: activity.version,
         });

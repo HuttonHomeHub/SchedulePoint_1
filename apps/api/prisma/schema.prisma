@@ -203,6 +203,10 @@ model Organization {
   // pattern), purely as the tenant scope tag for the plan-scoped report read; the row
   // itself is owned by its plan and dies with it by ON DELETE CASCADE.
   placementMigrations  PlacementMigration[]
+  // The record of finish-milestone placements re-encoded for the end-of-day rule
+  // (finish-milestone-date M2-T3). Same ownership as placementMigrations: the tenant scope
+  // tag is copied from the plan, and the row dies with its plan.
+  fmDateMigrations     FmDateMigration[]
 
   @@map("organizations")
 }
@@ -994,6 +998,10 @@ model Plan {
   // is also true of every plan created after the migration ran. Non-scheduling: the CPM
   // engine never reads it.
   placementMigrations PlacementMigration[]
+  // Finish-milestone placements this plan had re-encoded one day earlier when the engine began
+  // reading a finish milestone's date as the end of that day (finish-milestone-date M2-T3).
+  // ON DELETE CASCADE, for the placementMigrations reason. Non-scheduling.
+  fmDateMigrations    FmDateMigration[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -2970,6 +2978,65 @@ model PlacementMigration {
   @@index([planId, id])
   @@index([organizationId])
   @@map("placement_migrations")
+}
+
+/// The record of one finish milestone whose stored placement was moved one day earlier when the
+/// engine began reading a FINISH_MILESTONE's `visual_start` as the END of that day
+/// (finish-milestone-date M2-T3, spec §4; migration
+/// 20260923120000_finish_milestone_end_of_day_placements). The diamond did not move; only the
+/// stored date did. Written once by that migration and never by the application; there is no
+/// reader. It exists for the compensating reverse (docs/DEPLOYMENT.md) and as the only record of
+/// the rewrite, since activity content edits are excluded from `audit_events` (ADR-0073).
+///
+/// Deliberately NOT a row in `placement_migrations`: that table's rows mean "a constraint was
+/// removed" (its prior constraint columns are NOT NULL for that reason) and its one reader is the
+/// planner-facing dock notice about removed constraints.
+///
+/// Write-once like `placement_migrations`: no `version`, no `created_at`/`updated_at`, no soft
+/// delete — a record of a one-time act that the product could hide would not be a record.
+///
+/// `Fm` = finish milestone. The model name is short only so the back-relation fields on
+/// `Organization` and `Plan` fit their blocks' existing column widths; the table name is the
+/// descriptive one.
+model FmDateMigration {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Tenant scope tag copied from the plan by the migration, never client input. RESTRICT,
+  /// matching every sibling; inert in practice because organisations are never hard-deleted.
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// ON DELETE CASCADE: the row dies with its plan, which keeps this table out of the
+  /// hierarchy-expiry delete list (its census only follows RESTRICT edges). The
+  /// `placement_migrations` reasoning, verbatim.
+  planId String @map("plan_id") @db.Uuid
+
+  /// A plain correlation UUID with no foreign key, on ADR-0025's `source_activity_id` leg: the
+  /// record must outlive the activity it describes.
+  activityId String @map("activity_id") @db.Uuid
+
+  /// The activity's code and name as they stood at migration time — a frozen copy, so the
+  /// record still names something after a hard delete. Shapes copied from the live columns.
+  activityCode String? @map("activity_code")
+  activityName String  @map("activity_name")
+
+  /// The placement before the rewrite. The migration wrote `prior_visual_start - 1`. NOT NULL
+  /// because a row exists only for an activity that had a placement.
+  priorVisualStart DateTime @map("prior_visual_start") @db.Date
+
+  /// Transaction start time (`DEFAULT CURRENT_TIMESTAMP` inside the migration), so every row of
+  /// the run shares one instant.
+  migratedAt DateTime @default(now()) @map("migrated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // ONE index. (plan_id) is for the CASCADE: a plan hard-delete must find these rows, and without
+  // it every ADR-0096 expiry would sequentially scan this table. There is no application read, so
+  // no second column. No (organization_id) index: organisations are never hard-deleted and their
+  // ids never change, so the RESTRICT check on that FK never runs. No unique constraint, for the
+  // placement_migrations reason: a refusal would fail the migration and the API's boot.
+  @@index([planId])
+  @@map("finish_milestone_date_migrations")
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import type { ActivitySummary } from '@repo/types';
 
 import { daysBetween, isMilestone } from '@/features/tsld/render/render-model';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
+import { finishMilestoneDayShift } from '@/lib/milestone-day';
 
 /**
  * How a row's bar is drawn. All values are pixels in the bar region's own coordinate space, where
@@ -64,7 +65,10 @@ export function barGeometry(
   const x = startOffset * pxPerDay;
 
   if (isMilestone(activity.type)) {
-    return { x, width: 0, milestone: true, progress: 0, floatWidth: 0 };
+    // A finish milestone sits on the END of its dated day (#381, `lib/milestone-day.ts`) — where
+    // its predecessor's bar ends — exactly as the canvas draws it.
+    const shift = finishMilestoneDayShift(activity.type);
+    return { x: x + shift * pxPerDay, width: 0, milestone: true, progress: 0, floatWidth: 0 };
   }
 
   const spanDays = daysBetween(barStart, barFinish) + 1;

@@ -2,7 +2,12 @@ import type { ActivityType, ConstraintType } from '@repo/types';
 
 import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
 
-import { advanceWorking, rollBackwardToWorking, rollForwardToWorking } from './instants';
+import {
+  advanceWorking,
+  finishMilestoneDateInstant,
+  rollBackwardToWorking,
+  rollForwardToWorking,
+} from './instants';
 import type { EngineActivity } from './types';
 import { instantToAbsMinutes, type WorkingTimeCalendar } from './working-time-calendar';
 
@@ -106,8 +111,15 @@ function resolvePair(
   durationMinutes: number,
   calendar: WorkingTimeCalendar,
   dataDateAbs: number,
+  activityType: ActivityType,
 ): ResolvedConstraint | null {
   if (!constraintType || !constraintDate) return null;
+  // A finish milestone's constraint date means the END of that day (#381): `FNLT 30 Apr` on a
+  // milestone after a task ending 30 Apr is met exactly, not missed by a day.
+  if (activityType === 'FINISH_MILESTONE') {
+    const at = finishMilestoneDateInstant(calendar, constraintDate);
+    return { kind: normaliseConstraint(constraintType), startAbs: at, finishAbs: at };
+  }
   const startAbs = rollForwardToWorking(calendar, instantToAbsMinutes(constraintDate));
   const finishAbs =
     durationMinutes === 0
@@ -132,6 +144,7 @@ function resolve(
     activity.durationMinutes,
     calendar,
     dataDateAbs,
+    activity.type,
   );
 }
 
@@ -205,6 +218,7 @@ export function clampSecondaryBackwardFinish(
     activity.durationMinutes,
     calendar,
     dataDateAbs,
+    activity.type,
   );
   return backwardClamp(constraint, logicLateFinish, activity.durationMinutes, calendar);
 }
@@ -226,10 +240,10 @@ export function clampExternalForwardStart(
   ignoreExternal: boolean,
 ): number {
   if (ignoreExternal || !activity.externalEarlyStart) return logicEarlyStart;
-  const externalAbs = rollForwardToWorking(
-    calendar,
-    instantToAbsMinutes(activity.externalEarlyStart),
-  );
+  const externalAbs =
+    activity.type === 'FINISH_MILESTONE'
+      ? finishMilestoneDateInstant(calendar, activity.externalEarlyStart)
+      : rollForwardToWorking(calendar, instantToAbsMinutes(activity.externalEarlyStart));
   // §30.1 / N25: floor at the data date — an external date in the past can't pull work before it.
   return Math.max(logicEarlyStart, externalAbs, dataDateAbs);
 }
@@ -255,13 +269,15 @@ export function clampExternalBackwardFinish(
   // measured on the activity's calendar — mirroring an FNLT constraint's `finishAbs` (see resolvePair).
   // A zero-duration milestone finishes at its start instant.
   const externalFinishAbs =
-    activity.durationMinutes === 0
-      ? rollForwardToWorking(calendar, instantToAbsMinutes(activity.externalLateFinish))
-      : rollBackwardToWorking(
-          calendar,
-          dataDateAbs,
-          instantToAbsMinutes(nextCalendarDay(activity.externalLateFinish)),
-        );
+    activity.type === 'FINISH_MILESTONE'
+      ? finishMilestoneDateInstant(calendar, activity.externalLateFinish)
+      : activity.durationMinutes === 0
+        ? rollForwardToWorking(calendar, instantToAbsMinutes(activity.externalLateFinish))
+        : rollBackwardToWorking(
+            calendar,
+            dataDateAbs,
+            instantToAbsMinutes(nextCalendarDay(activity.externalLateFinish)),
+          );
   return Math.min(logicLateFinish, externalFinishAbs);
 }
 

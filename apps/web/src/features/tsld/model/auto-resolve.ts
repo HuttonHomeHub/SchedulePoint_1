@@ -2,8 +2,10 @@ import { rowOccupancy, type PackItem } from '@repo/layout';
 import type { ActivitySummary } from '@repo/types';
 
 import { laneOverlapPairs, type LaneSpan } from '../render/lane-overlap';
+import { addCalendarDays as shiftIsoDay } from '../render/working-time';
 
 import { barDatesFor } from '@/lib/bar-dates';
+import { finishMilestoneDayShift } from '@/lib/milestone-day';
 
 /**
  * **An edit moves only the bar that caused it** (NetPoint-layout M3, spec §4.4, ADR-0153).
@@ -181,6 +183,7 @@ export function laneSnapshotOf(
   activities: readonly Pick<
     ActivitySummary,
     | 'id'
+    | 'type'
     | 'laneIndex'
     | 'earlyStart'
     | 'earlyFinish'
@@ -194,7 +197,13 @@ export function laneSnapshotOf(
   for (const a of activities) {
     const { start, finish } = barDatesFor(a, 'visual');
     if (start == null) continue; // undefined too: a partially-loaded row is undrawn, not a crash
-    snapshot.set(a.id, { laneIndex: a.laneIndex, start, finish: finish ?? start });
+    // Axis dates, not stored ones: a finish milestone sits on the END of its dated day (#381), so a
+    // diamond after a task ending Friday occupies the next day's boundary, not the task's last day.
+    const shift = finishMilestoneDayShift(a.type);
+    const axisStart = shift === 0 ? start : shiftIsoDay(start, shift);
+    const axisFinish =
+      finish == null ? axisStart : shift === 0 ? finish : shiftIsoDay(finish, shift);
+    snapshot.set(a.id, { laneIndex: a.laneIndex, start: axisStart, finish: axisFinish });
   }
   return snapshot;
 }

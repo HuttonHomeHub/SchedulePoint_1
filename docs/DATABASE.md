@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 32
-> models across 69 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 33
+> models across 70 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1607,6 +1607,74 @@ separate nothing-to-do from nobody-looked" trap the three baseline snapshot leve
 That is acceptable while the strip is a **one-time** migration whose answer is global, and if M-I
 needs it per-plan the extension is an `outcome` discriminator with a constant `DEFAULT` that is true
 of every existing row — metadata-only, and honest.
+
+### FmDateMigration: the record of finish-milestone placements re-encoded for the end-of-day rule (finish-milestone-date M2-T3)
+
+From the finish-milestone-date release the CPM engine reads a `FINISH_MILESTONE`'s dates as the
+**end** of the day given, where it used to read the start (`docs/TECH_DEBT.md` #381; spec
+`docs/specs/finish-milestone-date/`). The product owner chose to keep every placed diamond where it
+was (Q1 A), so migration `20260923120000_finish_milestone_end_of_day_placements` rewrites every
+stored placement on a finish milestone one calendar day earlier —
+`visual_start := visual_start - 1` — and records each row in `finish_milestone_date_migrations`
+(Prisma model `FmDateMigration`; the short name only keeps the `Organization` and `Plan`
+back-relations inside their blocks' column widths).
+
+- **Why D − 1 keeps the instant.** The old parse of a placement D is
+  `rollForwardToWorking(cal, D 00:00)`. The new parse (`finishMilestoneDateInstant`,
+  `engine/instants.ts`) is `rollForwardToWorking(cal, date 00:00 + 1 day)` for a bare date, which on
+  D − 1 is the old parse of D — on every calendar, before or after the data date. It relies on the
+  engine receiving a bare `YYYY-MM-DD` (the loader passes `formatCalendarDate`,
+  `schedule.service.ts:2625`); the helper reads a longer string as an instant and adds no day. The
+  migration header records a 1,440-case check with the real helpers and its failing control.
+- **Scope.** `activities.visual_start` on `FINISH_MILESTONE` rows, nothing else: not constraint or
+  external dates (Q2 A moves those deliberately), not actuals, not other types, not
+  `baseline_activities`.
+- **Soft-deleted rows are included**, the opposite of the ADR-0148 strip. Every stored
+  finish-milestone placement was written under the old rule and will be read under the new one when
+  restored, so excluding a recycle-bin row would bring it back a working day later than it was
+  deleted.
+- **A new table rather than `placement_migrations`.** That table's rows mean "a constraint was
+  removed" (`prior_constraint_type`/`prior_constraint_date` are `NOT NULL` for that reason) and its
+  one reader is the planner-facing notice about removed constraints. Reusing it would mean relaxing
+  both columns and filtering the reader, or telling planners their milestones lost constraints they
+  never had.
+- **Same write-once shape and FK reasoning as `PlacementMigration`**: no `version`, timestamps or
+  soft delete; `plan_id` `ON DELETE CASCADE` (out of the hierarchy-expiry census, dies with its
+  plan); `organization_id` `RESTRICT`, copied from the plan; `activity_id` a correlation id with no
+  FK; frozen `activity_code`/`activity_name`; UUID v7 ids generated in SQL; `migrated_at` from
+  `CURRENT_TIMESTAMP`; no unique constraint. Outside `RETENTION_TABLES`.
+- **Indexes: `(plan_id)` only.** It backs the `CASCADE` lookup on a plan hard-delete. There is no
+  application read, so no second column, and no `(organization_id)` index: organisations are never
+  hard-deleted and their ids never change, so that `RESTRICT` check never runs.
+- **`version` is bumped, `updated_at`/`updated_by` are not** — the strip's reasoning. A stale tab
+  resends `visualStart` with its version (`useBatchPlacements`); without the bump the old D would be
+  written back and read as the end of D, a day late.
+- **Not re-applied by a manual re-run.** Re-running the file fails at `CREATE TABLE`; re-running
+  only the statement skips recorded activities (`NOT EXISTS`). Placements written after the release
+  are not in the record, so running the statement by hand after the API has served would move them.
+- **Cost, measured** (PostgreSQL 16.13, all prior migrations replayed, 102,000 activities / 18 MB,
+  2,266 placed finish milestones of which 206 soft-deleted): 113–175 ms over five `EXPLAIN ANALYZE`
+  runs, 121 ms as recorded by `prisma migrate deploy`. Sequential scan of `activities`, anti-join
+  against the empty record, hash join to `plans`, primary-key update per row. No index added on
+  `activities` for a once-ever statement. Verified afterwards: exactly those 2,266 rows changed, only
+  in `visual_start` (−1 day) and `version` (+1); every other activity row and every
+  `baseline_activities` row byte-identical; CI drift check clean on the populated and on an empty
+  database.
+- **Engine-owned dates are not rewritten, and stay in the old rule until each plan is
+  recalculated.** `early_*`/`late_*`/`visual_effective_*`/`leveled_*` on finish milestones still hold
+  the dates the old rule projected. The new projection is not "old date minus one" (a milestone after
+  a Friday task on a Mon–Fri calendar goes from Monday to Friday), so SQL cannot compute it, and those
+  columns belong to the recalculation pass. Until a plan is recalculated, a reader that positions a
+  finish milestone from these columns with the new end-of-day rule shows it one day later than the
+  engine will. This applies to every finish milestone, placed or not.
+- **Reverse** (forward-only in production; the compensating step is in the migration header and
+  `docs/DEPLOYMENT.md`): with the API stopped, in one transaction, lock the record table (the guard —
+  it fails if the reverse already ran), `visual_start + 1` on **every** finish-milestone placement
+  present (after the release they are all in the new encoding, including ones written since, so the
+  record is a check rather than the selector), compare against `prior_visual_start`, drop the table
+  and delete the migration's `_prisma_migrations` row so a later roll-forward applies it afresh.
+  Measured: 2,266 rows restored to their exact pre-migration values; a second run fails at the lock.
+- **Non-scheduling.** The CPM engine never reads it.
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 

@@ -357,6 +357,13 @@ keep `main` releasable.
   hidden links from 58 to 17 and crossings from 360 to 204 without adding a row. The prompt at the
   foot of the diagram now appears only when activities overlap in a lane.
 
+- **A finish milestone is dated by the day it closes** (ADR-0155, amending ADR-0023 §4). After a
+  task ending Friday, a finish milestone now reads Friday, not the following Monday, which is how P6
+  and NetPoint print it. Placing one on its predecessor's last day is no longer a conflict, and a
+  "finish no later than" on that day gives zero float rather than a day negative. Existing
+  placements were re-encoded so no diamond moved, and every plan computed under the old rule is
+  recalculated once when the API starts.
+
 - **A link says what drives, which way, and how long it waits** (ADR-0154, amending
   ADR-0054/0065/0151). This follows the NetPoint diagrams the product owner supplied:
   - a driving link is a heavier line, in the critical colour only when both of its ends are critical;

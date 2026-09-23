@@ -437,6 +437,50 @@ secret manager — never baked into images or committed. See
   rates. **Rollback = redeploy the previous image tag** (plus any compensating
   migration).
 
+### Rolling back past the finish-milestone date release
+
+That release (`docs/specs/finish-milestone-date/`) makes the engine read a finish milestone's date as
+the **end** of that day, and its migration
+`20260923120000_finish_milestone_end_of_day_placements` moves every stored finish-milestone
+placement one day earlier so no diamond moves. A previous API image reads those placements as the
+**start** of the day, so **redeploying the previous images alone draws every placed finish milestone
+one working day early** and can move its successors. Roll back in this order:
+
+1. Stop the API container (leave the database running).
+2. Run the reverse below as **one transaction**, e.g.
+   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -1 -f - < reverse.sql`.
+3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
+4. Recalculate the plans people are working in: the stored display dates were computed under the
+   new rule and stay that way until each plan's next recalculation.
+
+```sql
+-- 0. Guard: fails if the reverse already ran (the table is gone), so step 1 cannot apply twice.
+--    To keep the record, \copy "finish_milestone_date_migrations" out before running this.
+LOCK TABLE "finish_milestone_date_migrations" IN ACCESS EXCLUSIVE MODE;
+
+-- 1. The rule inverse on EVERY finish-milestone placement, including ones placed after the
+--    release: they are all in the new encoding, and +1 keeps each diamond where it was.
+UPDATE "activities"
+   SET "visual_start" = "visual_start" + 1,
+       "version"      = "version" + 1
+ WHERE "type" = 'FINISH_MILESTONE' AND "visual_start" IS NOT NULL;
+
+-- 2. Check against the record. 0 means every migrated row is back at its original date; a
+--    non-zero count is milestones a planner re-placed after the release (kept, shifted +1).
+SELECT count(*) FROM "finish_milestone_date_migrations" m
+  JOIN "activities" a ON a."id" = m."activity_id"
+ WHERE a."type" = 'FINISH_MILESTONE' AND a."visual_start" <> m."prior_visual_start";
+
+-- 3. Remove the record and the migration's entry so a later roll-forward applies it afresh.
+DROP TABLE "finish_milestone_date_migrations";
+DELETE FROM "_prisma_migrations"
+ WHERE "migration_name" = '20260923120000_finish_milestone_end_of_day_placements';
+```
+
+Measured on a populated copy (102,000 activities, 2,266 placed finish milestones): step 1 updated
+2,266 rows, step 2 returned 0, every `visual_start` matched its pre-migration value, and a second
+run failed at step 0. The previous API image does not know the dropped table, so nothing reads it.
+
 ### Which switches actually work on a running container, and which do not
 
 This distinction is not obvious from `.env.example`, where both kinds sit in one list

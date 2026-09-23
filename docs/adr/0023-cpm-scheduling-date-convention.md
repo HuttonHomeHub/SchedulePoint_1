@@ -1,6 +1,6 @@
 # ADR-0023: CPM scheduling date convention (continuous-internal / inclusive-display)
 
-- **Status:** Accepted (amended by ADR-0036)
+- **Status:** Accepted (amended by ADR-0036; §4's milestone rule amended by [ADR-0155](0155-a-finish-milestone-is-dated-by-the-day-it-closes.md) — a finish milestone is dated by the day it closes)
 - **Date:** 2026-07-10
 - **Deciders:** James Ewbank (with Claude Code)
 

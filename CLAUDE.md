@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 32 Prisma models across 69 migrations, 1330 web
+> (`apps/api/src/modules/`), 33 Prisma models across 70 migrations, 1332 web
 > source files with 45 Playwright suites beside the base journey, and
-> 154 ADRs.
+> 155 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -115,7 +115,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   24 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (32 models) + 69 migrations
+│   │   ├── prisma/           #   Schema (33 models) + 70 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -5777,6 +5777,28 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   also exposed that the FC-C1 harness had not held the whole plan since ADR-0151 moved the row: its
   "whole plan" framing still assumed a 28 px row, and it had been refusing to judge, unseen. Flag-off
   keeps the legacy passes byte for byte. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0155** _(Accepted; landed 2026-09-23)_ — A finish milestone is dated by the day it closes.
+  Found by the NetPoint reference plan (`docs/TECH_DEBT.md` #381): ADR-0023 §4 dated a zero-duration
+  node by the working minute AFTER the boundary its predecessor finishes at, so after a task ending
+  Friday a finish milestone read the following Monday, and every date given for one (placement,
+  constraint, external date) was read as the start of its day. A planner who placed one on its
+  predecessor's last day was told it was early, `FNLT` on that day gave a false day of negative
+  float, and the reference seed had to place every milestone on the next day. **Every date for a
+  `FINISH_MILESTONE` now means the end of that day, and its reported day is the day that closes at
+  its instant.** Engine instants do not change; start milestones, zero-duration tasks and actuals are
+  untouched, and the Pass-1 golden suite passes unedited. A migration moves every stored placement
+  one day earlier, which keeps each placed instant identical on any calendar (checked over 1,440
+  cases against the real helpers, and in an API e2e through the real engine, verified red without
+  it), and records each row for a documented reverse. **The web draws the diamond on the end of its
+  day** through one helper applied to both of a milestone's axis days, with a structural gate
+  refusing a bare `daysBetween` on an activity's dates; on a 24-hour calendar every diamond keeps
+  its pixel. **D9 is the one the spec missed**: the migration cannot fix engine-owned dates (Monday
+  becomes Friday, which needs a calendar), and the status bar offers Recalculate only on a plan it
+  knows is stale, so an untouched plan would have stayed a day wrong indefinitely. The API therefore
+  recalculates, once, as the system, each plan last computed before the migration finished — no
+  principal constructed, no pen asserted, never awaited, never failing the boot. The database
+  review found that gap, not the plan.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
