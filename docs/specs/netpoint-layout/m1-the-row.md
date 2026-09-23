@@ -54,6 +54,20 @@ way.
 - **The journey was verified red twice.** With `Dates` defaulting off, it fails at the checkbox.
   With both below-row layers painted 5,000 px lower, it fails at the difference (133 against 133).
 
+## An instrument that had stopped judging
+
+`measure-crossings.mjs` (FC-C1, ADR-0149) opens with a control: at a framing that holds the whole
+plan, the painter must draw exactly one link polyline per edge. At M1 it drew **83 against 188** and
+refused to judge. The cause was in the harness, not the painter: two framings in `crossing-probe.ts`
+sized "the whole plan" as `lanes * 28 + 200`, where 28 was the row pitch two row changes ago. The
+harness had not held the whole plan since ADR-0151 moved the row to 52. Run at the commit before
+M1, the same control reads **100 against 188**. Nobody re-ran it in between, so the refusal was
+never seen.
+
+Both framings now derive from `LANE_HEIGHT`, as the harness's other framings already did. The
+control reads **188 against 188** at pitch 60. Found while teaching the recorder the M2 link marks,
+which is the only reason it was run.
+
 ## Export
 
 The export uses the same painter and the same defaults, so the exported picture gains the dates and
