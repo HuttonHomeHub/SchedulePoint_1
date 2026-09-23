@@ -1,16 +1,12 @@
-# ADR-0155 (draft): A finish milestone is dated by the day it closes
+# ADR-0155: A finish milestone is dated by the day it closes
 
-> **Draft.** Lives beside its spec until the product owner approves it. On approval it moves to
-> `docs/adr/0155-a-finish-milestone-is-dated-by-the-day-it-closes.md` (re-check the number first:
-> ADR-0079 records a number being taken between a plan and its filing).
-
-- **Status:** Proposed
+- **Status:** Accepted (product owner, 2026-09-23: Q1 A, Q2 A, Q3 moot — no baselines captured)
 - **Date:** 2026-09-23
 - **Deciders:** James Ewbank (with Claude Code)
-- **Amends:** [ADR-0023](../../adr/0023-cpm-scheduling-date-convention.md) §4 (the milestone rule).
+- **Amends:** [ADR-0023](./0023-cpm-scheduling-date-convention.md) §4 (the milestone rule).
   Notes against ADR-0035 §22, ADR-0125/0126 (how frozen dates are read) and ADR-0148 (how a
   placement is read).
-- **Spec:** [`./spec.md`](./spec.md)
+- **Spec:** [`docs/specs/finish-milestone-date/`](../specs/finish-milestone-date/spec.md)
 
 ## Context
 
@@ -49,14 +45,32 @@ calendar day later than a task ending at T". Three things were not costed when t
 6. **Existing placements are re-encoded one day earlier** in the release that switches the rule, so
    every placed finish milestone keeps its instant and its diamond; only its label moves. The rows
    rewritten are recorded so the change can be reversed exactly.
-7. **A baseline records the rule its dates were captured under**, and every reader reads a frozen
-   date under its own rule. Frozen dates are never rewritten.
-8. **The web draws a finish milestone's diamond at the end of its date**, and converts a drop
-   position back to a date with the inverse of the same helper. On a 24-hour-day calendar every
-   diamond keeps its pixel position.
-
-_(Decisions 3, 6, 7 are subject to the product owner's answers to spec §6 Q2, Q1, Q3; this draft
-records the recommended defaults.)_
+7. **~~A baseline records the rule its dates were captured under.~~ Withdrawn.** No baseline has
+   been captured on the installation (product owner, 2026-09-23), so there is nothing frozen under
+   the old rule to read. A baseline captured from here on freezes new-rule dates. Frozen dates are
+   still never rewritten.
+8. **On a time axis a finish milestone's day is one later than its date, for both of its dates**
+   (`apps/web/src/lib/milestone-day.ts`). Every axis site (the canvas rect, extents, link anchors,
+   the minimap, Arrange, the overlap resolver, the nudges, the Gantt diamond) goes through it, and
+   every write that turns an axis day back into a stored date subtracts it. Both dates shift, not
+   only the start, because every axis consumer treats a milestone as a one-day span whose start and
+   finish are the same day. On a 24-hour calendar every diamond keeps its pixel (FC-8). After a
+   Friday task on a Monday-to-Friday calendar it moves from Monday 00:00 back to the end of Friday,
+   where the task's bar ends. `finish-milestone-day.structural.test.ts` refuses a bare
+   `daysBetween` on an activity's early dates.
+9. **Plans computed under the old rule are recalculated once, by the API, at boot.** The migration
+   keeps every placed instant but cannot fix the engine-owned date columns: after a Friday task the
+   milestone moves from Monday to Friday, which is not "one day earlier" and needs a calendar SQL
+   does not have. Left alone, every finish milestone in every existing plan would draw and report
+   the old date until somebody edited that plan. The status bar offers Recalculate only on a plan it
+   knows is stale, so an untouched plan would stay wrong indefinitely.
+   `FinishMilestoneRederiveService` therefore recalculates, as the system, each live plan that holds
+   a live finish milestone and was last computed before the migration's `finished_at` (read from
+   `_prisma_migrations`, so no date is written into the code). A recalculated plan is stamped with
+   the present and leaves the set, so it runs once per plan. It is never awaited, never fails the
+   boot, asserts no pen (nobody is editing; the write is engine-owned, ADR-0022; the plan advisory
+   lock still serialises it), and is not audited (ADR-0072). No principal is constructed: the
+   single-plan transaction takes the pen check as a parameter (`recalculateInLock`).
 
 ## Alternatives considered
 
@@ -89,12 +103,37 @@ records the recommended defaults.)_
   ADR-0035 §22's "date-neutral" note stops being true.
 - Legacy baselines compare exactly for whole-day finish milestones and can be one working day out
   for one that sat mid-day; the comparison says so.
-- Rollback after the switch is a reverse migration with the previous engine, not a bare redeploy.
-- The ADR-0034 golden suite contains no finish milestone and passes unedited.
+- Rollback after the switch is a reverse migration with the previous engine, not a bare redeploy
+  (`docs/DEPLOYMENT.md`, "Rolling back past the finish-milestone date release").
+- The ADR-0034 golden suite contains no finish milestone and passes unedited. So does the canvas's
+  paint golden log, for the same reason, which means it gives decision 8 no coverage; the unit case
+  in `render-model.test.ts` and the placement journey carry it instead.
+- A migrated placement can be stored on a non-working day. A milestone the old engine read as
+  Monday was placed on Monday, and the rewrite stores Sunday: the end of Sunday rolls forward to
+  Monday's first working minute, the same instant. The reported date is the Friday. Correct, and
+  odd-looking in the placement field.
+- The paint layer's baseline, compare and levelled ghosts carry `isMilestone` and no type, and draw
+  a milestone mid-day where the live diamond sits on a day boundary. That mismatch predates this
+  ADR and is `docs/TECH_DEBT.md` #383.
+
+## Corrections recorded
+
+- **The spec never covered the stale engine-owned dates** (decision 9). The database-architect
+  agent's review of the migration raised it; before that, the plan would have shipped every existing
+  finish milestone drawn a day late until each plan was edited.
+- **FC-5's first wording was wrong.** "No non-milestone row moves" forgot that a reinterpreted
+  milestone pushes its successors, which the approved Q2 A accepts. The harness
+  (`apps/api/scripts/measure-finish-milestone.mts`) checks the invariant it meant: no row moves that
+  is not downstream of a dated finish milestone (by edge, WBS parent or LOE span). Result: 0.
+- **The API e2e's first fixture assumed a 24-hour calendar.** A new plan takes the organisation's
+  Monday-to-Friday default, so the old reading after a Friday task was Monday, not Saturday. The
+  case's own assertion caught it; the fixture was corrected, not the product.
 
 ## References
 
-- Spec and plan: [`./spec.md`](./spec.md), [`./implementation-plan.md`](./implementation-plan.md).
+- Spec, plan and conditions: [`docs/specs/finish-milestone-date/`](../specs/finish-milestone-date/spec.md).
+- Migration `20260923120000_finish_milestone_end_of_day_placements`; `docs/DATABASE.md`
+  "FmDateMigration"; API e2e `apps/api/test/finish-milestone-date-migration.e2e-spec.ts` (FC-6, D9).
 - ADR-0023 §4; ADR-0035 §22; ADR-0037 (instants); ADR-0107 (two-release schema change);
   ADR-0125/0126 (frozen dates, capture-level discriminators); ADR-0148 (placements, recorded
   conversions).

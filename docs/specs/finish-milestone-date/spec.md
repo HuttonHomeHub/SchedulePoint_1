@@ -1,14 +1,13 @@
 # Feature Spec: A finish milestone is dated by the day it closes
 
-- **Status:** Approved — by the product owner in conversation, 2026-09-23 (Q1 A, Q2 A; Q3 moot, no baselines captured; Q4 default A). See `conditions.md` for the decisions and the two scope reductions they allow
+- **Status:** Accepted — shipped ([ADR-0155](../../adr/0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)). Approved by the product owner in conversation, 2026-09-23 (Q1 A, Q2 A; Q3 moot, no baselines captured; Q4 default A). See `conditions.md` for the decisions and the two scope reductions they allow; the ADR records what changed in the build (the boot re-derivation, D9)
 - **Author(s):** feature-analyst agent
 - **Date:** 2026-09-23
 - **Tracking issue / epic:** [`docs/TECH_DEBT.md`](../../TECH_DEBT.md) #381
 - **Roadmap link:** _(none — a convention correction found by comparing against NetPoint)_
 - **Implementation plan:** [`./implementation-plan.md`](./implementation-plan.md)
-- **Related ADR(s):** draft in [`./adr-draft.md`](./adr-draft.md), amending
-  [ADR-0023](../../adr/0023-cpm-scheduling-date-convention.md) §4. Number `0155` is the next free one
-  today (`docs/adr/` ends at `0154-…`, listed 2026-09-23) and must be re-checked at filing.
+- **Related ADR(s):** [ADR-0155](../../adr/0155-a-finish-milestone-is-dated-by-the-day-it-closes.md),
+  amending [ADR-0023](../../adr/0023-cpm-scheduling-date-convention.md) §4.
 
 This spec crosses two ADR-0105 triggers — a schema change and a data migration — so it is a full
 spec, not a debt-row fix. Every decision-bearing claim below names the file and line it was read
@@ -510,7 +509,7 @@ host). The task case is filed as a debt row.
 ## 7. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
-- ADR draft: [`./adr-draft.md`](./adr-draft.md)
+- ADR: [ADR-0155](../../adr/0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)
 - Updated by this change: `docs/adr/0023-…` (amendment note), ADR-0035 §22 note, `docs/API.md`,
   `docs/DATABASE.md`, `docs/TEST_PLAYBOOK.md` (rows at `:43`, `:183`), `docs/TECH_DEBT.md` (#381
   closed; new rows for the zero-duration task and, under Q4 A, the cross-plan day rule), CLAUDE.md §16.

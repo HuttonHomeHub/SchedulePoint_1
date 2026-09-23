@@ -2,13 +2,13 @@ import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { dayAtScreenX, screenXOfDay, worldExtent, type RenderActivity } from '../render/geometry';
+import { axisDayOf } from '../render/geometry';
 import {
   minimapViewport,
   type MinimapBox,
   type MinimapMapping,
   type MinimapWindow,
 } from '../render/minimap';
-import { axisDayOf } from '../render/geometry';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
