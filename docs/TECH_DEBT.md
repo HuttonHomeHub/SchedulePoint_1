@@ -11725,3 +11725,23 @@ upstream task (pinned by `cross-plan-conformance.spec.ts`). ADR-0155 made it tru
 finish milestone too, which until then escaped only because it read a day late. Spec Q4 took the
 default ("treat a finish milestone like any finish") and was not put to the product owner, so a
 downstream plan can move one day earlier on its next programme recalculation.
+
+### 386. An MS Project import re-types a finish milestone with no predecessor, and does not say so
+
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (NetPoint round trip) ·
+**Size:** S · **Owner:** interchange
+
+MS Project has one milestone concept, so `mspdi-adapter.ts` infers the type from the task's own
+`<PredecessorLink>` elements: a milestone with a predecessor becomes `FINISH_MILESTONE`, one with none
+becomes `START_MILESTONE`. A finish milestone with no incoming logic (a delivery or an external event)
+therefore comes back as a start milestone. Measured on `plan:reference-netpoint-power-plant` exported
+through `GET …/interchange/export/mspdi` and re-imported: **11 finish milestones and 1 start milestone
+became 4 and 8**. The import report lists only the two calendar entries, so the change is **silent**,
+which is what ADR-0050's mapping contract exists to prevent. Since ADR-0155 the two types are read at
+different ends of their day, so the re-typed milestone can report a different date. The finish and the
+critical set of that plan are unchanged. The XER round trip keeps every type (it carries `task_type`).
+
+Remediation: at minimum, report the inference as an approximation that names each re-typed activity.
+Separately, the exporter could write the type somewhere MS Project preserves (a custom field) and the
+importer read it back when present, which would make a SchedulePoint-to-SchedulePoint round trip exact
+without changing how a genuine MS Project file is read.
