@@ -73,6 +73,20 @@ export class InterchangeCountsResponseDto {
 
   @ApiProperty({ required: false, description: 'Resource assignments mapped (M2, ADR-0039/0040).' })
   assignments?: number;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Hand-placed starts restored from a SchedulePoint XER (layout-interchange). Absent for a file ' +
+      'from another tool and when `restoreLayout` is `IGNORE`.',
+  })
+  placements?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Activities whose row was restored from a SchedulePoint XER (layout-interchange).',
+  })
+  lanes?: number;
 }
 
 /** The library resource an imported one collides with, named so a planner can tell whether it is the same crew. */
@@ -184,6 +198,8 @@ export class InterchangeReportResponseDto {
         ...(report.mapped.assignments === undefined
           ? {}
           : { assignments: report.mapped.assignments }),
+        ...(report.mapped.placements === undefined ? {} : { placements: report.mapped.placements }),
+        ...(report.mapped.lanes === undefined ? {} : { lanes: report.mapped.lanes }),
       },
       approximations: report.approximations.map(toFinding),
       repairs: report.repairs.map(toFinding),

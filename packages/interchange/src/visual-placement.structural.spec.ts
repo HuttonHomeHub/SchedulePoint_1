@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -45,5 +45,48 @@ describe('the hand-placement drop has one producer', () => {
    */
   it('export-mapper.ts is the one file that does', () => {
     expect(read('export-mapper.ts')).toMatch(/\bvisualStart\b/);
+  });
+});
+
+/**
+ * **ONE module names the layout fields** (layout-interchange, spec §4.6 items 2–3; the reader half,
+ * M2 — M3 adds the emitter's import to the positive list).
+ *
+ * The labels are the file format's identity for the two fields, so a second copy of one is a second
+ * definition of the format: change one and a SchedulePoint file stops restoring, with every unit test
+ * of the module that changed still green. The same argument keeps MSPDI out of it entirely until the
+ * deferred MSPDI milestone edits this assertion on purpose.
+ */
+describe('the layout fields have one home', () => {
+  const LABEL = /SchedulePoint layout v\d+:/;
+  const production = readdirSync(fileURLToPath(new URL('.', import.meta.url))).filter(
+    (name) => name.endsWith('.ts') && !name.endsWith('.spec.ts') && !name.includes('.fixtures.'),
+  );
+
+  it('no production file but xer-layout-fields.ts contains a layout label', () => {
+    const offenders = production.filter(
+      (name) => name !== 'xer-layout-fields.ts' && LABEL.test(read(name)),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('the XER adapter reads through it', () => {
+    expect(read('xer-adapter.ts')).toMatch(/from '\.\/xer-layout-fields\.js'/);
+  });
+
+  it.each(['mspdi-emit.ts', 'mspdi-serialiser.ts', 'export-mspdi.ts', 'mspdi-adapter.ts'])(
+    '%s mentions neither the fields nor a layout',
+    (file) => {
+      const text = read(file);
+      expect(text).not.toMatch(/xer-layout-fields|\blayout\b/);
+    },
+  );
+
+  /** The pinned positive (ADR-0093): every assertion above passes against a repository without the feature. */
+  it('xer-layout-fields.ts does contain both labels', () => {
+    const text = read('xer-layout-fields.ts');
+    expect(text).toContain("'SchedulePoint layout v1: placed start'");
+    expect(text).toContain("'SchedulePoint layout v1: lane'");
+    expect(production).toContain('xer-layout-fields.ts');
   });
 });

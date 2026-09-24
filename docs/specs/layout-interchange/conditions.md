@@ -25,3 +25,12 @@ Committed **alone, before any code** (M0-T0, ADR-0128's ordering). Each names it
 | FC-5 | **M1 (drawn span at phase 3):** after an import of each catalogue XER fixture, the server port of the web overlap predicate reports **0** overlapping activities. Today's count is measured first (M0-T4) — if it is already 0 everywhere, M1 still lands for the layout path and its commit says the defect was latent.                                                                                       | API e2e + M0 measurement                                 |
 | FC-6 | **P6 tolerance — owed, not claimable by CI:** one exported NetPoint XER opens in a real P6 and schedules to the same finish. Recorded **observed** or **unobserved**; unobserved is not a pass and is written as such in the ADR.                                                                                                                                                                              | Product owner (CQ-1)                                     |
 | FC-7 | **Export unchanged in scheduling content:** for the rich export fixture, every non-UDF table of the XER is byte-identical to the pre-epic output.                                                                                                                                                                                                                                                              | pure golden                                              |
+
+## Amendment, 2026-09-24 (M4 review, before any file carrying the fields existed)
+
+The row field's label is `SchedulePoint layout v1: lane`, not `… v1: row`. The UX review found the
+import dialog, the report and the server's findings saying "row" while every canvas surface says
+"lane" for the same `lane_index`. The label is the file format's identity and can never change once a
+file carries it. No file did: the reader (M2) had not merged and the writer (M3) had not shipped. So it
+was renamed then, and FC-4's near-miss cases read `… v1: Lane`, `… v1:lane` and `… v2: lane` for the
+same reason they read `Row`, `:row` and `v2: row` above. No threshold, limb or verdict changes.

@@ -344,4 +344,56 @@ describe('ImportScheduleDialog', () => {
       );
     });
   });
+
+  describe('restoring a SchedulePoint layout (layout-interchange)', () => {
+    const LAYOUT_REPORT: InterchangeReport = {
+      ...REPORT,
+      mapped: { ...REPORT.mapped, placements: 58, lanes: 58 },
+    };
+    const layoutOf = (call: number) =>
+      (vi.mocked(fetch).mock.calls[call]![1]!.body as FormData).get('restoreLayout');
+
+    it('is omitted for a file that carries no layout', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: REPORT }));
+      renderDialog();
+      pickFile();
+      await screen.findByText('214');
+      expect(screen.queryByLabelText('Restore the SchedulePoint layout')).not.toBeInTheDocument();
+      expect(layoutOf(0)).toBeNull();
+    });
+
+    it('is offered, on and described, when the dry-run found a layout — with both counts shown', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: LAYOUT_REPORT }));
+      renderDialog();
+      pickFile();
+      const option = await screen.findByLabelText('Restore the SchedulePoint layout');
+      expect(option).toBeChecked();
+      expect(option).toHaveAccessibleDescription(
+        /as they were when the file was exported\. Off: bars are drawn where the logic puts them/,
+      );
+      expect(screen.getByText('Placed starts')).toBeInTheDocument();
+      expect(screen.getByText('Lanes')).toBeInTheDocument();
+    });
+
+    it('unticking re-runs the dry-run with IGNORE, stays offered, and carries IGNORE to the commit', async () => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(jsonResponse(200, { data: LAYOUT_REPORT }))
+        // The IGNORE dry-run reports no layout counts, by design — the option must not vanish.
+        .mockResolvedValueOnce(jsonResponse(200, { data: REPORT }))
+        .mockResolvedValueOnce(jsonResponse(201, { data: { planId: 'plan-9', report: REPORT } }));
+      renderDialog();
+      pickFile();
+      fireEvent.click(await screen.findByLabelText('Restore the SchedulePoint layout'));
+
+      await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBe(2));
+      expect(layoutOf(1)).toBe('IGNORE');
+      await waitFor(() => expect(screen.queryByText('Placed starts')).not.toBeInTheDocument());
+      expect(screen.getByLabelText('Restore the SchedulePoint layout')).not.toBeChecked();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
+      await waitFor(() => expect(h.navigate).toHaveBeenCalled());
+      expect(vi.mocked(fetch).mock.calls[2]![0]).toContain('/interchange/commit');
+      expect(layoutOf(2)).toBe('IGNORE');
+    });
+  });
 });

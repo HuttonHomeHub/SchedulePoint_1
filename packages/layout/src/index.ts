@@ -19,5 +19,6 @@ export {
   type DrawnDaySpan,
   type DrawnSpanInput,
 } from './drawn-span.js';
+export { packAroundCarried } from './pack-around.js';
 export { nearestFreeRow, rowOccupancy, type RowOccupancy } from './nearest-free-row.js';
 export { packLanes, type LaneChange, type PackItem } from './pack-lanes.js';

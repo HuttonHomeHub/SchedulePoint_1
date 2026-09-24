@@ -173,24 +173,23 @@ export const importActivitySchema = z
     /** Progress, or null when the activity is un-progressed (NOT_STARTED with no actuals). */
     progress: importProgressSchema.nullable(),
     /**
-     * The planner's **hand-placement** — where somebody dragged this bar (one-planning-surface).
+     * The planner's **hand-placement** — where somebody dragged this bar (ADR-0148).
      *
-     * **No parser writes it and no emitter reads it**, and unlike `ResourceAssignment.lagMinutes`
-     * that is not a gap awaiting a real file. A hand-placement is a SchedulePoint concept: P6 and
-     * MSPDI carry constraints and computed dates, never "a human put it here", so there is no
-     * candidate column to discover and nothing for an importer to have missed. It is here so the
-     * **exporter** can count what the file will not carry, which is the only way the drop can be
-     * reported truthfully rather than as a standing guess.
+     * **A foreign file never carries one**: P6 and MSPDI hold constraints and computed dates, never "a
+     * human put it here". **SchedulePoint's own XER does** (layout-interchange, spec §0.1), in a user-
+     * defined field only this application writes and reads (`xer-layout-fields.ts`), so on import it is
+     * set exactly when the file came from SchedulePoint and the planner chose to restore its layout.
      *
-     * That asymmetry is why the two directions differ: export reports a drop **only when there is
-     * something to lose**, and import reports nothing at all, because it knows with certainty that
-     * nothing was lost. The `lagMinutes` importer reports unconditionally for the opposite reason —
-     * it cannot know.
-     *
-     * Absent on every import. It is deliberately **not** on the canonical model: a slot there would
-     * reserve space for something that can never arrive.
+     * On export it is how the exporter counts what a format will **not** carry, so the drop is reported
+     * only when there is something to lose (`export-mapper.ts`, the one producer of that finding).
      */
     visualStart: isoDateSchema.nullish(),
+    /**
+     * The row this bar sits in (ADR-0069's `lane_index`), carried by SchedulePoint's own XER beside the
+     * placement. Absent on a foreign import, where the commit's phase 3 packs every row; when present,
+     * phase 3 keeps it and packs only the activities the file left without one (spec §4.7).
+     */
+    laneIndex: z.number().int().min(0).max(10_000).nullish(),
   })
   .strict();
 export type ImportActivity = z.infer<typeof importActivitySchema>;

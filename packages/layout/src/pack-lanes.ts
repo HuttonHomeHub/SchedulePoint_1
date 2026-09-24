@@ -90,8 +90,11 @@ export function packLanes(
   return changes.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-/** The mean lane of this item's already-placed predecessors, or `null` when it has none. */
-function meanPlacedPredecessorLane(
+/**
+ * The mean lane of this item's already-placed predecessors, or `null` when it has none. Shared with
+ * `packAroundCarried`, so a partly-carried import hints exactly the way a full pack does.
+ */
+export function meanPlacedPredecessorLane(
   predecessorIds: readonly string[] | undefined,
   laneOf: ReadonlyMap<string, number>,
 ): number | null {

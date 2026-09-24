@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { importSchedule } from '@repo/interchange';
+import { encodeLayoutFields, importSchedule, parseXer } from '@repo/interchange';
 import { drawnSpanDays } from '@repo/layout';
 import { SeedClient, seedPlan } from '@repo/seed-http';
 import request from 'supertest';
@@ -47,6 +47,7 @@ interface Row {
   visualEffectiveFinish: string | null;
   visualConflictReason: string | null;
   isCritical: boolean;
+  version: number;
 }
 
 /** The only genuine P6 export in the repository (the ADR-0034 torture fixture). */
@@ -115,6 +116,15 @@ function overlappingActivities(side: Side): number {
 const lanesByCode = (side: Side): Record<string, number> =>
   Object.fromEntries([...side.rows.values()].map((r) => [r.code, r.laneIndex]));
 
+interface Finding {
+  detail: string;
+}
+interface Report {
+  mapped: { placements?: number; lanes?: number };
+  approximations: Finding[];
+  drops: Finding[];
+}
+
 interface Side {
   planId: string;
   rows: Map<string, Row>;
@@ -130,6 +140,19 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   let reimported: Side;
   let foreign: Side;
   let foreignAgain: Side;
+  // M2 — files carrying the layout, built by injecting the fields into the real export (the exporter
+  // writes them only from M3), each committed through the real route.
+  let restored: Side;
+  let restoredReport: Report;
+  let partial: Side;
+  let partialOmitted: string[];
+  let ignored: Side;
+  let ignoredReport: Report;
+  let conflicted: Report;
+  let conflictedSide: Side;
+  let conflictedCodes: { early: string; stacked: [string, string] };
+  let dryRunReport: Report;
+  let badOption: request.Response;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -199,7 +222,67 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       .attach('file', TORTURE_XER, 'p6_torture_test_v1.xer')
       .expect(201);
     foreignAgain = await read(againCommit.body.data.planId as string);
-  }, 240_000);
+
+    // --- M2: SchedulePoint files that carry their layout ------------------------------------------
+    const commitInto = async (
+      name: string,
+      file: Buffer,
+      restoreLayout?: string,
+    ): Promise<{ side: Side; report: Report }> => {
+      const target = await project(name);
+      const post = agent
+        .post(`/api/v1/organizations/${orgSlug}/projects/${target}/interchange/commit`)
+        .attach('file', file, 'netpoint-power-plant.xer');
+      const res = await (
+        restoreLayout === undefined ? post : post.field('restoreLayout', restoreLayout)
+      ).expect(201);
+      return {
+        side: await read(res.body.data.planId as string),
+        report: res.body.data.report as Report,
+      };
+    };
+
+    const full = withLayout(bytes, source, () => true);
+    ({ side: restored, report: restoredReport } = await commitInto('Restored', full));
+
+    // Six activities lose their row: the rest are carried, those six are placed around them.
+    partialOmitted = [...source.rows.keys()]
+      .filter((code) => source.rows.get(code)!.type !== 'WBS_SUMMARY')
+      .sort()
+      .slice(0, 6);
+    ({ side: partial } = await commitInto(
+      'Partial',
+      withLayout(bytes, source, (code) => !partialOmitted.includes(code)),
+    ));
+
+    ({ side: ignored, report: ignoredReport } = await commitInto('Ignored', full, 'IGNORE'));
+
+    // One placement pulled before its logic, and two overlapping bars stacked into one row.
+    const drawn = [...source.rows.values()].filter(
+      (r) => r.type !== 'WBS_SUMMARY' && r.visualEffectiveStart !== null,
+    );
+    const latest = [...drawn].sort((a, b) =>
+      a.visualEffectiveStart! < b.visualEffectiveStart! ? 1 : -1,
+    )[0]!;
+    const earliestStart = [...drawn].map((r) => r.visualEffectiveStart!).sort()[0]!;
+    const pair = overlappingPairInDifferentRows(drawn.filter((r) => r.code !== latest.code));
+    conflictedCodes = { early: latest.code, stacked: pair };
+    const conflictedFile = withLayout(bytes, source, () => true, {
+      [latest.code]: { placedStart: earliestStart },
+      [pair[1]]: { lane: source.rows.get(pair[0])!.laneIndex },
+    });
+    ({ side: conflictedSide, report: conflicted } = await commitInto('Conflicted', conflictedFile));
+
+    const dry = await agent
+      .post(`/api/v1/organizations/${orgSlug}/projects/${importProject}/interchange/dry-run`)
+      .attach('file', full, 'netpoint-power-plant.xer')
+      .expect(200);
+    dryRunReport = dry.body.data as Report;
+    badOption = await agent
+      .post(`/api/v1/organizations/${orgSlug}/projects/${importProject}/interchange/dry-run`)
+      .field('restoreLayout', 'MAYBE')
+      .attach('file', full, 'netpoint-power-plant.xer');
+  }, 360_000);
 
   afterAll(async () => {
     await resetDatabase();
@@ -293,6 +376,129 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       .map(([code, lane]) => `${code}: ${String(lane)} vs ${String(again[code])}`);
     expect(moved).toEqual([]);
   });
+
+  describe('a SchedulePoint XER carrying its layout (M2)', () => {
+    const differ = (side: Side, field: keyof Row, codes = [...source.rows.keys()]): string[] =>
+      codes.filter((code) => side.rows.get(code)?.[field] !== source.rows.get(code)?.[field]);
+
+    it('restores every placement and row, and writes no row in phase 3 (carried)', () => {
+      expect(differ(restored, 'visualStart')).toEqual([]);
+      expect(differ(restored, 'laneIndex')).toEqual([]);
+      expect(differ(restored, 'visualEffectiveStart')).toEqual([]);
+      expect(differ(restored, 'visualConflictReason')).toEqual([]);
+      const placed = [...source.rows.values()].filter((r) => r.visualStart !== null).length;
+      expect(restoredReport.mapped).toMatchObject({ placements: placed, lanes: source.rows.size });
+      // Phase 3 wrote nothing: no activity's version moved past the one the import created it at.
+      expect(new Set([...restored.rows.values()].map((r) => r.version))).toEqual(new Set([1]));
+    });
+
+    it('the dry-run reports the same counts the commit restores', () => {
+      expect(dryRunReport.mapped).toMatchObject({
+        placements: restoredReport.mapped.placements,
+        lanes: restoredReport.mapped.lanes,
+      });
+    });
+
+    it('keeps every carried row and places only the rest around them (partial, FC-3)', () => {
+      const carried = [...source.rows.keys()].filter((code) => !partialOmitted.includes(code));
+      expect(differ(partial, 'laneIndex', carried)).toEqual([]);
+      expect(overlappingActivities(partial)).toBe(overlappingActivities(source));
+    });
+
+    it('IGNORE imports the network as a foreign file would, and says what it left out', () => {
+      expect([...ignored.rows.values()].filter((r) => r.visualStart !== null)).toEqual([]);
+      expect(lanesByCode(ignored)).toEqual(lanesByCode(reimported));
+      expect(ignoredReport.mapped.placements).toBeUndefined();
+      expect(ignoredReport.drops.map((f) => f.detail)).toContain(
+        `The file carries a SchedulePoint layout for ${String(source.rows.size)} activities; it was not applied`,
+      );
+    });
+
+    it('names a restored placement the logic no longer allows, and carried rows that overlap', () => {
+      expect(conflictedSide.rows.get(conflictedCodes.early)?.visualConflictReason).not.toBeNull();
+      const [a, b] = conflictedCodes.stacked;
+      expect(conflictedSide.rows.get(b)?.laneIndex).toBe(conflictedSide.rows.get(a)?.laneIndex);
+      const details = conflicted.approximations.map((f) => f.detail);
+      expect(details).toContainEqual(
+        expect.stringMatching(/^\d+ restored placed starts? (is|are) no longer allowed/),
+      );
+      expect(details).toContainEqual(
+        expect.stringMatching(
+          /^\d+ activit(y|ies) overlaps? another in (its|their) lane — Arrange/,
+        ),
+      );
+    });
+
+    it('refuses an unknown restoreLayout value', () => {
+      expect(badOption.status).toBe(422);
+    });
+  });
+
+  /**
+   * The exported file with SchedulePoint's layout fields injected from the SOURCE plan's rows, keyed
+   * through the file's own TASK/PROJWBS ids. `keep(code)` decides which activities carry a row;
+   * `override` replaces a value, for the cases that need a picture the source does not have.
+   */
+  function withLayout(
+    file: Buffer,
+    from: Side,
+    keep: (code: string) => boolean,
+    override: Record<string, { placedStart?: string; lane?: number }> = {},
+  ): Buffer {
+    const parsed = parseXer(new Uint8Array(file));
+    if (!parsed.ok) throw new Error('the export did not parse');
+    const project = parsed.document.tables.get('PROJECT')!.rows[0]!.get('proj_id')!;
+    const ids = new Map<string, { id: string; type: string }>();
+    for (const row of parsed.document.tables.get('TASK')?.rows ?? []) {
+      ids.set(row.get('task_code')!, { id: row.get('task_id')!, type: 'TASK' });
+    }
+    for (const row of parsed.document.tables.get('PROJWBS')?.rows ?? []) {
+      ids.set(row.get('wbs_short_name')!, { id: `wbs:${row.get('wbs_id')!}`, type: 'WBS_SUMMARY' });
+    }
+    const activities = [...from.rows.values()].flatMap((r) => {
+      const target = ids.get(r.code);
+      if (target === undefined) return [];
+      const o = override[r.code] ?? {};
+      return [
+        {
+          id: target.id,
+          type: target.type as 'TASK',
+          layout: {
+            placedStart: o.placedStart ?? r.visualStart,
+            lane: keep(r.code) ? (o.lane ?? r.laneIndex) : null,
+          },
+        },
+      ];
+    });
+    const text = file.toString('utf8');
+    const tables = encodeLayoutFields(activities, project)
+      .map((t) =>
+        [
+          `%T\t${t.name}`,
+          `%F\t${t.fields.join('\t')}`,
+          ...t.rows.map((row) => `%R\t${t.fields.map((f) => row[f] ?? '').join('\t')}`),
+        ].join('\n'),
+      )
+      .join('\n');
+    const end = text.lastIndexOf('%E');
+    return Buffer.from(`${text.slice(0, end)}${tables}\n${text.slice(end)}`, 'utf8');
+  }
+
+  /** Two drawn activities that overlap in time and sit in different rows in the source. */
+  function overlappingPairInDifferentRows(rows: Row[]): [string, string] {
+    for (const a of rows) {
+      for (const b of rows) {
+        if (a.code >= b.code || a.laneIndex === b.laneIndex) continue;
+        if (
+          a.visualEffectiveStart! <= b.visualEffectiveFinish! &&
+          b.visualEffectiveStart! <= a.visualEffectiveFinish!
+        ) {
+          return [a.code, b.code];
+        }
+      }
+    }
+    throw new Error('the NetPoint plan has no two overlapping activities in different rows');
+  }
 
   /** Children before parents; the database is shared with every other e2e file. */
   async function resetDatabase(): Promise<void> {

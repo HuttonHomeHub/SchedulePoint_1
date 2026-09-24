@@ -31,7 +31,16 @@ export interface ImportXerInput {
    * imported file never writes the shared organisation library on its own say-so.
    */
   readonly globalCalendarScope?: ImportCalendarScope;
+  /**
+   * Whether the layout a SchedulePoint XER carries — hand-placed starts and rows — is restored
+   * (layout-interchange, spec §4.4). Omitted = `RESTORE`. `IGNORE` strips it before mapping, so the
+   * import takes exactly the path a foreign file takes, and reports what was present and not applied.
+   */
+  readonly restoreLayout?: RestoreLayout;
 }
+
+export const RESTORE_LAYOUT_OPTIONS = ['RESTORE', 'IGNORE'] as const;
+export type RestoreLayout = (typeof RESTORE_LAYOUT_OPTIONS)[number];
 
 /**
  * Hard graph-size ceiling (ADR-0050, security/perf). The parser's byte/row caps bound the *file*, but a
@@ -110,9 +119,30 @@ export function importXer(input: ImportXerInput): ImportXerResult {
     };
   }
 
+  // 2a. The planner asked not to restore a SchedulePoint layout: strip it here, before mapping, so every
+  // later stage sees what a foreign file gives it. Reported, because the file did carry it.
+  const layoutFindings: ReportFinding[] = [];
+  let model = adapted.model;
+  if (input.restoreLayout === 'IGNORE') {
+    const carried = model.activities.filter((a) => a.layout !== undefined).length;
+    if (carried > 0) {
+      layoutFindings.push({
+        kind: 'drop',
+        entity: 'activity',
+        sourceRef: null,
+        detail: `The file carries a SchedulePoint layout for ${String(carried)} activit${carried === 1 ? 'y' : 'ies'}; it was not applied`,
+        reason: 'Restore the SchedulePoint layout was switched off',
+      });
+      model = {
+        ...model,
+        activities: model.activities.map(({ layout: _layout, ...rest }) => rest),
+      };
+    }
+  }
+
   // 3. Map canonical → SchedulePoint import graph (incl. the ADR-0053 §5 calendar-tier decision).
   const mapped = mapCanonicalToImportGraph(
-    adapted.model,
+    model,
     input.globalCalendarScope === undefined
       ? {}
       : { globalCalendarScope: input.globalCalendarScope },
@@ -184,6 +214,7 @@ export function importXer(input: ImportXerInput): ImportXerResult {
   // 5. Build the report from the union of every stage's findings + the final mapped counts.
   const { approximations, repairs, drops } = bucketFindings([
     ...adapted.findings,
+    ...layoutFindings,
     ...mapped.findings,
     ...validated.findings,
   ]);
@@ -198,6 +229,9 @@ export function importXer(input: ImportXerInput): ImportXerResult {
     0,
   );
 
+  const placements = g.activities.filter((a) => a.visualStart != null).length;
+  const lanes = g.activities.filter((a) => a.laneIndex != null).length;
+
   const report: InterchangeReport = {
     detectedFormat: adapted.model.source.format,
     sourceVersion: adapted.model.source.version,
@@ -210,6 +244,8 @@ export function importXer(input: ImportXerInput): ImportXerResult {
       ...(constraints > 0 ? { constraints } : {}),
       ...(g.resources.length > 0 ? { resources: g.resources.length } : {}),
       ...(g.assignments.length > 0 ? { assignments: g.assignments.length } : {}),
+      ...(placements > 0 ? { placements } : {}),
+      ...(lanes > 0 ? { lanes } : {}),
     },
     approximations,
     repairs,

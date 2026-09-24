@@ -206,6 +206,10 @@ export function mapCanonicalToImportGraph(
     secondaryConstraintDate: activity.secondaryConstraintDate,
     scheduleAsLateAsPossible: activity.scheduleAsLateAsPossible,
     progress: activity.progress,
+    // Only when the file carried them (SchedulePoint's own XER), and spread rather than set to null, so a
+    // foreign file's graph is exactly what it always was (FC-2).
+    ...(activity.layout?.placedStart == null ? {} : { visualStart: activity.layout.placedStart }),
+    ...(activity.layout?.lane == null ? {} : { laneIndex: activity.layout.lane }),
   }));
 
   const dependencies: ImportDependency[] = model.relationships.map((relationship) => ({

@@ -519,10 +519,10 @@ contract) **without writing anything**, then a separate **commit** creates the p
 Contributor); the authoritative org-scope check is on the **target project** (anti-IDOR). Uploads are
 multipart with a **byte cap enforced at the boundary** (→ 413 before the file is fully buffered).
 
-| Method | Path                                        | Notes                                                                                                                                                                                                                                                                                        |
-| ------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. Optional form fields `globalCalendarScope=PROJECT\|ORG` (default `PROJECT`) and `resourceResolutions` (JSON). 422 unrecognised/malformed/no file or bad option · 413 oversize. `interchange:import`. |
-| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. Same optional form fields. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413, plus 422 `UNRESOLVED_RESOURCE_COLLISIONS`.                              |
+| Method | Path                                        | Notes                                                                                                                                                                                                                                                                                                                                             |
+| ------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `…/projects/:projectId/interchange/dry-run` | Parse an uploaded `file` (multipart) → `200 { data: InterchangeReport }`; **no write**. Optional form fields `globalCalendarScope=PROJECT\|ORG` (default `PROJECT`), `restoreLayout=RESTORE\|IGNORE` (default `RESTORE`) and `resourceResolutions` (JSON). 422 unrecognised/malformed/no file or bad option · 413 oversize. `interchange:import`. |
+| POST   | `…/projects/:projectId/interchange/commit`  | Re-parse the uploaded `file` (multipart) and create a plan → `201 { data: { planId, report } }`. Same optional form fields. One transaction (calendars + activities + dependencies), then recalculate. Same 422/413, plus 422 `UNRESOLVED_RESOURCE_COLLISIONS`.                                                                                   |
 
 The dry-run is **read-only** (returns `200`, not `201` — no resource is created). A parseable file returns
 its report **even when it needed repairs** (dangling edge dropped, duplicate `(pred,succ,type)`
@@ -540,8 +540,25 @@ is only invoked). It returns **`201 { data: { planId, report } }`**. **Atomicity
 unparseable file (422 before any write), a persistence rejection (duplicate plan/calendar name, duplicate/cyclic
 dependency — the whole transaction rolls back), or a recalculation failure (compensated) — leaves **nothing
 created**. Same authz (`interchange:import`), org-scope (anti-IDOR) and byte cap (→ 413) as the dry-run.
-Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays);
-activities are laid out on a deterministic lane per source order.
+Calendars are imported to the M1 weekday-mask contract (intraday shifts approximated to worked weekdays).
+After the recalculation the activities are **packed into rows** by the canvas's own packer (ADR-0069), on
+the span the canvas draws and keyed by activity code, so the same file lays out the same way every time.
+(This said "a deterministic lane per source order" until 2026-09-24: true of phase 1 alone, and stale since
+ADR-0069 added the packing.)
+
+**A SchedulePoint XER carries its own layout** (layout-interchange). Each activity's hand-placed start
+(`visualStart`) and lane (`laneIndex`) travel in two P6 user-defined fields that only SchedulePoint writes
+and reads, labelled exactly `SchedulePoint layout v1: placed start` and `SchedulePoint layout v1: lane`.
+On import with `restoreLayout=RESTORE` (the default) both are written as the file carried them; the
+packing then leaves every carried row where it is and places only activities the file left without one.
+`restoreLayout=IGNORE` imports the file exactly as one from another tool would be, and a `drop` finding
+names what was not applied. The report counts what was restored in `mapped.placements` and
+`mapped.lanes` (**absent when zero**, so a foreign file's report is unchanged), and after the commit's
+recalculation it adds up to two `approximation` findings: restored placements the logic no longer allows,
+and carried lanes whose bars overlap (Arrange lays them out again). Any other file's user-defined fields
+are not imported and are reported as one `drop` finding with their count. A malformed layout value is
+discarded and counted in a `repair` finding; the import proceeds. An unknown `restoreLayout` value is a
+**422**.
 
 **Resource-name collisions** are the one thing an import will not decide for you. A source resource whose
 `code` matches a library row **is** that row — a code is an identifier, and matching one is not a guess. The

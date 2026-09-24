@@ -17,6 +17,7 @@ import type {
 } from './canonical.js';
 import type { ReportFinding } from './report.js';
 import { fallbackWorkWeek, parseClndrData } from './xer-calendar.js';
+import { decodeLayoutFields } from './xer-layout-fields.js';
 import type { XerDocument } from './xer-parser.js';
 
 /**
@@ -615,7 +616,19 @@ export function adaptXerToCanonical(
 
   // WBS summaries precede real activities (their hierarchy is defined first); duplicate-code repair keeps
   // the earliest, so a code shared by a summary and an activity resolves deterministically.
-  const activities: CanonicalActivity[] = [...wbsSummaries, ...taskActivities];
+  // --- SchedulePoint's own layout fields (layout-interchange, spec §4.4) -------------------------------
+  // Read after every activity exists, so a value naming a row this import did not take is discarded and
+  // counted rather than attached to nothing. A foreign file with no UDFTYPE table reads nothing here.
+  const decoded = decodeLayoutFields(document, projId, {
+    taskIds: new Set(taskActivities.map((a) => a.id)),
+    wbsIds: new Set(wbsSummaries.map((a) => a.id.slice('wbs:'.length))),
+  });
+  findings.push(...decoded.findings);
+  const withLayout = (activity: CanonicalActivity): CanonicalActivity => {
+    const layout = decoded.layout.get(activity.id);
+    return layout === undefined ? activity : { ...activity, layout };
+  };
+  const activities: CanonicalActivity[] = [...wbsSummaries, ...taskActivities].map(withLayout);
 
   // --- Relationships --------------------------------------------------------------------------------
   const relationships: CanonicalRelationship[] = [];

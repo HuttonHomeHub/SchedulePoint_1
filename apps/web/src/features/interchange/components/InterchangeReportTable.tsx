@@ -19,6 +19,15 @@ export function InterchangeReportTable({
         <Count label="Activities" value={report.mapped.activities} />
         <Count label="Relationships" value={report.mapped.relationships} />
         <Count label="Calendars" value={report.mapped.calendars} />
+        {/* Only a SchedulePoint XER carries a layout (layout-interchange), so these two appear only
+            for one: a tile reading 0 on every foreign import would describe a feature that file
+            could never have used. */}
+        {report.mapped.placements === undefined ? null : (
+          <Count label="Placed starts" value={report.mapped.placements} />
+        )}
+        {report.mapped.lanes === undefined ? null : (
+          <Count label="Lanes" value={report.mapped.lanes} />
+        )}
       </dl>
 
       <p className="text-muted-foreground text-xs">

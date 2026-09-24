@@ -1,5 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { type ResourceCollisionResolution } from '@repo/interchange';
+import {
+  RESTORE_LAYOUT_OPTIONS,
+  type ResourceCollisionResolution,
+  type RestoreLayout,
+} from '@repo/interchange';
 import { CALENDAR_SCOPES, type CalendarScope } from '@repo/types';
 import { Transform } from 'class-transformer';
 import { IsIn, IsObject, IsOptional, Validate } from 'class-validator';
@@ -29,6 +33,24 @@ export class InterchangeImportOptionsDto {
   @IsOptional()
   @IsIn(CALENDAR_SCOPES)
   globalCalendarScope?: CalendarScope;
+
+  /**
+   * Whether a SchedulePoint XER's own layout — hand-placed starts and rows, carried in two user-defined
+   * fields only SchedulePoint writes — is restored (layout-interchange, spec §4.8). Sent on the dry-run
+   * too, so the report describes the import being confirmed (the `globalCalendarScope` rule).
+   */
+  @ApiPropertyOptional({
+    enum: RESTORE_LAYOUT_OPTIONS,
+    default: 'RESTORE',
+    description:
+      'Whether to restore the layout a SchedulePoint XER carries (hand-placed starts and rows). ' +
+      '`RESTORE` (the default) applies it; `IGNORE` imports the file as if it came from another tool, ' +
+      'lays it out afresh, and names what was not applied in the report. A file from another tool ' +
+      'carries no layout, so the option changes nothing for it.',
+  })
+  @IsOptional()
+  @IsIn(RESTORE_LAYOUT_OPTIONS)
+  restoreLayout?: RestoreLayout;
 
   /**
    * The planner's answer to each resource-name collision the dry-run reported, keyed by the report's
