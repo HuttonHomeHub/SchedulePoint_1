@@ -18,6 +18,7 @@ import {
   wbsGroupLabelById,
   type ColourableActivity,
   type FilterAttr,
+  type GhostLaneSource,
   type LegendActivity,
   type LensPalette,
   type MatchableActivity,
@@ -403,10 +404,10 @@ function varianceRow(over: Partial<BaselineVarianceRow> = {}): BaselineVarianceR
 }
 
 describe('buildBaselineGhosts', () => {
-  const lanes = new Map([
-    ['a', { laneIndex: 2, isMilestone: false }],
-    ['b', { laneIndex: 5, isMilestone: false }],
-    ['m', { laneIndex: 7, isMilestone: true }],
+  const lanes = new Map<string, GhostLaneSource>([
+    ['a', { laneIndex: 2, type: 'TASK' }],
+    ['b', { laneIndex: 5, type: 'TASK' }],
+    ['m', { laneIndex: 7, type: 'START_MILESTONE' }],
   ]);
 
   it('builds a ghost at the baseline dates, taking the LIVE lane by id (slipped)', () => {
@@ -417,7 +418,7 @@ describe('buildBaselineGhosts', () => {
         baselineStart: '2026-01-05',
         baselineFinish: '2026-01-08',
         laneIndex: 2,
-        isMilestone: false,
+        type: 'TASK',
       },
     ]);
   });
@@ -428,7 +429,7 @@ describe('buildBaselineGhosts', () => {
       baselineStart: '2026-01-05',
       baselineFinish: '2026-01-05',
     });
-    expect(buildBaselineGhosts([ms], lanes)[0]?.isMilestone).toBe(true);
+    expect(buildBaselineGhosts([ms], lanes)[0]?.type).toBe('START_MILESTONE');
   });
 
   it('handles an on-time activity (baseline == current dates)', () => {

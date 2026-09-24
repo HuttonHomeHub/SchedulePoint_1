@@ -310,7 +310,7 @@ const CASES: readonly Case[] = [
           baselineStart: '2026-01-03',
           baselineFinish: '2026-01-07',
           laneIndex: SUBJECT_LANE,
-          isMilestone: false,
+          type: 'TASK',
         },
       ],
     }),

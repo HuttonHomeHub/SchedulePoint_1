@@ -3193,6 +3193,11 @@ export interface RevisionGhostBar {
   readonly fromFinish: string;
   readonly laneIndex: number;
   readonly isMilestone: boolean;
+  /**
+   * The OLD side's activity type. A finish milestone is dated by the day it closes and drawn on that
+   * day's end boundary (ADR-0155), so a ghost cannot be placed from `isMilestone` alone (#383).
+   */
+  readonly type: ActivityType;
   /** In the old revision and not in the new. Drawn in a distinct treatment, never as a live bar. */
   readonly removed: boolean;
 }

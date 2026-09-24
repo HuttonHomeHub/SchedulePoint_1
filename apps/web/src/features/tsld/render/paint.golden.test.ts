@@ -244,7 +244,7 @@ const MAXIMAL: TsldScene = {
       baselineStart: '2026-01-03',
       baselineFinish: '2026-01-07',
       laneIndex: 1,
-      isMilestone: false,
+      type: 'TASK',
     },
   ],
   flaggedIds: new Set(['flagged']),

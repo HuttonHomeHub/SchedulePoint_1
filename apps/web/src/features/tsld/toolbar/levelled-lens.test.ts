@@ -65,7 +65,7 @@ describe('the levelled-placement lens — three states, one refusal', () => {
         {
           id: 'a',
           laneIndex: 0,
-          isMilestone: false,
+          type: 'TASK',
           earlyStart: '2026-03-02',
           // `level.ts:186` returns before writing either overlay column for an activity with no
           // finite assignments, so BOTH are null — not one of them.
@@ -84,7 +84,7 @@ describe('the levelled-placement lens — three states, one refusal', () => {
         {
           id: 'a',
           laneIndex: 0,
-          isMilestone: false,
+          type: 'TASK',
           earlyStart: '2026-03-02',
           // `pinAtNetwork` writes `leveledStart: r.earlyStart` for a participant it leaves alone.
           leveledStart: '2026-03-02',

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ActivityType } from '@prisma/client';
 import type {
   RevisionChangeClass,
   RevisionChangeReport,
@@ -361,6 +362,13 @@ export class RevisionGhostBarDto implements RevisionGhostBar {
   laneIndex!: number;
 
   @ApiProperty() isMilestone!: boolean;
+  @ApiProperty({
+    enum: ActivityType,
+    description:
+      'The old side’s activity type. A finish milestone is drawn on the END of its dated day ' +
+      '(ADR-0155), so `isMilestone` alone cannot place its ghost.',
+  })
+  type!: ActivityType;
   @ApiProperty({ description: 'In the old revision and not in the new.' }) removed!: boolean;
 }
 

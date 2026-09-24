@@ -1,4 +1,9 @@
-import type { ActivitySummary, BaselineVarianceRow, ConstraintType } from '@repo/types';
+import type {
+  ActivitySummary,
+  ActivityType,
+  BaselineVarianceRow,
+  ConstraintType,
+} from '@repo/types';
 
 import { CONFLICT_FLAGS, type ConflictFlagFields } from './conflicts';
 
@@ -348,16 +353,17 @@ export interface GhostBar {
   baselineStart: string;
   baselineFinish: string;
   laneIndex: number;
-  /** Whether the live activity is a milestone, so the painter ghosts it as a diamond outline (not a
-   * rect), matching the live milestone convention (ADR-0026). Carried from the joined live activity. */
-  isMilestone: boolean;
+  /** The live activity's type, so the painter places and shapes the ghost by the live bar's rule: a
+   * milestone as a diamond on a day boundary, a finish milestone's on its day's END (ADR-0026,
+   * ADR-0155, #383). Carried from the joined live activity. */
+  type: ActivityType;
 }
 
 /** The minimal live-activity shape the ghost builder joins against — the current lane + whether it is a
  * milestone (so the ghost matches its live bar's shape), by id. */
 export interface GhostLaneSource {
   laneIndex: number;
-  isMilestone: boolean;
+  type: ActivityType;
 }
 
 /**
@@ -383,7 +389,7 @@ export function buildBaselineGhosts(
       baselineStart: row.baselineStart,
       baselineFinish: row.baselineFinish,
       laneIndex: live.laneIndex,
-      isMilestone: live.isMilestone,
+      type: live.type,
     });
   }
   return ghosts;
@@ -406,24 +412,24 @@ export interface LevelledGhost {
   leveledStart: string;
   leveledFinish: string;
   laneIndex: number;
-  isMilestone: boolean;
+  type: ActivityType;
 }
 
 /**
  * The minimal activity shape the levelled ghost reads — the engine's levelling overlay, the lane,
- * and whether the live bar is a milestone so the ghost matches its shape.
+ * and the live bar's type so the ghost matches its shape and position.
  *
- * **`isMilestone` is passed in rather than derived from `type` here**, exactly as
- * {@link GhostLaneSource} passes it: the shared predicate lives in `features/activities`, and this
- * module is a pure render leaf with no feature imports. Restating the two milestone labels instead
- * would be a second derivation of a fact one helper already owns — and the first attempt at this
- * function did exactly that, comparing against a `'MILESTONE'` label that does not exist in
- * `ActivityType` at all.
+ * **It carries the type, not an `isMilestone` boolean** (#383). The boolean was enough to choose a
+ * diamond over a rect and not enough to place it: since ADR-0155 a finish milestone is drawn on the
+ * END of its dated day, so the painter needs the type to go through `axisDayOf` as the live bar
+ * does. Nothing here restates the milestone labels — the painter asks `geometry.isMilestone`, the
+ * one owner of that fact inside `render/`. (An earlier version of this function compared against a
+ * `'MILESTONE'` label that does not exist in `ActivityType` at all, which is why that matters.)
  */
 export interface LevellableActivity {
   id: string;
   laneIndex: number;
-  isMilestone: boolean;
+  type: ActivityType;
   earlyStart: string | null;
   leveledStart: string | null;
   leveledFinish: string | null;
@@ -463,7 +469,7 @@ export function buildLevelledGhosts(activities: readonly LevellableActivity[]): 
       leveledStart: a.leveledStart,
       leveledFinish: a.leveledFinish,
       laneIndex: a.laneIndex,
-      isMilestone: a.isMilestone,
+      type: a.type,
     });
   }
   return ghosts;

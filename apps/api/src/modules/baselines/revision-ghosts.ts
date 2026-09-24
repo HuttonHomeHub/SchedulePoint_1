@@ -144,6 +144,7 @@ export function buildRevisionGhosts(
       fromFinish: from.earlyFinish,
       laneIndex: placementLane,
       isMilestone: isMilestone(from),
+      type: from.type,
       removed,
     });
   }

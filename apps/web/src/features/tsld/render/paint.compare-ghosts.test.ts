@@ -136,7 +136,7 @@ function ghost(o: Partial<CompareGhost> & { activityId: string }): CompareGhost 
     fromStart: '2026-01-01',
     fromFinish: '2026-01-05',
     laneIndex: 0,
-    isMilestone: false,
+    type: 'TASK',
     removed: false,
     ...o,
   };
@@ -237,7 +237,7 @@ describe('the compare-overlay draw budget', () => {
 
   it('draws a milestone ghost as a diamond rather than a rectangle', () => {
     const base = paint(undefined);
-    const m = paint([ghost({ activityId: 'a0', isMilestone: true })]);
+    const m = paint([ghost({ activityId: 'a0', type: 'START_MILESTONE' })]);
     expect(m.strokeRect).toBe(base.strokeRect);
     expect(m.stroke).toBeGreaterThan(base.stroke);
   });

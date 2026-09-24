@@ -116,6 +116,39 @@ describe('adaptMspdiToCanonical — activity types + durations', () => {
     expect(byId('3')?.durationMinutes).toBe(0);
   });
 
+  it('reports every inferred milestone type, in both directions (#386)', () => {
+    // MS Project has one milestone concept, so the start/finish choice is inferred from logic and
+    // is a guess either way. It was silent: a SchedulePoint round trip turned 7 of the NetPoint
+    // plan's 11 finish milestones into start milestones with nothing in the report.
+    const { findings } = adaptOk({
+      ...BASE,
+      tasks: [
+        { uid: '1', id: '1', name: 'Work', duration: 'PT8H0M0S' },
+        { uid: '2', id: '2', name: 'Delivery', milestone: true }, // no predecessor
+        {
+          uid: '3',
+          id: '3',
+          name: 'Done',
+          milestone: true,
+          predecessors: [{ uid: '1', type: '1' }],
+        },
+      ],
+    });
+    const typed = findings.filter((f) => f.reason.includes('start or a finish'));
+    expect(typed.map((f) => [f.kind, f.sourceRef, f.detail])).toEqual([
+      [
+        'approximation',
+        '2',
+        'milestone imported as a start milestone because it has no predecessor',
+      ],
+      [
+        'approximation',
+        '3',
+        'milestone imported as a finish milestone because it has a predecessor',
+      ],
+    ]);
+  });
+
   it('derives WBS parentId from the outline structure (nearest preceding lower-level summary)', () => {
     const tasks: MspdiTaskSpec[] = [
       { uid: '1', name: 'Project', outlineLevel: 1, summary: true },

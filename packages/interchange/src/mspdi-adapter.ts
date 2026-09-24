@@ -431,6 +431,19 @@ export function adaptMspdiToCanonical(
         // MSP has one milestone concept; a milestone that closes preceding work (has a predecessor) maps
         // to a FINISH milestone, otherwise a START milestone — a deterministic structural inference.
         type = predecessorLinks.length > 0 ? 'FINISH_MILESTONE' : 'START_MILESTONE';
+        // The inference is a guess in both directions — a finish milestone with no incoming logic
+        // comes back as a START, a start milestone reached by logic as a FINISH — and since ADR-0155
+        // the two are read at opposite ends of their day. So it is reported, never silent (#386).
+        findings.push({
+          kind: 'approximation',
+          entity: 'activity',
+          sourceRef: uid,
+          detail:
+            type === 'FINISH_MILESTONE'
+              ? 'milestone imported as a finish milestone because it has a predecessor'
+              : 'milestone imported as a start milestone because it has no predecessor',
+          reason: 'MS Project does not record whether a milestone marks a start or a finish',
+        });
       } else {
         type = 'TASK';
       }
