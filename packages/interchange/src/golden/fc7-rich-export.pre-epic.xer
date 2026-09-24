@@ -1,0 +1,29 @@
+ERMHDR	18.8	2026-01-05	Project Management	admin	SchedulePoint	SchedulePoint	Project	UTF-8
+%T	PROJECT
+%F	proj_id	proj_short_name	last_recalc_date	plan_start_date	clndr_id
+%R	SP_PLAN	Rich Export	2026-01-05	2026-01-05	CAL1
+%T	CALENDAR
+%F	clndr_id	clndr_name	clndr_type	default_flag	day_hr_cnt	clndr_data
+%R	CAL1	Standard	CA_Project	Y	8	(0||CalendarData()((0||DaysOfWeek()((0||1()())(0||2()((s|08:00|f|16:00)))(0||3()((s|08:00|f|16:00)))(0||4()((s|08:00|f|16:00)))(0||5()((s|08:00|f|16:00)))(0||6()((s|08:00|f|16:00)))(0||7()())))(0||Exceptions()((0||d|46023())))))
+%T	PROJWBS
+%F	wbs_id	proj_id	parent_wbs_id	wbs_short_name	wbs_name
+%R	100	SP_PLAN		W-ENG	Engineering
+%R	110	SP_PLAN	100	W-DESIGN	Design
+%T	TASK
+%F	task_id	proj_id	wbs_id	task_code	task_name	task_type	target_drtn_hr_cnt	clndr_id	status_code	cstr_type	cstr_date	cstr_type2	cstr_date2	complete_pct	phys_complete_pct	complete_pct_type	act_start_date	act_end_date	suspend_date	resume_date	reend_date	remain_drtn_hr_cnt
+%R	A1	SP_PLAN	100	A1000	Mobilise	TT_Task	40	CAL1	TK_NotStart	CS_MSOA	2026-02-01	CS_MEOB	2026-03-01									
+%R	A2	SP_PLAN	110	A1010	Detailed design	TT_Task	80		TK_NotStart	CS_ALAP												
+%R	A3	SP_PLAN		A1020	Excavate	TT_Task	40		TK_Active					40	35	CP_Drtn	2026-01-06					24
+%R	M1	SP_PLAN	110	MS100	Design complete	TT_FinMile	0		TK_NotStart													
+%T	TASKPRED
+%F	task_pred_id	task_id	pred_task_id	pred_type	lag_hr_cnt
+%R	R1	A2	A1	PR_FS	0
+%R	R2	M1	A2	PR_FS	8
+%R	R3	A3	A1	PR_FS	0
+%T	RSRC
+%F	rsrc_id	rsrc_short_name	rsrc_name	rsrc_type	clndr_id
+%R	R-CREW	CREW	Site Crew	RT_Labor	
+%T	TASKRSRC
+%F	taskrsrc_id	task_id	rsrc_id	target_qty	target_qty_per_hr	driving_flag	act_reg_qty
+%R	AS1	A3	R-CREW	40		Y	10
+%E

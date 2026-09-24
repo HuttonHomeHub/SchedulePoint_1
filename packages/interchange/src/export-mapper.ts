@@ -159,7 +159,20 @@ export interface ExportMapResult {
 }
 
 /** Map a SchedulePoint export graph to a canonical model. Pure + deterministic; near-lossless (see the module doc). */
-export function mapExportGraphToCanonical(graph: ExportGraph): ExportMapResult {
+export interface ExportMapOptions {
+  /**
+   * The target format writes SchedulePoint's layout — hand-placed starts and lanes — as its own fields
+   * (layout-interchange: XER only; MSPDI is the deferred M5). Decides whether the canonical model carries
+   * a `layout` at all, and what the one placement finding says: a format that carries the layout loses
+   * nothing SchedulePoint needs back.
+   */
+  readonly carriesLayout?: boolean;
+}
+
+export function mapExportGraphToCanonical(
+  graph: ExportGraph,
+  options: ExportMapOptions = {},
+): ExportMapResult {
   const findings: ReportFinding[] = [];
 
   // Which calendars an exported resource holds — the set that must be emitted as resource calendars so
@@ -192,18 +205,28 @@ export function mapExportGraphToCanonical(graph: ExportGraph): ExportMapResult {
     secondaryConstraintDate: activity.secondaryConstraintDate,
     scheduleAsLateAsPossible: activity.scheduleAsLateAsPossible,
     progress: activity.progress,
+    // The picture: the placement and the lane. On the canonical model only for a format that writes it
+    // (XER), so no other emitter can start reading a field it was never meant to carry (M3 security
+    // review). A summary is never placed, so its placement is dropped here.
+    ...(options.carriesLayout !== true ||
+    (activity.visualStart == null && activity.laneIndex == null)
+      ? {}
+      : {
+          layout: {
+            placedStart: activity.type === 'WBS_SUMMARY' ? null : (activity.visualStart ?? null),
+            lane: activity.laneIndex ?? null,
+          },
+        }),
   }));
 
-  // The hand-placement (one-planning-surface) reaches the export graph and stops there: **no
-  // interchange format encodes one**, so the receiving tool reads every activity at its computed
-  // dates. Reported **only when there is something to lose** — a programme nobody has hand-placed
-  // loses nothing, and a standing finding on every export would train a reader to skip the section
-  // that matters (the `lagMinutes` rule below, and the same reasoning).
+  // The hand-placement (one-planning-surface; amended by layout-interchange M3). Reported **only when
+  // there is something to say** — a programme nobody has hand-placed has nothing another tool would show
+  // differently, and a standing finding on every export trains a reader to skip the section.
   //
-  // Unlike that one it is deliberately absent from the canonical model. `lagMinutes` has a slot
-  // there because a real P6 export may yet be read carrying one under a column name this repository
-  // does not know (ADR-0071 §5); a placement is a SchedulePoint concept with no candidate column to
-  // discover, so a canonical slot would reserve space for something that can never arrive.
+  // A format that carries the layout (XER) writes every placement and lane as SchedulePoint's own fields,
+  // so SchedulePoint loses nothing and the finding is an **approximation**: other tools cannot read the
+  // fields and show each activity at its computed dates. A format that does not (MSPDI, until M5) drops
+  // the placement outright. Lanes alone are never reported: no tool other than SchedulePoint has lanes.
   //
   // ONE producer. Neither `export-xer.ts` nor `export-mspdi.ts` repeats it — two copies would drift,
   // and the drift would be invisible because each looks right alone (ADR-0065). A structural test
@@ -211,14 +234,24 @@ export function mapExportGraphToCanonical(graph: ExportGraph): ExportMapResult {
   const placedActivities = graph.activities.filter(
     (activity) => activity.visualStart !== null && activity.visualStart !== undefined,
   );
-  if (placedActivities.length > 0) {
+  if (placedActivities.length > 0 && options.carriesLayout === true) {
+    const lanes = graph.activities.filter((activity) => activity.laneIndex != null).length;
+    findings.push({
+      kind: 'approximation',
+      entity: 'activity',
+      sourceRef: null,
+      detail: `${String(placedActivities.length)} hand-placed start(s) and ${String(lanes)} lane(s) written as SchedulePoint layout fields; P6 and other tools show every activity at its computed dates`,
+      reason:
+        'a hand-placement is a SchedulePoint concept; only SchedulePoint reads these fields back (layout-interchange)',
+    });
+  } else if (placedActivities.length > 0) {
     findings.push({
       kind: 'drop',
       entity: 'activity',
       sourceRef: null,
       detail: `${String(placedActivities.length)} activity(ies) carry a hand-placed start, which is not written to the exported file`,
       reason:
-        'no interchange format encodes a hand-placement; the receiving tool will read every activity at its computed dates (one-planning-surface)',
+        'this format has no field for a hand-placement; the receiving tool will read every activity at its computed dates (one-planning-surface)',
     });
   }
 

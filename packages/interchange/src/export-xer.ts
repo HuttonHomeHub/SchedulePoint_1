@@ -113,7 +113,7 @@ export function exportXer(input: ExportXerInput): ExportXerResult {
   }
 
   // 3. Map export graph → canonical model.
-  const mapped = mapExportGraphToCanonical(graph);
+  const mapped = mapExportGraphToCanonical(graph, { carriesLayout: true });
 
   // 4. Emit the canonical model → XER tables (PROJECT/CALENDAR/TASK/TASKPRED).
   const emitted = emitXerFromCanonical(mapped.model);

@@ -357,6 +357,16 @@ keep `main` releasable.
   hidden links from 58 to 17 and crossings from 360 to 204 without adding a row. The prompt at the
   foot of the diagram now appears only when activities overlap in a lane.
 
+- **An exported plan re-imports with the same picture** (ADR-0156, amending ADR-0148 D7, ADR-0050
+  and ADR-0069). A P6 (XER) export now carries every activity's hand-placed start and lane, and
+  importing the file back restores both, so the bars sit where they were placed, in the lanes they sat
+  in. The values travel in two user-defined fields only SchedulePoint reads; P6 and other tools show
+  each activity at its computed dates, and the export report says so. The import dialog offers
+  **Restore the SchedulePoint layout** (on by default) when a file carries one. A file from another
+  tool is laid out on the span the diagram draws, and two imports of one file now lay out
+  identically. MS Project files do not carry the layout yet. Whether a real P6 opens the file has
+  not been observed.
+
 - **A finish milestone is dated by the day it closes** (ADR-0155, amending ADR-0023 §4). After a
   task ending Friday, a finish milestone now reads Friday, not the following Monday, which is how P6
   and NetPoint print it. Placing one on its predecessor's last day is no longer a conflict, and a

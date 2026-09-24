@@ -1,7 +1,6 @@
 # ADR-0156 (draft) — A SchedulePoint layout travels in an inert field that only SchedulePoint reads
 
-- **Status:** Draft — awaiting approval before implementation (to be filed as `docs/adr/0156-…md` at
-  M4-T3; **re-verify the number at filing**)
+- **Status:** Superseded by the filed [ADR-0156](../../adr/0156-a-schedulepoint-layout-travels-in-an-inert-field.md); kept as the draft that was approved
 - **Date:** 2026-09-24
 - **Amends:** ADR-0148 D7 (what export does with a placement); ADR-0050 (mapping-contract rows for
   `Activity.visualStart` and UDFs, plus a new row for `Activity.laneIndex`); ADR-0069 §2/§4 (phase 3

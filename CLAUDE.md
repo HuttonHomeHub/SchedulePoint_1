@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 33 Prisma models across 70 migrations, 1333 web
 > source files with 45 Playwright suites beside the base journey, and
-> 155 ADRs.
+> 156 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5799,6 +5799,32 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   recalculates, once, as the system, each plan last computed before the migration finished — no
   principal constructed, no pen asserted, never awaited, never failing the boot. The database
   review found that gap, not the plan.
+
+- **ADR-0156** _(Accepted; layout-interchange M0–M4 landed 2026-09-24)_ — A SchedulePoint layout
+  travels in an inert field that only SchedulePoint reads. An XER export of a hand-laid-out plan
+  re-imported with the same network and a different picture: every placement was dropped and every
+  lane re-packed. ADR-0148 D7 had decided the export would report the placement rather than
+  translate it, and the code then asserted that no format could ever carry one — true of P6 and MS
+  Project as producers, false of SchedulePoint's own file. So each activity's placed start and lane
+  travel in two P6 user-defined fields, `SchedulePoint layout v1: placed start` and `… v1: lane`,
+  identified by **exact label** (never P6's database-local id, so a P6 re-export still restores),
+  with `v1` naming the **rule** (ADR-0155's end-of-day placement) rather than the format. One module
+  owns the labels, encoder and decoder, and a structural test holds every other file to it. Export
+  never translates a placement into anything a foreign tool schedules from (D7's reason kept whole);
+  the finding becomes one `approximation`. Import restores by default and can be declined, the
+  declined path identical to a foreign file's. Phase 3 gains three modes — packed, carried, partial —
+  and overlaps among carried lanes are **reported, not resolved** (ADR-0153). **M0 found a second
+  defect under the first**: phase 3 packed on early dates while the canvas draws the placed span, so
+  an import drew 37–39 overlapping bars on the torture file, and two imports of one file disagreed
+  about 32–39 lanes because the packer breaks ties on freshly minted ids. M1 packs the drawn span,
+  keyed by activity code — 0 and 0. **The reader shipped one release before the writer**, because the
+  web client parses the import report with a strict schema. The lane field was labelled `row` until
+  the review pass, which found every canvas surface saying lane for the same `lane_index`; a label is
+  a file format's identity, and no file carried one yet, so that was the last free moment. The export
+  side's security review found nothing blocking; its one suggestion — carry `layout` on the canonical
+  model only for a format that writes it — was taken. **FC-6, whether a real P6 opens the file, is
+  unobserved** (no P6 was available), and that is not a pass. MSPDI is deferred as M5 (#386). No
+  schema change, and `computeSchedule` is unmodified.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

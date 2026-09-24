@@ -179,3 +179,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0153](0153-an-edit-moves-only-the-bar-that-caused-an-overlap.md)                               | An edit moves only the bar that caused an overlap                               | Accepted           |
 | [0154](0154-a-link-says-what-drives-which-way-and-how-long-it-waits.md)                         | A link says what drives, which way, and how long it waits                       | Accepted           |
 | [0155](0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)                                | A finish milestone is dated by the day it closes                                | Accepted           |
+| [0156](0156-a-schedulepoint-layout-travels-in-an-inert-field.md)                                | A SchedulePoint layout travels in an inert field that only SchedulePoint reads  | Accepted           |

@@ -15,7 +15,9 @@ import { describe, expect, it } from 'vitest';
  *
  * So this asserts the negative, which no unit test of either serialiser can: that neither emitter
  * so much as **mentions** the field. A serialiser that read `visualStart` would either write it
- * (inventing a column name this repository has never verified) or report it a second time.
+ * under a name of its own or report it a second time. Since layout-interchange M3 the XER file DOES
+ * carry the placement, but through the canonical `layout` and the one module that names its fields
+ * (the block below), so this rule still holds for every serialiser, XER included.
  *
  * **It matches the field name precisely and not a substring like `lag` or `visual`.** Both emitters
  * legitimately read `relationship.lagMinutes` — the dependency lag, an entirely different field
@@ -49,8 +51,8 @@ describe('the hand-placement drop has one producer', () => {
 });
 
 /**
- * **ONE module names the layout fields** (layout-interchange, spec §4.6 items 2–3; the reader half,
- * M2 — M3 adds the emitter's import to the positive list).
+ * **ONE module names the layout fields** (layout-interchange, spec §4.6 items 2–3: the reader half
+ * landed in M2, the emitter joined the positive list in M3).
  *
  * The labels are the file format's identity for the two fields, so a second copy of one is a second
  * definition of the format: change one and a SchedulePoint file stops restoring, with every unit test
@@ -70,8 +72,8 @@ describe('the layout fields have one home', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the XER adapter reads through it', () => {
-    expect(read('xer-adapter.ts')).toMatch(/from '\.\/xer-layout-fields\.js'/);
+  it.each(['xer-adapter.ts', 'xer-emit.ts'])('%s goes through it', (file) => {
+    expect(read(file)).toMatch(/from '\.\/xer-layout-fields\.js'/);
   });
 
   it.each(['mspdi-emit.ts', 'mspdi-serialiser.ts', 'export-mspdi.ts', 'mspdi-adapter.ts'])(

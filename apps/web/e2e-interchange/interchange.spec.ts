@@ -297,3 +297,65 @@ test('a planner exports a plan to .xer from the canvas Export menu', async ({ pa
   expect(download.suggestedFilename()).toMatch(/\.xer$/);
   expect(download.suggestedFilename()).toMatch(/sample/i);
 });
+
+/**
+ * **The SchedulePoint → SchedulePoint round trip** (layout-interchange M3, FC-1 in a browser).
+ *
+ * A plan whose bars were placed is exported through **Share & export ▾ → Primavera P6 (XER)**, and
+ * the downloaded bytes are imported into a second project through **Import from file…** — the two
+ * entry points a planner uses, with nothing in between. The restored values are read back through
+ * the API (the ADR-0070 rule), per activity code, because the two plans share no ids.
+ */
+test('an exported .xer re-imports with its placed starts and lanes', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewProject(page);
+  const projectUrl = page.url();
+
+  // Seed a placed plan: the layout fixture restores A1000's placement and both rows.
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const seed = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await seed.getByLabel('Schedule file (.xer or .xml)').setInputFiles(layoutXerFile());
+  await expect(seed.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
+  await seed.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+
+  await page.getByRole('button', { name: /Share & export/ }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('menuitem', { name: 'Primavera P6 (XER)' }).click(),
+  ]);
+  const bytes = readFileSync(await download.path());
+  expect(bytes.toString('utf8')).toMatch(/^%T\tUDFVALUE$/m);
+
+  // A second project, so the re-imported plan's name does not collide with the source's.
+  await page.goto(projectUrl);
+  await page.getByRole('link', { name: 'Northgate' }).click();
+  await page.getByRole('button', { name: 'New project' }).click();
+  await page.getByRole('dialog').getByLabel('Name').fill('Eastside');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
+  await page.getByRole('link', { name: 'Eastside' }).click();
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog
+    .getByLabel('Schedule file (.xer or .xml)')
+    .setInputFiles({ name: 'exported.xer', mimeType: 'application/octet-stream', buffer: bytes });
+  await expect(dialog.getByLabel('Restore the SchedulePoint layout')).toBeChecked();
+  await dialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  const planId = new URL(page.url()).pathname.split('/').pop()!;
+
+  const res = await page.request.get(
+    `/api/v1/organizations/${orgSlug}/plans/${planId}/activities?limit=100`,
+  );
+  expect(res.ok()).toBe(true);
+  const rows = (
+    (await res.json()) as {
+      data: { code: string; visualStart: string | null; laneIndex: number }[];
+    }
+  ).data;
+  const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
+  expect(byCode['A1000']).toMatchObject({ visualStart: '2026-01-12', laneIndex: 2 });
+  expect(byCode['A1010']).toMatchObject({ visualStart: null, laneIndex: 0 });
+});

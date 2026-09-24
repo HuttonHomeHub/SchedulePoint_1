@@ -48,10 +48,13 @@ export class PlanExportController {
   @ApiOperation({
     summary: 'Export a plan as a foreign schedule file (any member; P6 XER or MS Project MSPDI).',
     description:
-      'Serialises the plan’s core network (activities, dependencies, calendars) to the requested format ' +
-      'and streams it as an attachment. Out-of-scope data (WBS summaries, constraints, progress, resources) ' +
-      'is reported — not silently omitted — in the `X-Interchange-Report` response header (compact JSON). ' +
-      'M4b supports `xer` (P6) and `mspdi` (MS Project XML); any other format is a 422.',
+      'Serialises the plan — activities, WBS summaries, dependencies, calendars, constraints, progress ' +
+      'and resources — to the requested format and streams it as an attachment. Anything the format ' +
+      'cannot carry is reported, not silently omitted, in the `X-Interchange-Report` response header ' +
+      '(compact JSON). An `xer` file also carries each activity’s hand-placed start and row as two ' +
+      'SchedulePoint user-defined fields, which only SchedulePoint reads back on import; other tools show ' +
+      'every activity at its computed dates. `mspdi` does not carry them and reports the placements as ' +
+      'dropped. Any other format is a 422.',
   })
   @ApiParam({
     name: 'format',

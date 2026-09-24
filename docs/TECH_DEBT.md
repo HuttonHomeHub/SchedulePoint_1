@@ -11714,3 +11714,44 @@ upstream task (pinned by `cross-plan-conformance.spec.ts`). ADR-0155 made it tru
 finish milestone too, which until then escaped only because it read a day late. Spec Q4 took the
 default ("treat a finish milestone like any finish") and was not put to the product owner, so a
 downstream plan can move one day earlier on its next programme recalculation.
+
+### 387. The import report schema is strict, so a report that gains a field breaks a browser one release behind
+
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (ADR-0156 review) ·
+**Size:** S · **Owner:** web
+
+The web client parses the interchange report with a `.strict()` schema, so a new report field makes
+the dry-run fail with "Something went wrong" in a tab loaded from the previous release. ADR-0156 worked
+around it by shipping the reader (and its new `placements`/`lanes` counts) one release before any file
+that produces them. That ordering is a convention nobody enforces. The next report field needs either
+the same ordering or a schema that tolerates unknown keys; which is a decision, not a fix.
+
+### 388. The partial lane pack is quadratic in occupied lanes in the worst case
+
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (ADR-0156 review) ·
+**Size:** S · **Owner:** api
+
+`packAroundCarried` (`packages/layout/src/pack-around.ts`) with `rowOccupancy`'s per-lane bounds
+measured 139–157 ms for 4,900 coincident movers, against `packLanes`' 67–109 ms on 5,000 coincident
+items (it was 426–561 ms before the review fold). It is still quadratic in the number of occupied lanes
+when every lane overlaps every mover. It runs once per import commit, so the cost is accepted; reopen
+if an import of a real programme is measured slow.
+
+### 389. The restored-layout findings query has no index of its own
+
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (ADR-0156 review) ·
+**Size:** S · **Owner:** api
+
+`InterchangeService.restoredLayoutFindings` counts a plan's activities with a non-null `visual_start`
+and `visual_conflict_reason`. It is served by the plan-scoped activity index and runs once per import
+commit on the plan just created, so it was not measured. Recorded so a later reader does not add an
+index for it without a measurement.
+
+### 390. The import dialog's layout checkbox shows no busy state while the dry-run re-runs
+
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (ADR-0156 accessibility review) ·
+**Size:** S · **Owner:** web
+
+Unticking **Restore the SchedulePoint layout** re-runs the dry-run. The checkbox gives no busy
+indication while that happens; the report region updates and announces when it settles. Suggested,
+not blocking: mark the checkbox `aria-busy` (or shade it with a reason) during the re-run.
