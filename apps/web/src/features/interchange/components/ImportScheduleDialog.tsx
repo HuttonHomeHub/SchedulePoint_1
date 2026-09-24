@@ -133,8 +133,13 @@ function ImportFlow({
             setFileHasLayout(true);
           }
           const collisions = report.resourceCollisions?.length ?? 0;
+          const layout =
+            report.mapped.placements !== undefined || report.mapped.lanes !== undefined
+              ? ' The file carries a SchedulePoint layout, which will be restored.'
+              : '';
           announce(
             `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.` +
+              layout +
               (collisions > 0
                 ? ` ${collisions} resource ${collisions === 1 ? 'name needs' : 'names need'} an answer before importing.`
                 : ''),
@@ -262,7 +267,7 @@ function ImportFlow({
             label="Restore the SchedulePoint layout"
             checked={restoreLayout}
             onChange={(event) => onToggleRestoreLayout(event.target.checked)}
-            hint="This file came from SchedulePoint and carries where each bar was placed and which row it sat in, as it was when the file was exported. Off: the plan is scheduled from its logic alone and laid out afresh."
+            hint="This file came from SchedulePoint and carries where each bar was placed and which lane it sat in, as they were when the file was exported. Off: bars are drawn where the logic puts them and packed into lanes afresh. The logic, early dates and critical path are the same either way."
           />
         ) : null}
 

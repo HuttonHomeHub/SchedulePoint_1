@@ -66,3 +66,37 @@ covers.
 
 `docs/API.md` said an import lays activities out "on a deterministic lane per source order". That was true
 of phase 1 alone and has been stale since ADR-0069 added packing. It is corrected in the same change.
+
+## Review fold (M4-T1, run over M1–M3 before M2 merged)
+
+Six specialist reviews ran over the combined diff. What they found in M2's code is fixed here, in the
+release that ships it, rather than in a later one:
+
+- **UX, blocking:** the checkbox hint said that off means "the plan is scheduled from its logic alone".
+  That is false: the network pass is the same either way (ADR-0148). Only the picture changes. The hint
+  now says so, including that the logic, early dates and critical path are identical.
+- **UX, blocking:** the dialog, the report tile and the server's findings said **row**; every canvas
+  surface says **lane** for the same `lane_index`. All user-facing copy now says lane. **So does the
+  field label**, `SchedulePoint layout v1: lane`. The label is the file format's identity and can never
+  change once a file carries one. None did yet, so this was the last moment the rename was free
+  (`conditions.md` records the amendment).
+- **Performance, blocking:** `packAroundCarried` on 4,900 coincident movers took 426–561 ms here
+  (reproduced from the review's own shape). The cause was `rowOccupancy` iterating a `Map` for every
+  lane it scanned. Each lane now keeps an array and its start and end bounds, so a lane the mover
+  cannot touch is ruled out in O(1): 139–157 ms on the same shapes, against `packLanes`' 67–109 ms on
+  5,000 coincident items. It is still quadratic in the number of occupied lanes, it runs once per
+  import commit, and that cost is accepted and recorded rather than removed.
+- **Tests, blocking:** the duplicate-definition case could not tell "first in file order" from "lowest
+  id", because its first definition had both. A case with id 9 listed before id 2 now does, verified
+  red against an id sort. Spec §2's "placement on a started / complete / LOE activity" had no test. It
+  now has one through the whole import, verified red against a mapper that drops placements on
+  progressed rows.
+- **Accessibility, suggested and taken:** the dry-run announcement now says when the file carries a
+  SchedulePoint layout, so a screen-reader user learns why a new option appeared.
+- **Security, suggested and taken:** `persistGraph` refuses a placement on a WBS summary itself, rather
+  than relying on the reader alone; `countOverlapping` pushes rather than copying each lane's array.
+- **API:** nothing blocking. The `@ApiBody` enum now reads `RESTORE_LAYOUT_OPTIONS` rather than
+  restating it.
+
+The security review could not see the export side, because M3 was held out of the tree while M2 was in
+review. That half is reviewed again in M3.

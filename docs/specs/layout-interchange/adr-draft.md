@@ -29,7 +29,7 @@ has been observed opening any SchedulePoint XER.
 
 1. **The layout travels in P6 user-defined fields namespaced to SchedulePoint and versioned.** Three
    fields: `SchedulePoint layout v1: placed start` (`TASK`, `FT_TEXT`, the stored `YYYY-MM-DD`) and
-   `SchedulePoint layout v1: row` (`TASK` and `PROJWBS`, `FT_INT`). One module owns the labels, the
+   `SchedulePoint layout v1: lane` (`TASK` and `PROJWBS`, `FT_INT`). One module owns the labels, the
    encoder and the decoder; a structural test holds every other file to it.
 2. **The field is identified by its exact label, never by P6's database-local name or id**, and never
    by the file's header, so a P6 re-export of our file still restores what it carries.

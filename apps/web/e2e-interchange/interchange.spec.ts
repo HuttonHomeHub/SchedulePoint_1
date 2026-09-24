@@ -184,7 +184,7 @@ test('a SchedulePoint .xer restores its placed starts and rows, and the option c
   const option = dialog.getByLabel('Restore the SchedulePoint layout');
   await expect(option).toBeChecked();
   await expect(mapped.getByText('Placed starts')).toBeVisible();
-  await expect(mapped.getByText('Rows')).toBeVisible();
+  await expect(mapped.getByText('Lanes')).toBeVisible();
 
   const results = await new AxeBuilder({ page })
     .include('dialog[open]')

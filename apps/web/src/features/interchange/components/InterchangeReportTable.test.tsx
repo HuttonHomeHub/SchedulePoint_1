@@ -48,7 +48,7 @@ describe('InterchangeReportTable', () => {
       />,
     );
     expect(screen.getByText('Placed starts').nextElementSibling).toHaveTextContent('12');
-    expect(screen.getByText('Rows').nextElementSibling).toHaveTextContent('40');
+    expect(screen.getByText('Lanes').nextElementSibling).toHaveTextContent('40');
   });
 
   it('renders each finding section as a labelled region with its count', () => {

@@ -26,7 +26,7 @@ export function InterchangeReportTable({
           <Count label="Placed starts" value={report.mapped.placements} />
         )}
         {report.mapped.lanes === undefined ? null : (
-          <Count label="Rows" value={report.mapped.lanes} />
+          <Count label="Lanes" value={report.mapped.lanes} />
         )}
       </dl>
 

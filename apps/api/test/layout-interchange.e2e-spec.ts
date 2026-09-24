@@ -423,7 +423,9 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
         expect.stringMatching(/^\d+ restored placed starts? (is|are) no longer allowed/),
       );
       expect(details).toContainEqual(
-        expect.stringMatching(/^\d+ activit(y|ies) overlaps? another in (its|their) row — Arrange/),
+        expect.stringMatching(
+          /^\d+ activit(y|ies) overlaps? another in (its|their) lane — Arrange/,
+        ),
       );
     });
 

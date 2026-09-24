@@ -75,7 +75,7 @@ export function layoutXerFile(): { name: string; mimeType: string; buffer: Buffe
     '%T\tUDFTYPE',
     '%F\tudf_type_id\ttable_name\tudf_type_name\tudf_type_label\tlogical_data_type',
     '%R\t1\tTASK\tuser_field_1\tSchedulePoint layout v1: placed start\tFT_TEXT',
-    '%R\t2\tTASK\tuser_field_2\tSchedulePoint layout v1: row\tFT_INT',
+    '%R\t2\tTASK\tuser_field_2\tSchedulePoint layout v1: lane\tFT_INT',
     '%T\tUDFVALUE',
     '%F\tudf_type_id\tfk_id\tproj_id\tudf_date\tudf_number\tudf_text\tudf_code_id',
     '%R\t1\tT1\tP1\t\t\t2026-01-12\t',

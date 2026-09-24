@@ -547,15 +547,15 @@ the span the canvas draws and keyed by activity code, so the same file lays out 
 ADR-0069 added the packing.)
 
 **A SchedulePoint XER carries its own layout** (layout-interchange). Each activity's hand-placed start
-(`visualStart`) and row (`laneIndex`) travel in two P6 user-defined fields that only SchedulePoint writes
-and reads, labelled exactly `SchedulePoint layout v1: placed start` and `SchedulePoint layout v1: row`.
+(`visualStart`) and lane (`laneIndex`) travel in two P6 user-defined fields that only SchedulePoint writes
+and reads, labelled exactly `SchedulePoint layout v1: placed start` and `SchedulePoint layout v1: lane`.
 On import with `restoreLayout=RESTORE` (the default) both are written as the file carried them; the
 packing then leaves every carried row where it is and places only activities the file left without one.
 `restoreLayout=IGNORE` imports the file exactly as one from another tool would be, and a `drop` finding
 names what was not applied. The report counts what was restored in `mapped.placements` and
 `mapped.lanes` (**absent when zero**, so a foreign file's report is unchanged), and after the commit's
 recalculation it adds up to two `approximation` findings: restored placements the logic no longer allows,
-and carried rows whose bars overlap (Arrange lays them out again). Any other file's user-defined fields
+and carried lanes whose bars overlap (Arrange lays them out again). Any other file's user-defined fields
 are not imported and are reported as one `drop` finding with their count. A malformed layout value is
 discarded and counted in a `repair` finding; the import proceeds. An unknown `restoreLayout` value is a
 **422**.

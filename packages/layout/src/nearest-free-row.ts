@@ -31,22 +31,55 @@ export interface RowOccupancy {
 }
 
 export function rowOccupancy(items: readonly PackItem[]): RowOccupancy {
-  const byLane = new Map<number, Map<string, PackItem>>();
+  // Per lane: its items, and the earliest start and latest end among them. The bounds rule most lanes
+  // out in O(1) — a mover wholly before or after everything in a lane fits there without looking at a
+  // single item — which is what keeps a dense import's partial pack near `packLanes`' cost (the
+  // layout-interchange M4 performance review measured the per-lane Map scan at ~0.5 s for 4,900
+  // coincident movers).
+  const byLane: PackItem[][] = [];
+  const laneMin: number[] = [];
+  const laneMax: number[] = [];
   const laneOf = new Map<string, number>();
+  const itemOf = new Map<string, PackItem>();
+
+  const rebound = (lane: number): void => {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const item of byLane[lane] ?? []) {
+      if (item.startDay < min) min = item.startDay;
+      if (item.endDay > max) max = item.endDay;
+    }
+    laneMin[lane] = min;
+    laneMax[lane] = max;
+  };
   const place = (item: PackItem, lane: number): void => {
-    const row = byLane.get(lane);
-    if (row) row.set(item.id, item);
-    else byLane.set(lane, new Map([[item.id, item]]));
+    const row = byLane[lane];
+    if (row) row.push(item);
+    else byLane[lane] = [item];
+    laneMin[lane] = Math.min(laneMin[lane] ?? Infinity, item.startDay);
+    laneMax[lane] = Math.max(laneMax[lane] ?? -Infinity, item.endDay);
     laneOf.set(item.id, lane);
   };
-  const itemOf = new Map<string, PackItem>();
+  const remove = (id: string): void => {
+    const lane = laneOf.get(id);
+    if (lane === undefined) return;
+    const row = byLane[lane];
+    if (row) {
+      const at = row.findIndex((item) => item.id === id);
+      if (at !== -1) row.splice(at, 1);
+    }
+    rebound(lane);
+  };
   for (const item of items) {
     itemOf.set(item.id, item);
     place(item, item.laneIndex);
   }
 
   const free = (lane: number, mover: PackItem): boolean => {
-    for (const item of byLane.get(lane)?.values() ?? []) {
+    const row = byLane[lane];
+    if (row === undefined || row.length === 0) return true;
+    if (laneMax[lane]! < mover.startDay || mover.endDay < laneMin[lane]!) return true;
+    for (const item of row) {
       if (item.id === mover.id) continue;
       if (!(item.endDay < mover.startDay || mover.endDay < item.startDay)) return false;
     }
@@ -68,12 +101,11 @@ export function rowOccupancy(items: readonly PackItem[]): RowOccupancy {
     move(id, lane) {
       const item = itemOf.get(id);
       if (item === undefined) return;
-      byLane.get(laneOf.get(id)!)?.delete(id);
+      remove(id);
       place(item, lane);
     },
     add(item, lane) {
-      const existing = laneOf.get(item.id);
-      if (existing !== undefined) byLane.get(existing)?.delete(item.id);
+      remove(item.id);
       itemOf.set(item.id, item);
       place(item, lane);
     },

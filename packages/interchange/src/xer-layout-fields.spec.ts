@@ -159,7 +159,7 @@ describe('decodeLayoutFields', () => {
     ]);
     expect(Object.fromEntries(layout)).toEqual({ T1: { placedStart: null, lane: 3 } });
     expect(findings).toEqual([
-      expect.objectContaining({ kind: 'repair', detail: expect.stringMatching(/^3 row value/) }),
+      expect.objectContaining({ kind: 'repair', detail: expect.stringMatching(/^3 lane value/) }),
     ]);
   });
 
@@ -208,6 +208,81 @@ describe('decodeLayoutFields', () => {
         detail: expect.stringMatching(/^1 duplicate SchedulePoint layout field/),
       }),
     ]);
+  });
+
+  /**
+   * The case above cannot tell "first in file order" from "lowest id": its first definition has both.
+   * Here the file lists id 9 BEFORE id 2, so the two rules disagree, and the shipped rule (m2-record.md,
+   * decision 2: ids are local to one P6 database, file order is not) must pick id 9.
+   */
+  it('when two definitions disagree, the first in FILE order wins, not the lowest id', () => {
+    const { layout } = decode(
+      [
+        ['9', 'TASK', 'first', LAYOUT_LABEL_ROW, 'FT_INT'],
+        ['2', 'TASK', 'second', LAYOUT_LABEL_ROW, 'FT_INT'],
+      ],
+      [row('T1', '4', '9'), row('T2', '7', '2')],
+    );
+    expect(Object.fromEntries(layout)).toEqual({ T1: { placedStart: null, lane: 4 } });
+  });
+
+  /**
+   * Spec §2: a placement on a started, complete or level-of-effort activity is carried verbatim; the
+   * engine decides what Pass 2 does with it (ADR-0148 D0). Run through the whole import, because the
+   * risk is a later stage dropping it for a progressed or LOE row.
+   */
+  it('carries a placement on a started, a complete and an LOE activity', () => {
+    const tables: XerTableSpec[] = [
+      {
+        name: 'PROJECT',
+        fields: ['proj_id', 'proj_short_name', 'plan_start_date', 'last_recalc_date'],
+        rows: [['P1', 'Sample', '2026-01-05 00:00', '2026-02-02 00:00']],
+      },
+      {
+        name: 'TASK',
+        fields: [
+          'task_id',
+          'proj_id',
+          'task_code',
+          'task_name',
+          'task_type',
+          'status_code',
+          'target_drtn_hr_cnt',
+          'remain_drtn_hr_cnt',
+          'act_start_date',
+          'act_end_date',
+        ],
+        rows: [
+          ['T1', 'P1', 'A1', 'Started', 'TT_Task', 'TK_Active', '80', '40', '2026-01-05 08:00', ''],
+          [
+            'T2',
+            'P1',
+            'A2',
+            'Complete',
+            'TT_Task',
+            'TK_Complete',
+            '40',
+            '0',
+            '2026-01-05 08:00',
+            '2026-01-09 16:00',
+          ],
+          ['T3', 'P1', 'A3', 'Level of effort', 'TT_LOE', 'TK_NotStart', '0', '0', '', ''],
+        ],
+      },
+      { name: 'UDFTYPE', fields: UDFTYPE_FIELDS, rows: OUR_TYPES },
+      {
+        name: 'UDFVALUE',
+        fields: UDFVALUE_FIELDS,
+        rows: [placed('T1', '2026-01-12'), placed('T2', '2026-01-19'), placed('T3', '2026-01-26')],
+      },
+    ];
+    const result = importXer({ content: buildXer(tables), filename: 'progressed.xer' });
+    if (!result.ok) throw new Error(result.error.code);
+    const byCode = new Map(result.graph.activities.map((a) => [a.code, a]));
+    expect(byCode.get('A1')).toMatchObject({ visualStart: '2026-01-12' });
+    expect(byCode.get('A2')).toMatchObject({ visualStart: '2026-01-19' });
+    expect(byCode.get('A3')).toMatchObject({ type: 'LEVEL_OF_EFFORT', visualStart: '2026-01-26' });
+    expect(result.graph.activities.find((a) => a.code === 'A1')?.progress).not.toBeNull();
   });
 });
 
@@ -275,7 +350,7 @@ describe('FC-4 — near-miss labels are somebody else’s field', () => {
   };
   const plain = run(base);
 
-  it.each(['SchedulePoint layout v1: Row', 'SchedulePoint layout v1:row'])(
+  it.each(['SchedulePoint layout v1: Lane', 'SchedulePoint layout v1:lane'])(
     '“%s” leaves the graph byte-identical and is one foreign-field drop',
     (label) => {
       const result = run([...base, ...nearMiss(label)]);
@@ -287,8 +362,8 @@ describe('FC-4 — near-miss labels are somebody else’s field', () => {
     },
   );
 
-  it('“SchedulePoint layout v2: row” leaves the graph byte-identical and adds exactly one newer-version drop', () => {
-    const result = run([...base, ...nearMiss('SchedulePoint layout v2: row')]);
+  it('“SchedulePoint layout v2: lane” leaves the graph byte-identical and adds exactly one newer-version drop', () => {
+    const result = run([...base, ...nearMiss('SchedulePoint layout v2: lane')]);
     expect(JSON.stringify(result.graph)).toBe(JSON.stringify(plain.graph));
     expect(result.report.drops).toEqual([
       ...plain.report.drops,

@@ -86,7 +86,7 @@ describe('the layout fields have one home', () => {
   it('xer-layout-fields.ts does contain both labels', () => {
     const text = read('xer-layout-fields.ts');
     expect(text).toContain("'SchedulePoint layout v1: placed start'");
-    expect(text).toContain("'SchedulePoint layout v1: row'");
+    expect(text).toContain("'SchedulePoint layout v1: lane'");
     expect(production).toContain('xer-layout-fields.ts');
   });
 });

@@ -24,7 +24,7 @@ import type { XerDocument } from './xer-parser.js';
 import type { XerTableData } from './xer-serialiser.js';
 
 export const LAYOUT_LABEL_PLACED_START = 'SchedulePoint layout v1: placed start';
-export const LAYOUT_LABEL_ROW = 'SchedulePoint layout v1: row';
+export const LAYOUT_LABEL_ROW = 'SchedulePoint layout v1: lane';
 
 /**
  * The row ceiling the API already enforces on `laneIndex` (`create-activity.dto.ts`, `@Max(10000)`),
@@ -213,8 +213,8 @@ export function decodeLayoutFields(
   );
   discarded(
     badLanes,
-    `row value(s) were not a whole number from 0 to ${String(MAX_LAYOUT_LANE)} and were discarded`,
-    'a row is a whole number',
+    `lane value(s) were not a whole number from 0 to ${String(MAX_LAYOUT_LANE)} and were discarded`,
+    'a lane is a whole number',
   );
   discarded(
     duplicates,

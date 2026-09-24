@@ -568,7 +568,10 @@ export class InterchangeService {
           laneIndex: activity.laneIndex ?? laneIndex,
           // The hand-placement a SchedulePoint XER carried (ADR-0148), written verbatim: the engine
           // decides what Pass 2 does with it, as it does for one a planner dragged.
-          ...(activity.visualStart == null
+          // Never on a WBS summary, whose dates are a rollup (ADR-0038): the reader already discards
+          // one, and this is the write path's own backstop, since nothing between here and the table
+          // re-checks it the way the PATCH route does.
+          ...(activity.visualStart == null || activity.type === 'WBS_SUMMARY'
             ? {}
             : { visualStart: this.toDateOrNull(activity.visualStart) }),
           // Constraints (ADR-0035 §7–§12): primary + secondary type/date pairs + the ALAP flag.
@@ -1261,8 +1264,8 @@ export class InterchangeService {
         kind: 'approximation',
         entity: 'activity',
         sourceRef: null,
-        detail: `${String(carriedOverlaps)} activit${carriedOverlaps === 1 ? 'y overlaps' : 'ies overlap'} another in ${carriedOverlaps === 1 ? 'its' : 'their'} row — Arrange can lay them out again`,
-        reason: 'the rows were kept as the file carried them',
+        detail: `${String(carriedOverlaps)} activit${carriedOverlaps === 1 ? 'y overlaps' : 'ies overlap'} another in ${carriedOverlaps === 1 ? 'its' : 'their'} lane — Arrange can lay them out again`,
+        reason: 'the lanes were kept as the file carried them',
       });
     }
     return findings;
@@ -1437,9 +1440,12 @@ export class InterchangeService {
 function countOverlapping(
   items: readonly { id: string; startDay: number; endDay: number; laneIndex: number }[],
 ): number {
-  const byLane = new Map<number, typeof items>();
-  for (const item of items)
-    byLane.set(item.laneIndex, [...(byLane.get(item.laneIndex) ?? []), item]);
+  const byLane = new Map<number, (typeof items)[number][]>();
+  for (const item of items) {
+    const lane = byLane.get(item.laneIndex);
+    if (lane) lane.push(item);
+    else byLane.set(item.laneIndex, [item]);
+  }
   const overlapping = new Set<string>();
   for (const row of byLane.values()) {
     const sorted = [...row].sort((a, b) => a.startDay - b.startDay);

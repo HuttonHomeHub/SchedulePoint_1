@@ -368,9 +368,11 @@ describe('ImportScheduleDialog', () => {
       pickFile();
       const option = await screen.findByLabelText('Restore the SchedulePoint layout');
       expect(option).toBeChecked();
-      expect(option).toHaveAccessibleDescription(/as it was when the file was exported/);
+      expect(option).toHaveAccessibleDescription(
+        /as they were when the file was exported\. Off: bars are drawn where the logic puts them/,
+      );
       expect(screen.getByText('Placed starts')).toBeInTheDocument();
-      expect(screen.getByText('Rows')).toBeInTheDocument();
+      expect(screen.getByText('Lanes')).toBeInTheDocument();
     });
 
     it('unticking re-runs the dry-run with IGNORE, stays offered, and carries IGNORE to the commit', async () => {
