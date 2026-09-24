@@ -431,3 +431,17 @@ the listbox.
 
 **FC-G1 byte-identical; FC-G5: row text on a disc 0, wrapped lines on a link 0, text on text 0.**
 Golden unchanged: its scene has no gap labels and no name that wraps.
+
+## M4 journey — `text.spec.ts` (2026-09-24)
+
+Two cases on the real canvas, with text found as dark unsaturated ink in the row above the bar (the
+name) and below it (the dates), located from the bar's own rows, and the data-date line switched off
+because it is a dark vertical through both rows:
+
+- the parallel listbox's option is named `Excavate, C100`, and still is after `View ▾ ▸ Markers ▸
+Activity codes` is switched on, while the name row gains ink (the code);
+- at the Week preset there is date ink under the bar; at Year there is none.
+
+Both passed first time, so both were run against the painter with the codes switch and the date tier
+removed, and both failed with their own messages. `test:e2e:netpoint-grammar` moves 60 → 72 s (seven
+tests, measured locally).
