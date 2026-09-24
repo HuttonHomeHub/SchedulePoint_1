@@ -473,8 +473,14 @@ jobs:
       # original omission, because the promotion M1-T5 specified had been
       # skipped — so as far as the contract was concerned `apps/web` depended on
       # neither. Ordered before `@repo/seed`, which imports it.
+      #
+      # `@repo/seed-http` is here for the NetPoint grammar journeys, which seed the reference plan by
+      # running `@repo/seed-cli` in a subprocess (`e2e-netpoint-grammar/support.ts`). `tsx` resolves
+      # workspace packages through `exports.default`, so the seeder needs `seed-http/dist` and fails
+      # with ERR_MODULE_NOT_FOUND without it — green locally, where an old `dist/` is lying there, and
+      # red on the first clean runner. Ordered after `@repo/seed`, which it imports.
       - name: Build shared packages
-        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build && pnpm --filter @repo/engine-conformance build && pnpm --filter @repo/seed build
+        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build && pnpm --filter @repo/engine-conformance build && pnpm --filter @repo/seed build && pnpm --filter @repo/seed-http build
 
       - name: Generate Prisma client
         run: pnpm --filter @repo/api prisma:generate

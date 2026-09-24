@@ -7,7 +7,17 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // Three NetPoint measurement scripts read the reference plan straight out of
+      // `apps/seed-cli/src`, and those files import `@repo/seed` — which TypeScript then looks up
+      // from `apps/seed-cli/node_modules`. The web image installs only `--filter @repo/web...`, so
+      // that directory does not exist there, the import fails, and every type the scripts derive
+      // from the plan collapses to an implicit `any`: the image build broke while every local gate
+      // passed, because a local checkout has the directory. This names the SAME declaration file
+      // web's own `@repo/seed` import already resolves to (`exports["."].types`), so it adds a
+      // route rather than a second copy of the types. `@repo/seed` is built before `@repo/web` in
+      // the image, so the file exists there.
+      "@repo/seed": ["../../packages/seed/dist/index.d.ts"]
     }
   },
   "include": [

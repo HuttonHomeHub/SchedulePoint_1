@@ -540,6 +540,14 @@ function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof 
  */
 const VIEW_SCOPED_TOGGLES: Partial<Record<keyof TsldViewToggles, 'gantt' | 'tsld'>> = {
   logicLinks: 'gantt',
+  // The NetPoint grammar's three lenses (spec §4.13) are read by the canvas painter and nothing
+  // else — the Gantt prints the code in its own column, has no centre item and draws no gap
+  // labels — so in the Gantt they are the same live-but-inert checkbox `logicLinks` is on the
+  // canvas. Found by `e2e-gantt-editing`, whose `name: 'Activity'` locator matched `Activity codes`
+  // in the Gantt's `View ▾`: a substring collision that was also the evidence of the inert control.
+  activityCodes: 'tsld',
+  centreItem: 'tsld',
+  linkSlack: 'tsld',
 };
 
 /** The keys `View▾` offers for the view currently on screen. */

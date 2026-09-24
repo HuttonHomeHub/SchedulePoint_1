@@ -103,9 +103,11 @@ test('a column choice survives a reload, and Activity can never be hidden', asyn
   await expect(page.getByRole('columnheader', { name: 'Predecessors' })).toBeVisible();
 
   // The one column the chooser must never offer: it identifies the row, carries the inline editor
-  // and is what a screen-reader user hears on landing.
+  // and is what a screen-reader user hears on landing. `exact`, because Playwright matches a string
+  // name as a SUBSTRING (Testing Library does not): unanchored, this caught the canvas's
+  // `Activity codes` lens the day `View ▾` grew one, and failed for a reason that is not its subject.
   await page.getByRole('button', { name: 'View', exact: true }).click();
-  await expect(page.getByRole('checkbox', { name: 'Activity' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Activity', exact: true })).toHaveCount(0);
 });
 
 test('Indent files a row under the summary above it, and the write reaches the API', async ({
