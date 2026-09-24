@@ -260,9 +260,10 @@ export async function seedDependency(
  * passed identically against the pre-M1 datum. A vertical crossing is one or two pixels wide; a
  * gutter leg is tens or hundreds. The run length tells them apart; the pixel count cannot.
  *
- * Colour is classified by saturation rather than by a literal: a bar is a saturated plot fill and a
- * link is a near-neutral grey, so a token re-value (ADR-0102 re-valued the whole canvas scope once)
- * changes the numbers and not the classification. A hex literal here would be exactly the second
+ * Colour is classified by saturation and hue rather than by a literal: a bar is a saturated plot
+ * fill, and a link is either a near-neutral grey or the violet family ADR-0157 gave links, so a
+ * token re-value (ADR-0102 re-valued the whole canvas scope once) changes the numbers and not the
+ * classification. A hex literal here would be exactly the second
  * opinion about a token that `resolveTsldPalette` exists to prevent.
  */
 export async function canvasInk(
@@ -298,11 +299,17 @@ export async function canvasInk(
         const max = Math.max(r, g, b);
         const min = Math.min(r, g, b);
         const chroma = max - min;
-        if (chroma > 40) {
+        // **Violet is link ink, whatever its saturation** (NetPoint grammar, ADR-0157). Links took
+        // a hue of their own — `--canvas-link*`, oklch hue 295 — so a routed link is now as
+        // saturated as a bar and a chroma test alone read it as a second bar band: the same-lane
+        // case below reported two lanes on a one-lane plan. Violet is the only ink here with blue
+        // above red above green; the green bar fill, the critical rung and every neutral are not.
+        const violet = b > r && r > g && chroma > 20;
+        if (chroma > 40 && !violet) {
           bar += 1;
           run = 0;
           gap = 0;
-        } else if (max < 190 && max > 40) {
+        } else if (violet || (max < 190 && max > 40)) {
           link += 1;
           run += gap + 1;
           gap = 0;
