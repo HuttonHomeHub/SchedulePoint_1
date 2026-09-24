@@ -830,7 +830,7 @@ describe('the diagram grid is readable on both of its grounds', () => {
   // Before M2 every link was one grey; these tokens reached the link role here, and `--primary` has
   // a thin margin (≈3.15:1) that a button or badge re-tune could erode without anyone looking here.
   const DRIVING_INKS: ReadonlyArray<readonly [rung: string, token: string]> = [
-    ['an ordinary driving link', '--primary'],
+    ['an ordinary driving link', '--canvas-link'],
     ['a critical driving link', '--destructive'],
     ['a near-critical driving link', '--warning'],
   ];
@@ -923,12 +923,9 @@ describe.each(THEME_SELECTORS)('%s — adjacent surfaces', (theme) => {
  * value being gated here while `globals.css` says something else. The overlay must be empty by M6.
  */
 const NETPOINT_PROPOSED: Readonly<Record<string, string>> = {
-  // M1 shipped the ground, the band, the wash, the lane rule, the three grid tiers and paper's own
-  // grid (as `--canvas-paper-grid-*`), and M2 shipped `--canvas-bar`, so their entries are deleted
-  // and the cases below read CSS.
-  '--canvas-link': 'oklch(0.592 0.13 295)',
-  '--canvas-link-minor': 'oklch(0.643 0.09 295)',
-  '--canvas-link-mark': 'oklch(0.331 0.13 295)',
+  // Empty since M3, as it must be by M6. M1 shipped the ground, the band, the wash, the lane rule,
+  // the three grid tiers and paper's own grid (as `--canvas-paper-grid-*`), M2 `--canvas-bar` and
+  // M3 the three link inks, so every case below reads the shipped CSS.
 };
 
 describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope', () => {

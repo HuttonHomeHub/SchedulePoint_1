@@ -69,3 +69,34 @@ describe('FC-G8 — the legend keys every node mark the painter draws, and nothi
     }
   });
 });
+
+/** M3 (spec §4.2 G5): the violet link family and its marks. */
+const LINK_LINES = [
+  { key: 'linkDriving', label: 'Driving link' },
+  { key: 'linkMinor', label: 'Non-driving link' },
+] as const;
+
+describe('FC-G8 — the legend keys the link family the painter draws (M3)', () => {
+  it.each([...LINK_LINES.map(({ key }) => key), 'linkMark'] as const)(
+    'the painter reads palette.%s',
+    (key) => {
+      expect(painter).toMatch(new RegExp(String.raw`palette\.${key}\b`));
+    },
+  );
+
+  it.each(LINK_LINES)('$label: a line swatch in var($key’s token)', ({ key, label }) => {
+    render(<TsldLegend />);
+    const item = screen.getByText(label, { exact: true }).closest('li');
+    const line = item?.querySelector<HTMLElement>('span[style*="border-top"]');
+    expect(line, `${label} has no line swatch`).not.toBeNull();
+    expect(line!.style.borderTopColor).toBe(`var(${tokenOf(key)})`);
+  });
+
+  it('Direction: the chevron is filled in the mark shade the painter fills violet marks with', () => {
+    render(<TsldLegend />);
+    const item = screen.getByText('Direction', { exact: true }).closest('li');
+    const mark = item?.querySelector<SVGPathElement>('[data-legend-mark]');
+    expect(mark, 'Direction has no mark swatch').not.toBeNull();
+    expect(mark!.style.fill).toBe(`var(${tokenOf('linkMark')})`);
+  });
+});

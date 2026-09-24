@@ -681,8 +681,20 @@
      to be drawn in `--muted-foreground` — the page's secondary TEXT colour, which nothing chose for
      a line and which moves whenever the page's text is re-valued (TECH_DEBT #367). A 1 px line a
      reader follows is a graphical object, so it clears 3:1 on both grounds; it stays quieter than a
-     driving link by WEIGHT, which is the channel that carries drivingness. */
-  --canvas-link-minor: oklch(0.61 0.008 252);
+     driving link by WEIGHT, which is the channel that carries drivingness.
+
+     **Links have a hue of their own** (NetPoint grammar M3, spec §4.2 G5, CQ-4 violet). Green is the
+     bar, amber and red the rungs, blue the selection ring and grey the grid, so a link in any of
+     those reads as one of them. The three violet values are solved, not chosen
+     (`scripts/solve-netpoint-grammar.ts`, `docs/specs/netpoint-grammar/m0-solved.md`): each line
+     clears 3:1 on the ground, the band and paper, the minor one the lightest that does with a 0.2
+     margin, and the mark ink clears 3:1 on both lines and 4.5:1 on the ground (it is also the gap
+     label's text). A contrast ratio cannot see the hue step from the bar, so FC-G3 measures ΔE. */
+  --canvas-link-minor: oklch(0.643 0.09 295);
+  /* An ordinary DRIVING link. Critical and near-critical driving links keep the rung inks. */
+  --canvas-link: oklch(0.592 0.13 295);
+  /* Direction marks on a violet link, and the gap label's text. */
+  --canvas-link-mark: oklch(0.331 0.13 295);
   /* **The activity bar** (NetPoint grammar M2, spec §4.13 A-n1). Its own token rather than a
      re-hued `--plot-primary`, because `--primary` inside the canvas scope also paints the primary
      BUTTON in the DOM mounted over the diagram (the dock, the create popover, the selection bar).

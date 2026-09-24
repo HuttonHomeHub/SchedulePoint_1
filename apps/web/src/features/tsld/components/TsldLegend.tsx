@@ -101,7 +101,8 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
           ink: 'var(--warning)',
           weight: 2,
         } as const,
-        { label: 'Driving link', line: 'solid', ink: 'var(--primary)', weight: 2 } as const,
+        // The violet link family (NetPoint grammar M3, spec §4.2 G5), never the button's blue.
+        { label: 'Driving link', line: 'solid', ink: 'var(--canvas-link)', weight: 2 } as const,
         {
           label: 'Non-driving link',
           line: 'solid',
@@ -506,7 +507,8 @@ export function TsldLegend({
             </span>
           ) : 'chevron' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
-              {/* A link with one filled chevron along it, pointing the way the link runs. */}
+              {/* A link with one filled chevron along it, pointing the way the link runs, in the
+                  darker mark shade the painter fills a violet link's marks with (M3). */}
               <span
                 className="w-full"
                 style={{
@@ -521,7 +523,11 @@ export function TsldLegend({
                 height="6"
                 viewBox="0 0 6 6"
               >
-                <path d="M1 0 L5 3 L1 6 Z" style={{ fill: 'var(--canvas-link-minor)' }} />
+                <path
+                  data-legend-mark=""
+                  d="M1 0 L5 3 L1 6 Z"
+                  style={{ fill: 'var(--canvas-link-mark)' }}
+                />
               </svg>
             </span>
           ) : 'lagPlate' in item ? (

@@ -111,6 +111,10 @@ describe('splitRunsByX', () => {
 });
 
 describe('chevronsAlong', () => {
+  it('spaces marks at the reference’s rhythm, about every 40 px (NetPoint grammar M3)', () => {
+    expect(CHEVRON_SPACING_PX).toBe(40);
+  });
+
   it('puts none on a short link', () => {
     expect(
       chevronsAlong([
@@ -140,6 +144,11 @@ describe('chevronsAlong', () => {
       { x: CHEVRON_SPACING_PX * 100, y: 0 },
     ]);
     expect(marks).toHaveLength(CHEVRON_MAX_PER_LINK);
+    // NetPoint grammar M3: where the cap binds, the marks spread along the whole link instead of
+    // bunching in its first stretch — evenly, one seventh of the length apart for six marks.
+    const total = CHEVRON_SPACING_PX * 100;
+    const step = total / (CHEVRON_MAX_PER_LINK + 1);
+    marks.forEach(([tip], i) => expect(tip.x).toBeCloseTo((i + 1) * step, 6));
   });
 
   it('follows the line round a corner', () => {

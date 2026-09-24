@@ -134,6 +134,8 @@ const OUTSIDE_THE_CLOSURE = {
     // The non-driving link (NetPoint-layout M2): a diagram line with no meaning on a header and no
     // semantic sibling, gated by its own pairs in token-contrast.test.ts rather than by completeness.
     '--canvas-link-minor',
+    '--canvas-link',
+    '--canvas-link-mark',
     // The activity bar (NetPoint grammar M2, spec §4.13 A-n1): its own token, so re-hueing the bar
     // does not re-hue the primary button mounted over the diagram. Gated by its own pairs.
     '--canvas-bar',

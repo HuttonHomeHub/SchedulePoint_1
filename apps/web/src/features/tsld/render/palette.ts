@@ -160,8 +160,11 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     laneRule: token('--canvas-lane-rule', '#232833'),
     // The non-driving link (NetPoint-layout M2). Unprefixed and resolved on the canvas element, like
     // every name here, so the canvas scope governs it (ADR-0102).
-    linkMinor: token('--canvas-link-minor', '#8a8f98'),
-    linkDriving: token('--primary', '#3b6fbf'),
+    linkMinor: token('--canvas-link-minor', '#9182be'),
+    // An ordinary driving link (NetPoint grammar M3): the violet link family, never the button's
+    // blue, which also paints the selection ring (spec §4.2 G5).
+    linkDriving: token('--canvas-link', '#846cc2'),
+    linkMark: token('--canvas-link-mark', '#3d2070'),
     edge: token('--muted-foreground', '#7a8090'),
     bar: token('--canvas-bar', '#459e5d'),
     critical: token('--destructive', '#c83c3c'),
@@ -263,8 +266,9 @@ export const PRINT_TOKEN_SOURCES = {
   gridLineMonth: ['--canvas-paper-grid-month', '#72777e'],
   gridLineYear: ['--canvas-paper-grid-year', '#595e66'],
   laneRule: ['--canvas-lane-rule', '#f4f6f8'],
-  linkMinor: ['--canvas-link-minor', '#80848b'],
-  linkDriving: ['--primary', '#4b8cca'],
+  linkMinor: ['--canvas-link-minor', '#9182be'],
+  linkDriving: ['--canvas-link', '#846cc2'],
+  linkMark: ['--canvas-link-mark', '#3d2070'],
   edge: ['--muted-foreground', '#636363'],
   bar: ['--canvas-bar', '#459e5d'],
   critical: ['--destructive', '#9c0711'],

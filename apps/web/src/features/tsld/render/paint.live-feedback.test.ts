@@ -21,6 +21,7 @@ const PALETTE: TsldPalette = {
   laneRule: '#9c9c9c',
   linkMinor: '#80848b',
   linkDriving: '#3b6fbf',
+  linkMark: '#3d2070',
   edge: '#333',
   bar: '#44f',
   nodeRim: '#44f',

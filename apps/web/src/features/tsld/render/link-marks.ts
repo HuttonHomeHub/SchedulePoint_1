@@ -111,8 +111,20 @@ export function splitRunsByX(
   return { solid, waiting };
 }
 
-/** The distance between direction chevrons along a link, and the most one link may carry. */
-export const CHEVRON_SPACING_PX = 56;
+/**
+ * The distance between direction chevrons along a link, and the most one link may carry.
+ *
+ * **40 px, the reference's own rhythm** (NetPoint grammar M3, spec §4.2 G5: about every 41 px on the
+ * product owner's picture, `reference-observations.md`). It was 56. A reader following a long link
+ * should meet a mark before losing the direction, and the reference's spacing is the one the product
+ * owner chose to copy.
+ *
+ * **The cap stays at six.** G5 raises it only if FC-G7's paint reading allows, and ADR-0154 D4 bounds
+ * the layer by it (M0-T4 P3: at most six marks per visible link at the overview tier). At 40 px the
+ * cap binds at 280 px of path rather than 392, so on a longer link the six marks are spread evenly
+ * along it instead of bunching in its first stretch and leaving the rest bare (`chevronsAlong`).
+ */
+export const CHEVRON_SPACING_PX = 40;
 export const CHEVRON_MAX_PER_LINK = 6;
 /**
  * A chevron's length along the line and its half-width across it. Half the routed arrowhead's
@@ -124,8 +136,9 @@ export const CHEVRON_HALF_W_PX = 2.5;
 
 /**
  * The filled direction chevrons along a link: one every {@link CHEVRON_SPACING_PX} of path, at
- * most {@link CHEVRON_MAX_PER_LINK}, none within half a spacing of either end (the start sits on a
- * node glyph and the end already has the arrowhead).
+ * most {@link CHEVRON_MAX_PER_LINK} (spread evenly along a link long enough for the cap to bind),
+ * none within half a step of either end (the start sits on a node glyph and the end already has the
+ * arrowhead).
  *
  * The cap is what bounds the layer at Fit on a plan of thousands of links: the cost is at most six
  * triangles per visible link, whatever the zoom.
@@ -137,7 +150,9 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
   }
   const out: [Point, Point, Point][] = [];
   if (total < CHEVRON_SPACING_PX * 2) return out;
-  let next = CHEVRON_SPACING_PX;
+  // Where the cap would bind, widen the step so the capped marks span the whole link.
+  const step = Math.max(CHEVRON_SPACING_PX, total / (CHEVRON_MAX_PER_LINK + 1));
+  let next = step;
   let walked = 0;
   for (let i = 1; i < line.length && out.length < CHEVRON_MAX_PER_LINK; i += 1) {
     const a = line[i - 1]!;
@@ -147,7 +162,7 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
     const ux = (b.x - a.x) / len;
     const uy = (b.y - a.y) / len;
     while (next <= walked + len && out.length < CHEVRON_MAX_PER_LINK) {
-      if (next > total - CHEVRON_SPACING_PX / 2) return out;
+      if (next > total - step / 2) return out;
       const d = next - walked;
       // Keep a chevron clear of a corner so its barbs never straddle two segments.
       if (d >= CHEVRON_LEN_PX) {
@@ -160,7 +175,7 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
           { x: baseX + uy * CHEVRON_HALF_W_PX, y: baseY - ux * CHEVRON_HALF_W_PX },
         ]);
       }
-      next += CHEVRON_SPACING_PX;
+      next += step;
     }
     walked += len;
   }

@@ -28,6 +28,7 @@ const PALETTE = {
   nodeRimCritical: '#888',
   linkMinor: '#666',
   linkDriving: '#777',
+  linkMark: '#3d2070',
   critical: '#888',
   nearCritical: '#999',
   selection: '#aaa',

@@ -206,6 +206,11 @@ export interface TsldPalette {
   nodeRim: string;
   nodeRimNear: string;
   nodeRimCritical: string;
+  /**
+   * The direction marks on a violet link, and the gap label's text (NetPoint grammar M3,
+   * `--canvas-link-mark`). A key of its own so a harness can tell a mark from its line.
+   */
+  linkMark: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -1254,6 +1259,8 @@ export function paintScene(
     const paintLinkLanguage = (): void => {
       interface Bucket {
         ink: string;
+        /** The marks' fill: the violet mark shade on a violet link, else the line's own ink. */
+        markInk: string;
         width: number;
         solid: Point[][];
         waiting: Point[][];
@@ -1290,6 +1297,15 @@ export function paintScene(
         if (!bucket) {
           bucket = {
             ink: highlighted ? palette.selection : inkOf(key),
+            // NetPoint grammar M3 (spec §4.2 G5): a violet link's direction marks are the darker
+            // mark shade, clearing 3:1 on the line itself. A rung link's marks stay in the rung's
+            // ink and read by their outline, because no darker step clears 3:1 on the critical line
+            // (conditions.md, the 2026-09-24 amendment).
+            markInk: highlighted
+              ? palette.selection
+              : key === 'minor' || key === 'normal'
+                ? palette.linkMark
+                : inkOf(key),
             // The highlight is one weight step heavier than the link it lights (ADR-0052 M5).
             width: (edge.isDriving ? 2 : 1) + (highlighted ? 1 : 0),
             solid: [],
@@ -1344,7 +1360,7 @@ export function paintScene(
           ctx.setLineDash([]);
         }
         if (bucket.marks.length > 0) {
-          ctx.fillStyle = bucket.ink;
+          ctx.fillStyle = bucket.markInk;
           ctx.beginPath();
           for (const [tip, left, right] of bucket.marks) {
             ctx.moveTo(tip.x, tip.y);

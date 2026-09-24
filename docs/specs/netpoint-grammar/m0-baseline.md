@@ -221,3 +221,43 @@ budget.
   `roundRect` and ignores `strokeRect`, so a node there is never a recorded path and cannot be
   counted as a link. The node rims still have their own sentinels (`NODE_SENTINELS`), which is what
   the closed-shape control needs if a later recorder does trace them.
+
+## M2-T5 — journeys and reviews (2026-09-24)
+
+- **Journey:** `e2e-netpoint-grammar/nodes.spec.ts` reads `--canvas-bar` on the scene canvas, finds
+  ground-filled node rings by shape on the reference plan (verified red with hollow nodes: 0 found),
+  and seeds one activity per rung to measure each rim by ink coverage from the node's centre: 3, 2
+  and 1 px, each within 0.6 px (verified red with the near-critical rim set to 1 px: it measured
+  1.09 against 2). A first version classified pixels by hue and read the 1 px green rim as 2 px,
+  because anti-aliasing splits a 1 px ring over two lighter pixels. Coverage against the rung's
+  exact ink, read by painting the token on an offscreen canvas, fixed that.
+- **Accessibility review, FC-G4:** its first pass could not judge, because none of the three
+  pictures held a near-critical activity (a finding in the evidence, not the code). On `rungs.png`
+  and `rungs-grey.png` it **passes**: all three rungs are perceivable without colour, and the
+  critical centre-dot fallback should **not** fire, because critical is already unambiguous and the
+  dot would not help the weak step. **The weak step is 1 px against 2 px:** readable side by side,
+  not confidently so for a lone near-critical activity. Near-critical also carries its float in
+  words under the bar ("3d float left") and in the listbox. The reviewer's smallest remedy, a small
+  dot on the near rung, changes the product owner's CQ-11 answer, so it goes to them rather than
+  being built.
+- **UX review, FC-G10:** passes with nits. Recommends keeping the 15 px node: the separation it buys
+  (P1) scales with its overhang past the 6 px bar, while the text it costs barely depends on
+  diameter. Nits: a one-day activity's two nodes overlap into a figure-8 at whole-plan zoom, and the
+  `Marine Demob` name's descender nearly touches a rim (re-check after M4's wrapping).
+
+## M3-T1 — the link hue and its marks (2026-09-24)
+
+- **Tokens:** `--canvas-link` oklch(0.592 0.13 295), `--canvas-link-minor` oklch(0.643 0.09 295),
+  `--canvas-link-mark` oklch(0.331 0.13 295), the M0-T2 solved values. `NETPOINT_PROPOSED` is now
+  **empty**, so every NetPoint pair reads shipped CSS. `linkDriving` reads `--canvas-link` (it was
+  `--primary`, the button's blue) and a new `linkMark` key fills a violet link's marks. A rung link's
+  marks stay in the rung ink (conditions.md, 2026-09-24 amendment). Fallback hexes computed from the
+  oklch values.
+- **Spacing:** `CHEVRON_SPACING_PX` 56 → 40, the reference's rhythm. The cap stays at six (G5 raises
+  it only on FC-G7's paint reading, which needs the product owner's hardware; M0-T4 P3 bounds the
+  overview tier at six per link). Where the cap binds, the six marks spread evenly along the link.
+- **FC-G6:** predicted: marks only, fill → the mark shade on the violet bucket, and more of them.
+  The maximal scene's diff is +4 chevrons (4 `moveTo`, 12 `lineTo`) and one `fillStyle`, nothing
+  else.
+- **FC-G8:** the census now covers `linkDriving`, `linkMinor` and `linkMark` against the legend's
+  Driving link, Non-driving link and Direction entries.

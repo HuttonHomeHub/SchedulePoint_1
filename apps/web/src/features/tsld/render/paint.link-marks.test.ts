@@ -23,6 +23,7 @@ const PALETTE = {
   nodeRimCritical: '#000008',
   linkMinor: '#000006',
   linkDriving: '#000007',
+  linkMark: '#3d2070',
   critical: '#000008',
   nearCritical: '#000009',
   selection: '#00000a',
@@ -142,7 +143,7 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
     expect(widthAt(PALETTE.linkDriving)).toBe('2');
   });
 
-  it('fills chevrons along a long link in the link’s own ink', () => {
+  it('fills a violet link’s chevrons in the darker mark shade, never the line’s own ink (M3)', () => {
     const far = act('B', 2, '2026-02-20', '2026-02-24');
     const log = paint([A, far], [edge({ predecessorId: 'A', successorId: 'B' })]);
     let fillInk = '';
@@ -151,9 +152,12 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
       if (line.startsWith('fillStyle=')) fillInk = line.slice('fillStyle='.length);
       if (line.startsWith('fill(')) fills.push(fillInk);
     }
-    expect(fills).toContain(PALETTE.linkMinor);
+    // NetPoint grammar M3 (spec §4.2 G5): the marks are the mark shade, which clears 3:1 on the
+    // line; filled in the line's own ink a mark disappears into the line it sits on.
+    expect(fills).toContain(PALETTE.linkMark);
+    expect(fills).not.toContain(PALETTE.linkMinor);
     // More than the one terminal head: a link this long carries chevrons too.
-    const minorFill = log.lastIndexOf(`fillStyle=${PALETTE.linkMinor}`);
+    const minorFill = log.lastIndexOf(`fillStyle=${PALETTE.linkMark}`);
     const triangles = log
       .slice(minorFill, log.indexOf('fill([])', minorFill))
       .filter((l) => l.startsWith('moveTo('));
