@@ -9,6 +9,7 @@ import {
   type TsldScene,
 } from './paint';
 import {
+  activityRect,
   BAR_HEIGHT,
   BAR_PAD,
   BAR_RADIUS,
@@ -19,6 +20,9 @@ import {
   lagAnchorPoints,
   makeWorkingDayWalk,
   NODE_RADIUS,
+  NODE_REACH_PX,
+  NODE_RIM_W,
+  NODE_TEXT_CLEAR_PX,
   PROGRESS_FRONT_PROUD_PX,
   rowSlots,
   screenYOfLane,
@@ -41,6 +45,9 @@ const PALETTE: TsldPalette = {
   linkDriving: '#3b6fbf',
   edge: '#333',
   bar: '#44f',
+  nodeRim: '#44f',
+  nodeRimNear: '#fa0',
+  nodeRimCritical: '#f00',
   critical: '#f00',
   nearCritical: '#fa0',
   outline: '#fff',
@@ -74,6 +81,15 @@ const ALL_ON = {
   labels: true,
   lateOverlay: false,
 } as const;
+/**
+ * `fillRect` calls that are not a node's ground fill. On the square-fallback context a node is a
+ * `NODE_RADIUS * 2` box, filled with the ground since NetPoint grammar M2-T3; cases counting a bar's
+ * own fills (body, progress band, divider) exclude it by that size.
+ */
+const nonNodeFillRects = (ctx: { fillRect: { mock: { calls: unknown[][] } } }): number =>
+  ctx.fillRect.mock.calls.filter(([, , w, h]) => !(w === NODE_RADIUS * 2 && h === NODE_RADIUS * 2))
+    .length;
+
 const VIEW: Viewport = { pxPerDay: 12, originX: 60, originY: 40 };
 
 /**
@@ -1854,23 +1870,28 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     };
     const fills = (log: string[]): number => log.filter((e) => e === 'fill([])').length;
 
-    // **Critical — the node is FILLED.** Bar body + two filled nodes = three `fill()`s.
+    // **NetPoint grammar M2-T3: rim WEIGHT carries the rung, and every node is ground-filled**
+    // (spec §4.2 G4, CQ-11). A red disc on a red line would not interrupt the line, which is the
+    // reason for the fill, so filled-versus-hollow gave way to one weight step per rung. Every rung
+    // fills its two nodes with the diagram ground: bar body + two nodes = three `fill()`s each.
     const critical = paintWith(task({ isCritical: true }));
-    expect(critical).toContain(`strokeStyle=${PALETTE.outline}`);
+    expect(critical).toContain(`strokeStyle=${PALETTE.nodeRimCritical}`);
+    expect(critical).toContain(`lineWidth=${NODE_RIM_W.critical}`);
+    expect(critical).toContain(`fillStyle=${PALETTE.canvasGround}`);
     expect(fills(critical)).toBe(3);
 
-    // **Near-critical — a heavy RING.** Emphasised like critical and hollow like neither, which is
-    // what makes it a third shape rather than a second colour.
     const near = paintWith(task({ isNearCritical: true }));
-    expect(near).toContain(`strokeStyle=${PALETTE.outline}`);
-    expect(near).toContain(`lineWidth=${EMPHASIS_STROKE_W}`);
-    expect(fills(near)).toBe(1);
+    expect(near).toContain(`strokeStyle=${PALETTE.nodeRimNear}`);
+    expect(near).toContain(`lineWidth=${NODE_RIM_W.near}`);
+    expect(fills(near)).toBe(3);
 
-    // **Neither — the calm hairline, hollow.**
     const plain = paintWith(task());
-    expect(plain).toContain(`strokeStyle=${PALETTE.barStroke}`);
-    expect(plain).not.toContain(`strokeStyle=${PALETTE.outline}`);
-    expect(fills(plain)).toBe(1);
+    expect(plain).toContain(`strokeStyle=${PALETTE.nodeRim}`);
+    expect(plain).toContain(`lineWidth=${NODE_RIM_W.none}`);
+    expect(fills(plain)).toBe(3);
+
+    // The weights are three different numbers, so the rungs differ with the hue removed.
+    expect(new Set(Object.values(NODE_RIM_W)).size).toBe(3);
 
     // The retired cue: no dashed emphasis outline on the BAR, at any rung.
     for (const log of [critical, near, plain]) expect(log).not.toContain('setLineDash([[3,2]])');
@@ -1914,6 +1935,49 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
    * neighbours. An LOE cap is 2 px wide and a summary tab 3 px, both at the bar's ends; a node is
    * a 10 px disc centred on that same end, so it paints the identity glyph out entirely.
    */
+  it('rings a node in the lens ink when a Colour-by lens sets the bar fill (rim and bar agree)', () => {
+    const r = recordingCtx({ ...mockCtx(), roundRect: vi.fn() });
+    paintScene(
+      r.ctx,
+      refreshScene({
+        activities: [task({ isCritical: true })],
+        barFill: new Map([['t', '#abcdef']]),
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(r.log).toContain('strokeStyle=#abcdef');
+    expect(r.log).not.toContain(`strokeStyle=${PALETTE.nodeRimCritical}`);
+    // The WEIGHT still says critical: the lens takes the colour channel, never the shape one.
+    expect(r.log).toContain(`lineWidth=${NODE_RIM_W.critical}`);
+  });
+
+  it('stops a link’s head at the node rim rather than under the disc (spec §4.13 A1)', () => {
+    const pred = task({ id: 'p', earlyStart: '2026-01-02', earlyFinish: '2026-01-03' });
+    const succ = task({ id: 's', earlyStart: '2026-01-10', earlyFinish: '2026-01-12' });
+    const r = recordingCtx();
+    paintScene(
+      r.ctx,
+      refreshScene({
+        activities: [pred, succ],
+        edges: [{ predecessorId: 'p', successorId: 's', type: 'FS', isDriving: true }],
+        timeTrueLinks: true,
+        isWorkingDay: () => true,
+      }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    const succRect = activityRect(succ, VIEW, DATA_DATE)!;
+    const cy = succRect.y + succRect.h / 2;
+    // The stroked line still ends on the node centre (FC-G1: the route is untouched)…
+    expect(r.log).toContain(`lineTo([${succRect.x},${cy}])`);
+    // …and the head's tip, the `moveTo` that opens it, is pulled back to the rim.
+    expect(r.log).toContain(`moveTo([${succRect.x - NODE_REACH_PX},${cy}])`);
+    expect(r.log).not.toContain(`moveTo([${succRect.x},${cy}])`);
+  });
+
   it('draws no node on a bracketed span — the cap or tab IS its terminal glyph', () => {
     const nodes = (activity: RenderActivity): number => {
       const r = recordingCtx();
@@ -2016,8 +2080,10 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     const inside = drawnBelow([task()], wide);
     expect(inside).toHaveLength(2);
     const rect = { x: 60 + 1 * wide.pxPerDay, w: 4 * wide.pxPerDay };
-    expect(Math.min(...inside)).toBe(rect.x);
-    expect(Math.max(...inside)).toBe(rect.x + rect.w);
+    // Clear of the two node discs (NetPoint grammar M2-T3, spec §4.13 A3): the start begins at the
+    // start node's rim plus a gap, and the finish ends at the finish node's.
+    expect(Math.min(...inside)).toBe(rect.x + NODE_TEXT_CLEAR_PX);
+    expect(Math.max(...inside)).toBe(rect.x + rect.w - NODE_TEXT_CLEAR_PX);
     // **Crowded from both sides**: nothing fits inside and there is no room beside, so the row
     // shows the bar alone rather than two dates printed over each other. Asserted on the MIDDLE
     // bar, because the last bar in a lane always has the rest of the canvas to its right and
@@ -2033,9 +2099,13 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     const middle = { x: 60 + 1 * VIEW.pxPerDay, w: Math.max(2, VIEW.pxPerDay) };
     for (const x of [
       middle.x - LABEL_GAP_PX,
+      middle.x - NODE_TEXT_CLEAR_PX,
       middle.x,
+      middle.x + NODE_TEXT_CLEAR_PX,
+      middle.x + middle.w - NODE_TEXT_CLEAR_PX,
       middle.x + middle.w,
       middle.x + middle.w + LABEL_GAP_PX,
+      middle.x + middle.w + NODE_TEXT_CLEAR_PX,
     ]) {
       expect(crowded).not.toContain(x);
     }
@@ -2059,17 +2129,20 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       lateOverlay: false,
       dates: true,
     } as const;
+    // 18 px/day, not the file's 12: since the dates keep clear of the node discs (M2-T3, A3), a
+    // bar has to be `NODE_TEXT_CLEAR_PX` wider at each end to hold both of its dates inside.
+    const view = { ...VIEW, pxPerDay: 18 };
     const textsBelow = (activities: RenderActivity[]): string[] => {
       const r = recordingCtx();
-      paintScene(r.ctx, refreshScene({ view: { ...datesOnly }, activities }), VIEW, SIZE, PALETTE);
-      const below = rowSlots(screenYOfLane(0, VIEW)).belowY;
+      paintScene(r.ctx, refreshScene({ view: { ...datesOnly }, activities }), view, SIZE, PALETTE);
+      const below = rowSlots(screenYOfLane(0, view)).belowY;
       return r.log
         .map((e) => /^fillText\(\["([^"]*)",([-\d.]+),([-\d.]+)\]\)$/.exec(e))
         .filter((m): m is RegExpExecArray => m !== null && Number(m[3]) === below)
         .map((m) => m[1]!);
     };
     const first = task({ id: 'a', earlyStart: '2026-01-02', earlyFinish: '2026-01-07' });
-    // Abutting, and wide enough (72 px) to write both of its own dates.
+    // Abutting, and wide enough (108 px) to write both of its own dates clear of its nodes.
     const meets = textsBelow([
       first,
       task({ id: 'b', earlyStart: '2026-01-08', earlyFinish: '2026-01-13' }),
@@ -2078,7 +2151,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     // A visible gap: the node is two nodes, each with its date.
     const apart = textsBelow([
       first,
-      // 84 px: "10 Jan" + "16 Jan" + the gap is 76 px, so both of its own dates fit inside.
+      // 126 px: "10 Jan" + "16 Jan" + the gap + two node clearances fit inside.
       task({ id: 'b', earlyStart: '2026-01-10', earlyFinish: '2026-01-16' }),
     ]);
     expect(apart).toEqual(['2 Jan', '7 Jan', '10 Jan', '16 Jan']);
@@ -2099,9 +2172,10 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       SIZE,
       PALETTE,
     );
-    // Square-fallback ctx: bar body + band + divider = 3 fillRects. The two HOLLOW nodes take the
-    // fallback's `strokeRect`, not a fill — only a critical bar's filled nodes add fills here.
-    expect(ctx.fillRect).toHaveBeenCalledTimes(3);
+    // Square-fallback ctx: bar body + band + divider = 3 fillRects that are not nodes. Every node is
+    // ground-filled since NetPoint grammar M2-T3, so the fallback also fills each node's box; those
+    // are excluded by size, which is what this case is not about.
+    expect(nonNodeFillRects(ctx)).toBe(3);
     // **The band is the bar's WHOLE height** under the row treatment (M3-T3): the inset shape
     // exists to sit below a centred inside label, and a 5 px bar holds neither.
     expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, BAR_Y, BAR_W / 2, BAR_HEIGHT);
@@ -2124,7 +2198,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       SIZE,
       PALETTE,
     );
-    expect(done.fillRect).toHaveBeenCalledTimes(2); // body + full band, no divider
+    expect(nonNodeFillRects(done)).toBe(2); // body + full band, no divider
     expect(done.fillRect).toHaveBeenCalledWith(BAR_X, BAR_Y, BAR_W, BAR_HEIGHT);
     const zero = mockCtx();
     paintScene(
@@ -2134,10 +2208,10 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       SIZE,
       PALETTE,
     );
-    expect(zero.fillRect).toHaveBeenCalledTimes(1); // body only
+    expect(nonNodeFillRects(zero)).toBe(1); // body only
     const absent = mockCtx();
     paintScene(absent, refreshScene(), VIEW, SIZE, PALETTE);
-    expect(absent.fillRect).toHaveBeenCalledTimes(1);
+    expect(nonNodeFillRects(absent)).toBe(1);
   });
 
   it('culls the progress detail below the zoom LOD threshold (like labels)', () => {
@@ -2149,7 +2223,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       SIZE,
       PALETTE,
     );
-    expect(ctx.fillRect).toHaveBeenCalledTimes(1); // body only — no sub-pixel smear
+    expect(nonNodeFillRects(ctx)).toBe(1); // body only — no sub-pixel smear
   });
 
   it('progress ink follows the criticality pairing and the lens barInk override', () => {
@@ -2343,7 +2417,8 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     //
     // **The refresh now draws two NODE glyphs the legacy path does not** (M3-T3), so the counts
     // differ by exactly that and the assertion says so rather than being relaxed to an
-    // inequality. A hollow node is one `strokeRect` on the fallback context this case uses.
+    // inequality. A node is one ground `fillRect` plus one rim `strokeRect` on the fallback context
+    // this case uses (NetPoint grammar M2-T3 fills every node with the ground).
     const scene = (visualRefresh: boolean): TsldScene => ({
       activities: [task({ visualConflict: true, laneOverlap: true })],
       edges: [],
@@ -2359,8 +2434,8 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     // Badge fills: the conflict triangle path (fill) is unchanged, and so are the squares and the
     // histogram fillRects — the badges themselves are untouched by the row treatment.
     expect(refreshed.fill.mock.calls.length).toBe(legacy.fill.mock.calls.length);
-    expect(refreshed.fillRect.mock.calls.length).toBe(legacy.fillRect.mock.calls.length);
-    // The refreshed bar adds exactly TWO hollow node glyphs, each one `strokeRect` on this
+    expect(refreshed.fillRect.mock.calls.length).toBe(legacy.fillRect.mock.calls.length + 2);
+    // The refreshed bar adds exactly TWO node glyphs, each one `fillRect` + one `strokeRect` on this
     // fallback context. It adds no bar outline: M3-T3 removed that in favour of the node.
     expect(refreshed.strokeRect.mock.calls.length).toBe(legacy.strokeRect.mock.calls.length + 2);
   });

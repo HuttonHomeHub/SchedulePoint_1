@@ -166,6 +166,11 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     bar: token('--canvas-bar', '#459e5d'),
     critical: token('--destructive', '#c83c3c'),
     nearCritical: token('--warning', '#d29628'),
+    // The node rims (NetPoint grammar M2): the rung inks, under keys of their own so a harness can
+    // tell a node from a bar (spec §4.11 R2).
+    nodeRim: token('--canvas-bar', '#459e5d'),
+    nodeRimNear: token('--warning', '#d29628'),
+    nodeRimCritical: token('--destructive', '#c83c3c'),
     // A foreground-contrast stroke used to outline critical/near-critical bars, so
     // criticality is never conveyed by fill colour alone (WCAG 1.4.1).
     outline: token('--foreground', '#e6e8ee'),
@@ -264,6 +269,9 @@ export const PRINT_TOKEN_SOURCES = {
   bar: ['--canvas-bar', '#459e5d'],
   critical: ['--destructive', '#9c0711'],
   nearCritical: ['--warning', '#9f5600'],
+  nodeRim: ['--canvas-bar', '#459e5d'],
+  nodeRimNear: ['--warning', '#9f5600'],
+  nodeRimCritical: ['--destructive', '#9c0711'],
   outline: ['--foreground', '#333333'],
   labelBeside: ['--foreground', '#333333'],
   selection: ['--ring', '#1266a9'],

@@ -33,7 +33,14 @@ import {
   loeBracketRects,
   NODE_RADIUS,
   nodeCentres,
-  criticalityRung,
+  nodeMarks,
+  NODE_REACH_PX,
+  NODE_TEXT_CLEAR_PX,
+  trimPolylineEnd,
+  NODE_RIM_W,
+  type NodeMark,
+  sharesNode,
+  type CriticalityRung,
   laneAtScreenY,
   LABEL_ELLIPSIS,
   progressGeometry,
@@ -191,6 +198,14 @@ export interface TsldPalette {
    * ink. Its own key rather than `bar`, which also fills every bar and LOE cap, so a measurement
    * harness can tell a driving link from a bar by colour alone. */
   linkDriving: string;
+  /**
+   * The node rim for each criticality rung (NetPoint grammar M2, spec §4.2 G4). They resolve to the
+   * same tokens as the three bar fills, and are keys of their own for the `linkDriving` reason: a
+   * measurement harness has to tell a node from a bar and a link by colour alone (spec §4.11 R2).
+   */
+  nodeRim: string;
+  nodeRimNear: string;
+  nodeRimCritical: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -827,6 +842,64 @@ function barInkColour(
 }
 
 /**
+ * Paint the frame's nodes (NetPoint grammar M2-T3, spec §4.2 G4): each a disc filled with the
+ * diagram ground and ringed in its rung's ink at its rung's weight ({@link NODE_RIM_W}).
+ *
+ * The ground fill is the point. It breaks a row of back-to-back bars into separate activities,
+ * which a hollow ring cannot do (the bar shows through it). It also sits over the link that ends at
+ * the node's centre, which is why the arrowhead is pulled back to the rim (spec §4.13 A1).
+ *
+ * The rim follows the owner's BAR fill when a Colour-by lens has set one (`barFill`), so rim and
+ * bar never disagree; otherwise it takes the rung's own key. Nodes are grouped by ink and weight so
+ * each group sets its styles once: the count of style writes grows with the number of distinct
+ * rims on screen (at most three rungs times the lens ramp), never with the number of nodes.
+ */
+function paintNodes(
+  ctx: Ctx2D,
+  marks: readonly NodeMark[],
+  palette: TsldPalette,
+  barFill?: ReadonlyMap<string, string>,
+): void {
+  const rungInk: Readonly<Record<CriticalityRung, string>> = {
+    none: palette.nodeRim,
+    near: palette.nodeRimNear,
+    critical: palette.nodeRimCritical,
+  };
+  const groups = new Map<string, { ink: string; width: number; marks: NodeMark[] }>();
+  for (const mark of marks) {
+    const ink = barFill?.get(mark.ownerId) ?? rungInk[mark.rung];
+    const width = NODE_RIM_W[mark.rung];
+    const key = `${ink}|${width}`;
+    const group = groups.get(key);
+    if (group) group.marks.push(mark);
+    else groups.set(key, { ink, width, marks: [mark] });
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = palette.canvasGround;
+  for (const { ink, width, marks: group } of groups.values()) {
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = width;
+    for (const mark of group) {
+      const box: Rect = {
+        x: mark.x - NODE_RADIUS,
+        y: mark.y - NODE_RADIUS,
+        w: NODE_RADIUS * 2,
+        h: NODE_RADIUS * 2,
+      };
+      // A circle is a `roundRect` whose radius is half its side; a context without `roundRect`
+      // takes the square fallback every other rounded shape here takes.
+      if (beginRoundedRect(ctx, box, NODE_RADIUS)) {
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+      }
+    }
+  }
+}
+
+/**
  * Draw one **refreshed** activity bar (ADR-0052 M4, `scene.visualRefresh`). Called with the
  * bar's fill (`barColour`) already set and `globalAlpha` at the bar's dim state; restores alpha
  * to 1 before the outline (so the criticality shape cue survives a filter dim, like the legacy
@@ -907,57 +980,14 @@ function drawRefreshedBar(
   }
   ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
   // **The bar's own outline is GONE, deliberately** (M3-T3). A non-critical bar carried a 1 px
-  // inset hairline and a critical one a 2 px dashed emphasis; inset into a 5 px bar the first
-  // leaves 3 px of fill and the second is a dash whose period exceeds the shape it dashes. The
-  // reference draws a plain line and puts the definition in the node, which is what happens below.
+  // inset hairline and a critical one a 2 px dashed emphasis; inset into a thin bar the first
+  // leaves almost no fill and the second is a dash whose period exceeds the shape it dashes. The
+  // reference draws a plain line and puts the definition in the node.
   //
-  // Recorded here because it was dropped silently on the first pass and the suite did not notice:
-  // the case guarding the hairline asks whether ANY `strokeRect` was emitted, and the node emits
-  // one. It now asks for the stroke on the bar's own extent.
-  //
-  // **The node at each end, and criticality's second channel** (M3-T3, CQ-6's default).
-  //
-  // The shipped criticality cue was a dashed emphasis outline on the bar. A dash on a 5 px outline
-  // is not a channel a reader can use — the dash period is wider than the shape being dashed — so
-  // the non-colour half moves to the node, filled versus hollow, which the reference already draws
-  // both ways and which is legible across a whole diagram rather than only on the bar under the
-  // cursor. Colour is unchanged, so criticality still carries two channels (WCAG 1.4.1).
-  //
-  // A circle is traced as a `roundRect` whose radius is half its side, which needs no addition to
-  // the `Ctx2D` surface; contexts without `roundRect` get the same square fallback every other
-  // rounded shape here already takes.
-  // **A bracketed span draws no node either, for the milestone's own reason.** An LOE/hammock
-  // cap is 2 px wide and a summary tab 3 px, both at the bar's ends — and a node is a 10 px disc
-  // centred on that same end, so it paints the glyph out entirely. The milestone branch above
-  // states the rule ("the diamond is already a terminal glyph"); the component review found it had
-  // been written for one glyph family and not its two neighbours, which is this register's most
-  // recorded shape. The node is the TASK's terminal glyph; a span that has one of its own keeps it.
-  if (glyph === 'loe' || glyph === 'summary') return;
-
-  const rung = criticalityRung(activity);
-  const filled = rung === 'critical';
-  ctx.strokeStyle = rung === 'none' ? palette.barStroke : palette.outline;
-  // **A RING is near-critical's rung**: heavier than the calm hairline, hollow where critical is
-  // solid. Three shapes, so hue is never the only thing separating the two states a planner most
-  // needs to tell apart — which is what M3-T3's boolean cost and the accessibility gate caught.
-  ctx.lineWidth = rung === 'near' ? EMPHASIS_STROKE_W : 1;
-  for (const centre of nodeCentres(rect)) {
-    const box: Rect = {
-      x: centre.x - NODE_RADIUS,
-      y: centre.y - NODE_RADIUS,
-      w: NODE_RADIUS * 2,
-      h: NODE_RADIUS * 2,
-    };
-    if (beginRoundedRect(ctx, box, NODE_RADIUS)) {
-      if (filled) ctx.fill();
-      ctx.stroke();
-    } else if (filled) {
-      ctx.fillRect(box.x, box.y, box.w, box.h);
-      ctx.strokeRect(box.x, box.y, box.w, box.h);
-    } else {
-      ctx.strokeRect(box.x, box.y, box.w, box.h);
-    }
-  }
+  // **The nodes are not drawn here** (NetPoint grammar M2-T3). A node is filled with the diagram
+  // ground and shared where two bars meet, so it has to paint after EVERY bar body in its lane:
+  // drawn per bar, a later bar would paint over the left half of an earlier bar's shared node. See
+  // the node pass in `paintScene` and `nodeMarks`.
 }
 
 /**
@@ -1202,6 +1232,25 @@ export function paintScene(
      * Links are batched into buckets by (ink, width), drawn quietest first, so a critical link is
      * never overdrawn by an ordinary one and each style is set once per bucket, not per link.
      */
+    /**
+     * The polyline a link's HEAD is built from (NetPoint grammar M2-T3, spec §4.13 A1). Where the
+     * link ends on a node, the node paints over its last {@link NODE_REACH_PX} px, so the head is
+     * built from the line with that length removed and stops at the rim. Only where a node is
+     * actually drawn: the refreshed path, a task bar, and a tip on one of its two node centres (a
+     * time-true lag anchor mid-bar has no node). The stroked line is never trimmed.
+     */
+    const headLineFor = (edge: RenderEdge, line: Point[]): Point[] => {
+      if (scene.visualRefresh !== true) return line;
+      const succ = byId.get(edge.successorId);
+      if (!succ || barGlyphKind(succ.type) !== 'bar') return line;
+      const succRect = activityRect(succ, view, scene.dataDate, rectCache);
+      const tip = line[line.length - 1];
+      if (!succRect || !tip) return line;
+      const onNode = nodeCentres(succRect).some(
+        (c) => Math.abs(c.x - tip.x) < 0.5 && Math.abs(c.y - tip.y) < 0.5,
+      );
+      return onNode ? trimPolylineEnd(line, NODE_REACH_PX) : line;
+    };
     const paintLinkLanguage = (): void => {
       interface Bucket {
         ink: string;
@@ -1271,9 +1320,10 @@ export function paintScene(
         // emits — the same order the legacy pass gives, which is what a recorder reads a head by.
         bucket.marks.push(...chevronsAlong(line));
         if (workingWalk) {
+          const headLine = headLineFor(edge, line);
           const head = laneIndex
-            ? arrowhead(line, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
-            : arrowhead(line);
+            ? arrowhead(headLine, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
+            : arrowhead(headLine);
           if (head) bucket.marks.push(head);
         }
         const lag = edge.lagDays ?? 0;
@@ -1355,9 +1405,10 @@ export function paintScene(
           // The routed head (T17) is longer along the line but no wider — legible where a Month-zoom
           // link is a few pixels of rule, without a barb crossing its neighbour in a fanned bundle.
           // It rides the routing flag, so flag-off is the same five-pixel head it has always been.
+          const headLine = headLineFor(edge, line);
           const head = laneIndex
-            ? arrowhead(line, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
-            : arrowhead(line);
+            ? arrowhead(headLine, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
+            : arrowhead(headLine);
           if (head) heads.push(head);
         }
       }
@@ -1781,6 +1832,17 @@ export function paintScene(
         ctx.setLineDash([]);
       }
     }
+  }
+
+  // Layer 3.1: the NODES (NetPoint grammar M2-T3, spec §4.2 G4) — after every bar body, so a shared
+  // node is never half-covered by the bar it joins, and before the badges, so a constraint pin
+  // (whose apex touches the bar edge a node is centred on) stays on top. Refresh path only: the
+  // legacy path carries criticality on the bar outline and has never drawn a node.
+  if (scene.visualRefresh)
+    paintNodes(ctx, nodeMarks(frame.laneRows().values()), palette, scene.barFill);
+
+  for (const [id, rect] of rects) {
+    const activity = byId.get(id)!;
     // A set date constraint pins the bar's start or finish edge — mark that edge (a milestone,
     // having no width, is marked at its centre). A cheap per-bar shape, drawn only for the
     // constrained + visible activities, so it stays within the draw budget (ADR-0026).
@@ -2174,8 +2236,42 @@ export function paintScene(
   const datesFitInside = (
     startWidthPx: number,
     finishWidthPx: number,
-    barWidthPx: number,
-  ): boolean => startWidthPx + finishWidthPx + LABEL_GAP_PX <= barWidthPx;
+    span: { left: number; right: number },
+  ): boolean => startWidthPx + finishWidthPx + LABEL_GAP_PX <= span.right - span.left;
+
+  /**
+   * How far text under a bar keeps from each of its ends: clear of the node disc there (NetPoint
+   * grammar M2-T3, spec §4.13 A3). A 15 px disc on a 6 px bar reaches into the date row, so a date
+   * written at the bar's own end would print over it. Only a task bar on the refreshed path has
+   * nodes; a milestone, a span and the legacy path keep today's placement exactly.
+   */
+  const nodeTextInset = (activity: RenderActivity): number =>
+    scene.visualRefresh === true && barGlyphKind(activity.type) === 'bar' ? NODE_TEXT_CLEAR_PX : 0;
+
+  /**
+   * The x-range text under bar `i` may use: its own ends, less its own nodes' clearance, and never
+   * into a NEIGHBOUR's node where one abuts it. The second half is the case the first version
+   * missed: an LOE or summary has no nodes of its own, so its text started at its own edge, where
+   * an abutting task's node already sat (FC-G5 found it, as a one-day "1d" on Unit 300).
+   */
+  const textSpan = (
+    row: readonly { activity: RenderActivity; rect: Rect }[],
+    i: number,
+  ): { left: number; right: number } => {
+    const { activity, rect } = row[i]!;
+    const own = nodeTextInset(activity);
+    const prev = row[i - 1];
+    const next = row[i + 1];
+    const left = Math.max(
+      rect.x + own,
+      prev ? prev.rect.x + prev.rect.w + nodeTextInset(prev.activity) : -Infinity,
+    );
+    const right = Math.min(
+      rect.x + rect.w - own,
+      next ? next.rect.x - nodeTextInset(next.activity) : Infinity,
+    );
+    return { left, right };
+  };
 
   // Layer 3.7: flanking start/finish DATES (ADR-0054 §3) — the start date left of the bar, the
   // finish date right of it, never inside (an inside date competes with the name label for the
@@ -2212,13 +2308,13 @@ export function paintScene(
     ): boolean => {
       const next = row[i + 1];
       if (!next) return false;
-      if (next.rect.x - (rect.x + rect.w) >= LABEL_GAP_PX) return false;
+      if (!sharesNode(rect, next.rect)) return false;
       const a = next.activity;
       if (isMilestone(a.type) || !a.earlyStart || !a.earlyFinish) return false;
       return datesFitInside(
         measure(formatCanvasDate(a.earlyStart)),
         measure(formatCanvasDate(a.earlyFinish)),
-        next.rect.w,
+        textSpan(row, i + 1),
       );
     };
     for (const row of laneRows().values()) {
@@ -2268,23 +2364,33 @@ export function paintScene(
           // own docblock calls worse than no fixture. The gate was right and the rule was too
           // blunt.
           const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
+          const inset = nodeTextInset(activity);
           ctx.fillStyle = palette.labelBeside;
           if (isMilestone(activity.type)) {
             // **One date, centred under the diamond** (NetPoint-layout M1). A milestone's start and
             // finish are the same day, so the ladder below printed that day twice, once either side
             // of a 12 px glyph. It is judged against HALF of each neighbour gap plus half the
             // glyph, the same sharing rule the flanking rung uses.
+            // A neighbouring task's node reaches into the gap from its side (A3), so the date's
+            // share of that gap stops at the node's clearance even when half the gap is more.
             const halfText = startWidthPx / 2;
-            const roomLeft = Math.max(0, (rect.x - prevRight) / 2) + rect.w / 2;
-            const roomRight = Math.max(0, (nextLeft - (rect.x + rect.w)) / 2) + rect.w / 2;
+            const prevReach = i > 0 ? nodeTextInset(row[i - 1]!.activity) : 0;
+            const nextReach = i + 1 < row.length ? nodeTextInset(row[i + 1]!.activity) : 0;
+            const gapLeft = rect.x - prevRight;
+            const gapRight = nextLeft - (rect.x + rect.w);
+            const roomLeft = Math.max(0, Math.min(gapLeft / 2, gapLeft - prevReach)) + rect.w / 2;
+            const roomRight =
+              Math.max(0, Math.min(gapRight / 2, gapRight - nextReach)) + rect.w / 2;
             if (halfText <= roomLeft && halfText <= roomRight) {
               ctx.textAlign = 'center';
               ctx.fillText(startText, rect.x + rect.w / 2, below);
             }
-          } else if (datesFitInside(startWidthPx, finishWidthPx, rect.w)) {
-            // **Inside its own ends**, which is the reference's placement and reaches nothing.
+          } else if (datesFitInside(startWidthPx, finishWidthPx, textSpan(row, i))) {
+            // **Inside its own ends**, which is the reference's placement and reaches nothing: the
+            // start begins at the start node's rim plus a gap, the finish ends at the finish node's.
+            const span = textSpan(row, i);
             ctx.textAlign = 'left';
-            ctx.fillText(startText, rect.x, below);
+            ctx.fillText(startText, span.left, below);
             // **One date per node** (`docs/TECH_DEBT.md` #379). Where the next bar in the lane
             // starts at this bar's end, its start date is written at the same node, and the two ran
             // together ("31 Jan1 Feb"). NetPoint writes the node once, with the next activity's
@@ -2292,7 +2398,7 @@ export function paintScene(
             // The finish is still on the bar's option in the parallel listbox (ADR-0026 D7).
             if (!nextDrawsStartAtNode(row, i, rect)) {
               ctx.textAlign = 'right';
-              ctx.fillText(finishText, rect.x + rect.w, below);
+              ctx.fillText(finishText, span.right, below);
             }
           } else {
             // **Otherwise flank the ends it has room beside**, each end judged on its own HALF of
@@ -2300,20 +2406,24 @@ export function paintScene(
             // reason: the whole gap belongs to two bars, so a rule that grants it to each of them
             // grants it twice. `dateLabelSlot` is the room test the flanking path has always used;
             // what is new is halving what it is told the room is.
+            // A task's flanking date also stands clear of its own node (A3): the node reaches
+            // `inset` beyond the bar's end, so the date is offset by that and charged for it.
             const half = (raw: number): number => Math.max(0, raw / 2);
+            const offset = Math.max(LABEL_GAP_PX, inset);
+            const extra = offset - LABEL_GAP_PX;
             const belowSlot = dateLabelSlot({
               roomLeftPx: half(rect.x - prevRight),
               roomRightPx: half(nextLeft - (rect.x + rect.w)),
-              startWidthPx,
-              finishWidthPx,
+              startWidthPx: startWidthPx + extra,
+              finishWidthPx: finishWidthPx + extra,
             });
             if (belowSlot.start) {
               ctx.textAlign = 'right';
-              ctx.fillText(startText, rect.x - LABEL_GAP_PX, below);
+              ctx.fillText(startText, rect.x - offset, below);
             }
             if (belowSlot.finish) {
               ctx.textAlign = 'left';
-              ctx.fillText(finishText, rect.x + rect.w + LABEL_GAP_PX, below);
+              ctx.fillText(finishText, rect.x + rect.w + offset, below);
             }
           }
           ctx.textAlign = 'left';
@@ -2368,7 +2478,8 @@ export function paintScene(
     const datesDrawn = toggles.dates === true;
     let styled = false;
     for (const row of laneRows().values()) {
-      for (const { activity, rect } of row) {
+      for (let i = 0; i < row.length; i += 1) {
+        const { activity } = row[i]!;
         if (activity.durationDays === undefined) continue;
         if (!activity.earlyStart || !activity.earlyFinish) continue;
         const item = {
@@ -2379,12 +2490,15 @@ export function paintScene(
         };
         const full = centreItemText(item, 'full');
         if (full === null) continue;
-        let left = rect.x;
-        let right = rect.x + rect.w;
+        // Clear of its own nodes and any abutting neighbour's (A3), whether or not the dates are
+        // drawn inside.
+        const span = textSpan(row, i);
+        let left = span.left;
+        let right = span.right;
         if (datesDrawn) {
           const startWidthPx = measure(formatCanvasDate(activity.earlyStart));
           const finishWidthPx = measure(formatCanvasDate(activity.earlyFinish));
-          if (datesFitInside(startWidthPx, finishWidthPx, rect.w)) {
+          if (datesFitInside(startWidthPx, finishWidthPx, span)) {
             left += startWidthPx + LABEL_GAP_PX;
             right -= finishWidthPx + LABEL_GAP_PX;
           }

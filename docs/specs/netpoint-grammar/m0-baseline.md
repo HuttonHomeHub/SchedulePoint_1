@@ -155,3 +155,52 @@ budget.
   (`fillRect`), and nothing else.
 - FC-G1 is unaffected by construction: `NODE_RADIUS` feeds neither routing nor the layout search
   (`layout-objective.test.ts` asserts the latter reads `LAYOUT_CONTACT_REACH_PX`).
+
+## M2-T3 — the nodes, and where text keeps from them (2026-09-24)
+
+- **What shipped.** Every task node is filled with the diagram ground and ringed in its rung's ink at
+  1, 2 or 3 px (`NODE_RIM_W`, CQ-11). Nodes paint in one pass after every bar body and before the
+  badges, so a shared node is never half-covered by the bar it joins and a constraint pin stays on
+  top. Where the next task in a lane starts at this one's end (`sharesNode`), one node is drawn,
+  with the heavier rung. The node pass (`nodeMarks`) and the date layer's one-date-per-node rule
+  (#379) ask the same predicate, pinned by `node-sharing.structural.test.ts`. Overlapping bars do
+  not share (the later start would sit inside the earlier bar). Under a Colour-by lens the rim takes
+  the lens ink and the weight still carries the rung.
+- **A1:** a link's head is built from its line with `NODE_REACH_PX` (9 px) removed, so it stops at
+  the rim instead of under the disc. The stroked line is untouched. `nodes.test.ts` asserts the
+  whole 8 px head lies outside the disc (≥ 6 required), verified red by disabling the trim.
+- **A3:** dates and the centre item keep clear of their own nodes and of an abutting neighbour's
+  (`textSpan`). The clearance is the disc's chord at the date row's top edge plus 1 px, 8.48 px at
+  15 px, not the full reach. Charging the full 11 px withheld text the disc never touches.
+- **FC-G5, first limb (`scripts/netpoint-grammar-text-nodes.ts`, control verified):** row text on a
+  disc is **0** on all four yardstick plans at 1, 4 and 12 px/day. The first reading found 2 (a
+  one-day LOE's "1d" beside an abutting task's node), which is what added the neighbour half of
+  `textSpan`.
+- **FC-G5, the spec's G4 rule: "if 15 px cannot meet that without withholding more than today's
+  text, take the largest diameter that can".** Row texts drawn (dates, centre items, plates):
+
+  | Node diameter                | Unit 300 @ 1 | @ 4 | @ 12 | small-17 @ 4 | reference @ 1 | @ 4, 12 |
+  | ---------------------------- | ------------ | --- | ---- | ------------ | ------------- | ------- |
+  | today (10 px, hollow)        | 74           | 200 | 293  | 23           | 118           | 124     |
+  | 15 (shipped)                 | 48           | 160 | 273  | 9            | 111           | 124     |
+  | 13                           | 51           | 161 | 273  | 9            | 111           | 124     |
+  | 11                           | 53           | 166 | 273  | 12           | 115           | 124     |
+  | 9                            | 54           | 167 | 279  | 13           | 115           | 124     |
+  | 7 (disc misses the text row) | 68           | 195 | 288  | 20           | 118           | 124     |
+  | 15 with no clearance         | 68           | 195 | 288  | 20           | 118           | 124     |
+
+  **No diameter meets the rule as written.** The loss is the clearance itself, and it barely
+  depends on diameter: 9 px withholds almost as much as 15. Only a node too small to reach the text
+  row (7 px, barely wider than the 6 px bar) comes close, and even that draws 195 against 200
+  because overlapping bars no longer share a node. "Today's text" also counts dates printed across
+  today's hollow nodes, which FC-G5's first limb forbids. The rule was written expecting little or
+  no withholding, so which way to resolve it is the product owner's call, put to them with this
+  table. 15 px ships in the meantime, as approved. The reference plan loses nothing at 4 or
+  12 px/day, and M4 withholds dates below 4 px/day anyway (the overview tier).
+
+- **FC-G6:** predicted: node calls move into one pass after all bodies, with ground fills (+14
+  `fillRect` for the 14 formerly hollow nodes), three rim groups instead of per-bar style writes,
+  heads ending on a node shift 9 px back, and dates move inward. The maximal scene's diff is that
+  and nothing else. The flag-off scene is a pure reorder (the same multiset of calls: badges now
+  follow every body, so no later bar can cover an earlier badge).
+- **FC-G1 and FC-G1b:** byte-identical to M0 after the change.

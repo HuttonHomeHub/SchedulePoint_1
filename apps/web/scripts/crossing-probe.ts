@@ -215,6 +215,17 @@ export const LINK_SENTINELS = {
   linkDriving: '#0d0e0f',
 } as const;
 
+/**
+ * NetPoint grammar M2 (FC-G0): the node rims get sentinels of their own, distinct from every link
+ * sentinel, so a rim can never be counted as a link and `linkPaths`' closed-shape control has a
+ * named ink to check against. A node is a closed shape, which that control already refuses.
+ */
+export const NODE_SENTINELS = {
+  nodeRim: '#101112',
+  nodeRimNear: '#131415',
+  nodeRimCritical: '#161718',
+} as const;
+
 export const PALETTE: TsldPalette = {
   canvasGround: '#14161c',
   gridLine: '#e5e7eb',
@@ -226,6 +237,9 @@ export const PALETTE: TsldPalette = {
   linkDriving: LINK_SENTINELS.linkDriving,
   edge: LINK_SENTINELS.edge,
   bar: '#459e5d',
+  nodeRim: NODE_SENTINELS.nodeRim,
+  nodeRimNear: NODE_SENTINELS.nodeRimNear,
+  nodeRimCritical: NODE_SENTINELS.nodeRimCritical,
   critical: LINK_SENTINELS.critical,
   nearCritical: LINK_SENTINELS.nearCritical,
   outline: '#ffffff',

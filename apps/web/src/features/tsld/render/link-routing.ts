@@ -896,6 +896,33 @@ export function arrowhead(
   return null;
 }
 
+/**
+ * The polyline with `distance` px of length removed from its successor end, walking back across
+ * corners where a final segment is shorter than that. The head of a link that ends on a node is
+ * built from this (NetPoint grammar M2-T3, spec §4.13 A1): a ground-filled node painted over the
+ * link's end would otherwise hide nearly all of an 8 px head. Only the head is built from it; the
+ * stroked line and every routing decision keep the untouched polyline, so FC-G1 cannot see it.
+ * Returns a single point when the whole line is shorter than `distance`, and `arrowhead` draws no
+ * head for that, which is right: such a link lies inside the node it points at.
+ */
+export function trimPolylineEnd(points: readonly Point[], distance: number): Point[] {
+  const out = points.slice();
+  let left = distance;
+  while (out.length >= 2 && left > 0) {
+    const b = out[out.length - 1]!;
+    const a = out[out.length - 2]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > left) {
+      const t = (len - left) / len;
+      out[out.length - 1] = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      return out;
+    }
+    out.pop();
+    left -= len;
+  }
+  return out;
+}
+
 // ── Link visual refresh (ADR-0052 M5, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ──
 
 /** Target corner radius (px) of a refreshed link elbow — small, so the line reads as routed

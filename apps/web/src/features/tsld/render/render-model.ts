@@ -4,7 +4,9 @@ import {
   BAR_HEIGHT,
   BAR_PAD,
   isMilestone,
+  LABEL_GAP_PX,
   LABEL_INSIDE_MIN_HEIGHT_PX,
+  ROW_TEXT_GAP_PX,
   LABEL_MIN_PX_PER_DAY,
   type Point,
   type Rect,
@@ -301,4 +303,130 @@ export function barGlyphKind(type: ActivityType): BarGlyphKind {
   if (type === 'LEVEL_OF_EFFORT' || type === 'HAMMOCK') return 'loe';
   if (type === 'WBS_SUMMARY') return 'summary';
   return 'bar';
+}
+
+// ── Node rims and shared nodes (NetPoint grammar M2-T3) ─────────────────────────────────────────
+
+/**
+ * **Rim weight per rung** (spec §4.2 G4, CQ-11 answered "rim thickness"). A node is filled with the
+ * diagram ground, which is what breaks a row of back-to-back bars into separate activities, so
+ * filled-versus-hollow can no longer carry criticality: a red disc on a red line would not interrupt
+ * the line. Weight carries it instead, one step per rung, and the three survive a greyscale render
+ * (the M2-T5 accessibility review). The heaviest is {@link NODE_RIM_MAX_W}, which the node's
+ * containment bound already charges.
+ */
+export const NODE_RIM_W: Readonly<Record<CriticalityRung, number>> = {
+  none: 1,
+  near: 2,
+  critical: NODE_RIM_MAX_W,
+};
+
+/**
+ * How far a node reaches from its centre, rim included: the distance an arrowhead's tip is pulled
+ * back along its line (spec §4.13 A1) and the clearance a date keeps from a disc (§4.13 A3). Charged
+ * at the heaviest rim, so a shared node that took the heavier of two rungs is still cleared.
+ */
+export const NODE_REACH_PX = NODE_RADIUS + NODE_RIM_MAX_W / 2;
+
+/**
+ * How far text under a bar keeps from each node's centre (spec §4.13 A3: "the start node's right
+ * edge plus a gap").
+ *
+ * **The disc's CHORD at the text row, not its full reach.** The date row's top edge sits
+ * `BAR_HEIGHT / 2 + ROW_TEXT_GAP_PX` below the node's centre (`rowSlots`), so the only part of the
+ * disc the text can meet is the chord at that height, which is narrower than the disc. Charging the
+ * full reach withheld text that the disc never touches: measured on Unit 300 at 4 px/day, 143 row
+ * texts drawn against 160 with the chord (`docs/specs/netpoint-grammar/m0-baseline.md`, M2-T3). Zero when
+ * the disc does not reach the text row at all. Plus 1 px, so text never touches the rim.
+ */
+export const NODE_TEXT_CLEAR_PX =
+  Math.sqrt(Math.max(0, NODE_REACH_PX ** 2 - (BAR_HEIGHT / 2 + ROW_TEXT_GAP_PX) ** 2)) + 1;
+
+const RUNG_ORDER: Readonly<Record<CriticalityRung, number>> = { none: 0, near: 1, critical: 2 };
+
+/** The heavier of two rungs: a shared node carries the more urgent of the two activities it joins. */
+export function heavierRung(a: CriticalityRung, b: CriticalityRung): CriticalityRung {
+  return RUNG_ORDER[b] > RUNG_ORDER[a] ? b : a;
+}
+
+/**
+ * **Whether two bars in one lane meet at one node** — the reference's shared node, where one
+ * activity's finish is the next one's start (spec §4.2 G4, US-3).
+ *
+ * "Meet" means the next bar starts less than {@link LABEL_GAP_PX} after this one ends, the
+ * separation the date layer keeps everywhere else, and not before it: two bars that OVERLAP are a
+ * same-lane defect with a badge of their own, and a node drawn at the later bar's start would sit
+ * inside the earlier bar and hide its real finish.
+ *
+ * **One predicate for two layers.** The node layer asks it to draw one disc, and the date layer asks
+ * it to write one date there (#379's "one date per node"). Two copies of the test would let a date
+ * be withheld at a node that is drawn twice, or a node be shared where both dates print; that is
+ * the ADR-0065 one-implementation rule, pinned by `node-sharing.structural.test.ts`.
+ */
+export function sharesNode(prev: Rect, next: Rect): boolean {
+  const gap = next.x - (prev.x + prev.w);
+  return gap > -1 && gap < LABEL_GAP_PX;
+}
+
+/** One node to paint: its centre, its rung, and whose ink it takes. */
+export interface NodeMark {
+  x: number;
+  y: number;
+  rung: CriticalityRung;
+  /** The activity whose bar ink the rim follows, so a Colour-by lens keeps rim and bar in step. */
+  ownerId: string;
+}
+
+/**
+ * **The nodes a frame paints**, lane by lane (spec §4.2 G4). A task bar has one node at each end.
+ * Where the next task in the lane {@link sharesNode | meets it}, the two ends are one node, drawn
+ * once at the later bar's start with the heavier rung; its ink is that heavier activity's, and the
+ * later one's when the rungs are equal. Milestones, LOE/hammock spans and WBS summaries draw no
+ * node, since each already has a terminal glyph of its own, and a task never shares with one.
+ *
+ * `rows` is each lane's bars sorted by x (the frame's `laneRows`), which is what makes "the next
+ * bar in the lane" a neighbour lookup rather than a search.
+ */
+export function nodeMarks(
+  rows: Iterable<
+    readonly {
+      activity: {
+        id: string;
+        type: ActivityType;
+        isCritical?: boolean;
+        isNearCritical?: boolean;
+      };
+      rect: Rect;
+    }[]
+  >,
+): NodeMark[] {
+  const marks: NodeMark[] = [];
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i += 1) {
+      const { activity, rect } = row[i]!;
+      if (barGlyphKind(activity.type) !== 'bar') continue;
+      const rung = criticalityRung(activity);
+      const [start, finish] = nodeCentres(rect);
+      const prev = row[i - 1];
+      const joinsPrev =
+        prev !== undefined &&
+        barGlyphKind(prev.activity.type) === 'bar' &&
+        sharesNode(prev.rect, rect);
+      if (joinsPrev) {
+        const prevRung = criticalityRung(prev.activity);
+        const heavier = heavierRung(prevRung, rung);
+        const ownerId = heavier === rung ? activity.id : prev.activity.id;
+        marks.push({ ...start, rung: heavier, ownerId });
+      } else {
+        marks.push({ ...start, rung, ownerId: activity.id });
+      }
+      const next = row[i + 1];
+      const joinsNext =
+        next !== undefined &&
+        barGlyphKind(next.activity.type) === 'bar' &&
+        sharesNode(rect, next.rect);
+      if (!joinsNext) marks.push({ ...finish, rung, ownerId: activity.id });
+    }
+  }
+  return marks;
 }
