@@ -1,3 +1,4 @@
+import { finishMilestoneDayShift as sharedShift } from '@repo/layout';
 import type { ActivityType } from '@repo/types';
 
 /**
@@ -22,5 +23,7 @@ import type { ActivityType } from '@repo/types';
  * every axis site to it.
  */
 export function finishMilestoneDayShift(type: ActivityType | undefined): 0 | 1 {
-  return type === 'FINISH_MILESTONE' ? 1 : 0;
+  // One rule for both halves of the product: the importer's row packing reads the same shift from
+  // `@repo/layout` (layout-interchange M1), so it cannot disagree with where the canvas draws.
+  return sharedShift(type);
 }

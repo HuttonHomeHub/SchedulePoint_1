@@ -1,9 +1,9 @@
+import { drawnSpanDays } from '@repo/layout';
 import type { ActivitySummary } from '@repo/types';
 
 import { daysBetween } from '../render/render-model';
 
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
-import { finishMilestoneDayShift } from '@/lib/milestone-day';
 
 /**
  * **The day span a bar is DRAWN over, for anything that reasons about the picture.**
@@ -53,11 +53,9 @@ export function drawnDaySpan(
   dataDate: string,
 ): DrawnDaySpan | null {
   const { start, finish } = barDatesFor(activity, source);
-  if (start === null) return null;
-  // A finish milestone sits on the END of its dated day (#381, `lib/milestone-day.ts`), so its span
-  // is one day later than its dates — the same shift `activityRect` draws it with, or Arrange and
-  // the nudges would reason about a diamond a day from the one on screen.
-  const shift = finishMilestoneDayShift(activity.type);
-  const startDay = daysBetween(dataDate, start) + shift;
-  return { startDay, endDay: finish === null ? startDay : daysBetween(dataDate, finish) + shift };
+  // A finish milestone sits on the END of its dated day (#381), so its span is one day later than
+  // its dates — the same shift `activityRect` draws it with, or Arrange and the nudges would reason
+  // about a diamond a day from the one on screen. The rule lives in `@repo/layout` because the
+  // importer's row packing needs exactly the same answer (layout-interchange M1).
+  return drawnSpanDays({ type: activity.type, start, finish }, (iso) => daysBetween(dataDate, iso));
 }

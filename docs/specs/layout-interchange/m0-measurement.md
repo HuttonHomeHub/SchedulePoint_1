@@ -47,7 +47,8 @@ the graph digest, each fails the case; restoring passes it.
 **Scope departure, stated:** the plan asks for "every XER fixture imported by the existing e2e suites".
 Those are small builders private to their own spec files, so the baseline uses the **torture fixture**
 (`packages/engine-conformance/fixtures/p6_torture_test_v1.xer`, the only genuine P6 export in the
-repository, 147 activities) plus the **NetPoint re-import**. FC-2's parity is pinned for the torture
+repository; **144** activities once imported — 126 tasks and 18 WBS summaries. This read "147" until
+M1, which is the seeded catalogue version of the same plan, never counted from the file) plus the **NetPoint re-import**. FC-2's parity is pinned for the torture
 file as a SHA-256 of the parsed import graph and of the report.
 
 | Figure                                     | Value                                            | Stable?          |
@@ -75,3 +76,24 @@ depend on the database's scan order", which is true and does not make the result
 the file determines (the activity code, with the source position as a tie-break), or FC-5 can pass on
 one run and fail on the next. The torture count is therefore asserted only as "greater than zero"
 until M1, not pinned.
+
+## Amendment (2026-09-24, during M1): the torture figures above were measured on a subset
+
+The M0-T4 harness read each plan with one `GET …/activities?limit=100`. The torture import has **144**
+activities, and that endpoint orders by UUIDv7 id, so each read returned a **different 100**. The
+torture overlap counts in the table (8 to 23) were therefore taken over a random two-thirds of the plan.
+`packages/seed-http/src/client.ts` (`getPage`'s docblock) records the same trap catching a measurement
+script once before. The NetPoint figures (58 activities) and both digests are unaffected.
+
+Re-taken with a complete, cursor-paged read, against the **unchanged** phase 3 (the M1 source files
+stashed, only the harness corrected), three runs of two imports each:
+
+| Figure                                                 | Corrected value |
+| ------------------------------------------------------ | --------------- |
+| Torture import: activities overlapping                 | **37, 39, 39**  |
+| NetPoint re-import: activities overlapping             | **2, 2, 2**     |
+| Activities on a different row, two imports of one file | **39, 32, 34**  |
+
+So the finding itself **stands**, and was understated: phase 3 both overlaps and is not reproducible.
+The M1 code gives **0**, **0** and **0** on the same instrument, twice, and the pre-M1 code fails all
+three assertions, so the FC-5 case is verified red.

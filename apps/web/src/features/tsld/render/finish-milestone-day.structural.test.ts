@@ -66,7 +66,11 @@ describe('the finish-milestone axis shift is applied at every axis site (#381)',
     expect(uses).toBeGreaterThanOrEqual(20);
   });
 
+  // `drawnSpanDays` (`@repo/layout`) applies the shift itself and its own spec pins that, so a
+  // module delegating to it applies the shift as surely as one calling the shift by name.
   it.each(MUST_SHIFT)('%s applies finishMilestoneDayShift', (path) => {
-    expect(readFileSync(join(SRC, path), 'utf8')).toMatch(/finishMilestoneDayShift\(/);
+    expect(readFileSync(join(SRC, path), 'utf8')).toMatch(
+      /finishMilestoneDayShift\(|drawnSpanDays\(/,
+    );
   });
 });
