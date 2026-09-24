@@ -22,13 +22,17 @@ describe('TsldLegend — criticality names the node cue, three rungs (WCAG 1.4.1
     for (const label of ['Critical', 'Near-critical', 'On schedule']) {
       expect(within(legend).getByText(label)).toBeInTheDocument();
     }
-    // The glyphs, not just the words: filled / ring / hairline, mirroring `criticalityRung`.
-    const nodes = legend.querySelectorAll('span[style*="border-radius"]');
+    // The glyphs, not just the words: since NetPoint grammar M2 the rung is the node's RIM WEIGHT
+    // (3 / 2 / 1 px) on a ground-filled disc, mirroring `NODE_RIM_W`. The census
+    // (`TsldLegend.census.test.tsx`) pins the inks; this pins that the three weights differ.
+    const nodes = legend.querySelectorAll('[data-legend-node]');
     expect(nodes.length).toBe(3);
-    const style = (i: number): CSSStyleDeclaration => (nodes[i] as HTMLElement).style;
-    expect(style(0).backgroundColor).toBe('var(--foreground)'); // critical: filled
-    expect(style(1).border).toContain('2px solid var(--foreground)'); // near: ring
-    expect(style(2).border).toContain('1px solid var(--border)'); // neither: hairline
+    // jsdom does not expand a `border` shorthand holding a `var()`, so the width is read off it.
+    const width = (i: number): string => (nodes[i] as HTMLElement).style.border.split(' ')[0]!;
+    expect([width(0), width(1), width(2)]).toEqual(['3px', '2px', '1px']);
+    for (let i = 0; i < 3; i += 1) {
+      expect((nodes[i] as HTMLElement).style.backgroundColor).toBe('var(--canvas)');
+    }
   });
 
   it('keeps the two marked rungs keyed when the fill encodes something else', () => {

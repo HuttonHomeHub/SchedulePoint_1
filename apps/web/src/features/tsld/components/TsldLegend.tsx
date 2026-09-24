@@ -1,6 +1,6 @@
 /**
  * The visible key for the diagram, mirroring the canvas exactly: each activity class is a
- * fill colour **paired with a node glyph** (filled / ring / hairline) so criticality is never
+ * fill colour **paired with a node glyph** (a rim of 3 / 2 / 1 px) so criticality is never
  * conveyed by colour alone (WCAG 1.4.1). Swatches read their colours from the same design tokens
  * the painter uses, so the key stays truthful across themes.
  *
@@ -14,6 +14,7 @@
  * (ADR-0031) render one definition — the key can't drift from the canvas or itself.
  */
 import type { ColourLegend, ColourMode } from '../render/lenses';
+import { NODE_RIM_W } from '../render/render-model';
 
 import {
   CANVAS_DATA_DATE_ENABLED,
@@ -53,8 +54,8 @@ const CRITICALITY_SWATCHES: ReadonlyArray<LegendItem> = [
 
 /** The criticality **node** cues alone, kept in every non-Criticality Colour-by mode so criticality
  * is still readable when the fill encodes something else (WCAG 1.4.1). Three rungs, because the
- * canvas draws three: a filled node, a heavier ring, and the calm hairline every other bar wears —
- * so "on schedule" needs no row here, only the two that are marked. */
+ * canvas draws three rim weights (3, 2 and 1 px) — so "on schedule" needs no row here, only the
+ * two that are marked above the hairline every other node wears. */
 const CRITICALITY_OUTLINES: ReadonlyArray<LegendItem> = [
   { label: 'Critical (node)', criticality: 'critical' },
   { label: 'Near-critical (node)', criticality: 'near' },
@@ -238,29 +239,27 @@ export function TsldLegend({
         // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the list above
         <li key={item.label} role="listitem" className="flex items-center gap-1.5">
           {'criticality' in item ? (
-            // A thin bar with its end node — the canvas's own pair. The node is `--foreground` at
-            // both emphasised rungs and `--border` at rest, exactly as `resolveTsldPalette` maps
-            // `outline` and `barStroke`, so the key cannot describe a mark the painter does not draw.
+            // A thin bar with its end node — the canvas's own pair (NetPoint grammar M2-T4). The
+            // node is filled with the diagram ground and ringed at the rung's weight
+            // (`NODE_RIM_W`), in the rung's own ink where the fill is keyed by criticality and in
+            // the foreground where a Colour-by lens owns the colour. So the key cannot describe a
+            // mark the painter does not draw (`TsldLegend.census.test.tsx`, FC-G8).
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
               <span
                 className="w-full"
                 style={{ height: 3, backgroundColor: item.fill ?? 'var(--muted-foreground)' }}
               />
               <span
+                data-legend-node=""
                 className="absolute"
                 style={{
                   right: 0,
-                  width: 7,
-                  height: 7,
+                  width: 10,
+                  height: 10,
+                  boxSizing: 'border-box',
                   borderRadius: '50%',
-                  backgroundColor:
-                    item.criticality === 'critical' ? 'var(--foreground)' : 'transparent',
-                  border:
-                    item.criticality === 'critical'
-                      ? undefined
-                      : item.criticality === 'near'
-                        ? '2px solid var(--foreground)'
-                        : '1px solid var(--border)',
+                  backgroundColor: 'var(--canvas)',
+                  border: `${NODE_RIM_W[item.criticality]}px solid ${item.fill ?? 'var(--foreground)'}`,
                 }}
               />
             </span>
@@ -362,11 +361,12 @@ export function TsldLegend({
             </span>
           ) : 'loe' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
-              {/* Bracketed span: end caps overhanging a slim bar, matching the canvas LOE glyph
-                  (drawn in the bar's own fill on the canvas — the primary fill by default). */}
+              {/* Bracketed span: end caps overhanging a line HALF a task's height (spec §4.13 U1 —
+                  a span draws no node, so weight is what tells it from a task), in the bar's own
+                  fill, matching the canvas LOE glyph. */}
               <span
                 className="absolute inset-x-0 top-1/2 -translate-y-1/2"
-                style={{ height: 4, backgroundColor: 'var(--canvas-bar)' }}
+                style={{ height: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute inset-y-0 left-0"
@@ -379,11 +379,11 @@ export function TsldLegend({
             </span>
           ) : 'summary' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5">
-              {/* Summary bracket: a top bar with downward end tabs, matching the canvas
-                  WBS-summary glyph. */}
+              {/* Summary bracket: a line half a task's height (U1) with downward end tabs hanging
+                  from it, matching the canvas WBS-summary glyph. */}
               <span
-                className="absolute inset-x-0 top-0"
-                style={{ height: 4, backgroundColor: 'var(--canvas-bar)' }}
+                className="absolute inset-x-0 top-0.5"
+                style={{ height: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute left-0"

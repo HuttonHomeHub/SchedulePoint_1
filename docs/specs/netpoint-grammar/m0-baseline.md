@@ -204,3 +204,20 @@ budget.
   and nothing else. The flag-off scene is a pure reorder (the same multiset of calls: badges now
   follow every body, so no later bar can cover an earlier badge).
 - **FC-G1 and FC-G1b:** byte-identical to M0 after the change.
+
+## M2-T4 — legend, paper, minimap (2026-09-24)
+
+- **FC-G8:** `TsldLegend.census.test.tsx` maps each node key the painter reads (`palette.nodeRim*`,
+  checked in the painter's comment-stripped source) to a legend swatch ringed in that key's own token
+  at the rung's weight on the ground, and every node swatch back to a node key's token. The tokens
+  come from `PRINT_TOKEN_SOURCES`, not restated. Seen red against the old legend (4 of 7 failing).
+  M3 extends it to the link family.
+- **U1 in the key:** the LOE and WBS-summary swatches draw their line at half a task's height.
+- **Paper:** the three node keys joined `PRINT_TOKEN_SOURCES` with the resolver, and
+  `print-palette.structural.test.ts` sweeps them with no edit to the gate.
+- **Minimap:** draws bars in their rung's fill and no nodes, so nothing changes there. Its ladder
+  docblock was re-measured at M2-T1.
+- **FC-G0 for nodes holds by construction in the crossing harness:** its recorder has no
+  `roundRect` and ignores `strokeRect`, so a node there is never a recorded path and cannot be
+  counted as a link. The node rims still have their own sentinels (`NODE_SENTINELS`), which is what
+  the closed-shape control needs if a later recorder does trace them.
