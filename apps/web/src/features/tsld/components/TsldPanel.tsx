@@ -72,6 +72,7 @@ import {
   isMilestone,
   isResizeEligibleType,
   slackByDependencyId,
+  type LinkGap,
   type Point,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
@@ -1812,13 +1813,20 @@ export function TsldPanel({
   // the canvas and was announced with none (reported 2026-09-23; `docs/TECH_DEBT.md` #372 is the
   // naming trap that made the two lines look identical).
   const linkSlack = useMemo(() => {
-    if (!dataDate) return new Map<string, number>();
+    if (!dataDate) return new Map<string, LinkGap>();
     const drawn = activities.map((a) => {
       const { start, finish } = barDatesFor(a, barDateSource);
       return { id: a.id, earlyStart: start, earlyFinish: finish };
     });
-    return slackByDependencyId({ dataDate, activities: drawn, dependencies });
-  }, [dataDate, activities, dependencies, barDateSource]);
+    // In working days on the plan calendar, the unit the canvas's gap labels print (NetPoint
+    // grammar M3-T2); calendar days, said as such, when no calendar is loaded.
+    return slackByDependencyId({
+      dataDate,
+      activities: drawn,
+      dependencies,
+      isWorkingDay: workingDayPredicate,
+    });
+  }, [dataDate, activities, dependencies, barDateSource, workingDayPredicate]);
 
   /**
    * The resolved keyboard cursor. Flag-off it **is** `selectedId`, expression for expression, so

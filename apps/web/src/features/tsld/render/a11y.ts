@@ -5,6 +5,8 @@ import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import { formatFinishVariance } from '@/lib/schedule-format';
 
+import type { LinkGap } from './link-gap';
+
 /**
  * Pure text builders for the TSLD's parallel accessible representation (ADR-0026 D7, M5). Kept out
  * of the component so the three-tier disclosure — lean per-keystroke name (Tier 1), on-demand
@@ -547,7 +549,7 @@ export function summarizeLogic(
    * sighted-pointer-only and cannot be inferred (deriving it means subtracting two dates and a
    * lag by hand), which is a WCAG 1.1.1 gap. Absent ⇒ the sentence is exactly as before.
    */
-  slackByDependencyId?: ReadonlyMap<string, number>,
+  slackByDependencyId?: ReadonlyMap<string, LinkGap>,
 ): string {
   const preds = dependencies.filter((d) => d.successor.id === id);
   const succs = dependencies.filter((d) => d.predecessor.id === id);
@@ -564,7 +566,7 @@ export function summarizeLogic(
     const waits = [...preds, ...succs]
       .filter((d) => !d.isDriving)
       .map((d) => ({ d, gap: slackByDependencyId.get(d.id) }))
-      .filter((x): x is { d: DependencySummary; gap: number } => (x.gap ?? 0) > 0)
+      .filter((x): x is { d: DependencySummary; gap: LinkGap } => (x.gap?.days ?? 0) > 0)
       .map(({ d, gap }) => {
         const other = d.successor.id === id ? d.predecessor.name : d.successor.name;
         // Deliberately not the float helper: that one says "float", and a tie's gap is not
@@ -574,7 +576,10 @@ export function summarizeLogic(
         // **This site avoided the trap and the drift clause above did not**, under the same shared
         // helper, which is why `plainDays` now exists: the correct reasoning was written down here
         // and never applied one function over.
-        return `${other} ${gap} ${gap === 1 ? 'day' : 'days'}`;
+        // In the unit the gap label prints (NetPoint grammar M3-T2): "3 working days", or "12
+        // calendar days" where no calendar is loaded and the label reads `12 cal d`.
+        const unit = gap.unit === 'working' ? 'working' : 'calendar';
+        return `${other} ${gap.days} ${unit} ${gap.days === 1 ? 'day' : 'days'}`;
       });
     if (waits.length > 0) text += `; slack to ${waits.join(', ')}`;
   }

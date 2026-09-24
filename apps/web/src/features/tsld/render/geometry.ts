@@ -252,10 +252,12 @@ export function lodTier(pxPerDay: number): LodTier {
  * for. A **driving** edge is by definition the binding constraint, so its gap is 0; a positive
  * gap is genuine slack in that one tie.
  *
- * Deliberately a **calendar-day** count off the drawn geometry, not a working-day walk: this
- * annotates what the planner can see on the diagram, and the diagram's x-axis is calendar time.
- * The engine remains the authority on float — this is a reading of the picture, not a second
- * opinion about the schedule.
+ * A **calendar-day** count off the drawn geometry: the diagram's x-axis is calendar time, so this
+ * is where the waiting run is DRAWN (`waitingSpanX`). It is not the number a planner reads or
+ * hears. Since NetPoint grammar M3-T2 that is `linkGap` (`link-gap.ts`), in working days on the
+ * plan calendar like every other `d` on the canvas, and it reproduces this function exactly when
+ * no calendar is loaded. The engine remains the authority on float; both are readings of the
+ * picture, not second opinions about the schedule.
  */
 export function edgeGapDays(args: {
   type: DependencyType;
@@ -276,53 +278,6 @@ export function edgeGapDays(args: {
     case 'SF':
       return succFinishDay - (predStartDay - 1 + lagDays);
   }
-}
-
-/**
- * Every relationship's {@link edgeGapDays}, keyed by dependency id — the datum behind both the
- * on-canvas `Nd` slack chip (ADR-0054 §5) and its spoken equivalent in `summarizeLogic`.
- *
- * Built once from the plan's dependencies so the two surfaces cannot disagree: a number a sighted
- * planner reads off a link and the number a screen-reader user hears for the same link are the
- * same computation, not two similar ones (WCAG 1.1.1). Ties whose endpoints are not yet scheduled
- * are simply absent from the map — there is no gap to state.
- */
-export function slackByDependencyId(args: {
-  dataDate: string;
-  activities: readonly {
-    id: string;
-    type?: ActivityType;
-    earlyStart: string | null;
-    earlyFinish: string | null;
-  }[];
-  dependencies: readonly {
-    id: string;
-    type: DependencyType;
-    lagDays: number;
-    predecessor: { id: string };
-    successor: { id: string };
-  }[];
-}): Map<string, number> {
-  const { dataDate, activities, dependencies } = args;
-  const byId = new Map(activities.map((a) => [a.id, a]));
-  const slack = new Map<string, number>();
-  for (const edge of dependencies) {
-    const pred = byId.get(edge.predecessor.id);
-    const succ = byId.get(edge.successor.id);
-    if (!pred?.earlyStart || !pred.earlyFinish || !succ?.earlyStart || !succ.earlyFinish) continue;
-    slack.set(
-      edge.id,
-      edgeGapDays({
-        type: edge.type,
-        predStartDay: axisDayOf(pred.type, dataDate, pred.earlyStart),
-        predFinishDay: axisDayOf(pred.type, dataDate, pred.earlyFinish),
-        succStartDay: axisDayOf(succ.type, dataDate, succ.earlyStart),
-        succFinishDay: axisDayOf(succ.type, dataDate, succ.earlyFinish),
-        lagDays: edge.lagDays,
-      }),
-    );
-  }
-  return slack;
 }
 
 /**

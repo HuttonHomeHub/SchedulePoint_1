@@ -30,6 +30,7 @@ import {
 
 export * from './geometry';
 export * from './hit-test';
+export * from './link-gap';
 export * from './link-routing';
 export * from './viewport';
 export * from './working-time';

@@ -447,21 +447,30 @@ describe('summarizeLogic (Tier 2)', () => {
   it('speaks per-tie slack for the non-binding ties (the spoken twin of the canvas chip)', () => {
     // The map is what the canvas draws its `Nd` chips from; the driving ties carry 0 and are
     // already reported as the driver, so only the two waiting ties get a clause (ADR-0054 §5).
+    const w = (days: number) => ({ days, unit: 'working' as const });
     const slack = new Map([
-      ['p1->x', 0],
-      ['p2->x', 4],
-      ['x->s1', 0],
-      ['x->s2', 2],
+      ['p1->x', w(0)],
+      ['p2->x', w(4)],
+      ['x->s1', w(0)],
+      ['x->s2', w(2)],
     ]);
+    // NetPoint grammar M3-T2: in the unit the gap label prints, working days on the plan calendar.
     expect(summarizeLogic('x', deps, slack)).toBe(
-      '2 predecessors, 2 successors; start driven by Survey; drives Pour; slack to Permit 4 days, Backfill 2 days',
+      '2 predecessors, 2 successors; start driven by Survey; drives Pour; slack to Permit 4 working days, Backfill 2 working days',
     );
+  });
+
+  it('says calendar days where no calendar is loaded, as the `cal d` label does', () => {
+    const slack = new Map([['p2->x', { days: 1, unit: 'calendar' as const }]]);
+    expect(summarizeLogic('x', deps, slack)).toContain('slack to Permit 1 calendar day');
   });
 
   it('leaves the sentence untouched when no slack is supplied or none is positive', () => {
     const before = '2 predecessors, 2 successors; start driven by Survey; drives Pour';
     expect(summarizeLogic('x', deps, new Map())).toBe(before);
-    expect(summarizeLogic('x', deps, new Map([['p2->x', 0]]))).toBe(before);
+    expect(
+      summarizeLogic('x', deps, new Map([['p2->x', { days: 0, unit: 'working' as const }]])),
+    ).toBe(before);
   });
 });
 

@@ -1366,11 +1366,25 @@ describe('slackByDependencyId (the one shared per-tie gap, ADR-0054 §5)', () =>
       // FS: successor starts day 7, predecessor finishes day 2 ⇒ 7 − (2 + 1) = 4 days waiting.
       dependencies: [d('e1', 'p', 's'), d('e2', 'p', 't', 'SS'), d('e3', 'p', 's', 'FS', 4)],
     });
-    expect(slack.get('e1')).toBe(4);
+    // No calendar supplied ⇒ calendar days, and the gap says so (NetPoint grammar M3-T2).
+    expect(slack.get('e1')).toEqual({ days: 4, unit: 'calendar' });
     // SS: successor starts day 4, predecessor starts day 0 ⇒ 4 days.
-    expect(slack.get('e2')).toBe(4);
+    expect(slack.get('e2')).toEqual({ days: 4, unit: 'calendar' });
     // The lag consumes the gap: a 4-day lag on the same FS tie leaves nothing (a binding tie).
-    expect(slack.get('e3')).toBe(0);
+    expect(slack.get('e3')).toEqual({ days: 0, unit: 'calendar' });
+  });
+
+  it('counts working days when given the plan calendar (NetPoint grammar M3-T2)', () => {
+    // 2026-01-01 is a Thursday, so day offsets 2 and 3 are the weekend.
+    const isWorkingDay = (d: number): boolean => ![2, 3].includes(((d % 7) + 7) % 7);
+    const slack = slackByDependencyId({
+      dataDate: '2026-01-01',
+      activities: [a('p', '2026-01-01', '2026-01-02'), a('s', '2026-01-08', '2026-01-10')],
+      dependencies: [d('e1', 'p', 's')],
+      isWorkingDay,
+    });
+    // Waiting from day 2 (Sat) to day 7 (Thu): Mon, Tue, Wed = 3 working days, 5 calendar days.
+    expect(slack.get('e1')).toEqual({ days: 3, unit: 'working' });
   });
 
   it('omits a tie whose endpoints are not scheduled — there is no gap to state', () => {

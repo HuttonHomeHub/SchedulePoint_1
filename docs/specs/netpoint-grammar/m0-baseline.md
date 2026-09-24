@@ -261,3 +261,20 @@ budget.
   else.
 - **FC-G8:** the census now covers `linkDriving`, `linkMinor` and `linkMark` against the legend's
   Driving link, Non-driving link and Direction entries.
+
+## M3-T2 — one gap, in working days, for the label and the speech (2026-09-24)
+
+- **`linkGap`** (`render/link-gap.ts`): the waiting run starts at the relationship's lag anchor
+  (`lagAnchorDay`, the mapping that draws and drags a lag) and ends at the successor's constrained
+  edge, and the gap is the working days in that interval on the plan calendar. With no calendar it
+  is calendar days and says so (`12 cal d`). In calendar days it equals `edgeGapDays` for all four
+  types and both lags tried (`link-gap.test.ts`), so the unit is the only change.
+- **Cases written first and seen red** (the module did not exist). FS over a weekend (4 calendar,
+  2 working), SS with a 2-day lag, FF and SF to the finish edge, a driving tie (0) and a lead.
+- **Budget:** `workingDaysBetween` is memoised per calendar predicate and interval, so an unchanged
+  link is never re-walked across frames (FC-G7 limb). The first read walks, the second reads 0
+  predicate calls (asserted).
+- **Speech:** `slackByDependencyId` moved from `geometry.ts` (a leaf that cannot import the walk) to
+  `link-gap.ts`, takes the plan calendar and returns the gap with its unit. `summarizeLogic` says
+  "Permit 4 working days", or "1 calendar day" where no calendar is loaded. `TsldPanel` passes its
+  `workingDayPredicate`.
