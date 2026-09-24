@@ -216,19 +216,37 @@ describe('baselineGeometry', () => {
   });
 
   it('places the ghost at its baselined start', () => {
-    expect(baselineGeometry(row(), ANCHOR, 10)?.x).toBe(10);
+    expect(baselineGeometry(row(), ANCHOR, 10, 'TASK')?.x).toBe(10);
   });
+
+  // #383: a finish milestone's diamond sits on the END of its dated day (#381), so its ghost moves a
+  // day right with it — anything else reads as a day of slip that did not happen. The live bar's own
+  // geometry is the oracle, not a restatement of its arithmetic.
+  it.each(['START_MILESTONE', 'FINISH_MILESTONE'] as const)(
+    '%s: an unmoved ghost starts exactly where the live diamond sits',
+    (type) => {
+      const live = barGeometry(
+        anActivity({ type, earlyStart: '2026-02-02', earlyFinish: '2026-02-02' }),
+        ANCHOR,
+        10,
+      );
+      const one = row({ baselineFinish: '2026-02-02' });
+      expect(baselineGeometry(one, ANCHOR, 10, type)?.x).toBe(live?.x);
+    },
+  );
 
   // A ghost a day short of the bar it is compared against reads as drift that does not exist.
   it('is inclusive, exactly like the live bar', () => {
-    expect(baselineGeometry(row(), ANCHOR, 10)?.width).toBe(50);
-    expect(baselineGeometry(row({ baselineFinish: '2026-02-02' }), ANCHOR, 10)?.width).toBe(10);
+    expect(baselineGeometry(row(), ANCHOR, 10, 'TASK')?.width).toBe(50);
+    expect(baselineGeometry(row({ baselineFinish: '2026-02-02' }), ANCHOR, 10, 'TASK')?.width).toBe(
+      10,
+    );
   });
 
   it('clamps a sub-pixel ghost so it stays visible', () => {
-    expect(baselineGeometry(row({ baselineFinish: '2026-02-02' }), ANCHOR, 0.05)?.width).toBe(
-      MIN_BAR_WIDTH_PX,
-    );
+    expect(
+      baselineGeometry(row({ baselineFinish: '2026-02-02' }), ANCHOR, 0.05, 'TASK')?.width,
+    ).toBe(MIN_BAR_WIDTH_PX);
   });
 
   it.each([
@@ -236,7 +254,7 @@ describe('baselineGeometry', () => {
     ['the baseline has no start', { baselineStart: null }],
     ['the baseline has no finish', { baselineFinish: null }],
   ])('draws nothing when %s', (_label, over) => {
-    expect(baselineGeometry(row(over), ANCHOR, 10)).toBeNull();
+    expect(baselineGeometry(row(over), ANCHOR, 10, 'TASK')).toBeNull();
   });
 });
 

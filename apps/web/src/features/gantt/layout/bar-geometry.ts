@@ -1,6 +1,6 @@
-import type { ActivitySummary } from '@repo/types';
+import type { ActivitySummary, ActivityType } from '@repo/types';
 
-import { daysBetween, isMilestone } from '@/features/tsld/render/render-model';
+import { axisDayOf, daysBetween, isMilestone } from '@/features/tsld/render/render-model';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { finishMilestoneDayShift } from '@/lib/milestone-day';
 
@@ -140,12 +140,17 @@ export function baselineGeometry(
   row: { inBaseline: boolean; baselineStart: string | null; baselineFinish: string | null },
   anchorIso: string,
   pxPerDay: number,
+  type: ActivityType,
 ): { x: number; width: number } | null {
-  if (!row.inBaseline || row.baselineStart === null || row.baselineFinish === null) return null;
-  const x = daysBetween(anchorIso, row.baselineStart) * pxPerDay;
+  const { baselineStart: start, baselineFinish: finish } = row;
+  if (!row.inBaseline || start === null || finish === null) return null;
+  // A finish milestone's diamond sits on the END of its dated day (#381), so its one-day ghost moves
+  // with it or it reads as a day of slip that did not happen (#383, the canvas's ghost defect in the
+  // other view). Every other type shifts by zero.
+  const x = axisDayOf(type, anchorIso, start) * pxPerDay;
   // Inclusive, exactly like the live bar (ADR-0023) — a ghost a day short of the bar it is
   // compared against would read as drift that does not exist.
-  const spanDays = daysBetween(row.baselineStart, row.baselineFinish) + 1;
+  const spanDays = daysBetween(start, finish) + 1; // a length: the shift cancels
   return { x, width: Math.max(spanDays * pxPerDay, MIN_BAR_WIDTH_PX) };
 }
 

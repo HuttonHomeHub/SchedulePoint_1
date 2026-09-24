@@ -16,8 +16,8 @@ import { describe, expect, it } from 'vitest';
  * What it cannot see, stated rather than implied: a site that reads a date through a local variable
  * (`const { start } = barDatesFor(...)` then `daysBetween(d, start)`) is matched by name only in the
  * modules listed in {@link MUST_SHIFT}. A new module doing that is invisible to the first assertion.
- * The ghosts (`paint.ts` baseline/compare/levelled layers) carry `isMilestone` and no type, and are
- * `docs/TECH_DEBT.md` #383, deliberately outside this gate.
+ * The ghost layers (baseline, compare, levelled) are inside it since #383: each carries its type and
+ * goes through `ghostGeometry`, so a bare `daysBetween` on a ghost date is an offender like any other.
  */
 const SRC = join(import.meta.dirname, '../../..');
 const ROOTS = ['features/tsld', 'features/gantt'].map((r) => join(SRC, r));
@@ -30,8 +30,9 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** A bare `daysBetween(anchor, x.earlyStart)` / `x.earlyFinish` — an activity date put on the axis. */
-const BARE = /daysBetween\([^,()]+,\s*[\w?.]+\.(earlyStart|earlyFinish)\b/;
+/** A bare `daysBetween(anchor, x.<date>)` — an activity's or a ghost's date put on the axis. */
+const BARE =
+  /daysBetween\([^,()]+,\s*[\w?.]+\.(earlyStart|earlyFinish|baselineStart|baselineFinish|fromStart|fromFinish|leveledStart|leveledFinish)\b/;
 
 /** Modules that convert an activity's dates through a local and must apply the shift by name. */
 const MUST_SHIFT = [

@@ -88,7 +88,7 @@ describe('changedSet', () => {
     // milestone is a diamond rather than a bar. Both come from here or the painter has to guess.
     const [ghost] = changedSet([activity(7, { type: 'START_MILESTONE' })], []).ghosts;
     expect(ghost?.laneIndex).toBe(7);
-    expect(ghost?.isMilestone).toBe(true);
+    expect(ghost?.type).toBe('START_MILESTONE');
   });
 
   it('is empty for an empty scene rather than throwing', () => {

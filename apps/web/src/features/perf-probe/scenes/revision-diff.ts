@@ -115,7 +115,7 @@ export function changedSet(
       baselineStart: shiftIso(a.earlyStart, -GHOST_SHIFT_DAYS),
       baselineFinish: shiftIso(a.earlyFinish, -GHOST_SHIFT_DAYS),
       laneIndex: a.laneIndex,
-      isMilestone: a.type === 'START_MILESTONE' || a.type === 'FINISH_MILESTONE',
+      type: a.type,
     });
   }
   const changedEdges: RenderEdge[] = [];

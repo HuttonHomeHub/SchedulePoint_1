@@ -1516,6 +1516,12 @@ controller's 30 / 60 s per handler.
     it — `revision-ghosts.ts` records that history in its own docblock and has
     sliced to the cap since. `docs/TECH_DEBT.md` #263(e).)_
 
+    Each ghost carries the old side's activity **`type`** as well as `isMilestone`
+    (additive, 2026-09-24). A finish milestone is dated by the day it closes and
+    drawn on that day's **end** (ADR-0155), so a client cannot place a milestone
+    ghost from the boolean alone; before the field existed every milestone ghost
+    was drawn half a day from its live diamond (`docs/TECH_DEBT.md` #383).
+
 ## Authentication
 
 - Cookie-based sessions via Better Auth (secure, http-only, same-site); ADR-0003.

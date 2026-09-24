@@ -302,7 +302,9 @@ function PrintRow({
           labelChars: activity.name.length + (badge === null ? 0 : 2),
         });
   const ghost =
-    showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
+    showVariance && variance !== undefined
+      ? baselineGeometry(variance, anchorIso, pxPerDay, activity.type)
+      : null;
 
   return (
     <tr style={{ height: PRINT_ROW_HEIGHT }}>

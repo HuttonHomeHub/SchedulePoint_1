@@ -1,13 +1,13 @@
 {
   "verifiedAgainst": {
-    "better-auth": "1.7.4",
+    "better-auth": "1.7.5",
     "better-call": "1.4.0",
-    "@better-fetch/fetch": "1.3.1",
+    "@better-fetch/fetch": "1.3.2",
     "nodemailer": "10.0.9",
     "zod": "4.6.5",
-    "@nestjs/throttler": "6.5.0",
+    "@nestjs/throttler": "6.7.0",
     "react-hook-form": "7.88.0",
-    "lucide-react": "1.46.0",
+    "lucide-react": "1.48.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
     "@tanstack/react-router": "1.170.36",
@@ -15,9 +15,9 @@
     "@tanstack/router-core": "1.171.30",
     "playwright-core": "1.63.0",
     "tailwindcss": "4.3.3",
-    "@tanstack/query-core": "5.102.8",
-    "@nestjs/core": "11.2.3",
-    "@nestjs/common": "11.2.3"
+    "@tanstack/query-core": "5.103.2",
+    "@nestjs/core": "11.2.6",
+    "@nestjs/common": "11.2.6"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -38,8 +38,8 @@
       "ref": "index.js:733-739",
       "package": "@better-fetch/fetch",
       "path": "dist/index.js",
-      "lines": "733-739",
-      "anchor": "    data: null,\n    error: __spreadProps(__spreadValues({}, errorObject), {\n      status: response.status,\n      statusText: response.statusText",
+      "lines": "536-541",
+      "anchor": "\t\tdata: null,\n\t\terror: _objectSpread2(_objectSpread2({}, errorObject), {}, {\n\t\t\tstatus: response.status,\n\t\t\tstatusText: response.statusText",
       "citedBy": [
         "docs/adr/0077-public-screens-brand-surface.md",
         "docs/specs/public-screens-brand/feature-spec.md",
@@ -50,7 +50,7 @@
       "ref": "throttler.guard.js:148-150",
       "package": "@nestjs/throttler",
       "path": "dist/throttler.guard.js",
-      "lines": "148-150",
+      "lines": "151-153",
       "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
       "citedBy": [
         "apps/api/src/modules/schedule/schedule.controller.ts",
@@ -1035,7 +1035,7 @@
       "ref": "focusManager.js:11-13",
       "package": "@tanstack/query-core",
       "path": "build/modern/focusManager.js",
-      "lines": "11-13",
+      "lines": "16-18",
       "anchor": "window.addEventListener(\"visibilitychange\", listener, false);",
       "citedBy": ["apps/web/e2e-workspace-chrome/peer-unmount-focus.spec.ts", "docs/TECH_DEBT.md"]
     },
@@ -1043,7 +1043,7 @@
       "ref": "focusManager.js:56-59",
       "package": "@tanstack/query-core",
       "path": "build/modern/focusManager.js",
-      "lines": "50-53",
+      "lines": "103-104",
       "anchor": "return globalThis.document?.visibilityState !== \"hidden\";",
       "citedBy": ["apps/web/e2e-workspace-chrome/peer-unmount-focus.spec.ts", "docs/TECH_DEBT.md"]
     },

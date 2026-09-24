@@ -1,3 +1,5 @@
+import type { ActivityType } from '@repo/types';
+
 import { centreItemText } from './a11y';
 import { activityIndexFor } from './activity-index';
 import { axisMarkers } from './axis-markers';
@@ -23,7 +25,6 @@ import {
   arrowhead,
   barGlyphKind,
   axisDayOf,
-  daysBetween,
   edgeTouches,
   isMilestone,
   isResizeEligibleType,
@@ -495,7 +496,8 @@ export interface CompareGhost {
   readonly fromFinish: string;
   /** The FROZEN lane, never the live one and never a guess. Removed work has no live lane. */
   readonly laneIndex: number;
-  readonly isMilestone: boolean;
+  /** The old side's type: it places the ghost by the live bar's rule (ADR-0155, #383). */
+  readonly type: ActivityType;
   readonly removed: boolean;
 }
 
@@ -522,6 +524,31 @@ export interface CompareLink {
  * colour at all in a real browser, invisibly to the contrast gate). Drawn solid over the dashed
  * outline, so the two cues do not merge into one texture.
  */
+/**
+ * **Where a ghost sits on the axis — by the rule the live bar uses** (#383).
+ *
+ * Every ghost layer used to centre a milestone on the MIDDLE of its dated day, `(x1 + x2) / 2`,
+ * while the live diamond sits on a day BOUNDARY (`computeActivityRect`): the start of its day, or
+ * its end for a finish milestone (ADR-0155). So an unmoved milestone's ghost sat half a day from the
+ * diamond it describes. Taking the type and going through `axisDayOf` makes the ghost and its live
+ * bar one derivation rather than two that happen to agree.
+ */
+export function ghostGeometry(
+  type: ActivityType,
+  dataDate: string,
+  start: string,
+  finish: string,
+  view: Viewport,
+): { milestone: true; cx: number } | { milestone: false; x1: number; x2: number } {
+  const startDay = axisDayOf(type, dataDate, start);
+  if (isMilestone(type)) return { milestone: true, cx: screenXOfDay(startDay, view) };
+  return {
+    milestone: false,
+    x1: screenXOfDay(startDay, view),
+    x2: screenXOfDay(axisDayOf(type, dataDate, finish) + 1, view), // inclusive finish → +1 day
+  };
+}
+
 function strikeThrough(ctx: Ctx2D, x: number, midY: number, width: number): void {
   ctx.setLineDash([]);
   ctx.beginPath();
@@ -1461,15 +1488,18 @@ export function paintScene(
     ctx.setLineDash(GHOST_DASH as number[]);
     for (const ghost of scene.baselineGhosts) {
       if (!visibleIds.has(ghost.id)) continue; // cull by count before any date math / allocation
-      const startDay = daysBetween(scene.dataDate, ghost.baselineStart);
-      const finishDay = daysBetween(scene.dataDate, ghost.baselineFinish);
-      const x1 = screenXOfDay(startDay, view);
-      const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
+      const g = ghostGeometry(
+        ghost.type,
+        scene.dataDate,
+        ghost.baselineStart,
+        ghost.baselineFinish,
+        view,
+      );
       const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
       const dimmed = scene.dimmedIds?.has(ghost.id) ?? false;
-      if (ghost.isMilestone) {
+      if (g.milestone) {
         // A zero-width diamond outline centred on the baseline point, matching the live milestone.
-        const cx = (x1 + x2) / 2;
+        const cx = g.cx;
         const cy = top + BAR_HEIGHT / 2;
         if (
           !rectsIntersect(
@@ -1489,10 +1519,10 @@ export function paintScene(
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
-        const w = Math.max(2, x2 - x1);
-        if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+        const w = Math.max(2, g.x2 - g.x1);
+        if (!rectsIntersect({ x: g.x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+        ctx.strokeRect(g.x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
         if (dimmed) ctx.globalAlpha = 1;
       }
     }
@@ -1521,13 +1551,10 @@ export function paintScene(
     ctx.lineWidth = 1;
     ctx.setLineDash(COMPARE_DASH as number[]);
     for (const ghost of scene.compareGhosts) {
-      const startDay = daysBetween(scene.dataDate, ghost.fromStart);
-      const finishDay = daysBetween(scene.dataDate, ghost.fromFinish);
-      const x1 = screenXOfDay(startDay, view);
-      const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
+      const g = ghostGeometry(ghost.type, scene.dataDate, ghost.fromStart, ghost.fromFinish, view);
       const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
-      if (ghost.isMilestone) {
-        const cx = (x1 + x2) / 2;
+      if (g.milestone) {
+        const cx = g.cx;
         const cy = top + BAR_HEIGHT / 2;
         if (
           !rectsIntersect(
@@ -1547,14 +1574,14 @@ export function paintScene(
         if (ghost.removed) strikeThrough(ctx, cx - MILESTONE_RADIUS, cy, MILESTONE_RADIUS * 2);
         continue;
       }
-      const w = Math.max(2, x2 - x1);
-      if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
-      ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+      const w = Math.max(2, g.x2 - g.x1);
+      if (!rectsIntersect({ x: g.x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+      ctx.strokeRect(g.x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
       // Removed work is distinguished by SHAPE, not by colour (WCAG 1.4.1) — and by a shape that
       // needs no new token, which also sidesteps the ADR-0100 M4 trap of a canvas pair that is
       // absent from `@theme inline` and therefore paints nothing at all in a real browser while the
       // contrast gate stays green.
-      if (ghost.removed) strikeThrough(ctx, x1, top + BAR_HEIGHT / 2, w);
+      if (ghost.removed) strikeThrough(ctx, g.x1, top + BAR_HEIGHT / 2, w);
     }
     ctx.setLineDash([]);
   }
@@ -1590,14 +1617,17 @@ export function paintScene(
     ctx.setLineDash(LEVELLED_DASH as number[]);
     for (const ghost of scene.levelledGhosts) {
       if (!visibleIds.has(ghost.id)) continue; // cull by count before any date math / allocation
-      const startDay = daysBetween(scene.dataDate, ghost.leveledStart);
-      const finishDay = daysBetween(scene.dataDate, ghost.leveledFinish);
-      const x1 = screenXOfDay(startDay, view);
-      const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
+      const g = ghostGeometry(
+        ghost.type,
+        scene.dataDate,
+        ghost.leveledStart,
+        ghost.leveledFinish,
+        view,
+      );
       const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
       const dimmed = scene.dimmedIds?.has(ghost.id) ?? false;
-      if (ghost.isMilestone) {
-        const cx = (x1 + x2) / 2;
+      if (g.milestone) {
+        const cx = g.cx;
         const cy = top + BAR_HEIGHT / 2;
         if (
           !rectsIntersect(
@@ -1617,10 +1647,10 @@ export function paintScene(
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
-        const w = Math.max(2, x2 - x1);
-        if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+        const w = Math.max(2, g.x2 - g.x1);
+        if (!rectsIntersect({ x: g.x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+        ctx.strokeRect(g.x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
         if (dimmed) ctx.globalAlpha = 1;
       }
     }

@@ -1262,7 +1262,7 @@ export function TsldPanel({
       return undefined;
     }
     const laneById = new Map(
-      activities.map((a) => [a.id, { laneIndex: a.laneIndex, isMilestone: isMilestone(a.type) }]),
+      activities.map((a) => [a.id, { laneIndex: a.laneIndex, type: a.type }]),
     );
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
@@ -1287,7 +1287,7 @@ export function TsldPanel({
       activities.map((a) => ({
         id: a.id,
         laneIndex: a.laneIndex,
-        isMilestone: isMilestone(a.type),
+        type: a.type,
         earlyStart: a.earlyStart,
         leveledStart: a.leveledStart,
         leveledFinish: a.leveledFinish,

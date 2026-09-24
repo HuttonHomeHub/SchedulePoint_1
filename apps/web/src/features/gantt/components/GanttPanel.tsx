@@ -1618,7 +1618,9 @@ function GanttRowView({
     onCommit: commitResize,
   });
   const ghost =
-    showVariance && variance !== undefined ? baselineGeometry(variance, anchorIso, pxPerDay) : null;
+    showVariance && variance !== undefined
+      ? baselineGeometry(variance, anchorIso, pxPerDay, activity.type)
+      : null;
 
   return (
     <div

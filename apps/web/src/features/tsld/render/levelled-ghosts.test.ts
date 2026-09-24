@@ -13,7 +13,7 @@ import { buildLevelledGhosts, type LevellableActivity } from './lenses';
 const row = (over: Partial<LevellableActivity> = {}): LevellableActivity => ({
   id: 'a',
   laneIndex: 0,
-  isMilestone: false,
+  type: 'TASK',
   earlyStart: '2026-01-05',
   leveledStart: null,
   leveledFinish: null,
@@ -31,7 +31,7 @@ describe('the levelled ghost', () => {
         leveledStart: '2026-01-12',
         leveledFinish: '2026-01-16',
         laneIndex: 0,
-        isMilestone: false,
+        type: 'TASK',
       },
     ]);
   });
@@ -70,9 +70,9 @@ describe('the levelled ghost', () => {
     // `features/activities` and this module is a pure render leaf. The first version compared
     // against a `'MILESTONE'` label that does not exist in `ActivityType` at all.
     const ghosts = buildLevelledGhosts([
-      row({ isMilestone: true, leveledStart: '2026-01-12', leveledFinish: '2026-01-12' }),
+      row({ type: 'START_MILESTONE', leveledStart: '2026-01-12', leveledFinish: '2026-01-12' }),
     ]);
-    expect(ghosts[0]?.isMilestone).toBe(true);
+    expect(ghosts[0]?.type).toBe('START_MILESTONE');
   });
 
   it('keeps each ghost in its live activity’s lane', () => {
