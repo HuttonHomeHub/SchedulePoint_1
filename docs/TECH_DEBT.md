@@ -11795,3 +11795,10 @@ reviews raised and did not block on.
    the code twice with nothing structural to catch it.
 10. **`lod-tier.structural.test.ts` only refuses copied thresholds** (component). Its positive half,
     that each gated layer calls `lodTier`, lives in `paint.netpoint-text.test.ts`.
+11. **A single-line name can be crossed by a vertical link** (the M6 pictures). FC-G5 counts text
+    on text, text on nodes, and link segments met by a wrapped line; a one-line name over a routed
+    vertical is none of them ("Chem Clean", "Steam Blows" on the reference plan). The routing and
+    the row predate this epic.
+12. **A gap label can be cut by the viewport's edge** (the M6 pictures, Unit 300 at Month: `24d`).
+    It is placed on the longest stretch of its line inside the waiting interval, and that stretch
+    may run off screen; clamping the placement to the visible part would keep it whole.

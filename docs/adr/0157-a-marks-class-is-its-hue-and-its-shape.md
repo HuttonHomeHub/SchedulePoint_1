@@ -138,10 +138,13 @@ blocked, and every blocking finding was folded with a test first seen to fail ag
   draws none) and to the viewport (the same frame at four times the plan draws and tests the same
   text). The ceiling "gap labels ≤ waiting links on screen" holds but is loose (308 against 700), and
   says so in its test; the discriminating limb is the driving-only one.
-- **The pictures had been judged once, at M2** (UX). FC-G10 asks for M2, M3 and M4. Pictures of
-  the current build at the three tiers, for the reference plan and Unit 300, are **owed** at the
-  time of writing, with the two re-checks the M2 review left open; this bullet is updated when they
-  are taken and judged.
+- **The pictures had been judged once, at M2** (UX). FC-G10 asks for M2, M3 and M4. The current
+  build was photographed at the three tiers for the reference plan and Unit 300
+  (`docs/specs/netpoint-grammar/m6/`) and judged in `m0-baseline.md` ("M6 — the gate pass
+  pictures"): the grammar reads as intended at every tier, `Marine Demob` sits clear of its rims,
+  and the figure-8 is unchanged (it is the node-diameter question). The pictures also showed two
+  things no review raised, both filed in #391: a single-line name can be crossed by a routed
+  vertical, and a gap label can be cut by the viewport's edge.
 - Two docblocks described code that had changed under them (the milestone tracer and the width memo).
 
 The non-blocking findings are `docs/TECH_DEBT.md` #391.

@@ -472,3 +472,40 @@ already floored to 1 px. **M5-B (area labels) is not built**: CQ-7 kept the WBS 
 
 `test:e2e:netpoint-grammar` moves 72 → 78 s, which took shard 4 to 598 s against the 593 s
 critical-path budget, so `test:e2e:audit` (31 s) moves to shard 3: shards now 545/564/552/567 s.
+
+## M6 — the gate pass pictures (FC-G10, 2026-09-24)
+
+The UX review found FC-G10's pictures judged at M2 only, against "shown at M2, M3 and M4". The
+current build was photographed in Chromium at 1646 px against the real app, by a temporary
+journey that is not committed: the reference plan at whole-plan (overview), Month and Week zoom,
+the last two also in greyscale, and Unit 300 from the torture XER at the same three
+(`m6/*.png`). Judged here, as FC-G10 is judged and not gated.
+
+- **The grammar reads as intended at every tier.** Bars green, critical bars red and heavier, nodes
+  ground-filled with rim weight by criticality, violet links with chevrons, milestones as downward
+  triangles with bold names. At the overview tier there are no dates and no gap labels; at Month and
+  Week each node carries one date and each triangle one date under it.
+- **Gap labels and lag plates** (Unit 300, working zoom): `14d`, `24d`, `21d` unbordered in the mark
+  shade, `−5d`, `+10d`, `+5d · 21d` bordered in their link's ink, including the near-critical
+  orange. The two are told apart by the border, as D5 intends.
+- **Greyscale (detail):** critical bars are darker than on-schedule bars by lightness alone, and the
+  triangle reads as a shape. (The milestone outline ladder's own greyscale picture is still owed,
+  `docs/TECH_DEBT.md` #391 item 1: the reference plan has no critical milestone on screen at Week.)
+- **Wrapped names** (Unit 300 whole): "Access Roads & Laydown (Tempora…", "Pre-Commissioning &
+  Commissioning" and "Legacy Control System - Parallel R…" wrap into two lines inside their rows.
+
+The two re-checks the M2 review left open:
+
+- **`Marine Demob`:** its name sits clear of the node rims below it on the current painter.
+- **The figure-8:** unchanged. A very short activity's two 15 px nodes still overlap at whole-plan
+  zoom, because the bar is shorter than one node there (Unit 300's opening cluster). That is the node
+  diameter question already put to the product owner (M2-T3), not a new defect.
+
+Two things the pictures show that no review raised, filed rather than folded:
+
+- **Single-line names can be crossed by a vertical link** ("Chem Clean", "Steam Blows",
+  "Set Condenser" on the reference plan). FC-G5's zero counts text on text, text on nodes and lines
+  added by wrapping; a single-line name over a routed vertical is outside all three. It predates this
+  epic (the routing and the row are NetPoint-layout's), and is `docs/TECH_DEBT.md` #391 item 11.
+- **A gap label is cut by the viewport's right edge** (Unit 300 working, `24d`). The label is placed
+  on the stretch of line it sits on, and that stretch runs off screen. #391 item 12.
