@@ -78,3 +78,14 @@ A "darker step" therefore does not exist (`m0-solved.md`, "Two findings").
 
 The spec's G5 sentence "on critical links the mark uses the critical ink's darker step" is withdrawn
 by this entry.
+
+### 2026-09-24 — FC-G2's grid ceilings apply to the screen; paper keeps a floor (M0-T4)
+
+This amends commit `c5136616`, which committed FC-G2's grid ceilings for "unit and month ≤ 1.80:1,
+year ≤ 2.50:1" without naming a surface.
+
+The accessibility ruling (`m0-lod.md`) accepted the quiet grid only where the date ruler carries
+position, which is the workspace and the guest view. The exported raster has no ruler, so on paper
+the grid is the position channel. **The ceilings apply to the canvas scope. Paper's month and year
+rules are `--print-grid-month` and `--print-grid-year`, held at ≥ 3:1 on `--print` at every zoom
+tier.** That pair joins FC-G2. FC-G9's print sweep covers the two new keys.

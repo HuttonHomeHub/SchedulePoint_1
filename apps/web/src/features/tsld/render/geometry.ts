@@ -208,6 +208,37 @@ export const LABEL_GAP_PX = 4;
 export const DATE_LABEL_MIN_PX_PER_DAY = 6;
 
 /**
+ * **The canvas's three tiers of detail** (NetPoint grammar, spec G11), keyed to `view.pxPerDay`.
+ *
+ * - **overview:** grid, bars, nodes, links, direction marks, names and milestone glyphs. Names are
+ *   never withheld (#378).
+ * - **working:** adds dates, gap labels and attachment dots.
+ * - **detail:** adds lag plates, and the centre item when its switch is on.
+ *
+ * **The two thresholds are measured, not chosen** (`docs/specs/netpoint-grammar/m0-lod.md`,
+ * `scripts/measure-netpoint-lod.ts`). A layer's tier starts at the first zoom where its own collision
+ * rule withholds fewer than half of its items, taking the worse of the reference plan and Unit 300:
+ * - **Working (4):** Unit 300's dates, which the painter withholds 46 % of at 4 px/day and 58 % of at
+ *   3. Gap labels clear one half from 1.5 px/day, so the dates bind.
+ * - **Detail (6):** lag plates, which are withheld 42 % at 6 px/day and 52 % at 4.
+ *
+ * A layer asks {@link lodTier}, never these numbers. `lod-tier.structural.test.ts` refuses a copy of
+ * a threshold anywhere else in the canvas, because two copies drift about which zoom a date appears
+ * at, in a way only a planner zooming slowly would ever see.
+ */
+export const LOD_WORKING_MIN_PX_PER_DAY = 4;
+export const LOD_DETAIL_MIN_PX_PER_DAY = 6;
+
+export type LodTier = 'overview' | 'working' | 'detail';
+
+/** The tier of detail the canvas draws at `pxPerDay` (spec G11). */
+export function lodTier(pxPerDay: number): LodTier {
+  if (pxPerDay >= LOD_DETAIL_MIN_PX_PER_DAY) return 'detail';
+  if (pxPerDay >= LOD_WORKING_MIN_PX_PER_DAY) return 'working';
+  return 'overview';
+}
+
+/**
  * The **gap** in whole days a relationship leaves between its two endpoints (ADR-0054 §5) — the
  * answer to "why is this activity waiting?".
  *

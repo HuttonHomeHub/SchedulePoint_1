@@ -926,6 +926,10 @@ const NETPOINT_PROPOSED: Readonly<Record<string, string>> = {
   '--canvas-link': 'oklch(0.592 0.13 295)',
   '--canvas-link-minor': 'oklch(0.643 0.09 295)',
   '--canvas-link-mark': 'oklch(0.331 0.13 295)',
+  // Paper keeps today's grid values, because on paper the grid IS the position channel: the exported
+  // raster carries no ruler (accessibility ruling, M0-T4, conditions.md amendment of 2026-09-24).
+  '--print-grid-month': 'oklch(0.568 0.012 254)',
+  '--print-grid-year': 'oklch(0.48 0.014 256)',
 };
 
 describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope', () => {
@@ -999,6 +1003,17 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
       expect(value, `${rule} on ${ground} must still be visible`).toBeGreaterThan(1);
     }
   });
+
+  // Paper's grid stays a position channel: the export has no ruler, so the month and year rules are
+  // how a reader of a printed programme finds a date (M0-T4 ruling). Its own tokens, so paper can
+  // never silently inherit the screen's quiet value.
+  it.each(['--print-grid-month', '--print-grid-year'] as const)(
+    'the paper grid tier %s stays a position channel on paper (≥ 3:1)',
+    (rule) => {
+      const value = ratio(tokens, '--print', rule);
+      expect(value, `${rule} on --print is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+    },
+  );
 
   it('the grid tiers stay ordered, so a coarser boundary wins at a coincident x (ADR-0056 §2)', () => {
     const [day, month, year] = (
