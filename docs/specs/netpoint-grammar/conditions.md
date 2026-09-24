@@ -59,4 +59,22 @@ did not quote.
 
 ## Amendments
 
-None yet.
+### 2026-09-24 — FC-G2's mark-on-line pair, for the rung links (M0-T2)
+
+This amends commit `c5136616`, which committed FC-G2 as "Mark shade ≥ 3:1 on its line".
+
+**The bar cannot be met on the critical rung by any value.** Black on the critical line
+(`--destructive`) measures 2.46:1, because the critical ink is already dark (8.43:1 on the ground).
+A "darker step" therefore does not exist (`m0-solved.md`, "Two findings").
+
+**The amended bar:**
+
+- **Violet family:** the mark-on-line pair is asserted for `--canvas-link-mark` on
+  `--canvas-link-minor` and on `--canvas-link`.
+- **Critical and near-critical links:** the mark is drawn in the rung's own ink. It reads by its
+  outline, because a chevron is 5 px across (`CHEVRON_HALF_W_PX` 2.5, `link-marks.ts`) on a line at
+  most 2.5 px wide. So its pair is the rung ink against the ground, which FC-G2 already gates at
+  ≥ 3:1.
+
+The spec's G5 sentence "on critical links the mark uses the critical ink's darker step" is withdrawn
+by this entry.

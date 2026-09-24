@@ -9,13 +9,8 @@ import {
   relativeLuminance,
   type Srgb,
 } from '@/test/colour';
-import {
-  blockBody,
-  declarations,
-  readGlobalsCss,
-  THEME_SELECTORS,
-  themeTokens,
-} from '@/test/css-blocks';
+import { readGlobalsCss, THEME_SELECTORS } from '@/test/css-blocks';
+import { fillOf, ratio, resolve, SCOPES } from '@/test/scope-tokens';
 
 /**
  * The computed contrast matrix (ADR-0055 §2).
@@ -29,52 +24,6 @@ import {
  * which means the flagged milestones (S3's light rail, S4's cream canvas) get their contrast
  * checked the moment they add a value, without anyone remembering to extend this file.
  */
-
-type Scope = 'page' | 'chrome' | 'panel' | 'brand' | 'auth' | 'canvas' | 'print';
-const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand', 'auth', 'canvas', 'print'];
-
-/**
- * Resolve the tokens a component would actually see, given a theme and a surface scope —
- * i.e. replay the cascade by hand.
- *
- * **It used to take a third argument, `flagsOn`, and replay the flag-keyed value layers too**
- * (ADR-0055 §6). ADR-0097 folded those values into the one theme block, so the matrix is
- * half the size and every cell in it describes something a reader can actually reach — which
- * the flags-off half had stopped doing the day `VITE_` inlining made it unreachable
- * (ADR-0088).
- */
-function resolve(theme: (typeof THEME_SELECTORS)[number], scope: Scope): Map<string, string> {
-  const tokens = new Map(themeTokens(theme));
-  if (scope === 'page') return tokens;
-
-  for (const [name, value] of declarations(blockBody(`[data-surface='${scope}']`))) {
-    const source = /^var\((--[a-z0-9-]+)\)$/.exec(value)?.[1];
-    const resolved = source === undefined ? value : tokens.get(source);
-    if (resolved === undefined) throw new Error(`${scope} rebinds ${name} to an unknown ${value}`);
-    tokens.set(name, resolved);
-  }
-  return tokens;
-}
-
-/** The opaque fill a scope paints, used as the backdrop for any translucent ink. */
-function fillOf(tokens: Map<string, string>): Srgb {
-  const background = tokens.get('--background');
-  if (background === undefined) throw new Error('no --background');
-  return compositeOver(parseColour(background), [1, 1, 1]);
-}
-
-function ratio(tokens: Map<string, string>, fillToken: string, inkToken: string): number {
-  const fillValue = tokens.get(fillToken);
-  const inkValue = tokens.get(inkToken);
-  if (fillValue === undefined) throw new Error(`${fillToken} is not declared`);
-  if (inkValue === undefined) throw new Error(`${inkToken} is not declared`);
-  const surface = fillOf(tokens);
-  const fill = compositeOver(parseColour(fillValue), surface);
-  const ink = compositeOver(parseColour(inkValue), fill);
-  const a = relativeLuminance(fill);
-  const b = relativeLuminance(ink);
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
 
 /** Text pairs — WCAG 1.4.3 Contrast (Minimum), 4.5:1. */
 const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
@@ -948,5 +897,137 @@ describe.each(THEME_SELECTORS)('%s — adjacent surfaces', (theme) => {
     // eslint-disable-next-line no-console
     console.log(`[ADR-0055 §2] ${theme} — ${scope} vs page: ${fmtRatio(value)}`);
     expect(value).toBeGreaterThanOrEqual(1);
+  });
+});
+
+/**
+ * **NetPoint grammar (`docs/specs/netpoint-grammar/`), FC-G2 and FC-G3: the pairs land before the
+ * painter reads a token.**
+ *
+ * The new values do not ship until M1–M3, but their pairs must exist and have been seen red first
+ * (FC-G2). So this block asserts them against **today's canvas scope with the proposed values laid
+ * over it**. Each proposed value comes from `m0-solved.md`, the output of
+ * `scripts/solve-netpoint-grammar.ts`.
+ *
+ * **The overlay shrinks to nothing.** When a milestone writes a value into `globals.css`, it deletes
+ * that entry from `NETPOINT_PROPOSED`, and the same assertion then runs against the shipped CSS. The
+ * last case below fails if an entry is left in the overlay after its value has shipped. That stops a
+ * value being gated here while `globals.css` says something else. The overlay must be empty by M6.
+ */
+const NETPOINT_PROPOSED: Readonly<Record<string, string>> = {
+  '--canvas': 'oklch(0.995 0.002 250)',
+  '--canvas-band': 'oklch(0.977 0.003 250)',
+  '--canvas-nonworking': 'oklch(0.984 0.004 250)',
+  '--canvas-lane-rule': 'oklch(0.972 0.003 250)',
+  '--canvas-grid-day': 'oklch(0.947 0.003 250)',
+  '--canvas-grid-month': 'oklch(0.862 0.005 250)',
+  '--canvas-grid-year': 'oklch(0.776 0.008 250)',
+  '--canvas-bar': 'oklch(0.629 0.13 150)',
+  '--canvas-link': 'oklch(0.592 0.13 295)',
+  '--canvas-link-minor': 'oklch(0.643 0.09 295)',
+  '--canvas-link-mark': 'oklch(0.331 0.13 295)',
+};
+
+describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope', () => {
+  const tokens = new Map(resolve(':root', 'canvas'));
+  for (const [name, value] of Object.entries(NETPOINT_PROPOSED)) tokens.set(name, value);
+
+  const GROUNDS = ['--canvas', '--canvas-band', '--print'] as const;
+  // Every link ink: the violet family, and the two rungs a critical or near-critical driving link
+  // keeps (ADR-0154 D1).
+  const LINK_INKS = ['--canvas-link', '--canvas-link-minor', '--warning', '--destructive'] as const;
+
+  it.each(LINK_INKS.flatMap((ink) => GROUNDS.map((ground) => [ink, ground] as const)))(
+    'link ink %s is perceivable on %s (≥ 3:1)',
+    (ink, ground) => {
+      const value = ratio(tokens, ground, ink);
+      expect(value, `${ink} on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  // The mark separates from the violet lines it sits on. The rung links' marks are drawn in the
+  // rung's own ink and read by their outline (conditions.md, amendment of 2026-09-24): black on the
+  // critical line is 2.46:1, so no darker step exists there.
+  it.each(['--canvas-link-minor', '--canvas-link', '--canvas'] as const)(
+    'the direction mark is perceivable on %s (≥ 3:1)',
+    (line) => {
+      const value = ratio(tokens, line, '--canvas-link-mark');
+      expect(value, `mark on ${line} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  // The gap label's text is the mark ink on an opaque ground chip. The minor ink is 3.37:1 there,
+  // which is why it is not the text colour (m0-solved.md, "Two findings").
+  it('the gap label text is legible on its ground chip (≥ 4.5:1)', () => {
+    const value = ratio(tokens, '--canvas', '--canvas-link-mark');
+    expect(value, `gap label text is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(['--canvas', '--canvas-band', '--print'] as const)(
+    'the activity bar is perceivable on %s (≥ 3:1)',
+    (ground) => {
+      const value = ratio(tokens, ground, '--canvas-bar');
+      expect(value, `--canvas-bar on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  it('the ladder keeps its neighbour floors with the bar re-hued (≥ 1.5:1 each step)', () => {
+    const barToNear = ratio(tokens, '--canvas-bar', '--warning');
+    const nearToCritical = ratio(tokens, '--warning', '--destructive');
+    expect(barToNear, `bar → near-critical is ${fmtRatio(barToNear)}`).toBeGreaterThanOrEqual(1.5);
+    expect(nearToCritical, `near → critical is ${fmtRatio(nearToCritical)}`).toBeGreaterThanOrEqual(
+      1.5,
+    );
+  });
+
+  it('a label on the bar is legible (≥ 4.5:1)', () => {
+    const value = ratio(tokens, '--canvas-bar', '--primary-foreground');
+    expect(value, `label on --canvas-bar is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // FC-G2's ceilings: decoration stays quieter than every mark that carries meaning. These are
+  // CEILINGS, the first on a decoration in this file, and they replace the month rule's 3:1 floor
+  // only at M1, after the accessibility ruling (M0-T4, conditions X3).
+  it.each([
+    ['--canvas-grid-day', 1.8],
+    ['--canvas-grid-month', 1.8],
+    ['--canvas-grid-year', 2.5],
+  ] as const)('the grid tier %s stays quiet (≤ %s:1)', (rule, ceiling) => {
+    for (const ground of ['--canvas', '--canvas-band'] as const) {
+      const value = ratio(tokens, ground, rule);
+      expect(value, `${rule} on ${ground} is ${fmtRatio(value)}`).toBeLessThanOrEqual(ceiling);
+      expect(value, `${rule} on ${ground} must still be visible`).toBeGreaterThan(1);
+    }
+  });
+
+  it('the grid tiers stay ordered, so a coarser boundary wins at a coincident x (ADR-0056 §2)', () => {
+    const [day, month, year] = (
+      ['--canvas-grid-day', '--canvas-grid-month', '--canvas-grid-year'] as const
+    ).map((rule) => ratio(tokens, '--canvas', rule));
+    expect(day).toBeLessThan(month!);
+    expect(month).toBeLessThan(year!);
+  });
+
+  // FC-G3: a contrast ratio is blind to a hue shift at equal lightness (the bar and the minor link
+  // are 1.03:1 in luminance). The separation is carried by hue, so it is measured as ΔE.
+  it.each(['--canvas-link', '--canvas-link-minor', '--canvas-link-mark'] as const)(
+    'link ink %s is a different hue from every bar rung (ΔE ≥ 5)',
+    (ink) => {
+      const inkRgb = parseColour(tokens.get(ink)!).srgb;
+      for (const rung of ['--canvas-bar', '--warning', '--destructive'] as const) {
+        const value = deltaE76(inkRgb, parseColour(tokens.get(rung)!).srgb);
+        expect(value, `${ink} vs ${rung} ΔE ${value.toFixed(1)}`).toBeGreaterThanOrEqual(5);
+      }
+    },
+  );
+
+  it('keeps no proposed value that has already shipped', () => {
+    const shipped = resolve(':root', 'canvas');
+    const stale = Object.entries(NETPOINT_PROPOSED).filter(
+      ([name, value]) => shipped.get(name) === value,
+    );
+    expect(stale, 'delete these from NETPOINT_PROPOSED: the gate now reads them from CSS').toEqual(
+      [],
+    );
   });
 });
