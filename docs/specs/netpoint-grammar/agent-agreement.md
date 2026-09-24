@@ -1,6 +1,6 @@
 # Agent agreement on the NetPoint-grammar spec and plan
 
-**Status:** in progress. This file records the condition on the product owner's approval
+**Status:** complete — all five agents agree (round 3, 2026-09-24). This file records the condition on the product owner's approval
 (2026-09-24, [`feature-spec.md`](./feature-spec.md) §5.2): the specialist agents must agree with the
 spec and plan before M0 starts.
 
@@ -49,3 +49,26 @@ resolved and whether the folds introduced anything new.
 ## Round 3
 
 The three agents with conditions check their round-2 folds.
+
+### Round 3 verdicts
+
+| Agent              | Verdict   | Note                                                                                                    |
+| ------------------ | --------- | ------------------------------------------------------------------------------------------------------- |
+| ui-architect       | **AGREE** | Watch item: the bar-label contrast pairs must move with `--canvas-bar`. Taken into plan M0-T3 by name   |
+| ux-reviewer        | **AGREE** | Confirms the resource strip is the one deliberate `--primary` holdout. The spec gives the reason (A-n1) |
+| component-reviewer | **AGREE** | Tidiness: two earlier sections still described the WBS band on `--primary`. Both are marked superseded  |
+
+### Outcome
+
+| Agent                  | Final verdict | Round |
+| ---------------------- | ------------- | ----- |
+| ui-architect           | AGREE         | 3     |
+| accessibility-reviewer | AGREE         | 2     |
+| ux-reviewer            | AGREE         | 3     |
+| component-reviewer     | AGREE         | 3     |
+| performance-reviewer   | AGREE         | 2     |
+
+The condition on the approval (feature-spec §5.2) is met, and M0 may start.
+
+The accessibility reviewer's CQ-1 ruling is still **provisional**. It becomes final, or falls back to
+dashed at ≥ 3:1, only when M0-T4 shows X3's two premises.

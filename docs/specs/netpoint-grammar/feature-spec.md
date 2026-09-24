@@ -252,7 +252,7 @@ switch, they are session state and are not persisted (`view-toggles.ts:32-36`).
   treatments. Their pairs are re-swept against the new ground and link inks in M0.
 - **The WBS band** (ADR-0063, default off, `view-toggles.ts:68-73`). Its summary bars read
   `--primary` / `--primary-foreground` at 4.5:1 (`token-contrast.test.ts:302-311`). That pair is
-  re-swept after the re-hue.
+  re-swept after the re-hue. _(Superseded by §4.13 A-n1: the band summary reads `--canvas-bar`.)_
 - **The resource strip.** It reads `--primary` in the canvas scope for demand bars (`palette.ts`,
   `resolveResourceStripPalette`'s docblock). After the re-hue, demand bars would be green like
   activity bars. §4.11 R9 covers this.
@@ -432,7 +432,8 @@ WCAG luminance at equal OKLCH L is not identical across hues, so a green at L 0.
 3:1 or leave the 1.5–1.70 window. M0-T2 solves the lightness for the chosen hue against all ladder
 constraints and the gamut, the way the existing rungs were solved.
 
-`--plot-primary-foreground` stays the paired ink and keeps its 4.5:1 gate for the WBS band and lens
+_(Superseded by §4.13 A-n1: `--plot-primary` is not re-hued; the bar reads `--canvas-bar`, and its
+label pairs are named in plan M0-T3.)_ `--plot-primary-foreground` stays the paired ink and keeps its 4.5:1 gate for the WBS band and lens
 labels (`token-contrast.test.ts:302-311`). `--plot-primary` means "an ordinary activity" only inside
 the canvas scope (`globals.css:810-817`). M0-T3 lists every DOM consumer that resolves under that
 scope, because each one turns green with it.
