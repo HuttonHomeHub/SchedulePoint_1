@@ -1,5 +1,19 @@
 # @repo/api
 
+## 0.74.0
+
+### Minor Changes
+
+- [#680](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/680) [`2025042`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/202504235ae03e711a3960dc9789cdc8673b02cc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Each ghost in a revision comparison now carries the old side's activity `type`, so a client can place a milestone ghost where its diamond is drawn. The field is additive; `isMilestone` is unchanged.
+
+### Patch Changes
+
+- [#680](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/680) [`2025042`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/202504235ae03e711a3960dc9789cdc8673b02cc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Routine dependency updates: NestJS 11.2.6, the rate limiter 6.7, the sign-in library 1.7.5, TanStack Query and Virtual, the icon set and tailwind-merge. No behaviour change is intended; every place the code relies on those libraries' internals was re-checked against the new versions.
+
+- [#680](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/680) [`2025042`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/202504235ae03e711a3960dc9789cdc8673b02cc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An MS Project import now lists every milestone whose start-or-finish type it had to guess, since MS Project records only that a task is a milestone. The guess itself is unchanged.
+- Updated dependencies [[`2025042`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/202504235ae03e711a3960dc9789cdc8673b02cc)]:
+  - @repo/interchange@0.9.2
+
 ## 0.73.0
 
 ### Minor Changes
