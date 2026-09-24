@@ -357,6 +357,22 @@ keep `main` releasable.
   hidden links from 58 to 17 and crossings from 360 to 204 without adding a row. The prompt at the
   foot of the diagram now appears only when activities overlap in a lane.
 
+- **The canvas reads like NetPoint** (ADR-0157, amending ADR-0054/0056/0102/0151/0154). Each kind
+  of mark now has its own colour and shape, and the time grid is the quietest thing on the picture:
+  - day and month gridlines are faint and dashed, so the logic lines stand out; on paper they stay
+    dark enough to read positions from;
+  - bars are thin and green, with a filled circle at each end whose ring gets heavier with
+    criticality;
+  - links are violet, with small arrows about every 40 px;
+  - a link that waits says how long, in working days (`12d`), and the same number is read out by a
+    screen reader; the old dashed waiting line is gone;
+  - names are shown without codes, and long names wrap onto two lines where there is room; codes and
+    the duration-and-float line under each bar can be switched on under **View ▸ Markers**;
+  - milestones are downward triangles;
+  - at whole-plan zoom, dates and gap labels are hidden, and lag labels appear only when zoomed in.
+
+  No bar or link moved.
+
 - **An exported plan re-imports with the same picture** (ADR-0156, amending ADR-0148 D7, ADR-0050
   and ADR-0069). A P6 (XER) export now carries every activity's hand-placed start and lane, and
   importing the file back restores both, so the bars sit where they were placed, in the lanes they sat

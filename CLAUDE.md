@@ -5826,6 +5826,29 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   unobserved** (no P6 was available), and that is not a pass. MSPDI is deferred as M5 (#386). No
   schema change, and `computeSchedule` is unmodified.
 
+- **ADR-0157** _(Accepted; NetPoint grammar M0–M6 landed 2026-09-24)_ — A mark's class is its hue
+  and its shape, and the grid is the quietest mark. The previous epic copied NetPoint's structure
+  (thin bar, node at each end, name above, dates below, chevrons); the product owner compared it with
+  a real NetPoint picture and this copies the **grammar**: each class of mark has its own hue and
+  shape, and the time grid is the quietest thing on the picture. Day and month rules are dashed under
+  a contrast **ceiling** (≤ 1.80:1; year ≤ 2.50:1), the first ceilings on decoration loudness here,
+  with paper keeping ≥ 3:1 on tokens of its own because on paper the grid is the only position
+  channel (the accessibility ruling). The bar is 6 px in its own green; every task node is 15 px,
+  ground-filled, its rim 1/2/3 px by criticality, one node shared where two tasks abut. Links take a
+  violet family of their own with marks every ~40 px. The dashed waiting run is retired: a waiting
+  non-driving link carries a **gap label in working days** from the same function the logic summary
+  speaks (`link-gap.ts`), and `View ▾ ▸ Link gaps` is on by default. The canvas prints names without
+  codes (`Activity codes`, off) and the accessible name becomes `name, code` so the visible text
+  leads it; the centre item is behind `Duration & float`, off; milestone names are bold; long names
+  wrap onto two lines only where no routed link passes. Three measured tiers withhold dates below
+  4 px a day and lag plates below 6. Milestones are downward triangles with criticality by outline
+  weight. **No route or lane moved** (FC-G1 byte-identical after every milestone). Two findings came
+  from instruments rather than reviews: FC-G5's wrap limb read 0 on every plan because its scenes
+  labelled bars by one-word keys, and once it used real names, its new text-on-text count found M3's
+  gap labels overlapping each other and a date on Unit 300 — so gap labels are now placed after all
+  other text and withheld where they would meet any. **The CPM engine is not imported and no
+  migration runs.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
