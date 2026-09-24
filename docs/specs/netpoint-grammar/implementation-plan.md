@@ -269,9 +269,10 @@ finds three node rungs.
 > **Complexity:** M
 > **Dependencies:** M1
 > **Risks:** derived constants move (`SUMMARY_TAB_H`, the lane containment pad) → ADR-0151 D2's
-> derivation test asserts the relationships, and they hold by construction. The resource strip and
-> the WBS band turn green (spec R9) → decided with the product owner at this milestone, from the
-> M0-T3 inventory
+> derivation test asserts the relationships, and they hold by construction. R9 is superseded by
+> spec §4.13 A-n1: activity-bar consumers, including the WBS band, move to `--canvas-bar`; the
+> resource strip and interface buttons keep `--primary`. A missed consumer would stay blue beside green
+> bars, so the M0-T3 inventory is checked off against A-n1's list
 > **Testing requirements:** `geometry.constant-derivation.test.ts` unchanged in its relationships.
 > FC-G1 fingerprints identical (spec §3.2 predicts it: centre-line 30 px and 7 channels at both
 > heights). Lane containment. Minimap gates. Golden by prediction.
@@ -284,7 +285,10 @@ finds three node rungs.
 
 ##### Task M2-T1: bar height and rung hue
 
-- **Description:** Change `geometry.ts:80` and `globals.css:844`. Update the ladder comment
+- **Description:** Change `geometry.ts:80`. Add `--canvas-bar` beside the canvas family, and point
+  every "activity bar" consumer at it, listed in spec §4.13 A-n1: the painter, lens, Gantt, WBS band,
+  legend, print sources, the `MINIMAP_GROUNDS` entry, the `@theme inline` alias with its reachability
+  case, and `token-architecture.test.ts`. **Do not edit `--plot-primary` (`globals.css:844`).** Update the ladder comment
   (`:819-843`) with the solved values, `PRINT_TOKEN_SOURCES` `bar`, and the harness `PALETTE`
   literals.
 - **Complexity:** S
@@ -309,7 +313,7 @@ finds three node rungs.
 > names and dates budgeted clear of discs (FC-G5), and if that withholds text, the diameter shrinks.
 > Recorder confusion (spec R2) → own keys and M0-T5's control. Greyscale separability (CQ-11) →
 > review, with the centre-dot fallback
-> **Testing requirements:** new lane-containment case for a 15 px node. Text–node intersection count
+> **Testing requirements:** new lane-containment case for a 15 px node. Date- and plate-to-node intersection count (spec §4.13 A3)
 > 0 on all yardstick plans. A unit case per rung. Recorder control green. Accessibility review of a
 > greyscale render. Legend census (FC-G8). Export decode (FC-G9).
 
@@ -727,6 +731,6 @@ Docker build, CI, changelog, version impact). In addition, for this epic:
 | Gap labels read as noise (R11)                                          | med        | med    | Tier, minimum length, switch. Judged on Unit 300                      |
 | Paint cost of dash, labels, wrap (R12)                                  | med        | med    | Budgets plus the ADR-0128 reading. Named fallbacks                    |
 | Spoken slack already disagrees with the drawn gap on placed plans (R14) | unknown    | med    | Checked in M0-T5 and filed if true                                    |
-| Every `--primary` consumer in the canvas scope turns green (R9)         | high       | low    | M0-T3 inventory. Decided at M2                                        |
+| An activity-bar consumer is missed and stays blue (A-n1, was R9)        | medium     | low    | M0-T3 inventory checked against A-n1's list                           |
 | The prototype's working-tree edits leak into the build (R13)            | med        | med    | Each milestone starts from `main`                                     |
 | The owed paint reading is not taken                                     | med        | low    | Recorded as untaken, never as met (ADR-0128)                          |

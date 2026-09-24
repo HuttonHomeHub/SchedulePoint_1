@@ -35,3 +35,17 @@ was checked against the code before it was folded. The ids below match
 
 The folded spec and plan go back to the same five agents. Each is asked whether its own findings are
 resolved and whether the folds introduced anything new.
+
+### Round 2 verdicts
+
+| Agent                  | Verdict               | New findings                                                                                                                                                                                   | Folded as                                            |
+| ---------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| performance-reviewer   | **AGREE**             | none                                                                                                                                                                                           | —                                                    |
+| accessibility-reviewer | **AGREE**             | Suggestion only: a unit case for name ink against rim ink                                                                                                                                      | U4 (taken)                                           |
+| ui-architect           | AGREE WITH CONDITIONS | B6: four activity-bar consumers would stay blue under A-n1 (Gantt bar, Colour-by lens, WBS band summary, legend swatch), all verified in code. Suggestion: the memo key must include font size | A-n1 amended (full consumer list), A6                |
+| component-reviewer     | AGREE WITH CONDITIONS | The `MINIMAP_GROUNDS` bar entry goes stale; `--canvas-bar` needs an `@theme inline` alias and a `token-architecture.test.ts` entry; M2-T1's description still named `globals.css:844`          | A-n1 amended; M2-T1's description corrected in place |
+| ux-reviewer            | AGREE WITH CONDITIONS | A3's name-over-node trade-off must be judged deliberately                                                                                                                                      | U4                                                   |
+
+## Round 3
+
+The three agents with conditions check their round-2 folds.

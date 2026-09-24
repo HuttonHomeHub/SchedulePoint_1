@@ -810,9 +810,30 @@ the dock, the create popover and the selection bar (`globals.css:1375,1385-1387`
 turn those buttons green, which reads as "success". So the palette's `bar` key reads a new
 `--canvas-bar`, following the `--canvas-link-minor` precedent (`globals.css:654`), and `--primary` is
 not re-hued. This reverses §4.8's rejection of `--canvas-bar` and dissolves R9. Until M3, the
-driving link keeps `--primary` (blue) and is therefore distinct from the green bar. Other consumers
-of `--primary` stay blue: the WBS band summary and the resource strip. M0-T3 still inventories them,
-so any whose meaning is "the activity bar" is repointed deliberately.
+driving link keeps `--primary` (blue) and is therefore distinct from the green bar. **Every consumer whose meaning is "the activity bar" moves with it** (round 2, B6 and C2),
+including those in other renderers:
+
+- the Gantt bar, `GanttPanel.tsx:1860` (`bg-primary/60 ring-primary/70`). Its own docblock at
+  `:975-979` says the two bars match "because they are the same concept";
+- the Colour-by lens `bar`, `palette.ts:376`. Its contract is to mirror the painter byte for byte;
+- the WBS band summary fill, so a summary is the same colour with the band on or off;
+- the legend's "On schedule" swatch, `TsldLegend.tsx:51`, and its span swatches, `:369,373`;
+- `PRINT_TOKEN_SOURCES.bar`;
+- the minimap contrast gate's bar entry, `token-contrast.test.ts:383` (`MINIMAP_GROUNDS`), which
+  otherwise keeps testing a token the minimap no longer paints (`minimap.ts:408` reads
+  `palette.bar`).
+
+`--canvas-bar` also gets an `@theme inline` alias, `--color-canvas-bar`, beside the family at
+`globals.css:1496-1506`. It joins the canvas enumeration in `token-architecture.test.ts` (`:132`),
+and the alias gets a reachability case like the minimap frame's (`token-contrast.test.ts:525-540`).
+Without the alias a `bg-canvas-bar` utility paints nothing while every contrast gate stays green.
+
+**Consumers whose meaning is interface keep `--primary`:** DOM buttons inside the canvas container,
+and the minimap panel's `border-primary`.
+
+The resource strip keeps `--primary` too. Its demand bars are not activity bars, and giving demand
+the activity hue is a separate decision. The legend's "Driving link" swatch (`:103`) keeps
+`--primary` until M3 repoints it to the link family.
 
 **A-n2 — 1.70:1 is not a ceiling.** The ladder's existing gates assert only the 1.5:1 neighbour floor
 (`token-contrast.test.ts:250-254,317-322`). 1.70:1 was a feasibility limit under a white label.
@@ -866,6 +887,16 @@ If either fails, CQ-1's fallback (dashed at ≥ 3:1) is taken without further ar
 | columns`, and `labels` is a leaf toggle in `markers` (`:490`). "Activity codes" and "Centre item"
 are registered in `markers`, next to `labels`. Earlier mentions now read `View ▾ ▸ Markers`. The renamed "Link gaps" switch (formerly "Link slack") keeps
 `enabled: CANVAS_LIVE_FEEDBACK_ENABLED`, which is default-on.
+
+**U4 — the name-over-node case is judged on purpose** (UX round 2). A3's trade-off is most visible on
+short activities with long names, which Unit 300 has in quantity. Every FC-G10 picture set from M2
+onwards includes at least one such case at working zoom, named in the review record. A unit case at
+M2-T3 also asserts that name ink against each rung's rim ink clears 4.5:1. It is verified red first
+(accessibility, round 2 suggestion).
+
+**A6 — the label-width memo is keyed by font as well as text** (architecture, round 2). Single-line
+names are 12 px, wrapped ones 11 px, and milestone labels are bold, so a key of text alone returns
+the wrong width. M4-A widens the key to (text, font).
 
 **P1–P3 — three cost budgets are committed at M0.**
 
