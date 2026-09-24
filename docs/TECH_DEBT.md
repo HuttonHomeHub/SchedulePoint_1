@@ -11754,3 +11754,44 @@ index for it without a measurement.
 Unticking **Restore the SchedulePoint layout** re-runs the dry-run. The checkbox gives no busy
 indication while that happens; the report region updates and announces when it settles. Suggested,
 not blocking: mark the checkbox `aria-busy` (or shade it with a reason) during the re-run.
+
+### 391. The NetPoint-grammar gate pass's non-blocking findings
+
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (NetPoint grammar M6 reviews:
+accessibility, component, UX, performance) · **Size:** S · **Owner:** web
+
+The M6 gate pass folded every blocking finding (ADR-0157, "Gate pass"). These are what the four
+reviews raised and did not block on.
+
+1. **The milestone outline ladder has no rendered greyscale picture** (accessibility). The node rim
+   ladder was judged on `m2/rungs-grey.png`; the triangle's none / 1.5 px / 2 px outline was judged
+   from paint traces only, and its near-to-critical step (+33 %) is proportionally smaller than the
+   rim's. No outline against an outline is a real non-colour cue, so this is evidence owed, not a
+   compliance gap.
+2. **`--canvas-link-mark` has no contrast pair against `--canvas-bar`** (accessibility). The
+   attachment dot is drawn over a bar; the NetPoint block checks the mark against the grounds and
+   the link inks only.
+3. **"Link gaps" is not self-explanatory on first meeting** (UX). No `View ▾` item carries a
+   description today (`VIEW_TOGGLE_META` holds group, label and enabled), so a short one would be a
+   new convention rather than a fix here.
+4. **Wrap or truncate is decided by link geometry the planner cannot see** (UX). Two similar bars
+   can behave differently. Accepted as the trade (text over a link is worse); worth a line at the
+   next reconciliation pass.
+5. **A driving link to a hand-placed-late successor draws a long run with no gap label** (UX, and
+   the M3 build record). A gap label means a non-driving tie's waiting time, so labelling this
+   would put drift into that vocabulary; the successor's own feasible-window cue (ADR-0148) is the
+   channel for it. Recorded as accepted scope, pending the product owner's view.
+6. **Two small counting budgets are unwritten** (performance): node style writes grouped by
+   (ink, width) rather than per node, and an attachment-dot count, both true by inspection.
+7. **Direction-mark spacing is not tier-gated** (performance). `m0-lod.md` P3 says the 40 px
+   spacing applies at the working and detail tiers; `chevronsAlong` applies it at every tier. The
+   per-link cap of six bounds the cost either way, so the record should match the code, whichever
+   way it is settled.
+8. **`paintLinkLanguage` iterates the plan's whole edge list per frame** before the culled
+   `lines.get(edge)` test (performance, inherited from ADR-0154). O(plan edges) of map lookups on
+   every frame, under the code this epic extended.
+9. **`RenderActivity.label` is the bare name re-fed to `canvasLabel`** (component). It composes
+   correctly because the model always passes `withCode: false`; a future `true` there would print
+   the code twice with nothing structural to catch it.
+10. **`lod-tier.structural.test.ts` only refuses copied thresholds** (component). Its positive half,
+    that each gated layer calls `lodTier`, lives in `paint.netpoint-text.test.ts`.
