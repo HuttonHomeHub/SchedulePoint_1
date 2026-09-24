@@ -6,6 +6,7 @@ import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { importSchedule } from '@repo/interchange';
+import { drawnSpanDays } from '@repo/layout';
 import { SeedClient, seedPlan } from '@repo/seed-http';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -63,7 +64,7 @@ const TORTURE_XER = readFileSync(
 );
 
 /**
- * The M0 baseline FC-2 and FC-5 are judged against (M0-T4). Written by hand from the first run and
+ * The M0 baseline FC-2 is judged against (M0-T4). Written by hand from the first run and
  * never regenerated: a change to any figure is a finding to explain, not a snapshot to update.
  */
 const BASELINE = JSON.parse(
@@ -71,7 +72,6 @@ const BASELINE = JSON.parse(
 ) as {
   tortureGraphDigest: string;
   tortureReportDigest: string;
-  netpointReimportOverlaps: number;
 };
 
 const digest = (value: unknown): string =>
@@ -80,20 +80,20 @@ const digest = (value: unknown): string =>
 const dayOf = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`) / 86_400_000);
 
 /**
- * How many activities share a row with another they overlap in time, under the web's DRAWN span
- * (`apps/web/src/features/tsld/model/drawn-span.ts`: the visual-effective dates, with a finish
- * milestone moved to the end of its day, ADR-0155). A port, not the function: M1 moves the span into
- * `@repo/layout` and this harness then imports it.
+ * How many activities share a row with another they overlap in time, under the DRAWN span — the
+ * shared `drawnSpanDays` (`@repo/layout`) the web draws with and phase 3 now packs by (M1). This was a
+ * port at M0; importing the function is what the plan said M1 would change it to.
  */
 function overlappingActivities(side: Side): number {
   const byLane = new Map<number, { code: string; start: number; end: number }[]>();
   for (const r of side.rows.values()) {
-    if (r.visualEffectiveStart === null) continue;
-    const shift = r.type === 'FINISH_MILESTONE' ? 1 : 0;
-    const start = dayOf(r.visualEffectiveStart) + shift;
-    const end = r.visualEffectiveFinish === null ? start : dayOf(r.visualEffectiveFinish) + shift;
+    const span = drawnSpanDays(
+      { type: r.type, start: r.visualEffectiveStart, finish: r.visualEffectiveFinish },
+      dayOf,
+    );
+    if (span === null) continue;
     const lane = byLane.get(r.laneIndex) ?? [];
-    lane.push({ code: r.code, start, end });
+    lane.push({ code: r.code, start: span.startDay, end: span.endDay });
     byLane.set(r.laneIndex, lane);
   }
   const overlapping = new Set<string>();
@@ -112,6 +112,9 @@ function overlappingActivities(side: Side): number {
   return overlapping.size;
 }
 
+const lanesByCode = (side: Side): Record<string, number> =>
+  Object.fromEntries([...side.rows.values()].map((r) => [r.code, r.laneIndex]));
+
 interface Side {
   planId: string;
   rows: Map<string, Row>;
@@ -126,6 +129,7 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   let source: Side;
   let reimported: Side;
   let foreign: Side;
+  let foreignAgain: Side;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -189,6 +193,12 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       .attach('file', TORTURE_XER, 'p6_torture_test_v1.xer')
       .expect(201);
     foreign = await read(foreignCommit.body.data.planId as string);
+    const againProject = await project('Foreign again');
+    const againCommit = await agent
+      .post(`/api/v1/organizations/${orgSlug}/projects/${againProject}/interchange/commit`)
+      .attach('file', TORTURE_XER, 'p6_torture_test_v1.xer')
+      .expect(201);
+    foreignAgain = await read(againCommit.body.data.planId as string);
   }, 240_000);
 
   afterAll(async () => {
@@ -197,9 +207,19 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   });
 
   async function read(planId: string): Promise<Side> {
-    const rows = await client.get<Row[]>(
-      `/api/v1/organizations/${orgSlug}/plans/${planId}/activities?limit=100`,
-    );
+    // EVERY page. The torture import has 144 activities (126 tasks, 18 WBS summaries), and a single `limit=100` read returned a
+    // different 100 each time (ordered by UUIDv7), which is how M0-T4 first mis-measured it as a
+    // non-reproducible layout (m0-measurement.md records the correction).
+    const rows: Row[] = [];
+    let cursor: string | null = null;
+    do {
+      const query: string = cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+      const page = await client.getPage<Row>(
+        `/api/v1/organizations/${orgSlug}/plans/${planId}/activities?limit=100${query}`,
+      );
+      rows.push(...page.rows);
+      cursor = page.meta.hasMore ? page.meta.nextCursor : null;
+    } while (cursor !== null);
     const summary = await client.get<{ projectFinish: string | null }>(
       `/api/v1/organizations/${orgSlug}/plans/${planId}/schedule/summary`,
     );
@@ -249,29 +269,29 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     expect(differing('visualConflictReason')).toEqual([]);
   });
 
-  it('matches the M0 baseline: foreign import graph, report and row overlaps (M0-T4)', () => {
+  it('a foreign import keeps its M0 graph and report (FC-2)', () => {
     const parsed = importSchedule({
       content: new Uint8Array(TORTURE_XER),
       filename: 'p6_torture_test_v1.xer',
     });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    const measured = {
+    expect({
       tortureGraphDigest: digest(parsed.graph),
       tortureReportDigest: digest(parsed.report),
-      netpointReimportOverlaps: overlappingActivities(reimported),
-    };
-    const tortureOverlaps = overlappingActivities(foreign);
-    // eslint-disable-next-line no-console
-    console.log(
-      `\n[layout-interchange M0-T4] ${JSON.stringify({ ...measured, tortureOverlaps }, null, 2)}\n`,
-    );
-    expect(measured).toEqual(BASELINE);
-    // The torture import's count is NOT pinned, because it is not reproducible: phase 3 orders its
-    // packer input by activity id, ids are UUIDv7 minted during the import, and their random bits
-    // decide the tie-breaks — 8 to 23 over seven imports of one file (m0-measurement.md). What is
-    // stable, and what M1 must turn to zero, is that the drawn picture overlaps at all.
-    expect(tortureOverlaps).toBeGreaterThan(0);
+    }).toEqual(BASELINE);
+  });
+
+  it('an import opens with no row overlap on the canvas, and the same file lays out the same way twice (FC-5)', () => {
+    // M0-T4 measured 8 to 23 overlapping activities on the torture file and 2 on the NetPoint
+    // re-import, because phase 3 packed EARLY dates and broke ties on random ids.
+    expect(overlappingActivities(foreign)).toBe(0);
+    expect(overlappingActivities(reimported)).toBe(0);
+    const again = lanesByCode(foreignAgain);
+    const moved = Object.entries(lanesByCode(foreign))
+      .filter(([code, lane]) => again[code] !== lane)
+      .map(([code, lane]) => `${code}: ${String(lane)} vs ${String(again[code])}`);
+    expect(moved).toEqual([]);
   });
 
   /** Children before parents; the database is shared with every other e2e file. */

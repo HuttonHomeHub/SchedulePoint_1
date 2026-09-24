@@ -192,8 +192,9 @@ export class ActivityRepository {
    * exceeding Prisma's interactive-transaction timeout).
    */
   /**
-   * The plan's activities projected to the four columns a lane layout needs — `id`, its current
-   * `laneIndex`, the `version` the batch write matches on, and the computed span it is packed by.
+   * The plan's activities projected to the columns a lane layout needs — `id`, the `code` the packer
+   * is keyed by, the `type` and visual-effective dates that give its DRAWN span, its current
+   * `laneIndex`, and the `version` the batch write matches on.
    *
    * Deliberately NOT the full rows, for the reason {@link ActivityRepository.findPlanWbsTree} gives:
    * a layout pass may touch every activity in the plan, and the ~40 columns an `Activity` carries
@@ -201,8 +202,10 @@ export class ActivityRepository {
    * `findWbsTreeRows` "one method down", and it was wrong twice — no such symbol has ever existed,
    * and one method down is `updatePlacements`. A reader following it landed on an unrelated batch
    * writer. The real neighbour is four down and is now linked rather than described by position,
-   * which is what goes stale.)_ Ordered by id so a caller's input — and therefore the
-   * packer's tie-breaks — never depend on the database's scan order.
+   * which is what goes stale.)_ Ordered by id so a caller's input never depends on the database's
+   * scan order. **That does not make a packing reproducible, and this docblock used to imply it did**:
+   * the packer breaks ties on its item's id, and these ids are UUIDv7 minted during an import, so
+   * the interchange caller keys its items by `code` instead (layout-interchange M0-T4, M1).
    */
   async findLayoutRowsForPlan(
     organizationId: string,
@@ -210,15 +213,25 @@ export class ActivityRepository {
   ): Promise<
     {
       id: string;
+      code: string | null;
+      type: ActivityType;
       laneIndex: number;
       version: number;
-      earlyStart: Date | null;
-      earlyFinish: Date | null;
+      visualEffectiveStart: Date | null;
+      visualEffectiveFinish: Date | null;
     }[]
   > {
     return this.prisma.activity.findMany({
       where: { organizationId, planId, deletedAt: null },
-      select: { id: true, laneIndex: true, version: true, earlyStart: true, earlyFinish: true },
+      select: {
+        id: true,
+        code: true,
+        type: true,
+        laneIndex: true,
+        version: true,
+        visualEffectiveStart: true,
+        visualEffectiveFinish: true,
+      },
       orderBy: { id: 'asc' },
     });
   }

@@ -12,7 +12,7 @@ import {
   type ResourceCollision,
   type ResourceCollisionResolution,
 } from '@repo/interchange';
-import { packLanes } from '@repo/layout';
+import { drawnSpanDays, packLanes } from '@repo/layout';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -1071,31 +1071,58 @@ export class InterchangeService {
     // Day offsets about an arbitrary but FIXED origin. The packer only ever compares offsets to each
     // other, so the origin cancels — what matters is that both ends of every span use the same one.
     const DAY_MS = 86_400_000;
-    const items = activities.flatMap((activity) =>
-      activity.earlyStart === null || activity.earlyFinish === null
-        ? []
-        : [
-            {
-              id: activity.id,
-              startDay: Math.round(activity.earlyStart.getTime() / DAY_MS),
-              endDay: Math.round(activity.earlyFinish.getTime() / DAY_MS),
-              laneIndex: activity.laneIndex,
-            },
-          ],
-    );
+    const dayOf = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
+    const isoOf = (date: Date | null): string | null =>
+      date === null ? null : date.toISOString().slice(0, 10);
+
+    // **Keyed by CODE, not id** (layout-interchange M1). The packer breaks every tie on its item's
+    // `id` (`pack-lanes.ts`), and ids are UUIDv7 minted during this import, whose random bits decide
+    // those ties — one file imported seven times packed seven different ways
+    // (`docs/specs/layout-interchange/m0-measurement.md`, M0-T4). A code is unique within a plan and
+    // comes from the file, so the same file now lays out the same way every time.
+    // An import always sets a code (the XER `task_code`; the MSPDI fallback is its UID); a row without
+    // one keeps its id as the key, in a separate namespace so it can never collide with a code.
+    const keyOf = (a: { id: string; code: string | null }): string =>
+      a.code === null ? `id:${a.id}` : `code:${a.code}`;
+    const idOfCode = new Map(activities.map((a) => [keyOf(a), a.id] as const));
+    const codeOfId = new Map(activities.map((a) => [a.id, keyOf(a)] as const));
+
+    // **The DRAWN span, not the early one** (M1). The canvas draws a bar at its visual-effective
+    // dates, a finish milestone at the end of its day; packing on the early dates let an import open
+    // with bars overlapping in their rows on the first screen (M0-T4). `drawnSpanDays` is the rule the
+    // web draws with, shared through `@repo/layout` so the two cannot disagree.
+    const items = activities.flatMap((activity) => {
+      if (activity.visualEffectiveFinish === null) return [];
+      const span = drawnSpanDays(
+        {
+          type: activity.type,
+          start: isoOf(activity.visualEffectiveStart),
+          finish: isoOf(activity.visualEffectiveFinish),
+        },
+        dayOf,
+      );
+      return span === null ? [] : [{ id: keyOf(activity), ...span, laneIndex: activity.laneIndex }];
+    });
     if (items.length === 0) return;
 
     const predecessorsOf = new Map<string, string[]>();
     for (const edge of dependencies) {
-      const existing = predecessorsOf.get(edge.successorId);
-      if (existing === undefined) predecessorsOf.set(edge.successorId, [edge.predecessorId]);
-      else existing.push(edge.predecessorId);
+      const successor = codeOfId.get(edge.successorId);
+      const predecessor = codeOfId.get(edge.predecessorId);
+      if (successor === undefined || predecessor === undefined) continue;
+      const existing = predecessorsOf.get(successor);
+      if (existing === undefined) predecessorsOf.set(successor, [predecessor]);
+      else existing.push(predecessor);
     }
+    // The edges arrive in UUIDv7 order too, and the packer's predecessor hint reads each list in
+    // order — so the lists are sorted, or the hint is a second source of chance (M1).
+    for (const list of predecessorsOf.values()) list.sort();
 
     const versionOf = new Map(activities.map((a) => [a.id, a.version] as const));
     const positions = packLanes(items, predecessorsOf).flatMap((change) => {
-      const version = versionOf.get(change.id);
-      return version === undefined ? [] : [{ ...change, version }];
+      const id = idOfCode.get(change.id);
+      const version = id === undefined ? undefined : versionOf.get(id);
+      return id === undefined || version === undefined ? [] : [{ ...change, id, version }];
     });
     if (positions.length === 0) return;
 

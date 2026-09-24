@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { drawnSpanDays } from '@repo/layout';
 
 import { onboard, openNewProject, validMspdiFile, validXerFile } from './support';
 
@@ -63,6 +67,97 @@ test('a planner imports a schedule from a .xer file and lands on the new plan', 
   await confirmButton.click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
   await expect(page.getByRole('heading', { name: 'Sample', level: 1 })).toBeVisible();
+});
+
+/**
+ * **An imported P6 programme opens with no bar overlapping another in its row**
+ * (layout-interchange M1, FC-5; `docs/specs/layout-interchange/`).
+ *
+ * The import packed rows on EARLY dates while the canvas draws the visual-effective ones, and broke
+ * ties on ids minted during the import, so the 144-activity torture file opened with 37 to 39
+ * activities overlapping others in their rows, and differently each time (m0-measurement.md). The
+ * two-activity file above cannot show that, so this step imports the torture file through the same
+ * dialog and reads the result back through the API, never the DOM (the ADR-0070 rule), counting
+ * overlaps with the span the canvas draws by (`@repo/layout`'s `drawnSpanDays`).
+ */
+test('an imported P6 programme opens with no row overlap on the canvas (FC-5)', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewProject(page);
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles({
+    name: 'p6_torture_test_v1.xer',
+    mimeType: 'application/octet-stream',
+    buffer: readFileSync(
+      join(
+        import.meta.dirname,
+        '..',
+        '..',
+        '..',
+        'packages',
+        'engine-conformance',
+        'fixtures',
+        'p6_torture_test_v1.xer',
+      ),
+    ),
+  });
+  const confirm = dialog.getByRole('button', { name: 'Confirm import' });
+  await expect(confirm).toBeEnabled({ timeout: 20_000 });
+  await confirm.click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/, { timeout: 30_000 });
+  const planId = new URL(page.url()).pathname.split('/').pop()!;
+
+  interface Row {
+    code: string;
+    type: string;
+    laneIndex: number;
+    visualEffectiveStart: string | null;
+    visualEffectiveFinish: string | null;
+  }
+  const rows: Row[] = [];
+  let cursor: string | null = null;
+  do {
+    const query: string = cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`;
+    const res = await page.request.get(
+      `/api/v1/organizations/${orgSlug}/plans/${planId}/activities?limit=100${query}`,
+    );
+    expect(res.ok()).toBe(true);
+    const body = (await res.json()) as {
+      data: Row[];
+      meta: { hasMore: boolean; nextCursor: string | null };
+    };
+    rows.push(...body.data);
+    cursor = body.meta.hasMore ? body.meta.nextCursor : null;
+  } while (cursor !== null);
+  // 126 tasks and 18 WBS summaries (the import report's own `mapped` counts). More than one page, so
+  // the paging above is exercised: a single `limit=100` read is how M0-T4 first mis-measured this.
+  expect(rows).toHaveLength(144);
+
+  const dayOf = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`) / 86_400_000);
+  const byLane = new Map<number, { code: string; start: number; end: number }[]>();
+  for (const r of rows) {
+    const span = drawnSpanDays(
+      { type: r.type, start: r.visualEffectiveStart, finish: r.visualEffectiveFinish },
+      dayOf,
+    );
+    if (span === null) continue;
+    byLane.set(r.laneIndex, [
+      ...(byLane.get(r.laneIndex) ?? []),
+      { code: r.code, start: span.startDay, end: span.endDay },
+    ]);
+  }
+  const overlapping = [...byLane.values()].flatMap((lane) =>
+    lane.flatMap((a, i) =>
+      lane
+        .slice(i + 1)
+        .flatMap((b) => (a.start <= b.end && b.start <= a.end ? [`${a.code}/${b.code}`] : [])),
+    ),
+  );
+  expect(overlapping).toEqual([]);
 });
 
 // The same review→commit loop for a Microsoft Project MSPDI .xml file, proving the format-agnostic
