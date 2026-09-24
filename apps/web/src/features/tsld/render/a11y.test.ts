@@ -17,6 +17,7 @@ import {
   summarizeLogic,
   wbsGroupClause,
 } from './a11y';
+import { linkRung } from './link-marks';
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -407,7 +408,7 @@ describe('summarizeLogic (Tier 2)', () => {
 
   it('counts ties and names the driving predecessor + driven successors', () => {
     expect(summarizeLogic('x', deps)).toBe(
-      '2 predecessors, 2 successors; start driven by Survey; drives Pour',
+      '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS)',
     );
   });
 
@@ -416,7 +417,7 @@ describe('summarizeLogic (Tier 2)', () => {
     expect(summarizeLogic('x', one)).toBe('1 predecessor, 0 successors');
   });
 
-  it('speaks the lag on a lagged driving tie, and keeps zero-lag sentences verbatim (ADR-0052)', () => {
+  it('speaks the lag on a lagged driving tie, and the type alone on a zero-lag one', () => {
     const lagged = [
       edge({
         predecessor: ep('p1', 'Survey'),
@@ -438,9 +439,11 @@ describe('summarizeLogic (Tier 2)', () => {
     expect(summarizeLogic('x', lagged)).toBe(
       '1 predecessor, 1 successor; start driven by Survey (SS + 3 working days); drives Pour (FS - 1 working day)',
     );
-    // The lag clause is additive: zero-lag ties read exactly as before.
+    // NetPoint grammar M3-T4 (#374 item 6): a zero-lag tie names its type too. What a gap label
+    // measures depends on the type (FS finish to start, SS start to start), so a sentence without
+    // it cannot say what the drawn link says.
     expect(summarizeLogic('x', deps)).toBe(
-      '2 predecessors, 2 successors; start driven by Survey; drives Pour',
+      '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS)',
     );
   });
 
@@ -456,21 +459,47 @@ describe('summarizeLogic (Tier 2)', () => {
     ]);
     // NetPoint grammar M3-T2: in the unit the gap label prints, working days on the plan calendar.
     expect(summarizeLogic('x', deps, slack)).toBe(
-      '2 predecessors, 2 successors; start driven by Survey; drives Pour; slack to Permit 4 working days, Backfill 2 working days',
+      '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS); slack to Permit (FS) 4 working days, Backfill (FS) 2 working days',
     );
   });
 
   it('says calendar days where no calendar is loaded, as the `cal d` label does', () => {
     const slack = new Map([['p2->x', { days: 1, unit: 'calendar' as const }]]);
-    expect(summarizeLogic('x', deps, slack)).toContain('slack to Permit 1 calendar day');
+    expect(summarizeLogic('x', deps, slack)).toContain('slack to Permit (FS) 1 calendar day');
   });
 
   it('leaves the sentence untouched when no slack is supplied or none is positive', () => {
-    const before = '2 predecessors, 2 successors; start driven by Survey; drives Pour';
+    const before = '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS)';
     expect(summarizeLogic('x', deps, new Map())).toBe(before);
     expect(
       summarizeLogic('x', deps, new Map([['p2->x', { days: 0, unit: 'working' as const }]])),
     ).toBe(before);
+  });
+});
+
+/**
+ * **The link's rung and the words for criticality read one pair of flags** (NetPoint grammar M3-T4,
+ * `docs/TECH_DEBT.md` #374 item 7).
+ *
+ * A driving link between two activities is drawn in the rung `linkRung` returns, and each
+ * activity's sentence says `critical` / `near-critical` from `describeActivity`. They agree today
+ * because both read `isCritical` and `isNearCritical`. This pins the agreement over every
+ * combination of the two flags (including both set, which the engine does not produce and which
+ * both must resolve the same way), so a later change to either rule that makes them disagree fails
+ * here. A behavioural table rather than the source scan the plan named: a scan can say both read
+ * the same field names and still pass when one of them starts reading them in a different order.
+ */
+describe('linkRung and describeActivity agree on criticality (#374 item 7)', () => {
+  const words = (s: string): 'critical' | 'near' | 'normal' =>
+    s.includes(', critical') ? 'critical' : s.includes(', near-critical') ? 'near' : 'normal';
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true],
+  ])('isCritical %s, isNearCritical %s', (isCritical, isNearCritical) => {
+    const a = activity({ isCritical, isNearCritical, remainingFloat: 3 });
+    expect(linkRung(a, a)).toBe(words(describeActivity(a)));
   });
 });
 

@@ -537,8 +537,11 @@ export function lagPhrase(
  * **Tier 2** — the on-demand (`Space`) detail: how many logic ties the activity has and which are
  * driving. `start driven by {name}` names the binding predecessor (the driving edge into it);
  * `drives {names}` names the successors whose start it drives. Derived purely from `dependencies`.
- * A lagged driving tie appends its {@link lagPhrase} (the spoken twin of the time-true anchor
- * offset, ADR-0052); a zero-lag tie adds nothing, keeping today's sentences verbatim.
+ * Every named tie appends its {@link lagPhrase}: the type alone for a zero-lag tie (`(FS)`), the
+ * type and lag otherwise (`(SS + 3 working days)`, the spoken twin of the time-true anchor offset,
+ * ADR-0052). A zero-lag tie said nothing until NetPoint grammar M3-T4 (`docs/TECH_DEBT.md` #374
+ * item 6): the gap a waiting link is labelled with is measured from its type's anchor (finish for
+ * FS, start for SS), so a sentence without the type could not say what the drawn gap measures.
  */
 export function summarizeLogic(
   id: string,
@@ -554,7 +557,7 @@ export function summarizeLogic(
   const preds = dependencies.filter((d) => d.successor.id === id);
   const succs = dependencies.filter((d) => d.predecessor.id === id);
   const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`;
-  const lagSuffix = (d: DependencySummary): string => (d.lagDays === 0 ? '' : ` (${lagPhrase(d)})`);
+  const lagSuffix = (d: DependencySummary): string => ` (${lagPhrase(d)})`;
   let text = `${count(preds.length, 'predecessor')}, ${count(succs.length, 'successor')}`;
   const drivenBy = preds.find((d) => d.isDriving);
   if (drivenBy) text += `; start driven by ${drivenBy.predecessor.name}${lagSuffix(drivenBy)}`;
@@ -579,7 +582,7 @@ export function summarizeLogic(
         // In the unit the gap label prints (NetPoint grammar M3-T2): "3 working days", or "12
         // calendar days" where no calendar is loaded and the label reads `12 cal d`.
         const unit = gap.unit === 'working' ? 'working' : 'calendar';
-        return `${other} ${gap.days} ${unit} ${gap.days === 1 ? 'day' : 'days'}`;
+        return `${other}${lagSuffix(d)} ${gap.days} ${unit} ${gap.days === 1 ? 'day' : 'days'}`;
       });
     if (waits.length > 0) text += `; slack to ${waits.join(', ')}`;
   }

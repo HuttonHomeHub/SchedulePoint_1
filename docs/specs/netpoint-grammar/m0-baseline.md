@@ -308,3 +308,15 @@ nodes`) is red without the inset.
 against a written prediction, which the diff matched exactly: no gap label or dash in the maximal
 scene, and each of its two plates now strokes its border in its own link's ink (both links are
 selection-incident there, so `#0af`), one `strokeStyle` per plate where there was one for all.
+
+## M3-T4 — the type is spoken, and the rung and the words agree (2026-09-24)
+
+`summarizeLogic` now names every tie's type, `(FS)` for a zero-lag tie, where it used to say nothing
+for one: the gap a waiting link carries is measured from its type's anchor, so the spoken summary
+could not say what the drawn gap measured. The sentences change for every zero-lag driving tie and
+every gap (`slack to Permit (FS) 4 working days`). A table over the four `isCritical` /
+`isNearCritical` combinations pins `linkRung` to `describeActivity`'s criticality word; it passed on
+first run, as expected of a pin, and goes red when the sentence checks near-critical first. That is a
+behavioural table where the plan named a structural scan, because a scan of field names passes when
+one rule starts reading the same fields in a different order. `docs/TECH_DEBT.md` #374 items 6 and 7
+are closed.

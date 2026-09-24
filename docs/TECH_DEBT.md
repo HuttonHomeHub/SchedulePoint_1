@@ -11642,7 +11642,7 @@ positional figure as a count.
 
 ### 374. The NetPoint-layout gate pass's non-blocking findings
 
-**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint-layout M5 and M6
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-23 (NetPoint-layout M5 and M6
 reviews) · **Size:** S · **Owner:** web
 
 The M5 and M6 specialist reviews folded every blocking finding
@@ -11666,13 +11666,12 @@ raised and did not block on.
 5. **The roving-tabindex logic is written twice** (component): `SegmentedControl` and
    `RadioCardGroup`. They differ in a real way, since a disabled stop needs separate focus state.
    Extract a shared hook when a third radiogroup needs it.
-6. **A zero-lag link's type is not spoken** (accessibility, pre-existing). `describeActivity`
-   names a relationship's type (FS, SS, FF, SF) only when it carries a lag (`a11y.ts`,
-   `lagSuffix`). ADR-0154 now draws a waiting dash whose meaning depends on the type, so the gap
-   between what is drawn and what is spoken is wider than it was.
-7. **Nothing couples the link's rung to the words for criticality** (accessibility). `linkRung`
-   and `describeActivity` agree today because they read the same `isCritical` and `isNearCritical`
-   fields. A structural pin would stop a later change to one silently disagreeing with the other.
+
+Items 6 and 7 were closed by NetPoint grammar M3-T4 (2026-09-24). A zero-lag tie now names its
+type in the logic summary (`(FS)`), because a waiting link's gap is measured from its type's anchor
+(`a11y.ts`, `summarizeLogic`); and a table over all four flag combinations pins `linkRung` and
+`describeActivity` to one reading of criticality (`a11y.test.ts`, verified red by reordering the
+sentence's branches).
 
 ### 382. Re-layout from scratch cannot find the layout a skilled planner drew
 
