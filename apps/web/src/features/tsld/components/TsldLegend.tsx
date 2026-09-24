@@ -48,7 +48,7 @@ type LegendItem =
 const CRITICALITY_SWATCHES: ReadonlyArray<LegendItem> = [
   { label: 'Critical', criticality: 'critical', fill: 'var(--destructive)' },
   { label: 'Near-critical', criticality: 'near', fill: 'var(--warning)' },
-  { label: 'On schedule', criticality: 'none', fill: 'var(--primary)' },
+  { label: 'On schedule', criticality: 'none', fill: 'var(--canvas-bar)' },
 ];
 
 /** The criticality **node** cues alone, kept in every non-Criticality Colour-by mode so criticality
@@ -366,15 +366,15 @@ export function TsldLegend({
                   (drawn in the bar's own fill on the canvas — the primary fill by default). */}
               <span
                 className="absolute inset-x-0 top-1/2 -translate-y-1/2"
-                style={{ height: 4, backgroundColor: 'var(--primary)' }}
+                style={{ height: 4, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute inset-y-0 left-0"
-                style={{ width: 2, backgroundColor: 'var(--primary)' }}
+                style={{ width: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute inset-y-0 right-0"
-                style={{ width: 2, backgroundColor: 'var(--primary)' }}
+                style={{ width: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
             </span>
           ) : 'summary' in item ? (
@@ -383,22 +383,22 @@ export function TsldLegend({
                   WBS-summary glyph. */}
               <span
                 className="absolute inset-x-0 top-0"
-                style={{ height: 4, backgroundColor: 'var(--primary)' }}
+                style={{ height: 4, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute left-0"
-                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute right-0"
-                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
             </span>
           ) : 'progress' in item ? (
             <span
               aria-hidden="true"
               className="relative inline-block h-3 w-5 rounded-sm"
-              style={{ backgroundColor: 'var(--primary)' }}
+              style={{ backgroundColor: 'var(--canvas-bar)' }}
             >
               {/* The in-bar progress band + front divider along the bar bottom, in the fill's
                   paired ink — matching the canvas progress depiction. */}
@@ -429,7 +429,7 @@ export function TsldLegend({
                   lag-run depiction (a tighter dash than the non-driving link's). */}
               <span
                 className="absolute top-1/2 left-0 -translate-y-1/2"
-                style={{ width: 6, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ width: 6, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute top-1/2 -translate-y-1/2"
@@ -470,7 +470,7 @@ export function TsldLegend({
               />
               <span
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-                style={{ width: 8, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ width: 8, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
             </span>
           ) : 'slack' in item ? (

@@ -1857,7 +1857,7 @@ function GanttRowView({
                   ? 'bg-destructive/70 ring-destructive ring-2 ring-inset'
                   : activity.type === 'WBS_SUMMARY'
                     ? 'bg-foreground/70'
-                    : 'bg-primary/60 ring-primary/70 ring-1 ring-inset',
+                    : 'bg-canvas-bar/60 ring-canvas-bar/70 ring-1 ring-inset',
               )}
               // The ghost is a TRANSFORM on the live bar, not a second element: one bar means the
               // planner is dragging the thing they grabbed, and it costs no extra node per row.

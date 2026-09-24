@@ -225,7 +225,7 @@ export const PALETTE: TsldPalette = {
   linkMinor: LINK_SENTINELS.linkMinor,
   linkDriving: LINK_SENTINELS.linkDriving,
   edge: LINK_SENTINELS.edge,
-  bar: '#3b82f6',
+  bar: '#459e5d',
   critical: LINK_SENTINELS.critical,
   nearCritical: LINK_SENTINELS.nearCritical,
   outline: '#ffffff',

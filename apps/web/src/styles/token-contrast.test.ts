@@ -207,9 +207,9 @@ const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: st
  * distinction the scope exists to make (`diagnosis.md` §3.2).
  */
 const CRITICALITY_PAIRS: ReadonlyArray<readonly [a: string, b: string, why: string]> = [
-  ['--primary', '--destructive', 'an ordinary bar against a critical one'],
+  ['--canvas-bar', '--destructive', 'an ordinary bar against a critical one'],
   ['--warning', '--destructive', 'a near-critical bar against a critical one'],
-  ['--primary', '--warning', 'an ordinary bar against a near-critical one'],
+  ['--canvas-bar', '--warning', 'an ordinary bar against a near-critical one'],
 ];
 
 /**
@@ -249,8 +249,8 @@ describe('the WBS band pairs the ink it paints with the fill it paints on', () =
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 
   it.each([
-    ['--primary', '--primary-foreground', "a real summary's name on its bar", 4.5],
-    ['--primary', '--foreground', "the selected summary's INSET ring on its bar", 3],
+    ['--canvas-bar', '--primary-foreground', "a real summary's name on its bar", 4.5],
+    ['--canvas-bar', '--foreground', "the selected summary's INSET ring on its bar", 3],
   ] as const)('%s / %s — %s', (fill, ink, _why, floor) => {
     const value = ratio(tokens, fill, ink);
     expect(
@@ -274,7 +274,7 @@ describe('the diagram tells its three criticality states apart', () => {
   it('keeps each of the three perceivable against the ground it is painted on', () => {
     // The pair that had NO entry in this matrix at all before Landing E: every diagram ink was
     // validated against `--background` at `:root` while being painted on `--canvas`.
-    for (const ink of ['--primary', '--warning', '--destructive']) {
+    for (const ink of ['--canvas-bar', '--warning', '--destructive']) {
       const value = ratio(tokens, '--background', ink);
       expect(value, `${ink} on the diagram ground is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
     }
@@ -336,7 +336,7 @@ const PLOT_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
  */
 const MINIMAP_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
   ['the minimap ground', '--canvas'],
-  ['non-critical bar ink', '--primary'],
+  ['non-critical bar ink', '--canvas-bar'],
   ['critical bar ink', '--destructive'],
   // The THIRD bar ink, added at minimap-visual M2. The M5 accessibility review caught its
   // absence, and the reason it matters is this file's own recorded failure mode: a sweep that
@@ -511,7 +511,7 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
     // visible in the output — the same contract the day tier and the non-working hatch use.
     const tokens = resolve(THEME_SELECTORS[0], 'canvas');
     const fringeOnCritical = ratio(tokens, '--destructive', '--foreground');
-    const fringeOnBar = ratio(tokens, '--primary', '--foreground');
+    const fringeOnBar = ratio(tokens, '--canvas-bar', '--foreground');
     expect(
       `fringe on critical ${fmtRatio(fringeOnCritical)}, on non-critical ${fmtRatio(fringeOnBar)}`,
     ).toBeTruthy();
@@ -924,8 +924,8 @@ describe.each(THEME_SELECTORS)('%s — adjacent surfaces', (theme) => {
  */
 const NETPOINT_PROPOSED: Readonly<Record<string, string>> = {
   // M1 shipped the ground, the band, the wash, the lane rule, the three grid tiers and paper's own
-  // grid (as `--canvas-paper-grid-*`), so their entries are deleted and the cases below read CSS.
-  '--canvas-bar': 'oklch(0.629 0.13 150)',
+  // grid (as `--canvas-paper-grid-*`), and M2 shipped `--canvas-bar`, so their entries are deleted
+  // and the cases below read CSS.
   '--canvas-link': 'oklch(0.592 0.13 295)',
   '--canvas-link-minor': 'oklch(0.643 0.09 295)',
   '--canvas-link-mark': 'oklch(0.331 0.13 295)',
@@ -1034,6 +1034,13 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
       }
     },
   );
+
+  // M2-T1: a :root token with no `@theme inline` alias paints NOTHING through a Tailwind class in a
+  // real browser, while every computed assertion above stays green (the minimap-frame finding). The
+  // Gantt bar and the legend swatches read the bar as a class, so the alias is load-bearing.
+  it('the activity bar is REACHABLE — @theme inline aliases --canvas-bar', () => {
+    expect(readGlobalsCss()).toMatch(/--color-canvas-bar:\s*var\(--canvas-bar\);/);
+  });
 
   it('keeps no proposed value that has already shipped', () => {
     const shipped = resolve(':root', 'canvas');

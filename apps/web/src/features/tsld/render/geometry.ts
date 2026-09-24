@@ -77,7 +77,13 @@ export const LANE_HEIGHT = 60;
  * bar in its lane is an x-overlap question the bar's height does not enter. Only M2 served that,
  * and "we made the bars thinner" is the most natural wrong thing to believe about this epic.
  */
-export const BAR_HEIGHT = 5;
+/*
+ * **6 px since the NetPoint grammar (M2)**, the reference's own measured bar height
+ * (`docs/specs/netpoint-grammar/reference-observations.md`). One pixel moves nothing that routes:
+ * the centre-line stays at 30 px (27 + 3, where it was 27.5 + 2.5) and the gutter keeps its seven
+ * channels (spec §3.2, checked by FC-G1's fingerprints).
+ */
+export const BAR_HEIGHT = 6;
 /**
  * The vertical clearance between a lane's edge and the bar inside it — half the leftover row.
  *

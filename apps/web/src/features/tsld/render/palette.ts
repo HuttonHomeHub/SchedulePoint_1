@@ -163,7 +163,7 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     linkMinor: token('--canvas-link-minor', '#8a8f98'),
     linkDriving: token('--primary', '#3b6fbf'),
     edge: token('--muted-foreground', '#7a8090'),
-    bar: token('--primary', '#3b6fbf'),
+    bar: token('--canvas-bar', '#459e5d'),
     critical: token('--destructive', '#c83c3c'),
     nearCritical: token('--warning', '#d29628'),
     // A foreground-contrast stroke used to outline critical/near-critical bars, so
@@ -261,7 +261,7 @@ export const PRINT_TOKEN_SOURCES = {
   linkMinor: ['--canvas-link-minor', '#80848b'],
   linkDriving: ['--primary', '#4b8cca'],
   edge: ['--muted-foreground', '#636363'],
-  bar: ['--primary', '#4b8cca'],
+  bar: ['--canvas-bar', '#459e5d'],
   critical: ['--destructive', '#9c0711'],
   nearCritical: ['--warning', '#9f5600'],
   outline: ['--foreground', '#333333'],
@@ -373,7 +373,7 @@ export function resolveLensPalette(root: Element): LensPalette {
     // Mirror the painter (same tokens + fallbacks) so Criticality mode paints byte-for-byte today's fills.
     critical: token('--destructive', '#c83c3c'),
     nearCritical: token('--warning', '#d29628'),
-    bar: token('--primary', '#3b6fbf'),
+    bar: token('--canvas-bar', '#459e5d'),
     // The muted "uncomputed / ungrouped" fill — a null total float or a null WBS parent.
     neutral: token('--muted-foreground', '#7a8090'),
     // Total-float bands: less slack (red) → more slack (green), each a distinct semantic hue.
@@ -419,7 +419,7 @@ export function lensLegendVarPalette(): LensPalette {
   return {
     critical: v('--destructive'),
     nearCritical: v('--warning'),
-    bar: v('--primary'),
+    bar: v('--canvas-bar'),
     neutral: v('--muted-foreground'),
     floatCritical: v('--destructive'),
     floatLow: v('--warning'),
@@ -476,7 +476,7 @@ export function resolveWbsBandPalette(root: Element): WbsBandPalette {
     return value || fallback;
   };
   return {
-    bar: token('--primary', '#3b6fbf'),
+    bar: token('--canvas-bar', '#459e5d'),
     derived: token('--muted-foreground', '#7a8090'),
     rule: token('--border', '#2a2f3a'),
     label: token('--primary-foreground', '#ffffff'),

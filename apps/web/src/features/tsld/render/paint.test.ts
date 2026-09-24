@@ -2219,6 +2219,14 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       // Body + two bracket caps, overhanging the bar by `GLYPH_CAP_OVERHANG` top and bottom —
       // derived from the bar since M3-T2, so this states the shape rather than four numbers.
       expect(ctx.fillRect).toHaveBeenCalledTimes(3);
+      // The span's line at half height, centred (spec §4.13 U1): a span draws no node, so weight is
+      // what tells it from a task. The caps keep the FULL rect, so they stand proud of the line.
+      expect(ctx.fillRect).toHaveBeenCalledWith(
+        BAR_X,
+        BAR_Y + BAR_HEIGHT / 4,
+        BAR_W,
+        BAR_HEIGHT / 2,
+      );
       const capY = BAR_Y - GLYPH_CAP_OVERHANG;
       const capH = BAR_HEIGHT + GLYPH_CAP_OVERHANG * 2;
       expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, capY, GLYPH_CAP_W, capH);
@@ -2231,6 +2239,12 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     }
   });
 
+  it('paints a task at the full bar height, so only a span is thinner (U1 negative control)', () => {
+    const ctx = mockCtx();
+    paintScene(ctx, refreshScene({ activities: [task()] }), VIEW, SIZE, PALETTE);
+    expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, BAR_Y, BAR_W, BAR_HEIGHT);
+  });
+
   it('draws the WBS-summary bracket: downward end tabs in the bar’s own fill', () => {
     const ctx = mockCtx();
     paintScene(
@@ -2241,7 +2255,10 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       PALETTE,
     );
     expect(ctx.fillRect).toHaveBeenCalledTimes(3);
-    const tabY = BAR_Y + BAR_HEIGHT;
+    // The line at half height (U1), and the tabs hang from the line they close rather than from the
+    // unpainted bottom of the full rect, which would leave them floating a pixel and a half below it.
+    expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, BAR_Y + BAR_HEIGHT / 4, BAR_W, BAR_HEIGHT / 2);
+    const tabY = BAR_Y + (BAR_HEIGHT * 3) / 4;
     expect(ctx.fillRect).toHaveBeenCalledWith(BAR_X, tabY, SUMMARY_TAB_W, SUMMARY_TAB_H);
     expect(ctx.fillRect).toHaveBeenCalledWith(
       BAR_X + BAR_W - SUMMARY_TAB_W,

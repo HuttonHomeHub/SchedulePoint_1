@@ -94,10 +94,12 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
     // what must still hold, and they are separate cases for exactly this moment.
     // And again at NetPoint-layout M1, by reading: pitch 52 → 60 moves the pad and nothing the pad
     // does not own. Every value below this line is the same as it was at 52.
+    // And at NetPoint grammar M2-T1, by reading: the bar 5 → 6 px (spec §4.2) moves the pad by half
+    // a pixel, and every derived glyph constant in the second object rounds to the same value.
     expect({ LANE_HEIGHT, BAR_HEIGHT, BAR_PAD }).toEqual({
       LANE_HEIGHT: 60,
-      BAR_HEIGHT: 5,
-      BAR_PAD: 27.5,
+      BAR_HEIGHT: 6,
+      BAR_PAD: 27,
     });
     expect({
       TAIL_HEIGHT,

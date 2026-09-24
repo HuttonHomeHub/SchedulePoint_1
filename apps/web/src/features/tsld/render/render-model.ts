@@ -191,6 +191,19 @@ export function summaryTabRects(rect: Rect): [Rect, Rect] {
   ];
 }
 
+/**
+ * **A span is thinner than work** (NetPoint grammar, spec §4.13 U1). An LOE/hammock or WBS-summary
+ * bar draws no node, so without another channel it reads as one more task. Weight is that channel:
+ * the span's line paints at half the bar height, centred, in the same rung ink, so no new colour is
+ * needed. Only the PAINTED line thins — `activityRect` is unchanged, so routing, hit-testing and the
+ * route fingerprints (FC-G1) cannot see it. The bracket caps keep the full rect, which is what makes
+ * them read as a bracket around the thinner line; a summary's tabs hang from the line they close.
+ */
+export function spanLineRect(rect: Rect): Rect {
+  const h = rect.h / 2;
+  return { x: rect.x, y: rect.y + (rect.h - h) / 2, w: rect.w, h };
+}
+
 // ── The node glyph (logic-legibility M3-T3) ─────────────────────────────────────────────────────
 
 /**
@@ -206,7 +219,7 @@ export function summaryTabRects(rect: Rect): [Rect, Rect] {
  * be visibly larger than the line it terminates without becoming a blob. Twice the bar's height
  * puts it at 10 px across for a 5 px bar, which is the reference's own proportion.
  */
-export const NODE_RADIUS = Math.max(2, BAR_HEIGHT);
+export const NODE_RADIUS = 5;
 
 /**
  * Where a bar's two node glyphs sit: on the bar's centre-line, at each end.

@@ -43,6 +43,7 @@ import {
   screenXOfDay,
   screenYOfLane,
   summaryTabRects,
+  spanLineRect,
   truncateToWidth,
   BAR_HEIGHT,
   BAR_PAD,
@@ -876,14 +877,18 @@ function drawRefreshedBar(
     return;
   }
 
-  if (beginRoundedRect(ctx, rect, BAR_RADIUS)) ctx.fill();
-  else ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  // A span paints its line at half height (`spanLineRect`, spec §4.13 U1); a task fills the bar.
+  const isSpan = glyph === 'loe' || glyph === 'summary';
+  const line = isSpan ? spanLineRect(rect) : rect;
+  if (beginRoundedRect(ctx, line, BAR_RADIUS)) ctx.fill();
+  else ctx.fillRect(line.x, line.y, line.w, line.h);
   // Span glyphs, in the bar's own resolved fill (already set) so a Colour-by lens recolours the
-  // whole shape as one: LOE/hammock bracket end-caps; WBS-summary downward end tabs.
+  // whole shape as one: LOE/hammock bracket end-caps on the full rect, so they stand proud of the
+  // thinner line; WBS-summary downward end tabs hanging from the line they close.
   if (glyph === 'loe') {
     for (const cap of loeBracketRects(rect)) ctx.fillRect(cap.x, cap.y, cap.w, cap.h);
   } else if (glyph === 'summary') {
-    for (const tab of summaryTabRects(rect)) ctx.fillRect(tab.x, tab.y, tab.w, tab.h);
+    for (const tab of summaryTabRects(line)) ctx.fillRect(tab.x, tab.y, tab.w, tab.h);
   }
   // **Progress is a second, shorter bar along the same line, not an in-bar band** (M3-T3, CQ-6's
   // default). `progressGeometry`'s band is inset 2 px top and bottom inside the bar, which needs
@@ -892,7 +897,7 @@ function drawRefreshedBar(
   // 2 px proud top and bottom — a **shape** cue (WCAG 1.4.1) that survives at this thickness where
   // the old in-bar divider, clamped to a band that no longer exists, would not.
   if (view.pxPerDay >= PROGRESS_MIN_PX_PER_DAY) {
-    const progress = progressGeometry(rect, activity.percentComplete ?? 0);
+    const progress = progressGeometry(line, activity.percentComplete ?? 0);
     if (progress) {
       ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
       const { band, front } = progress;

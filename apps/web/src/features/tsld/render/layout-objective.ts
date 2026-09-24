@@ -2,7 +2,6 @@ import { laneOverlapPairs } from './lane-overlap';
 import {
   activityRect,
   barGlyphKind,
-  NODE_RADIUS,
   type Point,
   type RectCache,
   type RenderActivity,
@@ -231,9 +230,21 @@ function firstAbove(sorted: Float64Array, value: number): number {
 }
 
 /**
- * Adjacent bars in one row whose end glyphs touch and which no link joins. A task's glyph is its
- * two node discs, which reach {@link NODE_RADIUS} past its ends; a milestone's diamond and an LOE or
- * summary span carry no node, so their glyph is their own rect.
+ * How far past a task's ends its glyph reaches, for the contact score below.
+ *
+ * **It is not the painted node radius, deliberately** (NetPoint grammar, spec §4.13 A2). This
+ * score drives Tidy and Re-layout (ADR-0152), so tying it to `NODE_RADIUS` would let a purely visual
+ * change to the node (the grammar enlarges it to the reference's 15 px) quietly change which lanes
+ * the search picks. Nothing that holds the lanes fixed, such as a route fingerprint, could see
+ * that. So the layout keeps the reach it was measured and approved with: 5 px, the node radius when
+ * ADR-0152 shipped. FC-G1b fingerprints the optimiser's output to hold it there.
+ */
+export const LAYOUT_CONTACT_REACH_PX = 5;
+
+/**
+ * Adjacent bars in one row whose end glyphs touch and which no link joins. A task's glyph reaches
+ * {@link LAYOUT_CONTACT_REACH_PX} past its ends; a milestone's diamond and an LOE or summary span
+ * carry no node, so their glyph is their own rect.
  */
 function unlinkedContacts(
   activities: readonly RenderActivity[],
@@ -248,7 +259,7 @@ function unlinkedContacts(
     linked.add(`${e.successorId}|${e.predecessorId}`);
   }
   const { byLane } = barsByLane(activities, view, dataDate, rectCache, (a) =>
-    barGlyphKind(a.type) === 'bar' ? NODE_RADIUS : 0,
+    barGlyphKind(a.type) === 'bar' ? LAYOUT_CONTACT_REACH_PX : 0,
   );
   let n = 0;
   for (const list of byLane.values()) {

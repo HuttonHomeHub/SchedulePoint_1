@@ -109,3 +109,37 @@ budget.
   threshold of 20, so it separates cleanly.
 
 - **Other journeys run:** `arrange` (12), `export` (3), `minimap` (1) and `axis-markers` (2), all green.
+
+## M2-T0 and M2-T1 — decouple the node, then the bar (2026-09-24)
+
+- **M2-T0:** `NODE_RADIUS` is a literal 5 for the whole of M2-T1, and the layout search's contact
+  reach is its own named constant, `LAYOUT_CONTACT_REACH_PX = 5`
+  (`render/layout-objective.ts`). So a later change to the node (M2-T2) cannot move a lane Tidy
+  picks without somebody writing that down. The two new `layout-objective.test.ts` cases were
+  verified red.
+- **M2-T1, the bar:** `BAR_HEIGHT` 5 → 6 and `--canvas-bar: oklch(0.629 0.13 150)`, read by the
+  painter, the Colour-by lens and its legend, the Gantt bar, the WBS band summary, the TSLD legend
+  swatches and paper. The resource strip and the driving link stay on `--primary`, because their
+  colour does not mean "an ordinary activity".
+- **The bar's pairs, through the gate's own resolver:** ground 3.27:1, band 3.21:1, near-critical
+  1.66:1, critical 2.57:1, dark label 5.21:1, selection ring 3.81:1. `--canvas-bar` left the
+  `NETPOINT_PROPOSED` overlay in the same commit, so the NetPoint block now reads it from CSS, and a
+  new case asserts its `@theme inline` alias exists (the minimap-frame lesson: a missing alias
+  paints nothing through a class while every computed pair stays green).
+- **U1, spans at half height:** `spanLineRect` paints an LOE, hammock or WBS summary's line at half
+  the bar height, centred. The LOE caps keep the full rect, and a summary's tabs hang from the line.
+  Verified red by returning the full rect from `spanLineRect`: both span cases fail. A task keeps
+  the full height (a negative control case).
+- **FC-G6, the prediction and the diff.** Predicted: task bars +1 px tall and 0.5 px higher, span
+  lines 3 px tall, summary tabs 1 px higher, text above a bar 0.5 px higher and text below it
+  0.5 px lower. No fill value changes, because the golden scene paints with a literal palette. No
+  op count changes. The diff, classified by coordinate delta, is exactly that: 22 bar and cap rects
+  (y −0.5, h +1), 2 span lines (y +1, h −2), 2 summary tabs (y −1), 49 text entries (y ±0.5), and 31
+  path and badge entries at the bar top (y −0.5). The 121 changed lines were compared against the
+  prediction by script before the snapshot was accepted.
+- **FC-G1 and FC-G1b:** `netpoint-grammar-baseline.ts` re-run after M2-T1. It is **byte-identical**
+  to the M0 table: no route and no lane moved. Links attach at node centres, and a bar grown
+  symmetrically about its centre-line does not move one.
+- **A stale figure found on the way:** `minimap.ts`'s docblock quoted the ladder's luminances as
+  0.2152 / 0.1234 / 0.0626, and the near-critical and critical terms no longer matched the shipped
+  tokens. The whole line was re-measured (0.266 / 0.140 / 0.073) rather than one term patched.

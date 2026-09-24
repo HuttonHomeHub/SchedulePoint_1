@@ -683,6 +683,18 @@
      reader follows is a graphical object, so it clears 3:1 on both grounds; it stays quieter than a
      driving link by WEIGHT, which is the channel that carries drivingness. */
   --canvas-link-minor: oklch(0.61 0.008 252);
+  /* **The activity bar** (NetPoint grammar M2, spec §4.13 A-n1). Its own token rather than a
+     re-hued `--plot-primary`, because `--primary` inside the canvas scope also paints the primary
+     BUTTON in the DOM mounted over the diagram (the dock, the create popover, the selection bar).
+     A green there would read as "success". So the bar is green here, and the button stays blue.
+     Every consumer whose colour MEANS "an ordinary activity" reads it: the painter, the Colour-by
+     lens, the Gantt bar, the WBS band summary, the legend and paper
+     (`docs/specs/netpoint-grammar/m0-solved.md`, "the --primary consumers").
+
+     Solved rather than chosen (`scripts/solve-netpoint-grammar.ts`): the lightest green that clears
+     3:1 on the ground and the band, 1.66:1 from near-critical (the ladder's 1.5 floor), and 5.21:1
+     under the dark label ink. */
+  --canvas-bar: oklch(0.629 0.13 150);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
@@ -1529,6 +1541,8 @@
   --color-canvas-minimap-frame: var(--canvas-minimap-frame);
   --color-canvas-minimap-frame-halo: var(--canvas-minimap-frame-halo);
   --color-canvas-minimap-frame-fill: var(--canvas-minimap-frame-fill);
+
+  --color-canvas-bar: var(--canvas-bar);
 
   --color-canvas-grid-day: var(--canvas-grid-day);
   --color-canvas-grid-month: var(--canvas-grid-month);
