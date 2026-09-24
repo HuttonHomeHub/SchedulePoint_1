@@ -1,5 +1,27 @@
 # @repo/web
 
+## 0.149.0
+
+### Minor Changes
+
+- [#689](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/689) [`3acdc7d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3acdc7d004ad508546384b9c2a5c0ef074eb619a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram sits on a near-white ground, and its time grid is now its quietest mark. Day and month
+  lines are dashed and faint, and year lines are solid and faint, so the logic lines are what the eye
+  finds first. The date ruler still labels every month and year. The exported and printed diagram
+  keeps its stronger grid, because paper has no ruler.
+
+- [#689](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/689) [`3acdc7d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3acdc7d004ad508546384b9c2a5c0ef074eb619a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram now reads like a NetPoint picture: each kind of mark has its own colour and shape.
+  
+  - **Bars and nodes.** A bar is a thin green line. Each end has a round node, and a heavier ring
+    means a more critical activity.
+  - **Links.** Links are violet, with chevrons showing which way they run. A link that waits is
+    labelled with its gap in working days, the same number the logic summary reads out. It is no
+    longer dashed.
+  - **Joins and milestones.** A small dot marks where a link joins partway along a bar. A milestone
+    is a downward triangle.
+  - **Text.** The canvas prints each activity's name. The codes, and each bar's duration and
+    float, can be switched back on under View, Markers.
+  - **Zoom.** At whole-plan zoom, dates and gap labels are held back so the logic stays readable.
+
 ## 0.148.1
 
 ### Patch Changes
