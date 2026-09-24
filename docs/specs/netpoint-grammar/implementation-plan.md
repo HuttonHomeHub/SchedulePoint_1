@@ -1,7 +1,7 @@
 # Implementation Plan: NetPoint grammar — how bars, nodes, links and text look on the TSLD canvas
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — 2026-09-24 (feature-spec §5.1), conditional on agent agreement (§5.2)
 - **Owner:** web
 
 ## Breakdown
@@ -112,6 +112,8 @@ milestone a planner can see, on the canvas itself.`
   (new: a ceiling on decoration). Add the gap-plate and link-mark pairs, and `--canvas-link*` on
   `--print`. Extend `MINIMAP_GROUNDS` if the frame crosses a new ink. Then list every DOM and canvas
   consumer that resolves `--primary` under `[data-surface="canvas"]` (spec R9).
+  **Every pair is solved against the near-white ground `oklch(0.995 0.002 250)` (CQ-2), not today's
+  `0.958`.** Solving against the old ground and re-valuing it at M1 would move every pair twice.
 - **Complexity:** M
 - **Dependencies:** M0-T2
 - **Risks:** the month floor at `:853-856` must be **replaced, not deleted**. Its replacement ceiling
@@ -187,8 +189,8 @@ milestone a planner can see, on the canvas itself.`
 
 ### Milestone M1: grid and ground
 
-**Outcome:** the time grid is the quietest mark on the canvas. The ground is unchanged by default
-(CQ-2).
+**Outcome:** the time grid is the quietest mark on the canvas, on a near-white ground (CQ-2,
+answered 2026-09-24 against its default).
 **Entry point:** plan workspace → Diagram view → the TSLD canvas (no new control).
 `View ▾ ▸ Structure ▸ Month grid / Year grid` (`tsld-toolbar-items.tsx:464-466`) are unchanged.
 **Journey:** `e2e-netpoint-grammar/grid.spec.ts` opens the reference plan. It reads
@@ -224,11 +226,13 @@ gaps (under CQ-1's default).
   2. Change tokens and layer. Re-baseline by hand against the prediction.
   3. Update `docs/DESIGN_SYSTEM.md` canvas section and the ADR-0056 amendment note in `conditions.md`.
 
-##### Task M1-T2: journey assertions and the ground (only if CQ-2 = white)
+##### Task M1-T2: journey assertions and the near-white ground (CQ-2)
 
-- **Description:** Add the grid journey. If CQ-2 is answered "white", re-value `--canvas` and re-run
-  every canvas pair (a separate PR, because it moves every pair).
-- **Complexity:** S (M if CQ-2 = white)
+- **Description:** Add the grid journey. Re-value `--canvas` to the near-white ground and
+  `--canvas-nonworking` with it, and re-run every canvas pair. Every pair was already solved against
+  the new ground in M0-T3, so this step changes values, not the solving.
+  Check that the canvas panel's edge still reads against `--card` (spec §4.2 G2 amendment).
+- **Complexity:** M
 - **Dependencies:** M1-T1
 - **Risks:** pixel sampling at a DPR mismatch → sample at DPR 1 with a fixed viewport of 1646 × 1000
 - **Testing:** the journey. An axe scan of the legend panel

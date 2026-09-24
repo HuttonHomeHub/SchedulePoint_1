@@ -1,13 +1,15 @@
 # Feature Spec: NetPoint grammar — how bars, nodes, links and text look on the TSLD canvas
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — 2026-09-24, by the product owner, with all eleven critical questions
+  answered (§5.1). The approval is conditional: the specialist agents must agree with this spec and
+  the plan before M0 starts (§5.2).
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-09-24
 - **Tracking issue / epic:** none yet
 - **Roadmap link:** the TSLD legibility programme that `docs/specs/netpoint-layout/` began
 - **Related ADR(s):** ADR-0157 (to be filed at M6; outline in §4.10). Amends ADR-0056 §2, ADR-0151
-  D3/D4 and CQ-6, ADR-0154 D1/D3, and ADR-0054 §5. It amends ADR-0065, ADR-0063 or ADR-0102 only
-  if CQ-8, CQ-7 or CQ-2 is answered against its default.
+  D3/D4 and CQ-6, ADR-0154 D1/D3, and ADR-0054 §5. It also amends ADR-0102, because CQ-2 was answered
+  against its default (near-white ground). ADR-0065 and ADR-0063 are not amended (CQ-8, CQ-7).
 - **Evidence:** [`./reference-observations.md`](./reference-observations.md), the measured NetPoint
   reference. The prototype pictures are in [`./prototype-comparison.md`](./prototype-comparison.md),
   written separately (§4.12).
@@ -353,7 +355,7 @@ None at a boundary. The rules are on tokens and constants:
 | G   | Mark               | Today                                                                                                 | Proposed                                                                                                                             | Token / constant                                                       | Amends                                                                                        |
 | --- | ------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | G1  | Time grid          | Solid. Month 3.98:1, year 5.78:1, day texture                                                         | Unit and month ≤ 1.80:1, year ≤ 2.50:1, 1 px, dashed 3/3 (CQ-1)                                                                      | `--canvas-grid-*` re-valued                                            | ADR-0056 §2 (no dash), and the 1.4.11 month floor in `token-contrast.test.ts:342-344,853-856` |
-| G2  | Ground             | `oklch(0.958 0.004 250)`                                                                              | Unchanged by default (CQ-2)                                                                                                          | `--canvas`                                                             | ADR-0102 only if CQ-2 = white                                                                 |
+| G2  | Ground             | `oklch(0.958 0.004 250)`                                                                              | Near-white `oklch(0.995 0.002 250)`, CQ-2 answered 2026-09-24                                                                        | `--canvas`                                                             | ADR-0102 (CQ-2)                                                                               |
 | G3  | Bar                | 5 px, blue `--plot-primary` 3.15:1                                                                    | 6 px, non-critical rung re-hued to green at solved lightness                                                                         | `BAR_HEIGHT`, `--plot-primary`                                         | ADR-0151 D3 (5 → 6)                                                                           |
 | G4  | Node               | 10 px, filled only when critical, rim `--foreground`/`--border`                                       | ≤ 15 px, fill = ground, rim in rung colour, rim weight = rung. Shared at back-to-back ends                                           | `NODE_RADIUS`, palette keys `nodeRim*`                                 | ADR-0151 D4 / CQ-6 (filled/hollow → rim weight)                                               |
 | G5  | Link               | Driving `--primary` (the bar's colour), non-driving `--canvas-link-minor` grey                        | Link hue of its own. Driving 2 px, non-driving 1 px. Critical/near keep rung inks. Marks every ~40 px in a darker shade              | `--canvas-link`, `--canvas-link-minor` re-hued, `--canvas-link-mark`   | ADR-0154 D1, D4                                                                               |
@@ -405,6 +407,18 @@ link is 1.19:1.
 `oklch(0.958 0.004 250)` (`globals.css:407`), deliberately darker than the page so the diagram has a
 ground of its own (`:396-400`). Pure white would collapse `--canvas` onto `--card` and move every
 canvas contrast pair. CQ-2 asks. By default G2 changes nothing.
+
+**Amended 2026-09-24: CQ-2 was answered _near-white_.** The ground becomes about
+`oklch(0.995 0.002 250)`, the prototype's value, and the cost named above is accepted:
+
+- every canvas pair is re-solved in M0 against the new ground;
+- `--canvas-nonworking` is re-valued with it, since the prototype showed the old wash striping
+  every weekend;
+- ADR-0102 is amended by ADR-0157.
+
+`--canvas` then sits within a step of `--card` (1.0), so the diagram no longer has a ground of its
+own against the surrounding card. M0 measures whether the canvas panel's edge still reads, and M1
+answers with the panel border rather than with the ground if it does not.
 
 **G3 — the ordinary bar gets a hue no other mark uses.** Today the ordinary bar is the blue of the
 driving link (`palette.ts:164,166`) and shares hue 249 with the selection ring `--plot-ring`
@@ -774,6 +788,38 @@ Each question has a default. Work proceeds on the defaults unless an answer over
 | **CQ-9**  | New grammar default-on for everyone, or behind a `View ▾` "classic look" switch?                                                                  | Default-on, no flag and no switch (ADR-0088 D1). Rollback is a commit boundary                                                                                                           | A second painter path maintained indefinitely                                           |
 | **CQ-10** | Activity codes off the canvas by default, with a `View ▾` switch to bring them back?                                                              | Yes, off by default with a switch (P6 users do navigate by code)                                                                                                                         | Codes stay on, and wrapping carries more of P5                                          |
 | **CQ-11** | Criticality on the node by rim weight (reference-style) instead of today's filled/hollow?                                                         | Rim weight 1/2/3 px, with a critical centre dot added if the greyscale review cannot separate near from critical                                                                         | Keep filled critical nodes, and accept that a red disc does not break a red line        |
+
+### 5.1 Answers (product owner, 2026-09-24)
+
+| CQ    | Answer                                                                                  |
+| ----- | --------------------------------------------------------------------------------------- |
+| CQ-1  | Quiet and dashed, subject to the accessibility ruling at M0                             |
+| CQ-2  | **Near-white**, against the default. G2 is amended in §4.2                              |
+| CQ-3  | Green                                                                                   |
+| CQ-4  | Violet                                                                                  |
+| CQ-5  | Yes, in working days on the plan calendar; spoken slack changes unit in the same change |
+| CQ-6  | Triangles, no hourglass                                                                 |
+| CQ-7  | Keep the WBS band                                                                       |
+| CQ-8  | No, keep orthogonal routing                                                             |
+| CQ-9  | On for everyone, no flag and no switch                                                  |
+| CQ-10 | Codes off the canvas by default, with a `View ▾` switch                                 |
+| CQ-11 | Rim weight                                                                              |
+
+Every answer except CQ-2 is the default.
+
+### 5.2 Condition on the approval
+
+The product owner approved building all milestones "ensuring all agents are in agreement with the
+plan and spec". So before M0 starts, these agents review this spec and the plan:
+
+- ui-architect;
+- accessibility-reviewer;
+- ux-reviewer;
+- component-reviewer;
+- performance-reviewer.
+
+Each blocking finding is folded into these two documents and re-reviewed until none is outstanding.
+The round is recorded in [`./agent-agreement.md`](./agent-agreement.md).
 
 ## 6. Links
 
