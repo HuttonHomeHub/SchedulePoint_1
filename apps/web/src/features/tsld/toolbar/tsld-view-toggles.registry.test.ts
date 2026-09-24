@@ -60,6 +60,9 @@ describe('TSLD View▾ toggle registry', () => {
       'today',
       'nonWorking',
       'labels',
+      // NetPoint grammar M4-T1: the canvas label's code, and the centre item, both default off.
+      'activityCodes',
+      'centreItem',
       // The ADR-0054 insight layers — each one's paint pass is dead code without its entry here.
       'dates',
       // **The key is `floatTails` and the LABEL is "Feasible window"** (one-planning-surface M-E).
@@ -88,6 +91,8 @@ describe('TSLD View▾ toggle registry', () => {
     expect(CANVAS_VISUAL_LANGUAGE_ENABLED).toBe(true);
     expect(WBS_IMPROVEMENTS_ENABLED).toBe(true);
     expect(CANVAS_DATA_DATE_ENABLED).toBe(true);
-    expect(TSLD_VIEW_TOGGLE_KEYS).toHaveLength(14);
+    // 16 since NetPoint grammar M4-T1 added `activityCodes` and `centreItem`, both ungated: they
+    // switch text on an existing layer, so there is no flag for them to follow.
+    expect(TSLD_VIEW_TOGGLE_KEYS).toHaveLength(16);
   });
 });

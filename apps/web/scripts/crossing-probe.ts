@@ -215,6 +215,23 @@ export const LINK_SENTINELS = {
   linkDriving: '#0d0e0f',
 } as const;
 
+/**
+ * NetPoint grammar M2 (FC-G0): the node rims get sentinels of their own, distinct from every link
+ * sentinel, so a rim can never be counted as a link and `linkPaths`' closed-shape control has a
+ * named ink to check against. A node is a closed shape, which that control already refuses.
+ */
+export const NODE_SENTINELS = {
+  nodeRim: '#101112',
+  nodeRimNear: '#131415',
+  nodeRimCritical: '#161718',
+  // The direction marks (NetPoint grammar M3). Filled, so `linkPaths` never counts them, and a
+  // sentinel of their own so a reading can tell a mark from its line.
+  linkMark: '#191a1b',
+  // The attachment dots (NetPoint grammar M3-T5). Filled too, and their own sentinel for the same
+  // reason as the marks.
+  attachDot: '#1c1d1e',
+} as const;
+
 export const PALETTE: TsldPalette = {
   canvasGround: '#14161c',
   gridLine: '#e5e7eb',
@@ -224,8 +241,13 @@ export const PALETTE: TsldPalette = {
   laneRule: '#ececee',
   linkMinor: LINK_SENTINELS.linkMinor,
   linkDriving: LINK_SENTINELS.linkDriving,
+  linkMark: NODE_SENTINELS.linkMark,
+  attachDot: NODE_SENTINELS.attachDot,
   edge: LINK_SENTINELS.edge,
-  bar: '#3b82f6',
+  bar: '#459e5d',
+  nodeRim: NODE_SENTINELS.nodeRim,
+  nodeRimNear: NODE_SENTINELS.nodeRimNear,
+  nodeRimCritical: NODE_SENTINELS.nodeRimCritical,
   critical: LINK_SENTINELS.critical,
   nearCritical: LINK_SENTINELS.nearCritical,
   outline: '#ffffff',
@@ -265,9 +287,31 @@ export const PALETTE: TsldPalette = {
  */
 export function linkPaths(paths: readonly RecordedPath[]): RecordedPath[] {
   const sentinels = new Set<string>(Object.values(LINK_SENTINELS));
-  return paths.filter(
+  const links = paths.filter(
     (p) => p.flush === 'stroke' && sentinels.has(p.strokeStyle) && p.pts.length >= 2,
   );
+  // **The shape control (NetPoint grammar M0-T5, FC-G0).** A link is an open polyline. From that
+  // epic's M2 and M3, three new marks are STROKED in a link's own ink: the node rim (in the rung
+  // ink), the lag plate's border and the attachment dot's outline. Each is a closed shape. A closed
+  // shape in a link sentinel would be counted here as a link and would inflate every crossing count
+  // with nothing looking wrong. So refuse it: the mark must take its own palette key and sentinel.
+  const closed = links.filter((p) => isClosed(p.pts));
+  if (closed.length > 0) {
+    throw new Error(
+      `FC-G0: ${closed.length} closed path(s) were stroked in a link sentinel (first: ` +
+        `${closed[0]!.strokeStyle}, ${closed[0]!.pts.length} points). A node rim, plate or dot ` +
+        'must have its own palette key and sentinel, or it is counted as a link.',
+    );
+  }
+  return links;
+}
+
+/** Whether a recorded polyline returns to its start, which an open link route never does. */
+export function isClosed(pts: readonly Pt[]): boolean {
+  if (pts.length < 4) return false;
+  const a = pts[0]!;
+  const b = pts.at(-1)!;
+  return Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001;
 }
 
 interface Seg {
@@ -406,11 +450,6 @@ export function sceneFor(
       edges,
       dataDate: DATA_DATE,
       visualRefresh: true,
-      // Waiting time drawn solid: a link's geometry does not depend on its dash, and a dashed run is a
-      // separate path this recorder could not tell apart from a neighbour's (NetPoint-layout M2-T2).
-      // `WAITING_DASH=1` draws it dashed, for the ink harness's continuity count ONLY: the crossing
-      // controls would then count a link's dashed runs as extra links, and they refuse to judge.
-      solidWaiting: process.env.WAITING_DASH !== '1',
       timeTrueLinks: true,
       // `scene.linkRouting` is the ONE gate on the obstacle index and the corridor bundler
       // (`paint.ts:1091-1098`, `:1184-1189`, `:1211`): false takes the pre-ADR-0065 route. Exposed
@@ -2314,9 +2353,6 @@ export function rowCosts(
       edges: source.edges,
       dataDate: '2026-01-01',
       visualRefresh: true,
-      // Waiting time drawn solid: a link's geometry does not depend on its dash, and a dashed run is a
-      // separate path this recorder could not tell apart from a neighbour's (NetPoint-layout M2-T2).
-      solidWaiting: true,
       timeTrueLinks: true,
       linkRouting: true,
     };

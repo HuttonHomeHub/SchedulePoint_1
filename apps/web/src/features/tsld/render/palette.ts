@@ -160,12 +160,23 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     laneRule: token('--canvas-lane-rule', '#232833'),
     // The non-driving link (NetPoint-layout M2). Unprefixed and resolved on the canvas element, like
     // every name here, so the canvas scope governs it (ADR-0102).
-    linkMinor: token('--canvas-link-minor', '#8a8f98'),
-    linkDriving: token('--primary', '#3b6fbf'),
+    linkMinor: token('--canvas-link-minor', '#9182be'),
+    // An ordinary driving link (NetPoint grammar M3): the violet link family, never the button's
+    // blue, which also paints the selection ring (spec §4.2 G5).
+    linkDriving: token('--canvas-link', '#846cc2'),
+    linkMark: token('--canvas-link-mark', '#3d2070'),
+    // Where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12): the mark shade, a
+    // key of its own so a harness can tell a dot from a chevron.
+    attachDot: token('--canvas-link-mark', '#3d2070'),
     edge: token('--muted-foreground', '#7a8090'),
-    bar: token('--primary', '#3b6fbf'),
+    bar: token('--canvas-bar', '#459e5d'),
     critical: token('--destructive', '#c83c3c'),
     nearCritical: token('--warning', '#d29628'),
+    // The node rims (NetPoint grammar M2): the rung inks, under keys of their own so a harness can
+    // tell a node from a bar (spec §4.11 R2).
+    nodeRim: token('--canvas-bar', '#459e5d'),
+    nodeRimNear: token('--warning', '#d29628'),
+    nodeRimCritical: token('--destructive', '#c83c3c'),
     // A foreground-contrast stroke used to outline critical/near-critical bars, so
     // criticality is never conveyed by fill colour alone (WCAG 1.4.1).
     outline: token('--foreground', '#e6e8ee'),
@@ -254,20 +265,25 @@ export const PRINT_TOKEN_SOURCES = {
   mutedInk: ['--print-muted-foreground', '#666666'],
   canvasGround: ['--print', '#ffffff'],
   gridLine: ['--border', '#e0e0e0'],
-  gridLineDay: ['--canvas-grid-day', '#dee0e2'],
-  gridLineMonth: ['--canvas-grid-month', '#72777e'],
-  gridLineYear: ['--canvas-grid-year', '#595e66'],
-  laneRule: ['--canvas-lane-rule', '#e8eaec'],
-  linkMinor: ['--canvas-link-minor', '#80848b'],
-  linkDriving: ['--primary', '#4b8cca'],
+  gridLineDay: ['--canvas-grid-day', '#eceeef'],
+  gridLineMonth: ['--canvas-paper-grid-month', '#72777e'],
+  gridLineYear: ['--canvas-paper-grid-year', '#595e66'],
+  laneRule: ['--canvas-lane-rule', '#f4f6f8'],
+  linkMinor: ['--canvas-link-minor', '#9182be'],
+  linkDriving: ['--canvas-link', '#846cc2'],
+  linkMark: ['--canvas-link-mark', '#3d2070'],
+  attachDot: ['--canvas-link-mark', '#3d2070'],
   edge: ['--muted-foreground', '#636363'],
-  bar: ['--primary', '#4b8cca'],
+  bar: ['--canvas-bar', '#459e5d'],
   critical: ['--destructive', '#9c0711'],
   nearCritical: ['--warning', '#9f5600'],
+  nodeRim: ['--canvas-bar', '#459e5d'],
+  nodeRimNear: ['--warning', '#9f5600'],
+  nodeRimCritical: ['--destructive', '#9c0711'],
   outline: ['--foreground', '#333333'],
   labelBeside: ['--foreground', '#333333'],
   selection: ['--ring', '#1266a9'],
-  nonWorking: ['--canvas-nonworking', '#e9eef4'],
+  nonWorking: ['--canvas-nonworking', '#f8fafc'],
   today: ['--destructive', '#9c0711'],
   todayInk: ['--destructive-foreground', '#ffffff'],
   dataDate: ['--foreground', '#333333'],
@@ -280,7 +296,7 @@ export const PRINT_TOKEN_SOURCES = {
   barStroke: ['--border', '#e0e0e0'],
   hoverRing: ['--muted-foreground', '#636363'],
   handleHalo: ['--print', '#ffffff'],
-  monthBand: ['--canvas-band', '#f6f7f9'],
+  monthBand: ['--canvas-band', '#fafbfd'],
 } as const satisfies Record<keyof PrintPalette, readonly [token: string, fallback: string]>;
 
 /**
@@ -373,7 +389,7 @@ export function resolveLensPalette(root: Element): LensPalette {
     // Mirror the painter (same tokens + fallbacks) so Criticality mode paints byte-for-byte today's fills.
     critical: token('--destructive', '#c83c3c'),
     nearCritical: token('--warning', '#d29628'),
-    bar: token('--primary', '#3b6fbf'),
+    bar: token('--canvas-bar', '#459e5d'),
     // The muted "uncomputed / ungrouped" fill — a null total float or a null WBS parent.
     neutral: token('--muted-foreground', '#7a8090'),
     // Total-float bands: less slack (red) → more slack (green), each a distinct semantic hue.
@@ -419,7 +435,7 @@ export function lensLegendVarPalette(): LensPalette {
   return {
     critical: v('--destructive'),
     nearCritical: v('--warning'),
-    bar: v('--primary'),
+    bar: v('--canvas-bar'),
     neutral: v('--muted-foreground'),
     floatCritical: v('--destructive'),
     floatLow: v('--warning'),
@@ -476,7 +492,7 @@ export function resolveWbsBandPalette(root: Element): WbsBandPalette {
     return value || fallback;
   };
   return {
-    bar: token('--primary', '#3b6fbf'),
+    bar: token('--canvas-bar', '#459e5d'),
     derived: token('--muted-foreground', '#7a8090'),
     rule: token('--border', '#2a2f3a'),
     label: token('--primary-foreground', '#ffffff'),

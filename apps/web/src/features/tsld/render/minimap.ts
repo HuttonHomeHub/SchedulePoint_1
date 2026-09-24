@@ -102,11 +102,15 @@ export interface MinimapPalette {
    * wrong, and it was wrong here rather than in the reviewer.
    *
    * The three bar inks are already separated on **lightness** — measured relative luminance
-   * 0.2152 (`--primary`) / 0.1234 (`--warning`) / 0.0626 (`--destructive`), a monotone ladder
-   * whose steps are roughly a halving, and which `CRITICALITY_PAIRS` gates at ≥ 1.5:1. That is
-   * ADR-0102's own work: it separated these on lightness precisely because they had differed
+   * 0.266 (`--canvas-bar`) / 0.140 (`--warning`) / 0.073 (`--destructive`), a monotone
+   * ladder whose steps are roughly a halving, and which `CRITICALITY_PAIRS` gates at ≥ 1.5:1. That
+   * is ADR-0102's own work: it separated these on lightness precisely because they had differed
    * "in hue and almost nothing else" at 1.23:1. A luminance ratio IS a lightness measure, so a
-   * hue-only ladder would read ~1.00:1 and this one reads 2.36 / 1.54 / 1.53.
+   * hue-only ladder would read ~1.00:1 and this one reads 2.57 / 1.66 / 1.55 (bar–critical,
+   * bar–near, near–critical), measured through `token-contrast.test.ts`'s own resolver when the
+   * NetPoint grammar re-hued the bar green (M2-T1). The figures this sentence replaced
+   * (0.2152 / 0.1234 / 0.0626) no longer matched the shipped near-critical and critical values
+   * either, so the whole line was re-measured rather than one term patched.
    *
    * What the fringe adds on top is a second cue wherever a lane row can carry it (see
    * {@link CRITICAL_FRINGE_MIN_H}) — belt-and-braces on tall rows, absent on the plans this

@@ -488,6 +488,9 @@ const VIEW_TOGGLE_META: Record<
   today: { group: 'markers', label: 'Today line' },
   nonWorking: { group: 'markers', label: 'Non-working' },
   labels: { group: 'markers', label: 'Labels' },
+  // NetPoint grammar M4-T1 (spec §4.13 C1): beside `labels`, both default off.
+  activityCodes: { group: 'markers', label: 'Activity codes' },
+  centreItem: { group: 'markers', label: 'Duration & float' },
   dates: { group: 'insight', label: 'Dates', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
   // **Renamed, not replaced** (one-planning-surface M-E): the float and drift tails were one fact
   // drawn twice and became one bracket, so the control describes the same overlay under a name
@@ -504,7 +507,10 @@ const VIEW_TOGGLE_META: Record<
     label: 'Feasible window',
     enabled: CANVAS_LIVE_FEEDBACK_ENABLED,
   },
-  linkSlack: { group: 'insight', label: 'Link slack', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  // Renamed from `Link slack` (NetPoint grammar M3-T3): it now labels every waiting link's gap in
+  // working days rather than the selection's slack. The key keeps its name for the reason given
+  // for `floatTails` above.
+  linkSlack: { group: 'insight', label: 'Link gaps', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
   // **The overlay survives the mode** (one-planning-surface M-F-T5). It was gated on
   // `VITE_SCHEDULING_MODES` because ADR-0033 shipped it beside the Early/Visual selector, but it
   // reads the LATE dates and has never consulted `schedulingMode` — so deleting the mode leaves it
@@ -534,6 +540,14 @@ function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof 
  */
 const VIEW_SCOPED_TOGGLES: Partial<Record<keyof TsldViewToggles, 'gantt' | 'tsld'>> = {
   logicLinks: 'gantt',
+  // The NetPoint grammar's three lenses (spec §4.13) are read by the canvas painter and nothing
+  // else — the Gantt prints the code in its own column, has no centre item and draws no gap
+  // labels — so in the Gantt they are the same live-but-inert checkbox `logicLinks` is on the
+  // canvas. Found by `e2e-gantt-editing`, whose `name: 'Activity'` locator matched `Activity codes`
+  // in the Gantt's `View ▾`: a substring collision that was also the evidence of the inert control.
+  activityCodes: 'tsld',
+  centreItem: 'tsld',
+  linkSlack: 'tsld',
 };
 
 /** The keys `View▾` offers for the view currently on screen. */

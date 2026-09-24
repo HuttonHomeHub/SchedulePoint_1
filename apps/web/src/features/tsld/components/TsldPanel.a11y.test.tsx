@@ -226,7 +226,7 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
   it('`i` announces the Tier-2 logic summary', () => {
     const { listbox } = renderPanel(); // A: 0 preds, drives Excavate
     fireEvent.keyDown(listbox, { key: 'i' });
-    expect(announceSpy).toHaveBeenCalledWith('0 predecessors, 1 successor; drives Excavate');
+    expect(announceSpy).toHaveBeenCalledWith('0 predecessors, 1 successor; drives Excavate (FS)');
   });
 
   it('? and the toolbar button both ASK for the shortcuts help', () => {

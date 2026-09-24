@@ -1,6 +1,6 @@
 /**
  * The visible key for the diagram, mirroring the canvas exactly: each activity class is a
- * fill colour **paired with a node glyph** (filled / ring / hairline) so criticality is never
+ * fill colour **paired with a node glyph** (a rim of 3 / 2 / 1 px) so criticality is never
  * conveyed by colour alone (WCAG 1.4.1). Swatches read their colours from the same design tokens
  * the painter uses, so the key stays truthful across themes.
  *
@@ -14,6 +14,7 @@
  * (ADR-0031) render one definition — the key can't drift from the canvas or itself.
  */
 import type { ColourLegend, ColourMode } from '../render/lenses';
+import { NODE_RIM_W } from '../render/render-model';
 
 import {
   CANVAS_DATA_DATE_ENABLED,
@@ -29,6 +30,9 @@ type LegendItem =
   | { label: string; line: 'solid' | 'dashed'; ink?: string; weight?: 1 | 2 }
   | { label: string; chevron: true }
   | { label: string; lagPlate: true }
+  | { label: string; gapLabel: true }
+  | { label: string; attachDot: true }
+  | { label: string; milestone: true }
   | { label: string; pin: true }
   | { label: string; today: true }
   | { label: string; dataDate: true }
@@ -48,13 +52,13 @@ type LegendItem =
 const CRITICALITY_SWATCHES: ReadonlyArray<LegendItem> = [
   { label: 'Critical', criticality: 'critical', fill: 'var(--destructive)' },
   { label: 'Near-critical', criticality: 'near', fill: 'var(--warning)' },
-  { label: 'On schedule', criticality: 'none', fill: 'var(--primary)' },
+  { label: 'On schedule', criticality: 'none', fill: 'var(--canvas-bar)' },
 ];
 
 /** The criticality **node** cues alone, kept in every non-Criticality Colour-by mode so criticality
  * is still readable when the fill encodes something else (WCAG 1.4.1). Three rungs, because the
- * canvas draws three: a filled node, a heavier ring, and the calm hairline every other bar wears —
- * so "on schedule" needs no row here, only the two that are marked. */
+ * canvas draws three rim weights (3, 2 and 1 px) — so "on schedule" needs no row here, only the
+ * two that are marked above the hairline every other node wears. */
 const CRITICALITY_OUTLINES: ReadonlyArray<LegendItem> = [
   { label: 'Critical (node)', criticality: 'critical' },
   { label: 'Near-critical (node)', criticality: 'near' },
@@ -84,8 +88,9 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // Logic ties, matching the canvas. **The link language** (NetPoint-layout M2, ADR-0154) is drawn
   // only on the refreshed canvas, so its key rides the same flag; flag-off keeps the legacy pair
   // byte for byte. Drivingness is WEIGHT, criticality the rung's ink plus the endpoints' nodes, and
-  // the dash means waiting time and nothing else — so the legacy "Non-driving link — dashed" row
-  // must not survive here: a key naming a mark the canvas no longer paints is the ADR-0151 M6 defect.
+  // the waiting time is a GAP LABEL in working days (NetPoint grammar M3-T3, which retired the
+  // waiting dash) — so neither the legacy "Non-driving link — dashed" row nor the M2 "Waiting time"
+  // dash row survives here: a key naming a mark the canvas no longer paints is the ADR-0151 M6 defect.
   ...(CANVAS_DIRECT_MANIPULATION_ENABLED
     ? [
         {
@@ -100,21 +105,19 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
           ink: 'var(--warning)',
           weight: 2,
         } as const,
-        { label: 'Driving link', line: 'solid', ink: 'var(--primary)', weight: 2 } as const,
+        // The violet link family (NetPoint grammar M3, spec §4.2 G5), never the button's blue.
+        { label: 'Driving link', line: 'solid', ink: 'var(--canvas-link)', weight: 2 } as const,
         {
           label: 'Non-driving link',
           line: 'solid',
           ink: 'var(--canvas-link-minor)',
           weight: 1,
         } as const,
-        {
-          label: 'Waiting time',
-          line: 'dashed',
-          ink: 'var(--canvas-link-minor)',
-          weight: 1,
-        } as const,
+        { label: 'Gap in working days', gapLabel: true } as const,
         { label: 'Direction', chevron: true } as const,
         { label: 'Lag on a link', lagPlate: true } as const,
+        // Where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12).
+        { label: 'Link joins partway along', attachDot: true } as const,
       ]
     : [
         // A driving link (heavier solid) sets its successor's start; a non-driving link (thin
@@ -128,6 +131,9 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // legend renders byte-identically (the parity gate).
   ...(CANVAS_DIRECT_MANIPULATION_ENABLED
     ? [
+        // A milestone is a downward triangle (NetPoint grammar M5, spec §4.2 G8), filled in its rung's
+        // colour and outlined by weight when critical or near, as the criticality rows above say.
+        { label: 'Milestone', milestone: true } as const,
         { label: 'Level of effort', loe: true } as const,
         { label: 'WBS summary', summary: true } as const,
         { label: 'Progress', progress: true } as const,
@@ -153,7 +159,11 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   ...(CANVAS_LIVE_FEEDBACK_ENABLED
     ? [
         { label: 'Feasible window — earliest to latest', window: true } as const,
-        { label: 'Link slack (days)', slack: true } as const,
+        // The selection-scoped slack chip is the legacy link path's (NetPoint grammar M3-T3): the
+        // refreshed path labels every waiting link instead, keyed above as a gap.
+        ...(CANVAS_DIRECT_MANIPULATION_ENABLED
+          ? []
+          : [{ label: 'Link slack (days)', slack: true } as const]),
       ]
     : []),
   // Over-allocation cue (Stage E M2, ADR-0049) — a small rising-bars badge matching the canvas
@@ -238,29 +248,27 @@ export function TsldLegend({
         // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see the list above
         <li key={item.label} role="listitem" className="flex items-center gap-1.5">
           {'criticality' in item ? (
-            // A thin bar with its end node — the canvas's own pair. The node is `--foreground` at
-            // both emphasised rungs and `--border` at rest, exactly as `resolveTsldPalette` maps
-            // `outline` and `barStroke`, so the key cannot describe a mark the painter does not draw.
+            // A thin bar with its end node — the canvas's own pair (NetPoint grammar M2-T4). The
+            // node is filled with the diagram ground and ringed at the rung's weight
+            // (`NODE_RIM_W`), in the rung's own ink where the fill is keyed by criticality and in
+            // the foreground where a Colour-by lens owns the colour. So the key cannot describe a
+            // mark the painter does not draw (`TsldLegend.census.test.tsx`, FC-G8).
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
               <span
                 className="w-full"
                 style={{ height: 3, backgroundColor: item.fill ?? 'var(--muted-foreground)' }}
               />
               <span
+                data-legend-node=""
                 className="absolute"
                 style={{
                   right: 0,
-                  width: 7,
-                  height: 7,
+                  width: 10,
+                  height: 10,
+                  boxSizing: 'border-box',
                   borderRadius: '50%',
-                  backgroundColor:
-                    item.criticality === 'critical' ? 'var(--foreground)' : 'transparent',
-                  border:
-                    item.criticality === 'critical'
-                      ? undefined
-                      : item.criticality === 'near'
-                        ? '2px solid var(--foreground)'
-                        : '1px solid var(--border)',
+                  backgroundColor: 'var(--canvas)',
+                  border: `${NODE_RIM_W[item.criticality]}px solid ${item.fill ?? 'var(--foreground)'}`,
                 }}
               />
             </span>
@@ -360,45 +368,58 @@ export function TsldLegend({
                 />
               ))}
             </span>
+          ) : 'milestone' in item ? (
+            <span aria-hidden="true" className="inline-flex h-3 w-5 items-center justify-center">
+              {/* The triangle in the canvas's own proportions: a 14 px base 0.7r above the centre and
+                  the apex r below it, in the bar's on-schedule fill. */}
+              <svg width="14" height="12" viewBox="0 0 14 12">
+                <path
+                  data-legend-milestone=""
+                  d="M0 0 L14 0 L7 12 Z"
+                  style={{ fill: 'var(--canvas-bar)' }}
+                />
+              </svg>
+            </span>
           ) : 'loe' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
-              {/* Bracketed span: end caps overhanging a slim bar, matching the canvas LOE glyph
-                  (drawn in the bar's own fill on the canvas — the primary fill by default). */}
+              {/* Bracketed span: end caps overhanging a line HALF a task's height (spec §4.13 U1 —
+                  a span draws no node, so weight is what tells it from a task), in the bar's own
+                  fill, matching the canvas LOE glyph. */}
               <span
                 className="absolute inset-x-0 top-1/2 -translate-y-1/2"
-                style={{ height: 4, backgroundColor: 'var(--primary)' }}
+                style={{ height: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute inset-y-0 left-0"
-                style={{ width: 2, backgroundColor: 'var(--primary)' }}
+                style={{ width: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute inset-y-0 right-0"
-                style={{ width: 2, backgroundColor: 'var(--primary)' }}
+                style={{ width: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
             </span>
           ) : 'summary' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5">
-              {/* Summary bracket: a top bar with downward end tabs, matching the canvas
-                  WBS-summary glyph. */}
+              {/* Summary bracket: a line half a task's height (U1) with downward end tabs hanging
+                  from it, matching the canvas WBS-summary glyph. */}
               <span
-                className="absolute inset-x-0 top-0"
-                style={{ height: 4, backgroundColor: 'var(--primary)' }}
+                className="absolute inset-x-0 top-0.5"
+                style={{ height: 2, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute left-0"
-                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute right-0"
-                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
             </span>
           ) : 'progress' in item ? (
             <span
               aria-hidden="true"
               className="relative inline-block h-3 w-5 rounded-sm"
-              style={{ backgroundColor: 'var(--primary)' }}
+              style={{ backgroundColor: 'var(--canvas-bar)' }}
             >
               {/* The in-bar progress band + front divider along the bar bottom, in the fill's
                   paired ink — matching the canvas progress depiction. */}
@@ -429,7 +450,7 @@ export function TsldLegend({
                   lag-run depiction (a tighter dash than the non-driving link's). */}
               <span
                 className="absolute top-1/2 left-0 -translate-y-1/2"
-                style={{ width: 6, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ width: 6, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
               <span
                 className="absolute top-1/2 -translate-y-1/2"
@@ -470,7 +491,7 @@ export function TsldLegend({
               />
               <span
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-                style={{ width: 8, height: 8, backgroundColor: 'var(--primary)' }}
+                style={{ width: 8, height: 8, backgroundColor: 'var(--canvas-bar)' }}
               />
             </span>
           ) : 'slack' in item ? (
@@ -506,7 +527,8 @@ export function TsldLegend({
             </span>
           ) : 'chevron' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
-              {/* A link with one filled chevron along it, pointing the way the link runs. */}
+              {/* A link with one filled chevron along it, pointing the way the link runs, in the
+                  darker mark shade the painter fills a violet link's marks with (M3). */}
               <span
                 className="w-full"
                 style={{
@@ -521,15 +543,42 @@ export function TsldLegend({
                 height="6"
                 viewBox="0 0 6 6"
               >
-                <path d="M1 0 L5 3 L1 6 Z" style={{ fill: 'var(--canvas-link-minor)' }} />
+                <path
+                  data-legend-mark=""
+                  d="M1 0 L5 3 L1 6 Z"
+                  style={{ fill: 'var(--canvas-link-mark)' }}
+                />
               </svg>
+            </span>
+          ) : 'attachDot' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
+              {/* A bar with the dot on it, in the mark shade, 4 px across as the painter draws it. */}
+              <span
+                className="w-full"
+                style={{ height: 5, backgroundColor: 'var(--canvas-bar)' }}
+              />
+              <span
+                data-legend-attach=""
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{ width: 4, height: 4, backgroundColor: 'var(--canvas-link-mark)' }}
+              />
+            </span>
+          ) : 'gapLabel' in item ? (
+            <span
+              aria-hidden="true"
+              className="inline-flex h-3 items-center px-0.5 text-xs leading-none"
+              style={{ backgroundColor: 'var(--canvas)', color: 'var(--canvas-link-mark)' }}
+            >
+              {/* Borderless on the ground, in the mark ink, exactly as the painter prints it. */}
+              3d
             </span>
           ) : 'lagPlate' in item ? (
             <span
               aria-hidden="true"
               className="inline-flex h-3 items-center rounded-xs px-0.5 text-xs leading-none"
               style={{
-                border: '1px solid var(--border)',
+                // The plate's border is its link's ink since M3-T3, so it reads as a box (≥ 3:1).
+                border: '1px solid var(--canvas-link-minor)',
                 backgroundColor: 'var(--canvas)',
                 color: 'var(--foreground)',
               }}

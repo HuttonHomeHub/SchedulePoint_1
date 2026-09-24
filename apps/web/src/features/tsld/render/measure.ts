@@ -7,8 +7,13 @@
  * mutable state); the painter owns one instance across frames.
  */
 export interface MeasureCache {
-  /** Memoised width of `text` under the caller's (fixed) font; measures on first sight only. */
-  measure(text: string, measureText: (s: string) => number): number;
+  /**
+   * Memoised width of `text`; measures on first sight only. Keyed by the text alone under the fixed
+   * `LABEL_FONT`, and by (font, text) when `font` is given: NetPoint grammar M4 prints milestone
+   * names bold (spec §4.13 A6), and a bold string keyed by its text alone would return the regular
+   * width for the same string, or poison the regular entry with the bold one.
+   */
+  measure(text: string, measureText: (s: string) => number, font?: string): number;
   /** Number of distinct strings cached (bounded by the plan's label count). */
   readonly size: number;
   /**
@@ -22,11 +27,12 @@ export interface MeasureCache {
 export function createMeasureCache(): MeasureCache {
   const cache = new Map<string, number>();
   return {
-    measure(text, measureText) {
-      const hit = cache.get(text);
+    measure(text, measureText, font) {
+      const key = font === undefined ? text : `${font}\u0000${text}`;
+      const hit = cache.get(key);
       if (hit !== undefined) return hit;
       const width = measureText(text);
-      cache.set(text, width);
+      cache.set(key, width);
       return width;
     },
     get size() {

@@ -12,6 +12,8 @@ import {
   BAR_RADIUS,
   GLYPH_CAP_OVERHANG,
   NODE_RADIUS,
+  NODE_RIM_MAX_W,
+  REFERENCE_NODE_DIAMETER_PX,
   PROGRESS_BAND_H,
   SUMMARY_TAB_H,
 } from './render-model';
@@ -94,10 +96,12 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
     // what must still hold, and they are separate cases for exactly this moment.
     // And again at NetPoint-layout M1, by reading: pitch 52 → 60 moves the pad and nothing the pad
     // does not own. Every value below this line is the same as it was at 52.
+    // And at NetPoint grammar M2-T1, by reading: the bar 5 → 6 px (spec §4.2) moves the pad by half
+    // a pixel, and every derived glyph constant in the second object rounds to the same value.
     expect({ LANE_HEIGHT, BAR_HEIGHT, BAR_PAD }).toEqual({
       LANE_HEIGHT: 60,
-      BAR_HEIGHT: 5,
-      BAR_PAD: 27.5,
+      BAR_HEIGHT: 6,
+      BAR_PAD: 27,
     });
     expect({
       TAIL_HEIGHT,
@@ -123,7 +127,19 @@ describe('M3-T2 — each constant asserts the relationship its docblock claims',
    * M6 component review so the coverage is uniform across the family.
    */
   it('keeps a node inside its lane — the relationship, not the shipped number', () => {
-    // A node is centred on the bar's centre-line, so it reaches `NODE_RADIUS` above the bar's top.
-    expect(NODE_RADIUS - BAR_HEIGHT / 2).toBeLessThanOrEqual(BAR_PAD);
+    // A node is centred on the bar's centre-line, so its rim reaches `NODE_RADIUS` plus half the
+    // heaviest rim above the bar's centre, which is `BAR_HEIGHT / 2` below the bar's top.
+    expect(NODE_RADIUS + NODE_RIM_MAX_W / 2 - BAR_HEIGHT / 2).toBeLessThanOrEqual(BAR_PAD - 1);
+  });
+
+  /**
+   * NetPoint grammar M2-T2 (spec §4.2 G4): the node is the reference's measured size and never
+   * larger, and it is the largest mark on the row, so it must be clearly wider than the bar it
+   * terminates. Asserted as relationships, so a change to the bar or the row is caught by the rule
+   * rather than by a number.
+   */
+  it('sizes the node from the reference, and wider than the bar it terminates', () => {
+    expect(NODE_RADIUS * 2).toBeLessThanOrEqual(REFERENCE_NODE_DIAMETER_PX);
+    expect(NODE_RADIUS * 2).toBeGreaterThanOrEqual(BAR_HEIGHT * 2);
   });
 });

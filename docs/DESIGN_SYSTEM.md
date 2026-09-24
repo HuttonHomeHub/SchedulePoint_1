@@ -997,6 +997,16 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   approximately **at** `--border`, year is a step **stronger** — two cues (weight _and_ colour), so
   the day → month → year hierarchy survives monochrome print and colour-blind reading. The existing
   `gridLine` field (`--color-border`) is kept unchanged as the flag-off value.
+- **The NetPoint grammar's grid and ground (`docs/specs/netpoint-grammar/`, M1)** — the canvas
+  ground is near-white (`--canvas`, `oklch(0.995 0.002 250)`, CQ-2), and **the grid is the quietest
+  mark on it**. All three tiers are 1 px. Day and month are dashed 3 on / 3 off, and the year is
+  solid, so a coarser boundary still wins at a coincident x. They sit under **ceilings**, gated in
+  `token-contrast.test.ts`: day 1.15:1, month 1.50:1 (≤ 1.80) and year 2.00:1 (≤ 2.50). This amends
+  ADR-0056 §2's "never dashed", and the Today line stays separable by its ink, weight and pill.
+  **Paper keeps a floor**: the exported raster has no ruler, so paper's month and year rules are
+  their own tokens, `--canvas-paper-grid-month`/`-year`, at ≥ 3:1 on `--print`
+  (`PRINT_TOKEN_SOURCES`). The month band (1.02:1) and the non-working wash (1.03:1) are both
+  darker than the ground, and the wash stays darker than the band it paints over.
 - **TSLD non-working hatch (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F7a,
   ADR-0056)** — one new token, `--canvas-nonworking-hatch`, authored per theme block beside
   `--canvas-band` (mapped as `--color-canvas-nonworking-hatch`) and added to both palette
@@ -1014,12 +1024,12 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   ADR-0056 already had to reason about the dash channel in the absence of such a record. The table
   is the constraint the next canvas mark must obey:
 
-  | Mark                            | Channel                             | Rationale                                                                     |
-  | ------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
-  | Gridline tiers (day/month/year) | solid, hairline, border-family hues | Structure. Never dashed (ADR-0056).                                           |
-  | **Data date**                   | **solid, 2 px, foreground**         | The schedule's own pivot — a fact of the programme, permanent, authoritative. |
-  | Today                           | dashed, 1.5 px, destructive         | Wall-clock now: a _moving_ cue, and the dash says so.                         |
-  | Cursor guideline (ADR-0054)     | dashed, ring hue, transient         | Follows the pointer; exists only during a gesture.                            |
+  | Mark                            | Channel                                             | Rationale                                                                     |
+  | ------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+  | Gridline tiers (day/month/year) | dashed day/month, solid year, 1 px, under a ceiling | Structure, the quietest mark (NetPoint grammar G1, see below).                |
+  | **Data date**                   | **solid, 2 px, foreground**                         | The schedule's own pivot — a fact of the programme, permanent, authoritative. |
+  | Today                           | dashed, 1.5 px, destructive                         | Wall-clock now: a _moving_ cue, and the dash says so.                         |
+  | Cursor guideline (ADR-0054)     | dashed, ring hue, transient                         | Follows the pointer; exists only during a gesture.                            |
 
   Shape (solid vs dashed) and weight distinguish the data date from Today **without relying on
   hue** — that is what makes the pair WCAG 1.4.1-safe rather than merely pretty. The palette pair
@@ -1146,38 +1156,57 @@ field hint says so in a sentence.
 - Microcopy: plain, concise, sentence case; consistent terminology; actionable
   error and empty-state text.
 
-### The activity row on the diagram (NetPoint-layout M1)
+### The activity row on the diagram (NetPoint-layout M1, NetPoint grammar ADR-0157)
 
 Each diagram row is **60 px** and carries three things, each with one job:
 
-- **Above the bar: identity only** — `{code} {name}`. The duration used to ride here as a `· 5d`
-  suffix. It moved because a name is what a reader scans for and a number is what they compare,
-  and a label doing both is shortened first at exactly the zooms where it is needed most.
-- **Under the bar's ends: its dates** (`View ▾ ▸ Dates`, **on by default**): the start under the
-  start node and the finish under the finish node. A milestone has one date, centred under the
-  diamond.
+- **Above the bar: identity only** — the activity's **name**. The code is printed before it only
+  while `View ▾ ▸ Markers ▸ Activity codes` is on (off by default). The accessible name leads with
+  exactly what is printed: `{name}, {code}` while codes are off, `{code} {name}` while they are on
+  (WCAG 2.5.3). A name that would truncate wraps onto two lines sharing the pad above the bar
+  (`WRAP_LINE_H`, so the pair stays in its row), but only where the upper line meets no routed link;
+  otherwise it truncates. A milestone's name is bold.
+- **Under the bar's ends: its dates** (`View ▾ ▸ Dates`, **on by default**, withheld below 4 px a day):
+  the start under the start node and the finish under the finish node, each clear of its node's disc.
+  A milestone has one date, centred under the triangle.
 - **Under the bar's middle: the centre item** — `5d · 3d float left`, or `5d` alone where only that
-  fits, or nothing. It never leaves its own bar and never reaches the dates. It rides
-  `View ▾ ▸ Labels` and that toggle's zoom threshold, because it replaces a suffix `Labels` always
-  governed. The float wording is the one the rest of the product uses (`remainingFloat`, ADR-0148).
+  fits, or nothing; a critical activity prints its duration alone. Off by default (`View ▾ ▸ Markers
+▸ Duration & float`) and drawn from 6 px a day, because the reference prints no duration or float.
+
+The bar is **6 px** in `--canvas-bar`; each task end has a **15 px node** filled with the ground and
+ringed at 1, 2 or 3 px by criticality; a **milestone is a downward triangle** filled in its rung's
+colour, outlined 2 px when critical, 1.5 px when near-critical, not at all on schedule.
 
 A new cue for this row names which of the three rows it uses, and `paint.lane-containment.test.ts`
 gets a case for it. A cue that draws outside its lane is the defect that test was written to report.
+Text in these rows is recorded as it is drawn, and a gap label is placed only where it meets none of
+it (FC-G5's text-on-text limb, 0 on every yardstick plan).
 
-### The link on the diagram (NetPoint-layout M2, ADR-0154)
+### The link on the diagram (NetPoint-layout M2, ADR-0154; NetPoint grammar ADR-0157)
 
-A link carries four facts, and each has one channel:
+A link carries five facts, and each has one channel:
 
 - **Drivingness is weight.** A driving link is 2 px, a non-driving link 1 px.
 - **Criticality is the driving link's ink**: `--destructive` when both ends are critical,
-  `--warning` when both are at least near-critical, otherwise `--primary`. A non-driving link is
-  `--canvas-link-minor`. The endpoints' node shapes say criticality too, so colour is never alone.
-- **Direction is shape**: filled chevrons along the line, plus the terminal head.
-- **Waiting time is the dash**, and the dash means nothing else. Only the part of a non-driving link
-  inside its drawn gap is dashed. A lag is text on a plate, `+2d` / `−1d`.
+  `--warning` when both are at least near-critical, otherwise the violet `--canvas-link`. A
+  non-driving link is `--canvas-link-minor`. The endpoints' nodes say criticality too, so colour is
+  never alone.
+- **Direction is shape**: filled chevrons about every 40 px (at most six a link, spread along it),
+  in `--canvas-link-mark` on a violet link, plus the terminal head.
+- **Waiting time is a number**: a waiting non-driving link carries its gap in working days (`12d`, or
+  `12 cal d` where no calendar is loaded), borderless on a ground chip in the mark ink, from 4 px a
+  day, switched by `View ▾ ▸ Link gaps` (on by default). It is the number the logic summary speaks.
+  The waiting dash is retired: no link on the refreshed canvas is dashed.
+- **A lag is a bordered plate** (`+2d`, or `+2d · 4d` with the gap), from 6 px a day, its border in
+  the link's own ink so it reads as a box. The gap label is unbordered, which is how a reader tells
+  the two apart.
+
+Where a link joins partway along a bar (an SS or FF link with a lag), a **4 px dot** in the mark
+shade marks the join.
 
 A new link cue names which of these channels it uses. Two cues on one channel cannot be read apart,
-which is why the dash that used to mean "non-driving" was retired rather than kept beside the new one.
+which is why the dash that used to mean "non-driving", and then "waiting", was retired rather than
+kept beside a new one.
 
 ### The `…` convention on control labels (ADR-0091)
 

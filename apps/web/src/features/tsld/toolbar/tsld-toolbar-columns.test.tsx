@@ -95,6 +95,32 @@ describe('in the Gantt', () => {
   });
 });
 
+/**
+ * **A lens the Gantt does not draw is not offered there** (NetPoint grammar M6). The three grammar
+ * toggles are read only by the canvas painter, so in the Gantt they would be live checkboxes that
+ * change nothing — the case `VIEW_SCOPED_TOGGLES` exists for. Both halves are asserted: absence
+ * alone passes against a registry that dropped the toggles everywhere.
+ */
+const CANVAS_ONLY_LENSES = ['Activity codes', 'Duration & float', 'Link gaps'] as const;
+
+describe('canvas-only lenses', () => {
+  it('are absent from View ▾ in the Gantt', () => {
+    renderRows(ctx());
+    openView();
+    for (const name of CANVAS_ONLY_LENSES) {
+      expect(screen.queryByRole('checkbox', { name }), name).toBeNull();
+    }
+  });
+
+  it('are offered on the diagram', () => {
+    renderRows(ctx({ planView: 'tsld', ganttColumns: undefined }));
+    openView();
+    for (const name of CANVAS_ONLY_LENSES) {
+      expect(screen.getByRole('checkbox', { name }), name).toBeInTheDocument();
+    }
+  });
+});
+
 describe('on the diagram', () => {
   it('renders no Columns group at all — absent, not shaded', () => {
     renderRows(ctx({ planView: 'tsld', ganttColumns: undefined }));

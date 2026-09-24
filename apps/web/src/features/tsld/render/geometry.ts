@@ -77,7 +77,13 @@ export const LANE_HEIGHT = 60;
  * bar in its lane is an x-overlap question the bar's height does not enter. Only M2 served that,
  * and "we made the bars thinner" is the most natural wrong thing to believe about this epic.
  */
-export const BAR_HEIGHT = 5;
+/*
+ * **6 px since the NetPoint grammar (M2)**, the reference's own measured bar height
+ * (`docs/specs/netpoint-grammar/reference-observations.md`). One pixel moves nothing that routes:
+ * the centre-line stays at 30 px (27 + 3, where it was 27.5 + 2.5) and the gutter keeps its seven
+ * channels (spec §3.2, checked by FC-G1's fingerprints).
+ */
+export const BAR_HEIGHT = 6;
 /**
  * The vertical clearance between a lane's edge and the bar inside it — half the leftover row.
  *
@@ -141,6 +147,22 @@ export function rowSlots(laneTop: number): RowSlots {
     belowY: barY + BAR_HEIGHT + textOffset,
     clearHalfBandPx: Math.max(0, BAR_PAD - ROW_TEXT_GAP_PX - LABEL_LINE_H),
   };
+}
+
+/**
+ * The line height of a name **wrapped onto two lines** (NetPoint grammar, spec §4.13 A4): the two
+ * lines share the pad above the bar, less the gap to it, so the pair fits its lane. 12.5 px at a
+ * 6 px bar in a 60 px row. M4 first stacked the upper line a full {@link LABEL_LINE_H} above the
+ * single-line name row, which is the spec's §4.2 G7 wording and reaches across the lane boundary;
+ * the agreement round's A4 superseded it, and the M6 gate pass found A4 unbuilt when the
+ * lane-containment case for a wrapped name measured the upper line escaping its lane.
+ */
+export const WRAP_LINE_H = (BAR_PAD - ROW_TEXT_GAP_PX) / 2;
+
+/** Where a wrapped name's two lines sit: the lower one against the bar, the upper one above it. */
+export function wrappedNameYs(slots: RowSlots): { lower: number; upper: number } {
+  const lower = slots.barY - ROW_TEXT_GAP_PX - WRAP_LINE_H / 2;
+  return { lower, upper: lower - WRAP_LINE_H };
 }
 
 /**
@@ -208,6 +230,37 @@ export const LABEL_GAP_PX = 4;
 export const DATE_LABEL_MIN_PX_PER_DAY = 6;
 
 /**
+ * **The canvas's three tiers of detail** (NetPoint grammar, spec G11), keyed to `view.pxPerDay`.
+ *
+ * - **overview:** grid, bars, nodes, links, direction marks, names and milestone glyphs. Names are
+ *   never withheld (#378).
+ * - **working:** adds dates, gap labels and attachment dots.
+ * - **detail:** adds lag plates, and the centre item when its switch is on.
+ *
+ * **The two thresholds are measured, not chosen** (`docs/specs/netpoint-grammar/m0-lod.md`,
+ * `scripts/measure-netpoint-lod.ts`). A layer's tier starts at the first zoom where its own collision
+ * rule withholds fewer than half of its items, taking the worse of the reference plan and Unit 300:
+ * - **Working (4):** Unit 300's dates, which the painter withholds 46 % of at 4 px/day and 58 % of at
+ *   3. Gap labels clear one half from 1.5 px/day, so the dates bind.
+ * - **Detail (6):** lag plates, which are withheld 42 % at 6 px/day and 52 % at 4.
+ *
+ * A layer asks {@link lodTier}, never these numbers. `lod-tier.structural.test.ts` refuses a copy of
+ * a threshold anywhere else in the canvas, because two copies drift about which zoom a date appears
+ * at, in a way only a planner zooming slowly would ever see.
+ */
+export const LOD_WORKING_MIN_PX_PER_DAY = 4;
+export const LOD_DETAIL_MIN_PX_PER_DAY = 6;
+
+export type LodTier = 'overview' | 'working' | 'detail';
+
+/** The tier of detail the canvas draws at `pxPerDay` (spec G11). */
+export function lodTier(pxPerDay: number): LodTier {
+  if (pxPerDay >= LOD_DETAIL_MIN_PX_PER_DAY) return 'detail';
+  if (pxPerDay >= LOD_WORKING_MIN_PX_PER_DAY) return 'working';
+  return 'overview';
+}
+
+/**
  * The **gap** in whole days a relationship leaves between its two endpoints (ADR-0054 §5) — the
  * answer to "why is this activity waiting?".
  *
@@ -215,10 +268,12 @@ export const DATE_LABEL_MIN_PX_PER_DAY = 6;
  * for. A **driving** edge is by definition the binding constraint, so its gap is 0; a positive
  * gap is genuine slack in that one tie.
  *
- * Deliberately a **calendar-day** count off the drawn geometry, not a working-day walk: this
- * annotates what the planner can see on the diagram, and the diagram's x-axis is calendar time.
- * The engine remains the authority on float — this is a reading of the picture, not a second
- * opinion about the schedule.
+ * A **calendar-day** count off the drawn geometry: the diagram's x-axis is calendar time, so this
+ * is the drawn geometry's reading of a tie (the legacy path's slack chip). It is not the number a planner reads or
+ * hears. Since NetPoint grammar M3-T2 that is `linkGap` (`link-gap.ts`), in working days on the
+ * plan calendar like every other `d` on the canvas, and it reproduces this function exactly when
+ * no calendar is loaded. The engine remains the authority on float; both are readings of the
+ * picture, not second opinions about the schedule.
  */
 export function edgeGapDays(args: {
   type: DependencyType;
@@ -239,53 +294,6 @@ export function edgeGapDays(args: {
     case 'SF':
       return succFinishDay - (predStartDay - 1 + lagDays);
   }
-}
-
-/**
- * Every relationship's {@link edgeGapDays}, keyed by dependency id — the datum behind both the
- * on-canvas `Nd` slack chip (ADR-0054 §5) and its spoken equivalent in `summarizeLogic`.
- *
- * Built once from the plan's dependencies so the two surfaces cannot disagree: a number a sighted
- * planner reads off a link and the number a screen-reader user hears for the same link are the
- * same computation, not two similar ones (WCAG 1.1.1). Ties whose endpoints are not yet scheduled
- * are simply absent from the map — there is no gap to state.
- */
-export function slackByDependencyId(args: {
-  dataDate: string;
-  activities: readonly {
-    id: string;
-    type?: ActivityType;
-    earlyStart: string | null;
-    earlyFinish: string | null;
-  }[];
-  dependencies: readonly {
-    id: string;
-    type: DependencyType;
-    lagDays: number;
-    predecessor: { id: string };
-    successor: { id: string };
-  }[];
-}): Map<string, number> {
-  const { dataDate, activities, dependencies } = args;
-  const byId = new Map(activities.map((a) => [a.id, a]));
-  const slack = new Map<string, number>();
-  for (const edge of dependencies) {
-    const pred = byId.get(edge.predecessor.id);
-    const succ = byId.get(edge.successor.id);
-    if (!pred?.earlyStart || !pred.earlyFinish || !succ?.earlyStart || !succ.earlyFinish) continue;
-    slack.set(
-      edge.id,
-      edgeGapDays({
-        type: edge.type,
-        predStartDay: axisDayOf(pred.type, dataDate, pred.earlyStart),
-        predFinishDay: axisDayOf(pred.type, dataDate, pred.earlyFinish),
-        succStartDay: axisDayOf(succ.type, dataDate, succ.earlyStart),
-        succFinishDay: axisDayOf(succ.type, dataDate, succ.earlyFinish),
-        lagDays: edge.lagDays,
-      }),
-    );
-  }
-  return slack;
 }
 
 /**
@@ -479,6 +487,11 @@ export const FONT_STACK =
  * session.
  */
 export const LABEL_FONT = `11px ${FONT_STACK}`;
+/**
+ * A milestone's name (NetPoint grammar M4-T1, spec §4.2 G7): bold, never red, as the reference sets
+ * its key dates. Measured under its own memo key (`MeasureCache.measure`'s `font`).
+ */
+export const MILESTONE_LABEL_FONT = `600 11px ${FONT_STACK}`;
 
 /**
  * Discrete zoom stops → pixels per day. A continuous slider interpolates between them;
@@ -564,11 +577,14 @@ export interface RenderActivity {
   id: string;
   type: ActivityType;
   laneIndex: number;
-  /** The on-canvas name row: the activity's identity (`{code} {name}`), pre-built at the mapping
-   * seam from the shared `activityLabel` so the render model does no domain string logic and the
-   * visible label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). The
-   * duration left it at NetPoint-layout M1 for the row below the bar ({@link durationDays}). */
+  /** The on-canvas name row: the activity's **name** (NetPoint grammar M4-T1, spec §4.2 G7), built
+   * at the mapping seam by `canvasLabel` so the render model does no domain string logic. The code
+   * rides separately ({@link code}) and is printed only while `View ▾ ▸ Markers ▸ Activity codes`
+   * is on. The accessible name (`activityLabel`) leads with the same words (WCAG 2.5.3). The
+   * duration left this row at NetPoint-layout M1 for the row below the bar ({@link durationDays}). */
   label: string;
+  /** The activity code, printed before the name only while the codes switch is on. */
+  code?: string | null | undefined;
   /**
    * The working-day duration the centre item prints under the bar (NetPoint-layout M1). Carried
    * rather than re-derived because it is **not** the drawn span: a working-day figure differs from
@@ -862,6 +878,30 @@ export function truncateToWidth(
   }
   const kept = text.slice(0, lo).trimEnd();
   return kept ? kept + ellipsis : ellipsis;
+}
+
+/**
+ * A name broken onto two lines at a word boundary (NetPoint grammar M4-T2, spec §4.2 G7): the first
+ * line is the longest run of whole words that fits `maxPx`, the second is the rest, truncated to
+ * `maxPx` if it must be. Null where a wrap would not help: a single word, a first word that does
+ * not fit, or a second line that would be a lone ellipsis.
+ *
+ * The caller decides whether there is ROOM for a second line (it must meet no routed link); this
+ * only decides the break, so it is pure and testable without a canvas.
+ */
+export function wrapTwoLines(
+  text: string,
+  maxPx: number,
+  measure: (s: string) => number,
+): [string, string] | null {
+  const words = text.split(' ').filter((w) => w.length > 0);
+  if (words.length < 2 || maxPx <= 0) return null;
+  let k = 0;
+  while (k + 1 < words.length && measure(words.slice(0, k + 1).join(' ')) <= maxPx) k += 1;
+  if (k === 0) return null;
+  const second = truncateToWidth(words.slice(k).join(' '), maxPx, measure);
+  if (!second || second === LABEL_ELLIPSIS) return null;
+  return [words.slice(0, k).join(' '), second];
 }
 
 /** Whether two screen-space rectangles overlap (used for viewport culling). */

@@ -1,5 +1,7 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 
+import type { LinkGap } from './link-gap';
+
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -40,18 +42,38 @@ function plainDays(n: number): string {
 }
 
 /**
- * The activity's identity — `{code} {name}` when a code is set, else the name. This is the
- * single source both the on-canvas bar label and the accessible name (`describeActivity`,
- * `chainNeighbour`) build on, so the visible label and the spoken/AT name can never disagree
- * on *which* activity a bar is (WCAG 2.5.3 label-in-name). Kept as a leading substring of both.
+ * The activity's **accessible name**: `{name}, {code}` when a code is set, else the name. Used by
+ * the Tier-1 sentence (`describeActivity`) and chain navigation (`chainNeighbour`).
+ *
+ * **It says what the canvas prints, and the switch decides which order that is** (NetPoint grammar
+ * M4-T1, the M0-T4 ruling R7, and the M6 accessibility gate). While `View ▾ ▸ Markers ▸ Activity
+ * codes` is off the canvas prints the name alone, so the name leads and the code follows. While it
+ * is on the canvas prints `{code} {name}` and so does this, because WCAG 2.5.3 needs the visible
+ * label inside the accessible name as a contiguous string. `Pour slab, A1020` does not contain
+ * `A1020 Pour slab`. M4 shipped the name-first form in both states under a comment saying it did,
+ * and a test that checked each word was present in any order. Search by code builds its own
+ * haystack (`lenses.ts:82`), so nothing relies on either order.
  */
-export function activityLabel(a: { code: string | null; name: string }): string {
+export function activityLabel(
+  a: { code: string | null; name: string },
+  withCodes: boolean,
+): string {
   // **A code identical to the name is printed once** (`docs/TECH_DEBT.md` #376). The XER importer
   // gives a WBS summary `code = wbs_short_name` and `name = wbs_name ?? wbs_short_name`
   // (`packages/interchange/src/xer-adapter.ts:475-476`), and P6's project-root node commonly holds
   // the project's short name in both — so the label read "EDF - Hynamics Proposal EDF - Hynamics
   // Proposal". The second copy carries nothing, and this string is also the accessible name.
-  return a.code && a.code !== a.name ? `${a.code} ${a.name}` : a.name;
+  if (withCodes) return canvasLabel(a, true);
+  return a.code && a.code !== a.name ? `${a.name}, ${a.code}` : a.name;
+}
+
+/**
+ * What the canvas prints over a bar (NetPoint grammar M4-T1, spec §4.2 G7): the name alone, as the
+ * reference does, or `{code} {name}` while `View ▾ ▸ Markers ▸ Activity codes` is on. A code
+ * identical to the name is printed once (#376), as in {@link activityLabel}.
+ */
+export function canvasLabel(a: { code: string | null; name: string }, withCode: boolean): string {
+  return withCode && a.code && a.code !== a.name ? `${a.code} ${a.name}` : a.name;
 }
 
 /**
@@ -101,9 +123,9 @@ export function centreItemText(
  */
 export function describeActivity(
   a: ActivitySummary,
-  opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource },
+  opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource; withCodes?: boolean },
 ): string {
-  const name = activityLabel(a);
+  const name = activityLabel(a, opts?.withCodes ?? false);
   const duration =
     a.durationDays > 0
       ? `, ${a.durationDays} working ${a.durationDays === 1 ? 'day' : 'days'}`
@@ -535,8 +557,11 @@ export function lagPhrase(
  * **Tier 2** — the on-demand (`Space`) detail: how many logic ties the activity has and which are
  * driving. `start driven by {name}` names the binding predecessor (the driving edge into it);
  * `drives {names}` names the successors whose start it drives. Derived purely from `dependencies`.
- * A lagged driving tie appends its {@link lagPhrase} (the spoken twin of the time-true anchor
- * offset, ADR-0052); a zero-lag tie adds nothing, keeping today's sentences verbatim.
+ * Every named tie appends its {@link lagPhrase}: the type alone for a zero-lag tie (`(FS)`), the
+ * type and lag otherwise (`(SS + 3 working days)`, the spoken twin of the time-true anchor offset,
+ * ADR-0052). A zero-lag tie said nothing until NetPoint grammar M3-T4 (`docs/TECH_DEBT.md` #374
+ * item 6): the gap a waiting link is labelled with is measured from its type's anchor (finish for
+ * FS, start for SS), so a sentence without the type could not say what the drawn gap measures.
  */
 export function summarizeLogic(
   id: string,
@@ -547,12 +572,12 @@ export function summarizeLogic(
    * sighted-pointer-only and cannot be inferred (deriving it means subtracting two dates and a
    * lag by hand), which is a WCAG 1.1.1 gap. Absent ⇒ the sentence is exactly as before.
    */
-  slackByDependencyId?: ReadonlyMap<string, number>,
+  slackByDependencyId?: ReadonlyMap<string, LinkGap>,
 ): string {
   const preds = dependencies.filter((d) => d.successor.id === id);
   const succs = dependencies.filter((d) => d.predecessor.id === id);
   const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`;
-  const lagSuffix = (d: DependencySummary): string => (d.lagDays === 0 ? '' : ` (${lagPhrase(d)})`);
+  const lagSuffix = (d: DependencySummary): string => ` (${lagPhrase(d)})`;
   let text = `${count(preds.length, 'predecessor')}, ${count(succs.length, 'successor')}`;
   const drivenBy = preds.find((d) => d.isDriving);
   if (drivenBy) text += `; start driven by ${drivenBy.predecessor.name}${lagSuffix(drivenBy)}`;
@@ -564,7 +589,7 @@ export function summarizeLogic(
     const waits = [...preds, ...succs]
       .filter((d) => !d.isDriving)
       .map((d) => ({ d, gap: slackByDependencyId.get(d.id) }))
-      .filter((x): x is { d: DependencySummary; gap: number } => (x.gap ?? 0) > 0)
+      .filter((x): x is { d: DependencySummary; gap: LinkGap } => (x.gap?.days ?? 0) > 0)
       .map(({ d, gap }) => {
         const other = d.successor.id === id ? d.predecessor.name : d.successor.name;
         // Deliberately not the float helper: that one says "float", and a tie's gap is not
@@ -574,7 +599,10 @@ export function summarizeLogic(
         // **This site avoided the trap and the drift clause above did not**, under the same shared
         // helper, which is why `plainDays` now exists: the correct reasoning was written down here
         // and never applied one function over.
-        return `${other} ${gap} ${gap === 1 ? 'day' : 'days'}`;
+        // In the unit the gap label prints (NetPoint grammar M3-T2): "3 working days", or "12
+        // calendar days" where no calendar is loaded and the label reads `12 cal d`.
+        const unit = gap.unit === 'working' ? 'working' : 'calendar';
+        return `${other}${lagSuffix(d)} ${gap.days} ${unit} ${gap.days === 1 ? 'day' : 'days'}`;
       });
     if (waits.length > 0) text += `; slack to ${waits.join(', ')}`;
   }
@@ -598,6 +626,7 @@ export function chainNeighbour(
   focusedId: string,
   dependencies: readonly DependencySummary[],
   direction: 'pred' | 'succ',
+  withCodes: boolean,
 ): ChainNeighbour | null {
   const edges = dependencies.filter((d) =>
     direction === 'pred' ? d.successor.id === focusedId : d.predecessor.id === focusedId,
@@ -606,7 +635,7 @@ export function chainNeighbour(
   const chosen = edges.find((d) => d.isDriving) ?? edges[0]!;
   const endpoint = direction === 'pred' ? chosen.predecessor : chosen.successor;
   // Same identity builder as Tier-1 describeActivity, so the neighbour reads consistently.
-  const name = activityLabel(endpoint);
+  const name = activityLabel(endpoint, withCodes);
   return { id: endpoint.id, name, driving: chosen.isDriving };
 }
 

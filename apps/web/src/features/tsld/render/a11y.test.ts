@@ -6,6 +6,7 @@ import {
   activityLabel,
   announceChainStep,
   baselineGhostClause,
+  canvasLabel,
   chainNeighbour,
   compareClause,
   compareOverlaySummary,
@@ -17,6 +18,7 @@ import {
   summarizeLogic,
   wbsGroupClause,
 } from './a11y';
+import { linkRung } from './link-marks';
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
@@ -104,24 +106,48 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 }
 
 describe('activityLabel (shared identity) and centreItemText', () => {
-  it('prefixes the code when set, else uses the name alone', () => {
-    expect(activityLabel(activity({ code: 'A1020', name: 'Erect steel' }))).toBe(
-      'A1020 Erect steel',
+  it('leads with the name and follows it with the code when set (NetPoint grammar M4-T1, R7)', () => {
+    expect(activityLabel(activity({ code: 'A1020', name: 'Erect steel' }), false)).toBe(
+      'Erect steel, A1020',
     );
-    expect(activityLabel(activity({ code: null, name: 'Erect steel' }))).toBe('Erect steel');
+    expect(activityLabel(activity({ code: null, name: 'Erect steel' }), false)).toBe('Erect steel');
   });
 
   it('prints a code identical to the name once (#376: an imported P6 root WBS node)', () => {
     expect(
-      activityLabel(activity({ code: 'EDF - Hynamics Proposal', name: 'EDF - Hynamics Proposal' })),
+      activityLabel(
+        activity({ code: 'EDF - Hynamics Proposal', name: 'EDF - Hynamics Proposal' }),
+        true,
+      ),
     ).toBe('EDF - Hynamics Proposal');
     // A code that merely STARTS the name is still a code, and is still printed.
-    expect(activityLabel(activity({ code: 'A', name: 'A frame' }))).toBe('A A frame');
+    expect(activityLabel(activity({ code: 'A', name: 'A frame' }), false)).toBe('A frame, A');
+  });
+
+  it('the canvas prints the name alone, and the code only while codes are switched on', () => {
+    const a = { code: 'A1020', name: 'Erect steel' };
+    expect(canvasLabel(a, false)).toBe('Erect steel');
+    expect(canvasLabel(a, true)).toBe('A1020 Erect steel');
+    expect(canvasLabel({ code: null, name: 'Erect steel' }, true)).toBe('Erect steel');
+    expect(canvasLabel({ code: 'Same', name: 'Same' }, true)).toBe('Same');
+    // WCAG 2.5.3 needs the printed label inside the accessible name as one contiguous string, in
+    // both states of the switch. The M4 version of this case checked each WORD of the coded label
+    // was present in any order, which `Erect steel, A1020` passes and 2.5.3 does not (the M6
+    // accessibility gate). Both limbs are asserted on the same `withCodes` the canvas uses.
+    for (const withCodes of [false, true]) {
+      expect(activityLabel(a, withCodes).startsWith(canvasLabel(a, withCodes))).toBe(true);
+      expect(
+        describeActivity(activity({ ...a, durationDays: 5 }), { withCodes }).startsWith(
+          canvasLabel(a, withCodes),
+        ),
+      ).toBe(true);
+    }
+    expect(activityLabel(a, true)).toBe('A1020 Erect steel');
   });
 
   it('keeps the name row a leading substring of the accessible name (label-in-name)', () => {
     const a = activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 });
-    expect(describeActivity(a).startsWith(activityLabel(a))).toBe(true);
+    expect(describeActivity(a).startsWith(activityLabel(a, false))).toBe(true);
   });
 
   it('prints the duration and the float left in full, the duration alone short', () => {
@@ -203,7 +229,7 @@ describe('describeActivity (Tier 1)', () => {
 
   it('prefixes the code and gives duration + a date range + lane (1-based)', () => {
     expect(describeActivity(activity({ code: 'A100', laneIndex: 2 }))).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float left',
+      'Excavate, A100, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float left',
     );
   });
 
@@ -407,7 +433,7 @@ describe('summarizeLogic (Tier 2)', () => {
 
   it('counts ties and names the driving predecessor + driven successors', () => {
     expect(summarizeLogic('x', deps)).toBe(
-      '2 predecessors, 2 successors; start driven by Survey; drives Pour',
+      '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS)',
     );
   });
 
@@ -416,7 +442,7 @@ describe('summarizeLogic (Tier 2)', () => {
     expect(summarizeLogic('x', one)).toBe('1 predecessor, 0 successors');
   });
 
-  it('speaks the lag on a lagged driving tie, and keeps zero-lag sentences verbatim (ADR-0052)', () => {
+  it('speaks the lag on a lagged driving tie, and the type alone on a zero-lag one', () => {
     const lagged = [
       edge({
         predecessor: ep('p1', 'Survey'),
@@ -438,30 +464,67 @@ describe('summarizeLogic (Tier 2)', () => {
     expect(summarizeLogic('x', lagged)).toBe(
       '1 predecessor, 1 successor; start driven by Survey (SS + 3 working days); drives Pour (FS - 1 working day)',
     );
-    // The lag clause is additive: zero-lag ties read exactly as before.
+    // NetPoint grammar M3-T4 (#374 item 6): a zero-lag tie names its type too. What a gap label
+    // measures depends on the type (FS finish to start, SS start to start), so a sentence without
+    // it cannot say what the drawn link says.
     expect(summarizeLogic('x', deps)).toBe(
-      '2 predecessors, 2 successors; start driven by Survey; drives Pour',
+      '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS)',
     );
   });
 
   it('speaks per-tie slack for the non-binding ties (the spoken twin of the canvas chip)', () => {
     // The map is what the canvas draws its `Nd` chips from; the driving ties carry 0 and are
     // already reported as the driver, so only the two waiting ties get a clause (ADR-0054 §5).
+    const w = (days: number) => ({ days, unit: 'working' as const });
     const slack = new Map([
-      ['p1->x', 0],
-      ['p2->x', 4],
-      ['x->s1', 0],
-      ['x->s2', 2],
+      ['p1->x', w(0)],
+      ['p2->x', w(4)],
+      ['x->s1', w(0)],
+      ['x->s2', w(2)],
     ]);
+    // NetPoint grammar M3-T2: in the unit the gap label prints, working days on the plan calendar.
     expect(summarizeLogic('x', deps, slack)).toBe(
-      '2 predecessors, 2 successors; start driven by Survey; drives Pour; slack to Permit 4 days, Backfill 2 days',
+      '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS); slack to Permit (FS) 4 working days, Backfill (FS) 2 working days',
     );
   });
 
+  it('says calendar days where no calendar is loaded, as the `cal d` label does', () => {
+    const slack = new Map([['p2->x', { days: 1, unit: 'calendar' as const }]]);
+    expect(summarizeLogic('x', deps, slack)).toContain('slack to Permit (FS) 1 calendar day');
+  });
+
   it('leaves the sentence untouched when no slack is supplied or none is positive', () => {
-    const before = '2 predecessors, 2 successors; start driven by Survey; drives Pour';
+    const before = '2 predecessors, 2 successors; start driven by Survey (FS); drives Pour (FS)';
     expect(summarizeLogic('x', deps, new Map())).toBe(before);
-    expect(summarizeLogic('x', deps, new Map([['p2->x', 0]]))).toBe(before);
+    expect(
+      summarizeLogic('x', deps, new Map([['p2->x', { days: 0, unit: 'working' as const }]])),
+    ).toBe(before);
+  });
+});
+
+/**
+ * **The link's rung and the words for criticality read one pair of flags** (NetPoint grammar M3-T4,
+ * `docs/TECH_DEBT.md` #374 item 7).
+ *
+ * A driving link between two activities is drawn in the rung `linkRung` returns, and each
+ * activity's sentence says `critical` / `near-critical` from `describeActivity`. They agree today
+ * because both read `isCritical` and `isNearCritical`. This pins the agreement over every
+ * combination of the two flags (including both set, which the engine does not produce and which
+ * both must resolve the same way), so a later change to either rule that makes them disagree fails
+ * here. A behavioural table rather than the source scan the plan named: a scan can say both read
+ * the same field names and still pass when one of them starts reading them in a different order.
+ */
+describe('linkRung and describeActivity agree on criticality (#374 item 7)', () => {
+  const words = (s: string): 'critical' | 'near' | 'normal' =>
+    s.includes(', critical') ? 'critical' : s.includes(', near-critical') ? 'near' : 'normal';
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true],
+  ])('isCritical %s, isNearCritical %s', (isCritical, isNearCritical) => {
+    const a = activity({ isCritical, isNearCritical, remainingFloat: 3 });
+    expect(linkRung(a, a)).toBe(words(describeActivity(a)));
   });
 });
 
@@ -500,36 +563,48 @@ describe('chainNeighbour + announceChainStep', () => {
   ];
 
   it('prefers the driving predecessor over list order', () => {
-    expect(chainNeighbour('x', deps, 'pred')).toEqual({ id: 'p2', name: 'Permit', driving: true });
+    expect(chainNeighbour('x', deps, 'pred', false)).toEqual({
+      id: 'p2',
+      name: 'Permit',
+      driving: true,
+    });
   });
 
   it('falls back to the first tie when none drives', () => {
-    expect(chainNeighbour('x', deps, 'succ')).toEqual({ id: 's1', name: 'Pour', driving: false });
+    expect(chainNeighbour('x', deps, 'succ', false)).toEqual({
+      id: 's1',
+      name: 'Pour',
+      driving: false,
+    });
   });
 
   it('returns null when there is no tie in that direction', () => {
-    expect(chainNeighbour('s1', deps, 'succ')).toBeNull();
+    expect(chainNeighbour('s1', deps, 'succ', false)).toBeNull();
   });
 
-  it('prefixes the neighbour code (cross-tier consistency with Tier 1)', () => {
+  it('names the neighbour as Tier 1 does, name then code (cross-tier consistency)', () => {
     const coded = [
       edge({ predecessor: { id: 'p', code: 'A100', name: 'Survey' }, successor: ep('x', 'X') }),
     ];
-    expect(chainNeighbour('x', coded, 'pred')).toEqual({
+    expect(chainNeighbour('x', coded, 'pred', false)).toEqual({
       id: 'p',
-      name: 'A100 Survey',
+      name: 'Survey, A100',
       driving: false,
     });
-    expect(announceChainStep('pred', chainNeighbour('x', coded, 'pred'))).toBe(
-      'Predecessor: A100 Survey.',
+    expect(announceChainStep('pred', chainNeighbour('x', coded, 'pred', false))).toBe(
+      'Predecessor: Survey, A100.',
     );
+    // With codes printed, the neighbour is named as the canvas prints it (WCAG 2.5.3).
+    expect(chainNeighbour('x', coded, 'pred', true)?.name).toBe('A100 Survey');
   });
 
   it('announces the neighbour, flagging a driving tie, and the empty case', () => {
-    expect(announceChainStep('pred', chainNeighbour('x', deps, 'pred'))).toBe(
+    expect(announceChainStep('pred', chainNeighbour('x', deps, 'pred', false))).toBe(
       'Predecessor: Permit, driving.',
     );
-    expect(announceChainStep('succ', chainNeighbour('x', deps, 'succ'))).toBe('Successor: Pour.');
+    expect(announceChainStep('succ', chainNeighbour('x', deps, 'succ', false))).toBe(
+      'Successor: Pour.',
+    );
     expect(announceChainStep('succ', null)).toBe('No successors.');
   });
 });
@@ -566,7 +641,7 @@ describe('a11y-string parity across the M4 visual refresh', () => {
         { overlapsInLane: true },
       ),
     ).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 2 days float left, ' +
+      'Excavate, A100, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 2 days float left, ' +
         'Start no earlier than 02 Jan 2026, ' +
         'conflict: placed 2 working days before its earliest feasible start, ' +
         'overlaps another activity in its lane',
@@ -583,8 +658,9 @@ describe('a11y-string parity across the M4 visual refresh', () => {
     );
   });
 
-  it('pins the shared name-row identity byte-for-byte (visible label = accessible prefix)', () => {
-    expect(activityLabel({ code: 'A100', name: 'Excavate' })).toBe('A100 Excavate');
+  it('pins the accessible identity byte-for-byte (name, then code; the canvas name leads it)', () => {
+    expect(activityLabel({ code: 'A100', name: 'Excavate' }, false)).toBe('Excavate, A100');
+    expect(activityLabel({ code: 'A100', name: 'Excavate' }, true)).toBe('A100 Excavate');
   });
 });
 

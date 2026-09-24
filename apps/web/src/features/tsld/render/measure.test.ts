@@ -43,3 +43,24 @@ describe('createMeasureCache', () => {
     expect(measureText).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('createMeasureCache keyed by font (NetPoint grammar M4-T1, spec §4.13 A6)', () => {
+  it('keeps a bold measurement apart from the regular one for the same text', () => {
+    const cache = createMeasureCache();
+    let calls = 0;
+    const regular = (s: string): number => {
+      calls += 1;
+      return s.length * 6;
+    };
+    const bold = (s: string): number => {
+      calls += 1;
+      return s.length * 7;
+    };
+    expect(cache.measure('Handover', regular)).toBe(48);
+    expect(cache.measure('Handover', bold, '600 11px x')).toBe(56);
+    // Each is memoised under its own key: neither answers for the other.
+    expect(cache.measure('Handover', regular)).toBe(48);
+    expect(cache.measure('Handover', bold, '600 11px x')).toBe(56);
+    expect(calls).toBe(2);
+  });
+});

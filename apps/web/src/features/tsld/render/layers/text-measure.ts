@@ -1,16 +1,16 @@
 import { createMeasureCache } from '../measure';
 
 /**
- * Session-lived width memo for label text (font is fixed, so keyed by string alone). Held at
- * module scope so it persists across frames and canvas instances — a given label measures once.
+ * Session-lived width memo for label text, keyed by `(font, text)` (`measure.ts`). Held at module
+ * scope so it persists across frames and canvas instances — a given label measures once per font.
  *
  * Its own module (ADR-0078 S2) because **two** layers share this one instance — the activity
- * labels (layer 3.6) and the flanking dates (layer 3.7) — and it is keyed by text alone. Splitting
+ * labels (layer 3.6) and the flanking dates (layer 3.7). Splitting
  * it into a cache per layer would look tidy, cost nothing visible, and be wrong: the two would
  * then hold separate entries for the same string, and the point of the memo is that a label
- * measures once for the session. The keying also carries a live hazard the original docblock
- * records — the key is the string, not the string plus the font — so a future font change would
- * poison every entry across palettes. One module makes that one place to fix.
+ * measures once for the session. The key was the string alone until NetPoint grammar M4 put a bold
+ * font on milestone names; it now carries the font, so a bold width and a regular width of the same
+ * string are two entries rather than one poisoned one (`measure.test.ts`).
  */
 export const labelWidths = createMeasureCache();
 

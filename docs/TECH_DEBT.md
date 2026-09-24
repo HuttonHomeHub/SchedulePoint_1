@@ -11642,7 +11642,7 @@ positional figure as a count.
 
 ### 374. The NetPoint-layout gate pass's non-blocking findings
 
-**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (NetPoint-layout M5 and M6
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-23 (NetPoint-layout M5 and M6
 reviews) · **Size:** S · **Owner:** web
 
 The M5 and M6 specialist reviews folded every blocking finding
@@ -11666,13 +11666,12 @@ raised and did not block on.
 5. **The roving-tabindex logic is written twice** (component): `SegmentedControl` and
    `RadioCardGroup`. They differ in a real way, since a disabled stop needs separate focus state.
    Extract a shared hook when a third radiogroup needs it.
-6. **A zero-lag link's type is not spoken** (accessibility, pre-existing). `describeActivity`
-   names a relationship's type (FS, SS, FF, SF) only when it carries a lag (`a11y.ts`,
-   `lagSuffix`). ADR-0154 now draws a waiting dash whose meaning depends on the type, so the gap
-   between what is drawn and what is spoken is wider than it was.
-7. **Nothing couples the link's rung to the words for criticality** (accessibility). `linkRung`
-   and `describeActivity` agree today because they read the same `isCritical` and `isNearCritical`
-   fields. A structural pin would stop a later change to one silently disagreeing with the other.
+
+Items 6 and 7 were closed by NetPoint grammar M3-T4 (2026-09-24). A zero-lag tie now names its
+type in the logic summary (`(FS)`), because a waiting link's gap is measured from its type's anchor
+(`a11y.ts`, `summarizeLogic`); and a table over all four flag combinations pins `linkRung` and
+`describeActivity` to one reading of criticality (`a11y.test.ts`, verified red by reordering the
+sentence's branches).
 
 ### 382. Re-layout from scratch cannot find the layout a skilled planner drew
 
@@ -11755,3 +11754,51 @@ index for it without a measurement.
 Unticking **Restore the SchedulePoint layout** re-runs the dry-run. The checkbox gives no busy
 indication while that happens; the report region updates and announces when it settles. Suggested,
 not blocking: mark the checkbox `aria-busy` (or shade it with a reason) during the re-run.
+
+### 391. The NetPoint-grammar gate pass's non-blocking findings
+
+**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (NetPoint grammar M6 reviews:
+accessibility, component, UX, performance) · **Size:** S · **Owner:** web
+
+The M6 gate pass folded every blocking finding (ADR-0157, "Gate pass"). These are what the four
+reviews raised and did not block on.
+
+1. **The milestone outline ladder has no rendered greyscale picture** (accessibility). The node rim
+   ladder was judged on `m2/rungs-grey.png`; the triangle's none / 1.5 px / 2 px outline was judged
+   from paint traces only, and its near-to-critical step (+33 %) is proportionally smaller than the
+   rim's. No outline against an outline is a real non-colour cue, so this is evidence owed, not a
+   compliance gap.
+2. **`--canvas-link-mark` has no contrast pair against `--canvas-bar`** (accessibility). The
+   attachment dot is drawn over a bar; the NetPoint block checks the mark against the grounds and
+   the link inks only.
+3. **"Link gaps" is not self-explanatory on first meeting** (UX). No `View ▾` item carries a
+   description today (`VIEW_TOGGLE_META` holds group, label and enabled), so a short one would be a
+   new convention rather than a fix here.
+4. **Wrap or truncate is decided by link geometry the planner cannot see** (UX). Two similar bars
+   can behave differently. Accepted as the trade (text over a link is worse); worth a line at the
+   next reconciliation pass.
+5. **A driving link to a hand-placed-late successor draws a long run with no gap label** (UX, and
+   the M3 build record). A gap label means a non-driving tie's waiting time, so labelling this
+   would put drift into that vocabulary; the successor's own feasible-window cue (ADR-0148) is the
+   channel for it. Recorded as accepted scope, pending the product owner's view.
+6. **Two small counting budgets are unwritten** (performance): node style writes grouped by
+   (ink, width) rather than per node, and an attachment-dot count, both true by inspection.
+7. **Direction-mark spacing is not tier-gated** (performance). `m0-lod.md` P3 says the 40 px
+   spacing applies at the working and detail tiers; `chevronsAlong` applies it at every tier. The
+   per-link cap of six bounds the cost either way, so the record should match the code, whichever
+   way it is settled.
+8. **`paintLinkLanguage` iterates the plan's whole edge list per frame** before the culled
+   `lines.get(edge)` test (performance, inherited from ADR-0154). O(plan edges) of map lookups on
+   every frame, under the code this epic extended.
+9. **`RenderActivity.label` is the bare name re-fed to `canvasLabel`** (component). It composes
+   correctly because the model always passes `withCode: false`; a future `true` there would print
+   the code twice with nothing structural to catch it.
+10. **`lod-tier.structural.test.ts` only refuses copied thresholds** (component). Its positive half,
+    that each gated layer calls `lodTier`, lives in `paint.netpoint-text.test.ts`.
+11. **A single-line name can be crossed by a vertical link** (the M6 pictures). FC-G5 counts text
+    on text, text on nodes, and link segments met by a wrapped line; a one-line name over a routed
+    vertical is none of them ("Chem Clean", "Steam Blows" on the reference plan). The routing and
+    the row predate this epic.
+12. **A gap label can be cut by the viewport's edge** (the M6 pictures, Unit 300 at Month: `24d`).
+    It is placed on the longest stretch of its line inside the waiting interval, and that stretch
+    may run off screen; clamping the placement to the visible part would keep it whole.

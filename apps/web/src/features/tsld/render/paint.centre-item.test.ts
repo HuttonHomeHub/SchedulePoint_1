@@ -67,10 +67,31 @@ const withToggles = (activities: RenderActivity[], toggles: object): TsldScene =
   activities,
   edges: [],
   dataDate: DATA_DATE,
-  view: { ...DEFAULT_VIEW_TOGGLES, ...toggles },
+  // The item is off by default since NetPoint grammar M4-T1 (`View ▾ ▸ Markers ▸ Duration &
+  // float`), so this suite, which is about the layer's geometry, switches it on; the default is
+  // pinned by its own case below.
+  view: { ...DEFAULT_VIEW_TOGGLES, centreItem: true, ...toggles },
 });
 
 describe('paintScene — the centre item (NetPoint-layout M1)', () => {
+  it('is off by default, and drawn only at the detail tier when switched on (NetPoint grammar M4)', () => {
+    const a = bar({ id: 'a' });
+    const off = { activities: [a], edges: [], dataDate: DATA_DATE, view: DEFAULT_VIEW_TOGGLES };
+    expect(centreItems(off, VIEW)).toEqual([]);
+    // The control: the same bar with the switch on does draw its item.
+    expect(centreItems(withToggles([a], { labels: true }), VIEW)).toHaveLength(1);
+    // At the working tier (4–6 px a day) the switch alone does not draw it.
+    const working: Viewport = { ...VIEW, pxPerDay: 5 };
+    const wide = bar({ id: 'w', earlyFinish: '2026-06-30' });
+    expect(centreItems(withToggles([wide], { labels: true }), working)).toEqual([]);
+  });
+
+  it('prints a critical activity’s duration alone', () => {
+    const critical = bar({ id: 'c', isCritical: true, remainingFloat: 0 });
+    const items = centreItems(withToggles([critical], { labels: true }), VIEW);
+    expect(items.map((i) => i.text)).toEqual(['5d']);
+  });
+
   it('sits in full between the two dates when the dates are drawn inside the bar', () => {
     const a = bar({ id: 'a' });
     const rect = activityRect(a, VIEW, DATA_DATE)!;

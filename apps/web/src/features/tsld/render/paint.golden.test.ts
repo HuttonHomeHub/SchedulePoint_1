@@ -91,8 +91,13 @@ const PALETTE: TsldPalette = {
   laneRule: '#9c9c9c',
   linkMinor: '#80848b',
   linkDriving: '#3b6fbf',
+  linkMark: '#3d2070',
+  attachDot: '#3d2070',
   edge: '#333',
   bar: '#44f',
+  nodeRim: '#44f',
+  nodeRimNear: '#fa0',
+  nodeRimCritical: '#f00',
   critical: '#f00',
   nearCritical: '#fa0',
   outline: '#fff',
@@ -226,6 +231,9 @@ const MAXIMAL: TsldScene = {
     // Added at NetPoint-layout M1: the maximal frame had never set `dates`, so the flanking dates,
     // the milestone's single date and the centre item that shares their row were all unreached.
     dates: true,
+    // NetPoint grammar M4-T1 put the centre item behind its own switch, default off; the maximal
+    // frame keeps it on so the layer stays reached.
+    centreItem: true,
     lateOverlay: false,
   },
   isWorkingDay,

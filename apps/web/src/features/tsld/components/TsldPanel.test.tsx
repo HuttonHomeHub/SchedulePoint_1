@@ -138,7 +138,8 @@ describe('TsldPanel', () => {
     const options = screen.getAllByRole('option');
     expect(options).toHaveLength(2);
     // Each option describes the activity's schedule (dates + criticality) for AT.
-    expect(options[0]).toHaveTextContent(/A100 Excavate/);
+    // The name leads and the code follows (NetPoint grammar M4-T1, the M0-T4 ruling R7).
+    expect(options[0]).toHaveTextContent(/^Excavate, A100/);
     expect(options[0]).toHaveTextContent(/critical/);
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
   });

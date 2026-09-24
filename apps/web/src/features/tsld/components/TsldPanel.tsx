@@ -72,6 +72,7 @@ import {
   isMilestone,
   isResizeEligibleType,
   slackByDependencyId,
+  type LinkGap,
   type Point,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
@@ -1155,10 +1156,13 @@ export function TsldPanel({
     return new Map(
       activities.map((a) => [
         a.id,
-        describeActivity(a, { overlapsInLane: overlap.get(a.id) ?? false }),
+        describeActivity(a, {
+          overlapsInLane: overlap.get(a.id) ?? false,
+          withCodes: viewToggles.activityCodes ?? false,
+        }),
       ]),
     );
-  }, [activities, renderActivities]);
+  }, [activities, renderActivities, viewToggles.activityCodes]);
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // Precomputed, memoised maps handed to the painter via the `TsldScene`, so the culled rAF loop draws
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
@@ -1812,13 +1816,20 @@ export function TsldPanel({
   // the canvas and was announced with none (reported 2026-09-23; `docs/TECH_DEBT.md` #372 is the
   // naming trap that made the two lines look identical).
   const linkSlack = useMemo(() => {
-    if (!dataDate) return new Map<string, number>();
+    if (!dataDate) return new Map<string, LinkGap>();
     const drawn = activities.map((a) => {
       const { start, finish } = barDatesFor(a, barDateSource);
       return { id: a.id, earlyStart: start, earlyFinish: finish };
     });
-    return slackByDependencyId({ dataDate, activities: drawn, dependencies });
-  }, [dataDate, activities, dependencies, barDateSource]);
+    // In working days on the plan calendar, the unit the canvas's gap labels print (NetPoint
+    // grammar M3-T2); calendar days, said as such, when no calendar is loaded.
+    return slackByDependencyId({
+      dataDate,
+      activities: drawn,
+      dependencies,
+      isWorkingDay: workingDayPredicate,
+    });
+  }, [dataDate, activities, dependencies, barDateSource, workingDayPredicate]);
 
   /**
    * The resolved keyboard cursor. Flag-off it **is** `selectedId`, expression for expression, so
@@ -2113,7 +2124,12 @@ export function TsldPanel({
       const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       const dir = event.key === '[' ? 'pred' : 'succ';
-      const neighbour = chainNeighbour(current.id, dependencies, dir);
+      const neighbour = chainNeighbour(
+        current.id,
+        dependencies,
+        dir,
+        viewToggles.activityCodes ?? false,
+      );
       // `select`, not `setSelectedId`: this is a NAVIGATION command, so the keyboard cursor has to
       // follow the selection. Setting only the selection left `aria-activedescendant` on the row
       // the planner walked away from — and made a second press re-read the same neighbour, because

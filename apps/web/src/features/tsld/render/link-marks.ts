@@ -1,5 +1,3 @@
-import type { DependencyType } from '@repo/types';
-
 import type { Point, RenderActivity } from './geometry';
 
 /**
@@ -31,88 +29,19 @@ export function linkRung(
 }
 
 /**
- * The span of a relationship's **waiting time** on screen: from the earliest point the relationship
- * would allow to where the successor's constrained end is actually drawn. Its length in days is
- * `edgeGapDays` exactly (`geometry.ts`) for every type, which keeps the dash and the spoken slack one
- * number. Null when there is no waiting, including a lead that overlaps.
+ * The distance between direction chevrons along a link, and the most one link may carry.
  *
- * It is read off the endpoints' already-computed rects rather than re-derived from their dates. The painter needs this per link per frame, and re-parsing four dates
- * per link is exactly what the frame's rect cache exists to prevent (`paint.rect-cache-budget`
- * pins that adding links adds no date parsing).
+ * **40 px, the reference's own rhythm** (NetPoint grammar M3, spec §4.2 G5: about every 41 px on the
+ * product owner's picture, `reference-observations.md`). It was 56. A reader following a long link
+ * should meet a mark before losing the direction, and the reference's spacing is the one the product
+ * owner chose to copy.
  *
- * For a bar the two agree to the pixel: a rect's edges ARE `screenXOfDay` of its start and its
- * finish's right edge. A milestone's diamond is a few pixels wider than its day, so there the
- * waiting run ends at the glyph the line actually meets, which is the honest place for it.
+ * **The cap stays at six.** G5 raises it only if FC-G7's paint reading allows, and ADR-0154 D4 bounds
+ * the layer by it (M0-T4 P3: at most six marks per visible link at the overview tier). At 40 px the
+ * cap binds at 280 px of path rather than 392, so on a longer link the six marks are spread evenly
+ * along it instead of bunching in its first stretch and leaving the rest bare (`chevronsAlong`).
  */
-export function waitingSpanX(args: {
-  type: DependencyType;
-  pred: { x: number; w: number };
-  succ: { x: number; w: number };
-  lagPx: number;
-}): { x0: number; x1: number } | null {
-  const { type, pred, succ, lagPx } = args;
-  const x0 = (type === 'FS' || type === 'FF' ? pred.x + pred.w : pred.x) + lagPx;
-  const x1 = type === 'FS' || type === 'SS' ? succ.x : succ.x + succ.w;
-  return x1 > x0 ? { x0, x1 } : null;
-}
-
-/**
- * A polyline cut into the runs that lie inside `[x0, x1]` (waiting) and the runs that do not.
- *
- * A horizontal segment is clipped at the two boundaries. A vertical segment is waiting when its x
- * lies strictly inside the interval, and solid otherwise, so a corridor on a boundary stays solid.
- * Runs keep the line's direction and are returned in order along it. Consecutive runs share their
- * boundary point, which is what lets a recorder stitch them back into one link.
- */
-export function splitRunsByX(
-  line: readonly Point[],
-  x0: number,
-  x1: number,
-): { solid: Point[][]; waiting: Point[][] } {
-  const solid: Point[][] = [];
-  const waiting: Point[][] = [];
-  let run: Point[] = [];
-  let runWaiting: boolean | null = null;
-  const inside = (x: number): boolean => x > x0 && x < x1;
-  const push = (p: Point, isWaiting: boolean): void => {
-    if (runWaiting !== isWaiting) {
-      if (run.length >= 2) (runWaiting ? waiting : solid).push(run);
-      const last = run[run.length - 1];
-      run = last ? [last] : [];
-      runWaiting = isWaiting;
-    }
-    const tail = run[run.length - 1];
-    if (!tail || tail.x !== p.x || tail.y !== p.y) run.push(p);
-  };
-  for (let i = 1; i < line.length; i += 1) {
-    const a = line[i - 1]!;
-    const b = line[i]!;
-    if (run.length === 0) run = [{ x: a.x, y: a.y }];
-    if (a.x === b.x) {
-      push({ x: b.x, y: b.y }, inside(a.x));
-      continue;
-    }
-    // A horizontal (or, defensively, any sloped) segment: cut at each boundary it crosses, in the
-    // direction of travel, and classify each piece by its midpoint.
-    const cuts = [x0, x1]
-      .filter((c) => (c - a.x) * (c - b.x) < 0)
-      .sort((p, q) => (b.x > a.x ? p - q : q - p));
-    const t = (x: number): Point => {
-      const k = (x - a.x) / (b.x - a.x);
-      return { x, y: a.y + k * (b.y - a.y) };
-    };
-    let from = a;
-    for (const c of [...cuts.map(t), { x: b.x, y: b.y }]) {
-      push(c, inside((from.x + c.x) / 2));
-      from = c;
-    }
-  }
-  if (run.length >= 2 && runWaiting !== null) (runWaiting ? waiting : solid).push(run);
-  return { solid, waiting };
-}
-
-/** The distance between direction chevrons along a link, and the most one link may carry. */
-export const CHEVRON_SPACING_PX = 56;
+export const CHEVRON_SPACING_PX = 40;
 export const CHEVRON_MAX_PER_LINK = 6;
 /**
  * A chevron's length along the line and its half-width across it. Half the routed arrowhead's
@@ -124,8 +53,9 @@ export const CHEVRON_HALF_W_PX = 2.5;
 
 /**
  * The filled direction chevrons along a link: one every {@link CHEVRON_SPACING_PX} of path, at
- * most {@link CHEVRON_MAX_PER_LINK}, none within half a spacing of either end (the start sits on a
- * node glyph and the end already has the arrowhead).
+ * most {@link CHEVRON_MAX_PER_LINK} (spread evenly along a link long enough for the cap to bind),
+ * none within half a step of either end (the start sits on a node glyph and the end already has the
+ * arrowhead).
  *
  * The cap is what bounds the layer at Fit on a plan of thousands of links: the cost is at most six
  * triangles per visible link, whatever the zoom.
@@ -137,7 +67,9 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
   }
   const out: [Point, Point, Point][] = [];
   if (total < CHEVRON_SPACING_PX * 2) return out;
-  let next = CHEVRON_SPACING_PX;
+  // Where the cap would bind, widen the step so the capped marks span the whole link.
+  const step = Math.max(CHEVRON_SPACING_PX, total / (CHEVRON_MAX_PER_LINK + 1));
+  let next = step;
   let walked = 0;
   for (let i = 1; i < line.length && out.length < CHEVRON_MAX_PER_LINK; i += 1) {
     const a = line[i - 1]!;
@@ -147,7 +79,7 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
     const ux = (b.x - a.x) / len;
     const uy = (b.y - a.y) / len;
     while (next <= walked + len && out.length < CHEVRON_MAX_PER_LINK) {
-      if (next > total - CHEVRON_SPACING_PX / 2) return out;
+      if (next > total - step / 2) return out;
       const d = next - walked;
       // Keep a chevron clear of a corner so its barbs never straddle two segments.
       if (d >= CHEVRON_LEN_PX) {
@@ -160,11 +92,39 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
           { x: baseX + uy * CHEVRON_HALF_W_PX, y: baseY - ux * CHEVRON_HALF_W_PX },
         ]);
       }
-      next += CHEVRON_SPACING_PX;
+      next += step;
     }
     walked += len;
   }
   return out;
+}
+
+/**
+ * Where a link's GAP label is centred (NetPoint grammar M3-T3): the midpoint of the longest stretch
+ * of the route's horizontal segments that lies inside the waiting interval `[x0, x1]`, provided that
+ * stretch is at least `minPx` long; otherwise nowhere, and the label is withheld.
+ *
+ * Only horizontal segments are candidates, because the waiting interval is a span of time and only a
+ * horizontal run of a time-scaled diagram measures time. Only the link's own segments, so the label
+ * can only ever sit on the line it labels.
+ */
+export function gapLabelAt(
+  line: readonly Point[],
+  x0: number,
+  x1: number,
+  minPx: number,
+): Point | null {
+  let best: { x: number; y: number; len: number } | null = null;
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    if (a.y !== b.y) continue;
+    const lo = Math.max(Math.min(a.x, b.x), x0);
+    const hi = Math.min(Math.max(a.x, b.x), x1);
+    const len = hi - lo;
+    if (len >= minPx && (best === null || len > best.len)) best = { x: (lo + hi) / 2, y: a.y, len };
+  }
+  return best ? { x: best.x, y: best.y } : null;
 }
 
 /** A lag as a planner writes it: `+2d`, `−1d` (a true minus sign, not a hyphen). */

@@ -473,8 +473,14 @@ jobs:
       # original omission, because the promotion M1-T5 specified had been
       # skipped — so as far as the contract was concerned `apps/web` depended on
       # neither. Ordered before `@repo/seed`, which imports it.
+      #
+      # `@repo/seed-http` is here for the NetPoint grammar journeys, which seed the reference plan by
+      # running `@repo/seed-cli` in a subprocess (`e2e-netpoint-grammar/support.ts`). `tsx` resolves
+      # workspace packages through `exports.default`, so the seeder needs `seed-http/dist` and fails
+      # with ERR_MODULE_NOT_FOUND without it — green locally, where an old `dist/` is lying there, and
+      # red on the first clean runner. Ordered after `@repo/seed`, which it imports.
       - name: Build shared packages
-        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build && pnpm --filter @repo/engine-conformance build && pnpm --filter @repo/seed build
+        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build && pnpm --filter @repo/engine-conformance build && pnpm --filter @repo/seed build && pnpm --filter @repo/seed-http build
 
       - name: Generate Prisma client
         run: pnpm --filter @repo/api prisma:generate
@@ -831,6 +837,16 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:arrange
 
+      # The NetPoint grammar (playwright.netpoint-grammar.config.ts, docs/specs/netpoint-grammar/).
+      # It drives the real canvas on the seeded NetPoint reference plan with the pen enforced. Each
+      # milestone's colour change is asserted where the painter reads it: the token on the scene
+      # canvas, and the painted pixels. The three canvas colour traps this repository has shipped
+      # (ADR-0102, ADR-0100 M4, ADR-0121) are invisible to jsdom, which resolves no custom property
+      # and has no canvas. Runs after the prior suites tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (NetPoint grammar)
+        if: ${{ matrix.shard == 4 }}
+        run: pnpm --filter @repo/web test:e2e:netpoint-grammar
+
       # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
       # AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
       # membership write is per-row optimistic-locked (a mocked fetch accepts any version, so the
@@ -993,7 +1009,9 @@ jobs:
       # nav link, and that the `/me` feed is scoped by ACTOR — the teammate is the SUBJECT of the
       # role change and must not see it. Runs after the prior suites tear down their servers.
       - name: Web end-to-end tests (audit log flag on)
-        if: ${{ matrix.shard == 4 }}
+        # Moved from shard 4 at NetPoint grammar M5, when that suite's growth took shard 4 to 598 s
+        # against the 593 s budget; this one is 31 s and shard 3 had the room.
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:audit
 
       # ADR-0074 M5-T3. Two steps, because `AUTH_REQUIRE_EMAIL_VERIFICATION` is a server-boot

@@ -8,6 +8,7 @@ import {
   compareObjectives,
   countCrossings,
   evaluateLayout,
+  LAYOUT_CONTACT_REACH_PX,
   type LayoutObjective,
   type LayoutScene,
 } from './layout-objective';
@@ -177,5 +178,21 @@ describe('the objective is pure', () => {
 
   it('does not import the CPM engine', () => {
     expect(src).not.toMatch(/from\s+['"][^'"]*(engine|schedule)[^'"]*['"]/);
+  });
+});
+
+describe("the contact reach is the layout's own, not the painted node (NetPoint grammar §4.13 A2)", () => {
+  it('holds the reach ADR-0152 was measured with, whatever the node is drawn at', () => {
+    expect(LAYOUT_CONTACT_REACH_PX).toBe(5);
+  });
+
+  it('never reads NODE_RADIUS, so a visual change to the node cannot move a lane', () => {
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'layout-objective.ts'),
+      'utf8',
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(source).not.toMatch(/\bNODE_RADIUS\b/);
   });
 });

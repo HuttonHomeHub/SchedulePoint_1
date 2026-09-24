@@ -92,7 +92,7 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
 
   it('resolvePrintPalette carries LIGHT fallbacks for the same three tiers (total contract)', () => {
     const palette = resolvePrintPalette(document.documentElement);
-    expect(palette.gridLineDay).toBe('#dee0e2');
+    expect(palette.gridLineDay).toBe('#eceeef');
     expect(palette.gridLineMonth).toBe('#72777e');
     expect(palette.gridLineYear).toBe('#595e66');
   });
@@ -139,7 +139,7 @@ describe('non-working wash ink (nonWorking)', () => {
 
   it('resolvePrintPalette carries a light fallback for the same entry', () => {
     const palette = resolvePrintPalette(document.documentElement);
-    expect(palette.nonWorking).toBe('#e9eef4');
+    expect(palette.nonWorking).toBe('#f8fafc');
   });
 });
 

@@ -53,8 +53,13 @@ const PALETTE: TsldPalette = {
   laneRule: '#9c9c9c',
   linkMinor: '#80848b',
   linkDriving: '#3b6fbf',
+  linkMark: '#3d2070',
+  attachDot: '#3d2070',
   edge: '#333',
   bar: '#44f',
+  nodeRim: '#44f',
+  nodeRimNear: '#fa0',
+  nodeRimCritical: '#f00',
   critical: '#f00',
   nearCritical: '#fa0',
   outline: '#fff',
@@ -196,7 +201,24 @@ interface Case {
    * which a vertical-extent recorder can see, and neither of which FC-6 is about.
    */
   readonly geometryMatchesPlainBar?: true;
+  /**
+   * The same scene WITHOUT the mark this case is named for. A two-activity case always differs
+   * from a plain bar, so the plain-bar limb cannot tell whether the mark itself was drawn; this
+   * can. The case must lay down ink its control does not.
+   */
+  readonly withoutMark?: TsldScene;
 }
+
+/** The default view block, reused by the link cases so each can add one toggle to it. */
+const LINK_VIEW: NonNullable<TsldScene['view']> = {
+  dayGrid: true,
+  monthGrid: true,
+  yearGrid: true,
+  today: true,
+  nonWorking: true,
+  labels: true,
+  lateOverlay: false,
+};
 
 const CASES: readonly Case[] = [
   { name: 'task bar', scene: sceneOf([activity({ id: 'plain' })]) },
@@ -315,6 +337,131 @@ const CASES: readonly Case[] = [
       ],
     }),
   },
+  /**
+   * **The NetPoint grammar's marks** (M6 gate pass; `conditions.md` FC-G5 named them and M2–M5
+   * added none). The link marks need two activities, so each case puts both in the subject lane,
+   * one after the other, with a waiting link between them: what is measured is still one lane's ink.
+   */
+  {
+    name: 'critical milestone triangle with its outline',
+    scene: sceneOf([
+      activity({
+        id: 'mc',
+        type: 'START_MILESTONE',
+        earlyStart: '2026-01-06',
+        earlyFinish: '2026-01-06',
+        isCritical: true,
+      }),
+    ]),
+  },
+  {
+    name: 'gap label on a waiting link',
+    scene: sceneOf(
+      [
+        activity({ id: 'ga', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
+        activity({ id: 'gb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+      ],
+      {
+        edges: [{ id: 'g1', predecessorId: 'ga', successorId: 'gb', type: 'FS', isDriving: false }],
+        view: { ...LINK_VIEW, linkSlack: true },
+      },
+    ),
+    withoutMark: sceneOf(
+      [
+        activity({ id: 'ga', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
+        activity({ id: 'gb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+      ],
+      {
+        edges: [{ id: 'g1', predecessorId: 'ga', successorId: 'gb', type: 'FS', isDriving: false }],
+        view: { ...LINK_VIEW, linkSlack: false },
+      },
+    ),
+  },
+  {
+    name: 'lag plate',
+    scene: sceneOf(
+      [
+        activity({ id: 'la', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
+        activity({ id: 'lb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+      ],
+      {
+        edges: [
+          {
+            id: 'l1',
+            predecessorId: 'la',
+            successorId: 'lb',
+            type: 'FS',
+            isDriving: false,
+            lagDays: 2,
+          },
+        ],
+        view: { ...LINK_VIEW, linkSlack: true },
+      },
+    ),
+    withoutMark: sceneOf(
+      [
+        activity({ id: 'la', earlyStart: '2026-01-02', earlyFinish: '2026-01-05' }),
+        activity({ id: 'lb', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+      ],
+      {
+        edges: [{ id: 'l1', predecessorId: 'la', successorId: 'lb', type: 'FS', isDriving: false }],
+        view: { ...LINK_VIEW, linkSlack: true },
+      },
+    ),
+  },
+  {
+    name: 'attachment dot',
+    scene: sceneOf(
+      [
+        activity({ id: 'da', earlyStart: '2026-01-02', earlyFinish: '2026-01-09' }),
+        activity({ id: 'db', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+      ],
+      {
+        edges: [
+          {
+            id: 'd1',
+            predecessorId: 'da',
+            successorId: 'db',
+            type: 'SS',
+            isDriving: false,
+            lagDays: 2,
+          },
+        ],
+      },
+    ),
+    // The same link joined at the bar's start: no lag, so nothing partway along it.
+    withoutMark: sceneOf(
+      [
+        activity({ id: 'da', earlyStart: '2026-01-02', earlyFinish: '2026-01-09' }),
+        activity({ id: 'db', earlyStart: '2026-01-20', earlyFinish: '2026-01-22' }),
+      ],
+      {
+        edges: [{ id: 'd1', predecessorId: 'da', successorId: 'db', type: 'SS', isDriving: false }],
+      },
+    ),
+  },
+  {
+    // A name wraps only where it would otherwise truncate, and it truncates only against a
+    // neighbour: alone it runs into free room and draws exactly what a plain bar draws, which is
+    // what this case's first version did, and the plain-bar limb below reported it.
+    name: 'name wrapped onto two lines',
+    scene: sceneOf([
+      activity({
+        id: 'wrap',
+        label: 'Mechanical and electrical first fix to the east wing plant rooms',
+        earlyStart: '2026-01-02',
+        earlyFinish: '2026-01-05',
+      }),
+      activity({ id: 'next', label: 'B', earlyStart: '2026-01-09', earlyFinish: '2026-01-12' }),
+    ]),
+    // **Pinned, and it is the recorder rather than the ink.** The first measurement put the upper
+    // line 2.6 px above the lane: spec §4.13 A4 was unbuilt, and it is built now (`WRAP_LINE_H`).
+    // What remains is 0.35 px, because `ink-extents.ts` charges an 11 px line 13.2 px (ascent 0.9
+    // plus descent 0.3, deliberately generous) against A4's 12.5 px line. The LINE BOX fits its
+    // lane, asserted exactly in `paint.netpoint-text.test.ts`. Pinned rather than tolerated, so a
+    // wrap that moves any further up fails here.
+    escapes: ['fillText -0.35000000000002274..12.850000000000023 of 0..60'],
+  },
 ];
 
 const CHROME = inkOf(sceneOf([]));
@@ -363,6 +510,15 @@ describe('FC-6 — every glyph and decoration draws inside its own lane', () => 
     if (name !== 'task bar' && subject.geometryMatchesPlainBar !== true) {
       expect(marks.map(keyOf).sort()).not.toEqual(PLAIN_BAR_INK);
     }
+    if (subject.withoutMark) {
+      const control = multiset(subjectInk(subject.withoutMark));
+      const extra = marks.filter((m) => {
+        const left = control.get(keyOf(m)) ?? 0;
+        if (left > 0) control.set(keyOf(m), left - 1);
+        return left === 0;
+      });
+      expect(extra.length).toBeGreaterThan(0);
+    }
     const escaped = marks.filter((m) => m.top < LANE_TOP || m.bottom > LANE_BOTTOM);
     expect(
       escaped.map(
@@ -407,10 +563,11 @@ describe('FC-6 — every glyph and decoration draws inside its own lane', () => 
 
   /**
    * The census limb (ADR-0093's rule: a roster assertion that found nothing passes vacuously).
-   * Seventeen is what M3-T1 enumerated; a case removed rather than replaced fails here.
+   * Seventeen is what M3-T1 enumerated and the NetPoint grammar's gate pass added five; a case
+   * removed rather than replaced fails here.
    */
   it('the enumeration is not silently shrinking', () => {
-    expect(CASES.length).toBe(17);
+    expect(CASES.length).toBe(22);
     expect(new Set(CASES.map((c) => c.name)).size).toBe(CASES.length);
   });
 

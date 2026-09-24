@@ -2,6 +2,7 @@ import type { TsldScene } from './paint';
 import {
   activityRect,
   BAR_HEIGHT,
+  barGlyphKind,
   bundleCorridors,
   chooseCorridorsByCrossing,
   corridorGap,
@@ -67,6 +68,14 @@ export interface RouteFrame {
   /** The draggable lag handles at rest. */
   readonly lagHandlePoints: Point[] | null;
   /**
+   * **Where a link joins partway along a bar** (NetPoint grammar M3-T5, spec §4.2 G12): every
+   * anchor strictly inside a bar's span, which is where no node glyph sits — an SS or FF link with
+   * a lag, typically. Collected on the refreshed, time-true path only (null otherwise), for every
+   * visible edge in the frame, whether or not the lag drag is armed; the painter decides whether to
+   * draw them (the working tier and finer). Each point sits on the bar's centre-line.
+   */
+  readonly attachPoints: Point[] | null;
+  /**
    * The emphasised lag handle. A field on this object rather than a copy, because `lineOf` can
    * still be called after `routeFrame` returns and may set it.
    */
@@ -127,6 +136,22 @@ export function routeFrame(
   // where the anchors are time-true (the geometry `classifyHit` grabs), and only wanted where
   // the drag is actually armed. Flag-off ⇒ null ⇒ not one extra call in the paint log.
   const lagHandlePoints: Point[] | null = lagRuns && scene.lagHandles === true ? [] : null;
+  const attachPoints: Point[] | null = lagRuns ? [] : null;
+  /**
+   * True only while the frame's own edges are being routed. `lineOf` is also called afterwards by
+   * the revision overlay with synthetic edges for REMOVED links, and a dot for a link that no longer
+   * exists would be a mark the live diagram does not have.
+   */
+  let collecting = false;
+  /** An anchor on `a` strictly inside its bar's span: where a link joins partway along a bar. */
+  const midBar = (a: RenderActivity, anchor: Point): boolean => {
+    if (barGlyphKind(a.type) !== 'bar') return false;
+    const r = activityRect(a, view, scene.dataDate, rectCache);
+    if (r === null) return false;
+    // Half a pixel in from each edge, so an anchor that lands on an edge (a node) is not dotted.
+    const inside = { from: r.x + 0.5, to: r.x + r.w - 0.5 };
+    return anchor.x > inside.from && anchor.x < inside.to;
+  };
   // The one per-edge geometry seam: flag-off it is exactly the M1 branch (time-true or legacy);
   // refreshed it composes the SAME anchor mapping with the fan-out offsets + elbow shift, and
   // collects the edge's lag run while the anchors are at hand.
@@ -159,6 +184,11 @@ export function routeFrame(
       rectCache,
     );
     if (!anchors) return null;
+    // Read-only collection beside the handles: it changes no returned line (FC-G1).
+    if (attachPoints && collecting) {
+      if (midBar(pred, anchors.pred)) attachPoints.push({ x: anchors.pred.x, y: anchors.pred.y });
+      if (midBar(succ, anchors.succ)) attachPoints.push({ x: anchors.succ.x, y: anchors.succ.y });
+    }
     if (lagRuns && lag !== 0) {
       // FS/FF walk the successor end, SS/SF the predecessor end — the SAME choice `classifyHit`
       // makes for the draggable anchor, so the handle can never land on the wrong end.
@@ -210,6 +240,7 @@ export function routeFrame(
    * exactly once each, as they were.
    */
   const lines = new Map<RenderEdge, Point[]>();
+  collecting = true;
   for (const edge of scene.edges) {
     if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
     const pred = byId.get(edge.predecessorId);
@@ -218,6 +249,7 @@ export function routeFrame(
     const line = lineOf(edge, pred, succ);
     if (line) lines.set(edge, line);
   }
+  collecting = false;
   if (laneIndex && lines.size > 1) {
     const corridors = [...lines.entries()].map(([edge, line]) => ({
       line,
@@ -256,6 +288,7 @@ export function routeFrame(
     lines,
     lagRuns,
     lagHandlePoints,
+    attachPoints,
     get activeLagHandle() {
       return out.activeLagHandle;
     },

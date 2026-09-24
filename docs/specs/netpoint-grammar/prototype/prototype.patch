@@ -1,0 +1,314 @@
+diff --git a/apps/web/src/features/tsld/render/geometry.ts b/apps/web/src/features/tsld/render/geometry.ts
+index 748c2bff..6bd247fe 100644
+--- a/apps/web/src/features/tsld/render/geometry.ts
++++ b/apps/web/src/features/tsld/render/geometry.ts
+@@ -77,7 +77,7 @@ export const LANE_HEIGHT = 60;
+  * bar in its lane is an x-overlap question the bar's height does not enter. Only M2 served that,
+  * and "we made the bars thinner" is the most natural wrong thing to believe about this epic.
+  */
+-export const BAR_HEIGHT = 5;
++export const BAR_HEIGHT = 6;
+ /**
+  * The vertical clearance between a lane's edge and the bar inside it — half the leftover row.
+  *
+@@ -478,7 +478,7 @@ export const FONT_STACK =
+  * a width measured in the fallback face before the woff2 arrives would poison the memo for the
+  * session.
+  */
+-export const LABEL_FONT = `11px ${FONT_STACK}`;
++export const LABEL_FONT = `12px ${FONT_STACK}`;
+ 
+ /**
+  * Discrete zoom stops → pixels per day. A continuous slider interpolates between them;
+diff --git a/apps/web/src/features/tsld/render/link-marks.ts b/apps/web/src/features/tsld/render/link-marks.ts
+index e1066f67..4d5bcc44 100644
+--- a/apps/web/src/features/tsld/render/link-marks.ts
++++ b/apps/web/src/features/tsld/render/link-marks.ts
+@@ -112,14 +112,14 @@ export function splitRunsByX(
+ }
+ 
+ /** The distance between direction chevrons along a link, and the most one link may carry. */
+-export const CHEVRON_SPACING_PX = 56;
+-export const CHEVRON_MAX_PER_LINK = 6;
++export const CHEVRON_SPACING_PX = 40;
++export const CHEVRON_MAX_PER_LINK = 40;
+ /**
+  * A chevron's length along the line and its half-width across it. Half the routed arrowhead's
+  * size (`ARROWHEAD_ROUTED_PX` 8, half-width 3), so a chevron reads as "this way" and never as a
+  * second terminal head.
+  */
+-export const CHEVRON_LEN_PX = 4;
++export const CHEVRON_LEN_PX = 7;
+ export const CHEVRON_HALF_W_PX = 2.5;
+ 
+ /**
+diff --git a/apps/web/src/features/tsld/render/paint.ts b/apps/web/src/features/tsld/render/paint.ts
+index aa5a13d4..af688cce 100644
+--- a/apps/web/src/features/tsld/render/paint.ts
++++ b/apps/web/src/features/tsld/render/paint.ts
+@@ -853,7 +853,12 @@ function drawRefreshedBar(
+   if (glyph === 'milestone') {
+     const cx = rect.x + rect.w / 2;
+     const cy = rect.y + rect.h / 2;
+-    traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
++    const r = MILESTONE_RADIUS;
++    ctx.beginPath();
++    ctx.moveTo(cx - r, cy - r * 0.8);
++    ctx.lineTo(cx + r, cy - r * 0.8);
++    ctx.lineTo(cx, cy + r * 0.9);
++    ctx.lineTo(cx - r, cy - r * 0.8);
+     ctx.fill();
+     ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
+     // A milestone keeps its outline as the definition stroke. It draws NO nodes: the diamond is
+@@ -926,11 +931,13 @@ function drawRefreshedBar(
+ 
+   const rung = criticalityRung(activity);
+   const filled = rung === 'critical';
+-  ctx.strokeStyle = rung === 'none' ? palette.barStroke : palette.outline;
++  const barInk = ctx.fillStyle;
++  ctx.strokeStyle = barInk;
++  ctx.fillStyle = filled ? barInk : palette.canvasGround;
+   // **A RING is near-critical's rung**: heavier than the calm hairline, hollow where critical is
+   // solid. Three shapes, so hue is never the only thing separating the two states a planner most
+   // needs to tell apart — which is what M3-T3's boolean cost and the accessibility gate caught.
+-  ctx.lineWidth = rung === 'near' ? EMPHASIS_STROKE_W : 1;
++  ctx.lineWidth = rung === 'near' ? 2.5 : 1.5;
+   for (const centre of nodeCentres(rect)) {
+     const box: Rect = {
+       x: centre.x - NODE_RADIUS,
+@@ -939,7 +946,7 @@ function drawRefreshedBar(
+       h: NODE_RADIUS * 2,
+     };
+     if (beginRoundedRect(ctx, box, NODE_RADIUS)) {
+-      if (filled) ctx.fill();
++      ctx.fill();
+       ctx.stroke();
+     } else if (filled) {
+       ctx.fillRect(box.x, box.y, box.w, box.h);
+@@ -1084,6 +1091,7 @@ export function paintScene(
+     ): void => {
+       ctx.strokeStyle = colour;
+       ctx.lineWidth = width;
++      ctx.setLineDash([3, 3]);
+       ctx.beginPath();
+       for (const d of days) {
+         const raw = Math.round(screenXOfDay(d, view));
+@@ -1092,6 +1100,7 @@ export function paintScene(
+         ctx.lineTo(x, size.height);
+       }
+       ctx.stroke();
++      ctx.setLineDash([]);
+     };
+     if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
+       const days: number[] = [];
+@@ -1099,7 +1108,7 @@ export function paintScene(
+       strokeTier(days, palette.gridLineDay, 1, true);
+     }
+     if (toggles.monthGrid) strokeTier(bounds.months, palette.gridLineMonth, 1, true);
+-    if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, 2, false);
++    if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, 1, true);
+   } else {
+     // Flag-off: the single `gridLine` pass, byte-for-byte today's paint. Batched into one stroke.
+     ctx.strokeStyle = palette.gridLine;
+@@ -1136,6 +1145,7 @@ export function paintScene(
+   {
+     ctx.strokeStyle = palette.laneRule;
+     ctx.lineWidth = 1;
++    ctx.setLineDash([1, 3]);
+     ctx.beginPath();
+     const firstLane = Math.floor(laneAtScreenY(0, view));
+     const lastLane = Math.ceil(laneAtScreenY(size.height, view));
+@@ -1145,6 +1155,7 @@ export function paintScene(
+       ctx.lineTo(size.width, y);
+     }
+     ctx.stroke();
++    ctx.setLineDash([]);
+   }
+ 
+   // Layer 2: dependency edges (only when an endpoint is visible). Driving edges — the
+@@ -1211,7 +1222,6 @@ export function paintScene(
+       const plates: { text: string; line: Point[] }[] = [];
+       const platesOn =
+         (toggles.labels ?? true) &&
+-        view.pxPerDay >= LABEL_MIN_PX_PER_DAY &&
+         typeof ctx.fillText === 'function' &&
+         typeof ctx.measureText === 'function';
+       for (const edge of scene.edges) {
+@@ -1229,7 +1239,7 @@ export function paintScene(
+           bucket = {
+             ink: highlighted ? palette.selection : inkOf(key),
+             // The highlight is one weight step heavier than the link it lights (ADR-0052 M5).
+-            width: (edge.isDriving ? 2 : 1) + (highlighted ? 1 : 0),
++            width: (edge.isDriving ? 2.5 : 1.5) + (highlighted ? 1 : 0),
+             solid: [],
+             waiting: [],
+             marks: [],
+@@ -1239,7 +1249,7 @@ export function paintScene(
+         const predRect = activityRect(pred, view, scene.dataDate, rectCache);
+         const succRect = activityRect(succ, view, scene.dataDate, rectCache);
+         const waiting =
+-          !edge.isDriving && scene.solidWaiting !== true && predRect && succRect
++          false && predRect && succRect
+             ? waitingSpanX({
+                 type: edge.type,
+                 pred: predRect,
+@@ -1265,6 +1275,17 @@ export function paintScene(
+         }
+         const lag = edge.lagDays ?? 0;
+         if (platesOn && lag !== 0) plates.push({ text: formatLag(lag), line });
++        else if (platesOn && pred.earlyStart && pred.earlyFinish && succ.earlyStart && succ.earlyFinish) {
++          const gap = edgeGapDays({
++            type: edge.type,
++            predStartDay: axisDayOf(pred.type, scene.dataDate, pred.earlyStart),
++            predFinishDay: axisDayOf(pred.type, scene.dataDate, pred.earlyFinish),
++            succStartDay: axisDayOf(succ.type, scene.dataDate, succ.earlyStart),
++            succFinishDay: axisDayOf(succ.type, scene.dataDate, succ.earlyFinish),
++            lagDays: 0,
++          });
++          if (gap > 0) plates.push({ text: `${String(gap)}d`, line });
++        }
+       }
+       const drawBucket = (bucket: Bucket): void => {
+         ctx.lineWidth = bucket.width;
+@@ -1281,7 +1302,7 @@ export function paintScene(
+           ctx.setLineDash([]);
+         }
+         if (bucket.marks.length > 0) {
+-          ctx.fillStyle = bucket.ink;
++          ctx.fillStyle = bucket.ink === palette.linkMinor ? palette.linkDriving : bucket.ink;
+           ctx.beginPath();
+           for (const [tip, left, right] of bucket.marks) {
+             ctx.moveTo(tip.x, tip.y);
+@@ -1311,6 +1332,7 @@ export function paintScene(
+           const at = lagPlateAt(line, w, SLACK_CHIP_H);
+           if (!at) continue;
+           ctx.fillStyle = palette.canvasGround;
++          ctx.strokeStyle = palette.linkDriving;
+           ctx.fillRect(at.x - w / 2, at.y - SLACK_CHIP_H / 2, w, SLACK_CHIP_H);
+           ctx.strokeRect(
+             at.x - w / 2 + 0.5,
+@@ -1318,7 +1340,7 @@ export function paintScene(
+             w - 1,
+             SLACK_CHIP_H - 1,
+           );
+-          ctx.fillStyle = palette.labelBeside;
++          ctx.fillStyle = palette.linkDriving;
+           ctx.fillText(text, at.x, at.y);
+         }
+         ctx.textAlign = 'left';
+@@ -2338,7 +2360,7 @@ export function paintScene(
+   // before the field existed) ⇒ not one call.
+   // No zoom gate (#378): this layer exists only on the reserved-row path, and it never leaves its
+   // own bar — the room test below is the whole of its legibility rule.
+-  if (reservesTextRows && (toggles.labels ?? true)) {
++  if (false && reservesTextRows && (toggles.labels ?? true)) {
+     // **Every context write is lazy**, so a frame with nothing to print here costs nothing: the
+     // first draft set the font, baseline and alignment up front and the golden log caught three
+     // writes on a scene whose bars carry no duration — a per-frame cost for an empty layer.
+diff --git a/apps/web/src/features/tsld/render/palette.ts b/apps/web/src/features/tsld/render/palette.ts
+index d70fbaea..651d3101 100644
+--- a/apps/web/src/features/tsld/render/palette.ts
++++ b/apps/web/src/features/tsld/render/palette.ts
+@@ -161,7 +161,7 @@ export function resolveTsldPalette(root: Element): TsldPalette {
+     // The non-driving link (NetPoint-layout M2). Unprefixed and resolved on the canvas element, like
+     // every name here, so the canvas scope governs it (ADR-0102).
+     linkMinor: token('--canvas-link-minor', '#8a8f98'),
+-    linkDriving: token('--primary', '#3b6fbf'),
++    linkDriving: token('--canvas-link-driving', '#3b6fbf'),
+     edge: token('--muted-foreground', '#7a8090'),
+     bar: token('--primary', '#3b6fbf'),
+     critical: token('--destructive', '#c83c3c'),
+diff --git a/apps/web/src/features/tsld/render/render-model.ts b/apps/web/src/features/tsld/render/render-model.ts
+index 2b12b2c8..2d35ef99 100644
+--- a/apps/web/src/features/tsld/render/render-model.ts
++++ b/apps/web/src/features/tsld/render/render-model.ts
+@@ -206,7 +206,7 @@ export function summaryTabRects(rect: Rect): [Rect, Rect] {
+  * be visibly larger than the line it terminates without becoming a blob. Twice the bar's height
+  * puts it at 10 px across for a 5 px bar, which is the reference's own proportion.
+  */
+-export const NODE_RADIUS = Math.max(2, BAR_HEIGHT);
++export const NODE_RADIUS = 7;
+ 
+ /**
+  * Where a bar's two node glyphs sit: on the bar's centre-line, at each end.
+diff --git a/apps/web/src/features/tsld/render/to-render-model.ts b/apps/web/src/features/tsld/render/to-render-model.ts
+index ae49a28b..066099e2 100644
+--- a/apps/web/src/features/tsld/render/to-render-model.ts
++++ b/apps/web/src/features/tsld/render/to-render-model.ts
+@@ -69,7 +69,7 @@ export function toRenderActivities(
+     visualDriftDays: source === 'visual' ? a.visualDriftDays : null,
+     laneOverlap: overlapping.has(a.id),
+     constraint: activeConstraintAnchor(a),
+-    label: activityLabel(a),
++    label: a.name,
+     durationDays: a.durationDays,
+     // The same value the row/AT reports — the in-bar progress fill (ADR-0052 M4) draws from it,
+     // so the canvas and the table can never disagree on how complete an activity is.
+diff --git a/apps/web/src/styles/globals.css b/apps/web/src/styles/globals.css
+index 7b393884..1b2f11ed 100644
+--- a/apps/web/src/styles/globals.css
++++ b/apps/web/src/styles/globals.css
+@@ -404,8 +404,8 @@
+      took twelve matrix assertions with it — every one of them in the canvas scope and none in
+      the page. The two milestones are separable in what they DERIVE and not in what they
+      BREAK. M2 still owns the bars, the links, the hatch and the bands. */
+-  --canvas: oklch(0.958 0.004 250);
+-  --canvas-band: oklch(0.976 0.003 250);
++  --canvas: oklch(0.995 0.002 250);
++  --canvas-band: oklch(0.985 0.003 250);
+ 
+   /* The minimap rectangle's frame (ADR-0100 decision 9, M2-T1): a TWO-TONE pair, the
+      `outline`/`handleHalo` precedent, because the measurement said one solid cannot exist —
+@@ -579,7 +579,7 @@
+ 
+   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
+      day vs month must be reliably distinguishable, not merely a hair off --border). */
+-  --canvas-grid-day: oklch(0.905 0.004 250);
++  --canvas-grid-day: oklch(0.94 0.003 250);
+   /* **A month boundary is the axis a planner reads, so it clears WCAG 1.4.11's 3:1** — 0.76 gave
+      2.08:1 against the ground and **1.95:1 against the month band it is most often drawn over**,
+      i.e. a required graphical object below the non-text floor, live. 0.64 gives 3.25 / 3.05.
+@@ -588,8 +588,8 @@
+      this pair. It did not: `token-contrast.test.ts` swept the criticality triple and the closure
+      and had **no PLOT-pack pair at all**. It does now — which is the actual fix; this number is
+      only how that gate passes. */
+-  --canvas-grid-month: oklch(0.568 0.012 254);
+-  --canvas-grid-year: oklch(0.48 0.014 256);
++  --canvas-grid-month: oklch(0.86 0.005 250);
++  --canvas-grid-year: oklch(0.78 0.008 250);
+ 
+   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
+      Corporate's canvas tokens. */
+@@ -639,19 +639,20 @@
+      rung moves what every other rung has to clear. The gates refused all of it, and were right —
+      the design's own weekend tint is a 4.5% wash, so the subtle value was the intended one and
+      the darker bar was my invention. */
+-  --canvas-nonworking: oklch(0.947 0.01 252);
++  --canvas-nonworking: oklch(0.979 0.004 250);
+   /* **The lane hairline** (workspace redesign M4-T2). Deliberately the FAINTEST structural line on
+      the surface — fainter than a day gridline — because it repeats once per lane down the whole
+      diagram and is the most-repeated mark on the picture by a wide margin. It is a rule to sit a
+      bar on, not a boundary to read, so 1.4.11's 3:1 does not apply: it carries no information a
+      reader must perceive, and every bar it aligns is already a shape with its own contrast. */
+-  --canvas-lane-rule: oklch(0.936 0.004 250);
++  --canvas-lane-rule: oklch(0.965 0.002 250);
+   /* **The non-driving link** (NetPoint-layout M2, spec §4.7). Its own token, because the link used
+      to be drawn in `--muted-foreground` — the page's secondary TEXT colour, which nothing chose for
+      a line and which moves whenever the page's text is re-valued (TECH_DEBT #367). A 1 px line a
+      reader follows is a graphical object, so it clears 3:1 on both grounds; it stays quieter than a
+      driving link by WEIGHT, which is the channel that carries drivingness. */
+-  --canvas-link-minor: oklch(0.61 0.008 252);
++  --canvas-link-minor: oklch(0.62 0.09 295);
++  --canvas-link-driving: oklch(0.47 0.13 295);
+ 
+   --radius: 0.625rem;
+   /* ----------------------------------------------------------------------- */
+@@ -841,7 +842,7 @@
+      `--plot-destructive-foreground` and `--plot-warning-foreground` went dark → white in the same
+      edit. That pairing flips as a unit or the picture breaks in a way that reads as a bug rather
+      than a colour. */
+-  --plot-primary: oklch(0.624 0.115 249);
++  --plot-primary: oklch(0.624 0.13 150);
+   --plot-primary-foreground: oklch(0.22 0.02 260);
+   --plot-field: var(--page-field);
+   --plot-field-foreground: var(--page-field-foreground);

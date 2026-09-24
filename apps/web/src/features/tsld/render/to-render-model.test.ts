@@ -170,13 +170,16 @@ describe('toRenderActivities', () => {
     expect(clear.map((r) => r.laneOverlap)).toEqual([false, false]);
   });
 
-  it('pre-builds the name row (code + name, no duration) and carries the duration beside it', () => {
+  it('pre-builds the name row (the name alone, code beside it) and carries the duration', () => {
     // The duration left the name at NetPoint-layout M1 for the centre item under the bar; it is
     // carried as the working-day figure, never re-derived from the drawn span.
     const [row] = toRenderActivities([
       activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 }),
     ]);
-    expect(row!.label).toBe('A1020 Erect steel');
+    // NetPoint grammar M4-T1: the canvas prints the name, and the code travels separately for the
+    // `Activity codes` switch.
+    expect(row!.label).toBe('Erect steel');
+    expect(row!.code).toBe('A1020');
     expect(row!.durationDays).toBe(5);
   });
 

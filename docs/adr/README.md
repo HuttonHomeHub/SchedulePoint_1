@@ -180,3 +180,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0154](0154-a-link-says-what-drives-which-way-and-how-long-it-waits.md)                         | A link says what drives, which way, and how long it waits                       | Accepted           |
 | [0155](0155-a-finish-milestone-is-dated-by-the-day-it-closes.md)                                | A finish milestone is dated by the day it closes                                | Accepted           |
 | [0156](0156-a-schedulepoint-layout-travels-in-an-inert-field.md)                                | A SchedulePoint layout travels in an inert field that only SchedulePoint reads  | Accepted           |
+| [0157](0157-a-marks-class-is-its-hue-and-its-shape.md)                                          | A mark's class is its hue and its shape, and the grid is the quietest mark      | Accepted           |
