@@ -26,10 +26,10 @@
 import { netpointReferencePlan } from '../../seed-cli/src/references/netpoint-power-plant';
 import {
   activityRect,
-  LABEL_LINE_H,
   LANE_HEIGHT,
   rowSlots,
   screenYOfLane,
+  wrappedNameYs,
 } from '../src/features/tsld/render/geometry';
 import { paintScene, type TsldScene } from '../src/features/tsld/render/paint';
 import { NODE_REACH_PX, nodeMarks, type Viewport } from '../src/features/tsld/render/render-model';
@@ -119,8 +119,11 @@ function reading(
   const nameYs = new Set<number>();
   const upperYs = new Set<number>();
   for (let lane = 0; lane < lanes; lane += 1) {
-    nameYs.add(rowSlots(screenYOfLane(lane, view)).nameY);
-    upperYs.add(rowSlots(screenYOfLane(lane, view)).nameY - LABEL_LINE_H);
+    const slots = rowSlots(screenYOfLane(lane, view));
+    nameYs.add(slots.nameY);
+    // A wrapped pair sits at its own two positions (spec §4.13 A4), both of them name lines.
+    nameYs.add(wrappedNameYs(slots).lower);
+    upperYs.add(wrappedNameYs(slots).upper);
   }
   const segments: [Pt, Pt][] = [];
   for (const p of linkPaths(paths)) {

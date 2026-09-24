@@ -150,6 +150,22 @@ export function rowSlots(laneTop: number): RowSlots {
 }
 
 /**
+ * The line height of a name **wrapped onto two lines** (NetPoint grammar, spec §4.13 A4): the two
+ * lines share the pad above the bar, less the gap to it, so the pair fits its lane. 12.5 px at a
+ * 6 px bar in a 60 px row. M4 first stacked the upper line a full {@link LABEL_LINE_H} above the
+ * single-line name row, which is the spec's §4.2 G7 wording and reaches across the lane boundary;
+ * the agreement round's A4 superseded it, and the M6 gate pass found A4 unbuilt when the
+ * lane-containment case for a wrapped name measured the upper line escaping its lane.
+ */
+export const WRAP_LINE_H = (BAR_PAD - ROW_TEXT_GAP_PX) / 2;
+
+/** Where a wrapped name's two lines sit: the lower one against the bar, the upper one above it. */
+export function wrappedNameYs(slots: RowSlots): { lower: number; upper: number } {
+  const lower = slots.barY - ROW_TEXT_GAP_PX - WRAP_LINE_H / 2;
+  return { lower, upper: lower - WRAP_LINE_H };
+}
+
+/**
  * The minimum height (px) of a **pointer target** on the canvas — WCAG 2.2 §2.5.8's 24 px.
  *
  * It exists because the row treatment made the drawn rect and the hit rect different objects for

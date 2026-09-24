@@ -55,12 +55,6 @@ export function drawRoundedPolyline(ctx: Ctx2D, points: Point[]): void {
 }
 
 /**
- * Begin the 4-vertex milestone diamond path centred on (`cx`, `cy`) — the ONE tracing shared by
- * the refreshed bar, the baseline ghost, and the legacy bar layer, so the three can never drift.
- * Left open by default (a `fill` closes it implicitly); `close` traces the final segment back to
- * the top vertex for stroke-only callers (the Ctx2D surface has no closePath).
- */
-/**
  * Begin the **downward triangle** a milestone draws as on the refreshed canvas (NetPoint grammar
  * M5, spec §4.2 G8, CQ-6), centred on (`cx`, `cy`) inside the same `r` envelope the diamond used,
  * so the hit rect, lane containment and every anchor keep their numbers. Its base spans the full
@@ -81,7 +75,13 @@ export function traceMilestoneTriangle(
   if (close) ctx.lineTo(cx - r, cy - 0.7 * r);
 }
 
-/** The milestone glyph for the path in use: the triangle refreshed, the diamond on the legacy path. */
+/**
+ * The milestone glyph for the path in use: the triangle on the refreshed canvas, the diamond on the
+ * legacy path. **Every milestone caller goes through this one dispatch** (the refreshed bar, the
+ * baseline ghost and the legacy bar layer), so the choice of shape is made in one place and the
+ * callers cannot drift apart. It replaced a single diamond tracer that this file described as "the
+ * ONE tracing"; there are two tracers now, and this is the one place that picks between them.
+ */
 export function traceMilestoneGlyph(
   ctx: Ctx2D,
   cx: number,
@@ -94,6 +94,11 @@ export function traceMilestoneGlyph(
   else traceMilestoneDiamond(ctx, cx, cy, r, close);
 }
 
+/**
+ * Begin the 4-vertex milestone diamond path centred on (`cx`, `cy`), the legacy path's glyph.
+ * Left open by default (a `fill` closes it implicitly); `close` traces the final segment back to
+ * the top vertex for stroke-only callers (the Ctx2D surface has no closePath).
+ */
 export function traceMilestoneDiamond(
   ctx: Ctx2D,
   cx: number,

@@ -107,18 +107,21 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 
 describe('activityLabel (shared identity) and centreItemText', () => {
   it('leads with the name and follows it with the code when set (NetPoint grammar M4-T1, R7)', () => {
-    expect(activityLabel(activity({ code: 'A1020', name: 'Erect steel' }))).toBe(
+    expect(activityLabel(activity({ code: 'A1020', name: 'Erect steel' }), false)).toBe(
       'Erect steel, A1020',
     );
-    expect(activityLabel(activity({ code: null, name: 'Erect steel' }))).toBe('Erect steel');
+    expect(activityLabel(activity({ code: null, name: 'Erect steel' }), false)).toBe('Erect steel');
   });
 
   it('prints a code identical to the name once (#376: an imported P6 root WBS node)', () => {
     expect(
-      activityLabel(activity({ code: 'EDF - Hynamics Proposal', name: 'EDF - Hynamics Proposal' })),
+      activityLabel(
+        activity({ code: 'EDF - Hynamics Proposal', name: 'EDF - Hynamics Proposal' }),
+        true,
+      ),
     ).toBe('EDF - Hynamics Proposal');
     // A code that merely STARTS the name is still a code, and is still printed.
-    expect(activityLabel(activity({ code: 'A', name: 'A frame' }))).toBe('A frame, A');
+    expect(activityLabel(activity({ code: 'A', name: 'A frame' }), false)).toBe('A frame, A');
   });
 
   it('the canvas prints the name alone, and the code only while codes are switched on', () => {
@@ -127,15 +130,24 @@ describe('activityLabel (shared identity) and centreItemText', () => {
     expect(canvasLabel(a, true)).toBe('A1020 Erect steel');
     expect(canvasLabel({ code: null, name: 'Erect steel' }, true)).toBe('Erect steel');
     expect(canvasLabel({ code: 'Same', name: 'Same' }, true)).toBe('Same');
-    // WCAG 2.5.3: the default canvas label LEADS the accessible name, and the coded one is still
-    // contained in it word for word.
-    expect(activityLabel(a).startsWith(canvasLabel(a, false))).toBe(true);
-    for (const word of canvasLabel(a, true).split(' ')) expect(activityLabel(a)).toContain(word);
+    // WCAG 2.5.3 needs the printed label inside the accessible name as one contiguous string, in
+    // both states of the switch. The M4 version of this case checked each WORD of the coded label
+    // was present in any order, which `Erect steel, A1020` passes and 2.5.3 does not (the M6
+    // accessibility gate). Both limbs are asserted on the same `withCodes` the canvas uses.
+    for (const withCodes of [false, true]) {
+      expect(activityLabel(a, withCodes).startsWith(canvasLabel(a, withCodes))).toBe(true);
+      expect(
+        describeActivity(activity({ ...a, durationDays: 5 }), { withCodes }).startsWith(
+          canvasLabel(a, withCodes),
+        ),
+      ).toBe(true);
+    }
+    expect(activityLabel(a, true)).toBe('A1020 Erect steel');
   });
 
   it('keeps the name row a leading substring of the accessible name (label-in-name)', () => {
     const a = activity({ code: 'A1020', name: 'Erect steel', durationDays: 5 });
-    expect(describeActivity(a).startsWith(activityLabel(a))).toBe(true);
+    expect(describeActivity(a).startsWith(activityLabel(a, false))).toBe(true);
   });
 
   it('prints the duration and the float left in full, the duration alone short', () => {
@@ -551,36 +563,48 @@ describe('chainNeighbour + announceChainStep', () => {
   ];
 
   it('prefers the driving predecessor over list order', () => {
-    expect(chainNeighbour('x', deps, 'pred')).toEqual({ id: 'p2', name: 'Permit', driving: true });
+    expect(chainNeighbour('x', deps, 'pred', false)).toEqual({
+      id: 'p2',
+      name: 'Permit',
+      driving: true,
+    });
   });
 
   it('falls back to the first tie when none drives', () => {
-    expect(chainNeighbour('x', deps, 'succ')).toEqual({ id: 's1', name: 'Pour', driving: false });
+    expect(chainNeighbour('x', deps, 'succ', false)).toEqual({
+      id: 's1',
+      name: 'Pour',
+      driving: false,
+    });
   });
 
   it('returns null when there is no tie in that direction', () => {
-    expect(chainNeighbour('s1', deps, 'succ')).toBeNull();
+    expect(chainNeighbour('s1', deps, 'succ', false)).toBeNull();
   });
 
   it('names the neighbour as Tier 1 does, name then code (cross-tier consistency)', () => {
     const coded = [
       edge({ predecessor: { id: 'p', code: 'A100', name: 'Survey' }, successor: ep('x', 'X') }),
     ];
-    expect(chainNeighbour('x', coded, 'pred')).toEqual({
+    expect(chainNeighbour('x', coded, 'pred', false)).toEqual({
       id: 'p',
       name: 'Survey, A100',
       driving: false,
     });
-    expect(announceChainStep('pred', chainNeighbour('x', coded, 'pred'))).toBe(
+    expect(announceChainStep('pred', chainNeighbour('x', coded, 'pred', false))).toBe(
       'Predecessor: Survey, A100.',
     );
+    // With codes printed, the neighbour is named as the canvas prints it (WCAG 2.5.3).
+    expect(chainNeighbour('x', coded, 'pred', true)?.name).toBe('A100 Survey');
   });
 
   it('announces the neighbour, flagging a driving tie, and the empty case', () => {
-    expect(announceChainStep('pred', chainNeighbour('x', deps, 'pred'))).toBe(
+    expect(announceChainStep('pred', chainNeighbour('x', deps, 'pred', false))).toBe(
       'Predecessor: Permit, driving.',
     );
-    expect(announceChainStep('succ', chainNeighbour('x', deps, 'succ'))).toBe('Successor: Pour.');
+    expect(announceChainStep('succ', chainNeighbour('x', deps, 'succ', false))).toBe(
+      'Successor: Pour.',
+    );
     expect(announceChainStep('succ', null)).toBe('No successors.');
   });
 });
@@ -635,7 +659,8 @@ describe('a11y-string parity across the M4 visual refresh', () => {
   });
 
   it('pins the accessible identity byte-for-byte (name, then code; the canvas name leads it)', () => {
-    expect(activityLabel({ code: 'A100', name: 'Excavate' })).toBe('Excavate, A100');
+    expect(activityLabel({ code: 'A100', name: 'Excavate' }, false)).toBe('Excavate, A100');
+    expect(activityLabel({ code: 'A100', name: 'Excavate' }, true)).toBe('A100 Excavate');
   });
 });
 

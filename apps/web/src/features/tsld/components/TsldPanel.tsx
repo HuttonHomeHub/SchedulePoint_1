@@ -1156,10 +1156,13 @@ export function TsldPanel({
     return new Map(
       activities.map((a) => [
         a.id,
-        describeActivity(a, { overlapsInLane: overlap.get(a.id) ?? false }),
+        describeActivity(a, {
+          overlapsInLane: overlap.get(a.id) ?? false,
+          withCodes: viewToggles.activityCodes ?? false,
+        }),
       ]),
     );
-  }, [activities, renderActivities]);
+  }, [activities, renderActivities, viewToggles.activityCodes]);
   // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
   // Precomputed, memoised maps handed to the painter via the `TsldScene`, so the culled rAF loop draws
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
@@ -2121,7 +2124,12 @@ export function TsldPanel({
       const current = activities.find((a) => a.id === activeId);
       if (!current) return;
       const dir = event.key === '[' ? 'pred' : 'succ';
-      const neighbour = chainNeighbour(current.id, dependencies, dir);
+      const neighbour = chainNeighbour(
+        current.id,
+        dependencies,
+        dir,
+        viewToggles.activityCodes ?? false,
+      );
       // `select`, not `setSelectedId`: this is a NAVIGATION command, so the keyboard cursor has to
       // follow the selection. Setting only the selection left `aria-activedescendant` on the row
       // the planner walked away from — and made a second press re-read the same neighbour, because

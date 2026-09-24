@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_VIEW_TOGGLES, paintScene, type TsldPalette, type TsldScene } from './paint';
 import {
-  LABEL_LINE_H,
+  ROW_TEXT_GAP_PX,
+  WRAP_LINE_H,
+  wrappedNameYs,
   rowSlots,
   screenYOfLane,
   type RenderActivity,
@@ -164,20 +166,23 @@ describe('the wrap (M4-T2, spec §4.2 G7)', () => {
     expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCDE', 'FGHI…']);
   });
 
-  it('keeps the first line clear of the lane above’s date row (lane containment, FC-G5)', () => {
-    // The first line reaches over the lane boundary into the clear band by design (spec §4.2 G7),
-    // so the containment that matters is against the text row above it, not the lane edge.
-    const upperY = rowSlots(screenYOfLane(1, VIEW12)).nameY - LABEL_LINE_H;
-    const aboveBelowY = rowSlots(screenYOfLane(0, VIEW12)).belowY;
-    expect(upperY - LABEL_LINE_H / 2).toBeGreaterThan(aboveBelowY + LABEL_LINE_H / 2);
+  it('fits a wrapped pair inside its own lane (spec §4.13 A4)', () => {
+    // G7's first wording let the upper line reach across the lane boundary; A4 superseded it, and
+    // M4 built G7. The M6 gate pass found that from the lane-containment case, so the two lines now
+    // share the pad above the bar and neither box leaves the lane or reaches the bar.
+    const laneTop = screenYOfLane(1, VIEW12);
+    const slots = rowSlots(laneTop);
+    const { upper, lower } = wrappedNameYs(slots);
+    expect(upper - WRAP_LINE_H / 2).toBeGreaterThanOrEqual(laneTop);
+    expect(lower + WRAP_LINE_H / 2).toBeLessThanOrEqual(slots.barY - ROW_TEXT_GAP_PX);
   });
 
-  it('puts the first line one text row above the name row', () => {
+  it('puts the first line one wrapped line above the second', () => {
     const log = paint(plan(6), 12);
     const ys = log
       .filter((l) => l.startsWith('fillText(["ABCDE"') || l.startsWith('fillText(["FGHI'))
       .map((l) => (JSON.parse(l.slice('fillText('.length, -1)) as [string, number, number])[2]);
-    expect(ys[1]! - ys[0]!).toBe(14);
+    expect(ys[1]! - ys[0]!).toBe(WRAP_LINE_H);
   });
 });
 

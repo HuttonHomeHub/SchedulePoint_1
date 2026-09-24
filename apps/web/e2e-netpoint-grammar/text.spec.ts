@@ -14,8 +14,10 @@ import { pickZoomPreset } from '../e2e-search-nav/support';
  * **NetPoint grammar M4 — the canvas's text, on the real canvas** (spec §4.2 G7, G11).
  *
  * - The canvas prints a name without its code unless `View ▾ ▸ Markers ▸ Activity codes` is on, and
- *   the parallel listbox's accessible name is `name, code` either way: the switch changes the
- *   picture, never what a screen reader is told (the M0-T4 ruling R7).
+ *   the parallel listbox's accessible name follows it: `name, code` while codes are off, and the
+ *   printed `code name` while they are on, because WCAG 2.5.3 needs the visible label inside the
+ *   accessible name as one string. This journey first asserted the name did NOT change with the
+ *   switch, which is the failure the M6 accessibility gate found.
  * - Dates are withheld at the overview tier: at the Week preset there is text under the bar, at
  *   Year there is none.
  *
@@ -104,7 +106,7 @@ async function viewCheckbox(page: Page, name: string, checked: boolean): Promise
 test.describe('NetPoint grammar — text', () => {
   test.setTimeout(240_000);
 
-  test('codes are a picture choice; the accessible name is "name, code" either way', async ({
+  test('the code switch changes the picture, and the accessible name follows it', async ({
     page,
   }) => {
     const stamp = Date.now();
@@ -123,8 +125,8 @@ test.describe('NetPoint grammar — text', () => {
     const before = await inkAroundBar(page);
 
     await viewCheckbox(page, 'Activity codes', true);
-    // The name the screen reader is given does not move with the switch.
-    await expect(diagram.getByRole('option', { name: /^Excavate, C100/ })).toHaveCount(1);
+    // The name the screen reader is given leads with exactly what the canvas now prints.
+    await expect(diagram.getByRole('option', { name: /^C100 Excavate/ })).toHaveCount(1);
     // The picture does: the code adds ink to the name row.
     await expect
       .poll(async () => (await inkAroundBar(page)).above, {

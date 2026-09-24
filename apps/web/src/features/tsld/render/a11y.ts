@@ -45,21 +45,25 @@ function plainDays(n: number): string {
  * The activity's **accessible name**: `{name}, {code}` when a code is set, else the name. Used by
  * the Tier-1 sentence (`describeActivity`) and chain navigation (`chainNeighbour`).
  *
- * **The name leads, and the code follows** (NetPoint grammar M4-T1, the M0-T4 ruling R7). Until then
- * this string was also the canvas label, `{code} {name}`, which kept the two a leading-substring
- * match. The canvas now prints the name alone by default (`canvasLabel`, spec §4.2 G7), so the name
- * that leads the spoken text is exactly the visible label: WCAG 2.5.3's requirement and its best
- * practice both hold while codes are off. With `View ▾ ▸ Markers ▸ Activity codes` on, the visible
- * `{code} {name}` is still contained in the name, which 2.5.3 requires, though no longer leading.
- * Checked before the change: search by code builds its own haystack (`lenses.ts:82`), and nothing
- * else relied on the code leading.
+ * **It says what the canvas prints, and the switch decides which order that is** (NetPoint grammar
+ * M4-T1, the M0-T4 ruling R7, and the M6 accessibility gate). While `View ▾ ▸ Markers ▸ Activity
+ * codes` is off the canvas prints the name alone, so the name leads and the code follows. While it
+ * is on the canvas prints `{code} {name}` and so does this, because WCAG 2.5.3 needs the visible
+ * label inside the accessible name as a contiguous string. `Pour slab, A1020` does not contain
+ * `A1020 Pour slab`. M4 shipped the name-first form in both states under a comment saying it did,
+ * and a test that checked each word was present in any order. Search by code builds its own
+ * haystack (`lenses.ts:82`), so nothing relies on either order.
  */
-export function activityLabel(a: { code: string | null; name: string }): string {
+export function activityLabel(
+  a: { code: string | null; name: string },
+  withCodes: boolean,
+): string {
   // **A code identical to the name is printed once** (`docs/TECH_DEBT.md` #376). The XER importer
   // gives a WBS summary `code = wbs_short_name` and `name = wbs_name ?? wbs_short_name`
   // (`packages/interchange/src/xer-adapter.ts:475-476`), and P6's project-root node commonly holds
   // the project's short name in both — so the label read "EDF - Hynamics Proposal EDF - Hynamics
   // Proposal". The second copy carries nothing, and this string is also the accessible name.
+  if (withCodes) return canvasLabel(a, true);
   return a.code && a.code !== a.name ? `${a.name}, ${a.code}` : a.name;
 }
 
@@ -119,9 +123,9 @@ export function centreItemText(
  */
 export function describeActivity(
   a: ActivitySummary,
-  opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource },
+  opts?: { overlapsInLane?: boolean; barDateSource?: BarDateSource; withCodes?: boolean },
 ): string {
-  const name = activityLabel(a);
+  const name = activityLabel(a, opts?.withCodes ?? false);
   const duration =
     a.durationDays > 0
       ? `, ${a.durationDays} working ${a.durationDays === 1 ? 'day' : 'days'}`
@@ -622,6 +626,7 @@ export function chainNeighbour(
   focusedId: string,
   dependencies: readonly DependencySummary[],
   direction: 'pred' | 'succ',
+  withCodes: boolean,
 ): ChainNeighbour | null {
   const edges = dependencies.filter((d) =>
     direction === 'pred' ? d.successor.id === focusedId : d.predecessor.id === focusedId,
@@ -630,7 +635,7 @@ export function chainNeighbour(
   const chosen = edges.find((d) => d.isDriving) ?? edges[0]!;
   const endpoint = direction === 'pred' ? chosen.predecessor : chosen.successor;
   // Same identity builder as Tier-1 describeActivity, so the neighbour reads consistently.
-  const name = activityLabel(endpoint);
+  const name = activityLabel(endpoint, withCodes);
   return { id: endpoint.id, name, driving: chosen.isDriving };
 }
 

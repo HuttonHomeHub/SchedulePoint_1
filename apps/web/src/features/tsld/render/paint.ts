@@ -13,6 +13,7 @@ import {
   traceMilestoneTriangle,
 } from './layers/shapes';
 import { labelWidths } from './layers/text-measure';
+import { createWrapClearance } from './layers/wrap-clearance';
 import type { GhostBar, LevelledGhost } from './lenses';
 import { formatLinkGap, linkGapSpan } from './link-gap';
 import { chevronsAlong, formatLag, gapLabelAt, lagPlateAt, linkRung } from './link-marks';
@@ -69,6 +70,8 @@ import {
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
   LABEL_LINE_H,
+  WRAP_LINE_H,
+  wrappedNameYs,
   LANE_HEIGHT,
   MILESTONE_RADIUS,
   PROGRESS_MIN_PX_PER_DAY,
@@ -2211,51 +2214,14 @@ export function paintScene(
     const withCodes = toggles.activityCodes === true;
     const labelOf = (a: RenderActivity): string =>
       canvasLabel({ code: a.code ?? null, name: a.label }, withCodes);
-    /**
-     * **Where a wrapped name's first line may go** (NetPoint grammar M4-T2, spec §4.2 G7). Two lines
-     * need more than the row's pad, so the first line reaches over the lane boundary into the clear
-     * band where gutter legs run; it is drawn only where its box meets no routed link segment. The
-     * segments are bucketed by lane once per frame, lazily, on the first name that would truncate,
-     * so a frame whose names all fit tests nothing (FC-G7's wrap-candidate bound).
-     *
-     * The box is inflated by half a gap-label chip vertically, because a gap label or lag plate on a
-     * horizontal leg reaches that far either side of its line.
-     */
+    // Where a wrapped name's first line may go: the lazy, counted segment index
+    // (`layers/wrap-clearance.ts`, NetPoint grammar M4-T2 and the M6 gate pass).
     const lane0Top = screenYOfLane(0, view);
-    const laneOfY = (y: number): number => Math.floor((y - lane0Top) / LANE_HEIGHT);
-    let segmentsByLane: Map<number, [Point, Point][]> | null = null;
-    const segmentsNear = (lane: number): readonly [Point, Point][] => {
-      if (segmentsByLane === null) {
-        segmentsByLane = new Map();
-        for (const line of routed?.lines.values() ?? []) {
-          for (let k = 1; k < line.length; k += 1) {
-            const a = line[k - 1]!;
-            const b = line[k]!;
-            for (let l = laneOfY(Math.min(a.y, b.y)); l <= laneOfY(Math.max(a.y, b.y)); l += 1) {
-              const bucket = segmentsByLane.get(l);
-              if (bucket) bucket.push([a, b]);
-              else segmentsByLane.set(l, [[a, b]]);
-            }
-          }
-        }
-      }
-      return segmentsByLane.get(lane) ?? [];
-    };
-    const WRAP_PAD_Y = SLACK_CHIP_H / 2;
-    const upperLineClear = (lane: number, cx: number, w: number, y: number): boolean => {
-      const x0 = cx - w / 2;
-      const x1 = cx + w / 2;
-      const y0 = y - LABEL_LINE_H / 2 - WRAP_PAD_Y;
-      const y1 = y + LABEL_LINE_H / 2 + WRAP_PAD_Y;
-      for (const l of [lane - 1, lane]) {
-        for (const [a, b] of segmentsNear(l)) {
-          if (Math.max(a.x, b.x) < x0 || Math.min(a.x, b.x) > x1) continue;
-          if (Math.max(a.y, b.y) < y0 || Math.min(a.y, b.y) > y1) continue;
-          return false;
-        }
-      }
-      return true;
-    };
+    const wrapClearance = createWrapClearance(
+      () => routed?.lines.values() ?? [],
+      (y) => Math.floor((y - lane0Top) / LANE_HEIGHT),
+      SLACK_CHIP_H / 2,
+    );
 
     for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
@@ -2375,8 +2341,13 @@ export function paintScene(
             return minCx <= maxCx ? Math.min(Math.max(centreX, minCx), maxCx) : centreX;
           };
           let cx = centreFor(upper === null ? fit(text) : Math.max(fit(text), fit(upper)));
-          const upperY = slots.nameY - LABEL_LINE_H;
-          if (upper !== null && !upperLineClear(activity.laneIndex, cx, fit(upper), upperY)) {
+          // Spec §4.13 A4: a wrapped pair shares the pad above the bar, so both lines move.
+          const wrapped = wrappedNameYs(slots);
+          const upperY = wrapped.upper;
+          if (
+            upper !== null &&
+            !wrapClearance.clear(activity.laneIndex, cx, fit(upper), upperY, WRAP_LINE_H)
+          ) {
             // No room above: the one truncated line, exactly as before the wrap existed.
             upper = null;
             text = truncateToWidth(full, budget, fit);
@@ -2388,12 +2359,13 @@ export function paintScene(
           }
           ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'center';
+          const lowerY = upper !== null ? wrapped.lower : slots.nameY;
           if (upper !== null) {
             ctx.fillText(upper, cx, upperY);
             noteText(cx, fit(upper), upperY, 'center');
           }
-          ctx.fillText(text, cx, slots.nameY);
-          noteText(cx, fit(text), slots.nameY, 'center');
+          ctx.fillText(text, cx, lowerY);
+          noteText(cx, fit(text), lowerY, 'center');
           ctx.textAlign = 'left';
           if (bold) ctx.font = LABEL_FONT;
         } else if (placement === 'inside') {
