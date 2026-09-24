@@ -320,3 +320,22 @@ first run, as expected of a pin, and goes red when the sentence checks near-crit
 behavioural table where the plan named a structural scan, because a scan of field names passes when
 one rule starts reading the same fields in a different order. `docs/TECH_DEBT.md` #374 items 6 and 7
 are closed.
+
+## M3-T5 — the attachment dot (2026-09-24)
+
+`routeFrame` now collects, for every visible edge on the refreshed time-true path, each anchor that
+lands strictly inside a bar's span (where no node sits), and the painter draws a 4 px dot there in the
+mark shade (`attachDot`, `--canvas-link-mark`) at the working tier and finer, above the bars and lag
+runs and beneath the lag handle. The collection is read-only (**FC-G1 byte-identical**) and is
+switched off while the revision overlay routes removed links through the same `lineOf`, so a deleted
+link gets no dot. The legend keys it as `Link joins partway along`, and the census checks the swatch's
+token against the palette's.
+
+- Unit: an `SS + 2` link gets one dot, on its predecessor two days in; an `FS` zero-lag link gets
+  none; the overview tier gets none. Both assertions go red under the matching mutation.
+- Golden: one new `fillRect([82,248,4,4])` in the maximal scene's lag-run tie, immediately under that
+  tie's handle, which the scene has armed. The prediction and the diff agree.
+- Two gates caught my own code: the one-predicate scan matched `anchor.x < r.x + r.w`, which is a
+  span test and not a rect overlap, and is now written against named edges; and a `paint.test.ts`
+  case that took "the last `fillRect`" to be a bar body now excludes the 4 × 4 dot.
+- **FC-G5 stays 0.**

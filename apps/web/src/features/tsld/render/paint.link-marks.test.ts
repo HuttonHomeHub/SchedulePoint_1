@@ -25,6 +25,7 @@ const PALETTE = {
   linkMinor: '#000006',
   linkDriving: '#000007',
   linkMark: '#3d2070',
+  attachDot: '#3d2071',
   critical: '#000008',
   nearCritical: '#000009',
   selection: '#00000a',
@@ -240,6 +241,59 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
       view: { ...DEFAULT_VIEW_TOGGLES, labels: false, dates: false },
     });
     expect(off.some((l) => l.includes('fillText(["+2d'))).toBe(false);
+  });
+
+  /**
+   * The dots drawn, as boxes: every rect traced under the dot's own key. The recording context has
+   * no `roundRect`, so the painter takes its square fallback (`fillRect`); a real one traces
+   * `roundRect`, and either is read here.
+   */
+  function dots(log: readonly string[]): number[][] {
+    const at = log.indexOf(`fillStyle=${PALETTE.attachDot}`);
+    if (at === -1) return [];
+    const next = log.findIndex((l, i) => i > at && l.startsWith('fillStyle='));
+    return log
+      .slice(at, next === -1 ? undefined : next)
+      .filter((l) => l.startsWith('roundRect(') || l.startsWith('fillRect('))
+      .map((l) => JSON.parse(l.slice(l.indexOf('(') + 1, -1)) as number[]);
+  }
+
+  it('dots an anchor partway along a bar, and only there (NetPoint grammar M3-T5, G12)', () => {
+    // SS + 2 days: the link leaves A two days after A starts, partway along its bar. B's end is at
+    // B's start, where a node already sits, so it gets no dot.
+    const ss = [edge({ predecessorId: 'A', successorId: 'B', type: 'SS', lagDays: 2 })];
+    const got = dots(paint([A, B], ss));
+    expect(got).toHaveLength(1);
+    const [x = NaN, y = NaN, w = NaN, h = NaN] = got[0]!;
+    // A starts day 1 (x 72); two days on is x 96; 4 px across, on A's centre-line in lane 0.
+    expect(x + w / 2).toBe(96);
+    expect([w, h]).toEqual([4, 4]);
+    expect(y + h / 2).toBeGreaterThan(VIEW.originY);
+    expect(y + h / 2).toBeLessThan(VIEW.originY + 60);
+    // An FS zero-lag link joins at the nodes, so nothing is dotted.
+    expect(dots(paint([A, B], [edge({ predecessorId: 'A', successorId: 'B' })]))).toEqual([]);
+  });
+
+  it('draws no dot at the overview tier', () => {
+    const ss = [edge({ predecessorId: 'A', successorId: 'B', type: 'SS', lagDays: 2 })];
+    const { ctx, log } = recordingCtx();
+    paintScene(
+      ctx,
+      {
+        activities: [A, B],
+        edges: ss,
+        dataDate: DATA_DATE,
+        view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false },
+        visualRefresh: true,
+        timeTrueLinks: true,
+        linkRouting: true,
+        isWorkingDay: () => true,
+      },
+      { ...VIEW, pxPerDay: 3 },
+      SIZE,
+      PALETTE,
+    );
+    expect(dots(log)).toEqual([]);
   });
 
   it('keeps the legacy dashed non-driving pass when the refresh is off (the rollback)', () => {

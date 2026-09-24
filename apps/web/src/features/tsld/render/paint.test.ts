@@ -44,6 +44,7 @@ const PALETTE: TsldPalette = {
   linkMinor: '#80848b',
   linkDriving: '#3b6fbf',
   linkMark: '#3d2070',
+  attachDot: '#3d2070',
   edge: '#333',
   bar: '#44f',
   nodeRim: '#44f',
@@ -2801,7 +2802,12 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
     expect(log.indexOf(`moveTo([${BAR_X},${runY}])`)).toBeGreaterThan(dashAt);
     expect(log.indexOf(`lineTo([108,${runY}])`)).toBeGreaterThan(dashAt);
     // Painted after the bar bodies, so the run reads on the bar, not under it.
-    const lastBarFill = log.reduce((acc, e, i) => (e.startsWith('fillRect(') ? i : acc), -1);
+    // A 4 × 4 fill is the attachment dot (NetPoint grammar M3-T5), which this SS + 3 tie earns and
+    // which is drawn above the run on purpose; it is not a bar body.
+    const lastBarFill = log.reduce(
+      (acc, e, i) => (e.startsWith('fillRect(') && !e.endsWith(',4,4])') ? i : acc),
+      -1,
+    );
     expect(dashAt).toBeGreaterThan(lastBarFill);
     // No new colour: the run strokes in the edge colour.
     expect(log.lastIndexOf(`strokeStyle=${PALETTE.edge}`)).toBeGreaterThan(-1);

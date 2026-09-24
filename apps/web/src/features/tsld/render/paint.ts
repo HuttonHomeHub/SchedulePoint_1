@@ -206,6 +206,11 @@ export interface TsldPalette {
    * `--canvas-link-mark`). A key of its own so a harness can tell a mark from its line.
    */
   linkMark: string;
+  /**
+   * The dot where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12). Resolves to
+   * the mark shade, under its own key so a harness can tell a dot from a chevron.
+   */
+  attachDot: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -612,6 +617,22 @@ const LAG_HANDLE_HALO_W_ACTIVE = 2;
  * (radius = half the box ⇒ a circle), degrading to a square on contexts without it — never
  * throwing. Batched: one path per colour for the whole set, so a crowded diagram costs two fills.
  */
+/** The attachment dot's radius: 4 px across, under the lag handle's {@link LAG_HANDLE_R}. */
+export const ATTACH_DOT_R = 2;
+
+/** Every attachment dot in one filled path (one `fill()` per frame, whatever the count). */
+function drawAttachDots(ctx: Ctx2D, points: readonly Point[], palette: TsldPalette): void {
+  const r = ATTACH_DOT_R;
+  ctx.fillStyle = palette.attachDot;
+  if (typeof ctx.roundRect === 'function') {
+    ctx.beginPath();
+    for (const p of points) ctx.roundRect(p.x - r, p.y - r, r * 2, r * 2, r);
+    ctx.fill();
+  } else {
+    for (const p of points) ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+  }
+}
+
 function drawLagHandles(
   ctx: Ctx2D,
   points: readonly Point[],
@@ -1983,6 +2004,14 @@ export function paintScene(
   // invisible target). Only ever collected when the drag is armed AND the flag is on, so a
   // read-only surface and the flag-off path skip this block entirely (byte-for-byte parity). The
   // emphasised handle draws LAST, so it sits over any neighbour it grew into.
+  // Layer 3.2a: the attachment dots (NetPoint grammar M3-T5, spec G12) — where a link joins
+  // partway along a bar, drawn at the working tier and finer, above the bars and the lag runs and
+  // beneath the lag handles, which keep their size and draw over a dot when the drag is armed. In
+  // the mark shade and 4 px across, so a dot never reads as the handle (7 px, outline ink).
+  const attachPoints = routed?.attachPoints ?? null;
+  if (attachPoints && attachPoints.length > 0 && lodTier(view.pxPerDay) !== 'overview') {
+    drawAttachDots(ctx, attachPoints, palette);
+  }
   if (lagHandlePoints && lagHandlePoints.length > 0) {
     drawLagHandles(ctx, lagHandlePoints, palette, false);
   }

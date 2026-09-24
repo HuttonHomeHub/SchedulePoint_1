@@ -227,6 +227,9 @@ export const NODE_SENTINELS = {
   // The direction marks (NetPoint grammar M3). Filled, so `linkPaths` never counts them, and a
   // sentinel of their own so a reading can tell a mark from its line.
   linkMark: '#191a1b',
+  // The attachment dots (NetPoint grammar M3-T5). Filled too, and their own sentinel for the same
+  // reason as the marks.
+  attachDot: '#1c1d1e',
 } as const;
 
 export const PALETTE: TsldPalette = {
@@ -239,6 +242,7 @@ export const PALETTE: TsldPalette = {
   linkMinor: LINK_SENTINELS.linkMinor,
   linkDriving: LINK_SENTINELS.linkDriving,
   linkMark: NODE_SENTINELS.linkMark,
+  attachDot: NODE_SENTINELS.attachDot,
   edge: LINK_SENTINELS.edge,
   bar: '#459e5d',
   nodeRim: NODE_SENTINELS.nodeRim,

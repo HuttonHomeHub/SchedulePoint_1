@@ -77,7 +77,7 @@ const LINK_LINES = [
 ] as const;
 
 describe('FC-G8 — the legend keys the link family the painter draws (M3)', () => {
-  it.each([...LINK_LINES.map(({ key }) => key), 'linkMark'] as const)(
+  it.each([...LINK_LINES.map(({ key }) => key), 'linkMark', 'attachDot'] as const)(
     'the painter reads palette.%s',
     (key) => {
       expect(painter).toMatch(new RegExp(String.raw`palette\.${key}\b`));
@@ -98,5 +98,13 @@ describe('FC-G8 — the legend keys the link family the painter draws (M3)', () 
     const mark = item?.querySelector<SVGPathElement>('[data-legend-mark]');
     expect(mark, 'Direction has no mark swatch').not.toBeNull();
     expect(mark!.style.fill).toBe(`var(${tokenOf('linkMark')})`);
+  });
+
+  it('Link joins partway along: the dot is filled in the token the painter fills dots with', () => {
+    render(<TsldLegend />);
+    const item = screen.getByText('Link joins partway along', { exact: true }).closest('li');
+    const dot = item?.querySelector<HTMLElement>('[data-legend-attach]');
+    expect(dot, 'the attachment row has no dot swatch').not.toBeNull();
+    expect(dot!.style.backgroundColor).toBe(`var(${tokenOf('attachDot')})`);
   });
 });

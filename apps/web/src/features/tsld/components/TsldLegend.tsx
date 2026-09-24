@@ -31,6 +31,7 @@ type LegendItem =
   | { label: string; chevron: true }
   | { label: string; lagPlate: true }
   | { label: string; gapLabel: true }
+  | { label: string; attachDot: true }
   | { label: string; pin: true }
   | { label: string; today: true }
   | { label: string; dataDate: true }
@@ -114,6 +115,8 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
         { label: 'Gap in working days', gapLabel: true } as const,
         { label: 'Direction', chevron: true } as const,
         { label: 'Lag on a link', lagPlate: true } as const,
+        // Where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12).
+        { label: 'Link joins partway along', attachDot: true } as const,
       ]
     : [
         // A driving link (heavier solid) sets its successor's start; a non-driving link (thin
@@ -530,6 +533,19 @@ export function TsldLegend({
                   style={{ fill: 'var(--canvas-link-mark)' }}
                 />
               </svg>
+            </span>
+          ) : 'attachDot' in item ? (
+            <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">
+              {/* A bar with the dot on it, in the mark shade, 4 px across as the painter draws it. */}
+              <span
+                className="w-full"
+                style={{ height: 5, backgroundColor: 'var(--canvas-bar)' }}
+              />
+              <span
+                data-legend-attach=""
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{ width: 4, height: 4, backgroundColor: 'var(--canvas-link-mark)' }}
+              />
             </span>
           ) : 'gapLabel' in item ? (
             <span

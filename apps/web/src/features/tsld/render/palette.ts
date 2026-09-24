@@ -165,6 +165,9 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     // blue, which also paints the selection ring (spec §4.2 G5).
     linkDriving: token('--canvas-link', '#846cc2'),
     linkMark: token('--canvas-link-mark', '#3d2070'),
+    // Where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12): the mark shade, a
+    // key of its own so a harness can tell a dot from a chevron.
+    attachDot: token('--canvas-link-mark', '#3d2070'),
     edge: token('--muted-foreground', '#7a8090'),
     bar: token('--canvas-bar', '#459e5d'),
     critical: token('--destructive', '#c83c3c'),
@@ -269,6 +272,7 @@ export const PRINT_TOKEN_SOURCES = {
   linkMinor: ['--canvas-link-minor', '#9182be'],
   linkDriving: ['--canvas-link', '#846cc2'],
   linkMark: ['--canvas-link-mark', '#3d2070'],
+  attachDot: ['--canvas-link-mark', '#3d2070'],
   edge: ['--muted-foreground', '#636363'],
   bar: ['--canvas-bar', '#459e5d'],
   critical: ['--destructive', '#9c0711'],

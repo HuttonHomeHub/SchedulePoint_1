@@ -92,6 +92,7 @@ const PALETTE: TsldPalette = {
   linkMinor: '#80848b',
   linkDriving: '#3b6fbf',
   linkMark: '#3d2070',
+  attachDot: '#3d2070',
   edge: '#333',
   bar: '#44f',
   nodeRim: '#44f',
