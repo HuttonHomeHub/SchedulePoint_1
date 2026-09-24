@@ -107,15 +107,31 @@ function ImportFlow({
   // Cleared whenever the report is re-fetched: an answer belongs to the report that raised it, and a
   // stale one would be silently applied to a collision the planner never saw.
   const [resolutions, setResolutions] = useState<Record<string, ResourceCollisionResolution>>({});
+  // A SchedulePoint XER carries its own layout (layout-interchange). The option exists only for a file
+  // that has one — omitted, not shaded, for every other file (ADR-0082: it does not apply to them).
+  // Learned from the first dry-run, which always restores; remembered for as long as that file stays
+  // chosen, because the dry-run after unticking reports no layout counts by design.
+  const [restoreLayout, setRestoreLayout] = useState(true);
+  const [fileHasLayout, setFileHasLayout] = useState(false);
 
-  const startDryRun = (picked: File, shared: boolean): void => {
+  const layoutOption = (restore: boolean) =>
+    restore ? {} : ({ restoreLayout: 'IGNORE' } as const);
+
+  const startDryRun = (picked: File, shared: boolean, restore: boolean): void => {
     setResolutions({});
     dryRun.mutate(
-      { file: picked, ...(shared ? { globalCalendarScope: 'ORG' as const } : {}) },
+      {
+        file: picked,
+        ...(shared ? { globalCalendarScope: 'ORG' as const } : {}),
+        ...layoutOption(restore),
+      },
       {
         // Announce that the report resolved so a screen-reader user not focused on the mounting
         // report region still hears it — the Confirm button silently enabling otherwise (WCAG 4.1.3).
         onSuccess: (report) => {
+          if (report.mapped.placements !== undefined || report.mapped.lanes !== undefined) {
+            setFileHasLayout(true);
+          }
           const collisions = report.resourceCollisions?.length ?? 0;
           announce(
             `Report ready — ${report.mapped.activities} activities, ${report.mapped.relationships} relationships mapped.` +
@@ -134,13 +150,16 @@ function ImportFlow({
     commit.reset();
     dryRun.reset();
     setFile(picked);
+    // A new file starts from the default: its own first dry-run decides whether the option applies.
+    setFileHasLayout(false);
+    setRestoreLayout(true);
     if (!picked) return;
     const sizeError = checkUploadSize(picked);
     if (sizeError) {
       setClientError(sizeError);
       return;
     }
-    startDryRun(picked, globalCalendarsShared);
+    startDryRun(picked, globalCalendarsShared, true);
   };
 
   const onToggleGlobalCalendars = (shared: boolean): void => {
@@ -148,7 +167,14 @@ function ImportFlow({
     commit.reset();
     // A report already on screen described the OTHER choice — re-run rather than let a planner
     // confirm an import the report does not match.
-    if (file && !clientError) startDryRun(file, shared);
+    if (file && !clientError) startDryRun(file, shared, restoreLayout);
+  };
+
+  const onToggleRestoreLayout = (restore: boolean): void => {
+    setRestoreLayout(restore);
+    commit.reset();
+    // Same rule as the calendar option: the report must describe the import being confirmed.
+    if (file && !clientError) startDryRun(file, globalCalendarsShared, restore);
   };
 
   const onConfirm = (): void => {
@@ -158,6 +184,7 @@ function ImportFlow({
         file,
         ...(globalCalendarsShared ? { globalCalendarScope: 'ORG' as const } : {}),
         ...(collisions.length > 0 ? { resourceResolutions: resolutions } : {}),
+        ...layoutOption(restoreLayout),
       },
       {
         onSuccess: ({ planId, report }) => {
@@ -227,6 +254,15 @@ function ImportFlow({
             checked={globalCalendarsShared}
             onChange={(event) => onToggleGlobalCalendars(event.target.checked)}
             hint={`Off (recommended): the file’s calendars belong to “${projectName}” alone. On: its global calendars join the shared library every project picks from.`}
+          />
+        ) : null}
+
+        {fileHasLayout ? (
+          <CheckboxField
+            label="Restore the SchedulePoint layout"
+            checked={restoreLayout}
+            onChange={(event) => onToggleRestoreLayout(event.target.checked)}
+            hint="This file came from SchedulePoint and carries where each bar was placed and which row it sat in, as it was when the file was exported. Off: the plan is scheduled from its logic alone and laid out afresh."
           />
         ) : null}
 

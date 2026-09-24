@@ -64,6 +64,32 @@ export function validXer(): string {
   ].join('\n');
 }
 
+/**
+ * {@link validXer} as SchedulePoint writes it (layout-interchange): the same network plus the two
+ * user-defined fields carrying the layout — A1000 hand-placed on 12 January in row 2, A1010 in row 0.
+ * The labels are the file format's identity and are spelled out here, not imported, so a change to
+ * them in the product breaks this journey the way it would break a planner's saved file.
+ */
+export function layoutXerFile(): { name: string; mimeType: string; buffer: Buffer } {
+  const layout = [
+    '%T\tUDFTYPE',
+    '%F\tudf_type_id\ttable_name\tudf_type_name\tudf_type_label\tlogical_data_type',
+    '%R\t1\tTASK\tuser_field_1\tSchedulePoint layout v1: placed start\tFT_TEXT',
+    '%R\t2\tTASK\tuser_field_2\tSchedulePoint layout v1: row\tFT_INT',
+    '%T\tUDFVALUE',
+    '%F\tudf_type_id\tfk_id\tproj_id\tudf_date\tudf_number\tudf_text\tudf_code_id',
+    '%R\t1\tT1\tP1\t\t\t2026-01-12\t',
+    '%R\t2\tT1\tP1\t\t2\t\t',
+    '%R\t2\tT2\tP1\t\t0\t\t',
+  ];
+  const text = validXer().replace(/%E$/, `${layout.join('\n')}\n%E`);
+  return {
+    name: 'schedule-with-layout.xer',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(text, 'utf8'),
+  };
+}
+
 /** The `.xer` fixture as bytes, ready for `Locator.setInputFiles`. */
 export function validXerFile(): { name: string; mimeType: string; buffer: Buffer } {
   return {

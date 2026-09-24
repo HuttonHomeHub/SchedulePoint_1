@@ -11,8 +11,9 @@ import {
   type ReportFinding,
   type ResourceCollision,
   type ResourceCollisionResolution,
+  type RestoreLayout,
 } from '@repo/interchange';
-import { drawnSpanDays, packLanes } from '@repo/layout';
+import { drawnSpanDays, packAroundCarried, packLanes } from '@repo/layout';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -85,6 +86,11 @@ export interface InterchangeImportOptions {
    * no entry fails the commit with `UNRESOLVED_RESOURCE_COLLISIONS` rather than being guessed.
    */
   readonly resourceResolutions?: Readonly<Record<string, ResourceCollisionResolution>>;
+  /**
+   * Whether a SchedulePoint XER's own layout is restored (layout-interchange). Omitted = `RESTORE`;
+   * `IGNORE` makes the import take a foreign file's path exactly, with the omission reported.
+   */
+  readonly restoreLayout?: RestoreLayout;
 }
 
 /**
@@ -349,13 +355,42 @@ export class InterchangeService {
     // plan's dates are wrong, so the import is rolled back; a layout failure means the plan is
     // correct but arranged badly, which a planner fixes with one press of Auto-arrange. Rolling back
     // a valid import over cosmetics would be the worse trade.
+    //
+    // A SchedulePoint XER may have carried rows (layout-interchange, spec §4.7); phase 3 then keeps
+    // them and places only what the file left without one.
+    const carriedCodes = new Set(
+      graph.activities.filter((a) => a.laneIndex != null).map((a) => a.code),
+    );
+    let carriedOverlaps = 0;
     try {
-      await this.packImportedLanes(principal, organization.id, planId);
+      const laid = await this.packImportedLanes(principal, organization.id, planId, carriedCodes);
+      carriedOverlaps = laid.carriedOverlaps;
     } catch (error) {
       this.logger.warn(
-        { organizationId: organization.id, planId, err: error },
-        'interchange commit could not lay out lanes — plan kept, lanes left in source order',
+        {
+          organizationId: organization.id,
+          planId,
+          mode: carriedCodes.size === 0 ? 'packed' : 'carried-or-partial',
+          err: error,
+        },
+        'interchange commit could not lay out lanes — plan kept, lanes left as imported',
       );
+    }
+
+    // Phase 3b — say where the restored picture and the plan now disagree (spec §4.7, M2-T6). Best
+    // effort for the same reason as phase 3: the import is durable and correct, so a failed read omits
+    // two sentences rather than failing a plan that exists.
+    if (report.mapped.placements !== undefined || carriedCodes.size > 0) {
+      try {
+        report.approximations.push(
+          ...(await this.restoredLayoutFindings(organization.id, planId, carriedOverlaps)),
+        );
+      } catch (error) {
+        this.logger.warn(
+          { organizationId: organization.id, planId, err: error },
+          'interchange commit could not read back the restored layout — findings omitted',
+        );
+      }
     }
 
     // Release the pen so the imported plan opens unlocked for whoever navigates to it.
@@ -384,7 +419,8 @@ export class InterchangeService {
    * - The **plan** (a single insert), with `plannedStart` = the source data date and its default calendar
    *   resolved.
    * - **Activities**, resolving each activity's `calendarKey` → id and assigning a **deterministic
-   *   `laneIndex` = its 0-based position in the graph's activity list** (source order), all in one batch.
+   *   `laneIndex`** — the row a SchedulePoint XER carried, else its 0-based position in the graph's
+   *   activity list (source order), which phase 3 then packs — all in one batch.
    * - **Dependencies**, resolving `predecessorKey` / `successorKey` → activity ids, in one batch. The
    *   graph is already acyclic + de-duped (Task 1.3); a **single whole-graph `containsCycle` check**
    *   re-asserts the DAG invariant (ADR-0021) ONCE up front (replacing the old O(E²) per-row
@@ -527,7 +563,14 @@ export class InterchangeService {
             activity.parentKey === null
               ? null
               : this.resolveActivityId(activity.parentKey, activityIdByKey),
-          laneIndex,
+          // The row a SchedulePoint XER carried, else the source position — phase 3 packs every row
+          // that was not carried (layout-interchange, spec §4.7).
+          laneIndex: activity.laneIndex ?? laneIndex,
+          // The hand-placement a SchedulePoint XER carried (ADR-0148), written verbatim: the engine
+          // decides what Pass 2 does with it, as it does for one a planner dragged.
+          ...(activity.visualStart == null
+            ? {}
+            : { visualStart: this.toDateOrNull(activity.visualStart) }),
           // Constraints (ADR-0035 §7–§12): primary + secondary type/date pairs + the ALAP flag.
           constraintType: activity.constraintType,
           constraintDate: this.toDateOrNull(activity.constraintDate),
@@ -1062,7 +1105,8 @@ export class InterchangeService {
     principal: Principal,
     organizationId: string,
     planId: string,
-  ): Promise<void> {
+    carriedCodes: ReadonlySet<string>,
+  ): Promise<{ carriedOverlaps: number }> {
     const [activities, dependencies] = await Promise.all([
       this.activities.findLayoutRowsForPlan(organizationId, planId),
       this.dependencies.findEdgesForPlan(organizationId, planId),
@@ -1101,9 +1145,34 @@ export class InterchangeService {
         },
         dayOf,
       );
-      return span === null ? [] : [{ id: keyOf(activity), ...span, laneIndex: activity.laneIndex }];
+      return span === null
+        ? []
+        : [
+            {
+              id: keyOf(activity),
+              ...span,
+              laneIndex: activity.laneIndex,
+              carried: activity.code !== null && carriedCodes.has(activity.code),
+            },
+          ];
     });
-    if (items.length === 0) return;
+    if (items.length === 0) return { carriedOverlaps: 0 };
+
+    // The three modes (spec §4.7). `packed`: nothing carried a row — pack everything, as a foreign file
+    // always has been. `carried`: every drawn activity did — write nothing. `partial`: carried rows are
+    // fixed obstacles and only the rest are placed. Carried rows are never moved in either (FC-3), and
+    // an overlap among them is counted, not resolved: at import there is no "before" to compare with.
+    const carried = items.filter((item) => item.carried);
+    const movers = items.filter((item) => !item.carried);
+    const mode = carried.length === 0 ? 'packed' : movers.length === 0 ? 'carried' : 'partial';
+    const carriedOverlaps = countOverlapping(carried);
+    if (mode === 'carried') {
+      this.logger.info(
+        { organizationId, planId, mode, activities: items.length, carriedOverlaps },
+        'interchange commit kept the carried lanes',
+      );
+      return { carriedOverlaps };
+    }
 
     const predecessorsOf = new Map<string, string[]>();
     for (const edge of dependencies) {
@@ -1119,12 +1188,16 @@ export class InterchangeService {
     for (const list of predecessorsOf.values()) list.sort();
 
     const versionOf = new Map(activities.map((a) => [a.id, a.version] as const));
-    const positions = packLanes(items, predecessorsOf).flatMap((change) => {
+    const changes =
+      mode === 'packed'
+        ? packLanes(items, predecessorsOf)
+        : packAroundCarried(carried, movers, predecessorsOf);
+    const positions = changes.flatMap((change) => {
       const id = idOfCode.get(change.id);
       const version = id === undefined ? undefined : versionOf.get(id);
       return id === undefined || version === undefined ? [] : [{ ...change, id, version }];
     });
-    if (positions.length === 0) return;
+    if (positions.length === 0) return { carriedOverlaps };
 
     await this.prisma.$transaction(async (tx) => {
       const moved = await this.activities.updateLanePositions(
@@ -1144,9 +1217,55 @@ export class InterchangeService {
     });
 
     this.logger.info(
-      { organizationId, planId, activities: items.length, moved: positions.length },
+      { organizationId, planId, mode, activities: items.length, moved: positions.length },
       'interchange commit laid out lanes',
     );
+    return { carriedOverlaps };
+  }
+
+  /**
+   * The two sentences a restored layout can owe the planner (spec §4.7, M2-T6): placements the
+   * recalculated logic no longer allows, and carried rows whose bars now overlap. Each is a count, at
+   * most one finding apiece, and neither is an error — the planner decides, and Arrange offers the fix.
+   *
+   * A fresh import's only `visual_start` values are the ones the file carried, so counting every
+   * placed activity with a conflict reason counts exactly the restored placements that conflict.
+   */
+  private async restoredLayoutFindings(
+    organizationId: string,
+    planId: string,
+    carriedOverlaps: number,
+  ): Promise<ReportFinding[]> {
+    const conflicted = await this.prisma.activity.count({
+      where: {
+        organizationId,
+        planId,
+        deletedAt: null,
+        visualStart: { not: null },
+        visualConflictReason: { not: null },
+      },
+    });
+    const findings: ReportFinding[] = [];
+    if (conflicted > 0) {
+      findings.push({
+        kind: 'approximation',
+        entity: 'activity',
+        sourceRef: null,
+        detail: `${String(conflicted)} restored placed start${conflicted === 1 ? ' is' : 's are'} no longer allowed by the logic and ${conflicted === 1 ? 'is' : 'are'} flagged on the diagram`,
+        reason:
+          'the placement was kept as the file carried it; the plan was recalculated after import',
+      });
+    }
+    if (carriedOverlaps > 0) {
+      findings.push({
+        kind: 'approximation',
+        entity: 'activity',
+        sourceRef: null,
+        detail: `${String(carriedOverlaps)} activit${carriedOverlaps === 1 ? 'y overlaps' : 'ies overlap'} another in ${carriedOverlaps === 1 ? 'its' : 'their'} row — Arrange can lay them out again`,
+        reason: 'the rows were kept as the file carried them',
+      });
+    }
+    return findings;
   }
 
   private async compensate(
@@ -1225,6 +1344,7 @@ export class InterchangeService {
       ...(options.globalCalendarScope === undefined
         ? {}
         : { globalCalendarScope: options.globalCalendarScope }),
+      ...(options.restoreLayout === undefined ? {} : { restoreLayout: options.restoreLayout }),
     });
 
     if (!result.ok) {
@@ -1308,4 +1428,28 @@ export class InterchangeService {
       throw new ForbiddenError('You do not have permission to perform this action.');
     }
   }
+}
+
+/**
+ * How many of `items` overlap another item in the same row, on the inclusive-finish convention the
+ * packer uses (two bars share a row iff one finishes strictly before the other starts).
+ */
+function countOverlapping(
+  items: readonly { id: string; startDay: number; endDay: number; laneIndex: number }[],
+): number {
+  const byLane = new Map<number, typeof items>();
+  for (const item of items)
+    byLane.set(item.laneIndex, [...(byLane.get(item.laneIndex) ?? []), item]);
+  const overlapping = new Set<string>();
+  for (const row of byLane.values()) {
+    const sorted = [...row].sort((a, b) => a.startDay - b.startDay);
+    let reach: (typeof items)[number] | undefined;
+    for (const item of sorted) {
+      if (reach !== undefined && item.startDay <= reach.endDay) {
+        overlapping.add(item.id).add(reach.id);
+      }
+      if (reach === undefined || item.endDay > reach.endDay) reach = item;
+    }
+  }
+  return overlapping.size;
 }

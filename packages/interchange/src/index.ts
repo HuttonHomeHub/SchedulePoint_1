@@ -36,3 +36,4 @@ export * from './mspdi-serialiser.js';
 export * from './mspdi-emit.js';
 export * from './export-mspdi.js';
 export * from './export-schedule.js';
+export * from './xer-layout-fields.js';

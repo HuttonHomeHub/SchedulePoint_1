@@ -5,7 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { drawnSpanDays } from '@repo/layout';
 
-import { onboard, openNewProject, validMspdiFile, validXerFile } from './support';
+import { layoutXerFile, onboard, openNewProject, validMspdiFile, validXerFile } from './support';
 
 /**
  * Flag-ON **schedule interchange (XER import)** journey (`VITE_SCHEDULE_INTERCHANGE`, Stage C2 M1,
@@ -158,6 +158,67 @@ test('an imported P6 programme opens with no row overlap on the canvas (FC-5)', 
     ),
   );
   expect(overlapping).toEqual([]);
+});
+
+/**
+ * **A SchedulePoint XER restores its layout** (layout-interchange M2; `docs/specs/layout-interchange/`).
+ *
+ * The file carries a hand-placed start and a row per activity in two user-defined fields. The dialog
+ * offers the option only because the dry-run found them, and unticking it re-runs the dry-run without
+ * them while the option stays offered — the one behaviour a unit test can only approximate, since it
+ * depends on the real server returning no layout counts for the IGNORE report. The restored values are
+ * read back through the API, never the DOM (the ADR-0070 rule).
+ */
+test('a SchedulePoint .xer restores its placed starts and rows, and the option can switch them off', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewProject(page);
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(layoutXerFile());
+
+  const mapped = dialog.locator('dl[aria-label="Mapped"]');
+  const option = dialog.getByLabel('Restore the SchedulePoint layout');
+  await expect(option).toBeChecked();
+  await expect(mapped.getByText('Placed starts')).toBeVisible();
+  await expect(mapped.getByText('Rows')).toBeVisible();
+
+  const results = await new AxeBuilder({ page })
+    .include('dialog[open]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+
+  // Off: the report re-runs without the layout, and says the file carried one it will not apply.
+  await option.uncheck();
+  await expect(mapped.getByText('Placed starts')).toBeHidden();
+  await expect(
+    dialog.getByText(/SchedulePoint layout for 2 activities; it was not applied/),
+  ).toBeVisible();
+  await expect(option).not.toBeChecked();
+
+  // Back on, and import.
+  await option.check();
+  await expect(mapped.getByText('Placed starts')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+  const planId = new URL(page.url()).pathname.split('/').pop()!;
+
+  const res = await page.request.get(
+    `/api/v1/organizations/${orgSlug}/plans/${planId}/activities?limit=100`,
+  );
+  expect(res.ok()).toBe(true);
+  const rows = (
+    (await res.json()) as {
+      data: { code: string; visualStart: string | null; laneIndex: number }[];
+    }
+  ).data;
+  const byCode = Object.fromEntries(rows.map((r) => [r.code, r]));
+  expect(byCode['A1000']).toMatchObject({ visualStart: '2026-01-12', laneIndex: 2 });
+  expect(byCode['A1010']).toMatchObject({ visualStart: null, laneIndex: 0 });
 });
 
 // The same review→commit loop for a Microsoft Project MSPDI .xml file, proving the format-agnostic

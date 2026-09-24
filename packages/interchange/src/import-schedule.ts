@@ -1,6 +1,6 @@
 import type { ImportCalendarScope } from './import-graph.js';
 import { importMspdi, type ImportMspdiResult } from './import-mspdi.js';
-import { importXer, type ImportXerResult } from './import-xer.js';
+import { importXer, type ImportXerResult, type RestoreLayout } from './import-xer.js';
 import { detectMspdi } from './mspdi-parser.js';
 import { detectXer } from './xer-parser.js';
 
@@ -24,6 +24,11 @@ export interface ImportScheduleInput {
    * library on its own say-so.
    */
   readonly globalCalendarScope?: ImportCalendarScope;
+  /**
+   * Whether a SchedulePoint XER's own layout (placed starts + rows) is restored (layout-interchange,
+   * spec §4.4). Omitted = `RESTORE`. Only the XER orchestrator reads it: MSPDI carries no layout.
+   */
+  readonly restoreLayout?: RestoreLayout;
 }
 
 /** Identical union to each orchestrator's result — a domain-valid graph + report, or a typed rejection. */
@@ -35,13 +40,19 @@ export type ImportScheduleResult = ImportXerResult | ImportMspdiResult;
  * leaks which format probe failed or any internals.
  */
 export function importSchedule(input: ImportScheduleInput): ImportScheduleResult {
-  const { content, filename = null, maxBytes, globalCalendarScope } = input;
+  const { content, filename = null, maxBytes, globalCalendarScope, restoreLayout } = input;
   // Only attach the optional fields when supplied (exactOptionalPropertyTypes forbids `caps: undefined`).
   const capsField = maxBytes === undefined ? {} : { caps: { maxBytes } };
   const scopeField = globalCalendarScope === undefined ? {} : { globalCalendarScope };
 
   if (detectXer(content).ok) {
-    return importXer({ content, filename, ...capsField, ...scopeField });
+    return importXer({
+      content,
+      filename,
+      ...capsField,
+      ...scopeField,
+      ...(restoreLayout === undefined ? {} : { restoreLayout }),
+    });
   }
   if (detectMspdi(content).ok) {
     return importMspdi({ content, filename, ...capsField, ...scopeField });

@@ -60,6 +60,13 @@ export const interchangeCountsSchema = z
     resources: z.number().int().min(0).optional(),
     /** Resource assignments (ADR-0039); absent = 0. */
     assignments: z.number().int().min(0).optional(),
+    /**
+     * Hand-placed starts restored from SchedulePoint's own XER (layout-interchange); absent = 0, which is
+     * every foreign file and every import with the layout switched off.
+     */
+    placements: z.number().int().min(0).optional(),
+    /** Activities whose row was restored from SchedulePoint's own XER; absent = 0. */
+    lanes: z.number().int().min(0).optional(),
   })
   .strict();
 export type InterchangeCounts = z.infer<typeof interchangeCountsSchema>;

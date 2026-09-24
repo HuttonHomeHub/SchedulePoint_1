@@ -210,6 +210,22 @@ export type CanonicalProgress = z.infer<typeof canonicalProgressSchema>;
  * and the nested `progress` (ADR-0035 §6). No source *scheduled* dates — the CPM engine computes them
  * post-import. `durationMinutes` is already in working-minutes.
  */
+/**
+ * **The picture a SchedulePoint file carried for one activity** (layout-interchange, spec §4.5): the
+ * planner's hand-placed start (`visual_start`, ADR-0148) and its row (`lane_index`, ADR-0069).
+ *
+ * A foreign tool never produces one — P6 and MSPDI carry constraints and computed dates, never "a
+ * human put this bar here" — but **SchedulePoint's own XER does**, in two user-defined fields
+ * (`xer-layout-fields.ts`). Either half may be null; a WBS summary never carries a placed start.
+ */
+export const canonicalActivityLayoutSchema = z
+  .object({
+    placedStart: isoDateSchema.nullable(),
+    lane: z.number().int().min(0).max(10_000).nullable(),
+  })
+  .strict();
+export type CanonicalActivityLayout = z.infer<typeof canonicalActivityLayoutSchema>;
+
 export const canonicalActivitySchema = z
   .object({
     /** Source-local identifier, unique within the file (the parser's stable row key). */
@@ -238,6 +254,11 @@ export const canonicalActivitySchema = z
     scheduleAsLateAsPossible: z.boolean().default(false),
     /** Progress, or null when the activity is un-progressed (NOT_STARTED with no actuals). */
     progress: canonicalProgressSchema.nullable(),
+    /**
+     * What a SchedulePoint file said about this activity's picture. Optional, so a foreign file and the
+     * MSPDI adapter produce exactly what they always did: absent means the file said nothing.
+     */
+    layout: canonicalActivityLayoutSchema.optional(),
   })
   .strict();
 export type CanonicalActivity = z.infer<typeof canonicalActivitySchema>;

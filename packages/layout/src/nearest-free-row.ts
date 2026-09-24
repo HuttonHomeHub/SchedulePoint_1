@@ -26,6 +26,8 @@ export interface RowOccupancy {
   nearestFree(mover: PackItem): number;
   /** Record that `id` now sits in `lane`, so later queries see it there. */
   move(id: string, lane: number): void;
+  /** Record a bar the index was not built with, in `lane` (layout-interchange's partial pack). */
+  add(item: PackItem, lane: number): void;
 }
 
 export function rowOccupancy(items: readonly PackItem[]): RowOccupancy {
@@ -67,6 +69,12 @@ export function rowOccupancy(items: readonly PackItem[]): RowOccupancy {
       const item = itemOf.get(id);
       if (item === undefined) return;
       byLane.get(laneOf.get(id)!)?.delete(id);
+      place(item, lane);
+    },
+    add(item, lane) {
+      const existing = laneOf.get(item.id);
+      if (existing !== undefined) byLane.get(existing)?.delete(item.id);
+      itemOf.set(item.id, item);
       place(item, lane);
     },
   };

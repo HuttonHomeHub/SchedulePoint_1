@@ -6,25 +6,23 @@ import { importMspdi } from './import-mspdi.js';
 import { importXer } from './import-xer.js';
 import { buildMspdi, standardWeekDays } from './mspdi.fixtures.js';
 import type { ReportFinding } from './report.js';
+import { LAYOUT_LABEL_PLACED_START, LAYOUT_LABEL_ROW } from './xer-layout-fields.js';
 import { buildXer, standardClndrData, type XerTableSpec } from './xer.fixtures.js';
 
 /**
- * The **hand-placement** across interchange (one-planning-surface M-G).
+ * The **hand-placement** across interchange (one-planning-surface M-G; amended by layout-interchange
+ * M2, spec §0.1, deliberately).
  *
- * The milestone's whole content is a shape and one honest report: the export graph carries
- * `visualStart`, **no parser writes it and no emitter reads it**, and the export direction says so
- * rather than presenting computed dates as fidelity.
+ * **A foreign file cannot carry a placement, and SchedulePoint's own XER now can.** P6 and MSPDI hold
+ * constraints and computed dates, never "a human put this bar here", so a foreign import reports
+ * nothing about placement: the importer knows with certainty that nothing was lost, and a standing
+ * finding would be noise on every import forever. That half of M-G's reasoning stands.
  *
- * **The asymmetry with `assignment-lag.spec.ts` is the point, and it runs the opposite way.** That
- * milestone reports on IMPORT unconditionally because the reader cannot know whether a column it
- * cannot parse held anything. Here the importer knows with certainty that nothing was lost: a
- * hand-placement is a SchedulePoint concept, and P6 and MSPDI carry constraints and computed dates,
- * never "a human put this bar here". So import says **nothing**, and a standing finding would be
- * noise on every import forever.
- *
- * For the same reason `visualStart` is absent from the canonical model where `lagMinutes` is
- * present: that field's slot awaits a real export under an unknown column name (ADR-0071 §5), and
- * this one has no candidate column to discover.
+ * What it said beside that — that no parser writes `visualStart` and the canonical model has no slot
+ * for one — was true of foreign files and was stated of every file. SchedulePoint's XER carries the
+ * placement and the row in two user-defined fields only it writes (`xer-layout-fields.ts`), so a
+ * SchedulePoint file restores both, and switching the option off reports what was present and not
+ * applied. The export half is unchanged in M2: the file does not carry a placement until M3.
  */
 
 const placementFindings = (findings: readonly ReportFinding[]) =>
@@ -59,7 +57,7 @@ const TASK: XerTableSpec = {
   rows: [['T1', 'P1', 'C1', 'A1000', 'Excavate', 'TT_Task', '40']],
 };
 
-describe('import — a source file cannot carry a placement, so nothing is reported', () => {
+describe('import — a foreign file cannot carry a placement, so nothing is reported', () => {
   /**
    * **The negative is the assertion**, and it is the one that would be easiest to get wrong by
    * copying the lag suite. Reporting here would be a false statement: the reader did not drop a
@@ -89,6 +87,66 @@ describe('import — a source file cannot carry a placement, so nothing is repor
     if (!result.ok) return;
     expect(placementFindings(result.report.drops)).toHaveLength(0);
     expect(result.graph.activities.every((a) => a.visualStart == null)).toBe(true);
+  });
+});
+
+describe('import — a SchedulePoint XER restores its layout', () => {
+  const layoutTables: XerTableSpec[] = [
+    {
+      name: 'UDFTYPE',
+      fields: ['udf_type_id', 'table_name', 'udf_type_name', 'udf_type_label', 'logical_data_type'],
+      rows: [
+        ['1', 'TASK', 'user_field_1', LAYOUT_LABEL_PLACED_START, 'FT_TEXT'],
+        ['2', 'TASK', 'user_field_2', LAYOUT_LABEL_ROW, 'FT_INT'],
+      ],
+    },
+    {
+      name: 'UDFVALUE',
+      fields: [
+        'udf_type_id',
+        'fk_id',
+        'proj_id',
+        'udf_date',
+        'udf_number',
+        'udf_text',
+        'udf_code_id',
+      ],
+      rows: [
+        ['1', 'T1', 'P1', '', '', '2026-01-12', ''],
+        ['2', 'T1', 'P1', '', '3', '', ''],
+      ],
+    },
+  ];
+  const content = buildXer([PROJECT, CALENDAR, TASK, ...layoutTables]);
+
+  it('writes the placement and the row onto the graph, and counts both', () => {
+    const result = importXer({ content, filename: 'sample.xer' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.graph.activities[0]).toMatchObject({ visualStart: '2026-01-12', laneIndex: 3 });
+    expect(result.report.mapped).toMatchObject({ placements: 1, lanes: 1 });
+    // Nothing about the layout is dropped: the only drop is the fixture calendar's, which the foreign
+    // import of the same network reports too.
+    expect(result.report.drops.filter((f) => f.entity === 'activity')).toEqual([]);
+  });
+
+  it('IGNORE takes the foreign path exactly, and says what was not applied', () => {
+    const ignored = importXer({ content, filename: 'sample.xer', restoreLayout: 'IGNORE' });
+    const foreign = importXer({
+      content: buildXer([PROJECT, CALENDAR, TASK]),
+      filename: 'sample.xer',
+    });
+    expect(ignored.ok && foreign.ok).toBe(true);
+    if (!ignored.ok || !foreign.ok) return;
+    expect(ignored.graph).toEqual(foreign.graph);
+    expect(ignored.report.mapped).toEqual(foreign.report.mapped);
+    expect(ignored.report.drops).toEqual([
+      ...foreign.report.drops,
+      expect.objectContaining({
+        entity: 'activity',
+        detail: expect.stringMatching(/layout for 1 activity; it was not applied/),
+      }),
+    ]);
   });
 });
 

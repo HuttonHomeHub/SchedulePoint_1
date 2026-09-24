@@ -37,6 +37,20 @@ describe('InterchangeReportTable', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
+  it('shows the layout counts only for a file that carried a layout', () => {
+    const { unmount } = render(<InterchangeReportTable report={report} />);
+    expect(screen.queryByText('Placed starts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Rows')).not.toBeInTheDocument();
+    unmount();
+    render(
+      <InterchangeReportTable
+        report={{ ...report, mapped: { ...report.mapped, placements: 12, lanes: 40 } }}
+      />,
+    );
+    expect(screen.getByText('Placed starts').nextElementSibling).toHaveTextContent('12');
+    expect(screen.getByText('Rows').nextElementSibling).toHaveTextContent('40');
+  });
+
   it('renders each finding section as a labelled region with its count', () => {
     render(<InterchangeReportTable report={report} />);
     expect(screen.getByRole('heading', { name: 'Approximations (1)' })).toBeInTheDocument();

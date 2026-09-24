@@ -72,13 +72,15 @@ export class InterchangeController {
   @ApiBody({
     description:
       'The schedule file to parse (a P6 `.xer` or an MSPDI `.xml`), sent as the `file` multipart ' +
-      'field, plus the optional `globalCalendarScope` (ADR-0053 §5) and `resourceResolutions` form fields.',
+      'field, plus the optional `globalCalendarScope` (ADR-0053 §5), `restoreLayout` and ' +
+      '`resourceResolutions` form fields.',
     schema: {
       type: 'object',
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
         globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
+        restoreLayout: { type: 'string', enum: ['RESTORE', 'IGNORE'], default: 'RESTORE' },
         resourceResolutions: { type: 'string', example: '{"RSRC:1234":"REUSE_EXISTING"}' },
       },
     },
@@ -122,13 +124,15 @@ export class InterchangeController {
   @ApiBody({
     description:
       'The schedule file to import (a P6 `.xer` or an MSPDI `.xml`), sent as the `file` multipart ' +
-      'field, plus the optional `globalCalendarScope` (ADR-0053 §5) and `resourceResolutions` form fields.',
+      'field, plus the optional `globalCalendarScope` (ADR-0053 §5), `restoreLayout` and ' +
+      '`resourceResolutions` form fields.',
     schema: {
       type: 'object',
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
         globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
+        restoreLayout: { type: 'string', enum: ['RESTORE', 'IGNORE'], default: 'RESTORE' },
         resourceResolutions: { type: 'string', example: '{"RSRC:1234":"REUSE_EXISTING"}' },
       },
     },
@@ -186,5 +190,6 @@ function toImportOptions(options: InterchangeImportOptionsDto): InterchangeImpor
     ...(options.resourceResolutions === undefined
       ? {}
       : { resourceResolutions: options.resourceResolutions }),
+    ...(options.restoreLayout === undefined ? {} : { restoreLayout: options.restoreLayout }),
   };
 }

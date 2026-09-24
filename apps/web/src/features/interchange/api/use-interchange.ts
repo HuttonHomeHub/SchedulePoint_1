@@ -33,6 +33,13 @@ const GLOBAL_CALENDAR_SCOPE_FIELD = 'globalCalendarScope';
  */
 const RESOURCE_RESOLUTIONS_FIELD = 'resourceResolutions';
 
+/**
+ * The optional multipart field that switches off restoring a SchedulePoint XER's own layout
+ * (layout-interchange). Sent only as `IGNORE`: the server's default is `RESTORE`, so the common
+ * request stays byte-for-byte what it was.
+ */
+const RESTORE_LAYOUT_FIELD = 'restoreLayout';
+
 /** One interchange upload: the picked file plus the import options that shape the mapping. */
 export interface InterchangeUpload {
   file: File;
@@ -44,6 +51,8 @@ export interface InterchangeUpload {
    * where they mean something.
    */
   resourceResolutions?: Record<string, ResourceCollisionResolution>;
+  /** `IGNORE` imports a SchedulePoint XER without its layout. Omit to restore it (the default). */
+  restoreLayout?: 'IGNORE';
 }
 
 /**
@@ -64,6 +73,9 @@ async function postFile<T>(path: string, upload: InterchangeUpload): Promise<T> 
   }
   if (upload.resourceResolutions !== undefined) {
     form.append(RESOURCE_RESOLUTIONS_FIELD, JSON.stringify(upload.resourceResolutions));
+  }
+  if (upload.restoreLayout !== undefined) {
+    form.append(RESTORE_LAYOUT_FIELD, upload.restoreLayout);
   }
 
   let response: Response;
