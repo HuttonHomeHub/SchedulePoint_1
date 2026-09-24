@@ -59,6 +59,15 @@ export interface TsldViewToggles {
    * which with this default is always: that is a change to an unreachable configuration (ADR-0088
    * D1), recorded rather than hidden. */
   linkSlack?: boolean;
+  /** **Activity codes** on the canvas (NetPoint grammar M4-T1, spec §4.2 G7, CQ-10). Off by
+   * default: the reference prints names without codes, and the code is still in every activity's
+   * accessible name, the selection panel and the Activities table. On, a name reads
+   * `{code} {name}`. */
+  activityCodes?: boolean;
+  /** **Duration & float**, the centre item under a bar (NetPoint grammar M4-T1, spec §4.2 G7). Off
+   * by default, since the reference prints no duration or float under its bars; on, it is drawn at
+   * the detail tier only, and a critical activity prints its duration alone (its float is none). */
+  centreItem?: boolean;
   /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Ungated since the mode collapsed (one-planning-surface M-F-T5). */
@@ -110,6 +119,8 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
    */
   dates: true,
   linkSlack: true,
+  activityCodes: false,
+  centreItem: false,
   lateOverlay: false,
   /**
    * **Off by default since the workspace redesign (M4-T1).**

@@ -488,6 +488,9 @@ const VIEW_TOGGLE_META: Record<
   today: { group: 'markers', label: 'Today line' },
   nonWorking: { group: 'markers', label: 'Non-working' },
   labels: { group: 'markers', label: 'Labels' },
+  // NetPoint grammar M4-T1 (spec §4.13 C1): beside `labels`, both default off.
+  activityCodes: { group: 'markers', label: 'Activity codes' },
+  centreItem: { group: 'markers', label: 'Duration & float' },
   dates: { group: 'insight', label: 'Dates', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
   // **Renamed, not replaced** (one-planning-surface M-E): the float and drift tails were one fact
   // drawn twice and became one bracket, so the control describes the same overlay under a name

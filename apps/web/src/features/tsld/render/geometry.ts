@@ -471,6 +471,11 @@ export const FONT_STACK =
  * session.
  */
 export const LABEL_FONT = `11px ${FONT_STACK}`;
+/**
+ * A milestone's name (NetPoint grammar M4-T1, spec §4.2 G7): bold, never red, as the reference sets
+ * its key dates. Measured under its own memo key (`MeasureCache.measure`'s `font`).
+ */
+export const MILESTONE_LABEL_FONT = `600 11px ${FONT_STACK}`;
 
 /**
  * Discrete zoom stops → pixels per day. A continuous slider interpolates between them;
@@ -556,11 +561,14 @@ export interface RenderActivity {
   id: string;
   type: ActivityType;
   laneIndex: number;
-  /** The on-canvas name row: the activity's identity (`{code} {name}`), pre-built at the mapping
-   * seam from the shared `activityLabel` so the render model does no domain string logic and the
-   * visible label stays consistent with the accessible name (ADR-0026 D1; WCAG 2.5.3). The
-   * duration left it at NetPoint-layout M1 for the row below the bar ({@link durationDays}). */
+  /** The on-canvas name row: the activity's **name** (NetPoint grammar M4-T1, spec §4.2 G7), built
+   * at the mapping seam by `canvasLabel` so the render model does no domain string logic. The code
+   * rides separately ({@link code}) and is printed only while `View ▾ ▸ Markers ▸ Activity codes`
+   * is on. The accessible name (`activityLabel`) leads with the same words (WCAG 2.5.3). The
+   * duration left this row at NetPoint-layout M1 for the row below the bar ({@link durationDays}). */
   label: string;
+  /** The activity code, printed before the name only while the codes switch is on. */
+  code?: string | null | undefined;
   /**
    * The working-day duration the centre item prints under the bar (NetPoint-layout M1). Carried
    * rather than re-derived because it is **not** the drawn span: a working-day figure differs from

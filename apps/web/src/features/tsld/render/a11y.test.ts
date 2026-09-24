@@ -6,6 +6,7 @@ import {
   activityLabel,
   announceChainStep,
   baselineGhostClause,
+  canvasLabel,
   chainNeighbour,
   compareClause,
   compareOverlaySummary,
@@ -105,9 +106,9 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 }
 
 describe('activityLabel (shared identity) and centreItemText', () => {
-  it('prefixes the code when set, else uses the name alone', () => {
+  it('leads with the name and follows it with the code when set (NetPoint grammar M4-T1, R7)', () => {
     expect(activityLabel(activity({ code: 'A1020', name: 'Erect steel' }))).toBe(
-      'A1020 Erect steel',
+      'Erect steel, A1020',
     );
     expect(activityLabel(activity({ code: null, name: 'Erect steel' }))).toBe('Erect steel');
   });
@@ -117,7 +118,19 @@ describe('activityLabel (shared identity) and centreItemText', () => {
       activityLabel(activity({ code: 'EDF - Hynamics Proposal', name: 'EDF - Hynamics Proposal' })),
     ).toBe('EDF - Hynamics Proposal');
     // A code that merely STARTS the name is still a code, and is still printed.
-    expect(activityLabel(activity({ code: 'A', name: 'A frame' }))).toBe('A A frame');
+    expect(activityLabel(activity({ code: 'A', name: 'A frame' }))).toBe('A frame, A');
+  });
+
+  it('the canvas prints the name alone, and the code only while codes are switched on', () => {
+    const a = { code: 'A1020', name: 'Erect steel' };
+    expect(canvasLabel(a, false)).toBe('Erect steel');
+    expect(canvasLabel(a, true)).toBe('A1020 Erect steel');
+    expect(canvasLabel({ code: null, name: 'Erect steel' }, true)).toBe('Erect steel');
+    expect(canvasLabel({ code: 'Same', name: 'Same' }, true)).toBe('Same');
+    // WCAG 2.5.3: the default canvas label LEADS the accessible name, and the coded one is still
+    // contained in it word for word.
+    expect(activityLabel(a).startsWith(canvasLabel(a, false))).toBe(true);
+    for (const word of canvasLabel(a, true).split(' ')) expect(activityLabel(a)).toContain(word);
   });
 
   it('keeps the name row a leading substring of the accessible name (label-in-name)', () => {
@@ -204,7 +217,7 @@ describe('describeActivity (Tier 1)', () => {
 
   it('prefixes the code and gives duration + a date range + lane (1-based)', () => {
     expect(describeActivity(activity({ code: 'A100', laneIndex: 2 }))).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float left',
+      'Excavate, A100, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 3, 0 days float left',
     );
   });
 
@@ -549,17 +562,17 @@ describe('chainNeighbour + announceChainStep', () => {
     expect(chainNeighbour('s1', deps, 'succ')).toBeNull();
   });
 
-  it('prefixes the neighbour code (cross-tier consistency with Tier 1)', () => {
+  it('names the neighbour as Tier 1 does, name then code (cross-tier consistency)', () => {
     const coded = [
       edge({ predecessor: { id: 'p', code: 'A100', name: 'Survey' }, successor: ep('x', 'X') }),
     ];
     expect(chainNeighbour('x', coded, 'pred')).toEqual({
       id: 'p',
-      name: 'A100 Survey',
+      name: 'Survey, A100',
       driving: false,
     });
     expect(announceChainStep('pred', chainNeighbour('x', coded, 'pred'))).toBe(
-      'Predecessor: A100 Survey.',
+      'Predecessor: Survey, A100.',
     );
   });
 
@@ -604,7 +617,7 @@ describe('a11y-string parity across the M4 visual refresh', () => {
         { overlapsInLane: true },
       ),
     ).toBe(
-      'A100 Excavate, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 2 days float left, ' +
+      'Excavate, A100, 3 working days, 01 Jan 2026 to 03 Jan 2026, lane 1, 2 days float left, ' +
         'Start no earlier than 02 Jan 2026, ' +
         'conflict: placed 2 working days before its earliest feasible start, ' +
         'overlaps another activity in its lane',
@@ -621,8 +634,8 @@ describe('a11y-string parity across the M4 visual refresh', () => {
     );
   });
 
-  it('pins the shared name-row identity byte-for-byte (visible label = accessible prefix)', () => {
-    expect(activityLabel({ code: 'A100', name: 'Excavate' })).toBe('A100 Excavate');
+  it('pins the accessible identity byte-for-byte (name, then code; the canvas name leads it)', () => {
+    expect(activityLabel({ code: 'A100', name: 'Excavate' })).toBe('Excavate, A100');
   });
 });
 

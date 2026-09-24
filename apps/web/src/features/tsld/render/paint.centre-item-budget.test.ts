@@ -100,6 +100,8 @@ function paint(withDuration: boolean, pxPerDay: number) {
       labels: true,
       lateOverlay: false,
       dates: false,
+      // Off by default since NetPoint grammar M4-T1; this budget is about the layer when drawn.
+      centreItem: true,
     },
   };
   paintScene(ctx, scene, view, SIZE, PALETTE, 1);

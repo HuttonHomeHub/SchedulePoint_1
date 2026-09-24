@@ -42,10 +42,17 @@ function plainDays(n: number): string {
 }
 
 /**
- * The activity's identity — `{code} {name}` when a code is set, else the name. This is the
- * single source both the on-canvas bar label and the accessible name (`describeActivity`,
- * `chainNeighbour`) build on, so the visible label and the spoken/AT name can never disagree
- * on *which* activity a bar is (WCAG 2.5.3 label-in-name). Kept as a leading substring of both.
+ * The activity's **accessible name**: `{name}, {code}` when a code is set, else the name. Used by
+ * the Tier-1 sentence (`describeActivity`) and chain navigation (`chainNeighbour`).
+ *
+ * **The name leads, and the code follows** (NetPoint grammar M4-T1, the M0-T4 ruling R7). Until then
+ * this string was also the canvas label, `{code} {name}`, which kept the two a leading-substring
+ * match. The canvas now prints the name alone by default (`canvasLabel`, spec §4.2 G7), so the name
+ * that leads the spoken text is exactly the visible label: WCAG 2.5.3's requirement and its best
+ * practice both hold while codes are off. With `View ▾ ▸ Markers ▸ Activity codes` on, the visible
+ * `{code} {name}` is still contained in the name, which 2.5.3 requires, though no longer leading.
+ * Checked before the change: search by code builds its own haystack (`lenses.ts:82`), and nothing
+ * else relied on the code leading.
  */
 export function activityLabel(a: { code: string | null; name: string }): string {
   // **A code identical to the name is printed once** (`docs/TECH_DEBT.md` #376). The XER importer
@@ -53,7 +60,16 @@ export function activityLabel(a: { code: string | null; name: string }): string 
   // (`packages/interchange/src/xer-adapter.ts:475-476`), and P6's project-root node commonly holds
   // the project's short name in both — so the label read "EDF - Hynamics Proposal EDF - Hynamics
   // Proposal". The second copy carries nothing, and this string is also the accessible name.
-  return a.code && a.code !== a.name ? `${a.code} ${a.name}` : a.name;
+  return a.code && a.code !== a.name ? `${a.name}, ${a.code}` : a.name;
+}
+
+/**
+ * What the canvas prints over a bar (NetPoint grammar M4-T1, spec §4.2 G7): the name alone, as the
+ * reference does, or `{code} {name}` while `View ▾ ▸ Markers ▸ Activity codes` is on. A code
+ * identical to the name is printed once (#376), as in {@link activityLabel}.
+ */
+export function canvasLabel(a: { code: string | null; name: string }, withCode: boolean): string {
+  return withCode && a.code && a.code !== a.name ? `${a.code} ${a.name}` : a.name;
 }
 
 /**

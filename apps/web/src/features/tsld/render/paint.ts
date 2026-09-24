@@ -1,6 +1,6 @@
 import type { ActivityType } from '@repo/types';
 
-import { centreItemText } from './a11y';
+import { canvasLabel, centreItemText } from './a11y';
 import { activityIndexFor } from './activity-index';
 import { axisMarkers } from './axis-markers';
 import type { Ctx2D } from './ctx-2d';
@@ -54,6 +54,7 @@ import {
   ARROWHEAD_ROUTED_PX,
   EMPHASIS_STROKE_W,
   LABEL_FONT,
+  MILESTONE_LABEL_FONT,
   LABEL_GAP_PX,
   activityRect,
   DATE_LABEL_MIN_PX_PER_DAY,
@@ -1307,7 +1308,10 @@ export function paintScene(
         lodTier(view.pxPerDay) !== 'overview' &&
         typeof ctx.fillText === 'function' &&
         typeof ctx.measureText === 'function';
+      // Lag plates at the detail tier only (spec §4.2 G11; `m0-lod.md`: Unit 300 withheld 52 % at 4 px
+      // a day and 42 % at 6).
       const platesOn =
+        lodTier(view.pxPerDay) === 'detail' &&
         (toggles.labels ?? true) &&
         view.pxPerDay >= LABEL_MIN_PX_PER_DAY &&
         typeof ctx.fillText === 'function' &&
@@ -2200,6 +2204,11 @@ export function paintScene(
     // byte-for-byte today's. The font is deliberately unchanged — the module-scope width memo is
     // keyed by text alone, so a metric change would poison it across palettes (export path).
     const insidePad = LABEL_PAD_PX + (scene.visualRefresh ? 2 : 0);
+    // The canvas label (NetPoint grammar M4-T1): the name, with the code before it only while
+    // `View ▾ ▸ Markers ▸ Activity codes` is on (spec §4.2 G7).
+    const withCodes = toggles.activityCodes === true;
+    const labelOf = (a: RenderActivity): string =>
+      canvasLabel({ code: a.code ?? null, name: a.label }, withCodes);
 
     for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
@@ -2275,13 +2284,24 @@ export function paintScene(
             : 0;
           const budget = rect.w + leftRoom + rightRoom;
           if (budget <= 0) continue;
-          const text = truncateToWidth(activity.label, budget, measure);
-          if (!text || text === LABEL_ELLIPSIS) continue;
+          // A milestone's name is bold (spec §4.2 G7), measured under its own memo key so the bold
+          // width never answers for the regular string (§4.13 A6).
+          const bold = isMilestone(activity.type);
+          if (bold) ctx.font = MILESTONE_LABEL_FONT;
+          const fit = bold
+            ? (t: string): number =>
+                labelWidths.measure(t, (x) => ctx.measureText(x).width, MILESTONE_LABEL_FONT)
+            : measure;
+          const text = truncateToWidth(labelOf(activity), budget, fit);
+          if (!text || text === LABEL_ELLIPSIS) {
+            if (bold) ctx.font = LABEL_FONT;
+            continue;
+          }
           // Centred on its bar where the room allows, then slid back inside whichever neighbour's
           // half it would otherwise cross. A milestone's 14 px box with a generous gap on one side
           // still gets that whole half — the alternative (a symmetric cap) would truncate it for
           // room it is not using.
-          const textW = measure(text);
+          const textW = fit(text);
           const minCx = hasPrev ? rect.x - leftRoom + textW / 2 : -Infinity;
           const maxCx = rect.x + rect.w + rightRoom - textW / 2;
           // **Centred on the part of the bar that is on screen** (`docs/TECH_DEBT.md` #380). A bar
@@ -2306,8 +2326,9 @@ export function paintScene(
             slots.nameY,
           );
           ctx.textAlign = 'left';
+          if (bold) ctx.font = LABEL_FONT;
         } else if (placement === 'inside') {
-          const text = truncateToWidth(activity.label, rect.w - insidePad * 2, measure);
+          const text = truncateToWidth(labelOf(activity), rect.w - insidePad * 2, measure);
           if (!text) continue;
           // A Colour-by lens repaints the bar a non-criticality hue, so the criticality-based ink can
           // fail contrast (e.g. white-on-warning-yellow at 2.02:1). `barInkColour` applies the paired,
@@ -2319,7 +2340,7 @@ export function paintScene(
         } else {
           const startX = rect.x + rect.w + LABEL_GAP_PX;
           const maxPx = (nextLeftX === Infinity ? size.width : nextLeftX) - startX - LABEL_PAD_PX;
-          const text = truncateToWidth(activity.label, maxPx, measure);
+          const text = truncateToWidth(labelOf(activity), maxPx, measure);
           if (!text) continue;
           ctx.fillStyle = palette.labelBeside;
           ctx.fillText(text, startX, cy);
@@ -2382,7 +2403,15 @@ export function paintScene(
   // Same rule as the names above (#378): the reserved-row branch below fits both dates inside the
   // bar, or flanks each end on its half of the gap, or draws nothing, so the zoom gate only ever
   // withheld dates that fit. It still guards the centre-line path, which has no such room test.
-  if (toggles.dates === true && (reservesTextRows || view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY)) {
+  // **Withheld at the overview tier** (NetPoint grammar M4-T4, spec §4.2 G11): at Year and Fit a
+  // dense plan's dates collide more than they fit (`m0-lod.md`: Unit 300 withheld 46 % at 4 px a
+  // day and 75 % at 1), and the ruler still states position.
+  const datesTier = lodTier(view.pxPerDay) !== 'overview';
+  if (
+    toggles.dates === true &&
+    datesTier &&
+    (reservesTextRows || view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY)
+  ) {
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'middle';
     const measure = (t: string): number => labelWidths.measure(t, (x) => ctx.measureText(x).width);
@@ -2562,7 +2591,15 @@ export function paintScene(
   // before the field existed) ⇒ not one call.
   // No zoom gate (#378): this layer exists only on the reserved-row path, and it never leaves its
   // own bar — the room test below is the whole of its legibility rule.
-  if (reservesTextRows && (toggles.labels ?? true)) {
+  // **Off by default, and drawn at the detail tier only** (NetPoint grammar M4-T1/T4, spec §4.2
+  // G7/G11): the reference prints no duration or float under its bars, so the item is behind
+  // `View ▾ ▸ Markers ▸ Duration & float`.
+  if (
+    reservesTextRows &&
+    (toggles.labels ?? true) &&
+    toggles.centreItem === true &&
+    lodTier(view.pxPerDay) === 'detail'
+  ) {
     // **Every context write is lazy**, so a frame with nothing to print here costs nothing: the
     // first draft set the font, baseline and alignment up front and the golden log caught three
     // writes on a scene whose bars carry no duration — a per-frame cost for an empty layer.
@@ -2575,8 +2612,9 @@ export function paintScene(
       }
       return labelWidths.measure(t, (x) => ctx.measureText(x).width);
     };
-    // Must agree with the dates layer's own condition, which on this path is the toggle alone.
-    const datesDrawn = toggles.dates === true;
+    // Must agree with the dates layer's own condition, which on this path is the toggle and the
+    // tier.
+    const datesDrawn = toggles.dates === true && datesTier;
     let styled = false;
     for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
@@ -2589,7 +2627,9 @@ export function paintScene(
           milestone: isMilestone(activity.type),
           summary: activity.type === 'WBS_SUMMARY',
         };
-        const full = centreItemText(item, 'full');
+        // A critical activity prints its duration alone (spec §4.2 G7, P7): its float is none, and
+        // "0d float left" under every bar on the critical path is noise.
+        const full = centreItemText(item, activity.isCritical ? 'short' : 'full');
         if (full === null) continue;
         // Clear of its own nodes and any abutting neighbour's (A3), whether or not the dates are
         // drawn inside.

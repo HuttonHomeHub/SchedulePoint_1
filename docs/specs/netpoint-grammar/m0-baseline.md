@@ -368,3 +368,31 @@ could fail for the right reason, and both corrections are worth keeping:
 
 `scripts/e2e-durations.json` moves `test:e2e:netpoint-grammar` 45 → 60 s, measured locally (five
 tests); `check:e2e-roster` projects the shards at 545/564/521/580 s against a 593 s budget.
+
+## M4-T1 and M4-T4 — the canvas label, its switches, and the tiers (2026-09-24)
+
+**The label.** The canvas prints the activity's name (`canvasLabel`), and the code travels beside it
+on the render model for `View ▾ ▸ Markers ▸ Activity codes` (default off), which prints
+`{code} {name}`. The accessible name follows the M0-T4 ruling R7 and leads with the visible text:
+`{name}, {code}` (`activityLabel`), in the Tier-1 sentence and in chain navigation. With codes off the
+canvas label is a leading substring of the accessible name (WCAG 2.5.3's best practice); with codes on
+every word of it is still in the name (2.5.3's requirement). No journey matched an option by a code
+prefix (searched).
+
+**The centre item** is behind `View ▾ ▸ Markers ▸ Duration & float`, default off, drawn at the detail
+tier only, and a critical activity prints its duration alone. **Milestone names are bold** (`600 11px`)
+and measured under their own memo key: `MeasureCache.measure` takes an optional font, so a bold width
+never answers for the regular string (§4.13 A6).
+
+**The tiers** (spec §4.2 G11, thresholds from `m0-lod.md`): dates are withheld at the overview tier,
+lag plates are drawn at the detail tier only, and gap labels and attachment dots (M3) at the working
+tier and finer. Names are never withheld by tier (#378). A structural case pins that every tier gate
+in `paint.ts` reads `lodTier(view.pxPerDay)` and that neither threshold constant is read there.
+
+**Verification.** Cases for the codes switch, the bold face and its restore, the font-keyed memo, the
+centre item's default, tier and critical form, dates at overview versus working, and the plate at
+working versus detail: each red under its mutation (six at once, all six failed). Golden: exactly the
+prediction, a `font=600…` before the milestone's name and `font=11px…` after it in both scenes; the
+maximal scene switches the centre item on so the layer stays reached. **FC-G1 byte-identical; FC-G5
+0** (text drawn on Unit 300 at 1 px/day falls to 0, since dates are withheld there and the centre item
+is off).
