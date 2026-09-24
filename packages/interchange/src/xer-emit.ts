@@ -12,6 +12,7 @@ import type {
   CanonicalWorkWeek,
 } from './canonical.js';
 import type { ReportFinding } from './report.js';
+import { encodeLayoutFields } from './xer-layout-fields.js';
 import type { XerTableData } from './xer-serialiser.js';
 
 /**
@@ -464,6 +465,10 @@ export function emitXerFromCanonical(model: CanonicalModel): XerEmitResult {
   if (taskRsrcRows.length > 0) {
     tables.push({ name: 'TASKRSRC', fields: [...TASKRSRC_FIELDS], rows: taskRsrcRows });
   }
+  // SchedulePoint's own layout, as two P6 user-defined fields (layout-interchange, spec §4.4). Last,
+  // after every table whose rows the values point at, and written by the one module that names the
+  // fields — this emitter never spells a label.
+  tables.push(...encodeLayoutFields(model.activities, projId));
 
   return { tables, findings };
 }

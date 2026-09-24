@@ -28,10 +28,11 @@ import { clearBaselineTree } from './clear-baseline-tree';
  * pure parser). The source and the re-import are then compared per activity CODE, because the two
  * plans share no ids.
  *
- * **Today the network survives and the picture does not.** The first test pins the network half and
- * prints the measurement M0-T1 asks for. The second is `it.fails` on purpose: it states FC-1's
- * layout half and passes only while that half is still broken. M3 turns it into `it`, and a green
- * `it.fails` before then would mean the layout started surviving by accident.
+ * **Both survive since M3.** The export writes each activity's placed start and row as two P6
+ * user-defined fields and the import restores them, so FC-1 is an ordinary `it` — it was `it.fails`
+ * through M0–M2 and passing then would have meant the layout survived by accident. The M2 block below
+ * injects hand-built layout fields into the export (stripping the ones the export now writes) to reach
+ * the partial, IGNORE and conflict cases a clean export never produces; FC-3 mutates the real export.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const TRUSTED_ORIGIN = 'http://localhost:5173';
@@ -86,6 +87,10 @@ const dayOf = (iso: string): number => Math.round(Date.parse(`${iso}T00:00:00Z`)
  * port at M0; importing the function is what the plan said M1 would change it to.
  */
 function overlappingActivities(side: Side): number {
+  return overlappingCodes(side).length;
+}
+
+function overlappingCodes(side: Side): string[] {
   const byLane = new Map<number, { code: string; start: number; end: number }[]>();
   for (const r of side.rows.values()) {
     const span = drawnSpanDays(
@@ -110,7 +115,7 @@ function overlappingActivities(side: Side): number {
       }
     }
   }
-  return overlapping.size;
+  return [...overlapping];
 }
 
 const lanesByCode = (side: Side): Record<string, number> =>
@@ -122,6 +127,7 @@ interface Finding {
 interface Report {
   mapped: { placements?: number; lanes?: number };
   approximations: Finding[];
+  repairs: Finding[];
   drops: Finding[];
 }
 
@@ -153,6 +159,14 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
   let conflictedCodes: { early: string; stacked: [string, string] };
   let dryRunReport: Report;
   let badOption: request.Response;
+  // M3 — the export with its layout tables removed (a foreign-looking file), and FC-3's edited file.
+  let stripped: Side;
+  let edited: Side;
+  let editedReport: Report;
+  let editedCorrupt: string;
+  let editedNew: string;
+  let exportedHasLayout: boolean;
+  let editedText: string;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -273,6 +287,24 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     });
     ({ side: conflictedSide, report: conflicted } = await commitInto('Conflicted', conflictedFile));
 
+    exportedHasLayout = /^%T\tUDFVALUE$/m.test(bytes.toString('utf8'));
+    ({ side: stripped } = await commitInto(
+      'Stripped',
+      Buffer.from(stripLayoutTables(bytes.toString('utf8')), 'utf8'),
+    ));
+
+    // FC-3 — the exported file as if edited in P6: a critical-spine duration lengthened, a new TASK
+    // with no layout values, and one UDFVALUE row corrupted.
+    ({
+      text: editedText,
+      corruptCode: editedCorrupt,
+      newCode: editedNew,
+    } = editInP6(bytes.toString('utf8')));
+    ({ side: edited, report: editedReport } = await commitInto(
+      'Edited in P6',
+      Buffer.from(editedText, 'utf8'),
+    ));
+
     const dry = await agent
       .post(`/api/v1/organizations/${orgSlug}/projects/${importProject}/interchange/dry-run`)
       .attach('file', full, 'netpoint-power-plant.xer')
@@ -343,8 +375,8 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
     expect(critical(reimported)).toEqual(critical(source));
   });
 
-  // FC-1's layout half. Fails today by design; M3 turns this into `it`.
-  it.fails('restores every placement and row (FC-1; fails until M3)', () => {
+  // FC-1's layout half: the export carries the picture and the import restores it (M3).
+  it('restores every placement and row (FC-1)', () => {
     expect(differing('visualStart')).toEqual([]);
     expect(differing('laneIndex')).toEqual([]);
     expect(differing('visualEffectiveStart')).toEqual([]);
@@ -407,7 +439,7 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
 
     it('IGNORE imports the network as a foreign file would, and says what it left out', () => {
       expect([...ignored.rows.values()].filter((r) => r.visualStart !== null)).toEqual([]);
-      expect(lanesByCode(ignored)).toEqual(lanesByCode(reimported));
+      expect(lanesByCode(ignored)).toEqual(lanesByCode(stripped));
       expect(ignoredReport.mapped.placements).toBeUndefined();
       expect(ignoredReport.drops.map((f) => f.detail)).toContain(
         `The file carries a SchedulePoint layout for ${String(source.rows.size)} activities; it was not applied`,
@@ -431,6 +463,45 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
 
     it('refuses an unknown restoreLayout value', () => {
       expect(badOption.status).toBe(422);
+    });
+  });
+
+  describe('an exported SchedulePoint XER (M3)', () => {
+    it('carries the layout tables', () => {
+      expect(exportedHasLayout).toBe(true);
+    });
+
+    it('an edited-elsewhere file keeps every carried row, places the new activity, and reports the corrupt value (FC-3)', () => {
+      // Every activity that still carried a row is exactly where the source had it.
+      const carried = [...source.rows.keys()].filter((code) => code !== editedCorrupt);
+      const moved = carried.filter(
+        (code) => edited.rows.get(code)?.laneIndex !== source.rows.get(code)?.laneIndex,
+      );
+      expect(moved).toEqual([]);
+      // The new activity is in a row free at its drawn span.
+      expect(edited.rows.has(editedNew)).toBe(true);
+      expect(overlappingCodes(edited)).not.toContain(editedNew);
+      // The activity whose lane value was corrupted lost only that value: its placement is restored,
+      // and it was given a lane free at its drawn span like any activity the file left without one.
+      expect(edited.rows.get(editedCorrupt)?.visualStart).toBe(
+        source.rows.get(editedCorrupt)?.visualStart,
+      );
+      expect(overlappingCodes(edited)).not.toContain(editedCorrupt);
+      // The conflict count reported equals the engine's among restored placements.
+      const conflicting = [...edited.rows.values()].filter(
+        (r) => r.visualStart !== null && r.visualConflictReason !== null,
+      ).length;
+      const finding = editedReport.approximations.find((f) =>
+        /restored placed starts? (is|are) no longer allowed/.test(f.detail),
+      );
+      if (conflicting === 0) expect(finding).toBeUndefined();
+      else expect(finding?.detail).toMatch(new RegExp(`^${String(conflicting)} `));
+      // One repair for the corrupt value.
+      expect(
+        editedReport.repairs.filter((f) =>
+          /lane value\(s\) were not a whole number/.test(f.detail),
+        ),
+      ).toHaveLength(1);
     });
   });
 
@@ -470,7 +541,8 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
         },
       ];
     });
-    const text = file.toString('utf8');
+    // The export writes its own layout tables since M3; replace them rather than add a second pair.
+    const text = stripLayoutTables(file.toString('utf8'));
     const tables = encodeLayoutFields(activities, project)
       .map((t) =>
         [
@@ -482,6 +554,69 @@ describe.skipIf(!hasDatabase)('Layout interchange: NetPoint XER round trip (e2e)
       .join('\n');
     const end = text.lastIndexOf('%E');
     return Buffer.from(`${text.slice(0, end)}${tables}\n${text.slice(end)}`, 'utf8');
+  }
+
+  /**
+   * FC-3's edits, made to the exported text the way P6 would leave them: `B_ERECT` (on the critical
+   * spine) takes twice its hours, a new `TASK` row arrives with no layout values, and the first row
+   * value is overwritten with something that is not a number.
+   */
+  function editInP6(text: string): { text: string; corruptCode: string; newCode: string } {
+    const lines = text.split('\n');
+    const fieldsOf = (table: string): string[] => {
+      const at = lines.indexOf(`%T\t${table}`);
+      return lines[at + 1]!.split('\t').slice(1);
+    };
+    const task = fieldsOf('TASK');
+    const col = (name: string): number => task.indexOf(name) + 1;
+    const taskRows = lines.filter(
+      (l, i) => l.startsWith('%R\t') && lastTableBefore(lines, i) === 'TASK',
+    );
+    const erect = taskRows.find((l) => l.split('\t')[col('task_code')] === 'B_ERECT')!;
+    const erectCells = erect.split('\t');
+    erectCells[col('target_drtn_hr_cnt')] = String(
+      Number(erectCells[col('target_drtn_hr_cnt')]) * 2,
+    );
+    lines[lines.indexOf(erect)] = erectCells.join('\t');
+    // The new activity: a copy of B_ERECT under a fresh id and code, with no layout values.
+    const added = [...erectCells];
+    added[col('task_id')] = '999999';
+    added[col('task_code')] = 'P6_NEW';
+    added[col('task_name')] = 'Added in P6';
+    lines.splice(lines.indexOf(erectCells.join('\t')) + 1, 0, added.join('\t'));
+    // Corrupt the first row value.
+    const udfv = fieldsOf('UDFVALUE');
+    const vcol = (name: string): number => udfv.indexOf(name) + 1;
+    const taskIdCol = col('task_id');
+    const firstRow = lines.findIndex(
+      (l, i) =>
+        l.startsWith('%R\t') &&
+        lastTableBefore(lines, i) === 'UDFVALUE' &&
+        l.split('\t')[vcol('udf_number')] !== '',
+    );
+    const cells = lines[firstRow]!.split('\t');
+    const fk = cells[vcol('fk_id')]!;
+    cells[vcol('udf_number')] = 'not-a-row';
+    lines[firstRow] = cells.join('\t');
+    const owner = taskRows.find((l) => l.split('\t')[taskIdCol] === fk);
+    if (owner === undefined) throw new Error('the first row value is not on a TASK');
+    return {
+      text: lines.join('\n'),
+      corruptCode: owner.split('\t')[col('task_code')]!,
+      newCode: 'P6_NEW',
+    };
+  }
+
+  function lastTableBefore(lines: string[], index: number): string | undefined {
+    for (let i = index; i >= 0; i -= 1) {
+      if (lines[i]!.startsWith('%T\t')) return lines[i]!.slice(3);
+    }
+    return undefined;
+  }
+
+  /** The XER text without its `UDFTYPE`/`UDFVALUE` blocks: what a file from another tool looks like. */
+  function stripLayoutTables(text: string): string {
+    return text.replace(/%T\t(UDFTYPE|UDFVALUE)\n[\s\S]*?(?=%T\t|%E)/g, '');
   }
 
   /** Two drawn activities that overlap in time and sit in different rows in the source. */

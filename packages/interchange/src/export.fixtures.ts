@@ -469,3 +469,26 @@ function expandInclusive(from: string, to: string): string[] {
   }
   return out;
 }
+
+/**
+ * {@link buildRichExportGraph} as a planner would have left it (layout-interchange M3): every activity
+ * in a row, and every non-summary activity after the first hand-placed a week later per activity. The
+ * values are chosen, not realistic — what matters is that every activity has something to carry.
+ */
+export function buildLaidOutExportGraph(): ExportGraph {
+  const graph = buildRichExportGraph();
+  let placed = 0;
+  return {
+    ...graph,
+    activities: graph.activities.map((activity, lane) => {
+      if (activity.type === 'WBS_SUMMARY') return { ...activity, laneIndex: lane };
+      placed += 1;
+      const day = String(5 + 7 * placed).padStart(2, '0');
+      return {
+        ...activity,
+        laneIndex: lane,
+        visualStart: placed === 1 ? null : `2026-01-${placed < 4 ? day : '28'}`,
+      };
+    }),
+  };
+}

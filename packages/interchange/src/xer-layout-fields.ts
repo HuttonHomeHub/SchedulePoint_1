@@ -254,60 +254,65 @@ const UDFVALUE_FIELDS = [
   'udf_code_id',
 ] as const;
 
+/** The three field definitions, with ids FIXED so the same plan always writes the same bytes. */
+const DEFINITIONS: readonly {
+  readonly id: string;
+  readonly label: string;
+  readonly table: LayoutTable;
+  readonly dataType: string;
+}[] = [
+  { id: '1', label: LAYOUT_LABEL_PLACED_START, table: 'TASK', dataType: 'FT_TEXT' },
+  { id: '2', label: LAYOUT_LABEL_ROW, table: 'TASK', dataType: 'FT_INT' },
+  { id: '3', label: LAYOUT_LABEL_ROW, table: 'PROJWBS', dataType: 'FT_INT' },
+];
+
 /**
  * The `UDFTYPE` and `UDFVALUE` tables carrying `activities`' layout, or no tables when nothing has a
  * layout. The columns are Oracle's documented subset (spec §0.6); no real P6 file with a UDF was
  * available to copy (M0-T2). A summary gets a row only, never a placement.
+ *
+ * **Deterministic** (M3-T2): definition ids are fixed, only the definitions in use are written, and
+ * values are sorted by definition then by the activity's key, so one plan exports the same bytes
+ * whatever order its rows were read in.
  */
 export function encodeLayoutFields(
   activities: readonly Encodable[],
   projId: string,
 ): XerTableData[] {
-  const types: Record<string, string>[] = [];
-  const values: Record<string, string>[] = [];
-  const typeIds = new Map<string, string>();
-  const typeId = (label: string, table: LayoutTable, dataType: string): string => {
-    const slot = `${label}|${table}`;
-    const existing = typeIds.get(slot);
-    if (existing !== undefined) return existing;
-    const id = String(types.length + 1);
-    typeIds.set(slot, id);
-    types.push({
-      udf_type_id: id,
-      table_name: table,
-      udf_type_name: `user_field_sp_${id}`,
-      udf_type_label: label,
-      logical_data_type: dataType,
-    });
-    return id;
-  };
-
+  const values: { typeId: string; fk: string; row: Record<string, string> }[] = [];
   for (const activity of activities) {
     const layout = activity.layout;
     if (layout === undefined) continue;
     const isSummary = activity.type === 'WBS_SUMMARY';
-    const table: LayoutTable = isSummary ? 'PROJWBS' : 'TASK';
     const fk = isSummary ? activity.id.replace(/^wbs:/, '') : activity.id;
     if (layout.placedStart !== null && !isSummary) {
-      values.push({
-        udf_type_id: typeId(LAYOUT_LABEL_PLACED_START, 'TASK', 'FT_TEXT'),
-        fk_id: fk,
-        proj_id: projId,
-        udf_text: layout.placedStart,
-      });
+      values.push({ typeId: '1', fk, row: { udf_text: layout.placedStart } });
     }
     if (layout.lane !== null) {
-      values.push({
-        udf_type_id: typeId(LAYOUT_LABEL_ROW, table, 'FT_INT'),
-        fk_id: fk,
-        proj_id: projId,
-        udf_number: String(layout.lane),
-      });
+      values.push({ typeId: isSummary ? '3' : '2', fk, row: { udf_number: String(layout.lane) } });
     }
   }
   if (values.length === 0) return [];
+  values.sort((a, b) =>
+    a.typeId !== b.typeId ? (a.typeId < b.typeId ? -1 : 1) : a.fk < b.fk ? -1 : a.fk > b.fk ? 1 : 0,
+  );
+  const used = new Set(values.map((v) => v.typeId));
   return [
-    { name: 'UDFTYPE', fields: [...UDFTYPE_FIELDS], rows: types },
-    { name: 'UDFVALUE', fields: [...UDFVALUE_FIELDS], rows: values },
+    {
+      name: 'UDFTYPE',
+      fields: [...UDFTYPE_FIELDS],
+      rows: DEFINITIONS.filter((d) => used.has(d.id)).map((d) => ({
+        udf_type_id: d.id,
+        table_name: d.table,
+        udf_type_name: `user_field_sp_${d.id}`,
+        udf_type_label: d.label,
+        logical_data_type: d.dataType,
+      })),
+    },
+    {
+      name: 'UDFVALUE',
+      fields: [...UDFVALUE_FIELDS],
+      rows: values.map((v) => ({ udf_type_id: v.typeId, fk_id: v.fk, proj_id: projId, ...v.row })),
+    },
   ];
 }

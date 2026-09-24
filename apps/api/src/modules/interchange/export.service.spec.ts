@@ -49,6 +49,8 @@ function activityRow(overrides: Partial<Record<string, unknown>> = {}): Record<s
     constraintType: null,
     constraintDate: null,
     visualStart: null,
+    // NOT NULL on the real table (default 0), so every row the service reads has one.
+    laneIndex: 0,
     secondaryConstraintType: null,
     secondaryConstraintDate: null,
     scheduleAsLateAsPossible: false,
@@ -170,42 +172,42 @@ describe('ExportService.exportPlan', () => {
   });
 
   /**
-   * **The seam the pure package structurally cannot test** (one-planning-surface M-G).
+   * **The seam the pure package structurally cannot test** (one-planning-surface M-G; layout-interchange
+   * M3).
    *
-   * `packages/interchange` proves the mapper counts placements and that neither serialiser writes
-   * one — but every one of those tests builds its graph from a fixture. If THIS service simply did
-   * not copy `visual_start` off the row, every one of them would stay green while the export
-   * reported nothing on a plan full of hand-placed bars: a drop report that is silent precisely
-   * when there is something to report.
-   *
-   * So it asserts the finding end to end, from a database row through the real graph assembly and
-   * the real mapper, and the negative beside it — because a service that hard-coded the finding
-   * would pass the positive alone.
+   * `packages/interchange` proves the mapper and the emitter from fixtures. If THIS service did not copy
+   * `visual_start` and `lane_index` off the row, every one of those tests would stay green while a real
+   * export wrote no layout and reported nothing. So the finding and the file are asserted end to end,
+   * from database rows through the real graph assembly, mapper and emitter, in both formats.
    */
-  it('carries a hand-placement off the row, so the export reports the drop (M-G)', async () => {
+  it('carries the placement and the row off the row: XER writes them, MSPDI reports the drop', async () => {
     activities.findAllActiveByPlan.mockResolvedValue([
-      activityRow({ visualStart: new Date(Date.UTC(2026, 1, 9)) }),
-      activityRow({ id: 'act-2', code: 'A1010', name: 'Design' }),
+      activityRow({ visualStart: new Date(Date.UTC(2026, 1, 9)), laneIndex: 3 }),
+      activityRow({ id: 'act-2', code: 'A1010', name: 'Design', laneIndex: 1 }),
     ]);
 
-    const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
-    const placed = report.drops.filter((d) => d.detail.includes('hand-placed start'));
-    expect(placed).toHaveLength(1);
-    // ONE of the two rows carries it — so the count proves the field was READ, not merely that the
+    const xer = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
+    // ONE of the two rows is placed — so the count proves the field was READ, not merely that the
     // finding fires whenever any activity exists.
-    expect(placed[0]?.detail).toMatch(/^1 activity\(ies\) carry a hand-placed start/);
+    expect(xer.report.approximations.map((f) => f.detail)).toContain(
+      '1 hand-placed start(s) and 2 lane(s) written as SchedulePoint layout fields; P6 and other tools show every activity at its computed dates',
+    );
+    const text = Buffer.from(xer.bytes).toString('utf8');
+    expect(text).toMatch(/^%R\t1\tact-1\t[^\t]*\t\t\t2026-02-09\t$/m);
+    expect(text).toMatch(/^%R\t2\tact-1\t[^\t]*\t\t3\t\t$/m);
+    expect(text).toMatch(/^%R\t2\tact-2\t[^\t]*\t\t1\t\t$/m);
+
+    const mspdi = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'mspdi');
+    expect(mspdi.report.drops.map((f) => f.detail)).toContain(
+      '1 activity(ies) carry a hand-placed start, which is not written to the exported file',
+    );
   });
 
   /**
-   * **The parity limb, and it is the one that would catch a serialiser inventing a column.** The
-   * model-level equality is proved in `packages/interchange`; this proves it survives the real
-   * emitter, from real rows, for the file a planner actually hands over. A placement may change the
-   * REPORT and may not change one byte of the programme.
-   *
-   * The two exports differ in `visual_start` and nothing else, so any difference in the output is
-   * attributable.
+   * **FC-7 through the real service.** A placement adds one row to the layout tables and changes no
+   * other byte of the file: the scheduling tables are what a planner hands to P6.
    */
-  it('a placement changes the report and not one exported byte (M-G)', async () => {
+  it('a placement changes the layout tables and nothing else in the XER', async () => {
     activities.findAllActiveByPlan.mockResolvedValue([activityRow()]);
     const plain = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
 
@@ -214,24 +216,26 @@ describe('ExportService.exportPlan', () => {
     ]);
     const placed = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
 
-    expect(Buffer.from(placed.bytes).equals(Buffer.from(plain.bytes))).toBe(true);
-    // Not vacuous: the run that produced those identical bytes DID report the placement.
-    expect(placed.report.drops.filter((d) => d.detail.includes('hand-placed start'))).toHaveLength(
-      1,
-    );
-    expect(plain.report.drops.filter((d) => d.detail.includes('hand-placed start'))).toHaveLength(
-      0,
-    );
+    const withoutLayout = (bytes: Uint8Array): string =>
+      Buffer.from(bytes)
+        .toString('utf8')
+        .replace(/%T\t(UDFTYPE|UDFVALUE)\n[\s\S]*?(?=%T\t|%E)/g, '');
+    expect(withoutLayout(placed.bytes)).toBe(withoutLayout(plain.bytes));
+    // Not vacuous: the two files do differ, in the layout tables.
+    expect(Buffer.from(placed.bytes).equals(Buffer.from(plain.bytes))).toBe(false);
   });
 
-  it('reports no placement drop for a plan nobody has hand-placed (M-G)', async () => {
+  it('reports nothing about placements for a plan nobody has hand-placed, in either format (M-G)', async () => {
     activities.findAllActiveByPlan.mockResolvedValue([
       activityRow(),
       activityRow({ id: 'act-2', code: 'A1010' }),
     ]);
 
-    const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, 'xer');
-    expect(report.drops.filter((d) => d.detail.includes('hand-placed start'))).toHaveLength(0);
+    for (const format of ['xer', 'mspdi'] as const) {
+      const { report } = await service.exportPlan(member, ORG_SLUG, PLAN_ID, format);
+      const all = [...report.approximations, ...report.drops].map((f) => f.detail);
+      expect(all.filter((d) => d.includes('hand-placed'))).toEqual([]);
+    }
   });
 
   it('exports constraints, progress and resources (M4c) rather than dropping them', async () => {

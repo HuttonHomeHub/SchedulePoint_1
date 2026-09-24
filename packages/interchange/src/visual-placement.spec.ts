@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { mapExportGraphToCanonical } from './export-mapper.js';
-import { buildRichExportGraph } from './export.fixtures.js';
+import { exportMspdi } from './export-mspdi.js';
+import { exportXer } from './export-xer.js';
+import { buildLaidOutExportGraph, buildRichExportGraph } from './export.fixtures.js';
 import { importMspdi } from './import-mspdi.js';
 import { importXer } from './import-xer.js';
 import { buildMspdi, standardWeekDays } from './mspdi.fixtures.js';
@@ -150,7 +155,7 @@ describe('import — a SchedulePoint XER restores its layout', () => {
   });
 });
 
-describe('export — the placement reaches the mapper and is reported as dropped', () => {
+describe('export — the placement reaches the mapper and is reported honestly per format', () => {
   const withPlacement = (visualStart: string | null, count = 1) => {
     const graph = buildRichExportGraph();
     return {
@@ -159,7 +164,7 @@ describe('export — the placement reaches the mapper and is reported as dropped
     };
   };
 
-  it('reports the drop, with a count, when a real placement is about to be lost', () => {
+  it('a format without the fields (MSPDI) reports the drop, with a count', () => {
     const { findings } = mapExportGraphToCanonical(withPlacement('2026-02-09'));
     const placed = placementFindings(findings);
     expect(placed).toHaveLength(1);
@@ -167,6 +172,22 @@ describe('export — the placement reaches the mapper and is reported as dropped
     // The count is named so a planner can tell whether the programme they are handing over is one
     // of the affected ones — "some data was dropped" is not actionable.
     expect(placed[0]?.detail).toMatch(/^1 activity\(ies\) carry a hand-placed start/);
+  });
+
+  it('XER carries the layout, so the finding is an approximation naming both counts', () => {
+    const graph = buildLaidOutExportGraph();
+    const { findings } = mapExportGraphToCanonical(graph, { carriesLayout: true });
+    const placed = graph.activities.filter((a) => a.visualStart != null).length;
+    const layout = findings.filter((f) => f.detail.includes('SchedulePoint layout fields'));
+    expect(layout).toEqual([
+      expect.objectContaining({
+        kind: 'approximation',
+        detail: `${String(placed)} hand-placed start(s) and ${String(graph.activities.length)} lane(s) written as SchedulePoint layout fields; P6 and other tools show every activity at its computed dates`,
+      }),
+    ]);
+    expect(findings.filter((f) => f.kind === 'drop' && f.detail.includes('hand-placed'))).toEqual(
+      [],
+    );
   });
 
   /** ONE aggregate finding for the whole export, never one per bar — a placed phase is forty rows. */
@@ -177,21 +198,83 @@ describe('export — the placement reaches the mapper and is reported as dropped
     expect(placed[0]?.detail).toMatch(/^3 activity\(ies\) carry a hand-placed start/);
   });
 
-  it('says nothing for a programme nobody has hand-placed', () => {
-    // Conditional, unlike `lagMinutes`' import half — here we KNOW whether anything is lost, so a
-    // standing finding would be a false alarm on the overwhelming majority of exports.
-    const { findings } = mapExportGraphToCanonical(buildRichExportGraph());
-    expect(placementFindings(findings)).toHaveLength(0);
+  it('says nothing for a programme nobody has hand-placed, in either format', () => {
+    // Rows alone are never reported: no tool but SchedulePoint has rows, so nothing reads differently.
+    const graph = { ...buildRichExportGraph() };
+    const rowsOnly = {
+      ...graph,
+      activities: graph.activities.map((a, i) => ({ ...a, laneIndex: i })),
+    };
+    for (const options of [{}, { carriesLayout: true }]) {
+      const { findings } = mapExportGraphToCanonical(rowsOnly, options);
+      expect(findings.filter((f) => f.detail.includes('hand-placed'))).toEqual([]);
+    }
   });
 
   /**
-   * **The parity limb.** A field that reaches the mapper must not reach the FILE — the canonical
-   * model is what both serialisers read, so an activity gaining a placement may not change a single
-   * byte of either output.
+   * **FC-7** (replacing M-G's parity limb, which asserted the placement reached no byte of the file —
+   * now false for XER by design). Every table of the XER **other than the two layout tables** is
+   * byte-identical to what the exporter wrote before this epic, for a fully laid-out rich plan. The
+   * golden was written by the pre-M3 exporter (`a9021394`) from the same graph and is never regenerated.
    */
-  it('changes no exported byte: the canonical model is identical with and without a placement', () => {
-    const plain = mapExportGraphToCanonical(buildRichExportGraph());
-    const placed = mapExportGraphToCanonical(withPlacement('2026-02-09', 3));
-    expect(JSON.stringify(placed.model)).toBe(JSON.stringify(plain.model));
+  it('FC-7: every scheduling table is byte-identical to the pre-epic export', () => {
+    const golden = readFileSync(
+      fileURLToPath(new URL('./golden/fc7-rich-export.pre-epic.xer', import.meta.url)),
+      'utf8',
+    );
+    const exported = exportXer({ graph: buildLaidOutExportGraph() });
+    if (!exported.ok) throw new Error(exported.error.code);
+    const text = new TextDecoder().decode(exported.bytes);
+    const tablesOf = (xer: string) =>
+      xer
+        .split(/(?=^%T\t)/m)
+        .filter((block) => block.startsWith('%T\t'))
+        .map((block) => block.replace(/%E\s*$/, '').trimEnd());
+    const layoutTables = new Set(['UDFTYPE', 'UDFVALUE']);
+    const nameOf = (block: string) => block.slice(3, block.indexOf('\n'));
+    const now = tablesOf(text);
+    expect(now.filter((b) => !layoutTables.has(nameOf(b)))).toEqual(tablesOf(golden));
+    // And the layout really is there, so a green run cannot mean the new tables went missing.
+    expect(now.map(nameOf).filter((n) => layoutTables.has(n))).toEqual(['UDFTYPE', 'UDFVALUE']);
+    // The header line is scheduling content too (version, date).
+    expect(text.split('\n')[0]).toBe(golden.split('\n')[0]);
+  });
+
+  // The M3 security review: a format that does not write the layout never carries it on the canonical
+  // model, so no emitter can begin reading a field it was never meant to carry.
+  it('only a format that writes the layout carries it on the canonical model', () => {
+    const graph = buildLaidOutExportGraph();
+    const without = mapExportGraphToCanonical(graph).model.activities;
+    expect(without.filter((a) => a.layout !== undefined)).toEqual([]);
+    const withIt = mapExportGraphToCanonical(graph, { carriesLayout: true }).model.activities;
+    expect(withIt.filter((a) => a.layout !== undefined)).toHaveLength(graph.activities.length);
+  });
+
+  it('the MSPDI export is unchanged by the layout on the canonical model', () => {
+    const plain = exportMspdi({ graph: buildRichExportGraph() });
+    const laidOut = exportMspdi({
+      graph: {
+        ...buildRichExportGraph(),
+        activities: buildRichExportGraph().activities.map((a, i) => ({ ...a, laneIndex: i })),
+      },
+    });
+    if (!plain.ok || !laidOut.ok) throw new Error('mspdi export failed');
+    expect(Buffer.from(laidOut.bytes).equals(Buffer.from(plain.bytes))).toBe(true);
+  });
+
+  it('decode(emit) round-trips the layout through the real XER bytes', () => {
+    const graph = buildLaidOutExportGraph();
+    const exported = exportXer({ graph });
+    if (!exported.ok) throw new Error(exported.error.code);
+    const imported = importXer({ content: exported.bytes, filename: 'rich.xer' });
+    if (!imported.ok) throw new Error(imported.error.code);
+    const byCode = new Map(imported.graph.activities.map((a) => [a.code, a]));
+    for (const a of graph.activities) {
+      const back = byCode.get(a.code);
+      expect(back?.laneIndex ?? null, a.code).toBe(a.laneIndex ?? null);
+      expect(back?.visualStart ?? null, a.code).toBe(
+        a.type === 'WBS_SUMMARY' ? null : (a.visualStart ?? null),
+      );
+    }
   });
 });

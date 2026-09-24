@@ -221,6 +221,9 @@ export class ExportService {
         // drop report could not be truthful about whether anything was lost, which is the half a
         // bare "not supported" comment would have skipped.
         visualStart: dateOrNull(a.visualStart),
+        // The row the bar sits in. With `visualStart`, what a SchedulePoint XER carries back
+        // (layout-interchange M3); every other format ignores it.
+        laneIndex: a.laneIndex,
       })),
       dependencies: dependencyRows.map((d: ExportEdge) => ({
         key: d.id,

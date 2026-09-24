@@ -546,11 +546,19 @@ the span the canvas draws and keyed by activity code, so the same file lays out 
 (This said "a deterministic lane per source order" until 2026-09-24: true of phase 1 alone, and stale since
 ADR-0069 added the packing.)
 
+**Export** is `GET …/organizations/:orgSlug/plans/:planId/interchange/export/:format` (`xer` or
+`mspdi`, any member holding `interchange:export`). It streams the file as an attachment and puts the
+export report — what the format could not carry — in the `X-Interchange-Report` header as compact JSON.
+Any other format is a **422**. (This route was undocumented here until 2026-09-24.)
+
 **A SchedulePoint XER carries its own layout** (layout-interchange). Each activity's hand-placed start
 (`visualStart`) and lane (`laneIndex`) travel in two P6 user-defined fields that only SchedulePoint writes
 and reads, labelled exactly `SchedulePoint layout v1: placed start` and `SchedulePoint layout v1: lane`.
+An XER export writes them for every activity, with every other table exactly as before; its report names
+them as one `approximation`, because another tool shows each activity at its computed dates. An MSPDI
+export does not carry them and reports the placements as one `drop`.
 On import with `restoreLayout=RESTORE` (the default) both are written as the file carried them; the
-packing then leaves every carried row where it is and places only activities the file left without one.
+packing then leaves every carried lane where it is and places only activities the file left without one.
 `restoreLayout=IGNORE` imports the file exactly as one from another tool would be, and a `drop` finding
 names what was not applied. The report counts what was restored in `mapped.placements` and
 `mapped.lanes` (**absent when zero**, so a foreign file's report is unchanged), and after the commit's
