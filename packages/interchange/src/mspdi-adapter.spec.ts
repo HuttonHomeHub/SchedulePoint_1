@@ -134,7 +134,7 @@ describe('adaptMspdiToCanonical — activity types + durations', () => {
         },
       ],
     });
-    const typed = findings.filter((f) => f.reason.includes('start or a finish'));
+    const typed = findings.filter((f) => f.reason?.includes('start or a finish') === true);
     expect(typed.map((f) => [f.kind, f.sourceRef, f.detail])).toEqual([
       [
         'approximation',
