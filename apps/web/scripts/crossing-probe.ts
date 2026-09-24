@@ -265,9 +265,31 @@ export const PALETTE: TsldPalette = {
  */
 export function linkPaths(paths: readonly RecordedPath[]): RecordedPath[] {
   const sentinels = new Set<string>(Object.values(LINK_SENTINELS));
-  return paths.filter(
+  const links = paths.filter(
     (p) => p.flush === 'stroke' && sentinels.has(p.strokeStyle) && p.pts.length >= 2,
   );
+  // **The shape control (NetPoint grammar M0-T5, FC-G0).** A link is an open polyline. From that
+  // epic's M2 and M3, three new marks are STROKED in a link's own ink: the node rim (in the rung
+  // ink), the lag plate's border and the attachment dot's outline. Each is a closed shape. A closed
+  // shape in a link sentinel would be counted here as a link and would inflate every crossing count
+  // with nothing looking wrong. So refuse it: the mark must take its own palette key and sentinel.
+  const closed = links.filter((p) => isClosed(p.pts));
+  if (closed.length > 0) {
+    throw new Error(
+      `FC-G0: ${closed.length} closed path(s) were stroked in a link sentinel (first: ` +
+        `${closed[0]!.strokeStyle}, ${closed[0]!.pts.length} points). A node rim, plate or dot ` +
+        'must have its own palette key and sentinel, or it is counted as a link.',
+    );
+  }
+  return links;
+}
+
+/** Whether a recorded polyline returns to its start, which an open link route never does. */
+export function isClosed(pts: readonly Pt[]): boolean {
+  if (pts.length < 4) return false;
+  const a = pts[0]!;
+  const b = pts.at(-1)!;
+  return Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001;
 }
 
 interface Seg {

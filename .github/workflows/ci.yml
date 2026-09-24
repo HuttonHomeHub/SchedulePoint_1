@@ -831,6 +831,16 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:arrange
 
+      # The NetPoint grammar (playwright.netpoint-grammar.config.ts, docs/specs/netpoint-grammar/).
+      # It drives the real canvas on the seeded NetPoint reference plan with the pen enforced. Each
+      # milestone's colour change is asserted where the painter reads it: the token on the scene
+      # canvas, and the painted pixels. The three canvas colour traps this repository has shipped
+      # (ADR-0102, ADR-0100 M4, ADR-0121) are invisible to jsdom, which resolves no custom property
+      # and has no canvas. Runs after the prior suites tear down their servers, reusing the ports.
+      - name: Web end-to-end tests (NetPoint grammar)
+        if: ${{ matrix.shard == 4 }}
+        run: pnpm --filter @repo/web test:e2e:netpoint-grammar
+
       # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
       # AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
       # membership write is per-row optimistic-locked (a mocked fetch accepts any version, so the
