@@ -23,6 +23,12 @@ flowchart LR
 the quietest mark. Positions, routing, layout and the engine stay unchanged. This follows the
 NetPoint-layout programme (ADR-0151–0154).
 
+### Round-1 amendments (2026-09-24)
+
+The spec's §4.13 records fifteen decisions from the agent agreement round (A1–A5, A-n1–A-n3, U1–U3,
+X1–X3, C1, P1–P3). **They override any task text below that conflicts with them.** The inline edits
+below mark the tasks they move.
+
 ### Rules for every milestone
 
 - **Start from `main`, not from the prototype.** The prototype's edits are kept only as
@@ -140,6 +146,10 @@ milestone a planner can see, on the canvas itself.`
     layer's items (dates, gap labels, lag plates, attachment dots) that the existing collision
     ladders suppress. Set each tier's threshold where the fraction first drops below one half. Commit
     the `LOD_*` values with that reason (ADR-0151 D2).
+  - **Land `lodTier` and its structural test here, dark** (spec §4.13 A5). Commit a concrete
+    overview-tier ceiling on direction marks per frame (P3).
+  - The CQ-1 ruling must state that it evaluated the overview tier, and that the ruler is present on
+    the workspace, export, print and guest surfaces (X3).
 - **Complexity:** M
 - **Dependencies:** M0-T3
 - **Risks:** the reviewer refuses → CQ-1 fallback, with no loss of schedule
@@ -155,7 +165,8 @@ milestone a planner can see, on the canvas itself.`
 
 - **Description:**
   - On `chain-3-placed`, compare `slackByDependencyId` (early basis, `geometry.ts:275-283`) with the
-    drawn `waitingSpanX` gap. If they differ, file a `docs/TECH_DEBT.md` row before M3 (spec R14).
+    drawn `waitingSpanX` gap. If they differ, M3 unifies both on the placed, drawn basis before any
+    label ships (spec §4.13 X1). Filing a row is not enough.
   - Add sentinel entries for every new palette key to `crossing-probe.ts` / `netpoint-evaluate.ts`'s
     `PALETTE`. Add a control that throws if a stroke flush in a link sentinel has a node-rim or
     plate-box shape (FC-G0).
@@ -265,6 +276,12 @@ finds three node rungs.
 > FC-G1 fingerprints identical (spec §3.2 predicts it: centre-line 30 px and 7 channels at both
 > heights). Lane containment. Minimap gates. Golden by prediction.
 
+##### Task M2-T0: decouple the node and the layout reach first (spec §4.13 A2)
+
+- **Description:** Add `LAYOUT_CONTACT_REACH_PX = 5` to `layout-objective.ts` and use it at `:251`.
+  Set `NODE_RADIUS` to a literal 5 with a docblock, so that nothing moves.
+- **Testing:** FC-G1b (Tidy/Re-layout identical). Golden log unchanged.
+
 ##### Task M2-T1: bar height and rung hue
 
 - **Description:** Change `geometry.ts:80` and `globals.css:844`. Update the ladder comment
@@ -275,8 +292,11 @@ finds three node rungs.
 - **Risks:** a fingerprint differs → stop. The §3.2 arithmetic is wrong somewhere and must be found
   before shipping (FC-G1)
 - **Testing:** as the feature
+- **Order:** lands after M2-T0 below.
 - **Development steps:**
-  1. Golden prediction: bar rect heights +1, fill values changed. Nothing else.
+  1. Golden prediction: bar rect heights +1, bar fill values changed (via `--canvas-bar`, spec
+     §4.13 A-n1). Span bars at half height (U1). Node boxes unchanged, because M2-T0 has already
+     decoupled `NODE_RADIUS` from `BAR_HEIGHT`.
   2. Change, re-baseline, and compare fingerprints.
 
 #### Feature M2-B: the node
@@ -307,6 +327,10 @@ finds three node rungs.
   2. Assert the relationship, not the value.
 
 ##### Task M2-T3: paint the nodes and share them
+
+- **Amended (spec §4.13 A1, A3):** the arrowhead tip is pulled back to the rim at paint time, with
+  a unit case asserting ≥ 6 px of head outside the disc. Dates are placed clear of discs here: the
+  old M4-T3 is done in this milestone. A name on a short bar paints above the disc.
 
 - **Description:** Rewrite the node block in `paint.ts` (under "The node at each end"): fill with the
   ground key, stroke in the rung key, weight by rung. Share a node where
@@ -468,8 +492,8 @@ listbox's logic summary saying the same number). It toggles `Link gaps` off and 
 
 **Outcome:** names without codes, wrapped where clear, dates clear of nodes, the centre item off by
 default, bold milestone names, and three detail tiers.
-**Entry point:** the TSLD canvas, plus `View ▾ ▸ Labels ▸ Activity codes` and
-`View ▾ ▸ Labels ▸ Duration & float` (new, both default off).
+**Entry point:** the TSLD canvas, plus `View ▾ ▸ Markers ▸ Activity codes` and
+`View ▾ ▸ Markers ▸ Duration & float` (new, both default off).
 **Journey:** `text.spec.ts` toggles `Activity codes` and finds the parallel listbox option's
 accessible name unchanged either way (the canvas is `aria-hidden`; the name is the ruling from
 M0-T4). At the Year preset no date text is recorded; at Week, dates are present (via a test hook
@@ -491,7 +515,7 @@ reading the painter's text log, the recorder already used by FC-N6a).
 
 ##### Task M4-T1: split the label and add the switches
 
-- **Description:** As the feature. The switches join `tsld-toolbar-items.tsx:490-507`'s Labels group.
+- **Description:** As the feature. The switches join the `markers` group beside the `labels` toggle (`tsld-toolbar-items.tsx:133,490`; spec §4.13 C1).
 - **Complexity:** M
 - **Dependencies:** M0-T4
 - **Risks:** as the feature
@@ -526,7 +550,7 @@ reading the painter's text log, the recorder already used by FC-N6a).
      neighbour.
   2. Implement, measure FC-G5, and write the golden prediction.
 
-##### Task M4-T3: dates clear of discs
+##### Task M4-T3: dates clear of discs — MOVED to M2-T3 (spec §4.13 A3)
 
 - **Description:** In the Layer 3.7 reserved-row branch, offset start and finish by the node radius.
   Keep the "one date per node" rule (#379) and its shared predicate from M2-T3.
@@ -549,7 +573,7 @@ reading the painter's text log, the recorder already used by FC-N6a).
 > **Testing requirements:** a unit case per tier per layer, the #378 regression, the journey's Year
 > vs Week assertion
 
-##### Task M4-T4: the tier function and its consumers
+##### Task M4-T4: the tier function's remaining consumers (`lodTier` itself lands in M0-T4, spec §4.13 A5)
 
 - **Description:** As the feature. One function, pinned by a structural test that every layer's gate
   reads it (not a copy of a threshold).

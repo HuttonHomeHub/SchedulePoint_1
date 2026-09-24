@@ -194,14 +194,14 @@ defaults unless an answer overrides one.
 > else, so that the text says who and when without clutter.
 >
 > - **Given** an activity **then** its canvas label is the name only. The code is off by default and
->   comes back with `View ▾ ▸ Labels ▸ Activity codes` (CQ-10).
+>   comes back with `View ▾ ▸ Markers ▸ Activity codes` (CQ-10).
 > - **Given** a name that would truncate on one line **when** a second line fits clear of every routed
 >   link segment and every neighbour's text **then** the name wraps to two lines. Otherwise it
 >   truncates, as today.
 > - **Given** the dates **then** each date sits in the below-bar row, horizontally clear of its
 >   node's disc.
 > - **Given** the duration-and-float centre item **then** it is off by default and comes back with
->   `View ▾ ▸ Labels ▸ Duration & float`. When it is on, a critical activity prints its duration only,
+>   `View ▾ ▸ Markers ▸ Duration & float`. When it is on, a critical activity prints its duration only,
 >   because the node rim already says critical.
 > - **Given** a milestone **then** its name is drawn in the same ink as other names, in bold. It is
 >   never drawn in the critical red (the reference's red labels are rejected,
@@ -543,7 +543,7 @@ two lines, prints dates under the nodes, and prints no duration or float
 - **Dates clear of discs.** A start date begins at the start node's right edge plus a gap. A finish
   date ends at the finish node's left edge minus a gap. The `nextDrawsStartAtNode` "one date per
   node" rule (#379) stays.
-- **Centre item off.** Default off, behind `View ▾ ▸ Labels ▸ Duration & float`. When on, a critical
+- **Centre item off.** Default off, behind `View ▾ ▸ Markers ▸ Duration & float`. When on, a critical
   activity prints its duration only (P7).
 - **Bold milestone names.** The label width memo is keyed by text alone ("the module-scope width memo
   is keyed by text alone, so a metric change would poison it", `paint.ts` Layer 3 label comment), so
@@ -669,7 +669,7 @@ None. No model, column, index, constraint, migration, endpoint or DTO changes.
   and milestone triangle. The waiting-dash entry is removed (ADR-0154 D7's rule: key every mark and
   none retired).
 - `tsld-toolbar-items.tsx` / `view-toggles.ts`: `activityCodes` (default off) and `centreItem`
-  (default off) join the Labels group. `linkSlack` is relabelled `Link gaps` and defaults on. Keys
+  (default off) join the `markers` group ("Markers" in `View ▾`, beside `labels`). `linkSlack` is relabelled `Link gaps` and defaults on. Keys
   are kept where possible (the `floatTails` precedent, `view-toggles.ts:27-31`).
 - No new component and no new primitive.
 
@@ -702,19 +702,19 @@ only in a dated entry that quotes that commit, never edited in place (the NetPoi
 **Yardstick plans:** `plan:reference-netpoint-power-plant`, `chain-3-placed`, `small-17`, Unit 300
 (`p6_torture_test_v1.xer`), `scale-2000`. **Zooms:** 1, 4, 12 and 40 px/day.
 
-| ID         | Condition                     | Bar                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | If it fails                                                                                                      |
-| ---------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **FC-G0**  | Instruments see the new marks | Every new mark has its own palette key and a distinct harness sentinel. `crossing-probe.ts` and `netpoint-evaluate.ts` controls re-verified red against a node rim and a gap-label box stroked in a link sentinel. `linkPaths` count equals the visible-edge count                                                                                                                                                                                                                      | No milestone that adds a mark ships                                                                              |
-| **FC-G1**  | Positions unchanged           | Routed-polyline fingerprints (`crossing-probe.ts`) **byte-identical** before and after each milestone on all yardstick plans at all zooms. Hence `x/link` and hidden-link counts identical                                                                                                                                                                                                                                                                                              | Any difference is a defect in that milestone and it does not ship                                                |
-| **FC-G2**  | Contrast                      | Pairs land in `token-contrast.test.ts` before the painter reads the token, each verified red. Every link ink (driving, minor, near, critical) ≥ 3:1 on `--canvas`, `--canvas-band`, `--print`. Mark shade ≥ 3:1 on its line and on the ground. Node rims ≥ 3:1 on the ground. Gap-label text ≥ 4.5:1 on its plate. Ladder: each rung ≥ 3:1, neighbours ≥ 1.5:1, the 1.70:1 ceiling kept. Grid ceilings: unit and month ≤ 1.80:1, year ≤ 2.50:1. Every value in gamut                    | The value is re-solved. No bar moves                                                                             |
-| **FC-G3**  | Hue separation                | ΔE (the `globals.css:433-439` instrument) between link ink and each bar rung ≥ 5 asserted (the existing "must differ" floor), value reported                                                                                                                                                                                                                                                                                                                                            | Re-solve the link hue                                                                                            |
-| **FC-G4**  | WCAG 1.4.1                    | Each fact has a non-colour channel: criticality (rim weight / milestone outline + Tier-2 words), drivingness (weight), direction (marks + head), gap (label text), attachment (dot shape). A unit case per mark, plus a greyscale render reviewed by the accessibility reviewer                                                                                                                                                                                                         | Critical node gets a centre dot (§4.2 G4). The milestone keeps an outline                                        |
-| **FC-G5**  | Text                          | From the recorded painter on all plans at 4 and 12 px/day: text–text intersections **0** (the FC-N6a instrument), text–node-disc intersections **0**, text–routed-segment intersections added by wrapping **0**. `paint.lane-containment.test.ts` green with new cases for node, triangle, gap plate and attachment dot                                                                                                                                                                 | Node diameter reduced to the largest that holds. Wrapping withdrawn if its limb fails                            |
-| **FC-G6**  | Golden log                    | `paint.golden.test.ts` re-baselined by hand against a prediction committed first, listing which layers' entries change and roughly how. The diff is confined to the predicted layers. No `-u` (ADR-0034)                                                                                                                                                                                                                                                                                | An unpredicted change is investigated before the baseline moves                                                  |
-| **FC-G7**  | Paint cost                    | ADR-0128 `canvas-draw` at 500 and 2,000, on the product owner's hardware: Week dropped-frame % ≤ baseline + **2.00 pp**, spread reported, delta < spread = INDETERMINATE. Fit reported only. The probe scene paints the new marks (gap labels > 0, attachment dots > 0, dashed grid on). Counting-stub budgets: `setLineDash` calls per frame ≤ 1 per grid tier, gap labels ≤ visible links, `measureText` memoised per (text, font). `paint.routing-budget.test.ts` green **unedited** | Grid goes solid at the same ceilings. Gap labels move to detail tier. Mark spacing reverts to 56 px. Re-measured |
-| **FC-G8**  | Legend                        | A structural test maps every palette key the painter reads for a mark to a legend entry, and every legend entry to a key the painter reads                                                                                                                                                                                                                                                                                                                                              | Defect: the milestone does not ship                                                                              |
-| **FC-G9**  | Paper and parity              | `print-palette.structural.test.ts` sweeps the new keys. `e2e-export` decodes the real PNG and finds link-hue pixels and node-ground pixels. Minimap gates green. Guest view renders under the canvas scope                                                                                                                                                                                                                                                                              | Defect                                                                                                           |
-| **FC-G10** | The picture                   | Before/after of the reference plan and Unit 300 at the three tiers, shown to the product owner at M2, M3 and M4                                                                                                                                                                                                                                                                                                                                                                         | Judged, not gated, and recorded as judged                                                                        |
+| ID         | Condition                     | Bar                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | If it fails                                                                                                      |
+| ---------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| **FC-G0**  | Instruments see the new marks | Every new mark has its own palette key and a distinct harness sentinel. `crossing-probe.ts` and `netpoint-evaluate.ts` controls re-verified red against a node rim and a gap-label box stroked in a link sentinel. `linkPaths` count equals the visible-edge count                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | No milestone that adds a mark ships                                                                              |
+| **FC-G1**  | Positions unchanged           | Routed-polyline fingerprints (`crossing-probe.ts`) **byte-identical** before and after each milestone on all yardstick plans at all zooms. Hence `x/link` and hidden-link counts identical **FC-G1b:** Tidy and Re-layout (ADR-0152) produce identical lane assignments on every yardstick plan before and after each milestone (§4.13 A2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Any difference is a defect in that milestone and it does not ship                                                |
+| **FC-G2**  | Contrast                      | Pairs land in `token-contrast.test.ts` before the painter reads the token, each verified red. Every link ink (driving, minor, near, critical) ≥ 3:1 on `--canvas`, `--canvas-band`, `--print`. Mark shade ≥ 3:1 on its line and on the ground. Node rims ≥ 3:1 on the ground. Gap-label and lag-plate text ≥ 4.5:1 on its fill. The lag-plate border ≥ 3:1 on the ground (§4.13 X2). Ladder: each rung ≥ 3:1 and neighbours ≥ 1.5:1 (the existing floors only; 1.70:1 is not asserted, §4.13 A-n2). Grid ceilings: unit and month ≤ 1.80:1, year ≤ 2.50:1. `--canvas-bar` pairs mirror today's bar pairs (§4.13 A-n1). Every value in gamut                                                                                                                                                                                                                        | The value is re-solved. No bar moves                                                                             |
+| **FC-G3**  | Hue separation                | ΔE (the `globals.css:433-439` instrument) between link ink and each bar rung ≥ 5 asserted (the existing "must differ" floor), value reported                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Re-solve the link hue                                                                                            |
+| **FC-G4**  | WCAG 1.4.1                    | Each fact has a non-colour channel: criticality (rim weight / milestone outline + Tier-2 words), drivingness (weight), direction (marks + head), gap (label text), attachment (dot shape). A unit case per mark, plus a greyscale render reviewed by the accessibility reviewer Lag versus gap: the lag plate is bordered and the gap label is not (§4.13 U2), asserted by a unit case.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Critical node gets a centre dot (§4.2 G4). The milestone keeps an outline                                        |
+| **FC-G5**  | Text                          | From the recorded painter on all plans at **1**, 4 and 12 px/day: text–text intersections **0** (the FC-N6a instrument); date and plate text against node discs **0**; text–routed-segment intersections added by wrapping **0**. A name may cross a disc only where its bar is shorter than the name, and then paints above it (§4.13 A3). `paint.lane-containment.test.ts` green with new cases for node, triangle, gap label, lag plate, attachment dot and a wrapped name                                                                                                                                                                                                                                                                                                                                                                                      | Node diameter reduced to the largest that holds. Wrapping withdrawn if its limb fails                            |
+| **FC-G6**  | Golden log                    | `paint.golden.test.ts` re-baselined by hand against a prediction committed first, listing which layers' entries change and roughly how. The diff is confined to the predicted layers. No `-u` (ADR-0034)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | An unpredicted change is investigated before the baseline moves                                                  |
+| **FC-G7**  | Paint cost                    | ADR-0128 `canvas-draw` at 500 and 2,000, on the product owner's hardware: Week dropped-frame % ≤ baseline + **2.00 pp**, spread reported, delta < spread = INDETERMINATE. Fit reported only. The probe scene paints the new marks (gap labels > 0, attachment dots > 0, dashed grid on). Counting-stub budgets: `setLineDash` calls per frame ≤ 1 per grid tier, gap labels ≤ visible links, `measureText` memoised per (text, font). `paint.routing-budget.test.ts` green **unedited** Also: gap-label working-day walk invocations ≤ distinct visible waiting links, with no re-walk of an unchanged (pred end, gap) pair across frames; wrap-candidate segment tests ≤ visible truncating names; direction marks at the overview tier ≤ the ceiling M0-T4 commits (§4.13 P1–P3). At M6 the Fit figure is diffed against the M0-T6 baseline and shown, ungraded. | Grid goes solid at the same ceilings. Gap labels move to detail tier. Mark spacing reverts to 56 px. Re-measured |
+| **FC-G8**  | Legend                        | A structural test maps every palette key the painter reads for a mark to a legend entry, and every legend entry to a key the painter reads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Defect: the milestone does not ship                                                                              |
+| **FC-G9**  | Paper and parity              | `print-palette.structural.test.ts` sweeps the new keys. `e2e-export` decodes the real PNG and finds link-hue pixels and node-ground pixels. Minimap gates green. Guest view renders under the canvas scope The Gantt (inside the canvas scope, §4.13 U3) is covered by the `e2e-gantt*` suites in the sweep and by an FC-G10 picture.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Defect                                                                                                           |
+| **FC-G10** | The picture                   | Before/after of the reference plan and Unit 300 at the three tiers, shown to the product owner at M2, M3 and M4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Judged, not gated, and recorded as judged                                                                        |
 
 **Honest limits.** FC-G1 proves the lines did not move. It does not prove the picture is easier to
 read, which only FC-G10 can speak to. FC-G7's Fit limb stays ungraded, as ADR-0128 requires. The
@@ -753,7 +753,7 @@ re-checked at filing.
 | R6  | **Minimap palette** turns green and its frame gate crosses a new bar ink                                                                                                                                                                                               | The minimap reads the same tokens. `MINIMAP_GROUNDS` gates re-run (`token-contrast.test.ts:381-390`). ADR-0142 D2's data-date ordering is unaffected                  |
 | R7  | **Accessible name vs visible label** once the code leaves the canvas (WCAG 2.5.3 best practice)                                                                                                                                                                        | Accessibility reviewer rules at M0-T4. Fallback: the accessible name becomes `name, code` so the visible text leads                                                   |
 | R8  | **The legend keys a mark that is not on the canvas** (the shipped defect ADR-0151 M6 recorded)                                                                                                                                                                         | FC-G8 census, both directions                                                                                                                                         |
-| R9  | **Every `--primary` consumer in the canvas scope turns green**: WBS band summaries, lens `bar`, resource strip demand bars (`palette.ts` resource-strip resolver)                                                                                                      | M0-T3 inventory. The strip is pointed at a `--chart-*` ramp member if the product owner prefers demand not to share the activity hue (decided in M2, not guessed now) |
+| R9  | **Superseded by §4.13 A-n1: the bar reads `--canvas-bar`, so `--primary` is not re-hued.** Originally: every `--primary` consumer in the canvas scope turns green: WBS band summaries, lens `bar`, resource strip demand bars (`palette.ts` resource-strip resolver)   | M0-T3 inventory. The strip is pointed at a `--chart-*` ramp member if the product owner prefers demand not to share the activity hue (decided in M2, not guessed now) |
 | R10 | **The 3:1 floor for every link ink on all three grounds** leaves little room for a light, quiet link                                                                                                                                                                   | Solve, not choose (FC-G2). Quietness comes from weight (1 px non-driving), not from lightness                                                                         |
 | R11 | **Gap labels on every link read as noise** (`view-toggles.ts:46-50`'s own objection)                                                                                                                                                                                   | Working tier only, minimum run length, a switch, and FC-G10 judged on Unit 300                                                                                        |
 | R12 | **Paint cost** of the dashed grid, labels, wrap test and bold font                                                                                                                                                                                                     | FC-G7 counting-stub budgets plus the ADR-0128 reading. Remedies are named in advance                                                                                  |
@@ -770,6 +770,109 @@ widths and zooms, and any contrast figures taken from them.
 This spec does not restate them, and any figure there that decides something is re-derived under
 FC-G2 before it is relied on. If the pictures contradict a default here, the default changes in a
 dated amendment to this section. The pictures are not overridden by the default.
+
+### 4.13 Amendments from the agent agreement round (2026-09-24)
+
+These decisions come from round 1 of [`agent-agreement.md`](./agent-agreement.md). **Where they
+conflict with earlier sections, this section wins.** The plan's tasks are amended to match.
+
+**A1 — the arrowhead stops at the node's rim.** An FS successor's anchor is the bar end on the
+centre-line (`link-routing.ts:793-811`), which is the node centre (`paint.ts:934`). A ground-filled
+7.5 px disc painted after the links would hide 7.5 of the head's 8 px. So, at paint time only, the
+arrowhead's tip is pulled back along the final segment by `NODE_RADIUS` plus half the rim width. The
+routed polyline is untouched, so FC-G1 still holds. A unit case asserts that the head has at least
+6 px outside the disc. ADR-0157 records this as an amendment to the ADR-0064/0065 arrowhead.
+
+**A2 — the layout search keeps its own contact reach.** `layout-objective.ts:251` uses `NODE_RADIUS`
+as a task's contact reach, and that score drives Tidy and Re-layout (ADR-0152). A new
+`LAYOUT_CONTACT_REACH_PX` in `layout-objective.ts` holds today's value (5), with a docblock saying
+why it is not the painted radius. It lands before any geometry changes. FC-G1b guards it.
+
+**A3 — names may paint over a node; dates and plates may not.** In `rowSlots`
+(`geometry.ts:135-144`) any disc with a radius over about 5 px reaches into both text rows, and a
+centred name on a short bar covers both nodes. That is decided now, not discovered at M2:
+
+- Dates and plates are placed clear of discs. That is the old M4-T3, which moves into M2-B.
+- A name keeps its centred place. Where its bar is shorter than the name, it paints above the disc.
+- FC-G5's zero counts dates and plates against discs, not names.
+
+**A4 — a wrapped name fits its lane.** Two lines take their line height from the pad:
+`(BAR_PAD − ROW_TEXT_GAP_PX) / 2`, which is 12.5 px at a 6 px bar. They are set in 11 px (today's
+label size), not 12 px. A single-line name keeps 12 px. `paint.lane-containment.test.ts` gains the
+wrapped case.
+
+**A5 — the tier function lands at M0.** `lodTier` and its structural test (no copied threshold) land
+dark in M0-T4, with the thresholds that task measures. M3 is then the first consumer.
+
+**A-n1 — the bar gets its own token, `--canvas-bar`.** `--primary` has two meanings inside the canvas
+scope. It is the bar, and it is the primary button in the DOM mounted inside the canvas container:
+the dock, the create popover and the selection bar (`globals.css:1375,1385-1387`). Re-hueing it would
+turn those buttons green, which reads as "success". So the palette's `bar` key reads a new
+`--canvas-bar`, following the `--canvas-link-minor` precedent (`globals.css:654`), and `--primary` is
+not re-hued. This reverses §4.8's rejection of `--canvas-bar` and dissolves R9. Until M3, the
+driving link keeps `--primary` (blue) and is therefore distinct from the green bar. Other consumers
+of `--primary` stay blue: the WBS band summary and the resource strip. M0-T3 still inventories them,
+so any whose meaning is "the activity bar" is repointed deliberately.
+
+**A-n2 — 1.70:1 is not a ceiling.** The ladder's existing gates assert only the 1.5:1 neighbour floor
+(`token-contrast.test.ts:250-254,317-322`). 1.70:1 was a feasibility limit under a white label.
+
+**A-n3 — the month band inverts.** `--canvas-band` becomes darker than the near-white ground. M0
+records its value and pair, and M1 re-values it with the ground.
+
+**U1 — spans are thinner than work.** LOE and WBS-summary bars (the ones that draw no node) paint at
+half the bar height, centred, in their rung's ink. They keep their bracket and tab caps. Weight
+carries the difference, so no new colour is needed. `activityRect` is unchanged, so routing and
+hit-testing are unaffected (FC-G1). The legend gains a span entry.
+
+**U2 — a gap label and a lag plate are different shapes.**
+
+- **Lag plate:** a bordered box. Its border is repointed from `--border` to the link's own ink, so it
+  genuinely meets 1.4.11 (X2).
+- **Gap label:** borderless, on an opaque ground chip that knocks out the line beneath it, with the
+  text in the link's ink.
+- **One link with both:** one bordered plate carries both figures.
+- **The `+`/`−` sign** still leads a lag figure. It is no longer the only distinction.
+
+**U3 — the Gantt is inside the canvas scope.** `GanttPanel.tsx:974-1004` wraps the whole panel in the
+canvas surface (ADR-0097 Landing E). So the Gantt's bars and ground follow this grammar's tokens
+automatically, with no drift between the two views. That makes the Gantt a surface this grammar
+reaches: it is in FC-G9, in the M0-T3 inventory, and in every FC-G10 picture set.
+
+**X1 — the spoken slack and the drawn gap use one basis.** M3-T2 is gated on M0-T5. If
+`slackByDependencyId` (early basis, `geometry.ts:275-283`) and the drawn `waitingSpanX` (placed basis)
+differ on any placed yardstick plan, M3 unifies both on the placed, drawn span (ADR-0148) inside M3.
+M3 does not ship a visible number that disagrees with the spoken one.
+
+**X2 — the plate box has a committed 1.4.11 treatment.**
+
+- **Lag plate:** its border is ≥ 3:1 (U2).
+- **Gap label:** it has no border, so it has no box to assess. Its bounds come from the opaque
+  ground fill, and the fact is carried by the text at ≥ 4.5:1. This exemption note goes into
+  `token-contrast.test.ts` in the style of `:350-361`.
+
+**X3 — the CQ-1 ruling has two stated premises.** The accessibility reviewer's provisional ruling
+accepts the quiet grid, subject to two things M0-T4 must show:
+
+- the argument holds at the overview tier, where node dates are withheld and only the ruler carries
+  position;
+- the ruler is present and in step on every surface this grammar reaches: the workspace, export,
+  print and the guest view.
+
+If either fails, CQ-1's fallback (dashed at ≥ 3:1) is taken without further argument.
+
+**C1 — the new switches join the existing `markers` group.** There is no "Labels" group in `View ▾`:
+`ViewToggleGroupId` (`tsld-toolbar-items.tsx:133`) is `zoom | structure | markers | insight | panels
+| columns`, and `labels` is a leaf toggle in `markers` (`:490`). "Activity codes" and "Centre item"
+are registered in `markers`, next to `labels`. Earlier mentions now read `View ▾ ▸ Markers`. The renamed "Link gaps" switch (formerly "Link slack") keeps
+`enabled: CANVAS_LIVE_FEEDBACK_ENABLED`, which is default-on.
+
+**P1–P3 — three cost budgets are committed at M0.**
+
+- **P1:** the gap-label walk and the wrap-test budgets are in FC-G7.
+- **P2:** 1 px/day joins FC-G5's zooms.
+- **P3:** M0-T4 commits a concrete ceiling on direction marks at the overview tier, as the total per
+  frame, alongside the raised per-link cap.
 
 ## 5. Critical questions
 
