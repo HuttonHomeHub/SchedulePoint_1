@@ -118,8 +118,16 @@ milestone a planner can see, on the canvas itself.`
   (new: a ceiling on decoration). Add the gap-plate and link-mark pairs, and `--canvas-link*` on
   `--print`. Extend `MINIMAP_GROUNDS` if the frame crosses a new ink. Then list every DOM and canvas
   consumer that resolves `--primary` under `[data-surface="canvas"]` (spec R9).
+  **Name the bar pairs that move with `--canvas-bar`** (spec §4.13 A-n1, architect round 3):
+  - the label-on-bar ink (`labelInside`, `palette.ts:196`);
+  - the WBS band name pair (`token-contrast.test.ts:302-311`);
+  - `CRITICALITY_PAIRS` and the ground check (`:260-264,:328`).
+
+  Each is re-pointed from `--primary` to `--canvas-bar`, with a paired `--canvas-bar-foreground` if
+  `--primary-foreground` does not clear 4.5:1 on the new fill.
   **Every pair is solved against the near-white ground `oklch(0.995 0.002 250)` (CQ-2), not today's
   `0.958`.** Solving against the old ground and re-valuing it at M1 would move every pair twice.
+
 - **Complexity:** M
 - **Dependencies:** M0-T2
 - **Risks:** the month floor at `:853-856` must be **replaced, not deleted**. Its replacement ceiling
