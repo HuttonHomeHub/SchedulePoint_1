@@ -15,11 +15,14 @@ import { TsldLegend } from './TsldLegend';
  * rollback contract) is covered by the default TsldLegendPanel suite.
  */
 describe('TsldLegend — ADR-0054 insight marks', () => {
-  it('keys the feasible window and the link-slack chip', () => {
+  it('keys the feasible window, and not the selection slack chip the refreshed canvas retired', () => {
     render(<TsldLegend />);
     const legend = screen.getByRole('list', { name: 'Legend' });
     expect(within(legend).getByText(/^Feasible window/)).toBeInTheDocument();
-    expect(within(legend).getByText('Link slack (days)')).toBeInTheDocument();
+    // NetPoint grammar M3-T3: the refreshed link path labels every waiting link's gap instead of
+    // chipping the selection's, so the chip's key would name a mark the canvas no longer paints.
+    expect(within(legend).queryByText('Link slack (days)')).not.toBeInTheDocument();
+    expect(within(legend).getByText('Gap in working days')).toBeInTheDocument();
   });
 
   it('keys the window ONCE, where the two tails were keyed twice', () => {

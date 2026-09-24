@@ -278,3 +278,33 @@ budget.
   `link-gap.ts`, takes the plan calendar and returns the gap with its unit. `summarizeLogic` says
   "Permit 4 working days", or "1 calendar day" where no calendar is loaded. `TsldPanel` passes its
   `workingDayPredicate`.
+
+## M3-T3 — gap labels replace the waiting dash (2026-09-24)
+
+**What changed.** A waiting non-driving link is labelled with the working days it waits
+(`link-gap.ts`, the same number the listbox speaks), borderless on a ground chip in the mark ink,
+on the longest horizontal stretch of its own route inside the waiting interval. The M2 waiting dash
+is retired: the link layer now sets no dash at all on the refreshed path. Where a link has both a lag
+and a gap, one plate carries both (`+2d · 4d`, spec §4.13 U2), and the plate's border is the link's
+own ink so it reads as a box. Withheld at the overview tier (`lodTier`), when the stretch will not
+hold the label, and when `View ▾ ▸ Link gaps` is off. The switch was `Link slack`, which chipped
+only the selection's links; the key keeps its name and now defaults on. The legend's `Waiting time`
+row becomes `Gap in working days`, and the selection chip's row (`Link slack (days)`) is shown only
+on the legacy path that still draws it.
+
+**Two things found by running rather than reading.**
+
+- `paint.rect-cache-budget.test.ts` went red (229 against 69 `Date.parse` calls): the gap read each
+  endpoint's dates per EDGE. Now per ACTIVITY per frame. The gate's sparse scene was then moved from
+  4 to 8 edges, because at 4 only half the successors were endpoints, so the two counts differed by
+  endpoints rather than edges; at 8 against 24 the only difference is edge count, which is the
+  property the gate is named for. Removing the per-frame cache takes it red again (229 against 101).
+- **FC-G5 found 4 gap labels printed on node discs** (small-17 1, Unit 300 3, at 4 px a day). The
+  waiting interval runs node to node, so the label is now placed inside it less `NODE_REACH_PX` at
+  each end. FC-G5 is **0** again, and a unit case (`withholds a gap too short to clear both end
+nodes`) is red without the inset.
+
+**FC-G1:** route and lane fingerprints byte-identical to `base.md`. **Golden log:** re-baselined
+against a written prediction, which the diff matched exactly: no gap label or dash in the maximal
+scene, and each of its two plates now strokes its border in its own link's ink (both links are
+selection-incident there, so `#0af`), one `strokeStyle` per plate where there was one for all.

@@ -73,17 +73,35 @@ export function workingDaysBetween(
   return n;
 }
 
-/** The gap a relationship leaves, in working days when `isWorkingDay` is known. */
-export function linkGap(args: LinkGapArgs, isWorkingDay: ((d: number) => boolean) | null): LinkGap {
+/**
+ * The gap and the day interval it measures, `[fromDay, toDay)` on the canvas's day axis. The painter
+ * places the gap label on this interval, so where the label sits and what it says are one
+ * computation (NetPoint grammar M3-T3).
+ */
+export function linkGapSpan(
+  args: LinkGapArgs,
+  isWorkingDay: ((d: number) => boolean) | null,
+): LinkGap & { fromDay: number; toDay: number } {
   const { type, predStartDay, predFinishDay, succStartDay, succFinishDay, lagDays } = args;
   const walk = isWorkingDay ? walkFor(isWorkingDay) : ELAPSED_DAY_WALK;
-  const from = lagAnchorDay(predStartDay, predFinishDay, type, lagDays, walk);
-  const to = type === 'FS' || type === 'SS' ? succStartDay : succFinishDay + 1;
-  if (!isWorkingDay) return { days: to - from, unit: 'calendar' };
+  const fromDay = lagAnchorDay(predStartDay, predFinishDay, type, lagDays, walk);
+  const toDay = type === 'FS' || type === 'SS' ? succStartDay : succFinishDay + 1;
+  if (!isWorkingDay) return { days: toDay - fromDay, unit: 'calendar', fromDay, toDay };
   // No waiting (a driving tie) or a lead: the calendar difference, which is zero or negative and
   // draws no label either way.
-  if (to <= from) return { days: to - from, unit: 'working' };
-  return { days: workingDaysBetween(isWorkingDay, from, to), unit: 'working' };
+  if (toDay <= fromDay) return { days: toDay - fromDay, unit: 'working', fromDay, toDay };
+  return {
+    days: workingDaysBetween(isWorkingDay, fromDay, toDay),
+    unit: 'working',
+    fromDay,
+    toDay,
+  };
+}
+
+/** The gap a relationship leaves, in working days when `isWorkingDay` is known. */
+export function linkGap(args: LinkGapArgs, isWorkingDay: ((d: number) => boolean) | null): LinkGap {
+  const { days, unit } = linkGapSpan(args, isWorkingDay);
+  return { days, unit };
 }
 
 /** A gap as the canvas prints it: `3d` in working days, `12 cal d` when it is calendar days. */

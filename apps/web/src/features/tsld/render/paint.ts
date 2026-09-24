@@ -12,14 +12,8 @@ import {
 } from './layers/shapes';
 import { labelWidths } from './layers/text-measure';
 import type { GhostBar, LevelledGhost } from './lenses';
-import {
-  chevronsAlong,
-  formatLag,
-  lagPlateAt,
-  linkRung,
-  splitRunsByX,
-  waitingSpanX,
-} from './link-marks';
+import { formatLinkGap, linkGapSpan } from './link-gap';
+import { chevronsAlong, formatLag, gapLabelAt, lagPlateAt, linkRung } from './link-marks';
 import { buildPaintFrame } from './paint-frame';
 import {
   arrowhead,
@@ -32,6 +26,7 @@ import {
   linkHighlightIds,
   loeBracketRects,
   NODE_RADIUS,
+  lodTier,
   nodeCentres,
   nodeMarks,
   NODE_REACH_PX,
@@ -378,13 +373,6 @@ export interface TsldScene {
    * and it is structural: there is one route function, not two.
    */
   linkRouting?: boolean | undefined;
-  /**
-   * Draw a link's WAITING time solid rather than dashed (NetPoint-layout M2). **Measurement harnesses
-   * only**: a dashed run is a separate stroke, and at a node glyph (where links converge by design)
-   * a recorder cannot tell which link a run continues. A link's geometry does not depend on its dash,
-   * so measuring it solid measures the same lines. Absent in the product.
-   */
-  solidWaiting?: boolean;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -464,9 +452,6 @@ function traceWindowCap(ctx: Ctx2D, x: number, band: Rect): void {
 
 /** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
 const SLACK_CHIP_H = 13;
-/** Waiting time on a link (NetPoint-layout M2): the dash's one meaning. Distinct from the lag run's
- * `LAG_RUN_DASH`, which is on a bar rather than a link, so the legend can key the two apart. */
-const WAITING_DASH: readonly number[] = [3, 3];
 
 /**
  * Height (px) of the opaque plate drawn behind a flanking date when the float/drift tails are ALSO
@@ -1223,16 +1208,17 @@ export function paintScene(
      * - A **driving** link is 2 px solid in its rung's ink (`linkRung`): critical only when both
      *   ends are critical. Drivingness is carried by WEIGHT, criticality also by the endpoints' node
      *   shapes, so no fact here is colour-only (WCAG 1.4.1).
-     * - A **non-driving** link is 1 px SOLID in `linkMinor`. The dash that used to mean "non-driving"
-     *   is retired and given one meaning only:
-     * - **Waiting time** — the part of a NON-DRIVING route inside the relationship's drawn gap
-     *   (`waitingSpanX`, the same number `edgeGapDays` speaks) — is dashed, in the link's own ink.
-     *   A driving link has no waiting by definition, so it is never dashed, even where calendar
-     *   days put a weekend between its ends. `scene.solidWaiting` draws it solid instead; only a
-     *   measurement harness sets it (see that field).
+     * - A **non-driving** link is 1 px SOLID in `linkMinor`.
+     * - **Waiting time is a number, not a dash** (NetPoint grammar M3-T3, spec §4.2 G6, CQ-5). The
+     *   dash ADR-0154 D3 gave it is retired: a non-driving link whose gap (`linkGapSpan`, working
+     *   days on the plan calendar, the number the listbox speaks) is positive carries a borderless
+     *   label on its waiting run, on an opaque ground chip, at the working tier or finer, under the
+     *   `Link gaps` switch. A driving link has no waiting by definition, so it never has one.
      * - **Direction**: filled chevrons along the line (`chevronsAlong`, capped per link) plus the
      *   terminal head, filled in the link's ink in one batch per bucket.
-     * - **Lag**: a plate on the link's longest segment, drawn after every link so no line crosses it.
+     * - **Lag**: a BORDERED plate on the link's longest segment, its border in the link's own ink
+     *   (U2/X2), drawn after every link so no line crosses it. A link with a lag and a gap carries
+     *   one plate with both figures, the lag first with its sign.
      *
      * Links are batched into buckets by (ink, width), drawn quietest first, so a critical link is
      * never overdrawn by an ordinary one and each style is set once per bucket, not per link.
@@ -1263,7 +1249,6 @@ export function paintScene(
         markInk: string;
         width: number;
         solid: Point[][];
-        waiting: Point[][];
         marks: [Point, Point, Point][];
       }
       const order = ['minor', 'normal', 'near', 'critical'] as const;
@@ -1277,7 +1262,30 @@ export function paintScene(
               : palette.linkDriving;
       const base = new Map<string, Bucket>();
       const lit = new Map<string, Bucket>();
-      const plates: { text: string; line: Point[] }[] = [];
+      const plates: { text: string; line: Point[]; ink: string }[] = [];
+      const gapLabels: { text: string; line: Point[]; x0: number; x1: number }[] = [];
+      // An activity's axis days, parsed once per frame however many links it ends (the per-frame
+      // rect-cache budget gate, `paint.rect-cache-budget.test.ts`, pins that date parsing does not
+      // scale with edge count). Called only where both dates are present.
+      const axisDays = new Map<string, { start: number; finish: number }>();
+      const axisDaysOf = (a: RenderActivity): { start: number; finish: number } => {
+        let d = axisDays.get(a.id);
+        if (!d) {
+          d = {
+            start: axisDayOf(a.type, scene.dataDate, a.earlyStart!),
+            finish: axisDayOf(a.type, scene.dataDate, a.earlyFinish!),
+          };
+          axisDays.set(a.id, d);
+        }
+        return d;
+      };
+      // Gap labels (M3-T3): the working tier or finer (spec G11, `lodTier`) and the `Link gaps`
+      // switch, which defaults on.
+      const gapsOn =
+        toggles.linkSlack !== false &&
+        lodTier(view.pxPerDay) !== 'overview' &&
+        typeof ctx.fillText === 'function' &&
+        typeof ctx.measureText === 'function';
       const platesOn =
         (toggles.labels ?? true) &&
         view.pxPerDay >= LABEL_MIN_PX_PER_DAY &&
@@ -1309,28 +1317,42 @@ export function paintScene(
             // The highlight is one weight step heavier than the link it lights (ADR-0052 M5).
             width: (edge.isDriving ? 2 : 1) + (highlighted ? 1 : 0),
             solid: [],
-            waiting: [],
             marks: [],
           };
           buckets.set(bucketKey, bucket);
         }
-        const predRect = activityRect(pred, view, scene.dataDate, rectCache);
-        const succRect = activityRect(succ, view, scene.dataDate, rectCache);
-        const waiting =
-          !edge.isDriving && scene.solidWaiting !== true && predRect && succRect
-            ? waitingSpanX({
-                type: edge.type,
-                pred: predRect,
-                succ: succRect,
-                lagPx: (edge.lagDays ?? 0) * view.pxPerDay,
-              })
-            : null;
-        if (waiting) {
-          const runs = splitRunsByX(line, waiting.x0, waiting.x1);
-          bucket.solid.push(...runs.solid);
-          bucket.waiting.push(...runs.waiting);
-        } else {
-          bucket.solid.push(line);
+        bucket.solid.push(line);
+        // The gap a non-driving link waits, and where (M3-T3). One computation for both, from the
+        // relationship's lag anchor to the successor's constrained edge (`linkGapSpan`).
+        let gap: { text: string; x0: number; x1: number } | null = null;
+        if (
+          gapsOn &&
+          !edge.isDriving &&
+          pred.earlyStart &&
+          pred.earlyFinish &&
+          succ.earlyStart &&
+          succ.earlyFinish
+        ) {
+          const p = axisDaysOf(pred);
+          const q = axisDaysOf(succ);
+          const span = linkGapSpan(
+            {
+              type: edge.type,
+              predStartDay: p.start,
+              predFinishDay: p.finish,
+              succStartDay: q.start,
+              succFinishDay: q.finish,
+              lagDays: edge.lagDays ?? 0,
+            },
+            scene.isWorkingDay ?? null,
+          );
+          if (span.days > 0) {
+            gap = {
+              text: formatLinkGap(span),
+              x0: screenXOfDay(span.fromDay, view),
+              x1: screenXOfDay(span.toDay, view),
+            };
+          }
         }
         // Chevrons first and the terminal head last, so each link's head is the final subpath it
         // emits — the same order the legacy pass gives, which is what a recorder reads a head by.
@@ -1343,7 +1365,13 @@ export function paintScene(
           if (head) bucket.marks.push(head);
         }
         const lag = edge.lagDays ?? 0;
-        if (platesOn && lag !== 0) plates.push({ text: formatLag(lag), line });
+        if (platesOn && lag !== 0) {
+          // One plate carries both figures where a link has a lag and a gap (spec §4.13 U2).
+          const text = gap ? `${formatLag(lag)} · ${gap.text}` : formatLag(lag);
+          plates.push({ text, line, ink: bucket.ink });
+        } else if (gap) {
+          gapLabels.push({ text: gap.text, line, x0: gap.x0, x1: gap.x1 });
+        }
       }
       const drawBucket = (bucket: Bucket): void => {
         ctx.lineWidth = bucket.width;
@@ -1352,13 +1380,6 @@ export function paintScene(
         ctx.beginPath();
         for (const run of bucket.solid) drawRoundedPolyline(ctx, run);
         ctx.stroke();
-        if (bucket.waiting.length > 0) {
-          ctx.setLineDash(WAITING_DASH as number[]);
-          ctx.beginPath();
-          for (const run of bucket.waiting) drawPolyline(ctx, run);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
         if (bucket.marks.length > 0) {
           ctx.fillStyle = bucket.markInk;
           ctx.beginPath();
@@ -1384,11 +1405,13 @@ export function paintScene(
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
         ctx.lineWidth = 1;
-        ctx.strokeStyle = palette.gridLine;
-        for (const { text, line } of plates) {
+        for (const { text, line, ink } of plates) {
           const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
           const at = lagPlateAt(line, w, SLACK_CHIP_H);
           if (!at) continue;
+          // The border is the link's own ink (U2/X2): ≥ 3:1 on the ground, so the plate is a
+          // perceivable box, and it says which link the figure belongs to.
+          ctx.strokeStyle = ink;
           ctx.fillStyle = palette.canvasGround;
           ctx.fillRect(at.x - w / 2, at.y - SLACK_CHIP_H / 2, w, SLACK_CHIP_H);
           ctx.strokeRect(
@@ -1398,6 +1421,34 @@ export function paintScene(
             SLACK_CHIP_H - 1,
           );
           ctx.fillStyle = palette.labelBeside;
+          ctx.fillText(text, at.x, at.y);
+        }
+        ctx.textAlign = 'left';
+      }
+      if (gapLabels.length > 0) {
+        // Borderless, on an opaque ground chip that knocks the line out beneath it, the text in the
+        // mark ink (≥ 4.5:1 on the ground; the minor line ink is not, `m0-solved.md`). Placed on
+        // the longest horizontal stretch of the route inside the waiting interval, and only where
+        // that stretch holds the label plus 4 px (spec G6): a label that does not fit is withheld,
+        // and the gap is still in the listbox.
+        ctx.font = LABEL_FONT;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        for (const { text, line, x0, x1 } of gapLabels) {
+          const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
+          // The waiting interval runs node to node, and a node paints over the line for its reach
+          // at each end, so the label is placed inside the interval less that reach: a gap label on
+          // a disc is row text on a node (FC-G5), measured at 4 before this inset and 0 after.
+          const at = gapLabelAt(
+            line,
+            Math.min(x0, x1) + NODE_REACH_PX,
+            Math.max(x0, x1) - NODE_REACH_PX,
+            w + 4,
+          );
+          if (!at) continue;
+          ctx.fillStyle = palette.canvasGround;
+          ctx.fillRect(at.x - w / 2, at.y - SLACK_CHIP_H / 2, w, SLACK_CHIP_H);
+          ctx.fillStyle = palette.linkMark;
           ctx.fillText(text, at.x, at.y);
         }
         ctx.textAlign = 'left';
@@ -2034,7 +2085,12 @@ export function paintScene(
   // days each tie leaves, answering "why is this activity waiting?". Scoped to the selection: a
   // number on every edge is unreadable at real network sizes. A driving edge's gap is 0 by
   // definition and is skipped, so what remains is exactly the non-binding slack worth reading.
+  //
+  // **The legacy path only, since NetPoint grammar M3-T3**: the refreshed path labels every waiting
+  // link (the link language, above), so drawing this chip there too would be two marks for one fact
+  // (ADR-0093's defect). Kept here as the flag-off rollback, byte for byte.
   if (
+    scene.visualRefresh !== true &&
     toggles.linkSlack === true &&
     scene.selectedId &&
     typeof ctx.fillText === 'function' &&

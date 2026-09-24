@@ -83,7 +83,7 @@ test('the non-driving link ink is a real token on the canvas and in its key', as
   // Located by `data-toolbar-item`, never by copy: the Legend is promoted onto the command row.
   await page.locator('[data-toolbar-item="legend"]').click();
   const legend = page.getByRole('list', { name: 'Legend' });
-  await expect(legend.getByText('Waiting time')).toBeVisible();
+  await expect(legend.getByText('Gap in working days')).toBeVisible();
   await expect(legend.getByText('Non-driving link — dashed')).toHaveCount(0);
   const swatch = await legend.getByText('Non-driving link', { exact: true }).evaluate((label) => {
     const line = label.closest('li')!.querySelector('span > span') as HTMLElement;

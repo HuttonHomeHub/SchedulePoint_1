@@ -143,7 +143,6 @@ function reference(): Plan {
     })),
     dataDate: isoOf(0),
     visualRefresh: true,
-    solidWaiting: true,
     timeTrueLinks: true,
     linkRouting: true,
   });

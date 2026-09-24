@@ -43,10 +43,21 @@ export interface TsldViewToggles {
    *
    * Optional ⇒ absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
   floatTails?: boolean;
-  /** Annotate **relationship slack** on the SELECTED activity's own links (ADR-0054 §5). Scoped to
-   * the selection on purpose: a number on every edge of a real network is noise that obscures the
-   * very structure the diagram exists to show, so this is an *inspection* affordance. Optional ⇒
-   * absent/false ⇒ the pass never runs ⇒ byte-for-byte parity. */
+  /** **Link gaps** (NetPoint grammar M3-T3, spec §4.2 G6; the key keeps its ADR-0054 §5 name).
+   *
+   * On the refreshed link path this labels EVERY waiting non-driving link with the working days it
+   * waits (`link-gap.ts`), at the working tier or finer (`lodTier`), in place of the dashed waiting
+   * run it retires: the dash said "something waits here" and the label says how long. ADR-0054 §5
+   * scoped the number to the selection because a number on every edge was noise, and that reason
+   * holds for a number on every EDGE — a gap label is drawn only where there is waiting to state, is
+   * withheld where no horizontal stretch holds it, and is dropped at the overview tier. The
+   * reference the product owner chose labels every gap, and CQ-5 set the unit.
+   *
+   * **On by default.** `undefined` also reads as on in the refreshed painter (`!== false`), so a
+   * caller that never learnt the key keeps the picture the product owner approved. The legacy path
+   * (flag-off rollback) still reads `=== true` and draws its selection-scoped chip only when asked,
+   * which with this default is always: that is a change to an unreachable configuration (ADR-0088
+   * D1), recorded rather than hidden. */
   linkSlack?: boolean;
   /** The read-only **Late-Start overlay** (ADR-0033 M4): render bars from the late dates for float
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
@@ -98,6 +109,7 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
    * (`View ▾ ▸ Dates`), and it is still not persisted.
    */
   dates: true,
+  linkSlack: true,
   lateOverlay: false,
   /**
    * **Off by default since the workspace redesign (M4-T1).**

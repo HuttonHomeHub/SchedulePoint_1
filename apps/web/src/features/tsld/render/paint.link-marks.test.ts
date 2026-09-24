@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_VIEW_TOGGLES, paintScene, type TsldPalette, type TsldScene } from './paint';
-import type { RenderActivity, RenderEdge, Viewport } from './render-model';
+import { NODE_REACH_PX, type RenderActivity, type RenderEdge, type Viewport } from './render-model';
 import { recordingCtx } from './test-support/recording-ctx';
 
 /**
  * **The link language, as the painter emits it** (NetPoint-layout M2, spec §4.7, ADR-0154).
  *
  * The pure rules are pinned in `link-marks.test.ts`. This suite pins that the painter applies
- * them: which ink a link is stroked in, that the dash appears only on waiting time and never on a
- * driving link, that chevrons fill in the link's ink, and that a lag gets a plate. Each ink below
+ * them: which ink a link is stroked in, that a waiting link carries a gap label in working days and
+ * no dash (NetPoint grammar M3-T3), that chevrons fill in the mark shade, and that a lag gets a
+ * plate. Each ink below
  * is distinct, so a log line can only mean one thing.
  */
 const PALETTE = {
@@ -93,13 +94,79 @@ const A = act('A', 0, '2026-01-02', '2026-01-05');
 const B = act('B', 2, '2026-01-12', '2026-01-16');
 
 describe('paintScene — the link language (NetPoint-layout M2)', () => {
-  it('strokes a non-driving link SOLID in its own ink, and dashes only its waiting time', () => {
+  it('strokes a non-driving link SOLID in its own ink, and labels its waiting time (M3-T3)', () => {
     const log = paint([A, B], [edge({ predecessorId: 'A', successorId: 'B' })]);
     expect(strokeInks(log)).toContain(PALETTE.linkMinor);
     expect(strokeInks(log)).not.toContain(PALETTE.edge);
-    // The retired non-driving dash never appears; the waiting dash does, and is not the default.
+    // Neither the retired non-driving dash nor the M2 waiting dash: the link layer sets no dash.
     expect(log).not.toContain('setLineDash([[4,3]])');
-    expect(log).toContain('setLineDash([[3,3]])');
+    expect(log).not.toContain('setLineDash([[3,3]])');
+    // A finishes 5 Jan (right edge 6 Jan), B starts 12 Jan: six days, every day working here.
+    const at = log.findIndex((l) => l.includes('fillText(["6d"'));
+    expect(at).toBeGreaterThan(-1);
+    // In the mark shade, the ink that clears 4.5:1 on the ground.
+    expect(
+      log
+        .slice(0, at)
+        .reverse()
+        .find((l) => l.startsWith('fillStyle=')),
+    ).toBe(`fillStyle=${PALETTE.linkMark}`);
+    // Its ground chip sits inside the waiting interval less a node's reach at each end, so the
+    // label never lands on either disc (FC-G5). A's right edge is day 5 (x 120), B's start day 11
+    // (x 192), at 12 px a day from x 60.
+    const chip = log
+      .slice(0, at)
+      .reverse()
+      .find((l) => l.startsWith('fillRect('))!;
+    const [x = NaN, , w = NaN] = JSON.parse(chip.slice('fillRect('.length, -1)) as number[];
+    expect(x).toBeGreaterThanOrEqual(120 + NODE_REACH_PX);
+    expect(x + w).toBeLessThanOrEqual(192 - NODE_REACH_PX);
+  });
+
+  it('counts the gap in working days on the plan calendar, and withholds it at the overview tier', () => {
+    const weekdays = (d: number): boolean => ((d % 7) + 7) % 7 < 5;
+    const log = paint([A, B], [edge({ predecessorId: 'A', successorId: 'B' })], {
+      isWorkingDay: weekdays,
+    });
+    expect(log.some((l) => /fillText\(\["\d+d"/.test(l) && !l.includes('"6d"'))).toBe(true);
+    expect(log.some((l) => l.includes('fillText(["6d"'))).toBe(false);
+    // At the overview tier, on a gap long enough in PIXELS to hold the label (300 days at 1 px a
+    // day): withheld by the tier, not by room, which is what makes this case discriminate.
+    const late = act('B', 2, '2026-11-01', '2026-11-05');
+    const { ctx, log: far } = recordingCtx();
+    paintScene(
+      ctx,
+      {
+        activities: [A, late],
+        edges: [edge({ predecessorId: 'A', successorId: 'B' })],
+        dataDate: DATA_DATE,
+        view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false },
+        visualRefresh: true,
+        timeTrueLinks: true,
+        linkRouting: true,
+        isWorkingDay: () => true,
+      },
+      { ...VIEW, pxPerDay: 1 },
+      SIZE,
+      PALETTE,
+    );
+    expect(far.some((l) => /fillText\(\["\d+d"/.test(l))).toBe(false);
+  });
+
+  it('withholds a gap too short to clear both end nodes, rather than print it on a disc', () => {
+    // Same lane, two days apart at 12 px a day: a straight 24 px run from A's node to B's. "2d" on
+    // its chip is 18 px, which fits the run (≥ label + 4) but not the run less a node's reach at
+    // each end, so without the inset it would be printed over the discs (FC-G5).
+    const near = act('B', 0, '2026-01-08', '2026-01-10');
+    const log = paint([A, near], [edge({ predecessorId: 'A', successorId: 'B' })]);
+    expect(log.some((l) => l.includes('fillText(["2d"'))).toBe(false);
+  });
+
+  it('is withheld when the Link gaps switch is off', () => {
+    const log = paint([A, B], [edge({ predecessorId: 'A', successorId: 'B' })], {
+      view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false, linkSlack: false },
+    });
+    expect(log.some((l) => l.includes('fillText(["6d"'))).toBe(false);
   });
 
   it('never dashes a driving link, even where days separate its ends', () => {
@@ -157,7 +224,8 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
     expect(fills).toContain(PALETTE.linkMark);
     expect(fills).not.toContain(PALETTE.linkMinor);
     // More than the one terminal head: a link this long carries chevrons too.
-    const minorFill = log.lastIndexOf(`fillStyle=${PALETTE.linkMark}`);
+    // The first mark-shade fill is the chevrons; a later one is the gap label's text (M3-T3).
+    const minorFill = log.indexOf(`fillStyle=${PALETTE.linkMark}`);
     const triangles = log
       .slice(minorFill, log.indexOf('fill([])', minorFill))
       .filter((l) => l.startsWith('moveTo('));
@@ -166,11 +234,12 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
 
   it('puts a lag on a plate, and only while labels are on', () => {
     const lagged = [edge({ predecessorId: 'A', successorId: 'B', lagDays: 2 })];
-    expect(paint([A, B], lagged).some((l) => l.includes('fillText(["+2d"'))).toBe(true);
+    // One plate carries both figures where a link has a lag and a gap (spec §4.13 U2).
+    expect(paint([A, B], lagged).some((l) => l.includes('fillText(["+2d · 4d"'))).toBe(true);
     const off = paint([A, B], lagged, {
       view: { ...DEFAULT_VIEW_TOGGLES, labels: false, dates: false },
     });
-    expect(off.some((l) => l.includes('fillText(["+2d"'))).toBe(false);
+    expect(off.some((l) => l.includes('fillText(["+2d'))).toBe(false);
   });
 
   it('keeps the legacy dashed non-driving pass when the refresh is off (the rollback)', () => {

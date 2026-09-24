@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { edgeGapDays } from './geometry';
 import {
   CHEVRON_MAX_PER_LINK,
   CHEVRON_SPACING_PX,
@@ -8,8 +7,7 @@ import {
   formatLag,
   lagPlateAt,
   linkRung,
-  splitRunsByX,
-  waitingSpanX,
+  gapLabelAt,
 } from './link-marks';
 
 const crit = { isCritical: true, isNearCritical: false };
@@ -28,85 +26,6 @@ describe('linkRung', () => {
     expect(linkRung(crit, near)).toBe('near');
     expect(linkRung(near, crit)).toBe('near');
     expect(linkRung(near, plain)).toBe('normal');
-  });
-});
-
-describe('splitRunsByX', () => {
-  it('leaves a line with no waiting whole and solid', () => {
-    const line = [
-      { x: 0, y: 0 },
-      { x: 10, y: 0 },
-      { x: 10, y: 20 },
-      { x: 30, y: 20 },
-    ];
-    expect(splitRunsByX(line, 100, 200)).toEqual({ solid: [line], waiting: [] });
-  });
-
-  it('cuts a horizontal leg at both boundaries, keeping the order along the line', () => {
-    const line = [
-      { x: 0, y: 5 },
-      { x: 100, y: 5 },
-    ];
-    expect(splitRunsByX(line, 20, 60)).toEqual({
-      solid: [
-        [
-          { x: 0, y: 5 },
-          { x: 20, y: 5 },
-        ],
-        [
-          { x: 60, y: 5 },
-          { x: 100, y: 5 },
-        ],
-      ],
-      waiting: [
-        [
-          { x: 20, y: 5 },
-          { x: 60, y: 5 },
-        ],
-      ],
-    });
-  });
-
-  it('dashes a vertical inside the interval and keeps one on a boundary solid', () => {
-    const line = [
-      { x: 0, y: 0 },
-      { x: 40, y: 0 },
-      { x: 40, y: 30 },
-      { x: 80, y: 30 },
-    ];
-    const inside = splitRunsByX(line, 20, 60);
-    expect(inside.waiting).toEqual([
-      [
-        { x: 20, y: 0 },
-        { x: 40, y: 0 },
-        { x: 40, y: 30 },
-        { x: 60, y: 30 },
-      ],
-    ]);
-    const onBoundary = splitRunsByX(line, 40, 60);
-    expect(onBoundary.waiting).toEqual([
-      [
-        { x: 40, y: 30 },
-        { x: 60, y: 30 },
-      ],
-    ]);
-  });
-
-  it('loses no length: the runs cover the line exactly', () => {
-    const line = [
-      { x: 0, y: 0 },
-      { x: 50, y: 0 },
-      { x: 50, y: 40 },
-      { x: 120, y: 40 },
-    ];
-    const length = (runs: { x: number; y: number }[][]): number =>
-      runs.reduce(
-        (sum, r) =>
-          sum + r.slice(1).reduce((s, p, i) => s + Math.hypot(p.x - r[i]!.x, p.y - r[i]!.y), 0),
-        0,
-      );
-    const { solid, waiting } = splitRunsByX(line, 30, 90);
-    expect(length(solid) + length(waiting)).toBeCloseTo(50 + 40 + 70);
   });
 });
 
@@ -193,71 +112,25 @@ describe('lagPlateAt', () => {
   });
 });
 
-describe('waitingSpanX', () => {
-  const px = 12;
-  const bar = (start: number, finish: number) => ({ x: start * px, w: (finish + 1 - start) * px });
-  const cases = [
-    {
-      type: 'FS',
-      predStartDay: 0,
-      predFinishDay: 4,
-      succStartDay: 9,
-      succFinishDay: 12,
-      lagDays: 2,
-    },
-    {
-      type: 'SS',
-      predStartDay: 0,
-      predFinishDay: 4,
-      succStartDay: 6,
-      succFinishDay: 9,
-      lagDays: 1,
-    },
-    {
-      type: 'FF',
-      predStartDay: 0,
-      predFinishDay: 4,
-      succStartDay: 2,
-      succFinishDay: 10,
-      lagDays: 0,
-    },
-    {
-      type: 'SF',
-      predStartDay: 3,
-      predFinishDay: 4,
-      succStartDay: 0,
-      succFinishDay: 8,
-      lagDays: 2,
-    },
-  ] as const;
-  const spanOf = (
-    c:
-      | (typeof cases)[number]
-      | {
-          type: 'FS';
-          predStartDay: number;
-          predFinishDay: number;
-          succStartDay: number;
-          succFinishDay: number;
-          lagDays: number;
-        },
-  ) =>
-    waitingSpanX({
-      type: c.type,
-      pred: bar(c.predStartDay, c.predFinishDay),
-      succ: bar(c.succStartDay, c.succFinishDay),
-      lagPx: c.lagDays * px,
-    });
-
-  it.each(cases)('spans exactly the gap edgeGapDays reports ($type)', (c) => {
-    const span = spanOf(c);
-    expect(span).not.toBeNull();
-    expect((span!.x1 - span!.x0) / px).toBe(edgeGapDays(c));
+describe('gapLabelAt (NetPoint grammar M3-T3)', () => {
+  it('centres the label on the longest horizontal stretch inside the waiting interval', () => {
+    const line = [
+      { x: 0, y: 10 },
+      { x: 50, y: 10 },
+      { x: 50, y: 40 },
+      { x: 200, y: 40 },
+    ];
+    // Waiting from x 30 to 180: 20 px on the first leg, 130 px on the second.
+    expect(gapLabelAt(line, 30, 180, 20)).toEqual({ x: 115, y: 40 });
   });
 
-  it('is null for a driving (zero-gap) tie and for an overlapping lead', () => {
-    const base = { type: 'FS' as const, predStartDay: 0, predFinishDay: 4, succFinishDay: 8 };
-    expect(spanOf({ ...base, succStartDay: 5, lagDays: 0 })).toBeNull();
-    expect(spanOf({ ...base, succStartDay: 2, lagDays: -2 })).toBeNull();
+  it('never sits on a vertical, and is withheld where no stretch holds the label', () => {
+    const line = [
+      { x: 0, y: 10 },
+      { x: 0, y: 100 },
+      { x: 30, y: 100 },
+    ];
+    expect(gapLabelAt(line, 0, 30, 31)).toBeNull();
+    expect(gapLabelAt(line, 0, 30, 30)).toEqual({ x: 15, y: 100 });
   });
 });

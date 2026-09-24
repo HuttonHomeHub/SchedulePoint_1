@@ -65,7 +65,7 @@ describe('TsldLegend — visual-refresh shape vocabulary (flag on, ADR-0052 M4/M
       'Driving link — near-critical',
       'Driving link',
       'Non-driving link',
-      'Waiting time',
+      'Gap in working days',
       'Direction',
       'Lag on a link',
       'Lag run (on the bar)',
@@ -74,15 +74,21 @@ describe('TsldLegend — visual-refresh shape vocabulary (flag on, ADR-0052 M4/M
     }
     expect(within(legend).queryByText('Non-driving link — dashed')).not.toBeInTheDocument();
     expect(within(legend).queryByText('Lag (waiting time)')).not.toBeInTheDocument();
+    // NetPoint grammar M3-T3 retired the waiting dash for a gap label.
+    expect(within(legend).queryByText('Waiting time')).not.toBeInTheDocument();
   });
 
-  it('draws the non-driving and waiting rows in the link token, solid and dashed', () => {
+  it('draws the non-driving row solid in the link token, and the gap as text in the mark ink', () => {
     render(<TsldLegend />);
     const legend = screen.getByRole('list', { name: 'Legend' });
     const line = (label: string): HTMLElement =>
       within(legend).getByText(label).closest('li')!.querySelector('span > span') as HTMLElement;
     expect(line('Non-driving link').style.borderTopStyle).toBe('solid');
     expect(line('Non-driving link').style.borderTopColor).toBe('var(--canvas-link-minor)');
-    expect(line('Waiting time').style.borderTopStyle).toBe('dashed');
+    const gap = within(legend).getByText('Gap in working days').closest('li')!
+      .firstElementChild as HTMLElement;
+    expect(gap.textContent).toBe('3d');
+    expect(gap.style.color).toBe('var(--canvas-link-mark)');
+    expect(gap.style.border).toBe('');
   });
 });

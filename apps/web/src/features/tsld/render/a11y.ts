@@ -1,11 +1,11 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 
+import type { LinkGap } from './link-gap';
+
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { formatConstraint } from '@/lib/constraint-format';
 import { formatCalendarDate } from '@/lib/format-date';
 import { formatFinishVariance } from '@/lib/schedule-format';
-
-import type { LinkGap } from './link-gap';
 
 /**
  * Pure text builders for the TSLD's parallel accessible representation (ADR-0026 D7, M5). Kept out

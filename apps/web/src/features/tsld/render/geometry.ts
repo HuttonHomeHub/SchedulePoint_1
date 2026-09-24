@@ -253,7 +253,7 @@ export function lodTier(pxPerDay: number): LodTier {
  * gap is genuine slack in that one tie.
  *
  * A **calendar-day** count off the drawn geometry: the diagram's x-axis is calendar time, so this
- * is where the waiting run is DRAWN (`waitingSpanX`). It is not the number a planner reads or
+ * is the drawn geometry's reading of a tie (the legacy path's slack chip). It is not the number a planner reads or
  * hears. Since NetPoint grammar M3-T2 that is `linkGap` (`link-gap.ts`), in working days on the
  * plan calendar like every other `d` on the canvas, and it reproduces this function exactly when
  * no calendar is loaded. The engine remains the authority on float; both are readings of the

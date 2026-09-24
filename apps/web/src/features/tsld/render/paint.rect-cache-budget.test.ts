@@ -116,11 +116,18 @@ afterEach(() => {
 
 describe('paintScene — per-frame rect cache (call-count gate)', () => {
   it('date parsing does not scale with edge count — a rect is computed once per frame', () => {
-    // Two scenes, identical activities, 4 vs 24 edges into the same hub. The painter's date
+    // Two scenes, identical activities, 8 vs 24 edges into the same hub. The painter's date
     // parsing must cost the same for both: every extra edge reads the cached endpoint rects.
+    //
+    // **8, not 4, since NetPoint grammar M3-T3**: the gap label reads each endpoint's axis days,
+    // cached per ACTIVITY per frame. With 4 edges only four of the eight successors were endpoints,
+    // so the sparse scene parsed fewer activities' dates and the two counts differed by endpoints,
+    // not by edges. At 8 every successor is an endpoint in both scenes, so the only thing that
+    // differs is the edge count, which is the property this gate is named for. A per-EDGE parse
+    // still fails it (verified red by removing the per-frame cache in `paint.ts`).
     const spy = vi.spyOn(Date, 'parse');
 
-    paintScene(stubCtx(), hubScene(4), VIEW, SIZE, PALETTE);
+    paintScene(stubCtx(), hubScene(8), VIEW, SIZE, PALETTE);
     const sparse = spy.mock.calls.length;
 
     spy.mockClear();

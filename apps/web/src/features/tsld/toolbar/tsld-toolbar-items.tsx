@@ -504,7 +504,10 @@ const VIEW_TOGGLE_META: Record<
     label: 'Feasible window',
     enabled: CANVAS_LIVE_FEEDBACK_ENABLED,
   },
-  linkSlack: { group: 'insight', label: 'Link slack', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  // Renamed from `Link slack` (NetPoint grammar M3-T3): it now labels every waiting link's gap in
+  // working days rather than the selection's slack. The key keeps its name for the reason given
+  // for `floatTails` above.
+  linkSlack: { group: 'insight', label: 'Link gaps', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
   // **The overlay survives the mode** (one-planning-surface M-F-T5). It was gated on
   // `VITE_SCHEDULING_MODES` because ADR-0033 shipped it beside the Early/Visual selector, but it
   // reads the LATE dates and has never consulted `schedulingMode` — so deleting the mode leaves it

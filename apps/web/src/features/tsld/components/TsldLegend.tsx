@@ -30,6 +30,7 @@ type LegendItem =
   | { label: string; line: 'solid' | 'dashed'; ink?: string; weight?: 1 | 2 }
   | { label: string; chevron: true }
   | { label: string; lagPlate: true }
+  | { label: string; gapLabel: true }
   | { label: string; pin: true }
   | { label: string; today: true }
   | { label: string; dataDate: true }
@@ -85,8 +86,9 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // Logic ties, matching the canvas. **The link language** (NetPoint-layout M2, ADR-0154) is drawn
   // only on the refreshed canvas, so its key rides the same flag; flag-off keeps the legacy pair
   // byte for byte. Drivingness is WEIGHT, criticality the rung's ink plus the endpoints' nodes, and
-  // the dash means waiting time and nothing else — so the legacy "Non-driving link — dashed" row
-  // must not survive here: a key naming a mark the canvas no longer paints is the ADR-0151 M6 defect.
+  // the waiting time is a GAP LABEL in working days (NetPoint grammar M3-T3, which retired the
+  // waiting dash) — so neither the legacy "Non-driving link — dashed" row nor the M2 "Waiting time"
+  // dash row survives here: a key naming a mark the canvas no longer paints is the ADR-0151 M6 defect.
   ...(CANVAS_DIRECT_MANIPULATION_ENABLED
     ? [
         {
@@ -109,12 +111,7 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
           ink: 'var(--canvas-link-minor)',
           weight: 1,
         } as const,
-        {
-          label: 'Waiting time',
-          line: 'dashed',
-          ink: 'var(--canvas-link-minor)',
-          weight: 1,
-        } as const,
+        { label: 'Gap in working days', gapLabel: true } as const,
         { label: 'Direction', chevron: true } as const,
         { label: 'Lag on a link', lagPlate: true } as const,
       ]
@@ -155,7 +152,11 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   ...(CANVAS_LIVE_FEEDBACK_ENABLED
     ? [
         { label: 'Feasible window — earliest to latest', window: true } as const,
-        { label: 'Link slack (days)', slack: true } as const,
+        // The selection-scoped slack chip is the legacy link path's (NetPoint grammar M3-T3): the
+        // refreshed path labels every waiting link instead, keyed above as a gap.
+        ...(CANVAS_DIRECT_MANIPULATION_ENABLED
+          ? []
+          : [{ label: 'Link slack (days)', slack: true } as const]),
       ]
     : []),
   // Over-allocation cue (Stage E M2, ADR-0049) — a small rising-bars badge matching the canvas
@@ -530,12 +531,22 @@ export function TsldLegend({
                 />
               </svg>
             </span>
+          ) : 'gapLabel' in item ? (
+            <span
+              aria-hidden="true"
+              className="inline-flex h-3 items-center px-0.5 text-xs leading-none"
+              style={{ backgroundColor: 'var(--canvas)', color: 'var(--canvas-link-mark)' }}
+            >
+              {/* Borderless on the ground, in the mark ink, exactly as the painter prints it. */}
+              3d
+            </span>
           ) : 'lagPlate' in item ? (
             <span
               aria-hidden="true"
               className="inline-flex h-3 items-center rounded-xs px-0.5 text-xs leading-none"
               style={{
-                border: '1px solid var(--border)',
+                // The plate's border is its link's ink since M3-T3, so it reads as a box (≥ 3:1).
+                border: '1px solid var(--canvas-link-minor)',
                 backgroundColor: 'var(--canvas)',
                 color: 'var(--foreground)',
               }}

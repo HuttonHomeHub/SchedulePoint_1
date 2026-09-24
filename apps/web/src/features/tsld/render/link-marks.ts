@@ -1,5 +1,3 @@
-import type { DependencyType } from '@repo/types';
-
 import type { Point, RenderActivity } from './geometry';
 
 /**
@@ -28,87 +26,6 @@ export function linkRung(
   if (pred.isCritical && succ.isCritical) return 'critical';
   const atLeastNear = (a: typeof pred): boolean => a.isCritical || a.isNearCritical === true;
   return atLeastNear(pred) && atLeastNear(succ) ? 'near' : 'normal';
-}
-
-/**
- * The span of a relationship's **waiting time** on screen: from the earliest point the relationship
- * would allow to where the successor's constrained end is actually drawn. Its length in days is
- * `edgeGapDays` exactly (`geometry.ts`) for every type, which keeps the dash and the spoken slack one
- * number. Null when there is no waiting, including a lead that overlaps.
- *
- * It is read off the endpoints' already-computed rects rather than re-derived from their dates. The painter needs this per link per frame, and re-parsing four dates
- * per link is exactly what the frame's rect cache exists to prevent (`paint.rect-cache-budget`
- * pins that adding links adds no date parsing).
- *
- * For a bar the two agree to the pixel: a rect's edges ARE `screenXOfDay` of its start and its
- * finish's right edge. A milestone's diamond is a few pixels wider than its day, so there the
- * waiting run ends at the glyph the line actually meets, which is the honest place for it.
- */
-export function waitingSpanX(args: {
-  type: DependencyType;
-  pred: { x: number; w: number };
-  succ: { x: number; w: number };
-  lagPx: number;
-}): { x0: number; x1: number } | null {
-  const { type, pred, succ, lagPx } = args;
-  const x0 = (type === 'FS' || type === 'FF' ? pred.x + pred.w : pred.x) + lagPx;
-  const x1 = type === 'FS' || type === 'SS' ? succ.x : succ.x + succ.w;
-  return x1 > x0 ? { x0, x1 } : null;
-}
-
-/**
- * A polyline cut into the runs that lie inside `[x0, x1]` (waiting) and the runs that do not.
- *
- * A horizontal segment is clipped at the two boundaries. A vertical segment is waiting when its x
- * lies strictly inside the interval, and solid otherwise, so a corridor on a boundary stays solid.
- * Runs keep the line's direction and are returned in order along it. Consecutive runs share their
- * boundary point, which is what lets a recorder stitch them back into one link.
- */
-export function splitRunsByX(
-  line: readonly Point[],
-  x0: number,
-  x1: number,
-): { solid: Point[][]; waiting: Point[][] } {
-  const solid: Point[][] = [];
-  const waiting: Point[][] = [];
-  let run: Point[] = [];
-  let runWaiting: boolean | null = null;
-  const inside = (x: number): boolean => x > x0 && x < x1;
-  const push = (p: Point, isWaiting: boolean): void => {
-    if (runWaiting !== isWaiting) {
-      if (run.length >= 2) (runWaiting ? waiting : solid).push(run);
-      const last = run[run.length - 1];
-      run = last ? [last] : [];
-      runWaiting = isWaiting;
-    }
-    const tail = run[run.length - 1];
-    if (!tail || tail.x !== p.x || tail.y !== p.y) run.push(p);
-  };
-  for (let i = 1; i < line.length; i += 1) {
-    const a = line[i - 1]!;
-    const b = line[i]!;
-    if (run.length === 0) run = [{ x: a.x, y: a.y }];
-    if (a.x === b.x) {
-      push({ x: b.x, y: b.y }, inside(a.x));
-      continue;
-    }
-    // A horizontal (or, defensively, any sloped) segment: cut at each boundary it crosses, in the
-    // direction of travel, and classify each piece by its midpoint.
-    const cuts = [x0, x1]
-      .filter((c) => (c - a.x) * (c - b.x) < 0)
-      .sort((p, q) => (b.x > a.x ? p - q : q - p));
-    const t = (x: number): Point => {
-      const k = (x - a.x) / (b.x - a.x);
-      return { x, y: a.y + k * (b.y - a.y) };
-    };
-    let from = a;
-    for (const c of [...cuts.map(t), { x: b.x, y: b.y }]) {
-      push(c, inside((from.x + c.x) / 2));
-      from = c;
-    }
-  }
-  if (run.length >= 2 && runWaiting !== null) (runWaiting ? waiting : solid).push(run);
-  return { solid, waiting };
 }
 
 /**
@@ -180,6 +97,34 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
     walked += len;
   }
   return out;
+}
+
+/**
+ * Where a link's GAP label is centred (NetPoint grammar M3-T3): the midpoint of the longest stretch
+ * of the route's horizontal segments that lies inside the waiting interval `[x0, x1]`, provided that
+ * stretch is at least `minPx` long; otherwise nowhere, and the label is withheld.
+ *
+ * Only horizontal segments are candidates, because the waiting interval is a span of time and only a
+ * horizontal run of a time-scaled diagram measures time. Only the link's own segments, so the label
+ * can only ever sit on the line it labels.
+ */
+export function gapLabelAt(
+  line: readonly Point[],
+  x0: number,
+  x1: number,
+  minPx: number,
+): Point | null {
+  let best: { x: number; y: number; len: number } | null = null;
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    if (a.y !== b.y) continue;
+    const lo = Math.max(Math.min(a.x, b.x), x0);
+    const hi = Math.min(Math.max(a.x, b.x), x1);
+    const len = hi - lo;
+    if (len >= minPx && (best === null || len > best.len)) best = { x: (lo + hi) / 2, y: a.y, len };
+  }
+  return best ? { x: best.x, y: best.y } : null;
 }
 
 /** A lag as a planner writes it: `+2d`, `−1d` (a true minus sign, not a hyphen). */
