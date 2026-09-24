@@ -85,6 +85,11 @@ import type { WbsBandBar } from './wbs-band';
 const DAY_GRID_MIN_PX = 6;
 /** Below this px-per-day non-working columns are sub-pixel; the wash is culled (and would be costly). */
 const NON_WORKING_MIN_PX = 3;
+/**
+ * The day and month gridlines' dash, 3 on / 3 off (NetPoint grammar G1): the reference's own
+ * pattern, measured from its picture (`docs/specs/netpoint-grammar/reference-observations.md`).
+ */
+const GRID_DASH: readonly number[] = [3, 3];
 
 /**
  * The palette the painter draws with — resolved from the app's semantic design tokens
@@ -1073,21 +1078,23 @@ export function paintScene(
   if (scene.gridTiers) {
     // Three tiers (F5, `VITE_CANVAS_TIME_AXIS`): each its own batched pass, drawn in order
     // day → month → year so a heavier tier overwrites a coincident lighter one (a month start is
-    // also a day; a year start is also both). Day/month sit on a HALF-pixel x (odd lineWidth 1);
-    // year sits on an INTEGER x (even lineWidth 2) — mixing the two crispness rules on one width
-    // is what makes a 2px line render as two blurry grey pixels instead of one crisp one.
-    const strokeTier = (
-      days: Iterable<number>,
-      colour: string,
-      width: number,
-      half: boolean,
-    ): void => {
+    // also a day; a year start is also both). Every tier is 1 px on a HALF-pixel x, the crispness
+    // rule for an odd width.
+    //
+    // **The day and month tiers are dashed 3 on / 3 off; the year tier is solid** (NetPoint
+    // grammar G1, M1). Dash halves a rule's ink, which is what lets the grid read as the quietest
+    // mark while the logic reads first. The year stays solid so a coarser boundary still wins where
+    // it meets a month at the same x (ADR-0056 §2). This amends ADR-0056 §2's reservation of dash
+    // for the Today line and the cursor guideline: the Today line stays separable by its ink (≥ 4:1
+    // against a ≤ 1.80:1 rule), its weight and its pill. One `setLineDash` per tier, and the dash is
+    // cleared after the last tier, so nothing painted later inherits it.
+    const strokeTier = (days: Iterable<number>, colour: string, dash: readonly number[]): void => {
       ctx.strokeStyle = colour;
-      ctx.lineWidth = width;
+      ctx.lineWidth = 1;
+      ctx.setLineDash(dash);
       ctx.beginPath();
       for (const d of days) {
-        const raw = Math.round(screenXOfDay(d, view));
-        const x = half ? raw + 0.5 : raw;
+        const x = Math.round(screenXOfDay(d, view)) + 0.5;
         ctx.moveTo(x, 0);
         ctx.lineTo(x, size.height);
       }
@@ -1096,10 +1103,11 @@ export function paintScene(
     if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
       const days: number[] = [];
       for (let d = firstDay; d <= lastDay; d += 1) days.push(d);
-      strokeTier(days, palette.gridLineDay, 1, true);
+      strokeTier(days, palette.gridLineDay, GRID_DASH);
     }
-    if (toggles.monthGrid) strokeTier(bounds.months, palette.gridLineMonth, 1, true);
-    if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, 2, false);
+    if (toggles.monthGrid) strokeTier(bounds.months, palette.gridLineMonth, GRID_DASH);
+    if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, []);
+    ctx.setLineDash([]);
   } else {
     // Flag-off: the single `gridLine` pass, byte-for-byte today's paint. Batched into one stroke.
     ctx.strokeStyle = palette.gridLine;

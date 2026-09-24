@@ -49,11 +49,21 @@ const DATA_DATE = '2026-01-01';
 interface PassSnapshot {
   lineWidth: number;
   strokeStyle: string;
+  /** The dash in force when the pass was stroked (NetPoint grammar M1). */
+  dash: readonly number[];
   xs: number[];
 }
 
 function countingCtx() {
-  const calls = { beginPath: 0, stroke: 0, moveTo: 0, lineTo: 0, strokeStyleSets: 0 };
+  const calls = {
+    beginPath: 0,
+    stroke: 0,
+    moveTo: 0,
+    lineTo: 0,
+    strokeStyleSets: 0,
+    setLineDash: 0,
+  };
+  let dash: readonly number[] = [];
   const passes: PassSnapshot[] = [];
   let strokeStyleValue = '';
   let currentXs: number[] = [];
@@ -76,11 +86,14 @@ function countingCtx() {
     },
     stroke: () => {
       calls.stroke += 1;
-      passes.push({ lineWidth: ctx.lineWidth, strokeStyle: strokeStyleValue, xs: currentXs });
+      passes.push({ lineWidth: ctx.lineWidth, strokeStyle: strokeStyleValue, dash, xs: currentXs });
     },
     fill: () => {},
     setTransform: () => {},
-    setLineDash: () => {},
+    setLineDash: (d: readonly number[]) => {
+      calls.setLineDash += 1;
+      dash = d;
+    },
     fillText: () => {},
     measureText: (s: string) => ({ width: s.length * 6 }) as TextMetrics,
     get strokeStyle(): string {
@@ -213,7 +226,7 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
     expect(gridPasses(ctx.passes)).toHaveLength(0);
   });
 
-  it('draws day → month → year in that order, year at lineWidth 2 on an INTEGER x, day/month at lineWidth 1 on a HALF-pixel x', () => {
+  it('draws day → month → year in that order, every tier 1 px on a HALF-pixel x', () => {
     const { passes } = paint(true, VIEW);
     expect(passes).toHaveLength(3);
     const [day, month, year] = passes;
@@ -223,13 +236,29 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
     expect(month!.strokeStyle).toBe(PALETTE.gridLineMonth);
     expect(year!.strokeStyle).toBe(PALETTE.gridLineYear);
 
-    expect(day!.lineWidth).toBe(1);
-    expect(month!.lineWidth).toBe(1);
-    expect(year!.lineWidth).toBe(2);
+    // NetPoint grammar G1 (M1): every tier is 1 px, so the grid is the quietest mark. Odd lineWidth
+    // crisps on a HALF-pixel x.
+    for (const pass of [day, month, year]) expect(pass!.lineWidth).toBe(1);
+    for (const x of [...day!.xs, ...month!.xs, ...year!.xs]) expect(x % 1).toBeCloseTo(0.5);
+  });
 
-    // Odd lineWidth crisps on a HALF-pixel x; even lineWidth crisps on an INTEGER x. Mixing the two
-    // is what renders a 2px line as two blurry grey pixels instead of one crisp one.
-    for (const x of [...day!.xs, ...month!.xs]) expect(x % 1).toBeCloseTo(0.5);
-    for (const x of year!.xs) expect(Number.isInteger(x)).toBe(true);
+  it('dashes the day and month tiers 3 on / 3 off and leaves the year tier solid (G1)', () => {
+    const { passes } = paint(true, VIEW);
+    const [day, month, year] = passes;
+    expect(day!.dash).toEqual([3, 3]);
+    expect(month!.dash).toEqual([3, 3]);
+    // Solid, so a year boundary still wins where it meets a month at the same x (ADR-0056 §2).
+    expect(year!.dash).toEqual([]);
+  });
+
+  it('sets the dash once per tier and clears it after, so nothing painted later inherits it (FC-G7)', () => {
+    // Scene-wide, like the other counters here, so the figure is compared across two zooms rather
+    // than pinned: at 10 px/day the viewport holds ~160 days and at 40 px/day ~40. A per-line
+    // `setLineDash` would scale with the visible days; the tier batches do not.
+    const near = paint(true, VIEW).setLineDash;
+    const far = paint(true, { ...VIEW, pxPerDay: 40 }).setLineDash;
+    expect(near).toBe(far);
+    // Three tiers plus the reset, and no layer of a line-free scene adds one.
+    expect(near).toBeLessThanOrEqual(4);
   });
 });

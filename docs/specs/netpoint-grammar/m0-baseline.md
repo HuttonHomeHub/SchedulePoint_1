@@ -79,3 +79,33 @@ with the pen enforced. It opens the plan and checks that the canvas scope resolv
 It ran green locally in 34.8 s (`scripts/e2e-local.sh web:netpoint-grammar`). It is placed on CI
 shard 4, and `check:e2e-roster` projects the shards at 545 s, 564 s, 521 s and 555 s against a 593 s
 budget.
+
+## M1 — the grid and the ground (2026-09-24)
+
+- **FC-G1 and FC-G1b:** `netpoint-grammar-baseline.ts` re-run after M1. It is **byte-identical** to
+  the table above, so no route and no lane moved.
+- **FC-G2:** the NetPoint block's overlay lost every entry M1 shipped. The same cases now read the
+  CSS, and the screen's old month and year floor moved to paper's own tokens
+  (`--canvas-paper-grid-*`, ≥ 3:1 on `--print`).
+- **One value differs from `m0-solved.md`, because a gate refused it.** The month band is 1.02:1,
+  not 1.05. The solver kept each surface's own separation, which put the non-working wash (1.03)
+  lighter than the band it paints over. `print-palette.structural.test.ts` ("the three grounds keep
+  their order") refused that. The wash keeps its quiet value, because the prototype showed a louder
+  one striping every weekend, and the band gives way (month bands are off by default, ADR-0109 D4).
+- **FC-G6:** the golden log was predicted before the re-baseline: only grid-layer entries change,
+  with `setLineDash([3,3])` on day and month, the year going from `lineWidth` 2 on an integer x to 1
+  on a half-pixel x, and a `setLineDash([])` reset. The diff matched line for line (`setLineDash`
+  total 10 → 14), and it was edited in by hand.
+- **FC-G7:** `paint.grid-budget.test.ts` pins one `setLineDash` per tier plus the reset, identical at
+  10 and 40 px/day. That was verified red by moving the call into the per-line loop.
+- **Journey:** `e2e-netpoint-grammar` asserts the shipped token values on the scene canvas and
+  reads the pixels for a dashed rule. The pixel read took two corrections:
+  - its first version counted a transparent pixel as ink (the scene canvas does not paint its own
+    ground), so it saw a dashed rule as one line;
+  - its second version counted every on/off transition, and solid rules then scored 37 against a
+    threshold of 40, because bars crossing a column flip it too.
+
+  The shipped metric counts 2–4 px ink runs between 2–4 px gaps. Solid rules score 7 against a
+  threshold of 20, so it separates cleanly.
+
+- **Other journeys run:** `arrange` (12), `export` (3), `minimap` (1) and `axis-markers` (2), all green.

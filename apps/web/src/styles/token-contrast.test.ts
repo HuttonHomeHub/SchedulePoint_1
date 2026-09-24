@@ -292,6 +292,13 @@ describe('the diagram tells its three criticality states apart', () => {
  * month boundary on a time-scaled diagram is the axis a planner reads a bar's position off, so that
  * is a live WCAG 1.4.11 failure sitting behind a green suite and a paragraph saying it could not be.
  *
+ * **The NetPoint grammar (M1) moved the screen's month and year rules under a CEILING**, on an
+ * accessibility ruling (`docs/specs/netpoint-grammar/m0-lod.md`). On screen the date ruler states
+ * every month and year at every zoom tier, so the rule is texture there. The ceilings are gated in
+ * the NetPoint block at the end of this file. **Paper has no ruler**, so paper's own rules
+ * (`--canvas-paper-grid-*`) keep the 3:1 floor below. The argument above still holds wherever the
+ * rule is the only position channel, which is exactly where the floor still applies.
+ *
  * The pack is not part of any scope's family — it is drawn by the painter through
  * `token('--color-canvas-grid-month')` rather than by a utility — which is exactly why the closure
  * sweep above cannot see it and why it needs naming here.
@@ -799,15 +806,16 @@ describe('the stacked histogram is perceivable on every ground it paints on', ()
 describe('the diagram grid is readable on both of its grounds', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 
-  it.each(PLOT_GROUNDS)('the MONTH rule is perceivable on %s (≥ 3:1)', (_name, ground) => {
-    const value = ratio(tokens, ground, '--canvas-grid-month');
-    expect(value, `month gridline on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
-  });
-
-  it.each(PLOT_GROUNDS)('the YEAR rule is perceivable on %s (≥ 3:1)', (_name, ground) => {
-    const value = ratio(tokens, ground, '--canvas-grid-year');
-    expect(value, `year gridline on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
-  });
+  // Paper's month and year rules keep the floor: the exported raster has no ruler, so they are the
+  // position channel there (NetPoint grammar M0-T4 ruling). The screen's rules are under a ceiling,
+  // gated in the NetPoint block at the end of this file.
+  it.each(['--canvas-paper-grid-month', '--canvas-paper-grid-year'] as const)(
+    'the paper rule %s is perceivable on paper (≥ 3:1)',
+    (rule) => {
+      const value = ratio(tokens, '--print', rule);
+      expect(value, `${rule} on --print is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+    },
+  );
 
   it.each(PLOT_GROUNDS)('a NON-DRIVING link is perceivable on %s (≥ 3:1)', (_name, ground) => {
     // NetPoint-layout M2 (spec §4.7): a non-driving link is a 1 px solid line that carries a
@@ -915,21 +923,12 @@ describe.each(THEME_SELECTORS)('%s — adjacent surfaces', (theme) => {
  * value being gated here while `globals.css` says something else. The overlay must be empty by M6.
  */
 const NETPOINT_PROPOSED: Readonly<Record<string, string>> = {
-  '--canvas': 'oklch(0.995 0.002 250)',
-  '--canvas-band': 'oklch(0.977 0.003 250)',
-  '--canvas-nonworking': 'oklch(0.984 0.004 250)',
-  '--canvas-lane-rule': 'oklch(0.972 0.003 250)',
-  '--canvas-grid-day': 'oklch(0.947 0.003 250)',
-  '--canvas-grid-month': 'oklch(0.862 0.005 250)',
-  '--canvas-grid-year': 'oklch(0.776 0.008 250)',
+  // M1 shipped the ground, the band, the wash, the lane rule, the three grid tiers and paper's own
+  // grid (as `--canvas-paper-grid-*`), so their entries are deleted and the cases below read CSS.
   '--canvas-bar': 'oklch(0.629 0.13 150)',
   '--canvas-link': 'oklch(0.592 0.13 295)',
   '--canvas-link-minor': 'oklch(0.643 0.09 295)',
   '--canvas-link-mark': 'oklch(0.331 0.13 295)',
-  // Paper keeps today's grid values, because on paper the grid IS the position channel: the exported
-  // raster carries no ruler (accessibility ruling, M0-T4, conditions.md amendment of 2026-09-24).
-  '--print-grid-month': 'oklch(0.568 0.012 254)',
-  '--print-grid-year': 'oklch(0.48 0.014 256)',
 };
 
 describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope', () => {
@@ -1007,7 +1006,7 @@ describe('NetPoint grammar — FC-G2/FC-G3 pairs, on the proposed canvas scope',
   // Paper's grid stays a position channel: the export has no ruler, so the month and year rules are
   // how a reader of a printed programme finds a date (M0-T4 ruling). Its own tokens, so paper can
   // never silently inherit the screen's quiet value.
-  it.each(['--print-grid-month', '--print-grid-year'] as const)(
+  it.each(['--canvas-paper-grid-month', '--canvas-paper-grid-year'] as const)(
     'the paper grid tier %s stays a position channel on paper (≥ 3:1)',
     (rule) => {
       const value = ratio(tokens, '--print', rule);

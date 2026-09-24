@@ -403,9 +403,26 @@
      `--page-*`, so re-valuing the page's ink dark put dark ink on a still-dark diagram and
      took twelve matrix assertions with it — every one of them in the canvas scope and none in
      the page. The two milestones are separable in what they DERIVE and not in what they
-     BREAK. M2 still owns the bars, the links, the hatch and the bands. */
-  --canvas: oklch(0.958 0.004 250);
-  --canvas-band: oklch(0.976 0.003 250);
+     BREAK. M2 still owns the bars, the links, the hatch and the bands.
+
+     **Re-valued near-white by the NetPoint grammar (CQ-2, product owner 2026-09-24), which
+     amends the "darker than the page" argument above.** The diagram now reads as the sheet on the
+     desk, as the NetPoint reference does, and its edge against the page and cards is carried by
+     the canvas panel's border rather than by the ground. Every canvas pair was re-solved against
+     this value BEFORE it shipped (`docs/specs/netpoint-grammar/m0-solved.md`). The month band
+     inverts with it (spec §4.13 A-n3): nothing can be lighter than near-white, so the band is the
+     darker of the two now.
+
+     **The band sits at 1.02:1, not at today's 1.05, and the print gate is why.** The non-working
+     wash paints opaquely over the band, so it must stay darker than the band or a weekend reads
+     lighter inside a banded month and darker outside one (`print-palette.structural.test.ts`,
+     "the three grounds keep their order"). The M0 solver kept each surface's own separation and
+     so put the wash (1.03) lighter than the band (1.05), which that gate refused. The wash keeps
+     its quiet 1.03, because the prototype showed a louder wash striping every weekend. The band
+     gives way instead: month bands are off by default (ADR-0109 D4), and the ruler already
+     labels every month. */
+  --canvas: oklch(0.995 0.002 250);
+  --canvas-band: oklch(0.988 0.003 250);
 
   /* The minimap rectangle's frame (ADR-0100 decision 9, M2-T1): a TWO-TONE pair, the
      `outline`/`handleHalo` precedent, because the measurement said one solid cannot exist —
@@ -579,17 +596,26 @@
 
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
-  --canvas-grid-day: oklch(0.905 0.004 250);
-  /* **A month boundary is the axis a planner reads, so it clears WCAG 1.4.11's 3:1** — 0.76 gave
-     2.08:1 against the ground and **1.95:1 against the month band it is most often drawn over**,
-     i.e. a required graphical object below the non-text floor, live. 0.64 gives 3.25 / 3.05.
-     Found by the deferred accessibility gate, and the finding that matters more than the value is
-     that ADR-0097 D12 and this epic's own prose claimed the plot matrix already covered exactly
-     this pair. It did not: `token-contrast.test.ts` swept the criticality triple and the closure
-     and had **no PLOT-pack pair at all**. It does now — which is the actual fix; this number is
-     only how that gate passes. */
-  --canvas-grid-month: oklch(0.568 0.012 254);
-  --canvas-grid-year: oklch(0.48 0.014 256);
+  /* **The grid is the quietest mark on the screen** (NetPoint grammar G1, M1). Every tier sits
+     under a CEILING, dashed, so the logic is what the eye finds first: day 1.15:1, month 1.50:1
+     (ceiling 1.80), year 2.00:1 (ceiling 2.50). The tiers stay ordered, so a coarser boundary
+     still wins at a coincident x (ADR-0056 §2).
+
+     **This reverses the month rule's 3:1 floor, on an accessibility ruling rather than on taste.**
+     That floor held because a month boundary was the axis a planner read a bar's position off.
+     On screen the date ruler now states every month and year at every zoom tier, so the rule is
+     texture (`docs/specs/netpoint-grammar/m0-lod.md`). Paper has no ruler, so paper keeps the
+     old values below, at 3:1 or more. */
+  --canvas-grid-day: oklch(0.947 0.003 250);
+  --canvas-grid-month: oklch(0.862 0.005 250);
+  --canvas-grid-year: oklch(0.776 0.008 250);
+  /* **Paper's grid is a position channel** (NetPoint grammar M0-T4 ruling). The exported and
+     printed raster carries no ruler (`render-export-image.ts` `drawTitleBand`), so there the month
+     and year rules are how a reader finds a date. They are its own tokens, so paper can never
+     silently inherit the screen's quiet value, and they are gated at ≥ 3:1 on `--print`. These are
+     the values the screen's month and year rules held before M1. */
+  --canvas-paper-grid-month: oklch(0.568 0.012 254);
+  --canvas-paper-grid-year: oklch(0.48 0.014 256);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */
@@ -638,14 +664,19 @@
      slack in it: normal/near-critical carries both a 1.5 floor and a 1.70 ceiling, and moving one
      rung moves what every other rung has to clear. The gates refused all of it, and were right —
      the design's own weekend tint is a 4.5% wash, so the subtle value was the intended one and
-     the darker bar was my invention. */
-  --canvas-nonworking: oklch(0.947 0.01 252);
+     the darker bar was my invention.
+
+     **Re-valued with the near-white ground** (NetPoint grammar M1), at the same 1.03:1 separation
+     it held before. Kept at today's figure rather than at the prototype's first value, which
+     striped every weekend on the lighter ground (`docs/specs/netpoint-grammar/prototype-comparison.md`). */
+  --canvas-nonworking: oklch(0.984 0.004 250);
   /* **The lane hairline** (workspace redesign M4-T2). Deliberately the FAINTEST structural line on
      the surface — fainter than a day gridline — because it repeats once per lane down the whole
      diagram and is the most-repeated mark on the picture by a wide margin. It is a rule to sit a
      bar on, not a boundary to read, so 1.4.11's 3:1 does not apply: it carries no information a
      reader must perceive, and every bar it aligns is already a shape with its own contrast. */
-  --canvas-lane-rule: oklch(0.936 0.004 250);
+  /* NetPoint grammar M1: re-valued with the near-white ground at today's 1.07:1. */
+  --canvas-lane-rule: oklch(0.972 0.003 250);
   /* **The non-driving link** (NetPoint-layout M2, spec §4.7). Its own token, because the link used
      to be drawn in `--muted-foreground` — the page's secondary TEXT colour, which nothing chose for
      a line and which moves whenever the page's text is re-valued (TECH_DEBT #367). A 1 px line a

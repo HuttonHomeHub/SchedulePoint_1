@@ -254,10 +254,10 @@ export const PRINT_TOKEN_SOURCES = {
   mutedInk: ['--print-muted-foreground', '#666666'],
   canvasGround: ['--print', '#ffffff'],
   gridLine: ['--border', '#e0e0e0'],
-  gridLineDay: ['--canvas-grid-day', '#dee0e2'],
-  gridLineMonth: ['--canvas-grid-month', '#72777e'],
-  gridLineYear: ['--canvas-grid-year', '#595e66'],
-  laneRule: ['--canvas-lane-rule', '#e8eaec'],
+  gridLineDay: ['--canvas-grid-day', '#eceeef'],
+  gridLineMonth: ['--canvas-paper-grid-month', '#72777e'],
+  gridLineYear: ['--canvas-paper-grid-year', '#595e66'],
+  laneRule: ['--canvas-lane-rule', '#f4f6f8'],
   linkMinor: ['--canvas-link-minor', '#80848b'],
   linkDriving: ['--primary', '#4b8cca'],
   edge: ['--muted-foreground', '#636363'],
@@ -267,7 +267,7 @@ export const PRINT_TOKEN_SOURCES = {
   outline: ['--foreground', '#333333'],
   labelBeside: ['--foreground', '#333333'],
   selection: ['--ring', '#1266a9'],
-  nonWorking: ['--canvas-nonworking', '#e9eef4'],
+  nonWorking: ['--canvas-nonworking', '#f8fafc'],
   today: ['--destructive', '#9c0711'],
   todayInk: ['--destructive-foreground', '#ffffff'],
   dataDate: ['--foreground', '#333333'],
@@ -280,7 +280,7 @@ export const PRINT_TOKEN_SOURCES = {
   barStroke: ['--border', '#e0e0e0'],
   hoverRing: ['--muted-foreground', '#636363'],
   handleHalo: ['--print', '#ffffff'],
-  monthBand: ['--canvas-band', '#f6f7f9'],
+  monthBand: ['--canvas-band', '#fafbfd'],
 } as const satisfies Record<keyof PrintPalette, readonly [token: string, fallback: string]>;
 
 /**

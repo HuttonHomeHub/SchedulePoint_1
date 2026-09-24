@@ -997,6 +997,16 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   approximately **at** `--border`, year is a step **stronger** — two cues (weight _and_ colour), so
   the day → month → year hierarchy survives monochrome print and colour-blind reading. The existing
   `gridLine` field (`--color-border`) is kept unchanged as the flag-off value.
+- **The NetPoint grammar's grid and ground (`docs/specs/netpoint-grammar/`, M1)** — the canvas
+  ground is near-white (`--canvas`, `oklch(0.995 0.002 250)`, CQ-2), and **the grid is the quietest
+  mark on it**. All three tiers are 1 px. Day and month are dashed 3 on / 3 off, and the year is
+  solid, so a coarser boundary still wins at a coincident x. They sit under **ceilings**, gated in
+  `token-contrast.test.ts`: day 1.15:1, month 1.50:1 (≤ 1.80) and year 2.00:1 (≤ 2.50). This amends
+  ADR-0056 §2's "never dashed", and the Today line stays separable by its ink, weight and pill.
+  **Paper keeps a floor**: the exported raster has no ruler, so paper's month and year rules are
+  their own tokens, `--canvas-paper-grid-month`/`-year`, at ≥ 3:1 on `--print`
+  (`PRINT_TOKEN_SOURCES`). The month band (1.02:1) and the non-working wash (1.03:1) are both
+  darker than the ground, and the wash stays darker than the band it paints over.
 - **TSLD non-working hatch (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F7a,
   ADR-0056)** — one new token, `--canvas-nonworking-hatch`, authored per theme block beside
   `--canvas-band` (mapped as `--color-canvas-nonworking-hatch`) and added to both palette
@@ -1014,12 +1024,12 @@ disabled:opacity-50`: Tailwind's `disabled:` variant fires on the **native
   ADR-0056 already had to reason about the dash channel in the absence of such a record. The table
   is the constraint the next canvas mark must obey:
 
-  | Mark                            | Channel                             | Rationale                                                                     |
-  | ------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
-  | Gridline tiers (day/month/year) | solid, hairline, border-family hues | Structure. Never dashed (ADR-0056).                                           |
-  | **Data date**                   | **solid, 2 px, foreground**         | The schedule's own pivot — a fact of the programme, permanent, authoritative. |
-  | Today                           | dashed, 1.5 px, destructive         | Wall-clock now: a _moving_ cue, and the dash says so.                         |
-  | Cursor guideline (ADR-0054)     | dashed, ring hue, transient         | Follows the pointer; exists only during a gesture.                            |
+  | Mark                            | Channel                                             | Rationale                                                                     |
+  | ------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+  | Gridline tiers (day/month/year) | dashed day/month, solid year, 1 px, under a ceiling | Structure, the quietest mark (NetPoint grammar G1, see below).                |
+  | **Data date**                   | **solid, 2 px, foreground**                         | The schedule's own pivot — a fact of the programme, permanent, authoritative. |
+  | Today                           | dashed, 1.5 px, destructive                         | Wall-clock now: a _moving_ cue, and the dash says so.                         |
+  | Cursor guideline (ADR-0054)     | dashed, ring hue, transient                         | Follows the pointer; exists only during a gesture.                            |
 
   Shape (solid vs dashed) and weight distinguish the data date from Today **without relying on
   hue** — that is what makes the pair WCAG 1.4.1-safe rather than merely pretty. The palette pair
