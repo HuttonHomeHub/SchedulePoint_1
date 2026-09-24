@@ -339,3 +339,32 @@ token against the palette's.
   span test and not a rect overlap, and is now written against named edges; and a `paint.test.ts`
   case that took "the last `fillRect`" to be a bar body now excludes the 4 × 4 dot.
 - **FC-G5 stays 0.**
+
+## M3 journey — `links.spec.ts` (2026-09-24)
+
+Two cases, each reading pixels in a real browser against colours resolved in the canvas scope and
+painted once on an offscreen canvas. A 1 px line is anti-aliased, so a line pixel is matched on the
+straight blend from the ground to its colour rather than by exact value.
+
+- **A waiting link**: Piling drives Pour and Excavate → Pour waits. The non-driving link is drawn in
+  `--canvas-link-minor` (and that hue is not the bar green); switching `View ▾ ▸ Link gaps` off (it
+  defaults on) removes mark-shade ink, which is the label; and the Tier-2 summary for Pour says
+  `slack to Excavate (FS) N working days`.
+- **An `SS + 2` link** puts a mark-shade pixel on Frame's bar with bar ink 4 px either side; the same
+  plan before the link has none.
+
+**Verified red** against the painter with gap labels switched off (the first case fails) and with
+the dot pass removed (the second fails). Each test also failed once on its own fixture before it
+could fail for the right reason, and both corrections are worth keeping:
+
+- The first draft made the link wait by **placing** Pour late. That does not make a waiting link:
+  placement is not logic, so Excavate → Pour stayed the driving, critical link, drawn as a long red
+  line with no gap label — which is the rule (ADR-0154 labels relationship slack, not placement
+  drift). It is recorded for the M6 review as a question rather than a defect: a driving link to a
+  hand-placed-late successor shows a long horizontal run with nothing saying how long.
+- The gap case then **passed with no label drawn**, because the "on" count was taken before Pour was
+  selected and the "off" count after: a selection re-inks its links, chevrons included, in the
+  selection colour. Both counts are now taken with nothing selected.
+
+`scripts/e2e-durations.json` moves `test:e2e:netpoint-grammar` 45 → 60 s, measured locally (five
+tests); `check:e2e-roster` projects the shards at 545/564/521/580 s against a 593 s budget.
