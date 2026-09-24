@@ -396,3 +396,38 @@ prediction, a `font=600…` before the milestone's name and `font=11px…` after
 maximal scene switches the centre item on so the layer stays reached. **FC-G1 byte-identical; FC-G5
 0** (text drawn on Unit 300 at 1 px/day falls to 0, since dates are withheld there and the centre item
 is off).
+
+## M4-T2 — the wrap, and gap labels placed against the text already there (2026-09-24)
+
+**The wrap.** A name that would truncate is broken at a word (`wrapTwoLines`, pure) into a first line
+of whole words and a second truncated if it must be, the first drawn one text row above the name row.
+Two lines need more than the row's pad, so the first reaches over the lane boundary into the clear
+band where gutter legs run; it is drawn only where its box, inflated by half a gap-label chip, meets no
+routed link segment. The segments are bucketed by lane once per frame, lazily, on the first name that
+would truncate. Where it meets one, the name is one truncated line as before. A containment case pins
+the first line clear of the lane above's date row.
+
+Unit cases, each red under its mutation: wraps where nothing is routed; falls back to one truncated
+line where a routed corridor (x 124) passes where the first line would sit; wraps beside a corridor
+that passes clear (x 136); one row between the lines; the splitter's own rules. Two older cases that
+pinned `M…` now pin the wrap, which keeps `M1` and a truncated second line.
+
+**The instrument could not see a wrap, and that was found by its first reading.** The FC-G5 script
+labels every bar by its key (`sceneFor`), which is one word, so its new wrap limb read 0 on every plan
+for want of anything to wrap. It now relabels the reference plan and Unit 300 with their real names.
+With names: 2, 6, 7 and 10 wrapped names across the readings, **none meeting a link**.
+
+**The new text-on-text column (FC-N6a) then found an M3 defect.** Gap labels were drawn in the link
+layer as soon as each link was stroked, so two labels on one shared leg, or one on a gutter channel
+beside a date, overlapped: 2 collisions on small-17 at 12 px a day and 6 and 5 on Unit 300 at 4 and
+12, every one a gap label (`COLL=1` prints the pairs; one was `10 cal d` over `3 Jul`). Disabling the
+wrap left the counts unchanged, so the wrap caused none. Now the link layer only collects gap labels;
+names, dates, the centre item and plates record the boxes they draw; and the labels are placed last,
+each only where its chip meets none of those boxes and no label placed before it, in scene order.
+**Text on text: 0 on every plan and zoom** (was 2/6/5). A unit case draws two links of identical
+geometry and finds one label; it and the instrument both go red with the check removed. The cost is
+labels withheld where they would collide (Unit 300: 13 at 4 px a day, 13 at 12), each still spoken in
+the listbox.
+
+**FC-G1 byte-identical; FC-G5: row text on a disc 0, wrapped lines on a link 0, text on text 0.**
+Golden unchanged: its scene has no gap labels and no name that wraps.

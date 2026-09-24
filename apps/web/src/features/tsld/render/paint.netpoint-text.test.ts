@@ -5,7 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_VIEW_TOGGLES, paintScene, type TsldPalette, type TsldScene } from './paint';
-import type { RenderActivity, RenderEdge, Viewport } from './render-model';
+import {
+  LABEL_LINE_H,
+  rowSlots,
+  screenYOfLane,
+  type RenderActivity,
+  type RenderEdge,
+  type Viewport,
+} from './render-model';
 import { recordingCtx } from './test-support/recording-ctx';
 
 /**
@@ -43,6 +50,7 @@ const PALETTE = {
 } as unknown as TsldPalette;
 
 const SIZE = { width: 1600, height: 400 };
+const VIEW12: Viewport = { pxPerDay: 12, originX: 40, originY: 40 };
 const DATA_DATE = '2026-01-01';
 
 function act(over: Partial<RenderActivity> & { id: string }): RenderActivity {
@@ -111,6 +119,65 @@ describe('the canvas label (M4-T1)', () => {
     expect(fontBefore).toMatch(/^font=600 11px/);
     const fontAfter = log.slice(at).find((l) => l.startsWith('font='));
     expect(fontAfter).toMatch(/^font=11px/);
+  });
+});
+
+describe('the wrap (M4-T2, spec §4.2 G7)', () => {
+  // Two finish milestones in lane 1 with a long first word, and a link from lane 0 to lane 2 whose
+  // vertical corridor crosses lane 1 beside the first milestone: at x 124 (P finishing on day 6) it
+  // passes through where the wrapped first line would sit, at x 136 (day 7) it passes clear.
+  const d = (n: number): string => new Date(Date.UTC(2026, 0, n)).toISOString().slice(0, 10);
+  const plan = (pf: number): RenderActivity[] => [
+    act({ id: 'p', laneIndex: 0, earlyStart: d(2), earlyFinish: d(pf), label: 'P' }),
+    act({ id: 's', laneIndex: 2, earlyStart: d(20), earlyFinish: d(22), label: 'S' }),
+    act({
+      id: 'm1',
+      type: 'FINISH_MILESTONE',
+      laneIndex: 1,
+      earlyStart: d(6),
+      earlyFinish: d(6),
+      label: 'ABCDE FGHIJKLMNOP',
+    }),
+    act({
+      id: 'm2',
+      type: 'FINISH_MILESTONE',
+      laneIndex: 1,
+      earlyStart: d(11),
+      earlyFinish: d(11),
+      label: 'N',
+    }),
+  ];
+  const link: RenderEdge[] = [
+    { id: 'e', predecessorId: 'p', successorId: 's', type: 'FS', isDriving: true },
+  ];
+  const names = (log: string[]): string[] => texts(log).filter((t) => /^[A-J]/.test(t));
+
+  it('breaks a name that would truncate onto two lines at a word, where nothing is routed', () => {
+    expect(names(paint(plan(6), 12))).toEqual(['ABCDE', 'FGHI…']);
+  });
+
+  it('keeps one truncated line where a routed link passes where the first line would go', () => {
+    expect(names(paint(plan(6), 12, {}, link))).toEqual(['ABCD…']);
+  });
+
+  it('wraps beside a link that passes clear of the first line', () => {
+    expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCDE', 'FGHI…']);
+  });
+
+  it('keeps the first line clear of the lane above’s date row (lane containment, FC-G5)', () => {
+    // The first line reaches over the lane boundary into the clear band by design (spec §4.2 G7),
+    // so the containment that matters is against the text row above it, not the lane edge.
+    const upperY = rowSlots(screenYOfLane(1, VIEW12)).nameY - LABEL_LINE_H;
+    const aboveBelowY = rowSlots(screenYOfLane(0, VIEW12)).belowY;
+    expect(upperY - LABEL_LINE_H / 2).toBeGreaterThan(aboveBelowY + LABEL_LINE_H / 2);
+  });
+
+  it('puts the first line one text row above the name row', () => {
+    const log = paint(plan(6), 12);
+    const ys = log
+      .filter((l) => l.startsWith('fillText(["ABCDE"') || l.startsWith('fillText(["FGHI'))
+      .map((l) => (JSON.parse(l.slice('fillText('.length, -1)) as [string, number, number])[2]);
+    expect(ys[1]! - ys[0]!).toBe(14);
   });
 });
 

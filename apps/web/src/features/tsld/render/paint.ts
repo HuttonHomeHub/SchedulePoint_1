@@ -47,6 +47,7 @@ import {
   summaryTabRects,
   spanLineRect,
   truncateToWidth,
+  wrapTwoLines,
   BAR_HEIGHT,
   BAR_PAD,
   BAR_RADIUS,
@@ -64,6 +65,7 @@ import {
   formatCanvasDate,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
+  LABEL_LINE_H,
   LANE_HEIGHT,
   MILESTONE_RADIUS,
   PROGRESS_MIN_PX_PER_DAY,
@@ -1216,6 +1218,21 @@ export function paintScene(
   let lagHandlePoints: Point[] | null = null;
   // Read after the edge layer, because the revision overlay may still route through `lineOf`.
   let routed: RouteFrame | null = null;
+  /**
+   * **Gap labels are placed last, against the text already there** (NetPoint grammar M4, found by
+   * FC-G5's text-on-text limb). M3-T3 drew each gap label in the link layer as soon as its link was
+   * stroked, which put two labels on one shared leg on top of each other, and one over a date on
+   * the row below (Unit 300, 5 to 6 collisions per zoom). So the link layer only collects them, the
+   * name, date and plate passes record the boxes they draw, and the labels are placed after all of
+   * them, each only where its chip meets none of those boxes and no label placed before it. Scene
+   * order decides between two labels, so the choice is deterministic.
+   */
+  const pendingGapLabels: { text: string; line: Point[]; x0: number; x1: number }[] = [];
+  const placedText: Rect[] = [];
+  const noteText = (x: number, w: number, y: number, align: 'left' | 'right' | 'center'): void => {
+    const left = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
+    placedText.push({ x: left, y: y - LABEL_LINE_H / 2, w, h: LABEL_LINE_H });
+  };
   if (scene.edges.length > 0) {
     const route = routeFrame(scene, view, visibleIds, byId, rectCache);
     const { workingWalk, refresh, laneIndex, lineOf, lines } = route;
@@ -1285,7 +1302,7 @@ export function paintScene(
       const base = new Map<string, Bucket>();
       const lit = new Map<string, Bucket>();
       const plates: { text: string; line: Point[]; ink: string }[] = [];
-      const gapLabels: { text: string; line: Point[]; x0: number; x1: number }[] = [];
+      const gapLabels = pendingGapLabels;
       // An activity's axis days, parsed once per frame however many links it ends (the per-frame
       // rect-cache budget gate, `paint.rect-cache-budget.test.ts`, pins that date parsing does not
       // scale with edge count). Called only where both dates are present.
@@ -1447,34 +1464,7 @@ export function paintScene(
           );
           ctx.fillStyle = palette.labelBeside;
           ctx.fillText(text, at.x, at.y);
-        }
-        ctx.textAlign = 'left';
-      }
-      if (gapLabels.length > 0) {
-        // Borderless, on an opaque ground chip that knocks the line out beneath it, the text in the
-        // mark ink (≥ 4.5:1 on the ground; the minor line ink is not, `m0-solved.md`). Placed on
-        // the longest horizontal stretch of the route inside the waiting interval, and only where
-        // that stretch holds the label plus 4 px (spec G6): a label that does not fit is withheld,
-        // and the gap is still in the listbox.
-        ctx.font = LABEL_FONT;
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'center';
-        for (const { text, line, x0, x1 } of gapLabels) {
-          const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
-          // The waiting interval runs node to node, and a node paints over the line for its reach
-          // at each end, so the label is placed inside the interval less that reach: a gap label on
-          // a disc is row text on a node (FC-G5), measured at 4 before this inset and 0 after.
-          const at = gapLabelAt(
-            line,
-            Math.min(x0, x1) + NODE_REACH_PX,
-            Math.max(x0, x1) - NODE_REACH_PX,
-            w + 4,
-          );
-          if (!at) continue;
-          ctx.fillStyle = palette.canvasGround;
-          ctx.fillRect(at.x - w / 2, at.y - SLACK_CHIP_H / 2, w, SLACK_CHIP_H);
-          ctx.fillStyle = palette.linkMark;
-          ctx.fillText(text, at.x, at.y);
+          placedText.push({ x: at.x - w / 2, y: at.y - SLACK_CHIP_H / 2, w, h: SLACK_CHIP_H });
         }
         ctx.textAlign = 'left';
       }
@@ -2209,6 +2199,51 @@ export function paintScene(
     const withCodes = toggles.activityCodes === true;
     const labelOf = (a: RenderActivity): string =>
       canvasLabel({ code: a.code ?? null, name: a.label }, withCodes);
+    /**
+     * **Where a wrapped name's first line may go** (NetPoint grammar M4-T2, spec §4.2 G7). Two lines
+     * need more than the row's pad, so the first line reaches over the lane boundary into the clear
+     * band where gutter legs run; it is drawn only where its box meets no routed link segment. The
+     * segments are bucketed by lane once per frame, lazily, on the first name that would truncate,
+     * so a frame whose names all fit tests nothing (FC-G7's wrap-candidate bound).
+     *
+     * The box is inflated by half a gap-label chip vertically, because a gap label or lag plate on a
+     * horizontal leg reaches that far either side of its line.
+     */
+    const lane0Top = screenYOfLane(0, view);
+    const laneOfY = (y: number): number => Math.floor((y - lane0Top) / LANE_HEIGHT);
+    let segmentsByLane: Map<number, [Point, Point][]> | null = null;
+    const segmentsNear = (lane: number): readonly [Point, Point][] => {
+      if (segmentsByLane === null) {
+        segmentsByLane = new Map();
+        for (const line of routed?.lines.values() ?? []) {
+          for (let k = 1; k < line.length; k += 1) {
+            const a = line[k - 1]!;
+            const b = line[k]!;
+            for (let l = laneOfY(Math.min(a.y, b.y)); l <= laneOfY(Math.max(a.y, b.y)); l += 1) {
+              const bucket = segmentsByLane.get(l);
+              if (bucket) bucket.push([a, b]);
+              else segmentsByLane.set(l, [[a, b]]);
+            }
+          }
+        }
+      }
+      return segmentsByLane.get(lane) ?? [];
+    };
+    const WRAP_PAD_Y = SLACK_CHIP_H / 2;
+    const upperLineClear = (lane: number, cx: number, w: number, y: number): boolean => {
+      const x0 = cx - w / 2;
+      const x1 = cx + w / 2;
+      const y0 = y - LABEL_LINE_H / 2 - WRAP_PAD_Y;
+      const y1 = y + LABEL_LINE_H / 2 + WRAP_PAD_Y;
+      for (const l of [lane - 1, lane]) {
+        for (const [a, b] of segmentsNear(l)) {
+          if (Math.max(a.x, b.x) < x0 || Math.min(a.x, b.x) > x1) continue;
+          if (Math.max(a.y, b.y) < y0 || Math.min(a.y, b.y) > y1) continue;
+          return false;
+        }
+      }
+      return true;
+    };
 
     for (const row of laneRows().values()) {
       for (let i = 0; i < row.length; i += 1) {
@@ -2292,7 +2327,17 @@ export function paintScene(
             ? (t: string): number =>
                 labelWidths.measure(t, (x) => ctx.measureText(x).width, MILESTONE_LABEL_FONT)
             : measure;
-          const text = truncateToWidth(labelOf(activity), budget, fit);
+          const full = labelOf(activity);
+          let text = truncateToWidth(full, budget, fit);
+          // Wrap where a one-line name would truncate and a second line has room (M4-T2).
+          let upper: string | null = null;
+          if (text !== full) {
+            const lines = wrapTwoLines(full, budget, fit);
+            if (lines) {
+              upper = lines[0];
+              text = lines[1];
+            }
+          }
           if (!text || text === LABEL_ELLIPSIS) {
             if (bold) ctx.font = LABEL_FONT;
             continue;
@@ -2300,31 +2345,43 @@ export function paintScene(
           // Centred on its bar where the room allows, then slid back inside whichever neighbour's
           // half it would otherwise cross. A milestone's 14 px box with a generous gap on one side
           // still gets that whole half — the alternative (a symmetric cap) would truncate it for
-          // room it is not using.
-          const textW = fit(text);
-          const minCx = hasPrev ? rect.x - leftRoom + textW / 2 : -Infinity;
-          const maxCx = rect.x + rect.w + rightRoom - textW / 2;
-          // **Centred on the part of the bar that is on screen** (`docs/TECH_DEBT.md` #380). A bar
-          // longer than the viewport — a year-long fabrication on the critical path — had its name
-          // at its middle, so panning along it showed a red line with no name for most of its
-          // length. Clamping the centre into the visible span keeps the name on the bar the reader
-          // is looking at; a bar wholly on screen is unaffected, since its visible span is itself.
-          const visibleLeft = Math.max(rect.x, 0);
-          const visibleRight = Math.min(rect.x + rect.w, size.width);
-          const centreX =
-            visibleRight - visibleLeft >= textW
-              ? Math.min(
-                  Math.max(rect.x + rect.w / 2, visibleLeft + textW / 2),
-                  visibleRight - textW / 2,
-                )
-              : rect.x + rect.w / 2;
+          // room it is not using. **Centred on the part of the bar that is on screen**
+          // (`docs/TECH_DEBT.md` #380): a bar longer than the viewport had its name at its middle,
+          // so panning along it showed a line with no name for most of its length.
+          const centreFor = (textW: number): number => {
+            const minCx = hasPrev ? rect.x - leftRoom + textW / 2 : -Infinity;
+            const maxCx = rect.x + rect.w + rightRoom - textW / 2;
+            const visibleLeft = Math.max(rect.x, 0);
+            const visibleRight = Math.min(rect.x + rect.w, size.width);
+            const centreX =
+              visibleRight - visibleLeft >= textW
+                ? Math.min(
+                    Math.max(rect.x + rect.w / 2, visibleLeft + textW / 2),
+                    visibleRight - textW / 2,
+                  )
+                : rect.x + rect.w / 2;
+            return minCx <= maxCx ? Math.min(Math.max(centreX, minCx), maxCx) : centreX;
+          };
+          let cx = centreFor(upper === null ? fit(text) : Math.max(fit(text), fit(upper)));
+          const upperY = slots.nameY - LABEL_LINE_H;
+          if (upper !== null && !upperLineClear(activity.laneIndex, cx, fit(upper), upperY)) {
+            // No room above: the one truncated line, exactly as before the wrap existed.
+            upper = null;
+            text = truncateToWidth(full, budget, fit);
+            if (!text || text === LABEL_ELLIPSIS) {
+              if (bold) ctx.font = LABEL_FONT;
+              continue;
+            }
+            cx = centreFor(fit(text));
+          }
           ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'center';
-          ctx.fillText(
-            text,
-            minCx <= maxCx ? Math.min(Math.max(centreX, minCx), maxCx) : centreX,
-            slots.nameY,
-          );
+          if (upper !== null) {
+            ctx.fillText(upper, cx, upperY);
+            noteText(cx, fit(upper), upperY, 'center');
+          }
+          ctx.fillText(text, cx, slots.nameY);
+          noteText(cx, fit(text), slots.nameY, 'center');
           ctx.textAlign = 'left';
           if (bold) ctx.font = LABEL_FONT;
         } else if (placement === 'inside') {
@@ -2337,6 +2394,7 @@ export function paintScene(
           // 1.4.3) — the SAME chain the in-bar progress band draws with.
           ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
           ctx.fillText(text, rect.x + insidePad, cy);
+          noteText(rect.x + insidePad, measure(text), cy, 'left');
         } else {
           const startX = rect.x + rect.w + LABEL_GAP_PX;
           const maxPx = (nextLeftX === Infinity ? size.width : nextLeftX) - startX - LABEL_PAD_PX;
@@ -2344,6 +2402,7 @@ export function paintScene(
           if (!text) continue;
           ctx.fillStyle = palette.labelBeside;
           ctx.fillText(text, startX, cy);
+          noteText(startX, measure(text), cy, 'left');
         }
       }
     }
@@ -2514,6 +2573,7 @@ export function paintScene(
             if (halfText <= roomLeft && halfText <= roomRight) {
               ctx.textAlign = 'center';
               ctx.fillText(startText, rect.x + rect.w / 2, below);
+              noteText(rect.x + rect.w / 2, startWidthPx, below, 'center');
             }
           } else if (datesFitInside(startWidthPx, finishWidthPx, textSpan(row, i))) {
             // **Inside its own ends**, which is the reference's placement and reaches nothing: the
@@ -2521,6 +2581,7 @@ export function paintScene(
             const span = textSpan(row, i);
             ctx.textAlign = 'left';
             ctx.fillText(startText, span.left, below);
+            noteText(span.left, startWidthPx, below, 'left');
             // **One date per node** (`docs/TECH_DEBT.md` #379). Where the next bar in the lane
             // starts at this bar's end, its start date is written at the same node, and the two ran
             // together ("31 Jan1 Feb"). NetPoint writes the node once, with the next activity's
@@ -2529,6 +2590,7 @@ export function paintScene(
             if (!nextDrawsStartAtNode(row, i, rect)) {
               ctx.textAlign = 'right';
               ctx.fillText(finishText, span.right, below);
+              noteText(span.right, finishWidthPx, below, 'right');
             }
           } else {
             // **Otherwise flank the ends it has room beside**, each end judged on its own HALF of
@@ -2550,10 +2612,12 @@ export function paintScene(
             if (belowSlot.start) {
               ctx.textAlign = 'right';
               ctx.fillText(startText, rect.x - offset, below);
+              noteText(rect.x - offset, startWidthPx, below, 'right');
             }
             if (belowSlot.finish) {
               ctx.textAlign = 'left';
               ctx.fillText(finishText, rect.x + rect.w + offset, below);
+              noteText(rect.x + rect.w + offset, finishWidthPx, below, 'left');
             }
           }
           ctx.textAlign = 'left';
@@ -2570,12 +2634,14 @@ export function paintScene(
           ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'right';
           ctx.fillText(startText, rect.x - LABEL_GAP_PX, cy);
+          noteText(rect.x - LABEL_GAP_PX, startWidthPx, cy, 'right');
         }
         if (slot.finish) {
           plate(rect.x + rect.w + LABEL_GAP_PX - 1, finishWidthPx + 2);
           ctx.fillStyle = palette.labelBeside;
           ctx.textAlign = 'left';
           ctx.fillText(finishText, rect.x + rect.w + LABEL_GAP_PX, cy);
+          noteText(rect.x + rect.w + LABEL_GAP_PX, finishWidthPx, cy, 'left');
         }
       }
     }
@@ -2656,9 +2722,45 @@ export function paintScene(
         }
         const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
         ctx.fillText(text, (left + right) / 2, below);
+        noteText((left + right) / 2, measure(text), below, 'center');
       }
     }
     if (styled) ctx.textAlign = 'left';
+  }
+
+  // Layer 3.9: the GAP LABELS (NetPoint grammar M3-T3), collected by the link layer and placed here,
+  // after every other row text, so each can be withheld where it would sit on text already drawn.
+  if (pendingGapLabels.length > 0) {
+    // Borderless, on an opaque ground chip that knocks the line out beneath it, the text in the
+    // mark ink (≥ 4.5:1 on the ground; the minor line ink is not, `m0-solved.md`). Placed on
+    // the longest horizontal stretch of the route inside the waiting interval, and only where
+    // that stretch holds the label plus 4 px (spec G6): a label that does not fit is withheld,
+    // and the gap is still in the listbox.
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    for (const { text, line, x0, x1 } of pendingGapLabels) {
+      const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
+      // The waiting interval runs node to node, and a node paints over the line for its reach
+      // at each end, so the label is placed inside the interval less that reach: a gap label on
+      // a disc is row text on a node (FC-G5), measured at 4 before this inset and 0 after.
+      const at = gapLabelAt(
+        line,
+        Math.min(x0, x1) + NODE_REACH_PX,
+        Math.max(x0, x1) - NODE_REACH_PX,
+        w + 4,
+      );
+      if (!at) continue;
+      const chip: Rect = { x: at.x - w / 2, y: at.y - SLACK_CHIP_H / 2, w, h: SLACK_CHIP_H };
+      // Withheld where it would sit on text already placed; the gap is still in the listbox.
+      if (placedText.some((r) => rectsIntersect(r, chip))) continue;
+      placedText.push(chip);
+      ctx.fillStyle = palette.canvasGround;
+      ctx.fillRect(chip.x, chip.y, chip.w, chip.h);
+      ctx.fillStyle = palette.linkMark;
+      ctx.fillText(text, at.x, at.y);
+    }
+    ctx.textAlign = 'left';
   }
 
   // Layer 4: the selection ring on the selected activity (if visible), plus — when editing

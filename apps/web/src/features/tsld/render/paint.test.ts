@@ -1114,12 +1114,13 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       PALETTE,
     );
     const drawn = ctx.fillText.mock.calls.map((c) => c[0] as string);
-    expect(drawn).toHaveLength(2);
-    // **One character shorter than it was**, and that is M6's half-gap rule showing its price: the
-    // crowded name used to claim the WHOLE 10 px between the two boxes and now claims half, so it
-    // keeps `M…` where it kept `M1…`. Still a name rather than a suppression, which is the claim
-    // this case exists to pin; the assertion said `M1` and was pinning the arithmetic by accident.
-    expect(drawn.some((t) => t.startsWith('M') && t.endsWith('…'))).toBe(true);
+    // **Wrapped since NetPoint grammar M4-T2**, where it kept `M…` on one line (M6's half-gap
+    // rule, which still bounds each line): nothing is routed here, so the crowded name breaks at a
+    // word and keeps its whole first word above, `M1`, with the rest truncated below. Still a name
+    // rather than a suppression, which is the claim this case exists to pin.
+    expect(drawn).toHaveLength(3);
+    expect(drawn[0]).toBe('M1');
+    expect(drawn[1]!.startsWith('H') && drawn[1]!.endsWith('…')).toBe(true);
     expect(drawn).toContain('M2 Done');
   });
 
@@ -1158,7 +1159,7 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
     expect(drawn).not.toContain('…');
   });
 
-  it('truncates a beside label when the neighbour leaves only partial room', () => {
+  it('wraps, then truncates, a label when the neighbour leaves only partial room', () => {
     const ctx = mockCtx();
     // Neighbour four days right (x=120): ~32px of clear room beside the left diamond — enough to
     // place a beside label (≥ LABEL_BESIDE_MIN_PX) but far too narrow for the 66px label, so it
@@ -1172,9 +1173,11 @@ describe('paintScene — activity labels (Layer 3.6)', () => {
       SIZE,
       PALETTE,
     );
-    expect(ctx.fillText).toHaveBeenCalledTimes(2);
-    // Lane rows are x-sorted, so the crowded left diamond is drawn first — and truncated.
-    expect((ctx.fillText.mock.calls[0]![0] as string).endsWith('…')).toBe(true);
+    // Lane rows are x-sorted, so the crowded left diamond is drawn first: since NetPoint grammar
+    // M4-T2 its name wraps, first word above and the rest truncated below.
+    expect(ctx.fillText).toHaveBeenCalledTimes(3);
+    expect(ctx.fillText.mock.calls[0]![0]).toBe('M1');
+    expect((ctx.fillText.mock.calls[1]![0] as string).endsWith('…')).toBe(true);
   });
 });
 

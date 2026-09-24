@@ -154,6 +154,21 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
     expect(far.some((l) => /fillText\(\["\d+d"/.test(l))).toBe(false);
   });
 
+  it('draws a gap label only where it meets no text already placed (NetPoint grammar M4)', () => {
+    // Two links with the same geometry put two identical chips in one place. Scene order decides
+    // and the second is withheld: gap labels are placed last, each against every name, date, plate
+    // and earlier label (FC-G5's text-on-text limb, which found 5–6 collisions on Unit 300 per zoom
+    // before this).
+    const twice = [
+      edge({ id: 'e1', predecessorId: 'A', successorId: 'B' }),
+      edge({ id: 'e2', predecessorId: 'A', successorId: 'B' }),
+    ];
+    const log = paint([A, B], twice);
+    expect(log.filter((l) => l.includes('fillText(["6d"'))).toHaveLength(1);
+    // The control: each alone draws its label.
+    expect(paint([A, B], [twice[0]!]).filter((l) => l.includes('fillText(["6d"'))).toHaveLength(1);
+  });
+
   it('withholds a gap too short to clear both end nodes, rather than print it on a disc', () => {
     // Same lane, two days apart at 12 px a day: a straight 24 px run from A's node to B's. "2d" on
     // its chip is 18 px, which fits the run (≥ label + 4) but not the run less a node's reach at

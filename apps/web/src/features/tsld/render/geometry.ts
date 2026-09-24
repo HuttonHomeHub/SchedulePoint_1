@@ -864,6 +864,30 @@ export function truncateToWidth(
   return kept ? kept + ellipsis : ellipsis;
 }
 
+/**
+ * A name broken onto two lines at a word boundary (NetPoint grammar M4-T2, spec §4.2 G7): the first
+ * line is the longest run of whole words that fits `maxPx`, the second is the rest, truncated to
+ * `maxPx` if it must be. Null where a wrap would not help: a single word, a first word that does
+ * not fit, or a second line that would be a lone ellipsis.
+ *
+ * The caller decides whether there is ROOM for a second line (it must meet no routed link); this
+ * only decides the break, so it is pure and testable without a canvas.
+ */
+export function wrapTwoLines(
+  text: string,
+  maxPx: number,
+  measure: (s: string) => number,
+): [string, string] | null {
+  const words = text.split(' ').filter((w) => w.length > 0);
+  if (words.length < 2 || maxPx <= 0) return null;
+  let k = 0;
+  while (k + 1 < words.length && measure(words.slice(0, k + 1).join(' ')) <= maxPx) k += 1;
+  if (k === 0) return null;
+  const second = truncateToWidth(words.slice(k).join(' '), maxPx, measure);
+  if (!second || second === LABEL_ELLIPSIS) return null;
+  return [words.slice(0, k).join(' '), second];
+}
+
 /** Whether two screen-space rectangles overlap (used for viewport culling). */
 /**
  * The plan's world extent — the inclusive `minDay`, the **exclusive** `maxDay`
