@@ -1911,7 +1911,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
    * because the reason it was retired is about the 5 px bar and not about the cue: a 14 px
    * diamond's perimeter has room for a `[3, 2]` period and a 5 px outline has none.
    */
-  it('separates the three rungs on a milestone by outline weight and dash', () => {
+  it('separates the three rungs on a milestone by outline weight (NetPoint grammar M5, G8)', () => {
     const paintWith = (activity: RenderActivity): string[] => {
       const r = recordingCtx({ ...mockCtx(), roundRect: vi.fn() });
       paintScene(r.ctx, refreshScene({ activities: [activity] }), VIEW, SIZE, PALETTE);
@@ -1919,16 +1919,18 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     };
     const ms = { type: 'START_MILESTONE' as const };
 
+    // The triangle's outline carries the rung by WEIGHT, as a node's rim does (CQ-11), and never by
+    // dash: 2 px critical, 1.5 px near, none on schedule.
     const critical = paintWith(task({ ...ms, isCritical: true }));
     expect(critical).toContain(`lineWidth=${EMPHASIS_STROKE_W}`);
     expect(critical).not.toContain('setLineDash([[3,2]])');
 
     const near = paintWith(task({ ...ms, isNearCritical: true }));
-    expect(near).toContain(`lineWidth=${EMPHASIS_STROKE_W}`);
-    expect(near).toContain('setLineDash([[3,2]])');
+    expect(near).toContain('lineWidth=1.5');
+    expect(near).not.toContain('setLineDash([[3,2]])');
 
     const plain = paintWith(task({ ...ms }));
-    expect(plain).toContain(`strokeStyle=${PALETTE.barStroke}`);
+    expect(plain).not.toContain(`strokeStyle=${PALETTE.barStroke}`);
     expect(plain).not.toContain('setLineDash([[3,2]])');
 
     expect(new Set([critical.join('|'), near.join('|'), plain.join('|')]).size).toBe(3);
@@ -2347,7 +2349,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     );
   });
 
-  it('gives a non-critical milestone the hairline diamond outline (consistent glyph language)', () => {
+  it('draws a milestone as a downward triangle, outlined only when it is critical or near', () => {
     const { ctx, log } = recordingCtx();
     paintScene(
       ctx,
@@ -2358,11 +2360,16 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       SIZE,
       PALETTE,
     );
-    // The diamond fills, then strokes the same path with the calm definition stroke — the
-    // stroke lands AFTER the barStroke style is set (the grid layer's stroke precedes it).
-    const styleAt = log.indexOf(`strokeStyle=${PALETTE.barStroke}`);
-    expect(styleAt).toBeGreaterThanOrEqual(0);
-    expect(log.slice(styleAt).some((e) => e === 'stroke([])')).toBe(true);
+    // NetPoint grammar M5 (spec §4.2 G8): a downward triangle, its base above its apex, and on
+    // schedule no outline at all.
+    const move = log.findIndex((e, i) => e.startsWith('moveTo(') && log[i + 4] === 'fill([])');
+    expect(move).toBeGreaterThanOrEqual(0);
+    const pt = (e: string): number[] => JSON.parse(e.slice(e.indexOf('(') + 1, -1)) as number[];
+    const [a, b, apex] = [pt(log[move]!), pt(log[move + 1]!), pt(log[move + 2]!)];
+    expect(a[1]).toBe(b[1]); // a flat base
+    expect(apex[1]).toBeGreaterThan(a[1]!); // the apex below it: pointing down
+    expect(apex[0]).toBe((a[0]! + b[0]!) / 2);
+    expect(log).not.toContain(`strokeStyle=${PALETTE.barStroke}`);
     // A critical milestone keeps the emphasised outline + solid dash instead.
     const critical = recordingCtx();
     paintScene(

@@ -60,6 +60,40 @@ export function drawRoundedPolyline(ctx: Ctx2D, points: Point[]): void {
  * Left open by default (a `fill` closes it implicitly); `close` traces the final segment back to
  * the top vertex for stroke-only callers (the Ctx2D surface has no closePath).
  */
+/**
+ * Begin the **downward triangle** a milestone draws as on the refreshed canvas (NetPoint grammar
+ * M5, spec §4.2 G8, CQ-6), centred on (`cx`, `cy`) inside the same `r` envelope the diamond used,
+ * so the hit rect, lane containment and every anchor keep their numbers. Its base spans the full
+ * width `2r` and sits `0.7r` above the centre; its apex is `r` below it, pointing at the date line.
+ * Open by default as the diamond is, and closed on request for stroke-only callers.
+ */
+export function traceMilestoneTriangle(
+  ctx: Ctx2D,
+  cx: number,
+  cy: number,
+  r: number,
+  close = false,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(cx - r, cy - 0.7 * r);
+  ctx.lineTo(cx + r, cy - 0.7 * r);
+  ctx.lineTo(cx, cy + r);
+  if (close) ctx.lineTo(cx - r, cy - 0.7 * r);
+}
+
+/** The milestone glyph for the path in use: the triangle refreshed, the diamond on the legacy path. */
+export function traceMilestoneGlyph(
+  ctx: Ctx2D,
+  cx: number,
+  cy: number,
+  r: number,
+  close: boolean,
+  triangle: boolean,
+): void {
+  if (triangle) traceMilestoneTriangle(ctx, cx, cy, r, close);
+  else traceMilestoneDiamond(ctx, cx, cy, r, close);
+}
+
 export function traceMilestoneDiamond(
   ctx: Ctx2D,
   cx: number,

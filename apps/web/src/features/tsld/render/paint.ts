@@ -9,6 +9,8 @@ import {
   drawPolyline,
   drawRoundedPolyline,
   traceMilestoneDiamond,
+  traceMilestoneGlyph,
+  traceMilestoneTriangle,
 } from './layers/shapes';
 import { labelWidths } from './layers/text-measure';
 import type { GhostBar, LevelledGhost } from './lenses';
@@ -54,6 +56,7 @@ import {
   ARROWHEAD_HALF_W_PX,
   ARROWHEAD_ROUTED_PX,
   EMPHASIS_STROKE_W,
+  criticalityRung,
   LABEL_FONT,
   MILESTONE_LABEL_FONT,
   LABEL_GAP_PX,
@@ -588,6 +591,15 @@ function strikeThrough(ctx: Ctx2D, x: number, midY: number, width: number): void
  * node to carry the rung — and never a bar: a `[3, 2]` period is wider than a 5 px bar outline,
  * which is the whole reason the bar's rung moved to its nodes (`criticalityRung`).
  */
+/**
+ * A milestone's outline width per rung (NetPoint grammar M5, spec §4.2 G8): the triangle's
+ * non-colour channel for criticality, by weight. On schedule draws no outline.
+ */
+const MILESTONE_OUTLINE_W: Readonly<Record<'critical' | 'near', number>> = {
+  critical: EMPHASIS_STROKE_W,
+  near: 1.5,
+};
+
 function criticalDash(activity: RenderActivity): number[] | null {
   if (activity.isCritical) return [];
   if (activity.isNearCritical) return [3, 2];
@@ -946,21 +958,21 @@ function drawRefreshedBar(
   if (glyph === 'milestone') {
     const cx = rect.x + rect.w / 2;
     const cy = rect.y + rect.h / 2;
-    traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
+    // **A downward triangle** (NetPoint grammar M5, spec §4.2 G8, CQ-6): the reference's milestone,
+    // filled in the rung colour already set, inside the diamond's envelope.
+    traceMilestoneTriangle(ctx, cx, cy, MILESTONE_RADIUS, true);
     ctx.fill();
     ctx.globalAlpha = 1; // outline + badges stay full-strength even on a dimmed bar
-    // A milestone keeps its outline as the definition stroke. It draws NO nodes: the diamond is
-    // already a terminal glyph, and two nodes on a zero-width shape are two circles on each other.
-    // **A milestone has no nodes, so its own outline carries the rung** — weight for emphasis and
-    // the dash for which emphasis, which is exactly the three-state cue the bar used to carry.
-    // It stays legible here for the reason it stopped being legible there: a 14 px diamond's
-    // perimeter has room for a `[3, 2]` dash and a 5 px bar outline has none.
-    const dash = criticalDash(activity);
-    ctx.strokeStyle = dash === null ? palette.barStroke : palette.outline;
-    ctx.lineWidth = dash === null ? 1 : EMPHASIS_STROKE_W;
-    if (dash !== null) ctx.setLineDash(dash);
-    ctx.stroke();
-    if (dash !== null) ctx.setLineDash([]);
+    // It draws NO nodes: the triangle is already a terminal glyph. **Its outline carries the rung's
+    // non-colour channel** (WCAG 1.4.1), by weight as a node's rim does (CQ-11): 2 px in the
+    // foreground for critical, 1.5 px for near-critical, none on schedule.
+    const rung = criticalityRung(activity);
+    if (rung !== 'none') {
+      ctx.strokeStyle = palette.outline;
+      ctx.lineWidth = MILESTONE_OUTLINE_W[rung];
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
     return;
   }
 
@@ -1661,7 +1673,7 @@ export function paintScene(
           continue;
         }
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true); // closed — stroke-only
+        traceMilestoneGlyph(ctx, cx, cy, MILESTONE_RADIUS, true, scene.visualRefresh === true); // closed — stroke-only
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
@@ -1715,7 +1727,7 @@ export function paintScene(
         ) {
           continue;
         }
-        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true);
+        traceMilestoneGlyph(ctx, cx, cy, MILESTONE_RADIUS, true, scene.visualRefresh === true);
         ctx.stroke();
         if (ghost.removed) strikeThrough(ctx, cx - MILESTONE_RADIUS, cy, MILESTONE_RADIUS * 2);
         continue;
@@ -1789,7 +1801,7 @@ export function paintScene(
           continue;
         }
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true); // closed — stroke-only
+        traceMilestoneGlyph(ctx, cx, cy, MILESTONE_RADIUS, true, scene.visualRefresh === true); // closed — stroke-only
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
@@ -3114,10 +3126,10 @@ export function paintInteractionLayer(
 
   const refreshedGhost = (r: Rect): void => {
     ctx.fillStyle = palette.bar;
-    // A milestone ghosts as the diamond it really is, so a dragged milestone never momentarily
+    // A milestone ghosts as the triangle it really is, so a dragged milestone never momentarily
     // becomes a bar (ADR-0054 §1). The outline below then traces the same path.
     if (detail?.milestone) {
-      traceMilestoneDiamond(ctx, r.x + r.w / 2, r.y + r.h / 2, MILESTONE_RADIUS);
+      traceMilestoneTriangle(ctx, r.x + r.w / 2, r.y + r.h / 2, MILESTONE_RADIUS, true);
       ctx.fill();
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 1.5;

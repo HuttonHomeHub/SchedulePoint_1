@@ -107,4 +107,13 @@ describe('FC-G8 — the legend keys the link family the painter draws (M3)', () 
     expect(dot, 'the attachment row has no dot swatch').not.toBeNull();
     expect(dot!.style.backgroundColor).toBe(`var(${tokenOf('attachDot')})`);
   });
+
+  it('Milestone: a downward triangle filled in the token the painter fills an on-schedule bar with', () => {
+    render(<TsldLegend />);
+    const item = screen.getByText('Milestone', { exact: true }).closest('li');
+    const glyph = item?.querySelector<SVGPathElement>('[data-legend-milestone]');
+    expect(glyph, 'the Milestone row has no triangle').not.toBeNull();
+    expect(glyph!.getAttribute('d')).toBe('M0 0 L14 0 L7 12 Z');
+    expect(glyph!.style.fill).toBe(`var(${tokenOf('bar')})`);
+  });
 });

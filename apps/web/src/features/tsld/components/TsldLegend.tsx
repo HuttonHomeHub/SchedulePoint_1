@@ -32,6 +32,7 @@ type LegendItem =
   | { label: string; lagPlate: true }
   | { label: string; gapLabel: true }
   | { label: string; attachDot: true }
+  | { label: string; milestone: true }
   | { label: string; pin: true }
   | { label: string; today: true }
   | { label: string; dataDate: true }
@@ -130,6 +131,9 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // legend renders byte-identically (the parity gate).
   ...(CANVAS_DIRECT_MANIPULATION_ENABLED
     ? [
+        // A milestone is a downward triangle (NetPoint grammar M5, spec §4.2 G8), filled in its rung's
+        // colour and outlined by weight when critical or near, as the criticality rows above say.
+        { label: 'Milestone', milestone: true } as const,
         { label: 'Level of effort', loe: true } as const,
         { label: 'WBS summary', summary: true } as const,
         { label: 'Progress', progress: true } as const,
@@ -363,6 +367,18 @@ export function TsldLegend({
                   }}
                 />
               ))}
+            </span>
+          ) : 'milestone' in item ? (
+            <span aria-hidden="true" className="inline-flex h-3 w-5 items-center justify-center">
+              {/* The triangle in the canvas's own proportions: a 14 px base 0.7r above the centre and
+                  the apex r below it, in the bar's on-schedule fill. */}
+              <svg width="14" height="12" viewBox="0 0 14 12">
+                <path
+                  data-legend-milestone=""
+                  d="M0 0 L14 0 L7 12 Z"
+                  style={{ fill: 'var(--canvas-bar)' }}
+                />
+              </svg>
             </span>
           ) : 'loe' in item ? (
             <span aria-hidden="true" className="relative inline-flex h-3 w-5 items-center">

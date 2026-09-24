@@ -445,3 +445,30 @@ Activity codes` is switched on, while the name row gains ink (the code);
 Both passed first time, so both were run against the painter with the codes switch and the date tier
 removed, and both failed with their own messages. `test:e2e:netpoint-grammar` moves 60 → 72 s (seven
 tests, measured locally).
+
+## M5 — the milestone triangle (2026-09-24)
+
+A milestone draws as a **downward triangle** on the refreshed canvas (spec §4.2 G8, CQ-6): base `2r`
+wide `0.7r` above the centre, apex `r` below it, inside the diamond's `MILESTONE_RADIUS` envelope, so
+the hit rect, lane containment and every anchor keep their numbers (`finish-milestone-day.structural`
+green unedited). It is filled in its rung's colour, and its outline carries criticality **by weight**,
+as a node's rim does (CQ-11): 2 px in the foreground for critical, 1.5 px for near-critical, none on
+schedule. The dash it carried before is gone. Baseline, revision and drag ghosts trace the triangle on
+the refreshed path; the legacy (flag-off) path keeps the diamond. The legend gains a `Milestone` row
+with the triangle, checked by the census against the bar token. **No hourglass** (nothing in the data
+says which milestone is the project's start or finish). **The minimap keeps its own mark** (a 1 px
+bar at the milestone's day), because a 14 px glyph cannot be drawn at minimap scale and its bars are
+already floored to 1 px. **M5-B (area labels) is not built**: CQ-7 kept the WBS band.
+
+- Unit: the triangle's base is flat, its apex below and centred; the three rungs are 2, 1.5 and no
+  outline, none dashed.
+- Golden: exactly the prediction, the maximal scene's on-schedule milestone traces
+  `(113,545.1) (127,545.1) (120,557)` and closes, where the diamond was four points, and loses its
+  hairline outline (`stroke` 13 → 12).
+- Journey `milestones.spec.ts`: the milestone's widest pixel row sits above its narrowest and within
+  3 px of its top, and is at least three times wider; the legend lists `Milestone`. Red with the
+  diamond put back (`the widest row (the base) is not above the narrowest`).
+- FC-G1 byte-identical; FC-G5 0/0/0.
+
+`test:e2e:netpoint-grammar` moves 72 → 78 s, which took shard 4 to 598 s against the 593 s
+critical-path budget, so `test:e2e:audit` (31 s) moves to shard 3: shards now 545/564/552/567 s.

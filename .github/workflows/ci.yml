@@ -1003,7 +1003,9 @@ jobs:
       # nav link, and that the `/me` feed is scoped by ACTOR — the teammate is the SUBJECT of the
       # role change and must not see it. Runs after the prior suites tear down their servers.
       - name: Web end-to-end tests (audit log flag on)
-        if: ${{ matrix.shard == 4 }}
+        # Moved from shard 4 at NetPoint grammar M5, when that suite's growth took shard 4 to 598 s
+        # against the 593 s budget; this one is 31 s and shard 3 had the room.
+        if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:audit
 
       # ADR-0074 M5-T3. Two steps, because `AUTH_REQUIRE_EMAIL_VERIFICATION` is a server-boot
