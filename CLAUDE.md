@@ -5846,8 +5846,13 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   from instruments rather than reviews: FC-G5's wrap limb read 0 on every plan because its scenes
   labelled bars by one-word keys, and once it used real names, its new text-on-text count found M3's
   gap labels overlapping each other and a date on Unit 300 — so gap labels are now placed after all
-  other text and withheld where they would meet any. **The CPM engine is not imported and no
-  migration runs.**
+  other text and withheld where they would meet any. **The M6 gate pass blocked on all four
+  reviews.** With codes on, the accessible name `name, code` did not contain the printed
+  `code name` (WCAG 2.5.3), under a test that checked each word in any order; the name now follows
+  the switch. The spec's own A4 (a wrapped pair shares the pad) had not been built, so a wrapped
+  name crossed into the row above, found by the containment case FC-G5 named and nobody had
+  written. Two of FC-G7's counting budgets were unwritten, and the pictures had been judged at M2
+  only. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -63,7 +63,8 @@ yardstick plan were byte-identical after every milestone.
    (formerly `Link slack`) is on by default. A driving link is never labelled.
 6. **Text says identity and dates (D6).** The canvas prints the name; the code only while `View ▾ ▸
 Markers ▸ Activity codes` is on (off by default). The accessible name is `{name}, {code}`, so the
-   visible text leads it (the M0-T4 ruling R7). The centre item is behind `Duration & float`, off by
+   visible text leads it (the M0-T4 ruling R7). With codes on, the accessible name leads with the
+   printed `{code} {name}` instead (amended at the M6 gate pass: WCAG 2.5.3). The centre item is behind `Duration & float`, off by
    default, and a critical activity prints its duration alone. Milestone names are bold. A name that
    would truncate breaks onto two lines where no routed link passes. The logic summary names every
    tie's type, `(FS)` included.
@@ -108,6 +109,42 @@ Markers ▸ Activity codes` is on (off by default). The accessible name is `{nam
 - **Put to the product owner, not decided here:** the node diameter (spec G4's rule cannot be met by
   any diameter; 15 px ships, `m0-baseline.md` M2-T3), and whether the near-critical rung needs a
   second non-colour cue beside its 1 px against 2 px rim step.
+
+## Gate pass (M6)
+
+Four reviews ran over the combined diff: accessibility, component, UX and performance. All four
+blocked, and every blocking finding was folded with a test first seen to fail against the defect.
+
+- **The accessible name contradicted the printed label while codes were on** (accessibility). D6
+  made the accessible name `{name}, {code}` in both states, and with `Activity codes` on the canvas
+  prints `{code} {name}`, which is not contained in it: WCAG 2.5.3 fails. The M4 test that was meant
+  to catch this checked each word of the label was present in any order, which the defect passes.
+  The name now follows the switch (`activityLabel(a, withCodes)`), so it leads with exactly what the
+  canvas prints in both states, and the text journey now asserts the change instead of its absence.
+  D6 is amended accordingly.
+- **A wrapped name crossed into the row above** (component, via the containment case it asked for).
+  The spec gave two rules: §4.2 G7 let the first line reach over the lane boundary, and the agreement
+  round's §4.13 A4 superseded it with two lines sharing the pad (`(BAR_PAD − gap) / 2`, 12.5 px). M4
+  built G7. The case written for a wrapped name measured the upper line 2.6 px above the lane; with
+  A4 built (`WRAP_LINE_H`, `wrappedNameYs`) the line boxes fit, and the 0.35 px the ink recorder still
+  reports is its own deliberately generous text height, pinned as a measured escape.
+- **FC-G5's containment cases had not been written** (component). The condition named six; none
+  existed. Five are added (triangle with outline, gap label, lag plate, attachment dot, wrapped
+  name). Each link case carries a control scene without its mark and must lay down ink the control
+  does not, because a two-activity scene always differs from a plain bar.
+- **Two of FC-G7's counting budgets were unwritten** (performance). The wrap index is now a counted
+  module (`layers/wrap-clearance.ts`): built at most once a frame and never when no name truncates,
+  and testing only two lanes a name. Gap labels are pinned to waiting links (a plan of driving links
+  draws none) and to the viewport (the same frame at four times the plan draws and tests the same
+  text). The ceiling "gap labels ≤ waiting links on screen" holds but is loose (308 against 700), and
+  says so in its test; the discriminating limb is the driving-only one.
+- **The pictures had been judged once, at M2** (UX). FC-G10 asks for M2, M3 and M4. Pictures of
+  the current build at the three tiers, for the reference plan and Unit 300, are **owed** at the
+  time of writing, with the two re-checks the M2 review left open; this bullet is updated when they
+  are taken and judged.
+- Two docblocks described code that had changed under them (the milestone tracer and the width memo).
+
+The non-blocking findings are `docs/TECH_DEBT.md` #391.
 
 ## Parity
 

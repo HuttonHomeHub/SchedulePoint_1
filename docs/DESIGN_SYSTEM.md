@@ -1161,10 +1161,11 @@ field hint says so in a sentence.
 Each diagram row is **60 px** and carries three things, each with one job:
 
 - **Above the bar: identity only** — the activity's **name**. The code is printed before it only
-  while `View ▾ ▸ Markers ▸ Activity codes` is on (off by default); the accessible name is
-  `{name}, {code}` whichever, so the visible text always leads it (WCAG 2.5.3). A name that would
-  truncate wraps onto a second line above, but only where that line meets no routed link; otherwise
-  it truncates. A milestone's name is bold.
+  while `View ▾ ▸ Markers ▸ Activity codes` is on (off by default). The accessible name leads with
+  exactly what is printed: `{name}, {code}` while codes are off, `{code} {name}` while they are on
+  (WCAG 2.5.3). A name that would truncate wraps onto two lines sharing the pad above the bar
+  (`WRAP_LINE_H`, so the pair stays in its row), but only where the upper line meets no routed link;
+  otherwise it truncates. A milestone's name is bold.
 - **Under the bar's ends: its dates** (`View ▾ ▸ Dates`, **on by default**, withheld below 4 px a day):
   the start under the start node and the finish under the finish node, each clear of its node's disc.
   A milestone has one date, centred under the triangle.
