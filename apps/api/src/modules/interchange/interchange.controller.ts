@@ -24,6 +24,7 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { RESTORE_LAYOUT_OPTIONS } from '@repo/interchange';
+import { CALENDAR_SCOPES } from '@repo/types';
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -80,7 +81,7 @@ export class InterchangeController {
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
-        globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
+        globalCalendarScope: { type: 'string', enum: [...CALENDAR_SCOPES], default: 'PROJECT' },
         restoreLayout: { type: 'string', enum: [...RESTORE_LAYOUT_OPTIONS], default: 'RESTORE' },
         resourceResolutions: { type: 'string', example: '{"RSRC:1234":"REUSE_EXISTING"}' },
       },
@@ -132,7 +133,7 @@ export class InterchangeController {
       required: [INTERCHANGE_FILE_FIELD],
       properties: {
         [INTERCHANGE_FILE_FIELD]: { type: 'string', format: 'binary' },
-        globalCalendarScope: { type: 'string', enum: ['PROJECT', 'ORG'], default: 'PROJECT' },
+        globalCalendarScope: { type: 'string', enum: [...CALENDAR_SCOPES], default: 'PROJECT' },
         restoreLayout: { type: 'string', enum: [...RESTORE_LAYOUT_OPTIONS], default: 'RESTORE' },
         resourceResolutions: { type: 'string', example: '{"RSRC:1234":"REUSE_EXISTING"}' },
       },

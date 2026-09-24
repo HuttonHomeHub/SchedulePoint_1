@@ -1,6 +1,6 @@
 # Feature Spec: Layout interchange — a plan's picture survives export and re-import
 
-- **Status:** Approved 2026-09-24 (product owner) — CQ-1 (A), CQ-2 (A), FC-6 owed as unobserved
+- **Status:** Accepted — shipped ([ADR-0156](../../adr/0156-a-schedulepoint-layout-travels-in-an-inert-field.md)). Approved 2026-09-24 (product owner) — CQ-1 (A), CQ-2 (A); FC-6 recorded as unobserved. See `m4-verdict.md`
 - **Author(s):** feature-analyst agent
 - **Date:** 2026-09-24
 - **Tracking issue / epic:** _(none yet)_
