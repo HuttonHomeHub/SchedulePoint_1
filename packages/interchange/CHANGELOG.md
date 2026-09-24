@@ -1,5 +1,11 @@
 # @repo/interchange
 
+## 0.9.2
+
+### Patch Changes
+
+- [#680](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/680) [`2025042`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/202504235ae03e711a3960dc9789cdc8673b02cc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An MS Project import now lists every milestone whose start-or-finish type it had to guess, since MS Project records only that a task is a milestone. The guess itself is unchanged.
+
 ## 0.9.1
 
 ### Patch Changes
