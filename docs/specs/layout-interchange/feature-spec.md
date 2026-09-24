@@ -1,6 +1,6 @@
 # Feature Spec: Layout interchange — a plan's picture survives export and re-import
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved 2026-09-24 (product owner) — CQ-1 (A), CQ-2 (A), FC-6 owed as unobserved
 - **Author(s):** feature-analyst agent
 - **Date:** 2026-09-24
 - **Tracking issue / epic:** _(none yet)_
@@ -619,6 +619,12 @@ opening a SchedulePoint XER (§0.5) and importing ours would add two UDF definit
   file has been read. MSPDI cannot meet FC-1 on a working-hours calendar anyway (§0.8).
 - **(B)** Now, alongside XER — adds a milestone, blocks on a real MS Project sample, and ships with
   FC-1 scoped to 24-hour calendars for MSPDI.
+
+**Answered 2026-09-24 by the product owner:** CQ-1 **(A)** — every XER export carries the layout
+fields, with no new control. CQ-2 **(A)** — MSPDI later, as optional M5, outside this build. No real P6
+is available, so **FC-6 is recorded as unobserved** and cannot be discharged in this epic; the fallback
+if a recipient ever reports P6 rejecting a file is CQ-1 (B). No real P6-exported XER was supplied, so
+M0-T2 builds the `UDFTYPE`/`UDFVALUE` column lines from Oracle's documented subset.
 
 **Defaults taken without asking** (say if any is wrong): `FT_TEXT` date encoding; row written for every
 activity and WBS summary; an import checkbox **Restore the SchedulePoint layout**, checked by default and

@@ -1,7 +1,7 @@
 # Implementation Plan: Layout interchange — a plan's picture survives export and re-import
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved 2026-09-24 — building M0–M4; M5 (MSPDI) deferred by CQ-2
 - **Owner:** _(assigned at approval)_
 
 ## Breakdown
