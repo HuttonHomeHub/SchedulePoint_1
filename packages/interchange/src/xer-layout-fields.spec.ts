@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { importXer } from './import-xer.js';
 import {
   decodeLayoutFields,
   encodeLayoutFields,
@@ -241,5 +242,57 @@ describe('encodeLayoutFields', () => {
       // A summary carries its row only: its placement is never written.
       'wbs:W1': { placedStart: null, lane: 2 },
     });
+  });
+});
+
+/**
+ * **FC-4, as committed** (`docs/specs/layout-interchange/conditions.md`): a foreign XER carrying
+ * `UDFTYPE` rows whose labels nearly match ours imports to a graph byte-identical to the same file
+ * without those rows, and the `v2` label adds exactly one "newer version" drop. Run through the whole
+ * import, not the reader alone, because the claim is about the graph.
+ */
+describe('FC-4 — near-miss labels are somebody else’s field', () => {
+  const base: XerTableSpec[] = [
+    {
+      name: 'PROJECT',
+      fields: ['proj_id', 'proj_short_name', 'plan_start_date'],
+      rows: [['P1', 'Sample', '2026-01-05 00:00']],
+    },
+    {
+      name: 'TASK',
+      fields: ['task_id', 'proj_id', 'task_code', 'task_name', 'task_type', 'target_drtn_hr_cnt'],
+      rows: [['T1', 'P1', 'A1000', 'Mobilise', 'TT_Task', '40']],
+    },
+  ];
+  const nearMiss = (label: string): XerTableSpec[] => [
+    { name: 'UDFTYPE', fields: UDFTYPE_FIELDS, rows: [['1', 'TASK', 'u1', label, 'FT_INT']] },
+    { name: 'UDFVALUE', fields: UDFVALUE_FIELDS, rows: [['1', 'T1', 'P1', '', '3', '', '']] },
+  ];
+  const run = (tables: XerTableSpec[]) => {
+    const result = importXer({ content: buildXer(tables), filename: 'f.xer' });
+    if (!result.ok) throw new Error(result.error.code);
+    return result;
+  };
+  const plain = run(base);
+
+  it.each(['SchedulePoint layout v1: Row', 'SchedulePoint layout v1:row'])(
+    '“%s” leaves the graph byte-identical and is one foreign-field drop',
+    (label) => {
+      const result = run([...base, ...nearMiss(label)]);
+      expect(JSON.stringify(result.graph)).toBe(JSON.stringify(plain.graph));
+      expect(result.report.drops).toEqual([
+        ...plain.report.drops,
+        expect.objectContaining({ detail: '1 user-defined field type(s) were not imported' }),
+      ]);
+    },
+  );
+
+  it('“SchedulePoint layout v2: row” leaves the graph byte-identical and adds exactly one newer-version drop', () => {
+    const result = run([...base, ...nearMiss('SchedulePoint layout v2: row')]);
+    expect(JSON.stringify(result.graph)).toBe(JSON.stringify(plain.graph));
+    expect(result.report.drops).toEqual([
+      ...plain.report.drops,
+      expect.objectContaining({ detail: expect.stringContaining('newer SchedulePoint') }),
+    ]);
   });
 });
