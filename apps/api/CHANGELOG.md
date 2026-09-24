@@ -1,5 +1,16 @@
 # @repo/api
 
+## 0.76.0
+
+### Minor Changes
+
+- [#687](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/687) [`2720097`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/27200974f0dae33fcb80c35c872d1530c7dba1f9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A P6 (XER) export now carries each activity's hand-placed start and lane, so exporting a plan and importing the file back gives the same picture: every bar where it was placed, in the lane it sat in. The two values travel as SchedulePoint's own user-defined fields. P6 and other tools ignore them and show each activity at its computed dates, and the export report says so in one line. Every other part of the file is byte for byte what it was before. An MSPDI export does not carry them yet and reports the placements as dropped, as before.
+
+### Patch Changes
+
+- Updated dependencies [[`2720097`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/27200974f0dae33fcb80c35c872d1530c7dba1f9)]:
+  - @repo/interchange@0.11.0
+
 ## 0.75.0
 
 ### Minor Changes
