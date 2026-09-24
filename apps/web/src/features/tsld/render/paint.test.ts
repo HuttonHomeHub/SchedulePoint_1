@@ -2857,8 +2857,10 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
    * **Separating a handle from a bar's NODE glyph is the part that needed thought** (M3-T3). A
    * node is traced exactly the same way — a square box with a half-side radius, which is how a
    * circle is drawn without widening the `Ctx2D` surface — so the shape alone cannot tell them
-   * apart. Nor can the radius: `NODE_RADIUS` derives to 5 and the ACTIVE handle's radius is also
-   * 5, so excluding by size silently dropped the one disc two of these cases are about.
+   * apart. Nor can the radius: `NODE_RADIUS` was 5 when this was written and the ACTIVE handle's
+   * radius is also 5, so excluding by size silently dropped the one disc two of these cases are
+   * about. (The node is 7.5 since NetPoint grammar M2-T2, so the sizes now differ — which is a
+   * coincidence this discriminator deliberately does not rely on.)
    *
    * The discriminator is a **positive property of a handle**: it is traced TWICE, once for the
    * core fill and once for the halo stroke, while a node is traced once and then filled and/or

@@ -143,3 +143,15 @@ budget.
 - **A stale figure found on the way:** `minimap.ts`'s docblock quoted the ladder's luminances as
   0.2152 / 0.1234 / 0.0626, and the near-critical and critical terms no longer matched the shipped
   tokens. The whole line was re-measured (0.266 / 0.140 / 0.073) rather than one term patched.
+
+## M2-T2 — the node's size (2026-09-24)
+
+- `NODE_RADIUS = min(REFERENCE_NODE_DIAMETER_PX / 2, BAR_PAD + BAR_HEIGHT / 2 − NODE_RIM_MAX_W / 2 − 1)`,
+  which is 7.5 at the shipped row. `geometry.constant-derivation.test.ts` asserts the relationships:
+  never larger than the reference's 15 px, at least twice the bar's height, and the heaviest rim a
+  pixel inside the pad. The second case is red against the old radius of 5.
+- **FC-G6:** predicted that only node entries change, each box growing 10 → 15 px and moving
+  −2.5 px on both axes. The diff is exactly 16 node rims (`strokeRect`) and 2 filled critical nodes
+  (`fillRect`), and nothing else.
+- FC-G1 is unaffected by construction: `NODE_RADIUS` feeds neither routing nor the layout search
+  (`layout-objective.test.ts` asserts the latter reads `LAYOUT_CONTACT_REACH_PX`).

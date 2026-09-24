@@ -207,6 +207,18 @@ export function spanLineRect(rect: Rect): Rect {
 // ── The node glyph (logic-legibility M3-T3) ─────────────────────────────────────────────────────
 
 /**
+ * The reference node's measured diameter: a 15 px hollow circle at every start and finish
+ * (`docs/specs/netpoint-grammar/reference-observations.md`, "Node").
+ */
+export const REFERENCE_NODE_DIAMETER_PX = 15;
+
+/**
+ * The heaviest rim a node draws (the critical rung, spec §4.2 G4). Half of it lies outside the
+ * radius, so it enters the containment bound below.
+ */
+export const NODE_RIM_MAX_W = 3;
+
+/**
  * Radius (px) of the **node** at each end of a bar — the reference's own device, and the thing
  * that makes a thin bar read as an activity rather than a rule.
  *
@@ -215,11 +227,22 @@ export function spanLineRect(rect: Rect): Rect {
  * 2.5 and the step alone exceeds it. The reference solves the same problem the other way — every
  * link converges **on the node** — which needs no vertical room on the bar at all.
  *
- * Sized against the bar rather than written: a node is what a reader's eye lands on, so it has to
- * be visibly larger than the line it terminates without becoming a blob. Twice the bar's height
- * puts it at 10 px across for a 5 px bar, which is the reference's own proportion.
+ * **The reference's measured size, bounded by the row** (NetPoint grammar M2-T2). The node is the
+ * largest mark on the diagram because it is what separates one activity from the next (spec §4.2
+ * G4): filled with the ground, it breaks a row of back-to-back bars into separate activities. So it
+ * takes the reference's 15 px, never more. The second term is the lane: a node is centred on the
+ * bar's centre-line, so its rim reaches `NODE_RADIUS + NODE_RIM_MAX_W / 2` above the bar's centre,
+ * and that must stay a pixel inside the pad. At a 6 px bar in a 60 px lane the reference size
+ * binds (7.5 against 28.5), so the bound only matters if the row is ever made shallower.
+ *
+ * It was `Math.max(2, BAR_HEIGHT)` (10 px across a 5 px bar) until M2-T0 froze it at 5 so the bar
+ * could change on its own. It does not feed the layout search: `LAYOUT_CONTACT_REACH_PX` in
+ * `layout-objective.ts` does, so this can change without moving a lane (spec §4.13 A2, FC-G1b).
  */
-export const NODE_RADIUS = 5;
+export const NODE_RADIUS = Math.min(
+  REFERENCE_NODE_DIAMETER_PX / 2,
+  BAR_PAD + BAR_HEIGHT / 2 - NODE_RIM_MAX_W / 2 - 1,
+);
 
 /**
  * Where a bar's two node glyphs sit: on the bar's centre-line, at each end.
