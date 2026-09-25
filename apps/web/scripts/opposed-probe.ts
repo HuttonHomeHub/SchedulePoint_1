@@ -47,7 +47,7 @@ import { routeFrame } from '../src/features/tsld/render/route-frame';
 import { allItems } from '../src/features/tsld/render/row-text-layout';
 import { textIndexOf } from '../src/features/tsld/render/text-index';
 
-import { endSpecOf, moduleLayout, type EndKind } from './attachment-probe';
+import { endSpecOf, moduleLayout, probePlates, type EndKind } from './attachment-probe';
 
 export type OpposedKind =
   'crowded-shared-node' | 'escape-through-bar' | 'arrive-leave-unshared' | 'other';
@@ -158,12 +158,20 @@ export function listOpposed(
   scene: TsldScene,
   view: Viewport,
   size: { width: number; height: number },
+  /** Route text-blind, as before links-and-labels M2: for a verdict's before/after pair lists. */
+  options: { textBlind?: boolean } = {},
 ): OpposedPair[] {
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const rectCache: RectCache = new Map();
   // The text the painter routes around (links-and-labels M2): the same layout the painter reads.
-  const text = textIndexOf(allItems(moduleLayout(scene, view, size)));
-  const frame = routeFrame(scene, view, new Set(byId.keys()), byId, rectCache, text);
+  const layout = moduleLayout(scene, view, size);
+  const text = options.textBlind === true ? null : textIndexOf(allItems(layout));
+  const visible = new Set(byId.keys());
+  const plates =
+    options.textBlind === true
+      ? null
+      : probePlates(scene, view, size, visible, byId, rectCache, layout);
+  const frame = routeFrame(scene, view, visible, byId, rectCache, text, plates);
   if (!frame.glyphs || !frame.workingWalk) {
     throw new Error('opposed-probe needs the refreshed, time-true, node-to-node router');
   }

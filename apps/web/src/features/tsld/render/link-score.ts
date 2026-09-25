@@ -13,7 +13,13 @@
  *    apart afterwards by `packGutterChannels`);
  * 4. **text** — names and dates the line runs through (links-and-labels M2, `docs/TECH_DEBT.md`
  *    #393, spec D-1): after overlaps, so a name is never bought with a bar, a crossing or an
- *    overlap, and before length, so it breaks the ties those leave;
+ *    overlap, and before length, so it breaks the ties those leave. **Hidden legs rank just above
+ *    it**: `obstructions` counts a vertical through a bar and a run hidden behind one alike, and the
+ *    product owner's order puts a hidden link above text, so a name is never bought with a hidden
+ *    run either (M2's first reading did exactly that, twice on Unit 300: `m2-verdict.md`);
+ *    **A lagged link's plate** ranks just below it (spec D-5): at the detail tier, where plates are
+ *    drawn, a candidate on which the painter's own `freePlatePosition` finds no room for the link's
+ *    lag plate scores `plateBlocked` 1;
  * 5. **length**, 6. **bends**, 7. the fixed **candidate order**.
  *
  * **Two phases, one frozen snapshot** (ADR-0149 D4's contract, generalised from moving one corridor
@@ -25,6 +31,7 @@
  */
 import { MAX_ROUTE_CANDIDATES, routeCandidateParts, type RouteCandidate } from './link-candidates';
 import { linkEndOf } from './link-ports';
+import type { PlateRoom } from './plate-room';
 import {
   activityRect,
   barGlyphKind,
@@ -297,7 +304,13 @@ export interface Phase1Score {
   /** Names and dates the line runs through ({@link textCrossings}). Absent reads as zero. */
   text?: number;
   /**
-   * How many of `obstructions` are horizontal legs hidden behind a bar. Not a ranked term: phase 3
+   * 1 where a lagged link's plate has no free position on this line (spec D-5), else 0. Scored only
+   * for a lagged link at the detail tier; absent reads as zero.
+   */
+  plateBlocked?: number;
+  /**
+   * How many of `obstructions` are horizontal legs hidden behind a bar. Ranked only just above
+   * `text` (links-and-labels M2): where it leads, obstructions has already tied. Phase 3 also
    * refuses any move that raises it. Absent on a hand-built score, where it reads as zero.
    */
   hiddenLegs?: number;
@@ -309,11 +322,19 @@ export interface Phase1Score {
 function comparePhase1(a: Phase1Score, b: Phase1Score): number {
   return (
     a.obstructions - b.obstructions ||
+    (a.hiddenLegs ?? 0) - (b.hiddenLegs ?? 0) ||
     (a.text ?? 0) - (b.text ?? 0) ||
+    (a.plateBlocked ?? 0) - (b.plateBlocked ?? 0) ||
     a.length - b.length ||
     a.bends - b.bends ||
     a.order - b.order
   );
+}
+
+/** A lagged link's plate, for the plate sub-term: where there is room, and how wide it is. */
+export interface PlateScoringInput {
+  room: PlateRoom;
+  width: number;
 }
 
 export interface ScoredCandidate extends RouteCandidate {
@@ -342,6 +363,7 @@ function scoreCandidates(
   own: readonly OwnSpan[],
   view: Viewport,
   text: TextIndex | null,
+  plate: PlateScoringInput | null,
 ): ScoredCandidate[] {
   return (
     candidates
@@ -351,6 +373,7 @@ function scoreCandidates(
           obstructions: counts.total,
           hiddenLegs: counts.legs,
           text: textCrossings(c.line, text, view),
+          ...(plate ? { plateBlocked: plate.room.hasRoom(c.line, plate.width) ? 0 : 1 } : {}),
           length: lengthOf(c.line),
           bends: c.line.length - 2,
           order: c.order,
@@ -402,6 +425,8 @@ export function routeNodeToNodeParts(
   glyphs: GlyphIndex,
   view: Viewport,
   text: TextIndex | null,
+  /** The link's lag plate, where plates are drawn and the link has a lag (spec D-5); else null. */
+  plate: PlateScoringInput | null = null,
 ): { candidates: readonly ScoredCandidate[]; escapes: () => readonly ScoredCandidate[] } {
   const pred = linkEndOf(input.from, input.fromAnchor, input.fromRect);
   const succ = linkEndOf(input.to, input.toAnchor, input.toRect);
@@ -409,8 +434,8 @@ export function routeNodeToNodeParts(
   const parts = routeCandidateParts(pred, succ, input.from.laneIndex, input.to.laneIndex, view);
   let escapes: ScoredCandidate[] | undefined;
   const escapesOf = (): ScoredCandidate[] =>
-    (escapes ??= scoreCandidates(parts.escapes(), glyphs, own, view, text));
-  const ordinary = scoreCandidates(parts.ordinary, glyphs, own, view, text);
+    (escapes ??= scoreCandidates(parts.escapes(), glyphs, own, view, text, plate));
+  const ordinary = scoreCandidates(parts.ordinary, glyphs, own, view, text, plate);
   if (ordinary.length > 0) return { candidates: ordinary, escapes: escapesOf };
   const all = escapesOf();
   if (all.length > 0) return { candidates: all, escapes: () => [] };
@@ -529,7 +554,9 @@ function comparePhase2(a: Phase2Score, b: Phase2Score): number {
     a.obstructions - b.obstructions ||
     a.crossings - b.crossings ||
     a.overlaps - b.overlaps ||
+    (a.hiddenLegs ?? 0) - (b.hiddenLegs ?? 0) ||
     (a.text ?? 0) - (b.text ?? 0) ||
+    (a.plateBlocked ?? 0) - (b.plateBlocked ?? 0) ||
     a.length - b.length ||
     a.bends - b.bends ||
     a.order - b.order
@@ -638,9 +665,10 @@ export function chooseRoutesByCrossing(
     let bestScore = scoreAgainst(frozen, i, current)!;
     // Nothing can beat a pick with no crossings and no overlaps: phase 1 already made it the best
     // on every other term, and phase 2 only inserts those two. Exact, and most links stop here.
-    // Still exact with the text term (links-and-labels M2): text ranks after overlaps here and
-    // before length in phase 1, so phase 1's pick is already the best on text among the ordinary
-    // shapes, and the escapes are not consulted by this exit, before or after.
+    // Still exact with the text term (links-and-labels M2): hidden legs and text rank after
+    // overlaps here and in the same order before length in phase 1, so phase 1's pick is already
+    // the best on both among the ordinary shapes, and the escapes are not consulted by this exit,
+    // before or after.
     if (bestScore.crossings === 0 && bestScore.overlaps === 0) return best;
     // The escapes after the ordinary shapes, scored only now that this link has asked for them.
     const all = [...link.candidates, ...(link.escapes?.() ?? [])];
@@ -649,8 +677,7 @@ export function chooseRoutesByCrossing(
       // Obstructions lead the vector, so a candidate through more glyphs can never win. An escape
       // may not trade a vertical through a bar for a run hidden behind one (see phase 3).
       if (candidate.phase1.obstructions > bestScore.obstructions) continue;
-      if (candidate.escape && (candidate.phase1.hiddenLegs ?? 0) > (current.phase1.hiddenLegs ?? 0))
-        continue;
+      if ((candidate.phase1.hiddenLegs ?? 0) > (current.phase1.hiddenLegs ?? 0)) continue;
       const limit =
         candidate.phase1.obstructions < bestScore.obstructions ? Infinity : bestScore.crossings;
       const s = scoreAgainst(frozen, i, candidate, limit);

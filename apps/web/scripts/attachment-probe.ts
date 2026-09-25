@@ -46,6 +46,7 @@ import {
   screenYOfLane,
   wrappedNameYs,
 } from '../src/features/tsld/render/geometry';
+import { linkFactsOf, plateScoringOf } from '../src/features/tsld/render/link-facts';
 import {
   DEFAULT_VIEW_TOGGLES,
   paintScene,
@@ -68,7 +69,7 @@ import {
   type RenderEdge,
   type Viewport,
 } from '../src/features/tsld/render/render-model';
-import { routeFrame } from '../src/features/tsld/render/route-frame';
+import { routeFrame, type PlateScoring } from '../src/features/tsld/render/route-frame';
 import {
   allItems,
   layoutRowText,
@@ -360,6 +361,26 @@ export function moduleLayout(
   });
 }
 
+/**
+ * The painter's plate sub-term input for this frame (links-and-labels M2, spec D-5), built as the
+ * painter builds it (`link-facts.ts`) with the recording context's widths, so the probe's router
+ * copy scores plates exactly as the painter's does. Null where plates are not drawn.
+ */
+export function probePlates(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+  visible: ReadonlySet<string>,
+  byId: ReadonlyMap<string, RenderActivity>,
+  rectCache: RectCache,
+  textLayout: RowTextLayout,
+): PlateScoring | null {
+  const { ctx } = recordingCtx();
+  const frame = buildPaintFrame(ctx as Parameters<typeof buildPaintFrame>[0], scene, view, size);
+  const facts = linkFactsOf(scene, view, frame.toggles, (t) => t.length * 6);
+  return plateScoringOf(facts, scene, view, visible, byId, rectCache, textLayout);
+}
+
 export interface TextAgreement {
   /** Recorded texts matched to a module item, by index into `texts`, with the item's kind. */
   kinds: Map<number, PlacedTextKind>;
@@ -543,6 +564,7 @@ export function readAttachment(
     byId,
     rectCache,
     textIndexOf(allItems(textLayout)),
+    probePlates(scene, view, size, visible, byId, rectCache, textLayout),
   );
 
   const { ctx, paths, texts } = recordingCtx();
@@ -900,10 +922,14 @@ export function shuffleDifferences(
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const visible = new Set(byId.keys());
   // The text does not depend on the order of the edges, so one index serves every shuffle.
-  const text = textIndexOf(allItems(moduleLayout(scene, view, size)));
+  const layout = moduleLayout(scene, view, size);
+  const text = textIndexOf(allItems(layout));
   const keyOf = (e: RenderEdge): string => `${e.predecessorId}>${e.successorId}:${e.type}`;
   const linesOf = (edges: readonly RenderEdge[]): Map<string, string> => {
-    const frame = routeFrame({ ...scene, edges: [...edges] }, view, visible, byId, new Map(), text);
+    const shuffled = { ...scene, edges: [...edges] };
+    const rectCache: RectCache = new Map();
+    const plates = probePlates(shuffled, view, size, visible, byId, rectCache, layout);
+    const frame = routeFrame(shuffled, view, visible, byId, rectCache, text, plates);
     const out = new Map<string, string>();
     for (const [edge, line] of frame.lines) {
       out.set(keyOf(edge), line.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';'));

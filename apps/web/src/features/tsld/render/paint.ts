@@ -15,16 +15,16 @@ import {
 import { labelWidths } from './layers/text-measure';
 import { createWrapClearance } from './layers/wrap-clearance';
 import type { GhostBar, LevelledGhost } from './lenses';
-import { formatLinkGap, linkGapSpan } from './link-gap';
+import { linkFactsOf, plateScoringOf } from './link-facts';
 import {
   chevronsAlong,
-  formatLag,
   freePlatePosition,
   gapLabelAt,
   lagPlateCandidates,
   linkRung,
 } from './link-marks';
 import { buildPaintFrame } from './paint-frame';
+import { PLATE_GRAZE_PX, plateGlyphBoxes, SLACK_CHIP_H } from './plate-room';
 import {
   arrowhead,
   barGlyphKind,
@@ -65,7 +65,6 @@ import {
   activityRect,
   edgeGapDays,
   feasibleWindowRect,
-  LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
   LABEL_LINE_H,
   WRAP_LINE_H,
@@ -462,9 +461,6 @@ function traceWindowCap(ctx: Ctx2D, x: number, band: Rect): void {
   ctx.moveTo(x + 0.5, band.y + 0.5);
   ctx.lineTo(x + 0.5, band.y + band.h - 0.5);
 }
-
-/** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
-const SLACK_CHIP_H = 13;
 
 /**
  * Height (px) of the opaque plate drawn behind a flanking date when the float/drift tails are ALSO
@@ -1412,6 +1408,26 @@ export function paintScene(
     // `View ▾ ▸ Markers ▸ Activity codes` is on (spec §4.2 G7).
     labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
   });
+  // A link's facts that do not depend on its route (links-and-labels M2, spec D-5), derived once
+  // in `link-facts.ts` so the router can score whether a lagged link's plate has room and the link
+  // layer below draws the same plate: the gap a non-driving link waits, and the plate's text.
+  const linkFacts = linkFactsOf(
+    scene,
+    view,
+    toggles,
+    typeof ctx.fillText === 'function' && typeof ctx.measureText === 'function'
+      ? (t, f) =>
+          labelWidths.measure(
+            t,
+            (x) => {
+              ctx.font = f ?? LABEL_FONT;
+              return ctx.measureText(x).width;
+            },
+            f,
+          )
+      : null,
+  );
+  const { gapOf, plateTextOf } = linkFacts;
   if (scene.edges.length > 0) {
     const route = routeFrame(
       scene,
@@ -1420,6 +1436,7 @@ export function paintScene(
       byId,
       rectCache,
       textIndexOf(allItems(textLayout)),
+      plateScoringOf(linkFacts, scene, view, visibleIds, byId, rectCache, textLayout),
     );
     const { workingWalk, refresh, glyphs, lineOf, lines } = route;
     lagRuns = route.lagRuns;
@@ -1494,36 +1511,6 @@ export function paintScene(
       const lit = new Map<string, Bucket>();
       const plates: { text: string; line: Point[]; ink: string }[] = [];
       const gapLabels = pendingGapLabels;
-      // An activity's axis days, parsed once per frame however many links it ends (the per-frame
-      // rect-cache budget gate, `paint.rect-cache-budget.test.ts`, pins that date parsing does not
-      // scale with edge count). Called only where both dates are present.
-      const axisDays = new Map<string, { start: number; finish: number }>();
-      const axisDaysOf = (a: RenderActivity): { start: number; finish: number } => {
-        let d = axisDays.get(a.id);
-        if (!d) {
-          d = {
-            start: axisDayOf(a.type, scene.dataDate, a.earlyStart!),
-            finish: axisDayOf(a.type, scene.dataDate, a.earlyFinish!),
-          };
-          axisDays.set(a.id, d);
-        }
-        return d;
-      };
-      // Gap labels (M3-T3): the working tier or finer (spec G11, `lodTier`) and the `Link gaps`
-      // switch, which defaults on.
-      const gapsOn =
-        toggles.linkSlack !== false &&
-        lodTier(view.pxPerDay) !== 'overview' &&
-        typeof ctx.fillText === 'function' &&
-        typeof ctx.measureText === 'function';
-      // Lag plates at the detail tier only (spec §4.2 G11; `m0-lod.md`: Unit 300 withheld 52 % at 4 px
-      // a day and 42 % at 6).
-      const platesOn =
-        lodTier(view.pxPerDay) === 'detail' &&
-        (toggles.labels ?? true) &&
-        view.pxPerDay >= LABEL_MIN_PX_PER_DAY &&
-        typeof ctx.fillText === 'function' &&
-        typeof ctx.measureText === 'function';
       for (const edge of scene.edges) {
         const line = lines.get(edge);
         if (!line) continue;
@@ -1557,36 +1544,7 @@ export function paintScene(
         bucket.solid.push(line);
         // The gap a non-driving link waits, and where (M3-T3). One computation for both, from the
         // relationship's lag anchor to the successor's constrained edge (`linkGapSpan`).
-        let gap: { text: string; x0: number; x1: number } | null = null;
-        if (
-          gapsOn &&
-          !edge.isDriving &&
-          pred.earlyStart &&
-          pred.earlyFinish &&
-          succ.earlyStart &&
-          succ.earlyFinish
-        ) {
-          const p = axisDaysOf(pred);
-          const q = axisDaysOf(succ);
-          const span = linkGapSpan(
-            {
-              type: edge.type,
-              predStartDay: p.start,
-              predFinishDay: p.finish,
-              succStartDay: q.start,
-              succFinishDay: q.finish,
-              lagDays: edge.lagDays ?? 0,
-            },
-            scene.isWorkingDay ?? null,
-          );
-          if (span.days > 0) {
-            gap = {
-              text: formatLinkGap(span),
-              x0: screenXOfDay(span.fromDay, view),
-              x1: screenXOfDay(span.toDay, view),
-            };
-          }
-        }
+        const gap = gapOf(edge, pred, succ);
         // Chevrons first and the terminal head last, so each link's head is the final subpath it
         // emits — the same order the legacy pass gives, which is what a recorder reads a head by.
         bucket.marks.push(...chevronsAlong(line));
@@ -1597,11 +1555,9 @@ export function paintScene(
             : arrowhead(headLine);
           if (head) bucket.marks.push(head);
         }
-        const lag = edge.lagDays ?? 0;
-        if (platesOn && lag !== 0) {
-          // One plate carries both figures where a link has a lag and a gap (spec §4.13 U2).
-          const text = gap ? `${formatLag(lag)} · ${gap.text}` : formatLag(lag);
-          plates.push({ text, line, ink: bucket.ink });
+        const plateText = plateTextOf(edge, gap);
+        if (plateText !== null) {
+          plates.push({ text: plateText, line, ink: bucket.ink });
         } else if (gap) {
           gapLabels.push({ text: gap.text, line, x0: gap.x0, x1: gap.x1 });
         }
@@ -2467,19 +2423,17 @@ export function paintScene(
     ctx.lineWidth = 1;
     // A plate is drawn after the bars now, so it also keeps off every bar and its two nodes: before,
     // a bar painted over a plate that landed on it, and now the plate would paint over the bar.
-    // A text row's box is its line height, leading included; a plate on a lane's centre line grazes
-    // the rows either side by 1.5 px of leading and none of the ink, so only a real overlap counts.
-    const PLATE_GRAZE_PX = 2;
-    const glyphBoxes: Rect[] = [];
-    for (const a of scene.activities) {
-      if (!visibleIds.has(a.id)) continue;
-      const r = activityRect(a, view, scene.dataDate, rectCache);
-      if (!r) continue;
-      const reach = barGlyphKind(a.type) === 'bar' ? NODE_REACH_PX : 0;
-      glyphBoxes.push({ x: r.x - reach, y: r.y - reach, w: r.w + 2 * reach, h: r.h + 2 * reach });
-    }
+    // The grazing rule and the glyph boxes are `plate-room.ts`'s, which the router's plate sub-term
+    // reads too (links-and-labels M2, spec D-5).
+    const glyphBoxes = plateGlyphBoxes(
+      scene.activities,
+      visibleIds,
+      view,
+      scene.dataDate,
+      rectCache,
+    );
     for (const { text, line, ink } of pendingPlates) {
-      const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
+      const w = linkFacts.plateWidth(text);
       const at = freePlatePosition(
         lagPlateCandidates(line, w, SLACK_CHIP_H),
         w,

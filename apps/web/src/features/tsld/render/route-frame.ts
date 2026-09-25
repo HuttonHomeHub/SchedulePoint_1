@@ -8,6 +8,7 @@ import {
   type GlyphIndex,
 } from './link-score';
 import type { TsldScene } from './paint';
+import type { PlateRoom } from './plate-room';
 import {
   activityRect,
   barGlyphKind,
@@ -28,6 +29,16 @@ import {
   type Viewport,
 } from './render-model';
 import type { TextIndex } from './text-index';
+
+/**
+ * The plate sub-term's inputs (links-and-labels M2, spec D-5): where the frame's text and glyphs
+ * leave room, and the width of each lagged link's plate — null for a link that draws none. Only the
+ * painter draws plates, and only at the detail tier, so only the painter passes this.
+ */
+export interface PlateScoring {
+  room: PlateRoom;
+  widthOf(edge: RenderEdge): number | null;
+}
 
 /**
  * **The frame's routed links, as values** (NetPoint-layout M4-T1, spec §4.5).
@@ -101,6 +112,7 @@ export function routeFrame(
    * for `hoursPerDay`). `null` only off the routed path, or where a caller genuinely has no text.
    */
   text: TextIndex | null,
+  plates: PlateScoring | null = null,
 ): RouteFrame {
   // `lineOf` writes the active handle here, so a later call is seen by the painter too.
   const out: { activeLagHandle: Point | null } = { activeLagHandle: null };
@@ -170,6 +182,10 @@ export function routeFrame(
   // The one per-edge geometry seam: flag-off it is exactly the M1 branch (time-true or legacy);
   // refreshed it composes the SAME anchor mapping with the fan-out offsets + elbow shift, and
   // collects the edge's lag run while the anchors are at hand.
+  const plateInputOf = (edge: RenderEdge): { room: PlateRoom; width: number } | null => {
+    const width = plates?.widthOf(edge) ?? null;
+    return plates && width !== null ? { room: plates.room, width } : null;
+  };
   const lineOf = (edge: RenderEdge, pred: RenderActivity, succ: RenderActivity): Point[] | null => {
     if (!workingWalk) {
       return dependencyPolyline(pred, succ, edge.type, view, scene.dataDate, rectCache);
@@ -249,6 +265,7 @@ export function routeFrame(
       glyphs,
       view,
       text,
+      plateInputOf(edge),
     );
     if (collecting) candidatesByEdge.set(edge, { candidates: scored, escapes, ends: [from, to] });
     // Not copied: a multi-link frame replaces it with a copy of phase 2's choice below, and a single

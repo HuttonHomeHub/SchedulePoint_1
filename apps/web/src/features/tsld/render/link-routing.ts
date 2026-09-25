@@ -340,6 +340,19 @@ export function gutterChannels(clearHalfBandPx: number): number[] {
  *    `max legs on one y <= ceil(peak overlap / channels)`, and dumping every surplus run on one
  *    offset misses it by the whole surplus. Either way the run stays inside the clear band, which
  *    is the property that must not be traded for a cosmetic gain.
+ *
+ * ## Two runs with the same extent are ordered by where their verticals go
+ *
+ * First fit chooses a channel by x-overlap alone, so it cannot see that two runs spanning the same
+ * x — typically two links leaving one node for two successors — can be stacked so that one's
+ * vertical runs up the other's the opposite way: at a shared end, the run whose vertical lies
+ * **above** the gutter must take the **upper** channel, or the two verticals overlap between the
+ * channels with their arrowheads pointing at each other (`docs/TECH_DEBT.md` #394's shape, made by
+ * the packer rather than by a route). Links-and-labels M2 measured it: a text-driven move elsewhere
+ * in one gutter re-ordered first fit and made exactly one such pair on Unit 300 at 4 px/day
+ * (`m2-verdict.md`). Swapping two runs with the **identical** extent is free — each channel's
+ * occupancy is unchanged, so no clash appears — which is why the repair is limited to that case.
+ * Where the two ends ask for opposite orders it leaves them, since no order satisfies both.
  */
 export function packGutterChannels(
   candidates: readonly RoutedLine[],
@@ -395,6 +408,7 @@ export function packGutterChannels(
     // list per channel rather than a single "rightmost x", because a run may sit entirely to the
     // LEFT of one already placed there — sorting by x0 makes that rare, not impossible.
     const occupied: { x0: number; x1: number }[][] = offsets.map(() => []);
+    const chosen: number[] = [];
     for (let i = start; i < end; i += 1) {
       const run = runs[i]!;
       const clashesIn = (k: number): number =>
@@ -416,7 +430,12 @@ export function packGutterChannels(
         }
       }
       occupied[channel]!.push({ x0: run.x0, x1: run.x1 });
-      const offset = offsets[channel]!;
+      chosen.push(offsets[channel]!);
+    }
+    orderSameExtentRuns(runs, start, end, chosen, candidates);
+    for (let i = start; i < end; i += 1) {
+      const run = runs[i]!;
+      const offset = chosen[i - start]!;
       if (offset === 0) continue;
       const line = candidates[run.candidate]!.line;
       line[run.at] = { x: line[run.at]!.x, y: run.y + offset };
@@ -426,6 +445,65 @@ export function packGutterChannels(
     start = end;
   }
   return moved;
+}
+
+/**
+ * Which side of its gutter a run's vertical lies at `x`, or null where the run has no vertical
+ * there. The run is `line[at]..line[at + 1]`; its verticals are the segments either side of it.
+ */
+function verticalSideAt(
+  line: readonly Point[],
+  at: number,
+  y: number,
+  x: number,
+): 'above' | 'below' | null {
+  for (const [end, next] of [
+    [at, at - 1],
+    [at + 1, at + 2],
+  ] as const) {
+    const p = line[end];
+    const n = line[next];
+    if (!p || !n || p.x !== x || n.x !== x || n.y === y) continue;
+    return n.y < y ? 'above' : 'below';
+  }
+  return null;
+}
+
+/**
+ * The same-extent repair in {@link packGutterChannels}'s docblock, over one gutter's runs
+ * `runs[start..end)` with their chosen offsets `chosen[i - start]`, in place. Pairs are visited in
+ * the runs' own sorted order, so the result is as deterministic as the first fit before it.
+ */
+function orderSameExtentRuns(
+  runs: readonly { candidate: number; at: number; y: number; x0: number; x1: number }[],
+  start: number,
+  end: number,
+  chosen: number[],
+  candidates: readonly RoutedLine[],
+): void {
+  for (let i = start; i < end; i += 1) {
+    for (let j = i + 1; j < end; j += 1) {
+      const a = runs[i]!;
+      const b = runs[j]!;
+      if (a.x0 !== b.x0 || a.x1 !== b.x1) continue;
+      if (chosen[i - start] === chosen[j - start]) continue;
+      // +1: `a` should be above `b`; -1: below; 0: no end asks; NaN: the two ends disagree.
+      let want = 0;
+      for (const x of [a.x0, a.x1]) {
+        const sa = verticalSideAt(candidates[a.candidate]!.line, a.at, a.y, x);
+        const sb = verticalSideAt(candidates[b.candidate]!.line, b.at, b.y, x);
+        if (sa === null || sb === null || sa === sb) continue;
+        const here = sa === 'above' ? 1 : -1;
+        want = want === 0 || want === here ? here : Number.NaN;
+      }
+      if (want === 0 || Number.isNaN(want)) continue;
+      const aAbove = chosen[i - start]! < chosen[j - start]!;
+      if ((want === 1) === aAbove) continue;
+      const swap = chosen[i - start]!;
+      chosen[i - start] = chosen[j - start]!;
+      chosen[j - start] = swap;
+    }
+  }
 }
 
 // ── Time-true lag anchoring + arrowheads (ADR-0052 M1, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──
