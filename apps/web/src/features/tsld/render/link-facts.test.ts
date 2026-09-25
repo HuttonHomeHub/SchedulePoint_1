@@ -23,8 +23,10 @@ const act = (id: string, lane: number, start?: string, finish?: string): RenderA
   type: 'TASK',
   laneIndex: lane,
   label: id,
-  earlyStart: start,
-  earlyFinish: finish,
+  earlyStart: start ?? null,
+  earlyFinish: finish ?? null,
+  isCritical: false,
+  isNearCritical: false,
 });
 // A finishes 5 Jan, B starts 12 Jan: six days waiting, every day working here.
 const A = act('A', 0, '2026-01-02', '2026-01-05');
