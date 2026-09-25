@@ -39,6 +39,7 @@
 import { createHash } from 'node:crypto';
 
 import { netpointReferencePlan } from '../../seed-cli/src/references/netpoint-power-plant';
+import { rowSlots, screenYOfLane, wrappedNameYs } from '../src/features/tsld/render/geometry';
 import {
   DEFAULT_VIEW_TOGGLES,
   paintScene,
@@ -233,6 +234,31 @@ function segmentMeetsBox(a: Point, b: Point, box: ReturnType<typeof textBox>): b
   return sx0 < box.x1 && sx1 > box.x0 && sy0 < box.y1 && sy1 > box.y0;
 }
 
+export type TextKind = 'name' | 'name-wrapped' | 'date' | 'milestone-date' | 'centre';
+
+const DATE_TEXT = /^\d{1,2} [A-Z][a-z]{2}$/;
+
+/**
+ * Which row band a painted text sits on, and so what it is. Throws on a text in no band: the probe
+ * would otherwise count a crossing of something it cannot name.
+ */
+export function textKindOf(t: RecordedText, view: Viewport): TextKind {
+  const lane0 = screenYOfLane(0, view);
+  const lane = Math.floor((t.y - lane0) / LANE_HEIGHT);
+  const slots = rowSlots(screenYOfLane(lane, view));
+  const at = (y: number): boolean => Math.abs(t.y - y) < 0.5;
+  if (at(slots.nameY)) return 'name';
+  const wrapped = wrappedNameYs(slots);
+  if (at(wrapped.upper) || at(wrapped.lower)) return 'name-wrapped';
+  if (at(slots.belowY)) {
+    if (t.align === 'center') return DATE_TEXT.test(t.text) ? 'milestone-date' : 'centre';
+    return 'date';
+  }
+  throw new Error(
+    `text "${t.text}" at y=${t.y.toFixed(2)} is on no row band (lane ${lane}); refusing to classify it`,
+  );
+}
+
 const GAP_LABEL = /^\d+d$|^\d+ cal d$/;
 const LAG_PLATE = /^[+−]\d/;
 
@@ -255,6 +281,17 @@ export interface AttachmentReading {
   /** The opposed pairs by how the two links meet: at one node (arrive-leave), or not at all. */
   opposedByRole: Record<string, number>;
   textCrossings: number;
+  /**
+   * `textCrossings` split by what the text is (links-and-labels M0-T2). Classified by the text's row
+   * band from `rowSlots`, not by the painter's own kinds: a name sits on the name row, a wrapped name
+   * on one of `wrappedNameYs`' two lines, and everything on the row below the bar is a date (left or
+   * right aligned), a milestone's single date (centred, a date) or the centre item (centred, not a
+   * date). M1 replaces this with the layout module's own kinds; until then a text outside every band
+   * throws rather than being counted as something it is not.
+   */
+  textCrossingsByKind: Record<TextKind, number>;
+  /** `textCrossings` by the orientation of the first segment that met the text: `h` or `v`. */
+  textCrossingsByOrientation: { h: number; v: number };
   /** Lag plates whose text meets a name or date. */
   platesOnText: number;
   gapLabels: number;
@@ -293,6 +330,22 @@ export function readAttachment(
     throw new Error(
       `${lagRunsPainted} dashed paths in a link ink against ${frame.lagRuns?.length ?? 0} lag runs. ` +
         'Something other than a lag run is dashed in a link ink; refusing to set it aside.',
+    );
+  }
+  // **The point-by-point control** (links-and-labels M0-T2). Equal counts are not equal lines: a probe
+  // that routed differently from the painter (after M2, without the painter's text index) would still
+  // pass a count. So the routed lines and the stroked link polylines must be the same multiset of
+  // point sequences, to 0.01 px.
+  const keyOf = (pts: readonly Point[]): string =>
+    pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const routedKeys = [...frame.lines.values()].map(keyOf).sort();
+  const paintedKeys = painted.map((p) => keyOf(p.pts)).sort();
+  const firstDiff = routedKeys.findIndex((k, i) => k !== paintedKeys[i]);
+  if (routedKeys.length !== paintedKeys.length || firstDiff >= 0) {
+    throw new Error(
+      `the probe's routes are not the painter's lines (${routedKeys.length} routed, ` +
+        `${paintedKeys.length} painted; first difference at sorted index ${firstDiff}). Refusing ` +
+        'to measure a copy of the router.',
     );
   }
   const { crossings, diagonal } = countCrossings(painted);
@@ -464,13 +517,17 @@ export function readAttachment(
   let gapLabels = 0;
   let lagPlates = 0;
   const boxes: ReturnType<typeof textBox>[] = [];
+  const kinds: TextKind[] = [];
   const plateBoxes: ReturnType<typeof textBox>[] = [];
   for (const t of texts) {
     if (LAG_PLATE.test(t.text)) {
       lagPlates += 1;
       plateBoxes.push(textBox(t));
     } else if (GAP_LABEL.test(t.text)) gapLabels += 1;
-    else boxes.push(textBox(t));
+    else {
+      boxes.push(textBox(t));
+      kinds.push(textKindOf(t, view));
+    }
   }
   // A plate's TEXT meeting a name or date (node-to-node links M3, the UX gate's finding): the one
   // text-on-text case the line-segment count above cannot see, because a plate is not a segment.
@@ -482,15 +539,27 @@ export function readAttachment(
     }
   }
   let textCrossings = 0;
+  const textCrossingsByKind: Record<TextKind, number> = {
+    name: 0,
+    'name-wrapped': 0,
+    date: 0,
+    'milestone-date': 0,
+    centre: 0,
+  };
+  const textCrossingsByOrientation = { h: 0, v: 0 };
   for (const e of entries) {
-    for (const box of boxes) {
+    boxes.forEach((box, b) => {
       for (let i = 1; i < e.line.length; i += 1) {
-        if (segmentMeetsBox(e.line[i - 1]!, e.line[i]!, box)) {
+        const a = e.line[i - 1]!;
+        const c = e.line[i]!;
+        if (segmentMeetsBox(a, c, box)) {
           textCrossings += 1;
+          textCrossingsByKind[kinds[b]!] += 1;
+          textCrossingsByOrientation[Math.abs(a.y - c.y) < 1e-6 ? 'h' : 'v'] += 1;
           break;
         }
       }
-    }
+    });
   }
 
   return {
@@ -507,6 +576,8 @@ export function readAttachment(
     opposed: opposing.size,
     opposedByRole,
     textCrossings,
+    textCrossingsByKind,
+    textCrossingsByOrientation,
     platesOnText,
     gapLabels,
     lagPlates,
@@ -821,6 +892,50 @@ export function selfTest(): void {
       throw new Error(
         `attachment-probe self-test "${c.name}": got ${JSON.stringify(got)}, want ${JSON.stringify(c.want)}`,
       );
+    }
+  }
+  selfTestTextKinds();
+}
+
+/**
+ * The text classifier's own cases (links-and-labels M0-T2). Each names the mistake it fails on.
+ * Built on lane 2 of a panned view, so a classifier that forgot the pan or the lane fails too.
+ */
+function selfTestTextKinds(): void {
+  const view: Viewport = { pxPerDay: 4, originX: 40, originY: 32 };
+  const slots = rowSlots(screenYOfLane(2, view));
+  const wrapped = wrappedNameYs(slots);
+  const text = (t: string, y: number, align: CanvasTextAlign): RecordedText => ({
+    text: t,
+    x: 100,
+    y,
+    width: 30,
+    fontPx: 11,
+    align,
+    baseline: 'middle',
+  });
+  const cases: { name: string; t: RecordedText; want: TextKind | 'throws' }[] = [
+    // Fails if names are read from the below row or the pan is ignored.
+    { name: 'name', t: text('A1010', slots.nameY, 'center'), want: 'name' },
+    // Fails if a wrapped line is folded into the single-line name row.
+    { name: 'wrapped upper', t: text('Install', wrapped.upper, 'center'), want: 'name-wrapped' },
+    // Fails if an aligned date is taken for a milestone's centred one.
+    { name: 'flanking date', t: text('20 Jan', slots.belowY, 'left'), want: 'date' },
+    // Fails if every centred below-row text is called a date.
+    { name: 'milestone date', t: text('3 Sep', slots.belowY, 'center'), want: 'milestone-date' },
+    { name: 'centre item', t: text('5d · 3d float', slots.belowY, 'center'), want: 'centre' },
+    // Fails if an unknown text is quietly given a kind.
+    { name: 'no band', t: text('?', slots.barY + 1, 'left'), want: 'throws' },
+  ];
+  for (const c of cases) {
+    let got: TextKind | 'throws';
+    try {
+      got = textKindOf(c.t, view);
+    } catch {
+      got = 'throws';
+    }
+    if (got !== c.want) {
+      throw new Error(`attachment-probe self-test text "${c.name}": got ${got}, want ${c.want}`);
     }
   }
 }
