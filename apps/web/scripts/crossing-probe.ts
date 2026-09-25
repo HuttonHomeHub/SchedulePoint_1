@@ -52,6 +52,7 @@ import {
   rowSlots,
   worldExtent,
 } from '../src/features/tsld/render/geometry';
+import type { LayoutText } from '../src/features/tsld/render/layout-objective';
 import {
   gutterChannels,
   isLaneFreeBetween,
@@ -62,6 +63,7 @@ import {
 import { minimapViewport, sceneWindowRect } from '../src/features/tsld/render/minimap';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Point, Viewport } from '../src/features/tsld/render/render-model';
+import { DEFAULT_VIEW_TOGGLES } from '../src/features/tsld/render/view-toggles';
 
 import { reorderLanes, statsFor, unit300Asap } from './lane-travel-probe';
 export { smallPlanLayouts } from './small-plan-fixture';
@@ -223,6 +225,16 @@ export const NODE_SENTINELS = {
   // reason as the marks.
   attachDot: '#1c1d1e',
 } as const;
+
+/**
+ * The text a harness routes around (links-and-labels M2-T2): the default toggles, and the recording
+ * context's own width, 6 px a character whatever the font, so a harness's routes are the painter's
+ * routes under `recordingCtx`.
+ */
+export const HARNESS_TEXT: LayoutText = {
+  measure: (text) => text.length * 6,
+  toggles: DEFAULT_VIEW_TOGGLES,
+};
 
 export const PALETTE: TsldPalette = {
   canvasGround: '#14161c',

@@ -365,6 +365,7 @@ describe('link routing — draw-budget gate at 2,000 activities (T19)', () => {
         },
         glyphs,
         view,
+        null,
       );
       most = Math.max(most, shapes.length);
     }

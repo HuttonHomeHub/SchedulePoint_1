@@ -129,6 +129,7 @@ if (json) {
     const differing = probe.shuffleDifferences(
       fx.scene,
       { pxPerDay: 4, originX: 40, originY: 32 },
+      fx.sizeAt(4, 32),
       200,
     );
     console.log(

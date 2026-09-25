@@ -70,11 +70,13 @@ import {
 } from '../src/features/tsld/render/render-model';
 import { routeFrame } from '../src/features/tsld/render/route-frame';
 import {
+  allItems,
   layoutRowText,
   type PlacedText,
   type PlacedTextKind,
   type RowTextLayout,
 } from '../src/features/tsld/render/row-text-layout';
+import { textIndexOf } from '../src/features/tsld/render/text-index';
 
 import {
   countCrossings,
@@ -531,7 +533,17 @@ export function readAttachment(
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const visible = new Set(byId.keys());
   const rectCache: RectCache = new Map();
-  const frame = routeFrame(scene, view, visible, byId, rectCache);
+  // The text the painter routes around, from the painter's own frame (links-and-labels M2-T2); the
+  // same layout FC-W0 below holds the painted text to.
+  const textLayout = moduleLayout(scene, view, size);
+  const frame = routeFrame(
+    scene,
+    view,
+    visible,
+    byId,
+    rectCache,
+    textIndexOf(allItems(textLayout)),
+  );
 
   const { ctx, paths, texts } = recordingCtx();
   paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
@@ -785,7 +797,7 @@ export function readAttachment(
   // drew must be a module item at the same text, x, y and alignment, and every item the module
   // placed must be drawn. A reading of text the module did not place would be a reading of a
   // different layout from the one the router reads (M2), so the probe refuses it.
-  const agreement = textAgreement(moduleLayout(scene, view, size), texts);
+  const agreement = textAgreement(textLayout, texts);
   if (agreement.mismatches.length > 0) {
     throw new Error(
       `FC-W0: the painter's text and the module's disagree (${agreement.mismatches.length}): ` +
@@ -879,12 +891,19 @@ export function readAttachment(
  * return how many orders gave any link a different line. Lines are keyed by the link, never by
  * position, so a shuffle that changes only the order of the map is not a difference.
  */
-export function shuffleDifferences(scene: TsldScene, view: Viewport, runs: number): number {
+export function shuffleDifferences(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+  runs: number,
+): number {
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const visible = new Set(byId.keys());
+  // The text does not depend on the order of the edges, so one index serves every shuffle.
+  const text = textIndexOf(allItems(moduleLayout(scene, view, size)));
   const keyOf = (e: RenderEdge): string => `${e.predecessorId}>${e.successorId}:${e.type}`;
   const linesOf = (edges: readonly RenderEdge[]): Map<string, string> => {
-    const frame = routeFrame({ ...scene, edges: [...edges] }, view, visible, byId, new Map());
+    const frame = routeFrame({ ...scene, edges: [...edges] }, view, visible, byId, new Map(), text);
     const out = new Map<string, string>();
     for (const [edge, line] of frame.lines) {
       out.set(keyOf(edge), line.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';'));

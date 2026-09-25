@@ -1,6 +1,7 @@
-import { centreItemText } from './a11y';
-import type { LaneRow } from './paint-frame';
+import { canvasLabel, centreItemText } from './a11y';
+import { laneRowsOf, type LaneRow } from './paint-frame';
 import {
+  activityRect,
   barGlyphKind,
   dateLabelSlot,
   formatCanvasDate,
@@ -16,6 +17,7 @@ import {
   lodTier,
   MILESTONE_LABEL_FONT,
   NODE_TEXT_CLEAR_PX,
+  rowReservesTextRows,
   rowSlots,
   screenYOfLane,
   sharesNode,
@@ -23,6 +25,7 @@ import {
   wrappedNameYs,
   wrapTwoLines,
   type Rect,
+  type RectCache,
   type RenderActivity,
   type Viewport,
 } from './render-model';
@@ -866,4 +869,109 @@ export function layoutRowText({
   }
 
   return { names, dates, centre };
+}
+
+/** A width lookup: `measure(text, font)`, `font` undefined for the regular label font. */
+export type TextMeasure = (text: string, font?: string) => number;
+
+/**
+ * **The text layout of a whole scene**, for a caller with no paint frame: the layout objective
+ * (Tidy), the probes and the routing tests (links-and-labels M2-T2). Every activity with a drawn rect
+ * takes part, as it does in a frame whose viewport holds the whole plan; the rows come from
+ * `laneRowsOf`, the frame's own bucketing, so the search scores the text the canvas draws.
+ */
+export function sceneRowText(
+  scene: {
+    activities: readonly RenderActivity[];
+    dataDate: string;
+    visualRefresh?: boolean | undefined;
+  },
+  view: Viewport,
+  size: { width: number; height: number },
+  toggles: TsldViewToggles,
+  measure: TextMeasure,
+  rectCache: RectCache = new Map(),
+): RowTextLayout {
+  const byId = new Map(scene.activities.map((a) => [a.id, a]));
+  const rects = new Map<string, Rect>();
+  for (const a of scene.activities) {
+    const r = activityRect(a, view, scene.dataDate, rectCache);
+    if (r) rects.set(a.id, r);
+  }
+  const withCodes = toggles.activityCodes === true;
+  let rows: ReadonlyMap<number, readonly LaneRow[]> | null = null;
+  return layoutRowText({
+    rows: () => (rows ??= laneRowsOf(rects, byId)),
+    view,
+    size,
+    toggles,
+    visualRefresh: scene.visualRefresh === true,
+    reservesTextRows: rowReservesTextRows(),
+    measure,
+    labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
+  });
+}
+
+/** A width table key: the memo's own (`measure.ts`), the font only when one is given. */
+export const textWidthKey = (text: string, font: string | undefined): string =>
+  font === undefined ? text : `${font}\u0000${text}`;
+
+/**
+ * **Every width the layout can ask for, per activity** (links-and-labels M2-T3, spec §4.4). The
+ * Tidy worker has no `document`, so it is sent a table of these keys' widths, measured by the
+ * painter's own memo at the moment of the press. What the layout can ask is finite: an activity's
+ * canvas label in its font (bold for a milestone), the ellipsis, every prefix of the label plus the
+ * ellipsis trimmed and untrimmed (`truncateToWidth`'s search), the two dates, and the centre item's
+ * two forms. The two-line wrap is NOT here: the router scores the one-line name (spec D-4), and the
+ * wrap is the painter's decision after routing. M0-T4 recorded every key the painter asks for over
+ * four scenes and found none outside this set; the completeness property test holds it.
+ */
+export function textWidthKeys(
+  activities: readonly RenderActivity[],
+  toggles: TsldViewToggles,
+): { text: string; font: string | undefined }[] {
+  const out = new Map<string, { text: string; font: string | undefined }>();
+  const add = (text: string, font: string | undefined): void => {
+    out.set(textWidthKey(text, font), { text, font });
+  };
+  const withCodes = toggles.activityCodes === true;
+  for (const a of activities) {
+    const font = isMilestone(a.type) ? MILESTONE_LABEL_FONT : undefined;
+    const label = canvasLabel({ code: a.code ?? null, name: a.label }, withCodes);
+    add(label, font);
+    add(LABEL_ELLIPSIS, font);
+    for (let k = 0; k <= label.length; k += 1) {
+      add(label.slice(0, k) + LABEL_ELLIPSIS, font);
+      add(label.slice(0, k).trimEnd() + LABEL_ELLIPSIS, font);
+    }
+    if (a.earlyStart) add(formatCanvasDate(a.earlyStart), undefined);
+    if (a.earlyFinish) add(formatCanvasDate(a.earlyFinish), undefined);
+    if (toggles.centreItem === true && a.durationDays !== undefined) {
+      const item = {
+        durationDays: a.durationDays,
+        remainingFloat: a.remainingFloat,
+        milestone: isMilestone(a.type),
+        summary: a.type === 'WBS_SUMMARY',
+      };
+      for (const form of ['full', 'short'] as const) {
+        const t = centreItemText(item, form);
+        if (t !== null) add(t, undefined);
+      }
+    }
+  }
+  return [...out.values()];
+}
+
+/** A measure answered from a width table, which throws on a key it does not hold. */
+export function tableMeasure(table: Iterable<readonly [string, number]>): TextMeasure {
+  const widths = new Map(table);
+  return (text, font) => {
+    const w = widths.get(textWidthKey(text, font));
+    if (w === undefined) {
+      throw new Error(
+        `text width table has no entry for ${JSON.stringify(textWidthKey(text, font))}`,
+      );
+    }
+    return w;
+  };
 }

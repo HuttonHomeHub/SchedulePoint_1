@@ -9,6 +9,9 @@ import {
   type OptimiseMessage,
 } from './optimise-layout-protocol';
 import type { RenderActivity, RenderEdge } from './render-model';
+import { textWidthKey, textWidthKeys } from './row-text-layout';
+import { FIXED_WIDTH_TEXT } from './test-support/fixed-width-text';
+import { DEFAULT_VIEW_TOGGLES } from './view-toggles';
 
 /**
  * **The worker boundary** (NetPoint-layout M4-T3). jsdom has no worker, so the handler the worker
@@ -33,6 +36,11 @@ const ACTIVITIES = [
   task('C', 1, '2026-01-05', '2026-01-30'),
   task('D', 0, '2026-01-20', '2026-01-24'),
 ];
+/** The table the main thread would send: every key the layout can ask for, at 6 px a character. */
+const TEXT_WIDTHS: [string, number][] = textWidthKeys(ACTIVITIES, DEFAULT_VIEW_TOGGLES).map(
+  ({ text, font }) => [textWidthKey(text, font), text.length * 6],
+);
+
 const EDGES: RenderEdge[] = [
   { id: 'AB', predecessorId: 'A', successorId: 'B', type: 'FS', isDriving: true },
   { id: 'BD', predecessorId: 'B', successorId: 'D', type: 'FS', isDriving: true },
@@ -46,6 +54,8 @@ describe('handleOptimiseRequest', () => {
         activities: ACTIVITIES,
         edges: EDGES,
         dataDate: '2026-01-01',
+        textWidths: TEXT_WIDTHS,
+        textToggles: DEFAULT_VIEW_TOGGLES,
         workingDays: null,
         options: {},
       },
@@ -53,7 +63,12 @@ describe('handleOptimiseRequest', () => {
     );
     const done = messages.at(-1);
     expect(done?.type).toBe('done');
-    const direct = optimiseLayout({ activities: ACTIVITIES, edges: EDGES, dataDate: '2026-01-01' });
+    const direct = optimiseLayout({
+      activities: ACTIVITIES,
+      edges: EDGES,
+      dataDate: '2026-01-01',
+      text: FIXED_WIDTH_TEXT,
+    });
     if (done?.type !== 'done') throw new Error('no result');
     expect([...done.result.lanes]).toEqual([...direct.lanes]);
     expect(done.result.final).toEqual(direct.final);
@@ -66,6 +81,8 @@ describe('handleOptimiseRequest', () => {
         activities: ACTIVITIES,
         edges: EDGES,
         dataDate: '2026-01-01',
+        textWidths: TEXT_WIDTHS,
+        textToggles: DEFAULT_VIEW_TOGGLES,
         workingDays: null,
         options: {},
       },

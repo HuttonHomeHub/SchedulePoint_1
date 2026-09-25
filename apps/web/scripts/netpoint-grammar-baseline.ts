@@ -26,6 +26,7 @@ import { optimiseLayout } from '../src/features/tsld/render/optimise-layout';
 
 import {
   chainPlacedLayouts,
+  HARNESS_TEXT,
   packedOnDrawn,
   read,
   scalePlan,
@@ -143,8 +144,8 @@ out('\n## FC-G1b — Tidy and Re-layout lane assignments\n');
 out('| Plan | Tidy (seed: current rows) | Re-layout (seed: packed) |');
 out('| --- | --- | --- |');
 for (const c of cases.filter((x) => x.optimise)) {
-  const tidy = optimiseLayout(sceneFor(c.asap, c.layout).scene);
+  const tidy = optimiseLayout({ ...sceneFor(c.asap, c.layout).scene, text: HARNESS_TEXT });
   const packed = packedOnDrawn(c.asap, `${c.name} packed`);
-  const relayout = optimiseLayout(sceneFor(c.asap, packed).scene);
+  const relayout = optimiseLayout({ ...sceneFor(c.asap, packed).scene, text: HARNESS_TEXT });
   out(`| ${c.name} | \`${lanesDigest(tidy.lanes)}\` | \`${lanesDigest(relayout.lanes)}\` |`);
 }

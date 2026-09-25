@@ -88,6 +88,26 @@ export interface PaintFrame {
  * each call site is nil — which is what lets the 30 consuming files and their suites act as the
  * before/after oracle.
  */
+/**
+ * Bars bucketed by lane and x-sorted: the rows both text passes read. One function, because the
+ * painter's frame and the layout objective (Tidy) both need it, and two bucketings would let the
+ * search score a text layout the canvas does not draw (links-and-labels M2-T2).
+ */
+export function laneRowsOf(
+  rects: ReadonlyMap<string, Rect>,
+  byId: ReadonlyMap<string, RenderActivity>,
+): Map<number, LaneRow[]> {
+  const lanes = new Map<number, LaneRow[]>();
+  for (const [id, rect] of rects) {
+    const activity = byId.get(id)!;
+    const row = lanes.get(activity.laneIndex);
+    if (row) row.push({ activity, rect });
+    else lanes.set(activity.laneIndex, [{ activity, rect }]);
+  }
+  for (const row of lanes.values()) row.sort((a, b) => a.rect.x - b.rect.x);
+  return lanes;
+}
+
 export function buildPaintFrame(
   ctx: Ctx2D,
   scene: PaintFrameScene,
@@ -139,17 +159,8 @@ export function buildPaintFrame(
   // `measureText`. A paint with both layers off never calls it.
   let laneRowsCache: Map<number, LaneRow[]> | null = null;
   const laneRows = (): ReadonlyMap<number, LaneRow[]> => {
-    if (laneRowsCache) return laneRowsCache;
-    const lanes = new Map<number, LaneRow[]>();
-    for (const [id, rect] of rects()) {
-      const activity = byId.get(id)!;
-      const row = lanes.get(activity.laneIndex);
-      if (row) row.push({ activity, rect });
-      else lanes.set(activity.laneIndex, [{ activity, rect }]);
-    }
-    for (const row of lanes.values()) row.sort((a, b) => a.rect.x - b.rect.x);
-    laneRowsCache = lanes;
-    return lanes;
+    laneRowsCache ??= laneRowsOf(rects(), byId);
+    return laneRowsCache;
   };
 
   return {

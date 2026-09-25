@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { compareObjectives, evaluateLayout } from './layout-objective';
 import { optimiseLayout } from './optimise-layout';
 import type { RenderActivity, RenderEdge } from './render-model';
+import { FIXED_WIDTH_TEXT } from './test-support/fixed-width-text';
 
 /**
  * **Tidy and Re-layout's guarantees** (NetPoint-layout M4-T3, FC-N3).
@@ -83,7 +84,10 @@ describe('optimiseLayout', () => {
     let improved = 0;
     for (let seed = 1; seed <= 200; seed += 1) {
       const { activities, edges } = generated(seed);
-      const r = optimiseLayout({ activities, edges, dataDate: DATA_DATE }, { passes: 3 });
+      const r = optimiseLayout(
+        { activities, edges, dataDate: DATA_DATE, text: FIXED_WIDTH_TEXT },
+        { passes: 3 },
+      );
       expect(compareObjectives(r.final, r.repaired), `seed ${String(seed)}`).toBeLessThanOrEqual(0);
       expect(r.final.overlaps, `seed ${String(seed)}`).toBe(0);
       // The reported objective is the objective of the reported lanes, not a stale copy.
@@ -91,6 +95,7 @@ describe('optimiseLayout', () => {
         activities: activities.map((a) => ({ ...a, laneIndex: r.lanes.get(a.id)! })),
         edges,
         dataDate: DATA_DATE,
+        text: FIXED_WIDTH_TEXT,
       });
       expect(rescored, `seed ${String(seed)}`).toEqual(r.final);
       if (compareObjectives(r.final, r.repaired) < 0) improved += 1;
@@ -102,11 +107,19 @@ describe('optimiseLayout', () => {
   it('never uses more rows than the seed when the seed has no overlap (CQ-1: no extra rows)', () => {
     for (let seed = 1; seed <= 20; seed += 1) {
       const { activities, edges } = generated(seed);
-      const packed = optimiseLayout({ activities, edges, dataDate: DATA_DATE }, { passes: 1 });
+      const packed = optimiseLayout(
+        { activities, edges, dataDate: DATA_DATE, text: FIXED_WIDTH_TEXT },
+        { passes: 1 },
+      );
       // Re-run from the repaired, overlap-free layout: now the budget binds.
       const seedLanes = activities.map((a) => ({ ...a, laneIndex: packed.lanes.get(a.id)! }));
       const rows = Math.max(...seedLanes.map((a) => a.laneIndex)) + 1;
-      const r = optimiseLayout({ activities: seedLanes, edges, dataDate: DATA_DATE });
+      const r = optimiseLayout({
+        activities: seedLanes,
+        edges,
+        dataDate: DATA_DATE,
+        text: FIXED_WIDTH_TEXT,
+      });
       expect(r.final.rows, `seed ${String(seed)}`).toBeLessThanOrEqual(rows);
       expect(r.overBudget).toBe(false);
     }
@@ -117,6 +130,7 @@ describe('optimiseLayout', () => {
       activities: [task('A', 0, 0, 10), task('B', 0, 5, 10)],
       edges: [],
       dataDate: DATA_DATE,
+      text: FIXED_WIDTH_TEXT,
     });
     expect(r.seed.overlaps).toBe(1);
     expect(r.final.overlaps).toBe(0);
@@ -125,11 +139,12 @@ describe('optimiseLayout', () => {
 
   it('gives the same lanes whatever order activities and links arrive in', () => {
     const { activities, edges } = generated(7);
-    const a = optimiseLayout({ activities, edges, dataDate: DATA_DATE });
+    const a = optimiseLayout({ activities, edges, dataDate: DATA_DATE, text: FIXED_WIDTH_TEXT });
     const b = optimiseLayout({
       activities: [...activities].reverse(),
       edges: [...edges].reverse(),
       dataDate: DATA_DATE,
+      text: FIXED_WIDTH_TEXT,
     });
     expect([...b.lanes].sort()).toEqual([...a.lanes].sort());
   });
@@ -139,6 +154,7 @@ describe('optimiseLayout', () => {
       activities: [task('A', 0, 0, 5), task('B', 0, 10, 5)],
       edges: [link('A', 'B')],
       dataDate: DATA_DATE,
+      text: FIXED_WIDTH_TEXT,
     });
     expect(r.moved).toEqual([]);
     expect(r.final).toEqual(r.seed);
@@ -146,7 +162,10 @@ describe('optimiseLayout', () => {
 
   it('stops at its evaluation cap and says so', () => {
     const { activities, edges } = generated(3);
-    const r = optimiseLayout({ activities, edges, dataDate: DATA_DATE }, { evaluationsPerPass: 2 });
+    const r = optimiseLayout(
+      { activities, edges, dataDate: DATA_DATE, text: FIXED_WIDTH_TEXT },
+      { evaluationsPerPass: 2 },
+    );
     expect(r.capped).toBe(true);
   });
 });

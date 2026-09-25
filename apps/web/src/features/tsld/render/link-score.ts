@@ -11,7 +11,10 @@
  * 3. **overlaps** — collinear shared length with another link on a lane centre-line or a vertical,
  *    not counted between links that share an end (the bus, spec D-4) and not in gutters (packed
  *    apart afterwards by `packGutterChannels`);
- * 4. **length**, 5. **bends**, 6. the fixed **candidate order**.
+ * 4. **text** — names and dates the line runs through (links-and-labels M2, `docs/TECH_DEBT.md`
+ *    #393, spec D-1): after overlaps, so a name is never bought with a bar, a crossing or an
+ *    overlap, and before length, so it breaks the ties those leave;
+ * 5. **length**, 6. **bends**, 7. the fixed **candidate order**.
  *
  * **Two phases, one frozen snapshot** (ADR-0149 D4's contract, generalised from moving one corridor
  * to choosing among whole shapes). Phase 1 picks each link's best shape on terms 1, 4, 5 and 6,
@@ -35,6 +38,7 @@ import {
   type RenderActivity,
   type Viewport,
 } from './render-model';
+import { textBoxesOverlapping, type TextIndex } from './text-index';
 
 const EPS = 1e-6;
 
@@ -202,6 +206,40 @@ function obstructionCounts(
   return { total: count, legs };
 }
 
+/**
+ * **How many names and dates `line` runs through** (links-and-labels M2-T1, spec §4.3): the ink
+ * boxes of the text layout (`row-text-layout.ts`, indexed by `text-index.ts`) that any segment meets
+ * in their strict interior, each box counted once. The same test the attachment probe counts text
+ * crossings with, so the router and the instrument agree about what "through a name" means.
+ *
+ * A text box belongs to its activity's lane and lies inside that lane's band, so only the lanes a
+ * segment's y-range spans are asked. `null` (or an empty index) is zero: off the routed path.
+ */
+export function textCrossings(
+  line: readonly Point[],
+  text: TextIndex | null,
+  view: Viewport,
+): number {
+  if (text === null || text.size === 0) return 0;
+  const met = new Set<object>();
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const x0 = Math.min(a.x, b.x);
+    const x1 = Math.max(a.x, b.x);
+    const y0 = Math.min(a.y, b.y);
+    const y1 = Math.max(a.y, b.y);
+    const firstLane = Math.floor((y0 - view.originY) / LANE_HEIGHT);
+    const lastLane = Math.floor((y1 - view.originY) / LANE_HEIGHT);
+    for (let lane = firstLane; lane <= lastLane; lane += 1) {
+      for (const box of textBoxesOverlapping(text, lane, x0, x1)) {
+        if (y0 < box.y + box.h && y1 > box.y) met.add(box);
+      }
+    }
+  }
+  return met.size;
+}
+
 function lengthOf(line: readonly Point[]): number {
   let total = 0;
   for (let i = 1; i < line.length; i += 1) {
@@ -253,9 +291,11 @@ function segmentsOf(line: readonly Point[]): Segments {
   return { h, v };
 }
 
-/** Terms 1, 4, 5 and 6 — everything a link can know about itself alone. */
+/** Terms 1, 4, 5, 6 and 7 — everything a link can know about itself alone. */
 export interface Phase1Score {
   obstructions: number;
+  /** Names and dates the line runs through ({@link textCrossings}). Absent reads as zero. */
+  text?: number;
   /**
    * How many of `obstructions` are horizontal legs hidden behind a bar. Not a ranked term: phase 3
    * refuses any move that raises it. Absent on a hand-built score, where it reads as zero.
@@ -268,7 +308,11 @@ export interface Phase1Score {
 
 function comparePhase1(a: Phase1Score, b: Phase1Score): number {
   return (
-    a.obstructions - b.obstructions || a.length - b.length || a.bends - b.bends || a.order - b.order
+    a.obstructions - b.obstructions ||
+    (a.text ?? 0) - (b.text ?? 0) ||
+    a.length - b.length ||
+    a.bends - b.bends ||
+    a.order - b.order
   );
 }
 
@@ -297,6 +341,7 @@ function scoreCandidates(
   glyphs: GlyphIndex,
   own: readonly OwnSpan[],
   view: Viewport,
+  text: TextIndex | null,
 ): ScoredCandidate[] {
   return (
     candidates
@@ -305,6 +350,7 @@ function scoreCandidates(
         return toScored(c, {
           obstructions: counts.total,
           hiddenLegs: counts.legs,
+          text: textCrossings(c.line, text, view),
           length: lengthOf(c.line),
           bends: c.line.length - 2,
           order: c.order,
@@ -339,8 +385,9 @@ export function routeNodeToNode(
   input: LinkRouteInput,
   glyphs: GlyphIndex,
   view: Viewport,
+  text: TextIndex | null,
 ): ScoredCandidate[] {
-  const parts = routeNodeToNodeParts(input, glyphs, view);
+  const parts = routeNodeToNodeParts(input, glyphs, view, text);
   return [...parts.candidates, ...parts.escapes()];
 }
 
@@ -354,6 +401,7 @@ export function routeNodeToNodeParts(
   input: LinkRouteInput,
   glyphs: GlyphIndex,
   view: Viewport,
+  text: TextIndex | null,
 ): { candidates: readonly ScoredCandidate[]; escapes: () => readonly ScoredCandidate[] } {
   const pred = linkEndOf(input.from, input.fromAnchor, input.fromRect);
   const succ = linkEndOf(input.to, input.toAnchor, input.toRect);
@@ -361,8 +409,8 @@ export function routeNodeToNodeParts(
   const parts = routeCandidateParts(pred, succ, input.from.laneIndex, input.to.laneIndex, view);
   let escapes: ScoredCandidate[] | undefined;
   const escapesOf = (): ScoredCandidate[] =>
-    (escapes ??= scoreCandidates(parts.escapes(), glyphs, own, view));
-  const ordinary = scoreCandidates(parts.ordinary, glyphs, own, view);
+    (escapes ??= scoreCandidates(parts.escapes(), glyphs, own, view, text));
+  const ordinary = scoreCandidates(parts.ordinary, glyphs, own, view, text);
   if (ordinary.length > 0) return { candidates: ordinary, escapes: escapesOf };
   const all = escapesOf();
   if (all.length > 0) return { candidates: all, escapes: () => [] };
@@ -481,6 +529,7 @@ function comparePhase2(a: Phase2Score, b: Phase2Score): number {
     a.obstructions - b.obstructions ||
     a.crossings - b.crossings ||
     a.overlaps - b.overlaps ||
+    (a.text ?? 0) - (b.text ?? 0) ||
     a.length - b.length ||
     a.bends - b.bends ||
     a.order - b.order
@@ -589,6 +638,9 @@ export function chooseRoutesByCrossing(
     let bestScore = scoreAgainst(frozen, i, current)!;
     // Nothing can beat a pick with no crossings and no overlaps: phase 1 already made it the best
     // on every other term, and phase 2 only inserts those two. Exact, and most links stop here.
+    // Still exact with the text term (links-and-labels M2): text ranks after overlaps here and
+    // before length in phase 1, so phase 1's pick is already the best on text among the ordinary
+    // shapes, and the escapes are not consulted by this exit, before or after.
     if (bestScore.crossings === 0 && bestScore.overlaps === 0) return best;
     // The escapes after the ordinary shapes, scored only now that this link has asked for them.
     const all = [...link.candidates, ...(link.escapes?.() ?? [])];

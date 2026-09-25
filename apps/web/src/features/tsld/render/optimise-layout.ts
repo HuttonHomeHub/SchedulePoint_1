@@ -142,6 +142,7 @@ export function optimiseLayout(
         edges,
         dataDate: input.dataDate,
         isWorkingDay: input.isWorkingDay,
+        text: input.text,
       },
       LAYOUT_REFERENCE_PX_PER_DAY,
     );

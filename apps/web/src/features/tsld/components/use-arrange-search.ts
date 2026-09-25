@@ -5,6 +5,8 @@ import { OPTIMISE_MAX_ACTIVITIES } from '../render/optimise-layout';
 import { workingDaySpanOf, type OptimiseRequest } from '../render/optimise-layout-protocol';
 import { axisDayOf, type RenderActivity, type RenderEdge } from '../render/render-model';
 import { runOptimiseLayout } from '../render/run-optimise-layout';
+import { textWidthTable } from '../render/text-width-table';
+import type { TsldViewToggles } from '../render/view-toggles';
 
 /**
  * **What each Arrange option would do, worked out while the dialog is open** (NetPoint-layout M5).
@@ -46,13 +48,22 @@ export interface ArrangeSearchInput {
   isWorkingDay: ((dayOffset: number) => boolean) | null | undefined;
   /** Today's pack (`arrangeSummary.changes`), the seed Re-layout starts from. */
   packChanges: readonly { id: string; laneIndex: number }[];
+  /**
+   * The text toggles the canvas is drawing with (links-and-labels M2, spec D-7): the search routes
+   * around the names and dates the planner can see.
+   */
+  textToggles: TsldViewToggles;
 }
 
-/** The inputs a worker needs, with the working-day predicate sampled over the drawn span. */
+/**
+ * The inputs a worker needs, with the working-day predicate sampled over the drawn span and the
+ * text widths measured on this thread (`textWidths`, built once per search by the caller).
+ */
 export function arrangeRequest(
   input: ArrangeSearchInput,
   seed: ReadonlyMap<string, number>,
   options: OptimiseRequest['options'],
+  textWidths: [string, number][],
 ): OptimiseRequest {
   let from = 0;
   let to = 0;
@@ -69,6 +80,8 @@ export function arrangeRequest(
     workingDays: input.isWorkingDay
       ? workingDaySpanOf(input.isWorkingDay, from - 31, to + 31)
       : null,
+    textWidths,
+    textToggles: input.textToggles,
     options,
   };
 }
@@ -118,17 +131,19 @@ export function useArrangeSearch(
 
     void (async () => {
       try {
+        // One table for both runs: the lanes change between them, never the text.
+        const widths = textWidthTable(input.activities, input.textToggles);
         let tidy: ArrangeOutcome | null = null;
         // The diagram as it stands, scored. Tidy's seed is exactly that, so it comes for free when
         // Tidy runs; when it is bounded, one evaluation with no search supplies it.
         let before: LayoutObjective | null = null;
         if (bounded) {
-          const r = await runOptimiseLayout(arrangeRequest(input, current, { passes: 0 }), {
+          const r = await runOptimiseLayout(arrangeRequest(input, current, { passes: 0 }, widths), {
             signal,
           });
           before = r.seed;
         } else {
-          const r = await runOptimiseLayout(arrangeRequest(input, current, {}), {
+          const r = await runOptimiseLayout(arrangeRequest(input, current, {}, widths), {
             signal,
             onProgress: progress(0),
           });
@@ -137,7 +152,7 @@ export function useArrangeSearch(
           tidy = { changes: changesBetween(input.activities, r.lanes), before, after: r.final };
         }
         const r = await runOptimiseLayout(
-          arrangeRequest(input, packed, bounded ? { passes: 0 } : {}),
+          arrangeRequest(input, packed, bounded ? { passes: 0 } : {}, widths),
           { signal, onProgress: progress(tidyEvaluations) },
         );
         // Re-layout's own seed is the pack, so its "before" is the diagram's, never the pack's.

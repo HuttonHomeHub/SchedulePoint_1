@@ -44,7 +44,11 @@ const probe = await import(pathToFileURL(bundle).href);
 const rows = [];
 for (const fx of probe.fixtures(FIXTURE)) {
   for (const pxPerDay of [1, 4, 12]) {
-    const pairs = probe.listOpposed(fx.scene, { pxPerDay, originX: 40, originY: 32 });
+    const pairs = probe.listOpposed(
+      fx.scene,
+      { pxPerDay, originX: 40, originY: 32 },
+      fx.sizeAt(pxPerDay, 32),
+    );
     rows.push({ fixture: fx.name, pxPerDay, pairs });
   }
 }

@@ -2340,6 +2340,7 @@ export function TsldPanel({
       dataDate,
       isWorkingDay: workingDayPredicate,
       packChanges: computeArrangeChanges(),
+      textToggles: viewToggles,
     });
     setArrangeRun((n) => n + 1);
   };

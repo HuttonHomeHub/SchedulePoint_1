@@ -87,7 +87,8 @@ import {
   type ResourceStripSnapshot,
 } from './resource-strip';
 import { routeFrame, type RouteFrame } from './route-frame';
-import { layoutRowText, type PlacedText } from './row-text-layout';
+import { allItems, layoutRowText, type PlacedText } from './row-text-layout';
+import { textIndexOf } from './text-index';
 import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from './view-toggles';
 import type { WbsBandBar } from './wbs-band';
 
@@ -1412,7 +1413,14 @@ export function paintScene(
     labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
   });
   if (scene.edges.length > 0) {
-    const route = routeFrame(scene, view, visibleIds, byId, rectCache);
+    const route = routeFrame(
+      scene,
+      view,
+      visibleIds,
+      byId,
+      rectCache,
+      textIndexOf(allItems(textLayout)),
+    );
     const { workingWalk, refresh, glyphs, lineOf, lines } = route;
     lagRuns = route.lagRuns;
     lagHandlePoints = route.lagHandlePoints;

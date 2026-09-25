@@ -31,6 +31,7 @@
 import { createHash } from 'node:crypto';
 
 import { activityRect, LANE_HEIGHT, rowSlots } from '../src/features/tsld/render/geometry';
+import { layoutTextIndex } from '../src/features/tsld/render/layout-objective';
 import { isLaneBoundary } from '../src/features/tsld/render/link-candidates';
 import { lagAnchorPoints, packGutterChannels } from '../src/features/tsld/render/link-routing';
 import {
@@ -43,11 +44,13 @@ import {
 } from '../src/features/tsld/render/link-score';
 import { paintScene, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Point, RenderActivity, Viewport } from '../src/features/tsld/render/render-model';
+import type { TextIndex } from '../src/features/tsld/render/text-index';
 import { ELAPSED_DAY_WALK } from '../src/features/tsld/render/working-time';
 
 import {
   countCrossings,
   drawnOverlaps,
+  HARNESS_TEXT,
   type Layout,
   lineOcclusion,
   linkPaths,
@@ -77,6 +80,8 @@ export interface Model {
   /** Per edge (scene order): the route BEFORE the post-passes, or null if it has no anchors. */
   raw: (Point[] | null)[];
   index: GlyphIndex;
+  /** The text the routes avoid: the product's own `layoutTextIndex`, so the two agree (FC-N0). */
+  text: TextIndex;
 }
 
 const VIEW = (pxPerDay: number): Viewport => ({ pxPerDay, originX: 40, originY: 32 });
@@ -104,6 +109,7 @@ function candidatesOf(model: Model, e: number): FrameLink | null {
     { from: pred, to: succ, fromAnchor: anchors.pred, toAnchor: anchors.succ, fromRect, toRect },
     index,
     view,
+    model.text,
   );
   return { candidates, ends: [anchors.pred, anchors.succ] };
 }
@@ -172,6 +178,7 @@ export function buildModel(asap: Asap, layout: Layout, pxPerDay = 4): Model {
     byId,
     raw: [],
     index: glyphIndex(scene.activities, view, scene.dataDate),
+    text: layoutTextIndex({ ...scene, text: HARNESS_TEXT }, view),
   };
   model.raw = scene.edges.map((_, e) => routeOne(model, e));
   return model;
@@ -473,6 +480,7 @@ export function evaluateFull(
     byId,
     raw: [],
     index: glyphIndex(scene.activities, view, scene.dataDate),
+    text: layoutTextIndex({ ...scene, text: HARNESS_TEXT }, view),
   };
   t.index = performance.now() - s;
   s = performance.now();

@@ -27,6 +27,7 @@ import {
   type RenderEdge,
   type Viewport,
 } from './render-model';
+import type { TextIndex } from './text-index';
 
 /**
  * **The frame's routed links, as values** (NetPoint-layout M4-T1, spec §4.5).
@@ -94,6 +95,12 @@ export function routeFrame(
   visibleIds: ReadonlySet<string>,
   byId: ReadonlyMap<string, RenderActivity>,
   rectCache: RectCache,
+  /**
+   * Where the row's text is (links-and-labels M2-T1, spec §4.3): the text layout's ink boxes, from
+   * `textIndexOf`. **Required**, so every caller decides and the compiler checks (ADR-0070's rule
+   * for `hoursPerDay`). `null` only off the routed path, or where a caller genuinely has no text.
+   */
+  text: TextIndex | null,
 ): RouteFrame {
   // `lineOf` writes the active handle here, so a later call is seen by the painter too.
   const out: { activeLagHandle: Point | null } = { activeLagHandle: null };
@@ -241,6 +248,7 @@ export function routeFrame(
       },
       glyphs,
       view,
+      text,
     );
     if (collecting) candidatesByEdge.set(edge, { candidates: scored, escapes, ends: [from, to] });
     // Not copied: a multi-link frame replaces it with a copy of phase 2's choice below, and a single

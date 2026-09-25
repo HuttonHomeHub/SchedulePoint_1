@@ -1,6 +1,7 @@
 import { optimiseLayout } from '../optimise-layout';
 import type { OptimiseLayoutResult } from '../optimise-layout';
 import { workingDayPredicate, type OptimiseRequest } from '../optimise-layout-protocol';
+import { tableMeasure } from '../row-text-layout';
 
 /**
  * `runOptimiseLayout` without a worker, for suites under jsdom, which has none. It runs the same
@@ -19,6 +20,7 @@ export function runOptimiseLayout(request: OptimiseRequest): Promise<OptimiseLay
         edges: request.edges,
         dataDate: request.dataDate,
         isWorkingDay: request.workingDays ? workingDayPredicate(request.workingDays) : undefined,
+        text: { measure: tableMeasure(request.textWidths), toggles: request.textToggles },
       },
       request.options,
     ),

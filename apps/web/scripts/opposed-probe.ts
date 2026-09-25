@@ -44,8 +44,10 @@ import {
   type Viewport,
 } from '../src/features/tsld/render/render-model';
 import { routeFrame } from '../src/features/tsld/render/route-frame';
+import { allItems } from '../src/features/tsld/render/row-text-layout';
+import { textIndexOf } from '../src/features/tsld/render/text-index';
 
-import { endSpecOf, type EndKind } from './attachment-probe';
+import { endSpecOf, moduleLayout, type EndKind } from './attachment-probe';
 
 export type OpposedKind =
   'crowded-shared-node' | 'escape-through-bar' | 'arrive-leave-unshared' | 'other';
@@ -152,10 +154,16 @@ function opposedCount(
 const shapeKey = (line: readonly Point[]): string =>
   `${line.length}:${line.map((p) => p.x.toFixed(2)).join(',')}`;
 
-export function listOpposed(scene: TsldScene, view: Viewport): OpposedPair[] {
+export function listOpposed(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): OpposedPair[] {
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const rectCache: RectCache = new Map();
-  const frame = routeFrame(scene, view, new Set(byId.keys()), byId, rectCache);
+  // The text the painter routes around (links-and-labels M2): the same layout the painter reads.
+  const text = textIndexOf(allItems(moduleLayout(scene, view, size)));
+  const frame = routeFrame(scene, view, new Set(byId.keys()), byId, rectCache, text);
   if (!frame.glyphs || !frame.workingWalk) {
     throw new Error('opposed-probe needs the refreshed, time-true, node-to-node router');
   }
@@ -213,6 +221,7 @@ export function listOpposed(scene: TsldScene, view: Viewport): OpposedPair[] {
       },
       glyphs,
       view,
+      text,
     );
     const all = [...parts.candidates, ...parts.escapes()];
     // The control: the drawn shape is one of these, or this is not the frame's phase 1.

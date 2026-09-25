@@ -59,6 +59,10 @@ writeFileSync(
   browserEntry,
   `import { scaleScene } from ${JSON.stringify(`${cwd}/src/features/perf-probe/scenes/scale-scene.ts`)};
 import { routeFrame } from ${JSON.stringify(`${cwd}/src/features/tsld/render/route-frame.ts`)};
+import { sceneRowText, tableMeasure, allItems } from ${JSON.stringify(`${cwd}/src/features/tsld/render/row-text-layout.ts`)};
+import { textIndexOf } from ${JSON.stringify(`${cwd}/src/features/tsld/render/text-index.ts`)};
+import { textWidthTable } from ${JSON.stringify(`${cwd}/src/features/tsld/render/text-width-table.ts`)};
+import { DEFAULT_VIEW_TOGGLES } from ${JSON.stringify(`${cwd}/src/features/tsld/render/view-toggles.ts`)};
 import { activityRect, rectsIntersect } from ${JSON.stringify(`${cwd}/src/features/tsld/render/geometry.ts`)};
 import { paintScene } from ${JSON.stringify(`${cwd}/src/features/tsld/render/paint.ts`)};
 import { resolveTsldPalette } from ${JSON.stringify(`${cwd}/src/features/tsld/render/palette.ts`)};
@@ -88,6 +92,8 @@ globalThis.measure = () => {
   const view = { pxPerDay: 14, originX: 40, originY: 32 };
   const vp = { x: 0, y: 0, w: 1920, h: 1080 };
   const byId = new Map(s.activities.map((a) => [a.id, a]));
+  // The text the painter routes around (links-and-labels M2), measured once, as the memo would.
+  const measureText = tableMeasure(textWidthTable(s.activities, DEFAULT_VIEW_TOGGLES));
   const times = [];
   let visible = 0;
   let lines = 0;
@@ -99,8 +105,21 @@ globalThis.measure = () => {
       const r = activityRect(a, view, scene.dataDate, cache);
       if (r && rectsIntersect(r, vp)) ids.add(a.id);
     }
+    // The text layout is the painter's, built before the edge layer: laid out outside the clock.
+    const text = textIndexOf(
+      allItems(
+        sceneRowText(
+          { ...scene, activities: s.activities.filter((a) => ids.has(a.id)) },
+          view,
+          { width: 1920, height: 1080 },
+          DEFAULT_VIEW_TOGGLES,
+          measureText,
+          cache,
+        ),
+      ),
+    );
     const t0 = performance.now();
-    const f = routeFrame(scene, view, ids, byId, cache);
+    const f = routeFrame(scene, view, ids, byId, cache, text);
     const t = performance.now() - t0;
     if (i >= 30) times.push(t);
     visible = ids.size;
@@ -141,7 +160,7 @@ const nodeEntry = join(out, 'node.ts');
 writeFileSync(
   nodeEntry,
   `export { optimiseLayout } from ${JSON.stringify(`${cwd}/src/features/tsld/render/optimise-layout.ts`)};
-export { sceneFor, unit300Layouts } from ${JSON.stringify(`${cwd}/scripts/crossing-probe.ts`)};
+export { HARNESS_TEXT, sceneFor, unit300Layouts } from ${JSON.stringify(`${cwd}/scripts/crossing-probe.ts`)};
 `,
 );
 const nodeMod = await import(pathToFileURL(build(nodeEntry, join(out, 'node.mjs'), 'node')).href);
@@ -150,7 +169,7 @@ const { scene } = nodeMod.sceneFor(unit.asap, unit.shipped);
 const tidyRuns = [];
 for (let run = 0; run < 3; run += 1) {
   const t0 = performance.now();
-  const result = nodeMod.optimiseLayout(scene);
+  const result = nodeMod.optimiseLayout({ ...scene, text: nodeMod.HARNESS_TEXT });
   tidyRuns.push({ ms: performance.now() - t0, evaluations: result.evaluations ?? null });
 }
 

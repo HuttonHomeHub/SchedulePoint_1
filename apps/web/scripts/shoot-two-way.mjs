@@ -84,7 +84,8 @@ for (const fx of probe.fixtures(FIXTURE)) {
   if (fx.name !== 'small-17' && fx.name !== 'Unit 300') continue;
   const base = { pxPerDay: PX_PER_DAY, originX: 40, originY: 32 };
   const byId = new Map(fx.scene.activities.map((a) => [a.id, a]));
-  const frame = probe.routeFrame(fx.scene, base, new Set(byId.keys()), byId, new Map());
+  // The M0 prototype's pictures, taken before the router read text: routed text-blind, as they were.
+  const frame = probe.routeFrame(fx.scene, base, new Set(byId.keys()), byId, new Map(), null);
   const split = probe.splitTwoWayTracks(
     fx.scene,
     base,

@@ -4,6 +4,8 @@ import {
   type OptimiseLayoutResult,
 } from './optimise-layout';
 import type { RenderActivity, RenderEdge } from './render-model';
+import { tableMeasure } from './row-text-layout';
+import type { TsldViewToggles } from './view-toggles';
 
 /**
  * **The optimiser's worker boundary** (NetPoint-layout M4-T3, FC-N2 (b)).
@@ -30,6 +32,14 @@ export interface OptimiseRequest {
   dataDate: string;
   /** Null when the plan has no calendar loaded: every day is worked, as the painter assumes. */
   workingDays: WorkingDaySpan | null;
+  /**
+   * The text widths the routes read (links-and-labels M2-T3, spec §4.4): `[key, width]`, measured on
+   * the main thread by the painter's memo (`text-width-table.ts`). A key missing here fails the
+   * search rather than routing with a guessed width.
+   */
+  textWidths: [string, number][];
+  /** The text toggles the planner is looking at (spec D-7). */
+  textToggles: TsldViewToggles;
   options: Omit<OptimiseLayoutOptions, 'onProgress'>;
 }
 
@@ -72,6 +82,7 @@ export function handleOptimiseRequest(
         edges: request.edges,
         dataDate: request.dataDate,
         isWorkingDay: request.workingDays ? workingDayPredicate(request.workingDays) : undefined,
+        text: { measure: tableMeasure(request.textWidths), toggles: request.textToggles },
       },
       {
         ...request.options,
