@@ -167,6 +167,25 @@ The gate pass left three questions only the product owner could settle, and all 
   tie's waiting time; the successor's feasible-window cue (ADR-0148) is the channel for drift. #391
   item 5 is accepted scope, no longer pending.
 
+## Edge cues clear of the node (2026-09-25, after `web-v0.149.1`)
+
+The product owner reported against the release: "the constraint and conflict marks are now obscured
+pretty much by the nodes". Rendered, all three edge cues were inside a node's disc: the constraint
+pin (7 x 5, hanging from the bar's top) sat entirely within it, the conflict triangle (drawn from the
+bar's start, 1 px in) sat within it, and the over-allocation histogram overlapped the finish node.
+Each was placed against the bar's own edge when the bar was 18 px with no nodes, and M2 centred a
+15 px node on exactly those edges without re-asking where the cues go. They were still painted, on
+top of the node, so no test failed.
+
+On a bar that draws nodes the three now sit clear of `NODE_REACH_PX` (`edgeCuePlacement` in
+`paint.ts`): the pin hangs above its node, 1 px clear of the rim, since the node is what the
+constraint pins; the conflict triangle sits on the bar just inboard of the node at the breached end
+(centred on the bar where the bar is too short to hold it between its nodes); the histogram is
+right-anchored inboard of the finish node. A milestone, an LOE, a summary and the legacy path keep
+their exact positions. `paint.test.ts` asserts the property geometrically (no cue vertex within a
+node's reach, both constraint ends, both conflict reasons, histogram on) and was verified red
+against the old placement. The golden log moved by the 14 predicted lines in the maximal scene only.
+
 ## Parity
 
 The CPM engine is not imported, no API changes, and no migration runs. No route or lane moved

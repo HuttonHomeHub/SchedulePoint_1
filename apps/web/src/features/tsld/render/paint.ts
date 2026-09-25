@@ -677,8 +677,9 @@ function drawLagHandles(
 }
 
 /**
- * A small downward triangular pin sitting just above a bar's constrained edge (its tip
- * touching the top of the bar). A **shape** cue — not colour — so a set constraint reads
+ * A small downward triangular pin sitting just above a bar's constrained edge, its tip at `tipY`:
+ * the top of the bar, or — where the edge carries a node — just clear of the node's rim (see the
+ * caller, and {@link edgeCuePlacement}). A **shape** cue — not colour — so a set constraint reads
  * without relying on hue (WCAG 1.4.1); the panel's legend names it, and the parallel
  * listbox spells the constraint out for AT. Under the visual refresh (`outlined`, ADR-0052
  * M4) it gains the same foreground outline the other three badges already carry — a pure
@@ -687,18 +688,18 @@ function drawLagHandles(
 function drawConstraintPin(
   ctx: Ctx2D,
   edgeX: number,
-  barTop: number,
+  tipY: number,
   palette: TsldPalette,
   outlined = false,
 ): void {
   const ax = edgeX - CONSTRAINT_PIN_W / 2;
   const bx = edgeX + CONSTRAINT_PIN_W / 2;
-  const topY = barTop - CONSTRAINT_PIN_H;
+  const topY = tipY - CONSTRAINT_PIN_H;
   ctx.fillStyle = palette.edge;
   ctx.beginPath();
   ctx.moveTo(ax, topY);
   ctx.lineTo(bx, topY);
-  ctx.lineTo(edgeX, barTop);
+  ctx.lineTo(edgeX, tipY);
   ctx.fill();
   if (outlined) {
     // Traced over the same triangle (closed manually — the Ctx2D surface has no closePath),
@@ -708,7 +709,7 @@ function drawConstraintPin(
     ctx.beginPath();
     ctx.moveTo(ax, topY);
     ctx.lineTo(bx, topY);
-    ctx.lineTo(edgeX, barTop);
+    ctx.lineTo(edgeX, tipY);
     ctx.lineTo(ax, topY);
     ctx.stroke();
   }
@@ -732,17 +733,18 @@ const CONFLICT_BADGE_H = 7;
  * added `LATER_THAN_BOUND`, whose test is `placedFinish > constraintCeiling`, so its breach is at
  * the finish; marking the start pointed the planner at the end of the bar that is not the problem.
  *
- * It sits INSIDE the bar (`barTop + 1` downwards) while the constraint pin sits ABOVE it
- * (`barTop - CONSTRAINT_PIN_H`), so the two never collide even when both mark the same edge —
- * which is the common shape for this reason, since the bound that was breached is usually drawn as
- * a pin at that very edge.
+ * It sits ON the bar (a bar without nodes: `barTop + 1` downwards; a bar with nodes: centred on
+ * the bar, inboard of the node) while the constraint pin sits ABOVE it, so the two never collide
+ * even when both mark the same edge — which is the common shape for this reason, since the bound
+ * that was breached is usually drawn as a pin at that very edge. Where to draw it is
+ * {@link edgeCuePlacement}'s decision; this only draws.
  */
-function drawConflictBadge(ctx: Ctx2D, startX: number, barTop: number, palette: TsldPalette): void {
-  const ax = startX + 1;
-  const ay = barTop + CONFLICT_BADGE_H + 1;
-  const bx = startX + 1 + CONFLICT_BADGE_W;
-  const cx = startX + 1 + CONFLICT_BADGE_W / 2;
-  const cy = barTop + 1;
+function drawConflictBadge(ctx: Ctx2D, leftX: number, apexY: number, palette: TsldPalette): void {
+  const ax = leftX;
+  const ay = apexY + CONFLICT_BADGE_H;
+  const bx = leftX + CONFLICT_BADGE_W;
+  const cx = leftX + CONFLICT_BADGE_W / 2;
+  const cy = apexY;
   ctx.fillStyle = palette.conflict;
   ctx.beginPath();
   ctx.moveTo(ax, ay);
@@ -855,6 +857,76 @@ function drawOverAllocationBadge(
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     x += w + gap;
   }
+}
+
+/** Clearance (px) between a node's rim and a cue placed beside it. */
+const NODE_CUE_GAP_PX = 1;
+
+/** Where a bar's edge cues sit, in screen px. */
+interface EdgeCuePlacement {
+  /** The constraint pin's tip y (the pin hangs above it). */
+  pinTipY: number;
+  /** The conflict triangle's left x and apex y. */
+  conflict: { leftX: number; apexY: number };
+  /** The right x the over-allocation histogram is anchored to. */
+  overAllocRightX: number;
+}
+
+/**
+ * **Where the constraint pin, the conflict triangle and the over-allocation histogram sit, and
+ * why none of them is ever inside a node** (the product owner's report against `web-v0.149.1`,
+ * 2026-09-25: "the constraint and conflict marks are now obscured pretty much by the nodes").
+ *
+ * The three cues were placed against the bar's own edges when the bar was 18 px tall and had no
+ * nodes. NetPoint grammar M2 put a 15 px node on each end of a 6 px bar, centred on exactly the
+ * point every one of these cues was anchored to, and nothing re-asked where they should go: the pin
+ * (7 × 5, hanging 5 px above the bar's top) now falls entirely inside the node's disc, the conflict
+ * triangle (drawn from the bar's start, 1 px in) sits inside the disc too, and the histogram
+ * overlaps the finish node's upper-left quarter. Each was still drawn on top of the node, so no
+ * test failed — the cue was present and merely unreadable, reading as a smudge on the ring.
+ *
+ * So, **for a bar that draws nodes**, each cue moves clear of {@link NODE_REACH_PX}:
+ *
+ * - the **pin** hangs above its node, its tip {@link NODE_CUE_GAP_PX} above the rim — the node is
+ *   what the constraint pins, so the pin marks it rather than the bar;
+ * - the **conflict triangle** sits on the bar, centred on its centre-line, just inboard of the node
+ *   at the breached end (the start for `EARLIER_THAN_LOGIC`, the finish for `LATER_THAN_BOUND`) —
+ *   on the line the conflict is about, and below the pin, so the two never meet at a shared edge;
+ *   where the bar is too short to hold it between its nodes it is centred on the bar instead;
+ * - the **histogram** is right-anchored inboard of the finish node rather than on it.
+ *
+ * A bar without nodes — the legacy path, a milestone, an LOE or a summary — returns exactly the
+ * positions the painter used before, so those glyphs and the golden log for them do not move.
+ */
+function edgeCuePlacement(
+  activity: RenderActivity,
+  rect: Rect,
+  hasNodes: boolean,
+): EdgeCuePlacement {
+  const late = activity.visualConflictReason === 'LATER_THAN_BOUND';
+  if (!hasNodes) {
+    return {
+      pinTipY: rect.y,
+      conflict: {
+        leftX: (late ? Math.max(rect.x, rect.x + rect.w - CONFLICT_BADGE_W - 2) : rect.x) + 1,
+        apexY: rect.y + 1,
+      },
+      overAllocRightX: rect.x + rect.w,
+    };
+  }
+  const cy = rect.y + rect.h / 2;
+  const inset = NODE_REACH_PX + NODE_CUE_GAP_PX;
+  const fits = rect.w >= 2 * inset + CONFLICT_BADGE_W;
+  const leftX = !fits
+    ? rect.x + rect.w / 2 - CONFLICT_BADGE_W / 2
+    : late
+      ? rect.x + rect.w - inset - CONFLICT_BADGE_W
+      : rect.x + inset;
+  return {
+    pinTipY: cy - inset,
+    conflict: { leftX, apexY: cy - CONFLICT_BADGE_H / 2 },
+    overAllocRightX: rect.x + rect.w - inset,
+  };
 }
 
 /** The criticality-paired inside ink for a bar — the lens `barInk` override when present, else
@@ -1959,6 +2031,13 @@ export function paintScene(
 
   for (const [id, rect] of rects) {
     const activity = byId.get(id)!;
+    // Where each edge cue sits: clear of the node on a bar that draws them, exactly where it always
+    // was on one that does not (`edgeCuePlacement`, the product owner's 2026-09-25 report).
+    const cues = edgeCuePlacement(
+      activity,
+      rect,
+      scene.visualRefresh === true && barGlyphKind(activity.type) === 'bar',
+    );
     // A set date constraint pins the bar's start or finish edge — mark that edge (a milestone,
     // having no width, is marked at its centre). A cheap per-bar shape, drawn only for the
     // constrained + visible activities, so it stays within the draw budget (ADR-0026).
@@ -1968,7 +2047,7 @@ export function paintScene(
         : activity.constraint === 'finish'
           ? rect.x + rect.w
           : rect.x;
-      drawConstraintPin(ctx, edgeX, rect.y, palette, scene.visualRefresh === true);
+      drawConstraintPin(ctx, edgeX, cues.pinTipY, palette, scene.visualRefresh === true);
     }
     // Placement conflict (ADR-0033): never auto-moved, only flagged. The mapping seam gates this to
     // the placed basis, so a Late-overlay bar never shows it.
@@ -1981,13 +2060,9 @@ export function paintScene(
     // constraint pin sitting at the other.
     //
     // Clamped to the bar's own start so a narrow bar or a milestone keeps its badge on the shape
-    // rather than hanging it off the left edge.
+    // rather than hanging it off the left edge (`edgeCuePlacement` owns the arithmetic).
     if (activity.visualConflict) {
-      const badgeX =
-        activity.visualConflictReason === 'LATER_THAN_BOUND'
-          ? Math.max(rect.x, rect.x + rect.w - CONFLICT_BADGE_W - 2)
-          : rect.x;
-      drawConflictBadge(ctx, badgeX, rect.y, palette);
+      drawConflictBadge(ctx, cues.conflict.leftX, cues.conflict.apexY, palette);
     }
     // Same-lane time-overlap (TECH_DEBT #24c): a manual lane drop left this bar overlapping another
     // in its lane. A stacked-squares badge above the bar's centre — width-independent (so a milestone
@@ -2004,7 +2079,7 @@ export function paintScene(
     // set-membership check in this single pass (no extra repaint, ADR-0026). Absent `flaggedIds` ⇒ this
     // is a no-op ⇒ byte-for-byte parity.
     if (scene.flaggedIds?.has(id)) {
-      drawOverAllocationBadge(ctx, rect.x + rect.w, rect.y, palette);
+      drawOverAllocationBadge(ctx, cues.overAllocRightX, rect.y, palette);
     }
   }
 

@@ -2464,16 +2464,23 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
      * that was overrun sitting at the other end.
      *
      * The bar here is `rect.x = 72`, `rect.w = 48` (the same geometry the selection-ring case below
-     * pins), so the triangle's base-left lands at 73 for a start mark and at 113 for a finish one.
+     * pins). Without nodes (the legacy path) the triangle's base-left lands at 73 for a start mark
+     * and at 113 for a finish one. With nodes it lands just inboard of the node at the breached
+     * end: `NODE_REACH_PX + 1 = 10` in from each end, so 82 for a start mark and
+     * `120 - 10 - CONFLICT_BADGE_W = 104` for a finish one (see the node-clearance case below).
      *
      * Verified red against the pre-fix unconditional `rect.x`, which put both at 73.
      */
-    const badgeBaseX = (reason: 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND'): number => {
+    const badgeBaseX = (
+      reason: 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND',
+      visualRefresh: boolean,
+    ): number => {
       const ctx = mockCtx();
       paintScene(
         ctx,
         refreshScene({
           activities: [task({ visualConflict: true, visualConflictReason: reason })],
+          visualRefresh,
         }),
         VIEW,
         SIZE,
@@ -2483,8 +2490,10 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       if (!move) throw new Error('no conflict badge was drawn');
       return move[0];
     };
-    expect(badgeBaseX('EARLIER_THAN_LOGIC')).toBe(73);
-    expect(badgeBaseX('LATER_THAN_BOUND')).toBe(113);
+    expect(badgeBaseX('EARLIER_THAN_LOGIC', false)).toBe(73);
+    expect(badgeBaseX('LATER_THAN_BOUND', false)).toBe(113);
+    expect(badgeBaseX('EARLIER_THAN_LOGIC', true)).toBe(82);
+    expect(badgeBaseX('LATER_THAN_BOUND', true)).toBe(104);
   });
 
   it('keeps an overrun bound’s badge ON a bar narrower than the badge itself', () => {
@@ -2501,26 +2510,85 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
      * shape, over whatever the neighbouring lane happens to be drawing.
      *
      * Verified red against the unclamped expression.
+     *
+     * **A bar with nodes takes a different rule and it is the same promise.** There the badge sits
+     * between the nodes, and a bar too short to hold it there has it centred on the bar instead:
+     * `61 + 2 / 2 - CONFLICT_BADGE_W / 2 = 59`, so the triangle spans 59..65 over a bar at 61..63.
      */
-    const ctx = mockCtx();
-    paintScene(
-      ctx,
-      refreshScene({
-        activities: [
-          task({
-            earlyFinish: '2026-01-02',
-            visualConflict: true,
-            visualConflictReason: 'LATER_THAN_BOUND',
-          }),
-        ],
-      }),
-      { pxPerDay: 1, originX: 60, originY: 40 },
-      SIZE,
-      PALETTE,
-    );
-    const move = sceneMoveCalls(ctx).find(([x]) => x !== 0);
-    if (!move) throw new Error('no conflict badge was drawn');
-    expect(move[0]).toBe(62);
+    const baseLeft = (visualRefresh: boolean): number => {
+      const ctx = mockCtx();
+      paintScene(
+        ctx,
+        refreshScene({
+          activities: [
+            task({
+              earlyFinish: '2026-01-02',
+              visualConflict: true,
+              visualConflictReason: 'LATER_THAN_BOUND',
+            }),
+          ],
+          visualRefresh,
+        }),
+        { pxPerDay: 1, originX: 60, originY: 40 },
+        SIZE,
+        PALETTE,
+      );
+      const move = sceneMoveCalls(ctx).find(([x]) => x !== 0);
+      if (!move) throw new Error('no conflict badge was drawn');
+      return move[0];
+    };
+    expect(baseLeft(false)).toBe(62);
+    expect(baseLeft(true)).toBe(59);
+  });
+
+  it('draws no edge cue inside a node’s reach (the product owner’s 2026-09-25 report)', () => {
+    /**
+     * `web-v0.149.1` drew the constraint pin, the conflict triangle and the over-allocation
+     * histogram where the bar had always put them — against its own edges — and NetPoint grammar
+     * M2's 15 px nodes sit centred on exactly those edges. Every cue was still painted, on top of
+     * the node, so nothing failed; each read as a smudge on the ring instead. The product owner:
+     * "the constraint and conflict marks are now obscured pretty much by the nodes".
+     *
+     * So the property asserted is geometric, not a list of coordinates: every vertex of every cue
+     * lies outside the node's disc (`NODE_REACH_PX` from each node's centre). Checked for both
+     * constraint ends and both conflict reasons, with the histogram on, against the recording
+     * context's path vertices and `fillRect` corners.
+     *
+     * Verified red against the pre-fix placement (pin tip on the bar's top, triangle at `rect.x + 1`,
+     * histogram right-anchored on the finish edge), which puts all three inside a disc.
+     */
+    const variants: Partial<RenderActivity>[] = [
+      { constraint: 'start', visualConflict: true, visualConflictReason: 'EARLIER_THAN_LOGIC' },
+      { constraint: 'finish', visualConflict: true, visualConflictReason: 'LATER_THAN_BOUND' },
+    ];
+    for (const over of variants) {
+      const ctx = mockCtx();
+      paintScene(
+        ctx,
+        refreshScene({ activities: [task(over)], flaggedIds: new Set(['t']) }),
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      // `task()` is rect.x 72, w 48; its centre-line is the lane's bar centre.
+      const cy = BAR_Y + BAR_HEIGHT / 2;
+      const nodes = [
+        { x: 72, y: cy },
+        { x: 120, y: cy },
+      ];
+      const points: [number, number][] = [
+        ...sceneMoveCalls(ctx),
+        ...(ctx.lineTo.mock.calls as [number, number][]),
+      ];
+      // The histogram's three mini-bars (2 px wide, the only 2-px fillRects in this scene).
+      for (const [x, y, w, h] of ctx.fillRect.mock.calls as [number, number, number, number][]) {
+        if (w === 2) points.push([x, y], [x + w, y], [x, y + h], [x + w, y + h]);
+      }
+      const inside = points.filter(([x, y]) =>
+        nodes.some((n) => Math.hypot(x - n.x, y - n.y) < NODE_REACH_PX),
+      );
+      expect(inside, JSON.stringify(over)).toEqual([]);
+    }
   });
 
   it('rounds the selection ring with the bar (roundRect path) and keeps the square fallback', () => {

@@ -11755,6 +11755,17 @@ Unticking **Restore the SchedulePoint layout** re-runs the dry-run. The checkbox
 indication while that happens; the report region updates and announces when it settles. Suggested,
 not blocking: mark the checkbox `aria-busy` (or shade it with a reason) during the re-run.
 
+### 392. A milestone's constraint pin sits on its own bold name
+
+**Status:** open · **Verified:** 2026-09-25 · **Raised:** 2026-09-25 (rendered while fixing the
+edge cues the nodes hid, ADR-0157 "Edge cues clear of the node") · **Size:** S · **Owner:** web
+
+A milestone draws no nodes, so the 2026-09-25 fix leaves its constraint pin where it was: tip on the
+triangle's top, centred on it. The milestone's bold name (spec G7) is centred on the same x one row
+up, so the pin prints over the middle of the name. Nodes did not cause this, and the pin is still
+readable, but it is the same "a cue drawn under text" shape. A fix wants a decision (pin beside the
+triangle, or the name clear of it) rather than a constant.
+
 ### 391. The NetPoint-grammar gate pass's non-blocking findings
 
 **Status:** open · **Verified:** 2026-09-25 · **Raised:** 2026-09-24 (NetPoint grammar M6 reviews:
