@@ -100,7 +100,7 @@ separates that scene, so the track pass has nothing to do there, as the spec pre
 
 200 seeded shuffles of `scene.edges` draw identical lines on all four fixtures at 4 px/day.
 
-## Two departures from the plan
+## Three departures from the plan
 
 1. **The pass runs after `packGutterChannels`, not before it.** The plan put it before. The first
    cut did that and gained crossings on Unit 300: where two halves' gutter runs shared a boundary y,
@@ -113,6 +113,11 @@ separates that scene, so the track pass has nothing to do there, as the spec pre
    ends on a lane centre crosses no lane there, so `obstructions` cannot see it pass beside a node;
    moved δ closer, it can reach one. The guard refuses a move that brings a line within reach of a
    node, other than its own two activities', that it was not within reach of before. After it, 14 → 14.
+
+3. **M2 and M3 ship in one release.** The plan gave M3 its own slice and release, independent of
+   M2's cost outcome. Both landed on the same branch before either was released, so they go out
+   together, each with its own changeset; M3 can still be withdrawn alone, since M2 does not depend
+   on it.
 
 ## Cost: FC-Q1 misses on `routeFrame`
 
@@ -176,7 +181,11 @@ evaluations at 13.7 ms each, deterministic.
 - The derivation test: `PORT_OFFSET_PX` inside the window its bounds derive from the constants.
 - The golden log is byte-identical: the maximal scene has no residue track.
 - Journey: `e2e-netpoint-grammar/links.spec.ts`, "two links on one track at a crowded node are drawn
-  apart".
+  apart": green with the pass, red with it off, the suite's other ten cases unchanged. It failed on
+  its first run, twice, and neither failure was the product. The fixture came from a search whose
+  bars ended a working day late, so its crowded node did not exist in the app; and the detector
+  judged pixels composited over the ground, which a 1 px line on a whole-pixel x, drawn as two
+  half-alpha columns, never matches.
 
 ## Pictures
 
