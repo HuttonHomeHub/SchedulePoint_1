@@ -455,8 +455,9 @@ export function routeOrthogonal(
  * as short as the geometry allows. It is the last structured attempt and it is unconditional: if
  * the gutter itself is unusable the line is still drawn here rather than searched for, because
  * bounded work is the contract and an unbounded search on the paint path is how a draw budget dies.
- * {@link routeResidue} counts the cases where it does not clear, so a shortfall is explainable
- * rather than mysterious.
+ * The cases where it does not clear are counted by the measurement harnesses (`measure-occlusion.mjs`),
+ * so a shortfall is explainable rather than mysterious. (This read `{@link routeResidue}` until
+ * node-to-node links M0: no such function exists.)
  */
 function gutterRoute(
   from: Point,

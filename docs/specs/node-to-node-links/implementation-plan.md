@@ -1,7 +1,7 @@
 # Implementation Plan: Node-to-node link routing on the TSLD canvas
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved 2026-09-25 (product owner; CQ-1 answered "+10 %"). Built under this plan.
 - **Owner:** feature-analyst draft; build owner to be named on approval
 
 ## Breakdown

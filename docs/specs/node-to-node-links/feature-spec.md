@@ -1,6 +1,6 @@
 # Feature Spec: Node-to-node link routing on the TSLD canvas
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved 2026-09-25 (product owner; CQ-1 answered "+10 %"). Built under this plan.
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-09-25
 - **Tracking issue / epic:** none yet
