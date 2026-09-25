@@ -49,7 +49,9 @@ import {
   activityRect,
   ARROWHEAD_ROUTED_PX,
   barGlyphKind,
+  ELAPSED_DAY_WALK,
   isMilestone,
+  lagAnchorPoints,
   LANE_HEIGHT,
   LINK_ELBOW_RADIUS,
   NODE_REACH_PX,
@@ -67,6 +69,7 @@ import {
   linkPaths,
   PALETTE,
   recordingCtx,
+  type RecordedPath,
   sceneFor,
   smallPlanLayouts,
   unit300Layouts,
@@ -167,7 +170,61 @@ export function runsOf(line: readonly Point[]): { runs: Run[]; diagonal: number 
 
 const OPPOSITE: Record<Dir, Dir> = { E: 'W', W: 'E', N: 'S', S: 'N' };
 
-export type Unattached = 'direction' | 'stub';
+export type Unattached = 'direction' | 'stub' | 'detached';
+
+/**
+ * **The draft amended judge's end resolution** (links-and-labels M0-T3, spec §4.7, CQ-2). The shipped
+ * judge classifies an end by where its POINT is, which is right while every end sits on its anchor
+ * and wrong the moment one is offset: an end `PORT_OFFSET_PX` beside a start node is strictly inside
+ * the bar, so `endSpecOf` calls it an embed. This one is told the link's real anchor (from
+ * `lagAnchorPoints`, the painter's own anchor function) and accepts the end only when it is the
+ * anchor, or **exactly** `portOffset` from a task-node anchor, perpendicular to its end segment
+ * (a vertical segment, so a horizontal offset at the anchor's y). Exactly, not "within": a judge
+ * that accepted within δ would pass a drifting end. Anything else is `detached`.
+ *
+ * Draft: M3-T2 makes it the probe's judge. Until then it runs only when asked (`ReadOptions.judge`).
+ */
+export function resolveEndAmended(
+  end: Point,
+  ports: readonly { point: Point; spec: EndSpec }[],
+  endSegmentVertical: boolean,
+  portOffset: number,
+): EndSpec | 'detached' {
+  for (const { point, spec } of ports) {
+    if (Math.abs(end.x - point.x) < 0.01 && Math.abs(end.y - point.y) < 0.01) return spec;
+  }
+  for (const { point, spec } of ports) {
+    const taskNode = spec.kind === 'start-node' || spec.kind === 'finish-node';
+    if (
+      taskNode &&
+      endSegmentVertical &&
+      Math.abs(end.y - point.y) < 0.01 &&
+      Math.abs(Math.abs(end.x - point.x) - portOffset) < 0.01
+    ) {
+      return spec;
+    }
+  }
+  return 'detached';
+}
+
+/**
+ * The places a link end may sit for one anchor, each with the spec `endSpecOf` gives it. One, except
+ * a milestone's two (spec D-5 of node-to-node links): its side anchor and the glyph's centre, where a
+ * vertical joins it. Computed here from the rect, not imported from `link-ports.ts`, so the probe and
+ * the router cannot agree by sharing a mistake (ADR-0124).
+ */
+export function portsOf(
+  activity: RenderActivity,
+  anchor: Point,
+  rect: { x: number; y: number; w: number; h: number },
+): { point: Point; spec: EndSpec }[] {
+  const ports = [{ point: anchor, spec: endSpecOf(activity, anchor, rect) }];
+  if (isMilestone(activity.type)) {
+    const centre = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    ports.push({ point: centre, spec: endSpecOf(activity, centre, rect) });
+  }
+  return ports;
+}
 
 /**
  * Judge one link's two ends (spec §4.9). Returns the reason each end is unattached, or null.
@@ -275,6 +332,12 @@ export interface AttachmentReading {
   examples: string[];
   falseJunctions: number;
   falseJunctionLinks: number;
+  /**
+   * The end kind each end was judged as (links-and-labels M0-T3): the point's own kind under the
+   * shipped judge, the resolved port's kind (or `detached`) under the amended one. This is how an
+   * offset end being misread as an embed is SEEN rather than inferred from a verdict.
+   */
+  endKinds: Record<string, number>;
   overlaps: number;
   /** Link pairs running opposite ways along one track, shared end or not. */
   opposed: number;
@@ -304,6 +367,22 @@ export interface AttachmentReading {
   fingerprint: string;
 }
 
+/** Harness-only options (links-and-labels M0-T3). Absent, the reading is exactly the shipped one. */
+export interface ReadOptions {
+  /**
+   * Move the routed lines after the painter control and before every metric, so a prototype can be
+   * judged without the product drawing it. The control still holds the ROUTED lines to the painter;
+   * everything after it (ends, junctions, overlaps, opposed, text, crossings, occlusion) reads the
+   * transformed set, and `fingerprint` hashes it.
+   */
+  transform?: (
+    lines: Map<RenderEdge, Point[]>,
+    frame: ReturnType<typeof routeFrame>,
+  ) => Map<RenderEdge, Point[]>;
+  /** `amended`: the draft CQ-2 judge (`resolveEndAmended`, junction exemption by anchor id). */
+  judge?: { kind: 'shipped' } | { kind: 'amended'; portOffset: number };
+}
+
 /**
  * Read one scene at one framing. The size must hold the whole plan, so nothing is culled and the
  * painted link count can be held to the routed count exactly.
@@ -312,6 +391,7 @@ export function readAttachment(
   scene: TsldScene,
   view: Viewport,
   size: { width: number; height: number },
+  options: ReadOptions = {},
 ): AttachmentReading {
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const visible = new Set(byId.keys());
@@ -348,8 +428,35 @@ export function readAttachment(
         'to measure a copy of the router.',
     );
   }
-  const { crossings, diagonal } = countCrossings(painted);
-  const occlusion = countOcclusions(painted, scene, view);
+  const judged = options.transform ? options.transform(new Map(frame.lines), frame) : frame.lines;
+  const measured: RecordedPath[] = options.transform
+    ? [...judged.values()].map((pts) => ({
+        pts: pts.map((p) => ({ x: p.x, y: p.y })),
+        batch: 0,
+        flush: 'stroke',
+        strokeStyle: '',
+        fillStyle: '',
+        lineWidth: 1,
+        dashed: false,
+      }))
+    : painted;
+  const { crossings, diagonal } = countCrossings(measured);
+  const occlusion = countOcclusions(measured, scene, view);
+  const amended = options.judge?.kind === 'amended' ? options.judge : null;
+  const anchorsOf = (edge: RenderEdge): { pred: Point; succ: Point } | null => {
+    const walk = edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : frame.workingWalk;
+    if (!walk) throw new Error('the amended judge needs the time-true router (a working walk)');
+    return lagAnchorPoints(
+      byId.get(edge.predecessorId)!,
+      byId.get(edge.successorId)!,
+      edge.type,
+      edge.lagDays ?? 0,
+      view,
+      scene.dataDate,
+      walk,
+      rectCache,
+    );
+  };
 
   // Node centres, for false junctions: both ends of every bar-glyph activity.
   const nodeCentres: { id: string; point: Point }[] = [];
@@ -370,6 +477,7 @@ export function readAttachment(
   let unattachedLinks = 0;
   let falseJunctions = 0;
   let falseJunctionLinks = 0;
+  const endKinds: Record<string, number> = {};
   let bends = 0;
   const entries: { edge: RenderEdge; line: Point[]; ends: [Point, Point] }[] = [];
   const digest = createHash('sha256');
@@ -381,7 +489,7 @@ export function readAttachment(
     if (!predsOf.has(e.successorId)) predsOf.set(e.successorId, new Set());
     predsOf.get(e.successorId)!.add(e.predecessorId);
   }
-  for (const [edge, line] of frame.lines) {
+  for (const [edge, line] of judged) {
     for (const pt of line) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
     digest.update('|');
     const pred = byId.get(edge.predecessorId)!;
@@ -393,12 +501,35 @@ export function readAttachment(
     entries.push({ edge, line, ends: [from, to] });
     const { runs } = runsOf(line);
     bends += Math.max(0, runs.length - 1);
+    const anchors = amended ? anchorsOf(edge) : null;
+    if (amended && !anchors) throw new Error(`no anchors for a drawn link ${edge.dependencyId}`);
+    // The amended judge's own-node exemption is by the ANCHOR, never the line's end point, so an
+    // offset end does not make its co-located neighbour a false junction (spec §4.7).
+    const predPorts = anchors && predRect ? portsOf(pred, anchors.pred, predRect) : null;
+    const succPorts = anchors && succRect ? portsOf(succ, anchors.succ, succRect) : null;
+    const exemptPoints =
+      predPorts && succPorts ? [...predPorts, ...succPorts].map((p) => p.point) : [from, to];
     if (predRect && succRect) {
-      const verdict = judgeEnds(
+      const vertical = (a: Point, b: Point): boolean => Math.abs(a.x - b.x) < 1e-6;
+      const predSpec = predPorts
+        ? resolveEndAmended(from, predPorts, vertical(from, line[1] ?? from), amended!.portOffset)
+        : endSpecOf(pred, from, predRect);
+      const succSpec = succPorts
+        ? resolveEndAmended(to, succPorts, vertical(line.at(-2) ?? to, to), amended!.portOffset)
+        : endSpecOf(succ, to, succRect);
+      for (const spec of [predSpec, succSpec]) {
+        const k = spec === 'detached' ? 'detached' : spec.kind;
+        endKinds[k] = (endKinds[k] ?? 0) + 1;
+      }
+      const judgedEnds = judgeEnds(
         line,
-        endSpecOf(pred, from, predRect),
-        endSpecOf(succ, to, succRect),
+        predSpec === 'detached' ? endSpecOf(pred, from, predRect) : predSpec,
+        succSpec === 'detached' ? endSpecOf(succ, to, succRect) : succSpec,
       );
+      const verdict = {
+        pred: predSpec === 'detached' ? ('detached' as const) : judgedEnds.pred,
+        succ: succSpec === 'detached' ? ('detached' as const) : judgedEnds.succ,
+      };
       const bad = [
         verdict.pred ? `pred:${verdict.pred}` : null,
         verdict.succ ? `succ:${verdict.succ}` : null,
@@ -421,12 +552,7 @@ export function readAttachment(
     ]);
     for (const { id, point: c } of nodeCentres) {
       if (siblings.has(id)) continue;
-      if (
-        Math.hypot(c.x - from.x, c.y - from.y) < 0.5 ||
-        Math.hypot(c.x - to.x, c.y - to.y) < 0.5
-      ) {
-        continue;
-      }
+      if (exemptPoints.some((e) => Math.hypot(c.x - e.x, c.y - e.y) < 0.5)) continue;
       for (let i = 1; i < line.length; i += 1) {
         if (distToSegment(c, line[i - 1]!, line[i]!) < NODE_REACH_PX) {
           hit += 1;
@@ -564,7 +690,7 @@ export function readAttachment(
 
   return {
     edges: scene.edges.length,
-    links: frame.lines.size,
+    links: judged.size,
     painted: painted.length,
     unattachedEnds,
     unattachedLinks,
@@ -572,6 +698,7 @@ export function readAttachment(
     examples,
     falseJunctions,
     falseJunctionLinks,
+    endKinds,
     overlaps: overlapping.size,
     opposed: opposing.size,
     opposedByRole,
@@ -582,7 +709,7 @@ export function readAttachment(
     gapLabels,
     lagPlates,
     crossings,
-    crossingsPerLink: painted.length === 0 ? 0 : crossings / painted.length,
+    crossingsPerLink: measured.length === 0 ? 0 : crossings / measured.length,
     foreignOccludedLinks: occlusion.foreignLinks,
     diagonal,
     bends,
@@ -895,6 +1022,50 @@ export function selfTest(): void {
     }
   }
   selfTestTextKinds();
+  selfTestAmendedJudge();
+}
+
+/**
+ * The draft amended judge's cases (links-and-labels M0-T3, plan M3-T2's three). The offset is 4,
+ * inside the derived [3.25, 4.5] window. Each names the judge it would pass against.
+ */
+function selfTestAmendedJudge(): void {
+  const delta = 4;
+  const anchor: Point = { x: 100, y: 50 };
+  const start: EndSpec = { kind: 'start-node', reach: NODE_REACH_PX, allowed: WNS };
+  const embed: EndSpec = { kind: 'embed', reach: 2, allowed: NS };
+  const cases: { name: string; end: Point; spec: EndSpec; vertical: boolean; want: string }[] = [
+    // On the anchor: today's verdicts must reproduce. Fails if the anchor case is dropped.
+    { name: 'on the anchor', end: anchor, spec: start, vertical: false, want: 'start-node' },
+    // Exactly δ beside a task node, vertical end segment: attached (CQ-2). Fails if the offset is
+    // not accepted at all.
+    { name: 'δ attached', end: { x: 104, y: 50 }, spec: start, vertical: true, want: 'start-node' },
+    // δ + 1: a drifting end. Fails against a judge that accepts "within δ + 1" or "inside the disc".
+    { name: 'δ + 1', end: { x: 105, y: 50 }, spec: start, vertical: true, want: 'detached' },
+    // δ − 1: equally a drift. Fails against a judge that accepts "within δ".
+    { name: 'δ − 1', end: { x: 103, y: 50 }, spec: start, vertical: true, want: 'detached' },
+    // Offset at an embed: an embed's dot has radius 2 and cannot absorb it. Fails if the offset rule
+    // is applied to any anchor rather than to task nodes.
+    { name: 'embed offset', end: { x: 104, y: 50 }, spec: embed, vertical: true, want: 'detached' },
+    // Offset along the segment rather than across it: a horizontal end segment offset in x is a
+    // shorter leg, not a parallel track. Fails if perpendicularity is not checked.
+    {
+      name: 'not perpendicular',
+      end: { x: 104, y: 50 },
+      spec: start,
+      vertical: false,
+      want: 'detached',
+    },
+  ];
+  for (const c of cases) {
+    const got = resolveEndAmended(c.end, [{ point: anchor, spec: c.spec }], c.vertical, delta);
+    const kind = got === 'detached' ? 'detached' : got.kind;
+    if (kind !== c.want) {
+      throw new Error(
+        `attachment-probe amended-judge self-test "${c.name}": got ${kind}, want ${c.want}`,
+      );
+    }
+  }
 }
 
 /**
