@@ -409,6 +409,27 @@ class SegmentBuckets {
   at(fixed: number): readonly OwnedSeg[] {
     return this.byKey.get(fixed) ?? [];
   }
+  /**
+   * Phase 3's move, in place: link `link`'s old segments out of their buckets, its new ones in. The
+   * lists `at()` reads are updated exactly, so an opposed or collinear count sees the picture as it
+   * now stands. A new segment on a fixed coordinate nothing held before is visible to `at()` and not
+   * to `between()` — the sorted keys are not rebuilt — so a crossing against a moved link is counted
+   * against where it was. Phase 2 counts every crossing against a snapshot for the same reason: a
+   * rebuild per move measured at 1.7–2× a frame's routing.
+   */
+  move(link: number, from: readonly Seg[], to: readonly Seg[]): void {
+    for (const s of from) {
+      const list = this.byKey.get(s.fixed);
+      if (!list) continue;
+      const at = list.findIndex((t) => t.link === link && t.lo === s.lo && t.hi === s.hi);
+      if (at >= 0) list.splice(at, 1);
+    }
+    for (const s of to) {
+      const list = this.byKey.get(s.fixed);
+      if (list) list.push({ ...s, link });
+      else this.byKey.set(s.fixed, [{ ...s, link }]);
+    }
+  }
 }
 
 /**
@@ -552,7 +573,7 @@ export function chooseRoutesByCrossing(
     return best;
   });
 
-  resolveOpposed(links, picks, index, scoreAgainst);
+  resolveOpposed(links, picks, index, scoreAgainst, laneCentre);
   return picks.map((pick) => pick?.line ?? []);
 }
 
@@ -587,10 +608,25 @@ function resolveOpposed(
     i: number,
     candidate: ScoredCandidate,
   ) => Phase2Score,
+  laneCentre: (y: number) => boolean,
 ): void {
-  let snapshot = index(picks);
+  const snapshot = index(picks);
+  /** Only the opposed count: which links need this pass at all, without counting crossings. */
+  const opposedOf = (i: number, candidate: ScoredCandidate): number => {
+    const { h, v } = segmentsFor(candidate);
+    let opposed = 0;
+    const against = (s: Seg, list: readonly OwnedSeg[]): void => {
+      for (const t of list) {
+        if (t.link === i || t.dir === s.dir) continue;
+        if (Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo) > 0.5) opposed += 1;
+      }
+    };
+    for (const s of h) if (laneCentre(s.fixed)) against(s, snapshot.hBuckets.at(s.fixed));
+    for (const s of v) against(s, snapshot.vBuckets.at(s.fixed));
+    return opposed;
+  };
   const opposedNow = picks
-    .map((pick, i) => (pick && scoreAgainst(snapshot, i, pick).opposed > 0 ? i : -1))
+    .map((pick, i) => (pick && opposedOf(i, pick) > 0 ? i : -1))
     .filter((i) => i >= 0);
   if (opposedNow.length === 0) return;
   const key = (i: number): number[] => {
@@ -605,16 +641,11 @@ function resolveOpposed(
     }
     return 0;
   });
-  let stale = false;
   for (const i of opposedNow) {
-    if (stale) {
-      snapshot = index(picks);
-      stale = false;
-    }
     const current = picks[i]!;
+    if (opposedOf(i, current) === 0) continue; // an earlier move cleared it
     let best = current;
     let bestScore = scoreAgainst(snapshot, i, current);
-    if (bestScore.opposed === 0) continue; // an earlier move cleared it
     const hiddenNow = current.phase1.hiddenLegs ?? 0;
     for (const candidate of links[i]!.candidates) {
       if (candidate === current || candidate.phase1.obstructions > bestScore.obstructions) continue;
@@ -629,8 +660,11 @@ function resolveOpposed(
       }
     }
     if (best !== current) {
+      const from = segmentsFor(current);
+      const to = segmentsFor(best);
+      snapshot.hBuckets.move(i, from.h, to.h);
+      snapshot.vBuckets.move(i, from.v, to.v);
       picks[i] = best;
-      stale = true;
     }
   }
 }

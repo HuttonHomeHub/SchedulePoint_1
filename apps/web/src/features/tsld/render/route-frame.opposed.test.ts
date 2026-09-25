@@ -90,12 +90,13 @@ function opposedPairs(lines: ReadonlyMap<RenderEdge, Point[]>): string[] {
   };
   const segs: Seg[] = [];
   for (const [e, line] of lines) {
+    const id = `${e.predecessorId}>${e.successorId}>${e.type}`;
     for (let i = 1; i < line.length; i += 1) {
       const a = line[i - 1]!;
       const b = line[i]!;
       if (Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.x - b.x) > 1e-6) {
         segs.push({
-          link: e.id,
+          link: id,
           horizontal: true,
           fixed: a.y,
           lo: Math.min(a.x, b.x),
@@ -104,7 +105,7 @@ function opposedPairs(lines: ReadonlyMap<RenderEdge, Point[]>): string[] {
         });
       } else if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) > 1e-6) {
         segs.push({
-          link: e.id,
+          link: id,
           horizontal: false,
           fixed: a.x,
           lo: Math.min(a.y, b.y),
@@ -148,7 +149,9 @@ describe('routeFrame: links on one track never run opposite ways', () => {
     // ends on the same point, and the link out still starts there.
     for (const ppd of [4.5, 13, 56]) {
       const lines = route(ppd);
-      const byId = new Map([...lines].map(([e, line]) => [e.id, line]));
+      const byId = new Map(
+        [...lines].map(([e, line]) => [`${e.predecessorId}>${e.successorId}>${e.type}`, line]),
+      );
       const out = byId.get('Analyser>Welfare>FS')!;
       for (const id of ['TieIns>Analyser>FF', 'Grout>Analyser>FF']) {
         expect(byId.get(id)!.at(-1)).toEqual(out[0]);
