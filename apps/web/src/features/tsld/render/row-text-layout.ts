@@ -165,6 +165,14 @@ export interface RowTextInput {
   reservesTextRows: boolean;
   measure: (text: string, font?: string) => number;
   labelOf: (a: RenderActivity) => string;
+  /**
+   * Propose no two-line wraps (links-and-labels M2-T3). A wrap is the painter's decision AFTER
+   * routing, and the router reads a wrapped name's one-line fallback, so a caller that only routes
+   * — Tidy, the probes, `sceneRowText` — gets identical items with or without it (a property test
+   * holds that). Without it the layout measures single words for the wrap, which the Tidy worker's
+   * width table does not hold, and the search fails on any plan whose names would wrap.
+   */
+  oneLineOnly?: boolean;
 }
 
 /** The font px of `LABEL_FONT` and `MILESTONE_LABEL_FONT`: the ink box's height. */
@@ -224,6 +232,7 @@ export function layoutRowText({
   reservesTextRows,
   measure,
   labelOf,
+  oneLineOnly = false,
 }: RowTextInput): RowTextLayout {
   // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting
   // (ADR-0026 D1). Gated by the toggle and, off the reserved-row path, a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
@@ -337,7 +346,7 @@ export function layoutRowText({
           let text = oneLine;
           // Wrap where a one-line name would truncate and a second line has room (M4-T2).
           let upper: string | null = null;
-          if (text !== full) {
+          if (text !== full && !oneLineOnly) {
             const lines = wrapTwoLines(full, budget, fit);
             if (lines) {
               upper = lines[0];
@@ -909,6 +918,7 @@ export function sceneRowText(
     reservesTextRows: rowReservesTextRows(),
     measure,
     labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
+    oneLineOnly: true,
   });
 }
 
@@ -923,7 +933,10 @@ export const textWidthKey = (text: string, font: string | undefined): string =>
  * canvas label in its font (bold for a milestone), the ellipsis, every prefix of the label plus the
  * ellipsis trimmed and untrimmed (`truncateToWidth`'s search), the two dates, and the centre item's
  * two forms. The two-line wrap is NOT here: the router scores the one-line name (spec D-4), and the
- * wrap is the painter's decision after routing. M0-T4 recorded every key the painter asks for over
+ * wrap is the painter's decision after routing, so `sceneRowText` proposes none (`oneLineOnly`).
+ * **M2-T3's property test is why that flag exists**: M0-T4's recording found no key outside this
+ * set because none of its four scenes wraps a name, and the first property run over random plans
+ * found the wrap's single words at once. M0-T4 recorded every key the painter asks for over
  * four scenes and found none outside this set; the completeness property test holds it.
  */
 export function textWidthKeys(

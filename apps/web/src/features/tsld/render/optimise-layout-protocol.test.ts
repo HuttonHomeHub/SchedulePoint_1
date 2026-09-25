@@ -94,6 +94,33 @@ describe('handleOptimiseRequest', () => {
     expect(progress).toHaveLength(Math.floor(done.result.evaluations / PROGRESS_EVERY));
   });
 
+  /**
+   * **A missing width fails the search; it is never guessed** (links-and-labels M2-T3). A guessed
+   * width would route around text the canvas does not draw, and the dialog would report a result
+   * scored on a different picture with nothing saying so.
+   */
+  it('fails the search, rather than guessing, when the width table lacks a key', () => {
+    const missing = textWidthKey('A', undefined);
+    expect(TEXT_WIDTHS.some(([key]) => key === missing)).toBe(true);
+    const messages: OptimiseMessage[] = [];
+    handleOptimiseRequest(
+      {
+        activities: ACTIVITIES,
+        edges: EDGES,
+        dataDate: '2026-01-01',
+        textWidths: TEXT_WIDTHS.filter(([key]) => key !== missing),
+        textToggles: DEFAULT_VIEW_TOGGLES,
+        workingDays: null,
+        options: {},
+      },
+      (m) => messages.push(m),
+    );
+    const last = messages.at(-1);
+    expect(last?.type).toBe('failed');
+    if (last?.type !== 'failed') throw new Error('no failure');
+    expect(last.message).toMatch(/text width table has no entry/);
+  });
+
   it('reports a failure as a message rather than throwing inside the worker', () => {
     const messages: OptimiseMessage[] = [];
     expect(() => handleOptimiseRequest(null as never, (m) => messages.push(m))).not.toThrow();
