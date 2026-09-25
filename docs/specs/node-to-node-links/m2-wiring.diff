@@ -1,0 +1,252 @@
+diff --git a/apps/web/src/features/tsld/render/link-routing.ts b/apps/web/src/features/tsld/render/link-routing.ts
+index be869c89..e67ada7a 100644
+--- a/apps/web/src/features/tsld/render/link-routing.ts
++++ b/apps/web/src/features/tsld/render/link-routing.ts
+@@ -604,21 +604,32 @@ export function gutterChannels(clearHalfBandPx: number): number[] {
+ export function packGutterChannels(
+   candidates: readonly BundleCandidate[],
+   clearHalfBandPx: number,
++  isGutter?: (y: number) => boolean,
+ ): number {
+   const offsets = gutterChannels(clearHalfBandPx);
+   if (offsets.length < 2) return 0;
+ 
+-  // A gutter run is the horizontal leg of a VHV route: a 6-point line's middle segment. Its y is a
+-  // lane boundary by construction (M1-T1), so grouping by that y groups by gutter.
++  // A gutter run is the horizontal leg of a VHV route. Without `isGutter` it is a 6-point line's
++  // middle segment (the corridor router's shape). With it — node-to-node routing, whose VHV is four
++  // points — it is found by geometry: any interior horizontal segment lying on a lane boundary. Its y
++  // is a lane boundary by construction either way, so grouping by that y groups by gutter.
+   type Run = { candidate: number; at: number; y: number; x0: number; x1: number };
+   const runs: Run[] = [];
+   candidates.forEach((candidate, c) => {
+     const line = candidate.line;
+-    if (line.length !== 6) return;
+-    const a = line[2]!;
+-    const b = line[3]!;
+-    if (a.y !== b.y) return;
+-    runs.push({ candidate: c, at: 2, y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
++    const at: number[] = [];
++    if (isGutter) {
++      for (let i = 1; i + 2 < line.length; i += 1) {
++        if (line[i]!.y === line[i + 1]!.y && isGutter(line[i]!.y)) at.push(i);
++      }
++    } else if (line.length === 6 && line[2]!.y === line[3]!.y) {
++      at.push(2);
++    }
++    for (const i of at) {
++      const a = line[i]!;
++      const b = line[i + 1]!;
++      runs.push({ candidate: c, at: i, y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
++    }
+   });
+   if (runs.length < 2) return 0;
+ 
+diff --git a/apps/web/src/features/tsld/render/paint.ts b/apps/web/src/features/tsld/render/paint.ts
+index e3761b9b..77d69f1b 100644
+--- a/apps/web/src/features/tsld/render/paint.ts
++++ b/apps/web/src/features/tsld/render/paint.ts
+@@ -1413,14 +1413,19 @@ export function paintScene(
+     const headLineFor = (edge: RenderEdge, line: Point[]): Point[] => {
+       if (scene.visualRefresh !== true) return line;
+       const succ = byId.get(edge.successorId);
+-      if (!succ || barGlyphKind(succ.type) !== 'bar') return line;
++      if (!succ) return line;
+       const succRect = activityRect(succ, view, scene.dataDate, rectCache);
+       const tip = line[line.length - 1];
+       if (!succRect || !tip) return line;
+-      const onNode = nodeCentres(succRect).some(
+-        (c) => Math.abs(c.x - tip.x) < 0.5 && Math.abs(c.y - tip.y) < 0.5,
+-      );
+-      return onNode ? trimPolylineEnd(line, NODE_REACH_PX) : line;
++      const at = (c: Point): boolean => Math.abs(c.x - tip.x) < 0.5 && Math.abs(c.y - tip.y) < 0.5;
++      // A milestone's centre port (node-to-node links spec D-5): a vertical arrives at the glyph's
++      // centre, so the head stops on the triangle rather than under it.
++      if (isMilestone(succ.type)) {
++        const centre = { x: succRect.x + succRect.w / 2, y: succRect.y + succRect.h / 2 };
++        return at(centre) ? trimPolylineEnd(line, MILESTONE_RADIUS) : line;
++      }
++      if (barGlyphKind(succ.type) !== 'bar') return line;
++      return nodeCentres(succRect).some(at) ? trimPolylineEnd(line, NODE_REACH_PX) : line;
+     };
+     const paintLinkLanguage = (): void => {
+       interface Bucket {
+diff --git a/apps/web/src/features/tsld/render/route-frame.ts b/apps/web/src/features/tsld/render/route-frame.ts
+index 6b0eee03..a51eb7f4 100644
+--- a/apps/web/src/features/tsld/render/route-frame.ts
++++ b/apps/web/src/features/tsld/render/route-frame.ts
+@@ -1,18 +1,13 @@
+ import type { TsldScene } from './paint';
+ import {
+   activityRect,
+-  BAR_HEIGHT,
+   barGlyphKind,
+-  bundleCorridors,
+-  chooseCorridorsByCrossing,
+-  corridorGap,
+   dependencyPolyline,
+   dependencyPolylineTimeTrue,
+   ELAPSED_DAY_WALK,
+   lagAnchorPoints,
+   lagRunSegment,
+   LANE_HEIGHT,
+-  laneIntervalIndex,
+   makeWorkingDayWalk,
+   packGutterChannels,
+   routeOrthogonal,
+@@ -24,6 +19,13 @@ import {
+   type RenderEdge,
+   type Viewport,
+ } from './render-model';
++import {
++  chooseRoutesByCrossing,
++  glyphIndex,
++  isLaneCentre,
++  routeNodeToNode,
++  type FrameLink,
++} from './link-score';
+ 
+ /**
+  * **The frame's routed links, as values** (NetPoint-layout M4-T1, spec §4.5).
+@@ -54,8 +56,11 @@ export interface RouteFrame {
+   readonly workingWalk: ReturnType<typeof makeWorkingDayWalk> | null;
+   /** The refreshed link path (`scene.visualRefresh`). */
+   readonly refresh: boolean;
+-  /** The frame's obstacle index, or null when routing is off. */
+-  readonly laneIndex: ReturnType<typeof laneIntervalIndex> | null;
++  /**
++   * The frame's glyph index (every visible bar, widened by its nodes), or null when routing is off.
++   * The painter reads it only as "is node-to-node routing on".
++   */
++  readonly laneIndex: ReturnType<typeof glyphIndex> | null;
+   /**
+    * The per-edge geometry seam. Exposed because the revision overlay routes removed links through
+    * the SAME closure with a synthetic edge.
+@@ -82,6 +87,12 @@ export interface RouteFrame {
+   activeLagHandle: Point | null;
+ }
+ 
++/** Whether `y` is a lane boundary: the gutter datum (ADR-0150), where a VHV route runs. */
++function isLaneBoundary(y: number, view: Viewport): boolean {
++  const r = (((y - view.originY) % LANE_HEIGHT) + LANE_HEIGHT) % LANE_HEIGHT;
++  return r <= 0.5 || r >= LANE_HEIGHT - 0.5;
++}
++
+ export function routeFrame(
+   scene: RouteFrameScene,
+   view: Viewport,
+@@ -116,21 +127,23 @@ export function routeFrame(
+   // with the pass is a lookup per frame and the 5–11 ms once per edge-list change).
+   const refresh = scene.visualRefresh === true;
+   /**
+-   * Obstacle awareness for the corridor (ADR-0064 M2). Built **once per frame, from the culled
+-   * set** — a route is drawn inside the viewport, so a bar outside it cannot be visibly crossed,
+-   * and building over the whole plan would make an O(N) pass out of a layer whose whole budget
+-   * argument is that it is O(visible). Rebuilt each frame rather than memoised because it is a
+-   * function of the viewport, which is exactly what changes while panning.
++   * **The glyph index node-to-node routing scores against** (node-to-node links M2, spec §4.3):
++   * every visible bar, widened by its two nodes. Built **once per frame, from the culled set** — a
++   * route is drawn inside the viewport, so a bar outside it cannot be visibly crossed, and building
++   * over the whole plan would make an O(N) pass out of a layer whose budget argument is that it is
++   * O(visible). Rebuilt each frame because it is a function of the viewport.
+    */
+   const laneIndex =
+     refresh && scene.linkRouting === true
+-      ? laneIntervalIndex(
++      ? glyphIndex(
+           scene.activities.filter((a) => visibleIds.has(a.id)),
+           view,
+           scene.dataDate,
+           rectCache,
+         )
+       : null;
++  /** Each routed edge's scored shapes (best first by phase 1) and its two anchors: phase 2's input. */
++  const candidatesByEdge = new Map<RenderEdge, FrameLink>();
+   const lagRuns: LagRun[] | null = refresh && workingWalk ? [] : null;
+   // Handles ride the SAME gate as the runs plus their own scene flag: they are only meaningful
+   // where the anchors are time-true (the geometry `classifyHit` grabs), and only wanted where
+@@ -212,23 +225,23 @@ export function routeFrame(
+     const from = anchors.pred;
+     const to = anchors.succ;
+     if (!laneIndex) return routeOrthogonal(from, to, edge.type, view);
+-    /**
+-     * The two endpoint bars' own x-spans (logic-legibility M2-T2). A horizontal leg begins on its
+-     * anchor's edge, so the leg check has to exclude that bar by identity — and `laneIndex`
+-     * cannot supply it, because it merges spans that touch and `packLanes` puts activities end to
+-     * end. These rects are already cached for this frame, so it costs a lookup.
+-     */
+     const predRect = activityRect(pred, view, scene.dataDate, rectCache);
+     const succRect = activityRect(succ, view, scene.dataDate, rectCache);
+-    return routeOrthogonal(from, to, edge.type, view, 0, {
+-      index: laneIndex,
+-      fromLane: pred.laneIndex,
+-      toLane: succ.laneIndex,
+-      laneHeight: LANE_HEIGHT,
+-      barHeight: BAR_HEIGHT,
+-      ...(predRect ? { fromSpan: { x0: predRect.x, x1: predRect.x + predRect.w } } : {}),
+-      ...(succRect ? { toSpan: { x0: succRect.x, x1: succRect.x + succRect.w } } : {}),
+-    });
++    // `lagAnchorPoints` returned anchors, so both rects exist; this is the type system's check.
++    if (!predRect || !succRect) return routeOrthogonal(from, to, edge.type, view);
++    /**
++     * **Node to node** (node-to-node links M2, spec §4.2–§4.3): the link leaves its predecessor's
++     * end and enters its successor's through a side each glyph allows, with any bend clear of the
++     * node, choosing among at most eleven shapes the one through fewest foreign bars, then the
++     * shortest. Phase 2 below may move it to reduce crossings.
++     */
++    const scored = routeNodeToNode(
++      { from: pred, to: succ, fromAnchor: from, toAnchor: to, fromRect: predRect, toRect: succRect },
++      laneIndex,
++      view,
++    );
++    if (collecting) candidatesByEdge.set(edge, { candidates: scored, ends: [from, to] });
++    return scored[0]!.line.map((p) => ({ x: p.x, y: p.y }));
+   };
+   /**
+    * Every visible edge's line, computed **once** for the frame (ADR-0065 M3). It was previously
+@@ -251,34 +264,22 @@ export function routeFrame(
+   }
+   collecting = false;
+   if (laneIndex && lines.size > 1) {
++    /**
++     * **Phase 2, then gutter channels** (node-to-node links M2, spec §4.4), and the order is the
++     * decision. Phase 2 re-chooses each link's shape against a frozen snapshot of the phase-1
++     * picks, for crossings and overlaps; packing gutter channels first would assign them to runs
++     * phase 2 then replaces. Channels move y only, so they cannot undo a shape.
++     */
++    const edges = [...lines.keys()].filter((edge) => candidatesByEdge.has(edge));
++    const links = edges.map((edge) => candidatesByEdge.get(edge)!);
++    const chosen = chooseRoutesByCrossing(links, (y) => isLaneCentre(y, view));
++    edges.forEach((edge, i) => lines.set(edge, chosen[i]!.map((p) => ({ x: p.x, y: p.y }))));
+     const corridors = [...lines.entries()].map(([edge, line]) => ({
+       line,
+       fromLane: byId.get(edge.predecessorId)?.laneIndex ?? 0,
+       toLane: byId.get(edge.successorId)?.laneIndex ?? 0,
+     }));
+-    /**
+-     * **Corridor choice BEFORE bundling** (diagram-legibility M-C3), and the order is a decision.
+-     *
+-     * `routeOrthogonal` picks a corridor for what it HITS; this moves it for what it CROSSES,
+-     * which is the thing the product owner reported and the thing
+-     * `docs/specs/diagram-legibility/part-c-m-c0.md` measured height cannot buy. Bundling then
+-     * merges whatever near-identical verticals remain — run the other way round it would merge a
+-     * comb first and then pull members out of the trunk it had just made, undoing its own work.
+-     */
+-    chooseCorridorsByCrossing(corridors, laneIndex, corridorGap(view));
+-    // Trunk/branch bundling (ADR-0065 M3): a hub's dozen near-identical verticals become one
+-    // trunk. Rides the SAME flag as the routing it bundles — a comb is only worth merging once
+-    // the corridors are chosen deliberately, and the free-check it does needs that index anyway.
+-    bundleCorridors(corridors, laneIndex);
+-    /**
+-     * **Gutter channels LAST** (logic-legibility M1-T3), and the ordering is the decision.
+-     *
+-     * A gutter run's x-extent is set by the two verticals either side of it, and
+-     * `bundleCorridors` moves verticals. Packing channels before it would assign them against x
+-     * values that then change — ADR-0090's recorded oscillation with a third subject — so this
+-     * runs after every x is final and moves y only.
+-     */
+-    packGutterChannels(corridors, rowSlots(0).clearHalfBandPx);
++    packGutterChannels(corridors, rowSlots(0).clearHalfBandPx, (y) => isLaneBoundary(y, view));
+   }
+   const frame: RouteFrame = {
+     workingWalk,
