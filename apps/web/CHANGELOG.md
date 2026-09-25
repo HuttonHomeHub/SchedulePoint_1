@@ -1,5 +1,22 @@
 # @repo/web
 
+## 0.151.0
+
+### Minor Changes
+
+- [#701](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/701) [`7dda0be`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7dda0be344a70fd588b0994544dfb5ded26e547d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Links on the diagram now go round activity names and dates where they can, instead of running
+  through them. When two routes are otherwise equally good, the one that crosses less text wins. A
+  link never goes through a bar, hides behind one, or crosses another link to avoid a name. Lag
+  labels such as `+2d` also find room more often: a link now prefers a route that leaves space for
+  its label. Tidy and Re-layout score the same text the diagram draws. On a 144-activity plan, Tidy
+  takes about a fifth longer than in the previous release.
+
+- [#701](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/701) [`7dda0be`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7dda0be344a70fd588b0994544dfb5ded26e547d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Two links on one track at a crowded node are drawn apart. Where a link arriving at a node and a link
+  leaving it could only share one vertical, running opposite ways with an arrowhead at each end, the
+  diagram now draws them as two lines either side of the node centre, each still entering the node.
+  A track is left as it was where splitting it would put a line through a bar, a name or a neighbour's
+  node, or add a crossing.
+
 ## 0.150.1
 
 ### Patch Changes
