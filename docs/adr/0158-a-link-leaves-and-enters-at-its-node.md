@@ -1,7 +1,8 @@
 # ADR-0158: A link leaves and enters at its node
 
 - **Status:** Accepted (product owner, 2026-09-25: the spec and plan approved with "Approve, +10 %
-  limit"; the M2 stop at FC-T3 answered "Accept and ship")
+  limit"; the M2 stop at FC-T3 answered "Accept and ship"). Amended the same day by decisions 7–10,
+  "Opposed overlaps", on the product owner's report against `web-v0.150.0`
 - **Date:** 2026-09-25
 - **Deciders:** James Ewbank (with Claude Code)
 - **Amends:** [ADR-0065](./0065-canvas-link-routing.md) (the elbow no longer sits a gap outside the
@@ -126,3 +127,95 @@ The failure is the one spec §4.8 predicted. A long waiting interval gives a sha
 many lanes, which passes behind bars and through the name and date rows between. The construction
 rule answers ADR-0065's objection that a slope asserts work across the days it spans, and it
 answers nothing about legibility. ADR-0065's "Diagonal segments" clause therefore stands.
+
+## Opposed overlaps: a third pass and four escapes (amendment, 2026-09-25)
+
+The product owner used `web-v0.150.0` and reported links into one finish node "go in two directions
+and are a tad confusing when scaled out … fixed when you zoom in though, but then zooming in too far
+causes it again": the links arriving at Install Analyser Room's finish rose up the same vertical its
+successor link came down, two arrowheads on one stroke pointing at each other. Their rule: **the
+logic should avoid routing lines in opposing direction on each other.**
+
+Three causes, found by rebuilding that plan's shape around the node
+(`render/route-frame.opposed.test.ts`, verified red on `9092cf27` at 4.5, 13 and 56 px/day):
+
+- Decision 4's shared-end exemption treats **any** two links that touch at a node as a bus, so an
+  arrival and a departure on one vertical never counted as an overlap at all.
+- At a whole-plan zoom the successor starts two days later, which is narrower than the stub rule,
+  so the link leaving the node **can only go down**, and every candidate for an FF arriving at a
+  finish node came up or down that same vertical (a finish node cannot be entered from the west,
+  over its own bar, so every between-stubs HVH is illegal for it).
+- Decision 5's frozen snapshot moves **both** halves of a conflicting pair. Measured on the
+  reported shape: the arrivals moved to come in over the top, and so did the departure.
+
+This amends decisions 3–5:
+
+7. **An opposed overlap is its own term, ranked above crossings** and below foreign glyphs. It is
+   counted wherever an overlap is (a vertical, or a horizontal on a lane centre-line), between two
+   links running opposite ways, **shared end or not**. Phase 2 does not rank on it, and its overlap
+   count is unchanged: a collinear pair without a shared end is an overlap in either direction, as
+   before. (A first version moved opposite-direction pairs out of the overlap count into this one,
+   which silently stopped phase 2 penalising them; restoring it took Unit 300's crossings a further
+   2 % lower.)
+8. **Phase 3.** After phase 2, each link still in an opposed pair re-chooses against the picture
+   as it now stands, one link at a time, and moves only on a strict improvement in
+   (obstructions, opposed, crossings, overlaps, length, bends, order). The order is the links' own
+   ends (source then target, x then y), never the order they arrive in, so FC-T5 still holds. Which
+   half of a pair moves is whichever has a better line, not a fixed role: at 56 px/day the link out
+   can turn east first; at 4.5 px/day it cannot, and an arrival goes round instead.
+9. **Four escapes**, numbered after the eleven so no ordinary shape's tie-break place moves: the
+   two HVH positions outside both ends on a forward link (an FF can arrive at a finish node from
+   the east by going round it), and the two gutters outside the two lanes (a link can come in over
+   the top). Phase 1 sorts them last, so its pick is an escape only when nothing else obeys both
+   ports. Phase 2 may take one only where it hides no more of the line behind bars than its current
+   pick. They are built and scored **only when a link asks for them** (`routeCandidateParts`,
+   `routeNodeToNodeParts`): a link whose ordinary pick has no crossing and no overlap never does.
+   This raises FC-T8 (a)'s cap from 11 to 15 shapes per link; the eleven are always built.
+10. **No move may raise the number of horizontal legs hidden behind a bar.** Decision 4 counts a
+    vertical through a bar and a horizontal along one as one obstruction each, and they do not look
+    alike: the first is a short gap, the second a run of the link hidden behind the bar (links paint
+    under bars), the thing ADR-0150 removed. Measured without this rule, Unit 300's links hidden
+    behind a foreign bar rose by two or three a frame.
+
+Measured on the four fixtures, summed over four pan positions per zoom
+(`scripts/measure-attachment.mjs --json`, which now counts opposed pairs):
+
+| Fixture            | Opposed pairs (1 / 4 / 12 px/day) | Crossings (1 / 4 / 12)                | Hidden behind a foreign bar |
+| ------------------ | --------------------------------- | ------------------------------------- | --------------------------- |
+| brief              | 0 → 0 at every zoom               | unchanged                             | unchanged                   |
+| small-17           | 16 → 12, 16 → 12, 16 → 8          | 36 → 36, 32 → 28, 32 → 28             | unchanged (0)               |
+| reference-netpoint | 4 → 0 at every zoom               | unchanged                             | unchanged (0)               |
+| Unit 300           | 180 → 128, 172 → 112, 160 → 92    | 1548 → 1392, 1448 → 1396, 1400 → 1376 | unchanged (36, 32, 24)      |
+
+Unattached ends stay at zero everywhere. The costs are small and stated: bends rise by two or three
+a frame on Unit 300 and by one on the reference plan, and text crossings by two to five a frame on
+Unit 300.
+
+**Cost, and a miss accepted by the product owner.** The diagram stays inside FC-T8 (b):
+`routeFrame` p95 **4.9–5.5 ms** at `scale-2000`, Week, against the 8 ms bar
+(`scripts/measure-route-cost.mjs`). Tidy does not stay inside FC-T8 (d). Measured in one sitting
+by alternating builds (node 22, Unit 300, 2,000-evaluation cap, three runs each): the pre-epic tree
+(`edac0ba3^`) **4.08–4.21 s**, `web-v0.150.0` **5.04–5.81 s**, this amendment **6.87–7.39 s** —
+**1.66–1.78×** the pre-epic time against the 1.5× bar. At 300 generated activities
+(`PLANS=scale300 scripts/measure-netpoint-optimise.mjs`) Tidy takes **15.6 s** against 10.9 s
+shipped, which also passes the 10 s figure `OPTIMISE_MAX_ACTIVITIES` was chosen on. Put to the
+product owner with those numbers and three alternatives (a lower Tidy limit; Tidy scoring the
+phase-2 picture and drawing the full one; more optimisation first), they chose to **ship and accept
+the cost**: readability over search time, the limit unchanged, the run in a worker with progress.
+
+What was tried, so it is not tried again: rebuilding the index per phase-3 move (replaced by moving a
+link's segments in place); scoring every escape eagerly (now lazy, and exact); an early exit once a
+candidate has more crossings than the best (exact, kept); letting phase 3 move a link only to reduce
+its opposed count (kept: quality unchanged, cheaper). Two cuts were measured and **rejected on
+quality**: phase 2 looking at escapes only for a link that already shares a track saved about 0.3 s
+and raised Unit 300's crossings from 1,392 to 1,560 at 1 px/day; and no escapes at all saved about
+1 s and left the reported shape unfixed (`route-frame.opposed.test.ts` fails at 4.5 and
+13 px/day with Grout's FF running against the link out). A CPU profile puts the rest in phase 2's candidate scoring
+and the extra shapes' obstruction counts, spread thinly rather than in one hot spot.
+
+**Opposed pairs remain, and they are of two kinds.** Most are at crowded nodes: where a bar's finish
+and the next bar's start share one node, an arrival from above, an arrival from below and a link
+leaving along the lane (blocked by the next bar) leave the departure only up or down, so it opposes
+one arrival whichever it takes. The rest have an escape only through a bar, which decision 4 ranks
+worse. Neither is a defect in this pass, and both are recorded as `docs/TECH_DEBT.md` #394 rather
+than solved here.

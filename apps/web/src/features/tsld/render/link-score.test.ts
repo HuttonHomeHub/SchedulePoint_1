@@ -343,4 +343,104 @@ describe('chooseRoutesByCrossing', () => {
     expect(forward).toEqual([a.candidates[1]!.line, b.candidates[1]!.line]);
     expect(backward).toEqual([forward[1], forward[0]]);
   });
+
+  // ── Phase 3: opposed overlaps (product owner, 2026-09-25, on web-v0.150.0) ──
+
+  /**
+   * One link from literal lines: the first is phase 1's pick, the rest its other candidates. An
+   * `escape` line is offered to phase 3 only, and `hidden` is how many of its obstructions are
+   * horizontal legs hidden behind a bar.
+   */
+  const link = (
+    lines: { line: Point[]; escape?: true; hidden?: number; obstructions?: number }[],
+  ): FrameLink => ({
+    candidates: lines.map((l, order) => {
+      const scored = toScored(
+        { shape: 'VHV', line: l.line, order },
+        {
+          obstructions: l.obstructions ?? 0,
+          hiddenLegs: l.hidden ?? 0,
+          length: 100 + order,
+          bends: 1,
+          order,
+        },
+      );
+      return l.escape ? { ...scored, escape: true as const } : scored;
+    }),
+    ends: [lines[0]!.line[0]!, lines[0]!.line.at(-1)!],
+  });
+
+  // A node at (100, 90). `into` arrives up its vertical from below; `out` leaves down it.
+  const NODE = { x: 100, y: 90 };
+  const intoFromBelow = [{ x: 0, y: 150 }, { x: 100, y: 150 }, NODE];
+  const intoFromEast = [{ x: 0, y: 150 }, { x: 120, y: 150 }, { x: 120, y: 90 }, NODE];
+  const outDown = [NODE, { x: 100, y: 210 }, { x: 110, y: 210 }];
+
+  it('moves an arrival off the vertical its node is left by, through an escape (the report)', () => {
+    const into = link([{ line: intoFromBelow }, { line: intoFromEast, escape: true }]);
+    const out = link([{ line: outDown }]);
+    // Phase 2 alone keeps both: they share an end, so the overlap was exempt as a bus.
+    expect(chooseRoutesByCrossing([into, out], laneCentre)).toEqual([intoFromEast, outDown]);
+  });
+
+  it('moves only one half of an opposed pair, whichever order the links arrive in (FC-T5)', () => {
+    // Both halves have an alternative. Frozen, both would move and meet again from the other side;
+    // phase 3 moves one, in the order of the links' own ends, so the answer is the same both ways.
+    const outRight = [NODE, { x: 130, y: 90 }, { x: 130, y: 210 }];
+    const into = link([{ line: intoFromBelow }, { line: intoFromEast, escape: true }]);
+    const out = link([{ line: outDown }, { line: outRight }]);
+    const forward = chooseRoutesByCrossing([into, out], laneCentre);
+    const backward = chooseRoutesByCrossing([out, into], laneCentre);
+    expect(backward).toEqual([forward[1], forward[0]]);
+    const moved = [forward[0] !== intoFromBelow, forward[1] !== outDown];
+    expect(moved.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('never trades an opposed overlap for a run hidden behind a bar', () => {
+    const into = link([{ line: intoFromBelow }, { line: intoFromEast, escape: true, hidden: 1 }]);
+    const out = link([{ line: outDown }]);
+    expect(chooseRoutesByCrossing([into, out], laneCentre)).toEqual([intoFromBelow, outDown]);
+  });
+
+  it('keeps an opposed pair when the only escape passes through more bars', () => {
+    const into = link([
+      { line: intoFromBelow },
+      { line: intoFromEast, escape: true, obstructions: 1 },
+    ]);
+    const out = link([{ line: outDown }]);
+    expect(chooseRoutesByCrossing([into, out], laneCentre)).toEqual([intoFromBelow, outDown]);
+  });
+
+  it('never picks an escape in phase 1 while an ordinary shape obeys both ports', () => {
+    // An FF from lane 3 into a finish node in lane 1, with a bar in lane 2 under both ends. Every
+    // ordinary shape crosses lane 2 at one end or the other; the go-round escape crosses it past
+    // the bar's end and so scores fewer obstructions. Phase 1 must still pick an ordinary shape:
+    // an escape is phase 3's alone.
+    const a = task('a', 3, '2026-01-01', '2026-01-10');
+    const b = task('b', 1, '2026-01-20', '2026-01-30');
+    const blocker = task('x', 2, '2026-01-08', '2026-01-30');
+    const aRect = activityRect(a, VIEW, DATA_DATE)!;
+    const bRect = activityRect(b, VIEW, DATA_DATE)!;
+    const got = routeNodeToNode(
+      {
+        from: a,
+        to: b,
+        fromRect: aRect,
+        toRect: bRect,
+        fromAnchor: { x: aRect.x + aRect.w, y: aRect.y + aRect.h / 2 },
+        toAnchor: { x: bRect.x + bRect.w, y: bRect.y + bRect.h / 2 },
+      },
+      glyphIndex([a, b, blocker], VIEW, DATA_DATE),
+      VIEW,
+    );
+    const escapes = got.filter((c) => c.escape);
+    const ordinary = got.filter((c) => !c.escape);
+    // Not vacuous: an escape really does score fewer obstructions than every ordinary shape.
+    expect(Math.min(...escapes.map((c) => c.phase1.obstructions))).toBeLessThan(
+      Math.min(...ordinary.map((c) => c.phase1.obstructions)),
+    );
+    expect(got[0]!.escape).toBeUndefined();
+    const firstEscape = got.findIndex((c) => c.escape);
+    expect(got.slice(firstEscape).every((c) => c.escape)).toBe(true);
+  });
 });

@@ -37,6 +37,7 @@ describe('one router per frame', () => {
       'dependencyPolyline',
       'dependencyPolylineTimeTrue',
       'routeNodeToNode',
+      'routeNodeToNodeParts',
       'chooseRoutesByCrossing',
       'glyphIndex',
       'packGutterChannels',

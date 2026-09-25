@@ -20,7 +20,15 @@
  * The order above is the tie-break (spec D-2's last term), with VH before HV (D-3), so among equal
  * scores a hub's links share a vertical stem from its node: the reference picture's bus.
  *
- * **At most eleven per link** ({@link MAX_ROUTE_CANDIDATES}), and a milestone does not raise that:
+ * **Four escapes follow the eleven, marked `escape`** (product owner, 2026-09-25, on `web-v0.150.0`):
+ * the two HVH positions outside both ends on a forward link, and the two gutters outside the two
+ * lanes. They exist for one purpose — letting a link leave a track another link runs the other way
+ * along. Phase 1 sorts them after every ordinary shape, phase 2 may take one only where it hides no
+ * more of the link behind a bar, and phase 3 may take one to leave an opposed track (ADR-0158
+ * decisions 7–10). They are built lazily ({@link routeCandidateParts}): a link whose ordinary pick
+ * has no conflict never builds them.
+ *
+ * **At most fifteen per link** ({@link MAX_ROUTE_CANDIDATES}), and a milestone does not raise that:
  * each shape takes the port its first and last segments need (horizontal at the side anchor,
  * vertical at the centre), so a shape is built once, not once per port pair.
  */
@@ -47,10 +55,15 @@ export interface RouteCandidate {
   line: Point[];
   /** Position in the fixed candidate order: the last tie-break. */
   order: number;
+  /** One of the four escapes, sorted after every ordinary shape (see the module docblock). */
+  escape?: true;
 }
 
-/** V, H, VH, HV, five HVH, two VHV. Pinned by `link-candidates.test.ts`. */
-export const MAX_ROUTE_CANDIDATES = 11;
+/** V, H, VH, HV, five HVH, two VHV, then the four escapes. Pinned by `link-candidates.test.ts`. */
+export const MAX_ROUTE_CANDIDATES = 15;
+
+/** The eleven ordinary shapes' orders are 0–10, so the four escapes' are 11–14. */
+const ORDINARY_CANDIDATES = 11;
 
 const EPS = 0.5;
 
@@ -111,20 +124,38 @@ export function routeCandidates(
   toLane: number,
   view: Viewport,
 ): RouteCandidate[] {
-  const out: RouteCandidate[] = [];
+  const parts = routeCandidateParts(pred, succ, fromLane, toLane, view);
+  return [...parts.ordinary, ...parts.escapes()];
+}
+
+/**
+ * {@link routeCandidates} in two parts: the eleven, and the four escapes **built only when asked
+ * for**. Most links never need an escape — phase 2 stops at a pick with no crossing and no overlap,
+ * and phase 3 looks only at a link still opposed — so the frame builds and scores them lazily. The
+ * candidates and their orders are exactly `routeCandidates`', which is defined from this.
+ */
+export function routeCandidateParts(
+  pred: LinkEnd,
+  succ: LinkEnd,
+  fromLane: number,
+  toLane: number,
+  view: Viewport,
+): { ordinary: RouteCandidate[]; escapes: () => RouteCandidate[] } {
+  let out: RouteCandidate[] = [];
   let order = 0;
   const offer = (
     shape: RouteShape,
     p: LinkPort | null,
     s: LinkPort | null,
     build: (P: Point, S: Point) => Point[] | null,
+    escape = false,
   ): void => {
     const at = order;
     order += 1;
     if (!p || !s) return;
     const line = build(p.point, s.point);
     if (!line || !obeysPorts(line, p, s)) return;
-    out.push({ shape, line, order: at });
+    out.push(escape ? { shape, line, order: at, escape: true } : { shape, line, order: at });
   };
   const pV = portFor(pred, 'V');
   const pH = portFor(pred, 'H');
@@ -191,5 +222,56 @@ export function routeCandidates(
         : [P, { x: P.x, y: g }, { x: S.x, y: g }, S],
     );
   }
-  return out;
+
+  const ordinary = out;
+
+  // ── The four escapes, built on first request ──
+  //
+  // HVH outside both ends, on a FORWARD link (a backward one already gets them above). An FF into a
+  // finish node may arrive only from the east, the north or the south — never from the west, over
+  // its own bar — so every between position is illegal for it, and without these its only ways in
+  // were up or down the node's vertical: the vertical the report found a successor link coming down.
+  let escapes: RouteCandidate[] | undefined;
+  const buildEscapes = (): RouteCandidate[] => {
+    out = [];
+    order = ORDINARY_CANDIDATES;
+    const forwardOutside =
+      pH && sH && !sameLane && sH.point.x > pH.point.x
+        ? [
+            Math.min(pH.point.x - predecessorStub(pH.reach), sH.point.x - successorStub(sH.reach)),
+            Math.max(pH.point.x + predecessorStub(pH.reach), sH.point.x + successorStub(sH.reach)),
+          ]
+        : [];
+    for (let k = 0; k < 2; k += 1) {
+      const c = forwardOutside[k];
+      offer(
+        'HVH',
+        pH,
+        sH,
+        (P, S) => (c === undefined ? null : [P, { x: c, y: P.y }, { x: c, y: S.y }, S]),
+        true,
+      );
+    }
+    // VHV through the gutters OUTSIDE the two lanes: above the upper one and below the lower one, so a
+    // link can come into a node over the top when its neighbour leaves the node downwards.
+    const outer = sameLane ? [] : [gutterBelow(upper - 1, view), gutterBelow(lower, view)];
+    for (let k = 0; k < 2; k += 1) {
+      const g = outer[k];
+      offer(
+        'VHV',
+        pV,
+        sV,
+        (P, S) =>
+          g === undefined || Math.abs(P.x - S.x) <= EPS
+            ? null
+            : [P, { x: P.x, y: g }, { x: S.x, y: g }, S],
+        true,
+      );
+    }
+    return out;
+  };
+  return {
+    ordinary,
+    escapes: () => (escapes ??= buildEscapes()),
+  };
 }

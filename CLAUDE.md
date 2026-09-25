@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 33 Prisma models across 70 migrations, 1353 web
+> (`apps/api/src/modules/`), 33 Prisma models across 70 migrations, 1354 web
 > source files with 46 Playwright suites beside the base journey, and
 > 158 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -5888,6 +5888,22 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   slope behind bars and through name and date rows (reference plan: bars passed through 1 → 4, text
   crossings 10 → 13), while Unit 300 gains 0.6 % on crossings against 5 % required. Recorded without
   asking again, as the product owner had instructed, and ADR-0065's "Diagonal segments" clause stands.
+  **Amended the same day by decisions 7–10**, on the product owner's report against
+  `web-v0.150.0`: links into Install Analyser Room's finish ran up the vertical its successor link
+  came down, two arrowheads on one stroke, at whole-plan zoom and again when zoomed right in. Their
+  rule: links must not run on top of each other in opposite directions. The shared-end exemption had
+  treated any two links meeting at a node as a bus, so that pair never counted. At whole-plan zoom
+  the successor was nearer than the stub rule, and phase 2's frozen snapshot moved **both** halves of a pair. So an
+  **opposed** overlap becomes its own term, ranked above crossings, shared end or not. A **phase 3**
+  moves one link at a time against the picture as it now stands, in an order fixed by the links' own
+  ends so FC-T5 holds. Four **escape** shapes (an FF going round to arrive from the east, and the
+  gutters outside both lanes) are built only when a link asks for them. No move may hide more of a
+  link behind a bar. Opposed pairs fall 180 → 128 / 172 → 112 / 160 → 92 on Unit 300 and 4 → 0 on
+  the reference plan, crossings fall about 10 %, and hidden links do not move. The regression test
+  rebuilds the reported shape and was verified red at three zooms. **Tidy's cost is a miss the
+  product owner accepted**: 1.66–1.78× the pre-epic time against FC-T8 (d)'s 1.5×, and 15.6 s at
+  300 activities against 10.9 s shipped. Two cheaper variants were measured and rejected on quality.
+  The pairs that remain sit at crowded shared nodes, or can escape only through a bar: #394.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

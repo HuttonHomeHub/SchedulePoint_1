@@ -250,6 +250,10 @@ export interface AttachmentReading {
   falseJunctions: number;
   falseJunctionLinks: number;
   overlaps: number;
+  /** Link pairs running opposite ways along one track, shared end or not. */
+  opposed: number;
+  /** The opposed pairs by how the two links meet: at one node (arrive-leave), or not at all. */
+  opposedByRole: Record<string, number>;
   textCrossings: number;
   /** Lag plates whose text meets a name or date. */
   platesOnText: number;
@@ -389,7 +393,7 @@ export function readAttachment(
     const off = (((y - view.originY - LANE_HEIGHT / 2) % LANE_HEIGHT) + LANE_HEIGHT) % LANE_HEIGHT;
     return off < 0.5 || off > LANE_HEIGHT - 0.5;
   };
-  type Span = { link: number; at: number; lo: number; hi: number };
+  type Span = { link: number; at: number; lo: number; hi: number; dir: 1 | -1 };
   const horizontal = new Map<string, Span[]>();
   const vertical = new Map<string, Span[]>();
   entries.forEach((e, link) => {
@@ -400,17 +404,34 @@ export function readAttachment(
         if (!laneCentre(a.y)) continue;
         const key = a.y.toFixed(2);
         const list = horizontal.get(key) ?? [];
-        list.push({ link, at: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
+        list.push({
+          link,
+          at: a.y,
+          lo: Math.min(a.x, b.x),
+          hi: Math.max(a.x, b.x),
+          dir: b.x > a.x ? 1 : -1,
+        });
         horizontal.set(key, list);
       } else if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) > 1e-6) {
         const key = a.x.toFixed(2);
         const list = vertical.get(key) ?? [];
-        list.push({ link, at: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
+        list.push({
+          link,
+          at: a.x,
+          lo: Math.min(a.y, b.y),
+          hi: Math.max(a.y, b.y),
+          dir: b.y > a.y ? 1 : -1,
+        });
         vertical.set(key, list);
       }
     }
   });
   const overlapping = new Set<string>();
+  // Opposed: two links on one track running opposite ways, SHARED END OR NOT — the product owner's
+  // report on web-v0.150.0 was exactly a shared end (links rising into a finish node up the vertical
+  // its successor link came down), which the overlap count above exempts as a bus.
+  const opposing = new Set<string>();
+  const opposedByRole: Record<string, number> = {};
   for (const bucket of [...horizontal.values(), ...vertical.values()]) {
     for (let i = 0; i < bucket.length; i += 1) {
       for (let j = i + 1; j < bucket.length; j += 1) {
@@ -418,6 +439,22 @@ export function readAttachment(
         const t = bucket[j]!;
         if (s.link === t.link) continue;
         if (Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo) <= 0.5) continue;
+        if (s.dir !== t.dir) {
+          const key = s.link < t.link ? `${s.link}:${t.link}` : `${t.link}:${s.link}`;
+          if (!opposing.has(key)) {
+            opposing.add(key);
+            const [a, b] = [entries[s.link]!, entries[t.link]!];
+            const role =
+              near(a.ends[1], b.ends[0]) || near(b.ends[1], a.ends[0])
+                ? 'arrive-leave'
+                : near(a.ends[0], b.ends[0])
+                  ? 'same-source'
+                  : near(a.ends[1], b.ends[1])
+                    ? 'same-target'
+                    : 'unrelated';
+            opposedByRole[role] = (opposedByRole[role] ?? 0) + 1;
+          }
+        }
         if (shareEnd(entries[s.link]!, entries[t.link]!)) continue;
         overlapping.add(s.link < t.link ? `${s.link}:${t.link}` : `${t.link}:${s.link}`);
       }
@@ -467,6 +504,8 @@ export function readAttachment(
     falseJunctions,
     falseJunctionLinks,
     overlaps: overlapping.size,
+    opposed: opposing.size,
+    opposedByRole,
     textCrossings,
     platesOnText,
     gapLabels,

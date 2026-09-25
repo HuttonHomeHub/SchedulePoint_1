@@ -11822,3 +11822,23 @@ ADR-0149 exists to prevent. The misses are small (FC-T6: `brief` 4 against a bar
 `small-17` 17 against 8 at 1 px/day) and were accepted by the product owner with the rest of M2.
 The fix is to move the painter's label placement into a pure module that takes a text-width
 function, called by the painter with `ctx.measureText` and by the router with the same widths.
+
+### 394. Opposed link pairs that no legal route can separate
+
+**Status:** open · **Verified:** 2026-09-25 · **Raised:** 2026-09-25 (ADR-0158 decisions 7–10, on
+the product owner's report against `web-v0.150.0`) · **Size:** M · **Owner:** web
+
+ADR-0158's phase 3 separates links that run opposite ways along one track, and on the four fixtures
+it removes every one on the reference plan and about a third on Unit 300 and the 17-activity plan
+(`scripts/measure-attachment.mjs --json`, which counts opposed pairs). The rest are of two kinds,
+both measured on `small-17` and Unit 300 by listing the pairs and each link's candidate scores:
+
+- **Crowded shared nodes.** Where one bar's finish and the next bar's start share one node, a link
+  can arrive from above, another from below, and the link leaving along the lane is blocked by the
+  next bar, so it leaves up or down and opposes one arrival whichever it takes. No reordering or
+  escape fixes this; only a different lane layout or a port offset at the node would.
+- **Escapes that pass through a bar.** The only route off the shared track crosses a foreign bar,
+  and decision 4 ranks a bar above an opposed overlap.
+
+Before changing either, measure what a node-side port offset (arrivals and departures a few pixels
+apart on one node) does to attachment, which ADR-0158's FC-T1 pins at zero unattached ends.
