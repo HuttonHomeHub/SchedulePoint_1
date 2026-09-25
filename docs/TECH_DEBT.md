@@ -11757,7 +11757,7 @@ not blocking: mark the checkbox `aria-busy` (or shade it with a reason) during t
 
 ### 391. The NetPoint-grammar gate pass's non-blocking findings
 
-**Status:** open · **Verified:** 2026-09-24 · **Raised:** 2026-09-24 (NetPoint grammar M6 reviews:
+**Status:** open · **Verified:** 2026-09-25 · **Raised:** 2026-09-24 (NetPoint grammar M6 reviews:
 accessibility, component, UX, performance) · **Size:** S · **Owner:** web
 
 The M6 gate pass folded every blocking finding (ADR-0157, "Gate pass"). These are what the four
@@ -11780,7 +11780,7 @@ reviews raised and did not block on.
 5. **A driving link to a hand-placed-late successor draws a long run with no gap label** (UX, and
    the M3 build record). A gap label means a non-driving tie's waiting time, so labelling this
    would put drift into that vocabulary; the successor's own feasible-window cue (ADR-0148) is the
-   channel for it. Recorded as accepted scope, pending the product owner's view.
+   channel for it. **Accepted by the product owner (2026-09-24)**: kept unlabelled, no work owed.
 6. **Two small counting budgets are unwritten** (performance): node style writes grouped by
    (ink, width) rather than per node, and an attachment-dot count, both true by inspection.
 7. **Direction-mark spacing is not tier-gated** (performance). `m0-lod.md` P3 says the 40 px
@@ -11802,3 +11802,7 @@ reviews raised and did not block on.
 12. **A gap label can be cut by the viewport's edge** (the M6 pictures, Unit 300 at Month: `24d`).
     It is placed on the longest stretch of its line inside the waiting interval, and that stretch
     may run off screen; clamping the placement to the visible part would keep it whole.
+
+The product owner answered the gate pass's other two questions the same day (ADR-0157, "The product
+owner's three answers"): the node stays 15 px, and a near-critical node now carries a centre dot, so
+the rim ladder's weak step no longer rests on weight alone. Neither leaves work here.

@@ -14,7 +14,7 @@
  * (ADR-0031) render one definition — the key can't drift from the canvas or itself.
  */
 import type { ColourLegend, ColourMode } from '../render/lenses';
-import { NODE_RIM_W } from '../render/render-model';
+import { NEAR_CRITICAL_DOT_R, NODE_RIM_W } from '../render/render-model';
 
 import {
   CANVAS_DATA_DATE_ENABLED,
@@ -270,7 +270,22 @@ export function TsldLegend({
                   backgroundColor: 'var(--canvas)',
                   border: `${NODE_RIM_W[item.criticality]}px solid ${item.fill ?? 'var(--foreground)'}`,
                 }}
-              />
+              >
+                {item.criticality === 'near' ? (
+                  // The near-critical node's centre dot, in the rim's ink as the painter draws it
+                  // (`NEAR_CRITICAL_DOT_R`): the cue that survives without colour or a weight
+                  // comparison, so the key must show it too.
+                  <span
+                    data-legend-node-dot=""
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    style={{
+                      width: NEAR_CRITICAL_DOT_R * 2,
+                      height: NEAR_CRITICAL_DOT_R * 2,
+                      backgroundColor: item.fill ?? 'var(--foreground)',
+                    }}
+                  />
+                ) : null}
+              </span>
             </span>
           ) : 'text' in item ? (
             <span aria-hidden="true" className="inline-flex h-3 w-5 justify-center" />

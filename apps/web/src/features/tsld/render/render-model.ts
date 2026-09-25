@@ -323,6 +323,21 @@ export const NODE_RIM_W: Readonly<Record<CriticalityRung, number>> = {
 };
 
 /**
+ * **Radius of the near-critical node's centre dot** (NetPoint grammar, product owner 2026-09-24).
+ *
+ * Weight alone separates the rungs by one pixel each (1 / 2 / 3), and the step between on-schedule
+ * and near-critical is the weak one in greyscale and on paper (the M6 accessibility review). So a
+ * near-critical node also carries a solid dot in its rim's ink: a second cue that needs neither
+ * colour nor a pixel-level comparison of weights, and that distinguishes near-critical from
+ * critical too (which has no dot).
+ *
+ * A legibility choice, not a derivation, bounded below by what reads as a dot (4 px across) and
+ * above by the ground it sits in: it must leave a visible ring of ground between itself and the
+ * rim's inner edge, which is what the structural case in `nodes.test.ts` asserts.
+ */
+export const NEAR_CRITICAL_DOT_R = 2;
+
+/**
  * How far a node reaches from its centre, rim included: the distance an arrowhead's tip is pulled
  * back along its line (spec §4.13 A1) and the clearance a date keeps from a disc (§4.13 A3). Charged
  * at the heaviest rim, so a shared node that took the heavier of two rungs is still cleared.

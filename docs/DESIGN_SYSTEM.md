@@ -1174,7 +1174,8 @@ Each diagram row is **60 px** and carries three things, each with one job:
 ▸ Duration & float`) and drawn from 6 px a day, because the reference prints no duration or float.
 
 The bar is **6 px** in `--canvas-bar`; each task end has a **15 px node** filled with the ground and
-ringed at 1, 2 or 3 px by criticality; a **milestone is a downward triangle** filled in its rung's
+ringed at 1, 2 or 3 px by criticality, and a **near-critical node also carries a 4 px centre dot** in
+its rim's ink (the cue for the one weight step that is weak without colour); a **milestone is a downward triangle** filled in its rung's
 colour, outlined 2 px when critical, 1.5 px when near-critical, not at all on schedule.
 
 A new cue for this row names which of the three rows it uses, and `paint.lane-containment.test.ts`
