@@ -104,7 +104,13 @@ other on one stroke read as neither link.
 - **A gap label's count can pass while one label is lost**, and FC-W6 could not see it; the M4 UX
   review found it in a picture. Decision 6 recovers 3 / 4 labels on Unit 300 at 4 / 12 px a day, and
   moves no route.
-- **Cost:** COST-OWED.
+- **Cost.** Tidy on Unit 300 went from 7.24 s to 11.12 s (1.54 ×), recorded under CQ-1; `scale-300`
+  packed 24.9 s (1.52 × M0). `paintScene` p95 at scale-2000 Week meets its bar on the mean (17.35
+  against 17.45 ms). **`routeFrame` p95 misses FC-Q1**: 8.55 ms against 8 ms and against 1.3 × its
+  5.03 ms baseline. The track pass adds about 2.8 ms of it; M2's text term had already used most of
+  the allowance. The first reading was 12.73 ms and 18.8 s, and four changes that move no line cut
+  it to these figures (`m3-verdict.md`, "Cost"). Dropped frames on the product owner's hardware
+  (FC-Q5) are owed.
 - **No schema, API or engine change.** `computeSchedule` is not imported and no migration runs.
 
 ## References

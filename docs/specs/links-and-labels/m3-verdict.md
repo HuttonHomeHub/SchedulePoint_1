@@ -114,18 +114,63 @@ separates that scene, so the track pass has nothing to do there, as the spec pre
    moved δ closer, it can reach one. The guard refuses a move that brings a line within reach of a
    node, other than its own two activities', that it was not within reach of before. After it, 14 → 14.
 
-## Cost
+## Cost: FC-Q1 misses on `routeFrame`
 
-_Owed: the FC-Q1 / FC-Q2 sitting on the final tree, and FC-Q3._
+Two sittings, each BASE → NEW → BASE → NEW with BASE the M1 tree (`f77671b6`) and its own harness
+(`node scripts/measure-route-cost.mjs`, `apps/web/src` swapped in place and restored). Headless
+Chromium rasterises in software. Means of the per-run p95s; every sample is in the table.
+
+| Measure (p95)      | BASE                                      | NEW, first sitting (`81d0c3af`) | NEW, second sitting (`f05fa2a5`)                 | Bar                         |
+| ------------------ | ----------------------------------------- | ------------------------------- | ------------------------------------------------ | --------------------------- |
+| `routeFrame` (ms)  | 4.7, 6.6, 4.7, 4.1 (**5.03**)             | 10.9, 12.4, 13.1, 14.5 (12.73)  | 9.1, 9.7, 7.1, 8.3 (**8.55**)                    | ≤ 8 and ≤ 1.3 × 5.03 = 6.53 |
+| `paintScene` (ms)  | 13.3, 13.9, 13.2, 13.3 (13.43)            | 22.6, 20.5, 22.0, 25.1 (22.55)  | 17.4, 17.9, 17.4, 16.7 (17.35)                   | ≤ 1.3 × 13.43 = 17.45       |
+| Tidy, Unit 300 (s) | 7.52, 7.31, 7.17, 7.49, 7.12, 6.85 (7.24) | 18.80 (six runs, 18.2–19.6)     | 11.21, 10.91, 11.48, 11.30, 11.09, 10.72 (11.12) | recorded (CQ-1)             |
+
+BASE is the second sitting's; the first sitting's BASE read 5.20 / 12.80 / 7.16, the same within
+spread. **`routeFrame` misses both limbs** (8.55 against 8 and against 6.53). `paintScene` meets its
+bar on the mean, by 0.10 ms, with one sample (17.9) over. Tidy is 1.54 × BASE, recorded under CQ-1.
+
+**What the pass itself costs.** The same tree with only the `splitResidueTracks` call bypassed (one
+run): `routeFrame` 6.3 / 5.2 ms p95, Tidy 9.70 / 9.09 / 8.78 s. So M3's pass adds about 2.8 ms p95
+(1.2 ms p50) to a frame of 306 routed links at scale-2000 Week, and about 2 s to Tidy. M2 had
+already used most of the 1.3 × allowance (its own sitting read 6.25 ms against its BASE 5.45, and
+the bypass here reads 5.75), so the pass would have had to cost under about 0.8 ms p95 to fit it.
+
+**The first sitting was far worse, and a review found it before the sitting did.** The performance
+review read the pass as testing every other line in the frame for each track; a CPU profile of one
+Tidy run then put 32 % of it in `nodesReached`, which tested every node for every moved line on both
+sides. Four changes, none of which moves a line (all 48 probe rows keep their fingerprint, tracks and
+opposed pairs): nodes sorted by x and searched; each line's pre-move node count and score taken once;
+the vertical-occupancy guard a binary search; and the crossing and shared-run guards counted on each
+moved line's window only (both are sums over segment pairs, so the rest cancels), against only the
+lines whose box meets a window's. `routeFrame` 12.73 → 8.55 ms, Tidy 18.8 → 11.1 s. What remains is
+spread over fixed per-frame work (spans, sorting, boxes) with no single term to remove.
+
+**My own first A/B was wrong, and is recorded because its number was nearly used.** To isolate the
+pass I made the block that runs it unreachable, which also skipped phase 2 and the gutter channels;
+it read `routeFrame` 2.4 ms and Tidy 5.4 s and credited all of the difference to the pass. The pass
+alone, timed inside `routeFrame` in node, was 2.6 s of Tidy, and the bypass above is the figure used.
+
+**The miss goes to the product owner.** The conditions give FC-Q1 no stop clause, and the choices
+are theirs: accept the cost, as CQ-1 did for Tidy; run the pass in the painter only and not in Tidy's
+objective (Tidy would then score a picture a few pixels different from the one drawn); or withdraw
+M3. FC-Q5 (dropped frames on the product owner's hardware) is owed and not claimed.
+
+FC-Q3 (`scale-300` packed, `PLANS=scale300 node scripts/measure-netpoint-optimise.mjs`, reported
+beside FC-Q2): **24.9 s** on the final tree (`9b84cabc`), against M0's 16.4 s: 1.52 ×, 1,817
+evaluations at 13.7 ms each, deterministic.
 
 ## Tests
 
 - `link-tracks.test.ts`: the split on a crowded shared node, the tie rule, a V link on one side at
   both ends, a same-direction bus and a frame with no opposed pair returned untouched by identity,
   an embed end refused, and one case per guard (ports, obstruction, node, text, crossing, occupied).
-  Nine mutations of `splitResidueTracks` each turn their own case red. The hidden-leg guard has no
-  case of its own: a hidden leg also counts as an obstruction, so it fires alone only when a move
-  takes a vertical out of one bar while running a horizontal into another.
+  Nine mutations of `splitResidueTracks` each turn their own case red. The hidden-leg guard had no
+  case of its own until the M4 test review showed it reachable and untested (deleting it left the
+  suite green); its case builds the one shape it fires alone on, a move that takes a vertical out of
+  one bar while running a horizontal into another, and goes red without the guard.
+- The cost shape: a line far from every track is read the same number of times whether one track
+  or eight is split (a counting stub, verified red at 260 reads against 36).
 - `nodeHeadTrim` (in `link-tracks.test.ts`): the rim on a node centre and beside one, verified red
   against the untrimmed reach; nothing trimmed elsewhere.
 - The derivation test: `PORT_OFFSET_PX` inside the window its bounds derive from the constants.

@@ -143,7 +143,9 @@ The shipped fixes are:
 - `plateBlocked` is always a number.
 
 Tidy fell to 8.7–8.9 s against BASE 7.2–7.4 s in a direct interleaved check, and the formal sitting
-above reads 1.22×. FC-Q3 (`scale-300` packed) is reported below.
+above reads 1.22×. FC-Q3 (`scale-300` packed) was said here to be reported below and was not taken
+at M2; it was taken on the final tree at M4 and is in [`m3-verdict.md`](./m3-verdict.md) (24.9 s,
+1.52 × M0's 16.4 s).
 
 ## Findings the gates made
 
