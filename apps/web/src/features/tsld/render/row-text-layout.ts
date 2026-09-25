@@ -78,6 +78,8 @@ export interface TextBox {
 /** One string the canvas draws, where and how. */
 export interface PlacedText {
   activityId: string;
+  /** The activity's lane: the text sits in that lane's name row or below-bar row. */
+  lane: number;
   kind: PlacedTextKind;
   text: string;
   x: number;
@@ -180,6 +182,7 @@ function boxes(
 
 function placed(
   activityId: string,
+  lane: number,
   kind: PlacedTextKind,
   text: string,
   x: number,
@@ -188,7 +191,7 @@ function placed(
   font: string,
   width: number,
 ): PlacedText {
-  return { activityId, kind, text, x, y, align, font, width, ...boxes(x, width, y, align) };
+  return { activityId, lane, kind, text, x, y, align, font, width, ...boxes(x, width, y, align) };
 }
 
 /** Every text item the layout drew or proposes, flattened: the router's and the probe's view. */
@@ -367,7 +370,17 @@ export function layoutRowText({
             steps.push({
               activityId: activity.id,
               bold,
-              line: placed(activity.id, 'name', text, cx, slots.nameY, 'center', font, fit(text)),
+              line: placed(
+                activity.id,
+                activity.laneIndex,
+                'name',
+                text,
+                cx,
+                slots.nameY,
+                'center',
+                font,
+                fit(text),
+              ),
               wrap: null,
             });
             continue;
@@ -381,6 +394,7 @@ export function layoutRowText({
               ? null
               : placed(
                   activity.id,
+                  activity.laneIndex,
                   'name',
                   oneLine,
                   centreFor(fit(oneLine)),
@@ -396,6 +410,7 @@ export function layoutRowText({
             wrap: {
               upper: placed(
                 activity.id,
+                activity.laneIndex,
                 'name-upper',
                 upper,
                 cx,
@@ -406,6 +421,7 @@ export function layoutRowText({
               ),
               lower: placed(
                 activity.id,
+                activity.laneIndex,
                 'name-lower',
                 text,
                 cx,
@@ -424,6 +440,7 @@ export function layoutRowText({
           legacy.push(
             placed(
               activity.id,
+              activity.laneIndex,
               'inside',
               text,
               rect.x + insidePad,
@@ -440,7 +457,17 @@ export function layoutRowText({
           if (!text) continue;
           order.push({ legacy: legacy.length });
           legacy.push(
-            placed(activity.id, 'beside', text, startX, cy, 'left', LABEL_FONT, regular(text)),
+            placed(
+              activity.id,
+              activity.laneIndex,
+              'beside',
+              text,
+              startX,
+              cy,
+              'left',
+              LABEL_FONT,
+              regular(text),
+            ),
           );
         }
       }
@@ -615,6 +642,7 @@ export function layoutRowText({
               items.push(
                 placed(
                   activity.id,
+                  activity.laneIndex,
                   'milestone-date',
                   startText,
                   rect.x + rect.w / 2,
@@ -632,6 +660,7 @@ export function layoutRowText({
             items.push(
               placed(
                 activity.id,
+                activity.laneIndex,
                 'date-start',
                 startText,
                 span.left,
@@ -650,6 +679,7 @@ export function layoutRowText({
               items.push(
                 placed(
                   activity.id,
+                  activity.laneIndex,
                   'date-finish',
                   finishText,
                   span.right,
@@ -681,6 +711,7 @@ export function layoutRowText({
               items.push(
                 placed(
                   activity.id,
+                  activity.laneIndex,
                   'date-start',
                   startText,
                   rect.x - offset,
@@ -695,6 +726,7 @@ export function layoutRowText({
               items.push(
                 placed(
                   activity.id,
+                  activity.laneIndex,
                   'date-finish',
                   finishText,
                   rect.x + rect.w + offset,
@@ -714,6 +746,7 @@ export function layoutRowText({
           flank.push({
             item: placed(
               activity.id,
+              activity.laneIndex,
               'flank-start',
               startText,
               rect.x - LABEL_GAP_PX,
@@ -731,6 +764,7 @@ export function layoutRowText({
           flank.push({
             item: placed(
               activity.id,
+              activity.laneIndex,
               'flank-finish',
               finishText,
               rect.x + rect.w + LABEL_GAP_PX,
@@ -816,6 +850,7 @@ export function layoutRowText({
         items.push(
           placed(
             activity.id,
+            activity.laneIndex,
             'centre',
             text,
             (left + right) / 2,

@@ -39,12 +39,19 @@
 import { createHash } from 'node:crypto';
 
 import { netpointReferencePlan } from '../../seed-cli/src/references/netpoint-power-plant';
-import { rowSlots, screenYOfLane, wrappedNameYs } from '../src/features/tsld/render/geometry';
+import { canvasLabel } from '../src/features/tsld/render/a11y';
+import {
+  rowReservesTextRows,
+  rowSlots,
+  screenYOfLane,
+  wrappedNameYs,
+} from '../src/features/tsld/render/geometry';
 import {
   DEFAULT_VIEW_TOGGLES,
   paintScene,
   type TsldScene,
 } from '../src/features/tsld/render/paint';
+import { buildPaintFrame } from '../src/features/tsld/render/paint-frame';
 import {
   activityRect,
   ARROWHEAD_ROUTED_PX,
@@ -62,6 +69,12 @@ import {
   type Viewport,
 } from '../src/features/tsld/render/render-model';
 import { routeFrame } from '../src/features/tsld/render/route-frame';
+import {
+  layoutRowText,
+  type PlacedText,
+  type PlacedTextKind,
+  type RowTextLayout,
+} from '../src/features/tsld/render/row-text-layout';
 
 import {
   countCrossings,
@@ -319,6 +332,123 @@ export function textKindOf(t: RecordedText, view: Viewport): TextKind {
 const GAP_LABEL = /^\d+d$|^\d+ cal d$/;
 const LAG_PLATE = /^[+−]\d/;
 
+/**
+ * **The text layout the painter drew, recomputed** (links-and-labels M1-T3, FC-W0). The module is
+ * run on the painter's own frame (`buildPaintFrame`'s `laneRows`) with the recording context's
+ * width, 6 px a character whatever the font (`crossing-probe.ts` `recordingCtx`), so its items and
+ * the recorded `fillText` calls are comparable exactly.
+ */
+export function moduleLayout(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): RowTextLayout {
+  const { ctx } = recordingCtx();
+  const frame = buildPaintFrame(ctx as Parameters<typeof buildPaintFrame>[0], scene, view, size);
+  const withCodes = frame.toggles.activityCodes === true;
+  return layoutRowText({
+    rows: frame.laneRows,
+    view,
+    size,
+    toggles: frame.toggles,
+    visualRefresh: scene.visualRefresh === true,
+    reservesTextRows: rowReservesTextRows(),
+    measure: (t) => t.length * 6,
+    labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
+  });
+}
+
+export interface TextAgreement {
+  /** Recorded texts matched to a module item, by index into `texts`, with the item's kind. */
+  kinds: Map<number, PlacedTextKind>;
+  /** Wrap proposals the painter took (both lines drawn), and ones it fell back from. */
+  wrapsTaken: number;
+  wrapsFallenBack: number;
+  /** Module items the painter did not draw, and non-link texts it drew that no item placed. */
+  mismatches: string[];
+}
+
+const textKey = (text: string, x: number, y: number, align: string): string =>
+  `${text}|${x.toFixed(2)}|${y.toFixed(2)}|${align}`;
+
+/**
+ * FC-W0: the module's items against the recorded `fillText` calls. A wrap proposal is judged by what
+ * the painter did with it: both lines drawn is a wrap taken (listed, not failed), otherwise the
+ * fallback line is expected. Link labels (lag plates, gap labels) are not the module's and are left
+ * out of the drawn side. Exact: same text, x, y and alignment, to 0.01 px.
+ */
+export function textAgreement(
+  layout: RowTextLayout,
+  texts: readonly RecordedText[],
+): TextAgreement {
+  const drawn = new Map<string, number[]>();
+  texts.forEach((t, i) => {
+    const key = textKey(t.text, t.x, t.y, String(t.align));
+    drawn.set(key, [...(drawn.get(key) ?? []), i]);
+  });
+  const kinds = new Map<number, PlacedTextKind>();
+  const mismatches: string[] = [];
+  const take = (item: PlacedText): boolean => {
+    const list = drawn.get(textKey(item.text, item.x, item.y, item.align));
+    const i = list?.shift();
+    if (i === undefined) return false;
+    kinds.set(i, item.kind);
+    return true;
+  };
+  const expect = (item: PlacedText): void => {
+    if (!take(item))
+      mismatches.push(
+        `not drawn: ${item.kind} "${item.text}" at ${item.x.toFixed(2)},${item.y.toFixed(2)}`,
+      );
+  };
+  let wrapsTaken = 0;
+  let wrapsFallenBack = 0;
+  if (layout.names) {
+    for (const step of layout.names.steps) {
+      if (step.line) expect(step.line);
+      else if (step.wrap) {
+        const { upper, lower, fallback } = step.wrap;
+        const u = drawn.get(textKey(upper.text, upper.x, upper.y, upper.align));
+        const l = drawn.get(textKey(lower.text, lower.x, lower.y, lower.align));
+        if (u?.length && l?.length) {
+          wrapsTaken += 1;
+          take(upper);
+          take(lower);
+        } else {
+          wrapsFallenBack += 1;
+          if (fallback) expect(fallback);
+        }
+      }
+    }
+    layout.names.legacy.forEach(expect);
+  }
+  if (layout.dates) {
+    for (const step of layout.dates.reserved) step.items.forEach(expect);
+    for (const f of layout.dates.flank) expect(f.item);
+  }
+  if (layout.centre) layout.centre.items.forEach(expect);
+  texts.forEach((t, i) => {
+    if (kinds.has(i) || LAG_PLATE.test(t.text) || GAP_LABEL.test(t.text)) return;
+    mismatches.push(`drawn but not placed: "${t.text}" at ${t.x.toFixed(2)},${t.y.toFixed(2)}`);
+  });
+  return { kinds, wrapsTaken, wrapsFallenBack, mismatches };
+}
+
+/** The probe's text kinds, from the module's (M1-T3). */
+const KIND_OF: Record<PlacedTextKind, TextKind> = {
+  name: 'name',
+  'name-upper': 'name-wrapped',
+  'name-lower': 'name-wrapped',
+  'date-start': 'date',
+  'date-finish': 'date',
+  'milestone-date': 'milestone-date',
+  centre: 'centre',
+  inside: 'name',
+  beside: 'name',
+  'flank-start': 'date',
+  'flank-finish': 'date',
+};
+
 export interface AttachmentReading {
   edges: number;
   /** Lines `routeFrame` returned — the denominator. */
@@ -353,6 +483,11 @@ export interface AttachmentReading {
    * throws rather than being counted as something it is not.
    */
   textCrossingsByKind: Record<TextKind, number>;
+  /** FC-W0: wraps the painter took and fell back from; the agreement itself is enforced (throws). */
+  wrapsTaken: number;
+  wrapsFallenBack: number;
+  /** Non-link texts drawn (the module's items the painter drew). FC-W0's vacuity count. */
+  textsDrawn: number;
   /** `textCrossings` by the orientation of the first segment that met the text: `h` or `v`. */
   textCrossingsByOrientation: { h: number; v: number };
   /** Lag plates whose text meets a name or date. */
@@ -646,16 +781,34 @@ export function readAttachment(
   const boxes: ReturnType<typeof textBox>[] = [];
   const kinds: TextKind[] = [];
   const plateBoxes: ReturnType<typeof textBox>[] = [];
-  for (const t of texts) {
-    if (LAG_PLATE.test(t.text)) {
+  // **FC-W0, enforced on every reading** (links-and-labels M1-T3): every non-link text the painter
+  // drew must be a module item at the same text, x, y and alignment, and every item the module
+  // placed must be drawn. A reading of text the module did not place would be a reading of a
+  // different layout from the one the router reads (M2), so the probe refuses it.
+  const agreement = textAgreement(moduleLayout(scene, view, size), texts);
+  if (agreement.mismatches.length > 0) {
+    throw new Error(
+      `FC-W0: the painter's text and the module's disagree (${agreement.mismatches.length}): ` +
+        agreement.mismatches.slice(0, 5).join('; '),
+    );
+  }
+  texts.forEach((t, i) => {
+    const kind = agreement.kinds.get(i);
+    if (kind !== undefined) {
+      boxes.push(textBox(t));
+      // The module's kind, cross-checked against the row band the text sits in (M0-T2's
+      // classifier): two classifiers that share no code, agreeing, on every text.
+      const mapped = KIND_OF[kind];
+      const byBand = textKindOf(t, view);
+      if (mapped !== byBand) {
+        throw new Error(`text "${t.text}": the module says ${mapped}, its row band says ${byBand}`);
+      }
+      kinds.push(mapped);
+    } else if (LAG_PLATE.test(t.text)) {
       lagPlates += 1;
       plateBoxes.push(textBox(t));
     } else if (GAP_LABEL.test(t.text)) gapLabels += 1;
-    else {
-      boxes.push(textBox(t));
-      kinds.push(textKindOf(t, view));
-    }
-  }
+  });
   // A plate's TEXT meeting a name or date (node-to-node links M3, the UX gate's finding): the one
   // text-on-text case the line-segment count above cannot see, because a plate is not a segment.
   // Text boxes are the ink's, one font size high, so a graze into a row's leading does not count.
@@ -706,6 +859,9 @@ export function readAttachment(
     textCrossings,
     textCrossingsByKind,
     textCrossingsByOrientation,
+    wrapsTaken: agreement.wrapsTaken,
+    wrapsFallenBack: agreement.wrapsFallenBack,
+    textsDrawn: agreement.kinds.size,
     platesOnText,
     gapLabels,
     lagPlates,
