@@ -5854,7 +5854,7 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   written. Two of FC-G7's counting budgets were unwritten, and the pictures had been judged at M2
   only. **The CPM engine is not imported and no migration runs.**
 
-- **ADR-0158** _(Accepted; M0–M3 landed 2026-09-25)_ — A link leaves and enters at its node. The
+- **ADR-0158** _(Accepted; M0–M3 landed 2026-09-25, M4 diagonals recorded not valid)_ — A link leaves and enters at its node. The
   product owner asked for logic links that "come directly to the nodes unless a lead/lag is there",
   NetPoint-style. ADR-0151 already said every link converges on the node glyph; the router never
   made it true, because its elbow sat 4–12 px outside the anchored edge, inside a 9 px node reach, so
@@ -5883,7 +5883,11 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   gutter packer broke ties by input position; it now breaks them by edge id. Four cost changes that
   move no route (binary search, lazily cut segments, an index range for a generator, an early exit)
   took Tidy from INDETERMINATE to **1.21× its baseline in one sitting**, inside the 1.5× bar.
-  Diagonals (M4) are judged against these numbers and dropped on any failure.
+  **Diagonals (M4) are not valid**: built outside the branch behind a constant and measured, they
+  failed five of eight conditions, the one spec §4.8 predicted leading. A long wait becomes a shallow
+  slope behind bars and through name and date rows (reference plan: bars passed through 1 → 4, text
+  crossings 10 → 13), while Unit 300 gains 0.6 % on crossings against 5 % required. Recorded without
+  asking again, as the product owner had instructed, and ADR-0065's "Diagonal segments" clause stands.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

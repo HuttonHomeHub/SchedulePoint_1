@@ -109,8 +109,20 @@ segments are cut once and reused; phase 2 walks an index range, not a generator;
 once; and phase 2 stops early on a link that crosses and overlaps nothing. None of the cost changes
 moves a route: the attachment measure's fingerprints are identical before and after.
 
-## Diagonals
+## Diagonals are not valid
 
-Left open at filing. M4 builds them behind a module constant and judges FC-D0 to FC-D8. On any
-failure they are recorded here as not valid, with the numbers, and the product owner is not asked
-again.
+Diagonals were built outside the product branch behind a module constant, measured, and failed five
+of their eight conditions. By the product owner's standing instruction they are recorded here as not
+valid, and the product owner is not asked again ([`m4-verdict.md`](../specs/node-to-node-links/m4-verdict.md)).
+
+- **FC-D2**, links through a foreign bar: 1 → 4 on the reference plan at every zoom.
+- **FC-D3**, text crossings: 10 → 13 on the reference plan at 4 px/day.
+- **FC-D4**, gap labels drawn: fewer on three fixtures (17 → 15 on the reference plan).
+- **FC-D6**, benefit: Unit 300's crossings per link fall 0.6 % against 5 % required, and its bends 2 %
+  against 20 %.
+- **FC-D7**, a diagonal on every fixture: none is possible on the brief fixture at 4 px/day.
+
+The failure is the one spec §4.8 predicted. A long waiting interval gives a shallow slope across
+many lanes, which passes behind bars and through the name and date rows between. The construction
+rule answers ADR-0065's objection that a slope asserts work across the days it spans, and it
+answers nothing about legibility. ADR-0065's "Diagonal segments" clause therefore stands.

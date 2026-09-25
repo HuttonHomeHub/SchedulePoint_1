@@ -165,6 +165,9 @@ are filled in at M4 from `m2-verdict.md`.
 - **FC-D7, non-vacuity:** at least one diagonal drawn on each fixture at 4 px/day.
 - **FC-D8, cost:** within FC-T8.
 
+**Judged 2026-09-25: five fail (FC-D2, D3, D4, D6, D7), so diagonals are not valid**
+([`m4-verdict.md`](./m4-verdict.md)).
+
 **Any FC-D failure drops diagonals.** They are recorded as not valid in ADR-0158, and the product
 owner is not asked again (the product owner, 2026-09-25: "if the diagonal is an issue lets leave it
 as not valid").
