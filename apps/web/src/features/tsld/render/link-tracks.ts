@@ -202,16 +202,50 @@ function crossingsBetween(a: readonly Point[], b: readonly Point[]): number {
   return n;
 }
 
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+function boxOf(line: readonly Point[]): Box {
+  const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  for (const p of line) {
+    if (p.x < box.x0) box.x0 = p.x;
+    if (p.x > box.x1) box.x1 = p.x;
+    if (p.y < box.y0) box.y0 = p.y;
+    if (p.y > box.y1) box.y1 = p.y;
+  }
+  return box;
+}
+
+const boxesMeet = (a: Box, b: Box): boolean =>
+  a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
+
 /** How many node centres, other than the line's own two activities', lie within reach of `line`. */
 function nodesReached(
   line: readonly Point[],
+  /** Sorted by x (`byX`), so only the nodes within reach of the line's x-range are tested. */
   nodes: readonly TrackNode[],
   a: string,
   b: string,
 ): number {
+  const box = boxOf(line);
+  let lo = 0;
+  let hi = nodes.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (nodes[mid]!.point.x < box.x0 - NODE_REACH_PX) lo = mid + 1;
+    else hi = mid;
+  }
   let n = 0;
-  for (const { id, point: c } of nodes) {
-    if (id === a || id === b) continue;
+  for (let k = lo; k < nodes.length; k += 1) {
+    const { id, point: c } = nodes[k]!;
+    if (c.x > box.x1 + NODE_REACH_PX) break;
+    if (id === a || id === b || c.y < box.y0 - NODE_REACH_PX || c.y > box.y1 + NODE_REACH_PX) {
+      continue;
+    }
     for (let i = 1; i < line.length; i += 1) {
       const p = line[i - 1]!;
       const q = line[i]!;
@@ -220,7 +254,9 @@ function nodesReached(
       const len2 = dx * dx + dy * dy;
       const t =
         len2 === 0 ? 0 : Math.max(0, Math.min(1, ((c.x - p.x) * dx + (c.y - p.y) * dy) / len2));
-      if (Math.hypot(p.x + t * dx - c.x, p.y + t * dy - c.y) < NODE_REACH_PX) {
+      const ex = p.x + t * dx - c.x;
+      const ey = p.y + t * dy - c.y;
+      if (ex * ex + ey * ey < NODE_REACH_PX * NODE_REACH_PX) {
         n += 1;
         break;
       }
@@ -248,27 +284,6 @@ function collinearOverlaps(a: readonly Point[], b: readonly Point[]): number {
   return n;
 }
 
-interface Box {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-}
-
-function boxOf(line: readonly Point[]): Box {
-  const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
-  for (const p of line) {
-    if (p.x < box.x0) box.x0 = p.x;
-    if (p.x > box.x1) box.x1 = p.x;
-    if (p.y < box.y0) box.y0 = p.y;
-    if (p.y > box.y1) box.y1 = p.y;
-  }
-  return box;
-}
-
-const boxesMeet = (a: Box, b: Box): boolean =>
-  a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
-
 /**
  * Split every vertical track that still carries an opposed overlap, where §4.7's guards allow. The
  * input lines are not mutated.
@@ -291,12 +306,24 @@ export function splitResidueTracks(
 
   // The pre-pass picture every guard reads, so no track's decision depends on another's.
   const allSpans = verticalSpans(before);
-  // Each line's box, built once and only when a track is opposed.
+  // The same verticals sorted by x, so "does a moved segment land on one" is a search, not a scan.
+  const spanXs = [...allSpans].map(([key, list]) => ({ x: Number(key), list }));
+  spanXs.sort((p, q) => p.x - q.x);
+  // Each line's box, and the nodes sorted by x, built once and only when a track is opposed.
   let boxes: Box[] | undefined;
+  let byX: TrackNode[] | undefined;
   const scoreOf = (link: number, line: readonly Point[]) => {
     const counts = obstructionCounts(line, glyphs, links[link]!.own, view);
     return { total: counts.total, legs: counts.legs, text: textCrossings(line, text, view) };
   };
+  // A link's pre-pass score and node count, asked by both sides of every track it lies on: once.
+  const wasScores = new Map<number, ReturnType<typeof scoreOf>>();
+  const wasScore = (link: number) => {
+    let score = wasScores.get(link);
+    if (!score) wasScores.set(link, (score = scoreOf(link, before[link]!)));
+    return score;
+  };
+  const wasNodes = new Map<number, number>();
 
   for (const [key, spans] of allSpans) {
     for (const track of tracksOf(spans)) {
@@ -319,12 +346,30 @@ export function splitResidueTracks(
 
       const trackLinks = [...new Set(track.map((s) => s.link))];
       const onTrack = new Set(trackLinks);
-      // Only a line whose box meets a moved line's box, widened by the move, can cross it or share
-      // a run with it; every other pair counts 0 before and after. So the guards test those lines
-      // alone, and a track's work follows the lines near it, not the frame (the M4 performance
-      // review: every other visible line was tested, and in Tidy that is every line in the plan).
+      // A move changes a line only in its moved segments and the two either side of each, which it
+      // lengthens by δ. Crossings and shared runs are sums over segment pairs, so the guards count
+      // them on each moved line's window (one segment before its first moved segment to one after
+      // its last) and every other pair cancels between before and after. The window's segments are
+      // the same for both sides, so the side chosen is unchanged too. And only a line whose box
+      // meets a window's box, widened by the move, can cross it or share a run with it. So a
+      // track's work follows the segments it moves, not the frame (the M4 performance review:
+      // every other visible line was tested in full, and in Tidy that is every line in the plan).
+      const windows = new Map<number, [number, number]>();
+      for (const span of track) {
+        const w = windows.get(span.link);
+        windows.set(
+          span.link,
+          w ? [Math.min(w[0], span.seg), Math.max(w[1], span.seg)] : [span.seg, span.seg],
+        );
+      }
+      const windowOf = (link: number, line: readonly Point[]): readonly Point[] => {
+        const [first, last] = windows.get(link)!;
+        return line.slice(Math.max(0, first - 1), Math.min(line.length, last + 3));
+      };
       boxes ??= before.map(boxOf);
-      const reach = boxOf(trackLinks.flatMap((i) => before[i]!));
+      byX ??= [...nodes].sort((p, q) => p.point.x - q.point.x);
+      const sortedNodes = byX;
+      const reach = boxOf(trackLinks.flatMap((i) => windowOf(i, before[i]!)));
       reach.x0 -= delta + OVERLAP_PX;
       reach.x1 += delta + OVERLAP_PX;
       reach.y0 -= OVERLAP_PX;
@@ -332,6 +377,20 @@ export function splitResidueTracks(
       const others: number[] = [];
       for (let i = 0; i < boxes.length; i += 1) {
         if (!onTrack.has(i) && boxesMeet(boxes[i]!, reach)) others.push(i);
+      }
+      // What each track line's window crosses and shares before the move: the same for both sides.
+      const crossedBefore = new Map<number, number>();
+      const sharedBefore = new Map<number, number[]>();
+      for (const link of trackLinks) {
+        const window = windowOf(link, before[link]!);
+        let crossed = 0;
+        const shared: number[] = [];
+        for (const other of others) {
+          crossed += crossingsBetween(window, before[other]!);
+          shared.push(collinearOverlaps(window, before[other]!));
+        }
+        crossedBefore.set(link, crossed);
+        sharedBefore.set(link, shared);
       }
       const x = Number(key);
 
@@ -361,7 +420,7 @@ export function splitResidueTracks(
           if (!predPort || !succPort || !obeysPorts(line, predPort, succPort)) {
             return { moved, fail: 'ports', cost: [] };
           }
-          const was = scoreOf(link, before[link]!);
+          const was = wasScore(link);
           const now = scoreOf(link, line);
           if (now.total > was.total) return { moved, fail: 'obstruction', cost: [] };
           if (now.legs > was.legs) return { moved, fail: 'hidden-leg', cost: [] };
@@ -369,16 +428,20 @@ export function splitResidueTracks(
           // see it pass beside a neighbour's node; moved δ closer, it can reach one (the first
           // reading made two such junctions on Unit 300: `m3-verdict.md`).
           const [a, b] = links[link]!.endIds;
-          if (nodesReached(line, nodes, a, b) > nodesReached(before[link]!, nodes, a, b)) {
+          let reachedBefore = wasNodes.get(link);
+          if (reachedBefore === undefined) {
+            reachedBefore = nodesReached(before[link]!, sortedNodes, a, b);
+            wasNodes.set(link, reachedBefore);
+          }
+          if (nodesReached(line, sortedNodes, a, b) > reachedBefore) {
             return { moved, fail: 'node', cost: [] };
           }
           if (now.text > was.text) return { moved, fail: 'text', cost: [] };
           textAfter += now.text;
           obstructionsAfter += now.total;
-          for (const other of others) {
-            crossingsBefore += crossingsBetween(before[link]!, before[other]!);
-            crossingsAfter += crossingsBetween(line, before[other]!);
-          }
+          crossingsBefore += crossedBefore.get(link)!;
+          const window = windowOf(link, line);
+          for (const other of others) crossingsAfter += crossingsBetween(window, before[other]!);
         }
         for (let i = 0; i < trackLinks.length; i += 1) {
           for (let j = i + 1; j < trackLinks.length; j += 1) {
@@ -393,11 +456,10 @@ export function splitResidueTracks(
         // No moved line may overlap another line along a horizontal it did not before: moving a
         // vertical lengthens the horizontals either side of it by δ.
         for (const [link, line] of moved) {
-          for (const other of others) {
-            if (
-              collinearOverlaps(line, before[other]!) >
-              collinearOverlaps(before[link]!, before[other]!)
-            ) {
+          const window = windowOf(link, line);
+          const shared = sharedBefore.get(link)!;
+          for (let k = 0; k < others.length; k += 1) {
+            if (collinearOverlaps(window, before[others[k]!]!) > shared[k]!) {
               return { moved, fail: 'occupied', cost: [] };
             }
           }
@@ -405,9 +467,15 @@ export function splitResidueTracks(
         // No moved segment may land on a vertical another line already runs along.
         for (const s of track) {
           const nx = x + (s.dir === 1 ? downDx : -downDx);
-          for (const [otherKey, list] of allSpans) {
-            if (Math.abs(Number(otherKey) - nx) > OVERLAP_PX) continue;
-            if (list.some((t) => t.link !== s.link && overlaps(s, t))) {
+          let lo = 0;
+          let hi = spanXs.length;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (spanXs[mid]!.x < nx - OVERLAP_PX) lo = mid + 1;
+            else hi = mid;
+          }
+          for (let k = lo; k < spanXs.length && spanXs[k]!.x <= nx + OVERLAP_PX; k += 1) {
+            if (spanXs[k]!.list.some((t) => t.link !== s.link && overlaps(s, t))) {
               return { moved, fail: 'occupied', cost: [] };
             }
           }
