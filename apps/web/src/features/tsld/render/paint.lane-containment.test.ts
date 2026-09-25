@@ -439,6 +439,18 @@ const CASES: readonly Case[] = [
         edges: [{ id: 'd1', predecessorId: 'da', successorId: 'db', type: 'SS', isDriving: false }],
       },
     ),
+    // **The link, not the dot** (node-to-node links M2, ADR-0158). An embed may only be left
+    // vertically, so this same-lane SS+2 link drops from the dot to the gutter on the lane boundary
+    // and runs along it (a VHV). Its stroke, a direction mark on the drop, and the lag plate on its
+    // longest run (the gutter run, centred on the boundary) therefore reach just past the lane. The
+    // gutter is where links are meant to run (ADR-0150); the dot itself stays inside.
+    escapes: [
+      'stroke 29.5..60.5 of 0..60',
+      'fill 39..62.5 of 0..60',
+      'fillRect 53.5..66.5 of 0..60',
+      'strokeRect 53.5..66.5 of 0..60',
+      'fillText 53.39999999999998..66.60000000000002 of 0..60',
+    ],
   },
   {
     // A name wraps only where it would otherwise truncate, and it truncates only against a

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { MAX_ROUTE_CANDIDATES } from './link-candidates';
+import { glyphIndex, routeNodeToNode } from './link-score';
 import { paintScene, type Ctx2D, type TsldPalette, type TsldScene } from './paint';
 import {
+  activityRect,
   ARROWHEAD_PX,
   ARROWHEAD_ROUTED_PX,
   LANE_HEIGHT,
@@ -24,8 +27,9 @@ import {
  *    carries two changes — the corridor and the T17 arrowhead — so the corridor assertions compare
  *    the **line**, and the head has its own test. Comparing the trace whole would fail for the one
  *    reason those tests are not about.
- * 2. **The cost is bounded and proportionate.** Routing adds a per-frame interval index over the
- *    culled set plus, per edge, a binary search per crossed lane. The failure mode this guards is
+ * 2. **The cost is bounded and proportionate.** Node-to-node routing (ADR-0158) adds a per-frame
+ *    glyph index over the culled set plus, per edge, at most eleven shapes, each scored once with a
+ *    binary search into each lane it touches. The failure mode this guards is
  *    the one every obstacle-avoidance implementation reaches for first: an unbounded search that
  *    looks free on a ten-bar fixture and blows the ADR-0026 ≤4 ms budget at two thousand.
  *
@@ -244,17 +248,21 @@ describe('link routing — the painter-level flag-off parity gate', () => {
     expect(crossings.some((x) => x >= OBSTACLE_X0 && x <= OBSTACLE_X1)).toBe(true);
   });
 
-  it('leaves a clear corridor alone even with the flag ON', () => {
-    // The candidate search runs only when the preferred elbow is actually blocked. A route that
-    // moved for no reason would be the diagram twitching between frames — and it is why the
-    // obstacle branch returns early on an empty crossed-lane set rather than "optimising" anyway.
-    //
-    // The comparison is the LINE, not the whole trace: the arrowhead legitimately differs, because
-    // the routed head (T17) rides the same flag and is longer. Comparing the trace whole would make
-    // this test fail for the one reason it is not about.
-    expect(linkPolyline(paint(CLEAR, [edge('a', 'b')], true).path)).toEqual(
-      linkPolyline(paint(CLEAR, [edge('a', 'b')], false).path),
-    );
+  it('joins a clear link node to node with the flag ON', () => {
+    // Node-to-node links M2 (ADR-0158): with routing on, every link leaves its predecessor's node
+    // and enters its successor's, so even a clear corridor is redrawn. The elbow the flag-off path
+    // draws bends 5 px from the finish node, inside its disc; the routed line drops straight out
+    // of the node (VH) and runs along the successor's lane into its start node from the west.
+    const on = linkPolyline(paint(CLEAR, [edge('a', 'b')], true).path);
+    expect(on).not.toEqual(linkPolyline(paint(CLEAR, [edge('a', 'b')], false).path));
+    const pts = on.map((cmd) => {
+      const m = /^[ML](-?[\d.]+),(-?[\d.]+)$/.exec(cmd)!;
+      return { x: Number(m[1]), y: Number(m[2]) };
+    });
+    // a finishes at day 5 (x = 60) in lane 0; b starts at day 10 (x = 120) in lane 2.
+    expect(pts[0]).toEqual({ x: 60, y: LANE_HEIGHT / 2 });
+    expect(pts[1]).toEqual({ x: 60, y: 2 * LANE_HEIGHT + LANE_HEIGHT / 2 });
+    expect(pts.at(-1)!.y).toBe(2 * LANE_HEIGHT + LANE_HEIGHT / 2);
   });
 
   it('is wired — a blocked corridor draws a different LINE with the flag on', () => {
@@ -322,17 +330,46 @@ function denseEdges(): RenderEdge[] {
 }
 
 describe('link routing — draw-budget gate at 2,000 activities (T19)', () => {
-  it('adds a bounded number of extra segments, never an unbounded search', () => {
+  it('draws no more points than the elbow it replaces, and the fixture exercises it', () => {
     const activities = densePlan();
     const edges = denseEdges();
     const off = paint(activities, edges, false, 2);
     const on = paint(activities, edges, true, 2);
-    // A four-point elbow becomes at most a six-point gutter route: two extra points per edge is the
-    // ceiling the geometry can emit, and `MAX_CORRIDOR_CANDIDATES` bounds the search behind it.
-    expect(on.lineTo - off.lineTo).toBeLessThanOrEqual(edges.length * 2);
-    // …and the fixture actually exercises it. Without this the ceiling above is satisfied by a
-    // routing pass that never ran, which is exactly what the first run of this suite measured.
-    expect(on.lineTo).toBeGreaterThan(off.lineTo);
+    // Node-to-node links M2 (ADR-0158): the longest shape (HVH, VHV) is four points, the same as
+    // the flag-off elbow, so routing can never add segments. The heads trim at a node but keep
+    // their vertex count.
+    expect(on.lineTo).toBeLessThanOrEqual(off.lineTo);
+    // …and the fixture actually routes: without this the ceiling is met by a pass that never ran.
+    expect(on.lineTo).not.toBe(off.lineTo);
+  });
+
+  it('tries at most eleven shapes per link across the whole dense plan (FC-T8 a)', () => {
+    const activities = densePlan();
+    const byId = new Map(activities.map((a) => [a.id, a]));
+    const view: Viewport = { pxPerDay: 2, originX: 0, originY: 0 };
+    const glyphs = glyphIndex(activities, view, DATA_DATE);
+    let most = 0;
+    for (const e of denseEdges()) {
+      const from = byId.get(e.predecessorId)!;
+      const to = byId.get(e.successorId)!;
+      const fromRect = activityRect(from, view, DATA_DATE)!;
+      const toRect = activityRect(to, view, DATA_DATE)!;
+      const shapes = routeNodeToNode(
+        {
+          from,
+          to,
+          fromRect,
+          toRect,
+          fromAnchor: { x: fromRect.x + fromRect.w, y: fromRect.y + fromRect.h / 2 },
+          toAnchor: { x: toRect.x, y: toRect.y + toRect.h / 2 },
+        },
+        glyphs,
+        view,
+      );
+      most = Math.max(most, shapes.length);
+    }
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(MAX_ROUTE_CANDIDATES);
   });
 
   it('reports its measurement so the T21 default-on decision is made on data', () => {

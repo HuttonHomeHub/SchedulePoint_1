@@ -357,6 +357,11 @@ keep `main` releasable.
   hidden links from 58 to 17 and crossings from 360 to 204 without adding a row. The prompt at the
   foot of the diagram now appears only when activities overlap in a lane.
 
+- **Links join at the nodes** (ADR-0158, amending ADR-0065/0149/0150). Every logic link now leaves
+  its predecessor's node and enters its successor's from a side the node allows, with any bend clear
+  of the glyph, choosing the shortest of up to eleven shapes that avoid other bars. Links from one
+  node share a stem, the way NetPoint draws a hub. A lag still joins partway along the bar.
+
 - **The canvas reads like NetPoint** (ADR-0157, amending ADR-0054/0056/0102/0151/0154). Each kind
   of mark now has its own colour and shape, and the time grid is the quietest thing on the picture:
   - day and month gridlines are faint and dashed, so the logic lines stand out; on paper they stay

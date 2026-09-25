@@ -1,0 +1,648 @@
+diff --git a/apps/web/scripts/attachment-probe.ts b/apps/web/scripts/attachment-probe.ts
+index 9d3780bc..d2960a2c 100644
+--- a/apps/web/scripts/attachment-probe.ts
++++ b/apps/web/scripts/attachment-probe.ts
+@@ -63,6 +63,8 @@ import { routeFrame } from '../src/features/tsld/render/route-frame';
+ import {
+   countCrossings,
+   countOcclusions,
++  lineOcclusion,
++  occlusionContext,
+   linkPaths,
+   PALETTE,
+   recordingCtx,
+@@ -134,6 +136,7 @@ export function endSpecOf(
+ interface Run {
+   dir: Dir;
+   len: number;
++  slope?: boolean;
+ }
+ 
+ /**
+@@ -150,16 +153,20 @@ export function runsOf(line: readonly Point[]): { runs: Run[]; diagonal: number
+     const dy = b.y - a.y;
+     if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) continue;
+     let dir: Dir;
++    let slope = false;
+     if (Math.abs(dy) < 1e-6) dir = dx > 0 ? 'E' : 'W';
+     else if (Math.abs(dx) < 1e-6) dir = dy > 0 ? 'S' : 'N';
+     else {
++      // M4: a slope is its own run, judged at a port by its horizontal sense (spec §4.8), and never
++      // merged with a straight run, so a bend between them still counts.
+       diagonal += 1;
+-      continue;
++      dir = dx > 0 ? 'E' : 'W';
++      slope = true;
+     }
+-    const len = Math.abs(dx) + Math.abs(dy);
++    const len = Math.hypot(dx, dy);
+     const last = runs.at(-1);
+-    if (last && last.dir === dir) last.len += len;
+-    else runs.push({ dir, len });
++    if (last && last.dir === dir && !slope && !last.slope) last.len += len;
++    else runs.push({ dir, len, slope });
+   }
+   return { runs, diagonal };
+ }
+@@ -230,7 +237,24 @@ function segmentMeetsBox(a: Point, b: Point, box: ReturnType<typeof textBox>): b
+   const sx1 = Math.max(a.x, b.x);
+   const sy0 = Math.min(a.y, b.y);
+   const sy1 = Math.max(a.y, b.y);
+-  return sx0 < box.x1 && sx1 > box.x0 && sy0 < box.y1 && sy1 > box.y0;
++  if (!(sx0 < box.x1 && sx1 > box.x0 && sy0 < box.y1 && sy1 > box.y0)) return false;
++  if (Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6) return true;
++  // M4: a slope's bounding box is not the slope. Clip it to the box (Liang–Barsky).
++  let t0 = 0;
++  let t1 = 1;
++  const dx = b.x - a.x;
++  const dy = b.y - a.y;
++  for (const [p, q] of [
++    [-dx, a.x - box.x0],
++    [dx, box.x1 - a.x],
++    [-dy, a.y - box.y0],
++    [dy, box.y1 - a.y],
++  ] as const) {
++    const r = q / p;
++    if (p < 0) t0 = Math.max(t0, r);
++    else t1 = Math.min(t1, r);
++  }
++  return t1 - t0 > 1e-6;
+ }
+ 
+ const GAP_LABEL = /^\d+d$|^\d+ cal d$/;
+@@ -259,6 +283,7 @@ export interface AttachmentReading {
+   crossingsPerLink: number;
+   foreignOccludedLinks: number;
+   diagonal: number;
++  occludedAll: number;
+   bends: number;
+   fingerprint: string;
+ }
+@@ -293,6 +318,10 @@ export function readAttachment(
+   }
+   const { crossings, diagonal } = countCrossings(painted);
+   const occlusion = countOcclusions(painted, scene, view);
++  // M4: foreign-occluded links counting EVERY segment (verticals and slopes too), judged both ways.
++  const octx = occlusionContext(scene, view);
++  let occludedAll = 0;
++  for (const p of painted) if (lineOcclusion(p.pts, octx, undefined, true).foreign > 0) occludedAll += 1;
+ 
+   // Node centres, for false junctions: both ends of every bar-glyph activity.
+   const nodeCentres: { id: string; point: Point }[] = [];
+@@ -475,6 +504,7 @@ export function readAttachment(
+     crossingsPerLink: painted.length === 0 ? 0 : crossings / painted.length,
+     foreignOccludedLinks: occlusion.foreignLinks,
+     diagonal,
++    occludedAll,
+     bends,
+     fingerprint: digest.digest('hex').slice(0, 12),
+   };
+diff --git a/apps/web/scripts/crossing-probe.ts b/apps/web/scripts/crossing-probe.ts
+index 46525d16..6e218c4c 100644
+--- a/apps/web/scripts/crossing-probe.ts
++++ b/apps/web/scripts/crossing-probe.ts
+@@ -60,6 +60,7 @@ import {
+   type LaneIntervalIndex,
+ } from '../src/features/tsld/render/link-routing';
+ import { minimapViewport, sceneWindowRect } from '../src/features/tsld/render/minimap';
++import { properlyCross } from '../src/features/tsld/render/link-score';
+ import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
+ import type { Point, Viewport } from '../src/features/tsld/render/render-model';
+ 
+@@ -326,10 +327,7 @@ function segmentsOf(links: readonly RecordedPath[]): { segs: Seg[]; diagonal: nu
+       const horizontal = Math.abs(a.y - b.y) < 0.001;
+       const vertical = Math.abs(a.x - b.x) < 0.001;
+       // A zero-length segment is neither and is not a diagonal; it simply cannot cross anything.
+-      if (!horizontal && !vertical) {
+-        diagonal += 1;
+-        continue;
+-      }
++      if (!horizontal && !vertical) diagonal += 1;
+       segs.push({ link, x0: a.x, y0: a.y, x1: b.x, y1: b.y });
+     }
+   });
+@@ -377,6 +375,26 @@ export function countCrossings(links: readonly RecordedPath[]): {
+       crossings += 1;
+     }
+   }
++  // M4: a slope is counted against every other segment by general interior intersection, so a
++  // diagonal can never look free. On orthogonal input this loop never runs.
++  const slopes = segs.filter((s) => Math.abs(s.y0 - s.y1) >= 0.001 && Math.abs(s.x0 - s.x1) >= 0.001);
++  for (const d of slopes) {
++    for (const t of segs) {
++      if (t === d || t.link === d.link) continue;
++      const tSlope = Math.abs(t.y0 - t.y1) >= 0.001 && Math.abs(t.x0 - t.x1) >= 0.001;
++      if (tSlope && segs.indexOf(t) < segs.indexOf(d)) continue; // each slope pair once
++      if (
++        properlyCross(
++          { x: d.x0, y: d.y0 },
++          { x: d.x1, y: d.y1 },
++          { x: t.x0, y: t.y0 },
++          { x: t.x1, y: t.y1 },
++        )
++      ) {
++        crossings += 1;
++      }
++    }
++  }
+   return { crossings, segments: segs.length, diagonal };
+ }
+ 
+@@ -1572,6 +1590,8 @@ export function lineOcclusion(
+    * down.
+    */
+   foreignByLane?: Map<number, number[]>,
++  /** M4: also count a vertical through a bar, so a slope is not judged by a stricter rule. */
++  allSegments = false,
+ ): {
+   through: number;
+   tangent: number;
+@@ -1601,7 +1621,44 @@ export function lineOcclusion(
+   for (let i = 0; i + 1 < pts.length; i += 1) {
+     const a = pts[i]!;
+     const b = pts[i + 1]!;
+-    if (Math.abs(a.y - b.y) > EPS_Y) continue; // vertical corridors are already obstacle-checked
++    if (Math.abs(a.y - b.y) > EPS_Y) {
++      // M4: a slope hides behind a bar where it passes through the bar's box. Counted as through
++      // and foreign (never own: a slope leaves its own node and cannot run along its own bar).
++      if (Math.abs(a.x - b.x) <= EPS_X) {
++        if (!allSegments) continue; // vertical corridors are already obstacle-checked
++        const lo = Math.min(a.y, b.y);
++        const hi = Math.max(a.y, b.y);
++        for (const [lane, extent] of ctx.extentOfLane) {
++          if (Math.min(hi, extent.bottom) - Math.max(lo, extent.top) <= EPS_Y) continue;
++          const bars = ctx.barsOfLane.get(lane) ?? [];
++          for (let j = 0; j < bars.length; j += 1) {
++            if (!(a.x > bars[j]!.x0 + EPS_X && a.x < bars[j]!.x1 - EPS_X)) continue;
++            if (own.has(`${lane}:${j}`)) continue;
++            through += 1;
++            foreign += 1;
++          }
++        }
++        continue;
++      }
++      for (const [lane, extent] of ctx.extentOfLane) {
++        const ya = Math.max(Math.min(a.y, b.y), extent.top);
++        const yb = Math.min(Math.max(a.y, b.y), extent.bottom);
++        if (yb - ya <= EPS_Y) continue;
++        const xAt = (y: number): number => a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x);
++        const lo = Math.min(xAt(ya), xAt(yb));
++        const hi = Math.max(xAt(ya), xAt(yb));
++        const bars = ctx.barsOfLane.get(lane) ?? [];
++        for (let j = 0; j < bars.length; j += 1) {
++          const overlap = Math.min(hi, bars[j]!.x1) - Math.max(lo, bars[j]!.x0);
++          if (overlap <= EPS_X) continue;
++          if (own.has(`${lane}:${j}`)) continue;
++          through += 1;
++          foreign += 1;
++          buriedPx += overlap;
++        }
++      }
++      continue;
++    }
+     horizontals += 1;
+     const lo = Math.min(a.x, b.x);
+     const hi = Math.max(a.x, b.x);
+diff --git a/apps/web/scripts/measure-attachment.mjs b/apps/web/scripts/measure-attachment.mjs
+index 366c05b9..23e8563a 100644
+--- a/apps/web/scripts/measure-attachment.mjs
++++ b/apps/web/scripts/measure-attachment.mjs
+@@ -57,7 +57,7 @@ for (const fx of probe.fixtures(FIXTURE)) {
+             `${r.painted} painted, ${r.edges} edges. Refusing to judge.`,
+         );
+       }
+-      if (r.diagonal !== 0) {
++      if (r.diagonal !== 0 && !process.env.ALLOW_DIAG) {
+         throw new Error(`FC-T9: ${r.diagonal} diagonal segments on ${fx.name}. Refusing to judge.`);
+       }
+       rows.push({ fixture: fx.name, pxPerDay, originY, ...r });
+@@ -86,6 +86,7 @@ if (json) {
+     'x/link'.padStart(6),
+     'occl'.padStart(5),
+     'bends'.padStart(5),
++    'diag'.padStart(4),
+     'fingerprint'.padStart(12),
+   ];
+   console.log(`  ${h.join(' ')}`);
+@@ -98,7 +99,7 @@ if (json) {
+         `${String(r.gapLabels).padStart(4)} ${String(r.lagPlates).padStart(5)} ` +
+         `${String(r.platesOnText).padStart(5)} ` +
+         `${r.crossingsPerLink.toFixed(3).padStart(6)} ${String(r.foreignOccludedLinks).padStart(5)} ` +
+-        `${String(r.bends).padStart(5)} ${r.fingerprint.padStart(12)}`,
++        `${String(r.bends).padStart(5)} ${String(r.diagonal).padStart(4)} ${r.fingerprint.padStart(12)}`,
+     );
+   }
+   // FC-T5 on the fixtures: 200 seeded shuffles of each fixture's edges at 4 px/day, pan 32.
+diff --git a/apps/web/src/features/tsld/render/link-candidates.ts b/apps/web/src/features/tsld/render/link-candidates.ts
+index 0caeee2b..57c4eb31 100644
+--- a/apps/web/src/features/tsld/render/link-candidates.ts
++++ b/apps/web/src/features/tsld/render/link-candidates.ts
+@@ -40,7 +40,33 @@ import { LANE_HEIGHT, type Point, type Viewport } from './render-model';
+  * which happens only when the two anchors coincide (two abutting bars sharing one node, ADR-0157).
+  * It is named so a reader of the route can tell it apart rather than mistaking it for a choice.
+  */
+-export type RouteShape = 'V' | 'H' | 'VH' | 'HV' | 'HVH' | 'VHV' | 'fallback';
++export type RouteShape =
++  | 'V'
++  | 'H'
++  | 'VH'
++  | 'HV'
++  | 'HVH'
++  | 'VHV'
++  | 'D'
++  | 'VDV'
++  | 'HDH'
++  | 'HDV'
++  | 'VDH'
++  | 'fallback';
++
++/**
++ * **Diagonals (node-to-node links M4), off.** Built and measured behind this constant; ADR-0158
++ * records the verdict. A diagonal is offered only inside the link's own waiting interval, running
++ * forward, and at least {@link DIAGONAL_MIN_DX_PX} wide (spec §4.8's construction rule).
++ */
++export const ALLOW_DIAGONAL_LINKS = true; // flipped on for the M4 reading
++export const DIAGONAL_MIN_DX_PX = 24;
++
++/** A link's waiting interval in screen x (`linkGapSpan`), or null for a link that does not wait. */
++export interface WaitingSpan {
++  x0: number;
++  x1: number;
++}
+ 
+ export interface RouteCandidate {
+   shape: RouteShape;
+@@ -52,6 +78,9 @@ export interface RouteCandidate {
+ /** V, H, VH, HV, five HVH, two VHV. Pinned by `link-candidates.test.ts`. */
+ export const MAX_ROUTE_CANDIDATES = 11;
+ 
++/** The five diagonal shapes, one of each, when {@link ALLOW_DIAGONAL_LINKS} is on. */
++export const MAX_DIAGONAL_CANDIDATES = 5;
++
+ const EPS = 0.5;
+ 
+ function dirOf(a: Point, b: Point): LinkDir | null {
+@@ -60,7 +89,13 @@ function dirOf(a: Point, b: Point): LinkDir | null {
+   if (Math.abs(dx) <= 1e-6 && Math.abs(dy) <= 1e-6) return null;
+   if (Math.abs(dy) <= 1e-6) return dx > 0 ? 'E' : 'W';
+   if (Math.abs(dx) <= 1e-6) return dy > 0 ? 'S' : 'N';
+-  return null;
++  // A diagonal (M4) leaves or arrives by its horizontal sense: a forward slope leaves a finish node
++  // eastward and arrives at a start node from the west, which is what the ports already allow.
++  return dx > 0 ? 'E' : 'W';
++}
++
++function isDiagonal(a: Point, b: Point): boolean {
++  return Math.abs(a.x - b.x) > 1e-6 && Math.abs(a.y - b.y) > 1e-6;
+ }
+ 
+ /**
+@@ -77,10 +112,9 @@ export function obeysPorts(line: readonly Point[], pred: LinkPort, succ: LinkPor
+   if (!pred.allowed.has(first)) return false;
+   if (!succ.allowed.has(OPPOSITE_DIR[last])) return false;
+   if (line.length === 2) return true; // a straight line runs through both centres; nothing is hidden
+-  const firstLen = Math.abs(line[1]!.x - line[0]!.x) + Math.abs(line[1]!.y - line[0]!.y);
++  const firstLen = Math.hypot(line[1]!.x - line[0]!.x, line[1]!.y - line[0]!.y);
+   const n = line.length;
+-  const lastLen =
+-    Math.abs(line[n - 1]!.x - line[n - 2]!.x) + Math.abs(line[n - 1]!.y - line[n - 2]!.y);
++  const lastLen = Math.hypot(line[n - 1]!.x - line[n - 2]!.x, line[n - 1]!.y - line[n - 2]!.y);
+   return (
+     firstLen >= predecessorStub(pred.reach) - 1e-6 && lastLen >= successorStub(succ.reach) - 1e-6
+   );
+@@ -110,6 +144,7 @@ export function routeCandidates(
+   fromLane: number,
+   toLane: number,
+   view: Viewport,
++  waiting: WaitingSpan | null = null,
+ ): RouteCandidate[] {
+   const out: RouteCandidate[] = [];
+   let order = 0;
+@@ -191,5 +226,42 @@ export function routeCandidates(
+         : [P, { x: P.x, y: g }, { x: S.x, y: g }, S],
+     );
+   }
++  if (!ALLOW_DIAGONAL_LINKS || !waiting || sameLane) return out;
++  // Diagonals (M4): each shape's slope must lie inside the waiting interval, run forward, and span
++  // at least DIAGONAL_MIN_DX_PX; every other segment obeys the ports and the stub rule as before.
++  const slopeOk = (a: Point, b: Point): boolean =>
++    b.x - a.x >= DIAGONAL_MIN_DX_PX - 1e-6 &&
++    a.x >= waiting.x0 - EPS &&
++    b.x <= waiting.x1 + EPS &&
++    isDiagonal(a, b);
++  const down = toLane > fromLane;
++  // The boundary next to each end, toward the other: a vertical stub leaves or enters through it.
++  const nearPred = down ? gutterBelow(fromLane, view) : gutterBelow(fromLane - 1, view);
++  const nearSucc = down ? gutterBelow(toLane - 1, view) : gutterBelow(toLane, view);
++  const guard = (line: Point[]): Point[] | null => {
++    for (let i = 1; i < line.length; i += 1) {
++      const a = line[i - 1]!;
++      const b = line[i]!;
++      if (isDiagonal(a, b) && !slopeOk(a, b)) return null;
++    }
++    return line;
++  };
++  offer('D', pH, sH, (P, S) => guard([P, S]));
++  offer('VDV', pV, sV, (P, S) =>
++    guard([P, { x: P.x, y: nearPred }, { x: S.x, y: nearSucc }, S]),
++  );
++  offer('HDH', pH, sH, (P, S) => {
++    const a = Math.max(P.x + predecessorStub(pH!.reach), waiting.x0);
++    const b = Math.min(S.x - successorStub(sH!.reach), waiting.x1);
++    return guard([P, { x: a, y: P.y }, { x: b, y: S.y }, S]);
++  });
++  offer('HDV', pH, sV, (P, S) => {
++    const a = Math.max(P.x + predecessorStub(pH!.reach), waiting.x0);
++    return guard([P, { x: a, y: P.y }, { x: S.x, y: nearSucc }, S]);
++  });
++  offer('VDH', pV, sH, (P, S) => {
++    const b = Math.min(S.x - successorStub(sH!.reach), waiting.x1);
++    return guard([P, { x: P.x, y: nearPred }, { x: b, y: S.y }, S]);
++  });
+   return out;
+ }
+diff --git a/apps/web/src/features/tsld/render/link-marks.ts b/apps/web/src/features/tsld/render/link-marks.ts
+index 0251d36c..bde6fc5b 100644
+--- a/apps/web/src/features/tsld/render/link-marks.ts
++++ b/apps/web/src/features/tsld/render/link-marks.ts
+@@ -119,11 +119,14 @@ export function gapLabelAt(
+   for (let i = 1; i < line.length; i += 1) {
+     const a = line[i - 1]!;
+     const b = line[i]!;
+-    if (a.y !== b.y) continue;
++    if (a.x === b.x) continue;
+     const lo = Math.max(Math.min(a.x, b.x), x0);
+     const hi = Math.min(Math.max(a.x, b.x), x1);
+     const len = hi - lo;
+-    if (len >= minPx && (best === null || len > best.len)) best = { x: (lo + hi) / 2, y: a.y, len };
++    // A slope (M4) carries its label at the point on it over the interval's middle.
++    const mid = (lo + hi) / 2;
++    const y = a.y === b.y ? a.y : a.y + ((mid - a.x) / (b.x - a.x)) * (b.y - a.y);
++    if (len >= minPx && (best === null || len > best.len)) best = { x: mid, y, len };
+   }
+   return best ? { x: best.x, y: best.y } : null;
+ }
+@@ -157,6 +160,10 @@ export function lagPlateCandidates(
+     } else if (a.x === b.x) {
+       const len = Math.abs(b.y - a.y);
+       if (len >= plateH + 4) runs.push({ horizontal: false, len, a, b });
++    } else {
++      // A slope (M4), after every straight run: a plate needs its width across it.
++      const len = Math.abs(b.x - a.x);
++      if (len >= plateW + 4) runs.push({ horizontal: false, len: -1 / len, a, b });
+     }
+   }
+   // Stable: equal runs keep line order, so the first candidate is the one lagPlateAt always chose.
+diff --git a/apps/web/src/features/tsld/render/link-score.ts b/apps/web/src/features/tsld/render/link-score.ts
+index 6dd0d64d..537c4f17 100644
+--- a/apps/web/src/features/tsld/render/link-score.ts
++++ b/apps/web/src/features/tsld/render/link-score.ts
+@@ -20,7 +20,13 @@
+  * snapshot, the result does not depend on the order the links arrive in (FC-T5), and the pass never
+  * measures its own output.
+  */
+-import { MAX_ROUTE_CANDIDATES, routeCandidates, type RouteCandidate } from './link-candidates';
++import {
++  ALLOW_DIAGONAL_LINKS,
++  MAX_ROUTE_CANDIDATES,
++  routeCandidates,
++  type RouteCandidate,
++  type WaitingSpan,
++} from './link-candidates';
+ import { linkEndOf } from './link-ports';
+ import {
+   activityRect,
+@@ -177,6 +183,31 @@ export function obstructions(
+           if (!isOwn(own, lane, x0, x1)) count += 1;
+         }
+       }
++    } else {
++      // A slope (M4): for every lane whose glyph band (centre-line ± a node's reach) it passes
++      // through — including the two end lanes, where a bar abutting the node it leaves sits — the
++      // glyphs its x-extent inside that band overlaps by more than LEG_CLEARANCE_PX.
++      const lo = Math.min(a.y, b.y);
++      const hi = Math.max(a.y, b.y);
++      const xAt = (y: number): number => a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x);
++      const first = Math.floor((lo - view.originY - NODE_REACH_PX) / LANE_HEIGHT);
++      for (let lane = first; ; lane += 1) {
++        const cy = view.originY + lane * LANE_HEIGHT + LANE_HEIGHT / 2;
++        if (cy - NODE_REACH_PX >= hi) break;
++        const y0 = Math.max(lo, cy - NODE_REACH_PX);
++        const y1 = Math.min(hi, cy + NODE_REACH_PX);
++        if (y1 - y0 <= EPS) continue;
++        const row = glyphs.get(lane);
++        if (!row) continue;
++        const xlo = Math.min(xAt(y0), xAt(y1));
++        const xhi = Math.max(xAt(y0), xAt(y1));
++        for (let k = firstReaching(row, xlo); k < row.spans.length; k += 1) {
++          const [x0, x1] = row.spans[k]!;
++          if (x0 >= xhi) break;
++          if (Math.min(xhi, x1) - Math.max(xlo, x0) <= LEG_CLEARANCE_PX) continue;
++          if (!isOwn(own, lane, x0, x1)) count += 1;
++        }
++      }
+     }
+   }
+   return count;
+@@ -185,7 +216,7 @@ export function obstructions(
+ function lengthOf(line: readonly Point[]): number {
+   let total = 0;
+   for (let i = 1; i < line.length; i += 1) {
+-    total += Math.abs(line[i]!.x - line[i - 1]!.x) + Math.abs(line[i]!.y - line[i - 1]!.y);
++    total += Math.hypot(line[i]!.x - line[i - 1]!.x, line[i]!.y - line[i - 1]!.y);
+   }
+   return total;
+ }
+@@ -201,11 +232,14 @@ interface Seg {
+ interface Segments {
+   h: readonly Seg[];
+   v: readonly Seg[];
++  /** Slopes (M4), as their two endpoints; empty whenever diagonals are off. */
++  d: readonly (readonly [Point, Point])[];
+ }
+ 
+ function segmentsOf(line: readonly Point[]): Segments {
+   const h: Seg[] = [];
+   const v: Seg[] = [];
++  const d: (readonly [Point, Point])[] = [];
+   for (let i = 1; i < line.length; i += 1) {
+     const a = line[i - 1]!;
+     const b = line[i]!;
+@@ -213,9 +247,11 @@ function segmentsOf(line: readonly Point[]): Segments {
+       h.push({ fixed: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
+     } else if (Math.abs(a.x - b.x) <= EPS && Math.abs(a.y - b.y) > EPS) {
+       v.push({ fixed: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
++    } else if (Math.abs(a.x - b.x) > EPS && Math.abs(a.y - b.y) > EPS) {
++      d.push([a, b]);
+     }
+   }
+-  return { h, v };
++  return { h, v, d };
+ }
+ 
+ /** Terms 1, 4, 5 and 6 — everything a link can know about itself alone. */
+@@ -278,6 +314,8 @@ export interface LinkRouteInput {
+   toAnchor: Point;
+   fromRect: Rect;
+   toRect: Rect;
++  /** The link's waiting interval in screen x, for diagonals (M4); absent means none is offered. */
++  waiting?: WaitingSpan | null;
+ }
+ 
+ /**
+@@ -294,7 +332,14 @@ export function routeNodeToNode(
+   const succ = linkEndOf(input.to, input.toAnchor, input.toRect);
+   const own = [ownSpanOf(input.from, input.fromRect), ownSpanOf(input.to, input.toRect)];
+   const scored = scoreCandidates(
+-    routeCandidates(pred, succ, input.from.laneIndex, input.to.laneIndex, view),
++    routeCandidates(
++      pred,
++      succ,
++      input.from.laneIndex,
++      input.to.laneIndex,
++      view,
++      input.waiting ?? null,
++    ),
+     glyphs,
+     own,
+     view,
+@@ -361,6 +406,24 @@ class SegmentBuckets {
+   }
+ }
+ 
++/**
++ * Whether two segments meet at a point strictly interior to both (M4's general test). On two
++ * axis-aligned segments it agrees with the horizontal-meets-vertical rule above.
++ */
++export function properlyCross(a: Point, b: Point, c: Point, e: Point): boolean {
++  const orient = (p: Point, q: Point, r: Point): number =>
++    (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
++  const d1 = orient(c, e, a);
++  const d2 = orient(c, e, b);
++  const d3 = orient(a, b, c);
++  const d4 = orient(a, b, e);
++  const tol = 1e-6;
++  return (
++    ((d1 > tol && d2 < -tol) || (d1 < -tol && d2 > tol)) &&
++    ((d3 > tol && d4 < -tol) || (d3 < -tol && d4 > tol))
++  );
++}
++
+ /** Phase 2's full score: phase 1 plus crossings and overlaps against the frozen snapshot. */
+ interface Phase2Score extends Phase1Score {
+   crossings: number;
+@@ -407,15 +470,48 @@ export function chooseRoutesByCrossing(
+   });
+   const hBuckets = new SegmentBuckets(hs);
+   const vBuckets = new SegmentBuckets(vs);
++  // Slopes (M4): checked against everything by a plain general intersection. Built only while
++  // diagonals are on, so the orthogonal pass is byte-identical when they are off.
++  const ds: { a: Point; b: Point; link: number }[] = [];
++  const all: { a: Point; b: Point; link: number }[] = [];
++  if (ALLOW_DIAGONAL_LINKS) {
++    links.forEach((link, i) => {
++      const first = link.candidates[0];
++      if (!first) return;
++      const { h, v, d } = segmentsFor(first);
++      for (const [a, b] of d) ds.push({ a, b, link: i });
++      for (const t of h) {
++        all.push({ a: { x: t.lo, y: t.fixed }, b: { x: t.hi, y: t.fixed }, link: i });
++      }
++      for (const t of v) {
++        all.push({ a: { x: t.fixed, y: t.lo }, b: { x: t.fixed, y: t.hi }, link: i });
++      }
++      for (const [a, b] of d) all.push({ a, b, link: i });
++    });
++  }
+   const near = (p: Point, q: Point): boolean =>
+     Math.abs(p.x - q.x) <= 0.5 && Math.abs(p.y - q.y) <= 0.5;
+   const shareEnd = (i: number, j: number): boolean =>
+     links[i]!.ends.some((p) => links[j]!.ends.some((q) => near(p, q)));
+ 
+   const score = (i: number, candidate: ScoredCandidate): Phase2Score => {
+-    const { h, v } = segmentsFor(candidate);
++    const { h, v, d } = segmentsFor(candidate);
+     let crossings = 0;
+     let overlaps = 0;
++    if (ds.length > 0 || d.length > 0) {
++      // Every pair involving a slope: the candidate's slopes against the snapshot, and the
++      // candidate's straight segments against the snapshot's slopes.
++      for (const [a, b] of d) {
++        for (const t of all) if (t.link !== i && properlyCross(a, b, t.a, t.b)) crossings += 1;
++      }
++      const mine: [Point, Point][] = [
++        ...h.map((t): [Point, Point] => [{ x: t.lo, y: t.fixed }, { x: t.hi, y: t.fixed }]),
++        ...v.map((t): [Point, Point] => [{ x: t.fixed, y: t.lo }, { x: t.fixed, y: t.hi }]),
++      ];
++      for (const [a, b] of mine) {
++        for (const t of ds) if (t.link !== i && properlyCross(a, b, t.a, t.b)) crossings += 1;
++      }
++    }
+     for (const s of h) {
+       const [start, end] = vBuckets.between(s.lo, s.hi);
+       for (let b = start; b < end; b += 1) {
+diff --git a/apps/web/src/features/tsld/render/route-frame.ts b/apps/web/src/features/tsld/render/route-frame.ts
+index 1036399c..13e0e244 100644
+--- a/apps/web/src/features/tsld/render/route-frame.ts
++++ b/apps/web/src/features/tsld/render/route-frame.ts
+@@ -1,4 +1,5 @@
+-import { isLaneBoundary } from './link-candidates';
++import { ALLOW_DIAGONAL_LINKS, isLaneBoundary, type WaitingSpan } from './link-candidates';
++import { linkGapSpan } from './link-gap';
+ import {
+   chooseRoutesByCrossing,
+   glyphIndex,
+@@ -10,6 +11,7 @@ import {
+ import type { TsldScene } from './paint';
+ import {
+   activityRect,
++  axisDayOf,
+   barGlyphKind,
+   dependencyPolyline,
+   dependencyPolylineTimeTrue,
+@@ -20,6 +22,7 @@ import {
+   packGutterChannels,
+   routeOrthogonal,
+   rowSlots,
++  screenXOfDay,
+   type LagRun,
+   type Point,
+   type RectCache,
+@@ -163,6 +166,29 @@ export function routeFrame(
+   // The one per-edge geometry seam: flag-off it is exactly the M1 branch (time-true or legacy);
+   // refreshed it composes the SAME anchor mapping with the fan-out offsets + elbow shift, and
+   // collects the edge's lag run while the anchors are at hand.
++  // M4: a non-driving link's waiting interval in screen x, the one place a diagonal may run. The
++  // same `linkGapSpan` the gap label reads, so the slope and the label cover the same days.
++  const waitingOf = (
++    edge: RenderEdge,
++    pred: RenderActivity,
++    succ: RenderActivity,
++  ): WaitingSpan | null => {
++    if (edge.isDriving || !pred.earlyStart || !pred.earlyFinish) return null;
++    if (!succ.earlyStart || !succ.earlyFinish) return null;
++    const span = linkGapSpan(
++      {
++        type: edge.type,
++        predStartDay: axisDayOf(pred.type, scene.dataDate, pred.earlyStart),
++        predFinishDay: axisDayOf(pred.type, scene.dataDate, pred.earlyFinish),
++        succStartDay: axisDayOf(succ.type, scene.dataDate, succ.earlyStart),
++        succFinishDay: axisDayOf(succ.type, scene.dataDate, succ.earlyFinish),
++        lagDays: edge.lagDays ?? 0,
++      },
++      scene.isWorkingDay ?? null,
++    );
++    if (span.days <= 0) return null;
++    return { x0: screenXOfDay(span.fromDay, view), x1: screenXOfDay(span.toDay, view) };
++  };
+   const lineOf = (edge: RenderEdge, pred: RenderActivity, succ: RenderActivity): Point[] | null => {
+     if (!workingWalk) {
+       return dependencyPolyline(pred, succ, edge.type, view, scene.dataDate, rectCache);
+@@ -238,6 +264,7 @@ export function routeFrame(
+         toAnchor: to,
+         fromRect: predRect,
+         toRect: succRect,
++        waiting: ALLOW_DIAGONAL_LINKS ? waitingOf(edge, pred, succ) : null,
+       },
+       glyphs,
+       view,

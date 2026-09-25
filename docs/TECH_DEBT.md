@@ -11807,3 +11807,18 @@ reviews raised and did not block on.
 The product owner answered the gate pass's other two questions the same day (ADR-0157, "The product
 owner's three answers"): the node stays 15 px, and a near-critical node now carries a centre dot, so
 the rim ladder's weak step no longer rests on weight alone. Neither leaves work here.
+
+### 393. The router cannot see where the painter puts names and dates
+
+**Status:** open · **Verified:** 2026-09-25 · **Raised:** 2026-09-25 (node-to-node links M2,
+`docs/specs/node-to-node-links/m2-verdict.md`) · **Size:** M · **Owner:** web
+
+Node-to-node routing scores a link's shape on bars, crossings, overlaps and length. Spec D-6's
+remedy for links crossing text, a names term after overlaps, was tried at M2 and is not buildable
+faithfully. `paintScene` places a name centred over its bar, and its dates inside the bar's ends or
+flanking them. Both placements depend on `measureText` widths and neighbour gaps, and `routeFrame`
+has neither. An approximation would be a second opinion about where text sits, which is the drift
+ADR-0149 exists to prevent. The misses are small (FC-T6: `brief` 4 against a bar of 3 at 4 px/day,
+`small-17` 17 against 8 at 1 px/day) and were accepted by the product owner with the rest of M2.
+The fix is to move the painter's label placement into a pure module that takes a text-width
+function, called by the painter with `ctx.measureText` and by the router with the same widths.

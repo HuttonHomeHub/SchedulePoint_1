@@ -5,7 +5,9 @@ import {
   CHEVRON_SPACING_PX,
   chevronsAlong,
   formatLag,
+  freePlatePosition,
   lagPlateAt,
+  lagPlateCandidates,
   linkRung,
   gapLabelAt,
 } from './link-marks';
@@ -132,5 +134,64 @@ describe('gapLabelAt (NetPoint grammar M3-T3)', () => {
     ];
     expect(gapLabelAt(line, 0, 30, 31)).toBeNull();
     expect(gapLabelAt(line, 0, 30, 30)).toEqual({ x: 15, y: 100 });
+  });
+});
+
+describe('lagPlateCandidates', () => {
+  it('offers the longest horizontal first, its midpoint before its quarter points, then verticals', () => {
+    const line = [
+      { x: 0, y: 50 },
+      { x: 100, y: 50 },
+      { x: 100, y: 150 },
+      { x: 140, y: 150 },
+    ];
+    const got = lagPlateCandidates(line, 24, 12);
+    expect(got[0]).toEqual({ x: 50, y: 50 });
+    expect(got.slice(1, 3)).toEqual([
+      { x: 25, y: 50 },
+      { x: 75, y: 50 },
+    ]);
+    // The second horizontal (40 px) comes before the vertical, which comes last.
+    expect(got[7]).toEqual({ x: 120, y: 150 });
+    expect(got.at(-1)!.x).toBe(100);
+    // The first candidate is always where lagPlateAt puts the plate.
+    expect(lagPlateAt(line, 24, 12)).toEqual(got[0]);
+  });
+});
+
+/**
+ * **A plate moves off text, and off a bar, and is withheld when nothing is free** (node-to-node
+ * links M3, the UX gate's finding: "+1d" printed over "A108" on the small plan).
+ */
+describe('freePlatePosition', () => {
+  const candidates = [
+    { x: 50, y: 50 },
+    { x: 25, y: 50 },
+    { x: 75, y: 50 },
+  ];
+  it('takes the first candidate when nothing is in the way', () => {
+    expect(freePlatePosition(candidates, 24, 12, [], [], 2)).toEqual({ x: 50, y: 50 });
+  });
+  it('moves past a candidate that lands on a name', () => {
+    const name = { x: 40, y: 45, w: 24, h: 14 };
+    expect(freePlatePosition(candidates, 24, 12, [name], [], 2)).toEqual({ x: 25, y: 50 });
+  });
+  it('moves past a candidate that lands on a bar or its node', () => {
+    const bar = { x: 30, y: 47, w: 60, h: 6 };
+    expect(freePlatePosition(candidates, 24, 12, [], [bar], 2)).toBeNull();
+    expect(freePlatePosition(candidates, 24, 12, [], [{ x: 45, y: 47, w: 10, h: 6 }], 2)).toEqual({
+      x: 25,
+      y: 50,
+    });
+  });
+  it('ignores a graze into a text row’s leading, which covers no ink', () => {
+    // The row box ends 1.5 px inside the plate's top edge.
+    const row = { x: 38, y: 30, w: 24, h: 15.5 };
+    expect(freePlatePosition(candidates, 24, 12, [row], [], 2)).toEqual({ x: 50, y: 50 });
+    expect(freePlatePosition(candidates, 24, 12, [row], [], 0)).toEqual({ x: 25, y: 50 });
+  });
+  it('withholds the plate when every candidate is taken', () => {
+    const wide = { x: 0, y: 40, w: 200, h: 20 };
+    expect(freePlatePosition(candidates, 24, 12, [wide], [], 2)).toBeNull();
   });
 });

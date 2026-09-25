@@ -1,4 +1,5 @@
-import type { Point, RenderActivity } from './geometry';
+import type { Point, Rect, RenderActivity } from './geometry';
+import { rectsIntersect } from './geometry';
 
 /**
  * **The link language** (NetPoint-layout M2, spec §4.7, ADR-0154).
@@ -133,28 +134,72 @@ export function formatLag(lagDays: number): string {
 }
 
 /**
- * Where a link's lag plate is centred: the midpoint of its longest horizontal segment when that is
- * long enough to hold the plate, otherwise its longest vertical one, otherwise nowhere.
+ * Where a link's lag plate may be centred, in order of preference: the midpoint of each horizontal
+ * segment long enough to hold the plate, longest first, then each such vertical one, and on each
+ * segment the midpoint first, then its quarter and eighth points. The first is where the plate goes when nothing
+ * is in the way; the rest are where it moves to when a name or date is (node-to-node links M3).
  *
  * Only the link's own segments are candidates, so the plate can only ever sit on the line it
  * labels, never on a bar.
  */
-export function lagPlateAt(line: readonly Point[], plateW: number, plateH: number): Point | null {
-  let bestH: { len: number; at: Point } | null = null;
-  let bestV: { len: number; at: Point } | null = null;
+export function lagPlateCandidates(
+  line: readonly Point[],
+  plateW: number,
+  plateH: number,
+): Point[] {
+  const runs: { horizontal: boolean; len: number; a: Point; b: Point }[] = [];
   for (let i = 1; i < line.length; i += 1) {
     const a = line[i - 1]!;
     const b = line[i]!;
-    const at = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     if (a.y === b.y) {
       const len = Math.abs(b.x - a.x);
-      if (!bestH || len > bestH.len) bestH = { len, at };
+      if (len >= plateW + 4) runs.push({ horizontal: true, len, a, b });
     } else if (a.x === b.x) {
       const len = Math.abs(b.y - a.y);
-      if (!bestV || len > bestV.len) bestV = { len, at };
+      if (len >= plateH + 4) runs.push({ horizontal: false, len, a, b });
     }
   }
-  if (bestH && bestH.len >= plateW + 4) return bestH.at;
-  if (bestV && bestV.len >= plateH + 4) return bestV.at;
+  // Stable: equal runs keep line order, so the first candidate is the one lagPlateAt always chose.
+  runs.sort((p, q) => Number(q.horizontal) - Number(p.horizontal) || q.len - p.len);
+  const out: Point[] = [];
+  for (const { a, b } of runs) {
+    for (const t of [0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875])
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  }
+  return out;
+}
+
+/**
+ * The first of `candidates` whose plate box is free: its box, inset by `grazePx`, meets no text box,
+ * and its full box meets no glyph box. Null when every position is taken, and the plate is withheld.
+ * The inset exists because a text row's box is its line height, leading included, and a plate on a
+ * lane's centre line grazes the rows either side by 1.5 px of leading and none of the ink.
+ */
+export function freePlatePosition(
+  candidates: readonly Point[],
+  plateW: number,
+  plateH: number,
+  text: readonly Rect[],
+  glyphs: readonly Rect[],
+  grazePx: number,
+): Point | null {
+  for (const at of candidates) {
+    const box = { x: at.x - plateW / 2, y: at.y - plateH / 2, w: plateW, h: plateH };
+    const inner = {
+      x: box.x + grazePx,
+      y: box.y + grazePx,
+      w: box.w - 2 * grazePx,
+      h: box.h - 2 * grazePx,
+    };
+    if (text.some((r) => rectsIntersect(r, inner)) || glyphs.some((r) => rectsIntersect(r, box))) {
+      continue;
+    }
+    return at;
+  }
   return null;
+}
+
+/** Where a link's lag plate is centred when nothing is in the way: the first candidate. */
+export function lagPlateAt(line: readonly Point[], plateW: number, plateH: number): Point | null {
+  return lagPlateCandidates(line, plateW, plateH)[0] ?? null;
 }

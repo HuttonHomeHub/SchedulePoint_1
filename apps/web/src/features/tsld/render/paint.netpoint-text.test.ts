@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_VIEW_TOGGLES, paintScene, type TsldPalette, type TsldScene } from './paint';
 import {
+  activityRect,
+  MILESTONE_RADIUS,
   ROW_TEXT_GAP_PX,
   WRAP_LINE_H,
   wrappedNameYs,
@@ -126,8 +128,10 @@ describe('the canvas label (M4-T1)', () => {
 
 describe('the wrap (M4-T2, spec §4.2 G7)', () => {
   // Two finish milestones in lane 1 with a long first word, and a link from lane 0 to lane 2 whose
-  // vertical corridor crosses lane 1 beside the first milestone: at x 124 (P finishing on day 6) it
-  // passes through where the wrapped first line would sit, at x 136 (day 7) it passes clear.
+  // vertical crosses lane 1 beside the first milestone. Node-to-node routing (ADR-0158) drops that
+  // vertical straight out of P's finish node, so P finishing on day 7 puts it where the wrapped first
+  // line would sit and day 8 puts it clear. (The corridor router this case was written against bent
+  // one gap east of the node, which is why it used days 6 and 7.)
   const d = (n: number): string => new Date(Date.UTC(2026, 0, n)).toISOString().slice(0, 10);
   const plan = (pf: number): RenderActivity[] => [
     act({ id: 'p', laneIndex: 0, earlyStart: d(2), earlyFinish: d(pf), label: 'P' }),
@@ -159,11 +163,11 @@ describe('the wrap (M4-T2, spec §4.2 G7)', () => {
   });
 
   it('keeps one truncated line where a routed link passes where the first line would go', () => {
-    expect(names(paint(plan(6), 12, {}, link))).toEqual(['ABCD…']);
+    expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCD…']);
   });
 
   it('wraps beside a link that passes clear of the first line', () => {
-    expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCDE', 'FGHI…']);
+    expect(names(paint(plan(8), 12, {}, link))).toEqual(['ABCDE', 'FGHI…']);
   });
 
   it('fits a wrapped pair inside its own lane (spec §4.13 A4)', () => {
@@ -210,6 +214,42 @@ describe('the tiers (M4-T4, spec §4.2 G11)', () => {
     const plate = (log: string[]): boolean => texts(log).some((t) => t.startsWith('+2d'));
     expect(plate(paint([a, b], 5, {}, lagged))).toBe(false);
     expect(plate(paint([a, b], 8, {}, lagged))).toBe(true);
+  });
+
+  /**
+   * **An arrowhead into a milestone stops at the triangle** (node-to-node links M3, the
+   * accessibility gate's suggestion). A vertical arrives at a milestone's centre port, and the
+   * triangle paints after the links, so a head drawn to the centre would sit mostly under the glyph:
+   * direction is the one non-colour cue a link carries (WCAG 1.4.1). `headLineFor` trims the head's
+   * line by `MILESTONE_RADIUS`. Checked here on the recorded paths: no path vertex lies inside the
+   * glyph's radius except the stroked line's own end.
+   */
+  it('stops an arrowhead into a milestone at the triangle, not under it', () => {
+    const d = (n: number): string => new Date(Date.UTC(2026, 0, n)).toISOString().slice(0, 10);
+    const task = act({ id: 't', label: 'T', laneIndex: 0, earlyStart: d(2), earlyFinish: d(9) });
+    const milestone = act({
+      id: 'm',
+      label: 'M',
+      type: 'START_MILESTONE',
+      laneIndex: 2,
+      earlyStart: d(10),
+      earlyFinish: d(10),
+    });
+    const log = paint([task, milestone], 12, {}, [
+      { id: 'e', predecessorId: 't', successorId: 'm', type: 'FS', isDriving: true },
+    ]);
+    const rect = activityRect(milestone, VIEW12, DATA_DATE)!;
+    const centre = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    const points = log
+      .filter((l) => l.startsWith('moveTo(') || l.startsWith('lineTo('))
+      .map((l) => JSON.parse(l.slice(l.indexOf('(') + 1, -1)) as [number, number]);
+    const inside = points.filter(
+      ([x, y]) => Math.hypot(x - centre.x, y - centre.y) < MILESTONE_RADIUS - 0.5,
+    );
+    // Exactly one path point inside the glyph: the stroked line's own end, on the centre port. An
+    // untrimmed head would add its tip there too.
+    expect(inside).toHaveLength(1);
+    expect(Math.hypot(inside[0]![0] - centre.x, inside[0]![1] - centre.y)).toBeLessThanOrEqual(0.5);
   });
 
   it('every tier gate in the painter reads lodTier, never a copy of its thresholds', () => {

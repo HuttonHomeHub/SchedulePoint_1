@@ -8,10 +8,11 @@
  *
  * ## One line set, the painter's
  *
- * The lines are built by the same five functions `paint.ts:1152-1298` composes, in the same order —
- * `laneIntervalIndex` → `lagAnchorPoints` → `routeOrthogonal` (with the endpoint spans) →
- * `chooseCorridorsByCrossing` → `bundleCorridors` → `packGutterChannels` — which is the model
- * `crossing-probe.ts`'s `avoidableOcclusions` already built and digested against the picture.
+ * The lines are built by the same functions `route-frame.ts` composes, in the same order —
+ * `glyphIndex` → `lagAnchorPoints` → `routeNodeToNode` → `chooseRoutesByCrossing` →
+ * `packGutterChannels`. (Re-pointed at node-to-node links M2, when the corridor router this file
+ * first modelled was retired; this module's M0 figures in `docs/specs/netpoint-layout/` were taken
+ * on that router and are not reproducible from this version.)
  * {@link painterDigest} is that control again, run here rather than trusted: a whole-plan evaluator
  * that routes a different line set is a second opinion about the diagram, and the optimiser would
  * optimise it (the ADR-0065 `routeOrthogonal` argument).
@@ -29,22 +30,17 @@
  */
 import { createHash } from 'node:crypto';
 
+import { activityRect, LANE_HEIGHT, rowSlots } from '../src/features/tsld/render/geometry';
+import { isLaneBoundary } from '../src/features/tsld/render/link-candidates';
+import { lagAnchorPoints, packGutterChannels } from '../src/features/tsld/render/link-routing';
 import {
-  activityRect,
-  BAR_HEIGHT,
-  LANE_HEIGHT,
-  rowSlots,
-} from '../src/features/tsld/render/geometry';
-import {
-  bundleCorridors,
-  chooseCorridorsByCrossing,
-  corridorGap,
-  lagAnchorPoints,
-  laneIntervalIndex,
-  type LaneIntervalIndex,
-  packGutterChannels,
-  routeOrthogonal,
-} from '../src/features/tsld/render/link-routing';
+  chooseRoutesByCrossing,
+  glyphIndex,
+  isLaneCentre,
+  routeNodeToNode,
+  type FrameLink,
+  type GlyphIndex,
+} from '../src/features/tsld/render/link-score';
 import { paintScene, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Point, RenderActivity, Viewport } from '../src/features/tsld/render/render-model';
 import { ELAPSED_DAY_WALK } from '../src/features/tsld/render/working-time';
@@ -80,12 +76,12 @@ export interface Model {
   byId: Map<string, RenderActivity>;
   /** Per edge (scene order): the route BEFORE the post-passes, or null if it has no anchors. */
   raw: (Point[] | null)[];
-  index: LaneIntervalIndex;
+  index: GlyphIndex;
 }
 
 const VIEW = (pxPerDay: number): Viewport => ({ pxPerDay, originX: 40, originY: 32 });
 
-export function routeOne(model: Model, e: number): Point[] | null {
+function candidatesOf(model: Model, e: number): FrameLink | null {
   const { scene, view, byId, index } = model;
   const edge = scene.edges[e]!;
   const pred = byId.get(edge.predecessorId);
@@ -101,37 +97,54 @@ export function routeOne(model: Model, e: number): Point[] | null {
     ELAPSED_DAY_WALK,
   );
   if (!anchors) return null;
-  const predRect = activityRect(pred, view, scene.dataDate);
-  const succRect = activityRect(succ, view, scene.dataDate);
-  return routeOrthogonal(anchors.pred, anchors.succ, edge.type, view, 0, {
+  const fromRect = activityRect(pred, view, scene.dataDate);
+  const toRect = activityRect(succ, view, scene.dataDate);
+  if (!fromRect || !toRect) return null;
+  const candidates = routeNodeToNode(
+    { from: pred, to: succ, fromAnchor: anchors.pred, toAnchor: anchors.succ, fromRect, toRect },
     index,
-    fromLane: pred.laneIndex,
-    toLane: succ.laneIndex,
-    laneHeight: LANE_HEIGHT,
-    barHeight: BAR_HEIGHT,
-    ...(predRect ? { fromSpan: { x0: predRect.x, x1: predRect.x + predRect.w } } : {}),
-    ...(succRect ? { toSpan: { x0: succRect.x, x1: succRect.x + succRect.w } } : {}),
-  });
+    view,
+  );
+  return { candidates, ends: [anchors.pred, anchors.succ] };
 }
 
-/** The three whole-set passes, in the painter's order, over COPIES of the raw routes. */
+/** One link's phase-1 route: its best shape alone, before the whole-set passes. */
+export function routeOne(model: Model, e: number): Point[] | null {
+  const link = candidatesOf(model, e);
+  return link ? link.candidates[0]!.line.map((p) => ({ x: p.x, y: p.y })) : null;
+}
+
+/**
+ * The two whole-set passes, in the painter's order. Phase 2 needs every link's candidates, which
+ * `raw` does not carry, so they are re-derived here for the edges that have a route.
+ */
 function postPasses(model: Model): { lines: Point[][]; fromLane: number[]; edges: number[] } {
-  const corridors: { line: Point[]; fromLane: number; toLane: number }[] = [];
   const edges: number[] = [];
+  const links: FrameLink[] = [];
   model.raw.forEach((line, e) => {
     if (!line) return;
+    const link = candidatesOf(model, e);
+    if (!link) return;
     edges.push(e);
-    const edge = model.scene.edges[e]!;
-    corridors.push({
+    links.push(link);
+  });
+  const chosen =
+    links.length > 1
+      ? chooseRoutesByCrossing(links, (y) => isLaneCentre(y, model.view))
+      : links.map((l) => l.candidates[0]!.line);
+  const corridors = chosen.map((line, i) => {
+    const edge = model.scene.edges[edges[i]!]!;
+    return {
       line: line.map((p) => ({ x: p.x, y: p.y })),
       fromLane: model.byId.get(edge.predecessorId)!.laneIndex,
       toLane: model.byId.get(edge.successorId)!.laneIndex,
-    });
+      key: edge.id ?? `${edge.predecessorId}>${edge.successorId}:${edge.type}`,
+    };
   });
   if (corridors.length > 1) {
-    chooseCorridorsByCrossing(corridors, model.index, corridorGap(model.view));
-    bundleCorridors(corridors, model.index);
-    packGutterChannels(corridors, rowSlots(0).clearHalfBandPx);
+    packGutterChannels(corridors, rowSlots(0).clearHalfBandPx, (y) =>
+      isLaneBoundary(y, model.view),
+    );
   }
   return {
     lines: corridors.map((c) => c.line),
@@ -158,7 +171,7 @@ export function buildModel(asap: Asap, layout: Layout, pxPerDay = 4): Model {
     view,
     byId,
     raw: [],
-    index: laneIntervalIndex(scene.activities, view, scene.dataDate),
+    index: glyphIndex(scene.activities, view, scene.dataDate),
   };
   model.raw = scene.edges.map((_, e) => routeOne(model, e));
   return model;
@@ -459,7 +472,7 @@ export function evaluateFull(
     view,
     byId,
     raw: [],
-    index: laneIntervalIndex(scene.activities, view, scene.dataDate),
+    index: glyphIndex(scene.activities, view, scene.dataDate),
   };
   t.index = performance.now() - s;
   s = performance.now();
@@ -503,7 +516,7 @@ export function applyMoveIncremental(
 
   // Patch the two lanes of the index rather than rebuilding it.
   const touched = model.scene.activities.filter((a) => a.laneIndex === from || a.laneIndex === to);
-  const patch = laneIntervalIndex(touched, model.view, model.scene.dataDate);
+  const patch = glyphIndex(touched, model.view, model.scene.dataDate);
   const next = new Map(model.index);
   next.delete(from);
   next.delete(to);

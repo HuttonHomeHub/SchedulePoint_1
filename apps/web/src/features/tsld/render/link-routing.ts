@@ -76,9 +76,6 @@ export interface LaneIntervals {
 /** Per-lane occupied x-spans for the visible frame (ADR-0064 M2 T14). */
 export type LaneIntervalIndex = ReadonlyMap<number, LaneIntervals>;
 
-/** How many corridor candidates a single edge may try before falling back (ADR-0064 T15). */
-export const MAX_CORRIDOR_CANDIDATES = 4;
-
 /**
  * Build the per-lane interval index a link route consults to avoid drawing through bars.
  *
@@ -121,18 +118,12 @@ export function laneIntervalIndex(
 /**
  * Is the closed screen-x interval `[from, to]` clear of every bar in `lane`?
  *
- * **ONE predicate, and that is the point of it** (logic-legibility M0-T1 step 4). A vertical
- * corridor asks about a point and a horizontal leg asks about a span, and before this they were
- * different questions answered by different code — `routeOrthogonal` consulted the point test and
- * nothing at all asked the span one, which is why a leg has always been free to run through a bar
- * in its own lane (`link-routing.ts`'s own obstacle check reaches only `crossedLanes`, and that
- * excludes both endpoints). The measurement harness now imports THIS function, so what the router
- * refuses and what the instrument counts as an occlusion cannot drift into two opinions — the
- * ADR-0065 `routeOrthogonal` argument, applied to a predicate rather than to a route.
+ * **ONE predicate** (logic-legibility M0-T1 step 4): a point and a span are the same question, so
+ * the occlusion instrument (`scripts/crossing-probe.ts`) asks it once. The corridor router that
+ * also used it was retired by node-to-node links M2, which scores against `link-score.ts`'s glyph
+ * index instead; this stays because the instrument still reads it.
  *
- * **Containment is CLOSED at both ends, which makes the point case a true degenerate** —
- * `isLaneFreeBetween(i, l, x, x)` is exactly `isLaneFreeAt(i, l, x)`, asserted rather than assumed
- * (`link-routing.test.ts`). A closed interval also means a leg that merely TOUCHES a bar's edge
+ * **Containment is CLOSED at both ends.** A closed interval means a leg that merely TOUCHES a bar's edge
  * counts as blocked, which is deliberate and is not the same question as whether it is occluded:
  * every link's own anchor sits on its own bar's edge by construction, so a caller measuring
  * occlusion owes an endpoint rule of its own. It cannot be bought here with an epsilon, because an
@@ -218,55 +209,6 @@ export function laneOverlapBetween(
 }
 
 /**
- * Is a horizontal leg in `lane`, running between `a` and `b`, clear of every bar **except its own
- * anchor**?
- *
- * This is the question `routeOrthogonal` never asked. Its obstacle check covers the vertical
- * corridor only, and only across `crossedLanes` — the lanes strictly BETWEEN the two endpoints —
- * so the two horizontal legs, which run at the source and target bars' centre-lines, were checked
- * against nothing. A leg therefore ran straight through any bar sharing its lane between the anchor
- * and the corridor, and because links paint UNDER bars it did not overlap the bar, it **disappeared
- * behind it**. Measured band-off on Unit 300: 105 of 188 links.
- *
- * **The anchor is excluded by its own span, not by an epsilon.** The leg starts on the anchor's
- * edge, so a plain interval test reports it blocked by itself; an epsilon at the anchor does not
- * work either, because an `SF` corridor sits at `(from.x + to.x) / 2`, which can fall well inside
- * either bar, and a clamped lag anchor is placed **on** the bar deliberately. Splitting the leg at
- * the anchor's own edges and testing only the parts outside it is exact, and it is exact **through
- * the merge**: a touching neighbour is a different bar and its share of the merged span still
- * blocks, which is the whole point.
- *
- * `anchor` absent ⇒ every bar in the lane counts, which is the right answer for a leg with no
- * anchor in that lane at all.
- */
-export function isLegClear(
-  index: LaneIntervalIndex,
-  lane: number,
-  a: number,
-  b: number,
-  /**
-   * The leg's own anchors in this lane — **none, one, or TWO**. A same-lane link has both of its
-   * anchors in the lane its leg runs along, and excluding only one reports the link as blocked by
-   * the bar it is drawn to. Found by the existing parity suite rather than by reading.
-   */
-  anchors: readonly { x0: number; x1: number }[] = [],
-): boolean {
-  const lo = Math.min(a, b);
-  const hi = Math.max(a, b);
-  // The leg minus its own anchors: walk the gaps left between them, in x order.
-  const sorted = [...anchors].sort((p, q) => p.x0 - q.x0);
-  let cursor = lo;
-  for (const anchor of sorted) {
-    const until = Math.min(hi, anchor.x0);
-    if (cursor < until && laneOverlapBetween(index, lane, cursor, until) > LEG_CLEARANCE_PX) {
-      return false;
-    }
-    cursor = Math.max(cursor, anchor.x1);
-  }
-  return !(cursor < hi && laneOverlapBetween(index, lane, cursor, hi) > LEG_CLEARANCE_PX);
-}
-
-/**
  * How much of a bar a leg may overlap before it counts as running through it, in CSS px.
  *
  * Half a pixel: the question is whether a reader loses the line, and a sub-pixel graze is a
@@ -275,31 +217,11 @@ export function isLegClear(
  */
 export const LEG_CLEARANCE_PX = 0.5;
 
-/** Is screen-x `x` clear of every bar in `lane`? The degenerate {@link isLaneFreeBetween}. */
-export function isLaneFreeAt(index: LaneIntervalIndex, lane: number, x: number): boolean {
-  return isLaneFreeBetween(index, lane, x, x);
-}
-
-/**
- * The lanes a vertical run between two lane-centres crosses, **excluding the two endpoints' own
- * lanes** — a link is allowed to touch the bars it connects, and forbidding that would make every
- * route fall back.
- */
-function crossedLanes(fromLane: number, toLane: number): number[] {
-  const lo = Math.min(fromLane, toLane);
-  const hi = Math.max(fromLane, toLane);
-  const lanes: number[] = [];
-  for (let lane = lo + 1; lane < hi; lane += 1) lanes.push(lane);
-  return lanes;
-}
-
 /**
  * The elbow's clearance from a bar edge, in CSS px.
  *
- * Exported because {@link chooseCorridorsByCrossing} needs the same quantity to build its candidate
- * offsets, and two copies of this expression would drift apart in the one place a reader could
- * never see it: a corridor that moved by a different step than the one the router would have
- * considered.
+ * Used by the legacy elbow ({@link routeOrthogonal}), which draws every link while node-to-node
+ * routing is off (`scene.linkRouting`).
  */
 export function corridorGap(view: Viewport): number {
   return Math.min(12, Math.max(4, view.pxPerDay));
@@ -311,45 +233,13 @@ export function routeOrthogonal(
   type: DependencyType,
   view: Viewport,
   elbowShift = 0,
-  /**
-   * Obstacle awareness (ADR-0064 M2). **Absent ⇒ this function returns exactly what it always
-   * returned** — that default is the parity gate, and it is why the new path could be added without
-   * a flag inside the geometry itself.
-   */
-  obstacles?: {
-    index: LaneIntervalIndex;
-    fromLane: number;
-    toLane: number;
-    /** Lane pitch and bar height, so the 5-point fallback can find the inter-lane gutter. */
-    laneHeight: number;
-    barHeight: number;
-    /**
-     * The two endpoint bars' own x-spans (logic-legibility M2-T2).
-     *
-     * A horizontal leg begins ON its anchor's edge, so a test that simply asks "is this interval
-     * clear of every bar in the lane" reports every leg in the plan as blocked by itself. The
-     * anchor has to be excluded by identity, and `laneIntervalIndex` cannot supply it: it MERGES
-     * spans that overlap **or touch**, and `packLanes` puts activities end to end — so a leg
-     * crossing its immediate neighbour is inside the same merged span as its own bar. Measured in
-     * the M0 harness, attributing against merged spans undercounts foreign occlusion **6.6x**.
-     *
-     * So the caller passes the two rects it already has. Absent ⇒ the legs are not checked and this
-     * function behaves exactly as it did before M2, which is the parity default ADR-0064 M2 set for
-     * the obstacle parameter itself.
-     */
-    fromSpan?: { x0: number; x1: number };
-    toSpan?: { x0: number; x1: number };
-  },
 ): Point[] {
-  // **Parity first**: with no obstacle index this function returns exactly what it always returned
-  // (ADR-0064 M2's default, FC-L10). The same-lane straight segment is part of that, and moving
-  // this line below the elbow arithmetic broke it — caught by the parity suite, not by reading.
-  if (from.y === to.y && !obstacles) return [from, to];
+  if (from.y === to.y) return [from, to];
   // The vertical elbow sits clear of the anchored edges: just outside a finish edge (right) or a
   // start edge (left) so the line doesn't cut back across either bar; SF spans, so split the middle.
   const gap = corridorGap(view);
   const shift = elbowShift === 0 ? 0 : Math.max(-(gap - 1), Math.min(gap - 1, elbowShift));
-  const preferred =
+  const elbow =
     type === 'FS'
       ? from.x + gap + shift
       : type === 'SS'
@@ -357,173 +247,21 @@ export function routeOrthogonal(
         : type === 'FF'
           ? Math.max(from.x, to.x) + gap + shift
           : (from.x + to.x) / 2 + shift; // SF
-  const fourPoint = (elbow: number): Point[] => [
-    from,
-    { x: elbow, y: from.y },
-    { x: elbow, y: to.y },
-    to,
-  ];
-  if (!obstacles) return fourPoint(preferred);
-
-  const crossed = crossedLanes(obstacles.fromLane, obstacles.toLane);
-
-  /**
-   * **Viability, not freedom** (logic-legibility M2-T2). A corridor is usable when the lanes it
-   * crosses are clear **and** the two horizontal legs it implies are clear in their own lanes. The
-   * candidate list, its order and its bound are unchanged; only the test they are judged by is.
-   *
-   * The leg terms are skipped when the caller passed no spans, which keeps the pre-M2 behaviour
-   * available and is what the byte-identity cases assert.
-   */
-  const legsClear = (x: number): boolean =>
-    (obstacles.fromSpan === undefined ||
-      isLegClear(obstacles.index, obstacles.fromLane, from.x, x, [obstacles.fromSpan])) &&
-    (obstacles.toSpan === undefined ||
-      isLegClear(obstacles.index, obstacles.toLane, x, to.x, [obstacles.toSpan]));
-  const viable = (x: number): boolean =>
-    crossed.every((lane) => isLaneFreeAt(obstacles.index, lane, x)) && legsClear(x);
-
-  /**
-   * **A same-lane link is the small-plan mechanism, and it used to return before any of this.**
-   *
-   * `packLanes` packs by time, so A and C sit in one lane with B between them; the straight line
-   * `[from, to]` then draws through B and vanishes behind it. That early return is why the product
-   * owner's report said _"even for a simple plan"_ — a plan with few lanes has most of its links
-   * in one. Measured on Unit 300, which is the unfavourable case for this shape: 26 two-point
-   * links, 5 running through a foreign bar.
-   *
-   * The line is kept when it is clear, which is the overwhelmingly common case and FC-L10's
-   * parity; when it is not, the link leaves the lane and travels in the gutter below, which is what
-   * the reference diagram does and what M1 made safe.
-   */
-  if (from.y === to.y) {
-    // BOTH anchors are in this lane, so both are excluded; with either span missing the leg is not
-    // checked at all and the straight segment stands, which is the pre-M2 behaviour.
-    const anchors = [obstacles.fromSpan, obstacles.toSpan].filter(
-      (span): span is { x0: number; x1: number } => span !== undefined,
-    );
-    if (anchors.length < 2) return [from, to];
-    if (isLegClear(obstacles.index, obstacles.fromLane, from.x, to.x, anchors)) return [from, to];
-    return gutterRoute(from, to, view, obstacles, preferred, gap);
-  }
-
-  // Nothing between the two lanes to hit — but the two legs still run somewhere, and before M2 that
-  // ended the question. `chooseCorridorsByCrossing` already refuses to inherit this early return
-  // for its own reason; this is the same correction one function up.
-  if (crossed.length === 0 && legsClear(preferred)) return fourPoint(preferred);
-  if (viable(preferred)) return fourPoint(preferred);
-
-  /**
-   * A **bounded** candidate list, tried in a fixed order so the same input always produces the same
-   * line — a route that varies between frames reads as the diagram twitching. The order runs from
-   * "closest to what we would have drawn" outwards, so a corridor is only abandoned for a reason.
-   */
-  const candidates = [
-    preferred + gap * 2,
-    preferred - gap * 2,
-    (from.x + to.x) / 2,
-    Math.max(from.x, to.x) + gap * 3,
-  ].slice(0, MAX_CORRIDOR_CANDIDATES);
-  for (const candidate of candidates) {
-    if (viable(candidate)) return fourPoint(candidate);
-  }
-
-  /**
-   * No single corridor is clear. Route via **two** corridors joined by a short horizontal leg in
-   * the inter-lane gutter — the band between one lane's bar bottom and the next lane's bar top,
-   * where a bar can never be. This is the VHV shape, and it is the last structured attempt: if the
-   * gutter itself is unusable the line falls back to today's elbow, because bounded work is the
-   * contract and an unbounded search on the paint path is how a draw budget dies.
-   */
-  return gutterRoute(from, to, view, obstacles, preferred, gap);
+  return [from, { x: elbow, y: from.y }, { x: elbow, y: to.y }, to];
 }
 
-/**
- * The VHV escape: leave the lane, travel in the gutter, arrive.
- *
- * **Both legs hug their own anchor, and that is the largest single lever this epic measured.** The
- * shipped shape put its far corridor at `(from.x + to.x) / 2`, so the leg at the target's y ran
- * half the span and met whatever was in the way — which is why a clear channel alone rescued almost
- * nothing. Measured over Unit 300's 105 foreign-occluded links (`m0-measurement.md` §5):
- *
- * - every x in `routeOrthogonal`'s candidate list rescues **31**
- * - **every** x, swept at 1 px across the anchors' span plus three gaps either side, rescues **35**
- *   — so widening the search is worth four links and the obvious remedy is disposed of
- * - this shape rescues **45 on its own**, more than every elbow position in existence combined
- *
- * The corridors sit one gap outside each anchor, on the side the other end is, so the two legs are
- * as short as the geometry allows. It is the last structured attempt and it is unconditional: if
- * the gutter itself is unusable the line is still drawn here rather than searched for, because
- * bounded work is the contract and an unbounded search on the paint path is how a draw budget dies.
- * {@link routeResidue} counts the cases where it does not clear, so a shortfall is explainable
- * rather than mysterious.
- */
-function gutterRoute(
-  from: Point,
-  to: Point,
-  view: Viewport,
-  obstacles: NonNullable<Parameters<typeof routeOrthogonal>[5]>,
-  preferred: number,
-  gap: number,
-): Point[] {
-  // For a cross-lane link the gutter is the one below the upper of the two lanes; for a same-lane
-  // link (M2-T2) both are the same lane, so `Math.min` names it and the band below it is used.
-  const gutterLane = Math.min(obstacles.fromLane, obstacles.toLane);
+/** One routed line, with the lanes its ends sit in — what {@link packGutterChannels} reads. */
+export interface RoutedLine {
+  line: Point[];
+  fromLane: number;
+  toLane: number;
   /**
-   * **In SCREEN space, which means ADDING `view.originY`, not subtracting it.**
-   *
-   * `from.y` and `to.y` arrive already in screen space, and `screenYOfLane` — the function that
-   * defines it — is `view.originY + laneIndex * LANE_HEIGHT`. This expression subtracted instead,
-   * so the leg landed `2 x originY` away from the gutter it names. `originY` is never zero in the
-   * shipped product (40 on first paint, 32 after Fit, accumulating negative after any downward
-   * pan), so at rest the leg was 64 px out and panned ~34 lanes down it was ~1,920 px out — the
-   * line left the canvas and came back, which is exactly what a planner reported seeing.
-   *
-   * It survived because the only two exercises of this path both pinned `originY: 0` — the single
-   * value at which the two signs agree — and the unit case asserted the route's shape rather than
-   * the leg's value. Both are fixed in `link-routing.test.ts`.
-   *
-   * The pitch stays the INJECTED `obstacles.laneHeight` rather than becoming a `screenYOfLane`
-   * call: the two are the same value at the one real call site (`paint.ts:1185-1190` passes
-   * `LANE_HEIGHT`), and the parameter exists so this module does not depend on that constant.
-   * Swapping it would be a second change riding along with a one-character fix.
-   *
-   * **The DATUM is the lane boundary, not the upper lane's bar bottom** (logic-legibility M1-T1).
-   * This expression used to subtract `pad`, and `laneTop + pad + barHeight` IS
-   * `screenYOfLane(L + 1) - pad`, so the gutter leg was drawn along the upper bar's bottom edge
-   * **exactly** — ADR-0149 D3's arithmetic, and M-C0-T4 measured **58 of Unit 300's 68 gutter legs
-   * lying inside a painted bar at 0.0 px clearance**. The router's last structured escape ran
-   * through the obstacles it exists to avoid.
-   *
-   * The invariant, as an inequality rather than a sentence: lane `L`'s bar occupies
-   * `[laneTop + pad, laneTop + pad + barHeight]` and lane `L + 1`'s occupies the same band one
-   * pitch down, so the clear band is `[boundary - pad, boundary + pad]` where
-   * `boundary = originY + (L + 1) * laneHeight`. A channel at `boundary + k` enters **no** bar's
-   * extent for any `|k| <= pad - 1`, **at any pitch and any bar height** — which is what lets
-   * {@link packGutterChannels} derive its capacity instead of carrying a constant, and what lets M3
-   * thin the bar without rebuilding either.
+   * A stable identity for the link (its dependency id), the last tie-break between two gutter runs
+   * with the same geometry. Without it that tie fell to list position, which is the order
+   * `scene.edges` arrived in, and a 200-order shuffle of Unit 300 found 39 orders giving a link a
+   * different channel (node-to-node links M3, FC-T5).
    */
-  const gutterY = view.originY + (gutterLane + 1) * obstacles.laneHeight;
-  // Each leg only has to clear the lanes IT crosses, which is why this can succeed where a single
-  // corridor could not: the near leg runs from the source lane down to the gutter, the far leg from
-  // the gutter to the target lane, and neither spans the blocked middle.
-  const forward = from.x <= to.x;
-  const near = forward ? from.x + gap : from.x - gap;
-  const far = forward ? to.x - gap : to.x + gap;
-  // A degenerate span — the two anchors closer together than two gaps — would cross the corridors
-  // over each other and draw a bow tie. Fall back to the shipped placement there, which is correct
-  // and merely long, and is the case `preferred` was chosen for.
-  const tight = forward ? near <= far : near >= far;
-  const nearX = tight ? near : preferred + gap * 2;
-  const farX = tight ? far : (from.x + to.x) / 2;
-  return [
-    from,
-    { x: nearX, y: from.y },
-    { x: nearX, y: gutterY },
-    { x: farX, y: gutterY },
-    { x: farX, y: to.y },
-    to,
-  ];
+  key?: string;
 }
 
 // ── Gutter channels (logic-legibility M1) ───────────────────────────────────────────────────────
@@ -581,17 +319,20 @@ export function gutterChannels(clearHalfBandPx: number): number[] {
  * ## Four properties, in the order they matter
  *
  * 1. **It never measures its own output.** Channels are assigned against x-intervals that are
- *    already final, which is why it runs LAST — after `bundleCorridors`, which moves verticals and
- *    therefore moves the x-extent of the horizontal between them. Running it earlier would pack
- *    against x values that then change, which is ADR-0090's recorded oscillation with a third
- *    subject.
+ *    already final, which is why it runs LAST — after node-to-node routing's phase 2
+ *    (`chooseRoutesByCrossing`), which chooses each link's shape and therefore the x-extent of its
+ *    gutter run. Running it earlier would pack against runs that then change, which is ADR-0090's
+ *    recorded oscillation with a third subject.
  * 2. **It moves y only.** Lag anchors, drag handles and hit zones keep today's geometry — they are
  *    computed before this runs and are not passed in. Structural, not remembered: the
- *    {@link BundleCandidate} argument shape cannot reach them.
+ *    {@link RoutedLine} argument shape cannot reach them.
  * 3. **It is deterministic and permutation-independent.** Runs are sorted by (gutter y, left x,
- *    right x, candidate index) — a total order over the geometry, never the order `scene.edges`
- *    happened to arrive in, which is a server response. A channel that varied between frames would
- *    move a line while the viewport stood still.
+ *    right x, the link's key) — never the order `scene.edges` happened to arrive in, which is a
+ *    server response. A channel that varied between frames would move a line while the viewport
+ *    stood still. This said "candidate index" was a total order over the geometry until node-to-node
+ *    links M3: it is list position, so two runs with the same geometry took channels by arrival
+ *    order, and a 200-order shuffle of Unit 300 found 39 orders that moved a link. The key closes
+ *    it; list position is left only for a caller that passes no key.
  * 4. **Surplus spreads to the LEAST-LOADED channel, never into a bar.** A gutter carrying more
  *    simultaneous runs than it has channels cannot separate them all; the rest go to whichever
  *    channel already carries the fewest runs overlapping them, so the excess is shared evenly
@@ -601,27 +342,48 @@ export function gutterChannels(clearHalfBandPx: number): number[] {
  *    is the property that must not be traded for a cosmetic gain.
  */
 export function packGutterChannels(
-  candidates: readonly BundleCandidate[],
+  candidates: readonly RoutedLine[],
   clearHalfBandPx: number,
+  /** Whether a y is a lane boundary: the gutter datum (ADR-0150). */
+  isGutter: (y: number) => boolean,
 ): number {
   const offsets = gutterChannels(clearHalfBandPx);
   if (offsets.length < 2) return 0;
 
-  // A gutter run is the horizontal leg of a VHV route: a 6-point line's middle segment. Its y is a
-  // lane boundary by construction (M1-T1), so grouping by that y groups by gutter.
-  type Run = { candidate: number; at: number; y: number; x0: number; x1: number };
+  // A gutter run is the horizontal leg of a VHV route, found by geometry: any interior horizontal
+  // segment lying on a lane boundary. Its y is a lane boundary by construction, so grouping by that
+  // y groups by gutter.
+  type Run = { candidate: number; at: number; y: number; x0: number; x1: number; key: string };
   const runs: Run[] = [];
   candidates.forEach((candidate, c) => {
     const line = candidate.line;
-    if (line.length !== 6) return;
-    const a = line[2]!;
-    const b = line[3]!;
-    if (a.y !== b.y) return;
-    runs.push({ candidate: c, at: 2, y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
+    const at: number[] = [];
+    for (let i = 1; i + 2 < line.length; i += 1) {
+      if (line[i]!.y === line[i + 1]!.y && isGutter(line[i]!.y)) at.push(i);
+    }
+    for (const i of at) {
+      const a = line[i]!;
+      const b = line[i + 1]!;
+      runs.push({
+        candidate: c,
+        at: i,
+        y: a.y,
+        x0: Math.min(a.x, b.x),
+        x1: Math.max(a.x, b.x),
+        key: candidate.key ?? '',
+      });
+    }
   });
   if (runs.length < 2) return 0;
 
-  runs.sort((p, q) => p.y - q.y || p.x0 - q.x0 || p.x1 - q.x1 || p.candidate - q.candidate);
+  runs.sort(
+    (p, q) =>
+      p.y - q.y ||
+      p.x0 - q.x0 ||
+      p.x1 - q.x1 ||
+      (p.key < q.key ? -1 : p.key > q.key ? 1 : 0) ||
+      p.candidate - q.candidate,
+  );
 
   let moved = 0;
   let start = 0;
@@ -660,90 +422,6 @@ export function packGutterChannels(
       line[run.at] = { x: line[run.at]!.x, y: run.y + offset };
       line[run.at + 1] = { x: line[run.at + 1]!.x, y: run.y + offset };
       moved += 1;
-    }
-    start = end;
-  }
-  return moved;
-}
-
-// ── Trunk/branch bundling of co-linear corridors (ADR-0065 M3, the SAME flag) ────────────────────
-
-/**
- * How far apart (px) two vertical corridors may sit and still be drawn as one trunk.
- *
- * Six pixels is the fan-out cap (`FAN_OUT_MAX_PX`), and that is not a coincidence: the spread this
- * bundles away is largely the fan-out's own, plus the small type-dependent gap. Wider would start
- * merging corridors a reader can tell apart, which would move a line for no visible gain.
- */
-export const BUNDLE_TOLERANCE_PX = 6;
-
-/** One routed line, with the lanes its corridors cross — the bundler needs both. */
-export interface BundleCandidate {
-  line: Point[];
-  fromLane: number;
-  toLane: number;
-}
-
-/**
- * Snap near-coincident vertical corridors onto a shared trunk, **in place**.
- *
- * A hub with a dozen successors draws a dozen verticals two or three pixels apart: a comb, which
- * reads as noise rather than as "these all follow that". Snapping them to one x makes the picture
- * say what the logic says — one trunk, branching at each successor's lane.
- *
- * Three properties, in the order they matter:
- *
- * 1. **It never undoes the routing.** A corridor is only moved onto the trunk if the trunk x is
- *    *free across the lanes that corridor crosses*. Without that check, bundling would cheerfully
- *    snap an obstacle-avoiding corridor back through the bar M2 moved it off — the new feature
- *    silently reverting the old one, on the plans where both matter most.
- * 2. **It is deterministic.** Groups are swept over a sorted list and the trunk is the group's
- *    median, so the same frame always bundles the same way. The tie-break carries the candidate's
- *    index, because two corridors at an identical x must still order stably.
- * 3. **It moves the line only.** Lag anchors, their drag handles and their hit zones keep today's
- *    per-edge geometry — they are computed before this runs and are not passed in. That is the
- *    ADR-0065 M3 risk mitigation, and it is structural: this function cannot reach them.
- *
- * Returns the number of corridors actually moved, so a test can assert it did something rather
- * than assert the absence of a change it never attempted.
- */
-export function bundleCorridors(
-  candidates: readonly BundleCandidate[],
-  index: LaneIntervalIndex,
-  tolerancePx = BUNDLE_TOLERANCE_PX,
-): number {
-  type Corridor = { candidate: number; at: number; x: number; lanes: number[] };
-  const corridors: Corridor[] = [];
-  candidates.forEach((candidate, c) => {
-    const lanes = crossedLanes(candidate.fromLane, candidate.toLane);
-    if (lanes.length === 0) return; // adjacent lanes: nothing crosses, nothing to bundle
-    for (let i = 0; i + 1 < candidate.line.length; i += 1) {
-      const a = candidate.line[i]!;
-      const b = candidate.line[i + 1]!;
-      if (a.x === b.x && a.y !== b.y) corridors.push({ candidate: c, at: i, x: a.x, lanes });
-    }
-  });
-  if (corridors.length < 2) return 0;
-  corridors.sort((p, q) => p.x - q.x || p.candidate - q.candidate || p.at - q.at);
-
-  let moved = 0;
-  let start = 0;
-  while (start < corridors.length) {
-    let end = start + 1;
-    while (end < corridors.length && corridors[end]!.x - corridors[start]!.x <= tolerancePx) {
-      end += 1;
-    }
-    if (end - start > 1) {
-      const trunk = corridors[start + ((end - start) >> 1)]!.x;
-      for (let i = start; i < end; i += 1) {
-        const corridor = corridors[i]!;
-        if (corridor.x === trunk) continue;
-        if (!corridor.lanes.every((lane) => isLaneFreeAt(index, lane, trunk))) continue;
-        const line = candidates[corridor.candidate]!.line;
-        line[corridor.at] = { x: trunk, y: line[corridor.at]!.y };
-        line[corridor.at + 1] = { x: trunk, y: line[corridor.at + 1]!.y };
-        moved += 1;
-      }
     }
     start = end;
   }
@@ -1055,246 +733,4 @@ export function linkHighlightIds(
  * painter partitions its edge passes with (ADR-0052 M5). */
 export function edgeTouches(edge: RenderEdge, ids: ReadonlySet<string>): boolean {
   return ids.has(edge.predecessorId) || ids.has(edge.successorId);
-}
-
-// ── Crossing-aware corridor choice (diagram-legibility M-C3) ─────────────────────────────────────
-
-/** How far either side of its current x a corridor may be moved, in `corridorGap` multiples. */
-const CORRIDOR_OFFSETS = [1, -1, 2, -2, 3, -3, 4, -4, 6, -6, 8, -8] as const;
-const EPS = 0.001;
-
-/** `true` iff every value in the sorted array strictly before `x` … (an upper bound by binary search). */
-function countBelow(sorted: readonly number[], x: number): number {
-  let lo = 0;
-  let hi = sorted.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (sorted[mid]! < x) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
-/**
- * A frozen picture of every horizontal segment on screen, indexed by y for containment counting.
- *
- * **Frozen is the load-bearing word.** The pass below moves corridors, and moving a corridor moves
- * the two horizontals attached to it — so a chooser that re-read the geometry as it went would be
- * measuring its own output, which is ADR-0090's recorded oscillation with a different subject. The
- * snapshot is taken once, every decision is made against it, and no decision is ever re-evaluated.
- */
-interface SegmentIndex {
-  /** Sorted distinct positions on the segments' FIXED axis (y for horizontals, x for verticals). */
-  readonly at: number[];
-  /** Per position, the segment starts and ends on the other axis, each sorted. */
-  readonly spans: Map<number, { starts: number[]; ends: number[] }>;
-}
-
-interface Snapshot {
-  readonly horizontals: SegmentIndex;
-  readonly verticals: SegmentIndex;
-}
-
-function emptyIndex(): { at: number[]; spans: Map<number, { starts: number[]; ends: number[] }> } {
-  return { at: [], spans: new Map() };
-}
-
-function push(
-  index: { spans: Map<number, { starts: number[]; ends: number[] }> },
-  at: number,
-  lo: number,
-  hi: number,
-): void {
-  const bucket = index.spans.get(at) ?? { starts: [], ends: [] };
-  bucket.starts.push(lo);
-  bucket.ends.push(hi);
-  index.spans.set(at, bucket);
-}
-
-function seal(index: {
-  at: number[];
-  spans: Map<number, { starts: number[]; ends: number[] }>;
-}): SegmentIndex {
-  for (const bucket of index.spans.values()) {
-    bucket.starts.sort((p, q) => p - q);
-    bucket.ends.sort((p, q) => p - q);
-  }
-  index.at = [...index.spans.keys()].sort((p, q) => p - q);
-  return index;
-}
-
-function snapshotSegments(candidates: readonly BundleCandidate[]): Snapshot {
-  const horizontals = emptyIndex();
-  const verticals = emptyIndex();
-  for (const candidate of candidates) {
-    const line = candidate.line;
-    for (let i = 0; i + 1 < line.length; i += 1) {
-      const a = line[i]!;
-      const b = line[i + 1]!;
-      if (Math.abs(a.y - b.y) <= EPS && Math.abs(a.x - b.x) > EPS) {
-        push(horizontals, a.y, Math.min(a.x, b.x), Math.max(a.x, b.x));
-      } else if (Math.abs(a.x - b.x) <= EPS && Math.abs(a.y - b.y) > EPS) {
-        push(verticals, a.x, Math.min(a.y, b.y), Math.max(a.y, b.y));
-      }
-    }
-  }
-  return { horizontals: seal(horizontals), verticals: seal(verticals) };
-}
-
-/**
- * How many snapshot segments a segment at `fixed`, spanning `(lo, hi)` on the other axis, crosses.
- *
- * Only positions strictly inside the span can be crossed: a segment meeting this one at an endpoint
- * is its own elbow, or another link's segment meeting it at a shared anchor — and ADR-0065's
- * fan-out puts many of those on one bar edge **by design**. Strict interiority also excludes a
- * link's own segments structurally (they meet at its elbows), so this needs no owner bookkeeping.
- */
-function crossingsOf(index: SegmentIndex, fixed: number, from: number, to: number): number {
-  const lo = Math.min(from, to);
-  const hi = Math.max(from, to);
-  let total = 0;
-  for (let i = countBelow(index.at, lo + EPS); i < index.at.length; i += 1) {
-    const position = index.at[i]!;
-    if (position >= hi - EPS) break;
-    const bucket = index.spans.get(position)!;
-    total += countBelow(bucket.starts, fixed - EPS) - countBelow(bucket.ends, fixed + EPS);
-  }
-  return total;
-}
-
-/**
- * Move each vertical corridor to the candidate x it crosses the fewest other lines at, **in place**.
- *
- * ## Why this exists
- *
- * `routeOrthogonal` chooses a corridor for what it **hits** — a bar in a lane it passes through —
- * and has never had an opinion about what it **crosses**. The product owner's complaint was about
- * crossings ("the logic lines cross each other, which in NetPoint they rarely do"), and
- * `docs/specs/diagram-legibility/part-c-m-c0.md` measured that the obvious remedy is not height: at
- * the two zooms a planner works at, spreading Unit 300 over 144 rows instead of 21 changes
- * crossings per link by under half a per cent, while a bad assignment at constant height changes it
- * by 2.7×. So the levers are assignment and corridor choice, and this is the corridor half — at
- * **zero** vertical cost, which is why it is sequenced before the layout rule.
- *
- * ## The four properties, in the order they matter
- *
- * 1. **It measures a frozen snapshot, never its own output.** See {@link snapshotHorizontals}.
- * 2. **It never undoes the routing.** A corridor moves only to an x that is free of bars across
- *    every lane it crosses — the same `isLaneFreeAt` test `routeOrthogonal` applies — so this
- *    cannot snap an obstacle-avoiding corridor back through the bar ADR-0065 M2 moved it off. That
- *    is the same hazard {@link bundleCorridors} records, and it is checked the same way.
- * 3. **It moves only on a strict improvement**, and the candidate order is fixed, so the same frame
- *    always produces the same lines. A route that varies between frames reads as the diagram
- *    twitching (ADR-0065), and a tie is not a reason to abandon the line the router chose.
- * 4. **It moves the line only.** Lag anchors, their drag handles and their hit zones are computed
- *    before this runs and are not passed in — {@link bundleCorridors}'s structural property,
- *    inherited by taking the same argument.
- *
- * Bounded: four candidate offsets per corridor, and each is costed over the lanes that corridor
- * crosses rather than over the plan. Returns the number of corridors moved, so a test can assert it
- * did something rather than assert the absence of a change it never attempted.
- */
-export function chooseCorridorsByCrossing(
-  candidates: readonly BundleCandidate[],
-  index: LaneIntervalIndex,
-  gap: number,
-): number {
-  if (candidates.length < 2) return 0;
-  const snapshot = snapshotSegments(candidates);
-
-  let moved = 0;
-  for (const candidate of candidates) {
-    /**
-     * **Adjacent lanes are NOT skipped here, and that single decision is most of the result.**
-     *
-     * `routeOrthogonal` returns today's elbow unexamined when `crossedLanes` is empty, because it
-     * is answering "could this corridor hit a bar?" and the answer is no. This pass answers a
-     * different question — "what does this corridor cross?" — and a one-lane hop crosses other
-     * links just as readily. On Unit 300 **115 of 188 links are one lane apart or less**, so
-     * inheriting that early return excluded 61 % of the diagram: measured, the pass was worth
-     * −4.1 % with the skip and **−20.8 % without it**.
-     *
-     * The bar check below then does the right thing for free: an empty lane list makes
-     * `Array.every` vacuously true, which is correct — there is no intermediate lane to hit.
-     */
-    const lanes = crossedLanes(candidate.fromLane, candidate.toLane);
-    const line = candidate.line;
-    // Only the plain four-point elbow is moved. A six-point VHV route was produced because NO
-    // single corridor was clear (`routeOrthogonal`'s last structured attempt), so there is nothing
-    // here to improve on and moving one of its two legs would be re-deciding that search from the
-    // outside with less information than it had.
-    if (line.length !== 4) continue;
-    const from = line[0]!;
-    const elbow = line[1]!;
-    const to = line[3]!;
-
-    /**
-     * **The whole line, not just the corridor.** Moving the elbow moves the two horizontals
-     * attached to it, and an objective that counted only the vertical would trade one crossing for
-     * two elsewhere — measured: corridor-only scoring made Unit 300 very slightly WORSE
-     * (2.612 → 2.622 per link), which is how this came to count all three segments.
-     *
-     * The snapshot is frozen, so the two horizontals other links see are the ones they had before
-     * this pass ran. Re-snapshotting after every move was measured as well and is worth a further
-     * 1.2 % for an O(N²) rebuild — declined, and recorded rather than left as an open idea.
-     */
-    const score = (x: number): number =>
-      crossingsOf(snapshot.horizontals, x, from.y, to.y) +
-      crossingsOf(snapshot.verticals, from.y, from.x, x) +
-      crossingsOf(snapshot.verticals, to.y, x, to.x);
-
-    const current = score(elbow.x);
-    if (current === 0) continue; // nothing to improve, and a move could only make it worse
-
-    /**
-     * Two families, because they answer different questions and the measurement says both earn
-     * their place (Unit 300, whole-plan crossings per link, 2.612 baseline):
-     *
-     * - **Offsets from the elbow** — "shift it a little" — reach 2.117 on their own (−18.9 %).
-     * - **Positions relative to the ENDPOINTS** — "run it beside the successor's start instead of
-     *   the predecessor's finish", "run it down the middle" — take that to **2.037 (−22.0 %)**.
-     *
-     * Sampling the whole span at sixteen points instead was measured too and buys 0.2 % more, so
-     * it is not done: a corridor at an arbitrary fraction of the span has nothing to say for
-     * itself, and this list is one a reader can justify line by line.
-     */
-    const anchored = [
-      (from.x + to.x) / 2,
-      to.x - gap,
-      from.x + gap,
-      (from.x + to.x * 3) / 4,
-      (from.x * 3 + to.x) / 4,
-    ];
-    let bestX = elbow.x;
-    let best = current;
-    for (const x of [...CORRIDOR_OFFSETS.map((step) => elbow.x + step * gap), ...anchored]) {
-      if (!lanes.every((lane) => isLaneFreeAt(index, lane, x))) continue;
-      /**
-       * **This pass deliberately does NOT check the legs, and that was measured rather than
-       * assumed** (logic-legibility M2-T4).
-       *
-       * The concern was real on its face: the pass moves an elbow up to `± 8 × gap` from its anchor
-       * on a **crossings-only** score, so it can move a corridor to an x whose legs run through a
-       * bar — spending M2's gain immediately after M2 produces it. Built and measured band-off on
-       * Unit 300, adding `isLegClear` here moves `occl/link` by **−0.026 / +0.005 / −0.006** at
-       * 1 / 4 / 12 px/day — a wash, and worse at the middle zoom — while `x/link` rises at all
-       * three, taking 4 px/day to **+11.1 %** against the M0 baseline and back outside FC-L4's
-       * 10 % ceiling.
-       *
-       * So it is withdrawn and recorded as measured-and-rejected. The reason it costs nothing is
-       * that `routeOrthogonal` has already chosen an elbow whose legs are clear (M2-T2), and this
-       * pass only ever moves off it for a strictly better crossing count.
-       */
-      const count = score(x);
-      if (count < best) {
-        best = count;
-        bestX = x;
-      }
-    }
-    if (bestX === elbow.x) continue;
-    line[1] = { x: bestX, y: from.y };
-    line[2] = { x: bestX, y: to.y };
-    moved += 1;
-  }
-  return moved;
 }
