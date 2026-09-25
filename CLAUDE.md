@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 24 API modules
-> (`apps/api/src/modules/`), 33 Prisma models across 70 migrations, 1347 web
+> (`apps/api/src/modules/`), 33 Prisma models across 70 migrations, 1353 web
 > source files with 46 Playwright suites beside the base journey, and
-> 157 ADRs.
+> 158 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5853,6 +5853,30 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   name crossed into the row above, found by the containment case FC-G5 named and nobody had
   written. Two of FC-G7's counting budgets were unwritten, and the pictures had been judged at M2
   only. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0158** _(Accepted; M0–M2 landed 2026-09-25)_ — A link leaves and enters at its node. The
+  product owner asked for logic links that "come directly to the nodes unless a lead/lag is there",
+  NetPoint-style. ADR-0151 already said every link converges on the node glyph; the router never
+  made it true, because its elbow sat 4–12 px outside the anchored edge, inside a 9 px node reach, so
+  bends hid in the disc, links entered a start node over their own bar and legs landed mid-bar. M0's
+  new instrument (`scripts/attachment-probe.ts`, reading the painter's own routes) found unattached
+  ends on every fixture. **Ports and a stub rule** replace the corridor: each end allows set
+  directions (a start node W/N/S, a finish node E/N/S, an embed only a vertical, a milestone its side
+  for a horizontal and its centre for a vertical), and a bent end segment must clear the glyph
+  (14 / 17 px, derived from constants). At most **eleven orthogonal shapes** per link are scored
+  lexicographically in the product owner's order (foreign glyphs, crossings, overlaps, length,
+  bends), VH before HV so a hub's links share a stem, and **phase 2** re-scores every link against a
+  frozen snapshot and moves it only on a strict improvement. The corridor router (`bundleCorridors`,
+  `chooseCorridorsByCrossing`, the obstacle branch) is **deleted**, not kept beside it. Unattached
+  ends fall to **zero everywhere** and Unit 300 improves on every count, but the 17-activity plan's
+  crossings rose **3 → 8**, past the approved +10 %: every one is a gutter run the order prefers to a
+  line through a bar. **The work stopped as its conditions required, and the product owner accepted
+  the trade with the pictures in front of them.** Two conditions were corrected rather than passed:
+  FC-T2's false-junction metric now exempts a sibling's node (the bus the spec asked for), with the
+  baseline re-measured the same way, and the text-crossing remedy is filed (`docs/TECH_DEBT.md` #393)
+  because the router cannot see measured text. Tidy's cost is **INDETERMINATE** at 1.45× on the means
+  against a 1.5× bar. Diagonals (M4) are judged against these numbers and dropped on any failure.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

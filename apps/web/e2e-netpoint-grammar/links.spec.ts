@@ -25,7 +25,9 @@ import {
  *   label is text in the mark shade, so it is measured as the mark-shade ink that disappears with
  *   the switch (the chevrons, also mark shade, stay);
  * - an `SS + 2` link puts a dot on its predecessor's bar, and the same plan before that link has
- *   none.
+ *   none;
+ * - a link leaves its predecessor through the node (node-to-node links M2, ADR-0158): the vertical
+ *   that crosses an empty lane runs up into the node's ring, not one gap east of it.
  */
 
 /** A token's colour as the browser paints it, read inside the canvas scope. */
@@ -251,5 +253,89 @@ test.describe('NetPoint grammar — links', () => {
         message: 'no attachment dot on Frame, two days in',
       })
       .toBeGreaterThan(0);
+  });
+
+  test('a link leaves its predecessor through the finish node, not beside it', async ({ page }) => {
+    const stamp = Date.now();
+    const orgSlug = await onboard(page, stamp);
+    await openProject(page);
+    await createPlan(page, 'Node to node');
+    await ensurePen(page);
+    // Lane 1 is left empty, so the only ink between the two bars is the link's vertical. One-letter
+    // names keep the name row clear of the node, which the probe below looks through.
+    const made = await seedActivities(page, orgSlug, [
+      { name: 'A', laneIndex: 0, durationDays: 5 },
+      { name: 'B', laneIndex: 2, durationDays: 5 },
+    ]);
+    const [a, b] = made;
+    if (!a || !b) throw new Error('the fixture did not seed its two activities');
+    await seedLink(page, orgSlug, a.id, b.id, 'FS', 5);
+    await recalculate(page, orgSlug);
+    await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
+    const ground = await paintedRgb(page, '--canvas');
+    const inks = [
+      await paintedRgb(page, '--canvas-link'),
+      await paintedRgb(page, '--canvas-link-minor'),
+      await paintedRgb(page, '--destructive'),
+      await paintedRgb(page, '--warning'),
+    ];
+
+    /**
+     * Finds the link's vertical (the column with the longest run of link ink), then walks UP it
+     * from the middle of that run. Leaving through the node, the link ink stops at the ring's
+     * bottom rim, the ring's ground-filled interior follows, and then its top rim: a gap of about
+     * the node's diameter with ink on both sides. The corridor router bent one gap east of the
+     * node, so the same walk ends at the corner, with nothing above it.
+     */
+    const probe = await page.evaluate(
+      ({ ground, inks }) => {
+        const canvases = [...document.querySelectorAll('canvas')];
+        const canvas = canvases.reduce((p, q) =>
+          p.width * p.height >= q.width * q.height ? p : q,
+        );
+        const { width, height } = canvas;
+        const data = canvas.getContext('2d')!.getImageData(0, 0, width, height).data;
+        const dpr = window.devicePixelRatio || 1;
+        const [gr, gg, gb] = ground;
+        const at = (x: number, y: number): number => (y * width + x) * 4;
+        const isGround = (i: number): boolean =>
+          Math.abs((data[i] ?? 0) - gr) <= 6 &&
+          Math.abs((data[i + 1] ?? 0) - gg) <= 6 &&
+          Math.abs((data[i + 2] ?? 0) - gb) <= 6;
+        const isLink = (i: number): boolean =>
+          inks.some(([r, g, b]) => {
+            const dr = r - gr;
+            const dg = g - gg;
+            const db = b - gb;
+            const len2 = dr * dr + dg * dg + db * db;
+            const pr = (data[i] ?? 0) - gr;
+            const pg = (data[i + 1] ?? 0) - gg;
+            const pb = (data[i + 2] ?? 0) - gb;
+            const t = (pr * dr + pg * dg + pb * db) / len2;
+            return t >= 0.5 && t <= 1.1 && Math.hypot(pr - t * dr, pg - t * dg, pb - t * db) < 12;
+          });
+        let best = { x: -1, top: 0, bottom: 0 };
+        for (let x = 0; x < width; x += 1) {
+          let run = 0;
+          for (let y = 0; y < height; y += 1) {
+            run = isLink(at(x, y)) ? run + 1 : 0;
+            if (run > best.bottom - best.top) best = { x, top: y - run + 1, bottom: y };
+          }
+        }
+        if (best.x < 0) return null;
+        let y = Math.round((best.top + best.bottom) / 2);
+        while (y > 0 && !isGround(at(best.x, y))) y -= 1;
+        const gapStart = y;
+        while (y > 0 && isGround(at(best.x, y))) y -= 1;
+        return { run: (best.bottom - best.top) / dpr, gap: (gapStart - y) / dpr, above: y > 0 };
+      },
+      { ground, inks },
+    );
+    expect(probe, 'no link vertical was found').not.toBeNull();
+    expect(probe!.run, 'the vertical is too short to be the link').toBeGreaterThan(40);
+    // The node's interior: 15 px across less its rim, so 8–16 px of ground with ink above it.
+    expect(probe!.above, 'nothing above the link: it turned at a corner').toBe(true);
+    expect(probe!.gap).toBeGreaterThan(6);
+    expect(probe!.gap).toBeLessThan(18);
   });
 });

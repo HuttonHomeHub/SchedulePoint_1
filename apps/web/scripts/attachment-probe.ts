@@ -26,7 +26,11 @@
  *   successor `reach + ARROWHEAD_ROUTED_PX`). (a) catches "enters over its own bar" and "lands
  *   mid-bar"; (b) catches "floats beside the node". A line with no bend is never unattached.
  * - **False junction.** A segment passing within `NODE_REACH_PX` of a node centre that is not one of
- *   the link's own two anchors.
+ *   the link's own two anchors **and does not belong to a sibling**: another successor of the link's
+ *   predecessor, or another predecessor of its successor. That exemption is spec D-4's bus (product
+ *   owner, 2026-09-25): a stem from one node passing its own successors' nodes on one x is the
+ *   reference picture, and reads as linking to them because it does. The M0 metric counted it; the
+ *   baseline was re-measured with this definition so the comparison stays like for like.
  * - **Overlap.** Collinear shared length above 0.5 px between two links that share no anchor, on a
  *   lane centre-line or a vertical (gutter runs are separated by `packGutterChannels` and skipped).
  * - **Text crossing.** A link segment meeting the box of a painted name or date.
@@ -289,13 +293,16 @@ export function readAttachment(
   const occlusion = countOcclusions(painted, scene, view);
 
   // Node centres, for false junctions: both ends of every bar-glyph activity.
-  const nodeCentres: Point[] = [];
+  const nodeCentres: { id: string; point: Point }[] = [];
   for (const a of scene.activities) {
     if (barGlyphKind(a.type) !== 'bar') continue;
     const r = activityRect(a, view, scene.dataDate, rectCache);
     if (!r) continue;
     const cy = r.y + r.h / 2;
-    nodeCentres.push({ x: r.x, y: cy }, { x: r.x + r.w, y: cy });
+    nodeCentres.push(
+      { id: a.id, point: { x: r.x, y: cy } },
+      { id: a.id, point: { x: r.x + r.w, y: cy } },
+    );
   }
 
   const byReason: Record<string, number> = {};
@@ -307,6 +314,14 @@ export function readAttachment(
   let bends = 0;
   const entries: { edge: RenderEdge; line: Point[]; ends: [Point, Point] }[] = [];
   const digest = createHash('sha256');
+  const succsOf = new Map<string, Set<string>>();
+  const predsOf = new Map<string, Set<string>>();
+  for (const e of scene.edges) {
+    if (!succsOf.has(e.predecessorId)) succsOf.set(e.predecessorId, new Set());
+    succsOf.get(e.predecessorId)!.add(e.successorId);
+    if (!predsOf.has(e.successorId)) predsOf.set(e.successorId, new Set());
+    predsOf.get(e.successorId)!.add(e.predecessorId);
+  }
   for (const [edge, line] of frame.lines) {
     for (const pt of line) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
     digest.update('|');
@@ -341,7 +356,12 @@ export function readAttachment(
       }
     }
     let hit = 0;
-    for (const c of nodeCentres) {
+    const siblings = new Set([
+      ...(succsOf.get(edge.predecessorId) ?? []),
+      ...(predsOf.get(edge.successorId) ?? []),
+    ]);
+    for (const { id, point: c } of nodeCentres) {
+      if (siblings.has(id)) continue;
       if (
         Math.hypot(c.x - from.x, c.y - from.y) < 0.5 ||
         Math.hypot(c.x - to.x, c.y - to.y) < 0.5

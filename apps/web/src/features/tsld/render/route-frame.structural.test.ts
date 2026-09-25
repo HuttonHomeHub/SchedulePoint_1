@@ -36,8 +36,9 @@ describe('one router per frame', () => {
       'routeOrthogonal',
       'dependencyPolyline',
       'dependencyPolylineTimeTrue',
-      'chooseCorridorsByCrossing',
-      'bundleCorridors',
+      'routeNodeToNode',
+      'chooseRoutesByCrossing',
+      'glyphIndex',
       'packGutterChannels',
       'laneIntervalIndex',
     ]) {

@@ -124,6 +124,26 @@ condition, applied as written.
 No diagonal segment, on any fixture. This is the harness's throwing control. It stays until M4,
 which alone may relax it.
 
+## Amendment after M2 (product owner, 2026-09-25)
+
+M2 went past FC-T3 on `small-17` (3 → 8 crossings at 4 and 12 px/day), and the work stopped as
+this document requires. The numbers and pictures went to the product owner (`m2-verdict.md`), who
+answered **"Accept and ship"**:
+
+1. **FC-T3 on `small-17` is accepted as the cost of attached links.** The bar is not moved. The
+   miss is recorded against it. Every other FC-T3 cell passes, and Unit 300 and the reference plan
+   fall.
+2. **FC-T2's false-junction metric exempts a sibling's node** (spec D-4's bus): a node of another
+   successor of the link's predecessor, or of another predecessor of its successor. The M0 baseline
+   was **re-measured with the corrected metric** before judging (`m2-verdict.md`), so the bar is
+   still today's figure, measured like for like. This is the one condition changed after its
+   measurement, and it is changed because the metric contradicted spec D-4, not to pass a reading.
+3. **FC-T6's remedy (spec D-6) was tried and is not buildable faithfully in this epic.** The painter
+   places a name and its dates using measured text widths and neighbour gaps, and the router cannot
+   see either. An approximation would be the second opinion ADR-0149 warns against. The two small
+   misses are accepted with the rest, and the proper fix (the painter's label layout as a pure module
+   the router can read) is filed as `docs/TECH_DEBT.md` #393.
+
 ## Diagonal conditions (judged at M4, against the M2 result)
 
 Copied from spec §4.9 unchanged. Their reference numbers are M2's, which do not exist yet, so they

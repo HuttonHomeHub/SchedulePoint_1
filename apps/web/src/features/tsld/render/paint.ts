@@ -1413,14 +1413,19 @@ export function paintScene(
     const headLineFor = (edge: RenderEdge, line: Point[]): Point[] => {
       if (scene.visualRefresh !== true) return line;
       const succ = byId.get(edge.successorId);
-      if (!succ || barGlyphKind(succ.type) !== 'bar') return line;
+      if (!succ) return line;
       const succRect = activityRect(succ, view, scene.dataDate, rectCache);
       const tip = line[line.length - 1];
       if (!succRect || !tip) return line;
-      const onNode = nodeCentres(succRect).some(
-        (c) => Math.abs(c.x - tip.x) < 0.5 && Math.abs(c.y - tip.y) < 0.5,
-      );
-      return onNode ? trimPolylineEnd(line, NODE_REACH_PX) : line;
+      const at = (c: Point): boolean => Math.abs(c.x - tip.x) < 0.5 && Math.abs(c.y - tip.y) < 0.5;
+      // A milestone's centre port (node-to-node links spec D-5): a vertical arrives at the glyph's
+      // centre, so the head stops on the triangle rather than under it.
+      if (isMilestone(succ.type)) {
+        const centre = { x: succRect.x + succRect.w / 2, y: succRect.y + succRect.h / 2 };
+        return at(centre) ? trimPolylineEnd(line, MILESTONE_RADIUS) : line;
+      }
+      if (barGlyphKind(succ.type) !== 'bar') return line;
+      return nodeCentres(succRect).some(at) ? trimPolylineEnd(line, NODE_REACH_PX) : line;
     };
     const paintLinkLanguage = (): void => {
       interface Bucket {

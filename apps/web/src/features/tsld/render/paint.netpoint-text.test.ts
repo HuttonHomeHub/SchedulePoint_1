@@ -126,8 +126,10 @@ describe('the canvas label (M4-T1)', () => {
 
 describe('the wrap (M4-T2, spec §4.2 G7)', () => {
   // Two finish milestones in lane 1 with a long first word, and a link from lane 0 to lane 2 whose
-  // vertical corridor crosses lane 1 beside the first milestone: at x 124 (P finishing on day 6) it
-  // passes through where the wrapped first line would sit, at x 136 (day 7) it passes clear.
+  // vertical crosses lane 1 beside the first milestone. Node-to-node routing (ADR-0158) drops that
+  // vertical straight out of P's finish node, so P finishing on day 7 puts it where the wrapped first
+  // line would sit and day 8 puts it clear. (The corridor router this case was written against bent
+  // one gap east of the node, which is why it used days 6 and 7.)
   const d = (n: number): string => new Date(Date.UTC(2026, 0, n)).toISOString().slice(0, 10);
   const plan = (pf: number): RenderActivity[] => [
     act({ id: 'p', laneIndex: 0, earlyStart: d(2), earlyFinish: d(pf), label: 'P' }),
@@ -159,11 +161,11 @@ describe('the wrap (M4-T2, spec §4.2 G7)', () => {
   });
 
   it('keeps one truncated line where a routed link passes where the first line would go', () => {
-    expect(names(paint(plan(6), 12, {}, link))).toEqual(['ABCD…']);
+    expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCD…']);
   });
 
   it('wraps beside a link that passes clear of the first line', () => {
-    expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCDE', 'FGHI…']);
+    expect(names(paint(plan(8), 12, {}, link))).toEqual(['ABCDE', 'FGHI…']);
   });
 
   it('fits a wrapped pair inside its own lane (spec §4.13 A4)', () => {
