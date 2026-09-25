@@ -510,3 +510,129 @@ test.describe('NetPoint grammar — links', () => {
     expect(got.through, `link ink inside a name or date ${got.debug}`).toBe(0);
   });
 });
+
+/**
+ * **Links-and-labels M3 (#394): two links on one track are drawn apart.** Where a link into a node
+ * and a link out of it can only share one vertical, each running the other way, the pass draws them
+ * as two lines either side of the node centre, `PORT_OFFSET_PX` (4 px) each way, rather than one
+ * stroke carrying two arrowheads that point at each other.
+ *
+ * The plan was found by searching small FS plans with the real router (`routeFrame`) for one whose
+ * residue survives every earlier phase: here Task 2 → Task 5 arrives up the vertical Task 1 → Task 3
+ * leaves down, and every other shape runs through a bar. Dated from Monday 2026-01-05, as
+ * `createPlan` pins it, it splits at every zoom from 3 to 80 px/day; on other start weekdays it does
+ * not, which is why the date is pinned rather than today's.
+ *
+ * Read as ink: link-coloured vertical runs, grouped into lines by adjacent columns. The assertion is
+ * a pair of lines 8 px apart, side by side — two strokes, not one. Verified red with the pass off.
+ */
+test.describe('Links-and-labels — two-way tracks', () => {
+  test.setTimeout(240_000);
+
+  test('two links on one track at a crowded node are drawn apart', async ({ page }) => {
+    const stamp = Date.now();
+    const orgSlug = await onboard(page, stamp);
+    await openProject(page);
+    await createPlan(page, 'Two-way track');
+    await ensurePen(page);
+    const made = await seedActivities(page, orgSlug, [
+      { name: 'Task 0', laneIndex: 0, durationDays: 5 },
+      { name: 'Task 1', laneIndex: 2, durationDays: 3 },
+      { name: 'Task 2', laneIndex: 1, durationDays: 7 },
+      { name: 'Task 3', laneIndex: 1, durationDays: 7 },
+      { name: 'Task 4', laneIndex: 3, durationDays: 4 },
+      { name: 'Task 5', laneIndex: 3, durationDays: 6 },
+    ]);
+    if (made.length !== 6) throw new Error('the fixture did not seed its activities');
+    for (const [p, s] of [
+      [0, 1],
+      [1, 3],
+      [2, 3],
+      [2, 4],
+      [2, 5],
+      [3, 5],
+    ] as const) {
+      await seedDependency(page, orgSlug, made[p]!.id, made[s]!.id);
+    }
+    await recalculate(page, orgSlug);
+    await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
+    await pickZoomPreset(page, 'Week');
+
+    const ground = await paintedRgb(page, '--canvas');
+    const inks = [
+      await paintedRgb(page, '--canvas-link'),
+      await paintedRgb(page, '--canvas-link-minor'),
+      await paintedRgb(page, '--canvas-link-mark'),
+      await paintedRgb(page, '--destructive'),
+      await paintedRgb(page, '--warning'),
+    ];
+    const read = (): Promise<{ lines: number; pairs: { x: number; gap: number }[] }> =>
+      page.evaluate(
+        ({ ground, inks }) => {
+          const canvases = [...document.querySelectorAll('canvas')];
+          const canvas = canvases.reduce((p, q) =>
+            p.width * p.height >= q.width * q.height ? p : q,
+          );
+          const { width, height } = canvas;
+          const data = canvas.getContext('2d')!.getImageData(0, 0, width, height).data;
+          const dpr = window.devicePixelRatio || 1;
+          const [gr, gg, gb] = ground;
+          const isInk = (x: number, y: number): boolean => {
+            const i = (y * width + x) * 4;
+            const a = (data[i + 3] ?? 0) / 255;
+            if (a < 0.6) return false;
+            const r = (data[i] ?? 0) * a + gr * (1 - a);
+            const g = (data[i + 1] ?? 0) * a + gg * (1 - a);
+            const b = (data[i + 2] ?? 0) * a + gb * (1 - a);
+            return inks.some(
+              ([ir, ig, ib]) =>
+                Math.abs(r - ir) <= 40 && Math.abs(g - ig) <= 40 && Math.abs(b - ib) <= 40,
+            );
+          };
+          // Each column's long vertical runs of link ink (a bar is 6 px tall and a node 15 px, so
+          // neither passes for one).
+          const minRun = 20 * dpr;
+          const runs: { x: number; top: number; bottom: number }[] = [];
+          for (let x = 0; x < width; x += 1) {
+            let top = -1;
+            for (let y = 0; y <= height; y += 1) {
+              const ink = y < height && isInk(x, y);
+              if (ink && top < 0) top = y;
+              if (!ink && top >= 0) {
+                if (y - top >= minRun) runs.push({ x, top, bottom: y });
+                top = -1;
+              }
+            }
+          }
+          // Adjacent columns overlapping in y are one stroked line.
+          const lines: { x0: number; x1: number; top: number; bottom: number }[] = [];
+          for (const r of runs) {
+            const line = lines.find(
+              (l) => r.x === l.x1 + 1 && Math.min(r.bottom, l.bottom) - Math.max(r.top, l.top) > 0,
+            );
+            if (line) {
+              line.x1 = r.x;
+              line.top = Math.min(line.top, r.top);
+              line.bottom = Math.max(line.bottom, r.bottom);
+            } else lines.push({ x0: r.x, x1: r.x, top: r.top, bottom: r.bottom });
+          }
+          const centre = (l: (typeof lines)[number]): number => (l.x0 + l.x1) / 2;
+          const pairs: { x: number; gap: number }[] = [];
+          for (const a of lines) {
+            for (const b of lines) {
+              const gap = (centre(b) - centre(a)) / dpr;
+              const beside = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+              if (Math.abs(gap - 8) <= 1.5 && beside >= 12 * dpr) {
+                pairs.push({ x: centre(a) / dpr, gap });
+              }
+            }
+          }
+          return { lines: lines.length, pairs };
+        },
+        { ground, inks },
+      );
+    const got = await read();
+    expect(got.lines, 'no link vertical was found at all').toBeGreaterThan(0);
+    expect(got.pairs, 'no two link lines run side by side 8 px apart').not.toEqual([]);
+  });
+});
