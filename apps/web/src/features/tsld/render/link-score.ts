@@ -1,7 +1,7 @@
 /**
  * **Choosing a link's shape** (node-to-node links M1-T3 and M1-T4, spec §4.3 and §4.4).
  *
- * Each candidate from `routeCandidates` gets a score vector, compared term by term, lower better
+ * Each candidate from `routeCandidateParts` gets a score vector, compared term by term, lower better
  * (spec D-2, the product owner's order: through a bar, then crossings, then overlaps, then length):
  *
  * 1. **obstructions** — foreign glyphs the line passes through. A task bar counts together with its
@@ -20,7 +20,7 @@
  * snapshot, the result does not depend on the order the links arrive in (FC-T5), and the pass never
  * measures its own output.
  */
-import { MAX_ROUTE_CANDIDATES, routeCandidates, type RouteCandidate } from './link-candidates';
+import { MAX_ROUTE_CANDIDATES, routeCandidateParts, type RouteCandidate } from './link-candidates';
 import { linkEndOf } from './link-ports';
 import {
   activityRect,
@@ -340,23 +340,42 @@ export function routeNodeToNode(
   glyphs: GlyphIndex,
   view: Viewport,
 ): ScoredCandidate[] {
+  const parts = routeNodeToNodeParts(input, glyphs, view);
+  return [...parts.candidates, ...parts.escapes()];
+}
+
+/**
+ * {@link routeNodeToNode} with the four escapes scored **only when asked for**, which is what the
+ * frame uses: phase 2 stops at a pick with no crossing and no overlap and phase 3 looks only at a
+ * link still opposed, so most links never ask. `candidates` are the ordinary shapes best first, or
+ * every shape when no ordinary one obeys both ports (so phase 1's pick never waits on a thunk).
+ */
+export function routeNodeToNodeParts(
+  input: LinkRouteInput,
+  glyphs: GlyphIndex,
+  view: Viewport,
+): { candidates: readonly ScoredCandidate[]; escapes: () => readonly ScoredCandidate[] } {
   const pred = linkEndOf(input.from, input.fromAnchor, input.fromRect);
   const succ = linkEndOf(input.to, input.toAnchor, input.toRect);
   const own = [ownSpanOf(input.from, input.fromRect), ownSpanOf(input.to, input.toRect)];
-  const scored = scoreCandidates(
-    routeCandidates(pred, succ, input.from.laneIndex, input.to.laneIndex, view),
-    glyphs,
-    own,
-    view,
-  );
-  if (scored.length > 0) return scored;
+  const parts = routeCandidateParts(pred, succ, input.from.laneIndex, input.to.laneIndex, view);
+  let escapes: ScoredCandidate[] | undefined;
+  const escapesOf = (): ScoredCandidate[] =>
+    (escapes ??= scoreCandidates(parts.escapes(), glyphs, own, view));
+  const ordinary = scoreCandidates(parts.ordinary, glyphs, own, view);
+  if (ordinary.length > 0) return { candidates: ordinary, escapes: escapesOf };
+  const all = escapesOf();
+  if (all.length > 0) return { candidates: all, escapes: () => [] };
   const line = [input.fromAnchor, input.toAnchor];
-  return [
-    toScored(
-      { shape: 'fallback', line, order: MAX_ROUTE_CANDIDATES },
-      { obstructions: 0, length: lengthOf(line), bends: 0, order: MAX_ROUTE_CANDIDATES },
-    ),
-  ];
+  return {
+    candidates: [
+      toScored(
+        { shape: 'fallback', line, order: MAX_ROUTE_CANDIDATES },
+        { obstructions: 0, length: lengthOf(line), bends: 0, order: MAX_ROUTE_CANDIDATES },
+      ),
+    ],
+    escapes: () => [],
+  };
 }
 
 // ── Phase 2 ────────────────────────────────────────────────────────────────────────────────────
@@ -364,6 +383,11 @@ export function routeNodeToNode(
 /** One link as the frame pass sees it: its scored candidates (best first) and its two ends. */
 export interface FrameLink {
   candidates: readonly ScoredCandidate[];
+  /**
+   * The escapes, scored on first call (`routeNodeToNodeParts`). Absent where `candidates` already
+   * holds every shape the link has, as it does in a hand-built test.
+   */
+  escapes?: () => readonly ScoredCandidate[];
   /** The two anchor points, for the shared-end exemption on overlaps (spec D-4). */
   ends: readonly [Point, Point];
 }
@@ -499,24 +523,31 @@ export function chooseRoutesByCrossing(
     return { hBuckets: new SegmentBuckets(hs), vBuckets: new SegmentBuckets(vs) };
   };
 
-  /** One candidate for link `i`, scored against `snapshot` (every other link's pick). */
+  /**
+   * One candidate for link `i`, scored against `snapshot` (every other link's pick). With a
+   * `crossingLimit` it gives up — returning `null` — as soon as it has counted more crossings than
+   * that: phase 2 passes the best score's crossings for a candidate with the same obstructions, which
+   * then cannot win, since crossings are the next term. Exact, and most losing candidates stop early.
+   */
   const scoreAgainst = (
     snapshot: ReturnType<typeof index>,
     i: number,
     candidate: ScoredCandidate,
-  ): Phase2Score => {
+    crossingLimit = Infinity,
+  ): Phase2Score | null => {
     const { hBuckets, vBuckets } = snapshot;
     const { h, v } = segmentsFor(candidate);
     let crossings = 0;
     let overlaps = 0;
     let opposed = 0;
-    // A collinear pair running the same way is an overlap unless the two share an end (the bus);
-    // running opposite ways it is opposed, shared end or not — a shared end is exactly where the
-    // report found one, links rising into a finish node up the vertical its successor link came down.
+    // A collinear pair is an overlap unless the two share an end (the bus), exactly as phase 2 has
+    // always counted it. Running opposite ways it is also opposed, shared end or not — a shared end
+    // is exactly where the report found one, links rising into a finish node up the vertical its
+    // successor link came down. Phase 2 does not rank on `opposed`; phase 3 does.
     const collinear = (s: Seg, t: OwnedSeg): void => {
       if (Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo) <= 0.5) return;
+      if (!shareEnd(i, t.link)) overlaps += 1;
       if (s.dir !== t.dir) opposed += 1;
-      else if (!shareEnd(i, t.link)) overlaps += 1;
     };
     for (const s of h) {
       const [start, end] = vBuckets.between(s.lo, s.hi);
@@ -526,6 +557,7 @@ export function chooseRoutesByCrossing(
           if (s.fixed > t.lo + EPS && s.fixed < t.hi - EPS) crossings += 1;
         }
       }
+      if (crossings > crossingLimit) return null;
       if (laneCentre(s.fixed)) {
         for (const t of hBuckets.at(s.fixed)) {
           if (t.link !== i) collinear(s, t);
@@ -540,6 +572,7 @@ export function chooseRoutesByCrossing(
           if (s.fixed > t.lo + EPS && s.fixed < t.hi - EPS) crossings += 1;
         }
       }
+      if (crossings > crossingLimit) return null;
       for (const t of vBuckets.at(s.fixed)) {
         if (t.link !== i) collinear(s, t);
       }
@@ -553,19 +586,23 @@ export function chooseRoutesByCrossing(
     const current = link.candidates[0];
     if (!current) return undefined;
     let best = current;
-    let bestScore = scoreAgainst(frozen, i, current);
+    let bestScore = scoreAgainst(frozen, i, current)!;
     // Nothing can beat a pick with no crossings and no overlaps: phase 1 already made it the best
     // on every other term, and phase 2 only inserts those two. Exact, and most links stop here.
     if (bestScore.crossings === 0 && bestScore.overlaps === 0) return best;
-    for (let k = 1; k < link.candidates.length; k += 1) {
-      const candidate = link.candidates[k]!;
+    // The escapes after the ordinary shapes, scored only now that this link has asked for them.
+    const all = [...link.candidates, ...(link.escapes?.() ?? [])];
+    for (let k = 1; k < all.length; k += 1) {
+      const candidate = all[k]!;
       // Obstructions lead the vector, so a candidate through more glyphs can never win. An escape
       // may not trade a vertical through a bar for a run hidden behind one (see phase 3).
       if (candidate.phase1.obstructions > bestScore.obstructions) continue;
       if (candidate.escape && (candidate.phase1.hiddenLegs ?? 0) > (current.phase1.hiddenLegs ?? 0))
         continue;
-      const s = scoreAgainst(frozen, i, candidate);
-      if (comparePhase2(s, bestScore) < 0) {
+      const limit =
+        candidate.phase1.obstructions < bestScore.obstructions ? Infinity : bestScore.crossings;
+      const s = scoreAgainst(frozen, i, candidate, limit);
+      if (s && comparePhase2(s, bestScore) < 0) {
         best = candidate;
         bestScore = s;
       }
@@ -573,7 +610,17 @@ export function chooseRoutesByCrossing(
     return best;
   });
 
-  resolveOpposed(links, picks, index, scoreAgainst, laneCentre);
+  // Phase 3 reads the picture as phase 2 left it: bring the frozen snapshot up to date in place
+  // rather than building a second index, which on a Tidy run is paid once per routed frame.
+  picks.forEach((pick, i) => {
+    const was = links[i]!.candidates[0];
+    if (!pick || !was || pick === was) return;
+    const from = segmentsFor(was);
+    const to = segmentsFor(pick);
+    frozen.hBuckets.move(i, from.h, to.h);
+    frozen.vBuckets.move(i, from.v, to.v);
+  });
+  resolveOpposed(links, picks, frozen, scoreAgainst, laneCentre);
   return picks.map((pick) => pick?.line ?? []);
 }
 
@@ -594,23 +641,21 @@ export function chooseRoutesByCrossing(
  * comes in over the top instead.
  *
  * The order is fixed by the links' own geometry (source then target, x then y), never by the order
- * they arrive in, so FC-T5 still holds. Most frames have no opposed pair and pay one index build.
+ * they arrive in, so FC-T5 still holds. It reads phase 2's snapshot, updated in place to phase 2's
+ * picks, so a frame with no opposed pair pays only the scan that finds none.
  */
 function resolveOpposed(
   links: readonly FrameLink[],
   picks: (ScoredCandidate | undefined)[],
-  index: (p: readonly (ScoredCandidate | undefined)[]) => {
-    hBuckets: SegmentBuckets;
-    vBuckets: SegmentBuckets;
-  },
+  snapshot: { hBuckets: SegmentBuckets; vBuckets: SegmentBuckets },
   scoreAgainst: (
     snapshot: { hBuckets: SegmentBuckets; vBuckets: SegmentBuckets },
     i: number,
     candidate: ScoredCandidate,
-  ) => Phase2Score,
+    crossingLimit?: number,
+  ) => Phase2Score | null,
   laneCentre: (y: number) => boolean,
 ): void {
-  const snapshot = index(picks);
   /** Only the opposed count: which links need this pass at all, without counting crossings. */
   const opposedOf = (i: number, candidate: ScoredCandidate): number => {
     const { h, v } = segmentsFor(candidate);
@@ -643,18 +688,31 @@ function resolveOpposed(
   });
   for (const i of opposedNow) {
     const current = picks[i]!;
-    if (opposedOf(i, current) === 0) continue; // an earlier move cleared it
+    const opposedHere = opposedOf(i, current);
+    if (opposedHere === 0) continue; // an earlier move cleared it
     let best = current;
-    let bestScore = scoreAgainst(snapshot, i, current);
+    let bestScore = scoreAgainst(snapshot, i, current)!;
     const hiddenNow = current.phase1.hiddenLegs ?? 0;
-    for (const candidate of links[i]!.candidates) {
+    const link = links[i]!;
+    for (const candidate of [...link.candidates, ...(link.escapes?.() ?? [])]) {
       if (candidate === current || candidate.phase1.obstructions > bestScore.obstructions) continue;
       // Never trade an opposed overlap for a run hidden behind a bar: both are one obstruction to
       // the ranking, and only the first is what this pass exists to remove. Measured without this
       // guard, Unit 300's links hidden behind a foreign bar rose by two or three a frame.
       if ((candidate.phase1.hiddenLegs ?? 0) > hiddenNow) continue;
-      const s = scoreAgainst(snapshot, i, candidate);
-      if (comparePhase3(s, bestScore) < 0) {
+      // Opposed overlaps come next in the order and are cheap to count alone, so a candidate that
+      // ties on obstructions and has more of them cannot win; one that ties on both can win only on
+      // crossings, which bounds the full count exactly as phase 2 does.
+      // This pass moves a link to leave an opposed track, not to trade one crossing for another
+      // (phase 2 did that): a candidate through no fewer bars must run opposite fewer links.
+      const opposed = opposedOf(i, candidate);
+      if (candidate.phase1.obstructions >= current.phase1.obstructions && opposed >= opposedHere)
+        continue;
+      const tie = candidate.phase1.obstructions === bestScore.obstructions;
+      if (tie && opposed > bestScore.opposed) continue;
+      const limit = tie && opposed === bestScore.opposed ? bestScore.crossings : Infinity;
+      const s = scoreAgainst(snapshot, i, candidate, limit);
+      if (s && comparePhase3(s, bestScore) < 0) {
         best = candidate;
         bestScore = s;
       }

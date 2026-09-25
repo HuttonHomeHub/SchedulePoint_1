@@ -3,7 +3,7 @@ import {
   chooseRoutesByCrossing,
   glyphIndex,
   isLaneCentre,
-  routeNodeToNode,
+  routeNodeToNodeParts,
   type FrameLink,
   type GlyphIndex,
 } from './link-score';
@@ -230,7 +230,7 @@ export function routeFrame(
      * node, choosing among at most fifteen shapes the one through fewest foreign bars, then the
      * shortest. Phase 2 below may move it to reduce crossings.
      */
-    const scored = routeNodeToNode(
+    const { candidates: scored, escapes } = routeNodeToNodeParts(
       {
         from: pred,
         to: succ,
@@ -242,7 +242,7 @@ export function routeFrame(
       glyphs,
       view,
     );
-    if (collecting) candidatesByEdge.set(edge, { candidates: scored, ends: [from, to] });
+    if (collecting) candidatesByEdge.set(edge, { candidates: scored, escapes, ends: [from, to] });
     // Not copied: a multi-link frame replaces it with a copy of phase 2's choice below, and a single
     // link is never packed, so nothing mutates the candidate's array.
     return scored[0]!.line;
