@@ -2541,6 +2541,53 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     expect(baseLeft(true)).toBe(59);
   });
 
+  it('marks a constrained milestone with a "!" inside its triangle, not a pin on its name', () => {
+    /**
+     * TECH_DEBT #392 (product owner's choice, 2026-09-25): the pin hung above a milestone's centre
+     * and printed over the middle of its bold name one row up. On the refreshed canvas the
+     * constraint is a "!" cut into the triangle in the ground colour — two `fillRect`s centred on
+     * the milestone — and no pin path is drawn for it at all. The legacy diamond keeps the pin.
+     *
+     * Verified red against the pre-fix branch, which drew the pin (three moveTo/lineTo vertices at
+     * the triangle's top) and no ground-coloured rects.
+     */
+    const milestone = task({
+      type: 'FINISH_MILESTONE',
+      earlyStart: '2026-01-05',
+      earlyFinish: '2026-01-05',
+      constraint: 'finish',
+    });
+    const refreshed = recordingCtx();
+    paintScene(refreshed.ctx, refreshScene({ activities: [milestone] }), VIEW, SIZE, {
+      ...PALETTE,
+      canvasGround: '#abcdef',
+    });
+    const log = refreshed.log;
+    // The LAST ground fill: the canvas ground itself is painted in the same colour first.
+    const bang = log.lastIndexOf('fillStyle=#abcdef');
+    expect(bang).toBeGreaterThan(-1);
+    const rects = log.slice(bang + 1, bang + 3);
+    expect(rects.every((l) => l.startsWith('fillRect('))).toBe(true);
+    const rect = activityRect(milestone, VIEW, DATA_DATE)!;
+    const cx = rect.x + rect.w / 2;
+    for (const line of rects) {
+      const [x, , w] = JSON.parse(line.slice('fillRect('.length, -1)) as number[];
+      expect(x! + w! / 2).toBe(cx);
+    }
+    // No pin: the pin's fill is `palette.edge`, and nothing else on this scene uses it.
+    expect(log).not.toContain(`fillStyle=${PALETTE.edge}`);
+
+    const legacy = recordingCtx();
+    paintScene(
+      legacy.ctx,
+      refreshScene({ activities: [milestone], visualRefresh: false }),
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
+    expect(legacy.log).toContain(`fillStyle=${PALETTE.edge}`);
+  });
+
   it('draws no edge cue inside a node’s reach (the product owner’s 2026-09-25 report)', () => {
     /**
      * `web-v0.149.1` drew the constraint pin, the conflict triangle and the over-allocation

@@ -181,10 +181,17 @@ On a bar that draws nodes the three now sit clear of `NODE_REACH_PX` (`edgeCuePl
 `paint.ts`): the pin hangs above its node, 1 px clear of the rim, since the node is what the
 constraint pins; the conflict triangle sits on the bar just inboard of the node at the breached end
 (centred on the bar where the bar is too short to hold it between its nodes); the histogram is
-right-anchored inboard of the finish node. A milestone, an LOE, a summary and the legacy path keep
-their exact positions. `paint.test.ts` asserts the property geometrically (no cue vertex within a
+right-anchored inboard of the finish node. An LOE, a summary and the legacy path keep their exact
+positions. `paint.test.ts` asserts the property geometrically (no cue vertex within a
 node's reach, both constraint ends, both conflict reasons, histogram on) and was verified red
 against the old placement. The golden log moved by the 14 predicted lines in the maximal scene only.
+
+A constrained **milestone** gets its own mark, decided the same day: a "!" cut into the triangle in
+the ground colour (`drawMilestoneConstraintMark`), NetPoint's own sign for a constrained milestone.
+The pin it replaces sat on the triangle's top edge and printed over the middle of the milestone's
+bold name (`docs/TECH_DEBT.md` #392). Nothing required the mark to be outside the glyph; the pin was
+designed for the legacy diamond and was not revisited when the milestone became a filled triangle.
+The product owner chose it from four rendered options. The legacy diamond keeps the pin.
 
 ## Parity
 
