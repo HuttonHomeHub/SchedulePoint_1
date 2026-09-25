@@ -503,6 +503,8 @@ export interface AttachmentReading {
   opposed: number;
   /** The opposed pairs by how the two links meet: at one node (arrive-leave), or not at all. */
   opposedByRole: Record<string, number>;
+  /** Opposed pairs by the orientation of the track they share: the two-way pass (M3) splits vertical ones only. */
+  opposedByOrientation: { h: number; v: number };
   textCrossings: number;
   /**
    * `textCrossings` split by what the text is (links-and-labels M0-T2). Classified by the text's row
@@ -865,7 +867,12 @@ export function readAttachment(
   // its successor link came down), which the overlap count above exempts as a bus.
   const opposing = new Set<string>();
   const opposedByRole: Record<string, number> = {};
-  for (const bucket of [...horizontal.values(), ...vertical.values()]) {
+  const opposedByOrientation = { h: 0, v: 0 };
+  const buckets = [
+    ...[...horizontal.values()].map((b) => ['h', b] as const),
+    ...[...vertical.values()].map((b) => ['v', b] as const),
+  ];
+  for (const [orientation, bucket] of buckets) {
     for (let i = 0; i < bucket.length; i += 1) {
       for (let j = i + 1; j < bucket.length; j += 1) {
         const s = bucket[i]!;
@@ -886,6 +893,7 @@ export function readAttachment(
                     ? 'same-target'
                     : 'unrelated';
             opposedByRole[role] = (opposedByRole[role] ?? 0) + 1;
+            opposedByOrientation[orientation] += 1;
           }
         }
         if (shareEnd(entries[s.link]!, entries[t.link]!)) continue;
@@ -973,6 +981,7 @@ export function readAttachment(
     endKinds,
     overlaps: overlapping.size,
     opposed: opposing.size,
+    opposedByOrientation,
     opposedByRole,
     textCrossings,
     textCrossingsByKind,
