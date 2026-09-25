@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.149.2
+
+### Patch Changes
+
+- [#693](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/693) [`396c0c3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/396c0c3cb5fb5d51a3319545acf585596684d309) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The constraint pin, the conflict warning and the over-allocation mark are no longer hidden inside an
+  activity's end nodes. The pin now sits just above the node it constrains, and the conflict warning
+  and over-allocation mark sit on the bar just inside the node at the end they are about.
+
 ## 0.149.1
 
 ### Patch Changes
