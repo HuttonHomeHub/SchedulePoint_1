@@ -35,6 +35,7 @@ import {
   NODE_REACH_PX,
   NODE_TEXT_CLEAR_PX,
   trimPolylineEnd,
+  NEAR_CRITICAL_DOT_R,
   NODE_RIM_W,
   type NodeMark,
   sharesNode,
@@ -924,6 +925,24 @@ function paintNodes(
         ctx.fillRect(box.x, box.y, box.w, box.h);
         ctx.strokeRect(box.x, box.y, box.w, box.h);
       }
+    }
+  }
+  // **The near-critical dot** ({@link NEAR_CRITICAL_DOT_R}), drawn after every disc so a later disc
+  // cannot cover it, and in the rim's own ink so it follows a Colour-by lens exactly as the rim does.
+  // The near rung's weight is unique among the three, so its groups are found by width; one
+  // `fillStyle` write per group keeps the style count off the node count.
+  for (const { ink, width, marks: group } of groups.values()) {
+    if (width !== NODE_RIM_W.near) continue;
+    ctx.fillStyle = ink;
+    for (const mark of group) {
+      const dot: Rect = {
+        x: mark.x - NEAR_CRITICAL_DOT_R,
+        y: mark.y - NEAR_CRITICAL_DOT_R,
+        w: NEAR_CRITICAL_DOT_R * 2,
+        h: NEAR_CRITICAL_DOT_R * 2,
+      };
+      if (beginRoundedRect(ctx, dot, NEAR_CRITICAL_DOT_R)) ctx.fill();
+      else ctx.fillRect(dot.x, dot.y, dot.w, dot.h);
     }
   }
 }

@@ -4,6 +4,7 @@ import {
   ARROWHEAD_HALF_W_PX,
   ARROWHEAD_ROUTED_PX,
   arrowhead,
+  NEAR_CRITICAL_DOT_R,
   NODE_RADIUS,
   NODE_REACH_PX,
   NODE_RIM_MAX_W,
@@ -95,6 +96,18 @@ describe('nodeMarks — one node per end, one where two bars meet', () => {
     expect(sharesNode(bar(10, 50), bar(60, 50))).toBe(true);
     expect(sharesNode(bar(10, 50), bar(63, 50))).toBe(true);
     expect(sharesNode(bar(10, 50), bar(64, 50))).toBe(false);
+  });
+});
+
+describe('the near-critical dot (product owner, 2026-09-24)', () => {
+  it('reads as a dot, and leaves a ring of ground between itself and the near rim', () => {
+    // 4 px across is the smallest mark that reads as a dot rather than a speck.
+    expect(NEAR_CRITICAL_DOT_R * 2).toBeGreaterThanOrEqual(4);
+    // The rim is stroked on the radius, so its inner edge is half its weight inside. At least 2 px
+    // of ground must separate the two, or the dot merges into the rim and reads as a heavier rim —
+    // the very weight comparison the dot exists to avoid.
+    const rimInner = NODE_RADIUS - NODE_RIM_W.near / 2;
+    expect(rimInner - NEAR_CRITICAL_DOT_R).toBeGreaterThanOrEqual(2);
   });
 });
 

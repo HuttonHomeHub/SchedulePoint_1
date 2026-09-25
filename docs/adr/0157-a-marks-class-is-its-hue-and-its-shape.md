@@ -149,6 +149,24 @@ blocked, and every blocking finding was folded with a test first seen to fail ag
 
 The non-blocking findings are `docs/TECH_DEBT.md` #391.
 
+## The product owner's three answers (2026-09-24, after `web-v0.149.0`)
+
+The gate pass left three questions only the product owner could settle, and all three are answered.
+
+- **The node stays 15 px.** No diameter clears every neighbour at every zoom (the figure-8 at tight
+  abutments), a smaller node loses the 1/2/3 px rim ladder, and a larger one touches more often. The
+  shipped value is kept on purpose, not by default.
+- **A near-critical node carries a centre dot** (`NEAR_CRITICAL_DOT_R`, 4 px across, in the rim's own
+  ink). Weight alone made on-schedule against near-critical a one-pixel comparison, the weak step
+  without colour or on paper (the M6 accessibility review). The dot is a second cue that needs neither,
+  and it also separates near-critical from critical, which has none. It follows a Colour-by lens as the
+  rim does, and the legend's node swatch shows it (`TsldLegend.census.test.tsx`), because a key must
+  not describe a node the canvas does not draw. The milestone triangle's outline ladder is unchanged
+  and still has the evidence owed in #391 item 1.
+- **A driving link to a hand-placed-late successor stays unlabelled.** A gap label is a non-driving
+  tie's waiting time; the successor's feasible-window cue (ADR-0148) is the channel for drift. #391
+  item 5 is accepted scope, no longer pending.
+
 ## Parity
 
 The CPM engine is not imported, no API changes, and no migration runs. No route or lane moved

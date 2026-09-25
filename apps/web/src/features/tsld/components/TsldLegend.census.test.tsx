@@ -54,6 +54,24 @@ describe('FC-G8 — the legend keys every node mark the painter draws, and nothi
     },
   );
 
+  it.each(NODE_MARKS)(
+    '$label: carries the centre dot exactly when the painter draws one (near-critical only)',
+    ({ key, rung, label }) => {
+      render(<TsldLegend />);
+      const node = screen
+        .getByText(label)
+        .closest('li')
+        ?.querySelector<HTMLElement>('[data-legend-node]');
+      const dot = node?.querySelector<HTMLElement>('[data-legend-node-dot]') ?? null;
+      if (rung === 'near') {
+        expect(dot, `${label} has no centre dot`).not.toBeNull();
+        expect(dot!.style.backgroundColor).toBe(`var(${tokenOf(key)})`);
+      } else {
+        expect(dot, `${label} carries a dot the painter does not draw`).toBeNull();
+      }
+    },
+  );
+
   it('every node swatch in the legend is ringed in a token a painted node key resolves to', () => {
     render(<TsldLegend />);
     const allowed = new Set(NODE_MARKS.map(({ key }) => `var(${tokenOf(key)})`));

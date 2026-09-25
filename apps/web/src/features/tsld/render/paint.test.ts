@@ -1885,10 +1885,12 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     expect(critical).toContain(`fillStyle=${PALETTE.canvasGround}`);
     expect(fills(critical)).toBe(3);
 
+    // …plus, for near-critical alone, a centre dot in each node (product owner, 2026-09-24): the
+    // second cue for the one weight step that is weak without colour. Two more `fill()`s.
     const near = paintWith(task({ isNearCritical: true }));
     expect(near).toContain(`strokeStyle=${PALETTE.nodeRimNear}`);
     expect(near).toContain(`lineWidth=${NODE_RIM_W.near}`);
-    expect(fills(near)).toBe(3);
+    expect(fills(near)).toBe(5);
 
     const plain = paintWith(task());
     expect(plain).toContain(`strokeStyle=${PALETTE.nodeRim}`);
