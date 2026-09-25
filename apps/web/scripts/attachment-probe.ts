@@ -47,6 +47,7 @@ import {
   wrappedNameYs,
 } from '../src/features/tsld/render/geometry';
 import { linkFactsOf, plateScoringOf } from '../src/features/tsld/render/link-facts';
+import { PORT_OFFSET_PX } from '../src/features/tsld/render/link-tracks';
 import {
   DEFAULT_VIEW_TOGGLES,
   paintScene,
@@ -198,7 +199,7 @@ export type Unattached = 'direction' | 'stub' | 'detached';
  * (a vertical segment, so a horizontal offset at the anchor's y). Exactly, not "within": a judge
  * that accepted within δ would pass a drifting end. Anything else is `detached`.
  *
- * Draft: M3-T2 makes it the probe's judge. Until then it runs only when asked (`ReadOptions.judge`).
+ * The probe's default judge since M3-T2 (`ReadOptions.judge`).
  */
 export function resolveEndAmended(
   end: Point,
@@ -537,7 +538,12 @@ export interface ReadOptions {
     lines: Map<RenderEdge, Point[]>,
     frame: ReturnType<typeof routeFrame>,
   ) => Map<RenderEdge, Point[]>;
-  /** `amended`: the draft CQ-2 judge (`resolveEndAmended`, junction exemption by anchor id). */
+  /**
+   * The judge. **Default since links-and-labels M3-T2: `amended`** at the product's
+   * `PORT_OFFSET_PX` (CQ-2: an end exactly that far from a task node's centre, inside the disc, is
+   * attached; `resolveEndAmended`, junction exemption by anchor id). `shipped` is the pre-M3 judge,
+   * kept so a reading can be compared across the change.
+   */
   judge?: { kind: 'shipped' } | { kind: 'amended'; portOffset: number };
 }
 
@@ -611,7 +617,10 @@ export function readAttachment(
     : painted;
   const { crossings, diagonal } = countCrossings(measured);
   const occlusion = countOcclusions(measured, scene, view);
-  const amended = options.judge?.kind === 'amended' ? options.judge : null;
+  const amended =
+    options.judge?.kind === 'shipped'
+      ? null
+      : (options.judge ?? { kind: 'amended' as const, portOffset: PORT_OFFSET_PX });
   const anchorsOf = (edge: RenderEdge): { pred: Point; succ: Point } | null => {
     const walk = edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : frame.workingWalk;
     if (!walk) throw new Error('the amended judge needs the time-true router (a working walk)');

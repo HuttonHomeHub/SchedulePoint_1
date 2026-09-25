@@ -1,12 +1,15 @@
 import { isLaneBoundary } from './link-candidates';
+import { linkEndOf } from './link-ports';
 import {
   chooseRoutesByCrossing,
   glyphIndex,
   isLaneCentre,
+  ownSpanOf,
   routeNodeToNodeParts,
   type FrameLink,
   type GlyphIndex,
 } from './link-score';
+import { splitResidueTracks, type TrackSplit } from './link-tracks';
 import type { TsldScene } from './paint';
 import type { PlateRoom } from './plate-room';
 import {
@@ -18,6 +21,7 @@ import {
   lagAnchorPoints,
   lagRunSegment,
   makeWorkingDayWalk,
+  nodeCentres,
   packGutterChannels,
   routeOrthogonal,
   rowSlots,
@@ -65,6 +69,11 @@ export type RouteFrameScene = Pick<
 >;
 
 export interface RouteFrame {
+  /**
+   * What the two-way track pass did this frame (links-and-labels M3): tracks split, segments moved,
+   * and tracks left by reason. Null where node-to-node routing is off or the frame has one link.
+   */
+  readonly tracks: Pick<TrackSplit, 'split' | 'segments' | 'refused'> | null;
   /** The time-true day walk, or null on the legacy extreme-end routing. */
   readonly workingWalk: ReturnType<typeof makeWorkingDayWalk> | null;
   /** The refreshed link path (`scene.visualRefresh`). */
@@ -282,6 +291,7 @@ export function routeFrame(
    * exactly once each, as they were.
    */
   const lines = new Map<RenderEdge, Point[]>();
+  let tracks: RouteFrame['tracks'] = null;
   collecting = true;
   for (const edge of scene.edges) {
     if (!visibleIds.has(edge.predecessorId) && !visibleIds.has(edge.successorId)) continue;
@@ -315,8 +325,44 @@ export function routeFrame(
       key: edge.id ?? `${edge.predecessorId}>${edge.successorId}:${edge.type}`,
     }));
     packGutterChannels(corridors, rowSlots(0).clearHalfBandPx, (y) => isLaneBoundary(y, view));
+    /**
+     * **Two-way tracks** (links-and-labels M3, spec §4.7): a vertical that still carries an
+     * arrival and a departure the other way after phase 3 is drawn as two lines, one each way,
+     * both inside the node's disc. After phase 3, which it must not re-rank, and AFTER the gutter
+     * channels, so its guards judge the geometry that is drawn. The plan put it before them, and
+     * the first reading showed why not: two halves whose gutter runs shared a boundary y met only
+     * at a T before packing, which is no crossing, and packing then moved the runs into different
+     * channels and made it one (`m3-verdict.md`). Packing moves only gutter y and this pass only
+     * vertical x, so neither undoes the other; a vertical moved here lengthens a gutter run by δ at
+     * most, and the pass's own overlap guard refuses a run pushed onto another.
+     */
+    const trackLinks = edges.map((edge) => {
+      const pred = byId.get(edge.predecessorId)!;
+      const succ = byId.get(edge.successorId)!;
+      const predRect = activityRect(pred, view, scene.dataDate, rectCache)!;
+      const succRect = activityRect(succ, view, scene.dataDate, rectCache)!;
+      const [fromAnchor, toAnchor] = candidatesByEdge.get(edge)!.ends;
+      return {
+        line: lines.get(edge)!,
+        pred: linkEndOf(pred, fromAnchor, predRect),
+        succ: linkEndOf(succ, toAnchor, succRect),
+        own: [ownSpanOf(pred, predRect), ownSpanOf(succ, succRect)],
+        endIds: [pred.id, succ.id] as const,
+      };
+    });
+    const nodes: { id: string; point: Point }[] = [];
+    for (const id of visibleIds) {
+      const a = byId.get(id);
+      if (!a || barGlyphKind(a.type) !== 'bar') continue;
+      const r = activityRect(a, view, scene.dataDate, rectCache);
+      if (r) for (const point of nodeCentres(r)) nodes.push({ id, point });
+    }
+    const split = splitResidueTracks(trackLinks, glyphs, text, view, nodes);
+    edges.forEach((edge, i) => lines.set(edge, split.lines[i]!));
+    tracks = { split: split.split, segments: split.segments, refused: split.refused };
   }
   const frame: RouteFrame = {
+    tracks,
     workingWalk,
     refresh,
     glyphs,

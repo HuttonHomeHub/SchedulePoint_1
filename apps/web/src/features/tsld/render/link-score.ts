@@ -165,7 +165,7 @@ export function obstructions(
  * the thing ADR-0150 and ADR-0158 spent two epics removing. Phase 3 trades lines to remove opposed
  * overlaps and must never pay for it in hidden runs, so it reads `legs` on its own.
  */
-function obstructionCounts(
+export function obstructionCounts(
   line: readonly Point[],
   glyphs: GlyphIndex,
   own: readonly OwnSpan[],
