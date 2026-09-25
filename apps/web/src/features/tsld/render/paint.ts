@@ -715,6 +715,41 @@ function drawConstraintPin(
   }
 }
 
+/** The milestone constraint mark's stem and dot, in CSS px (see {@link drawMilestoneConstraintMark}). */
+const MILESTONE_BANG_W = 2;
+const MILESTONE_BANG_STEM_TOP = -3.6;
+const MILESTONE_BANG_STEM_H = 4;
+const MILESTONE_BANG_DOT_TOP = 1.4;
+const MILESTONE_BANG_DOT_H = 1.8;
+
+/**
+ * **A constrained milestone carries a "!" inside its triangle**, in the diagram's ground colour —
+ * NetPoint's own mark for a constrained milestone (the product owner's choice, 2026-09-25,
+ * `docs/TECH_DEBT.md` #392).
+ *
+ * The pin that marks a task's constrained edge was placed on a milestone's centre, tip on the
+ * triangle's top edge, which put it on the milestone's bold name one row up: every constrained
+ * milestone printed a pin over the middle of its own name. Nothing required it to sit outside the
+ * glyph. It sat there because it was designed for the legacy diamond, which has no interior to
+ * speak of, and nobody re-asked when the milestone became a 14 px filled triangle.
+ *
+ * The mark is cut from the fill, so it reads against every rung's colour and every Colour-by lens
+ * fill: the pair is ground-on-fill, the same pair that makes the triangle visible on the ground at
+ * all. Stem and dot sit in the triangle's upper, wider part: the dot's bottom is 3.2 px below the
+ * centre, where the triangle is still 4.5 px wide. The legacy (flag-off) diamond keeps the pin.
+ */
+function drawMilestoneConstraintMark(
+  ctx: Ctx2D,
+  cx: number,
+  cy: number,
+  palette: TsldPalette,
+): void {
+  ctx.fillStyle = palette.canvasGround;
+  const x = cx - MILESTONE_BANG_W / 2;
+  ctx.fillRect(x, cy + MILESTONE_BANG_STEM_TOP, MILESTONE_BANG_W, MILESTONE_BANG_STEM_H);
+  ctx.fillRect(x, cy + MILESTONE_BANG_DOT_TOP, MILESTONE_BANG_W, MILESTONE_BANG_DOT_H);
+}
+
 /** Half-width (px) of the upward warning triangle marking a Visual-Planning conflict. */
 const CONFLICT_BADGE_W = 6;
 const CONFLICT_BADGE_H = 7;
@@ -2042,12 +2077,18 @@ export function paintScene(
     // having no width, is marked at its centre). A cheap per-bar shape, drawn only for the
     // constrained + visible activities, so it stays within the draw budget (ADR-0026).
     if (activity.constraint) {
-      const edgeX = isMilestone(activity.type)
-        ? rect.x + rect.w / 2
-        : activity.constraint === 'finish'
-          ? rect.x + rect.w
-          : rect.x;
-      drawConstraintPin(ctx, edgeX, cues.pinTipY, palette, scene.visualRefresh === true);
+      if (isMilestone(activity.type) && scene.visualRefresh === true) {
+        // The refreshed milestone is a filled triangle, and its constraint is a "!" cut into it
+        // (`drawMilestoneConstraintMark`) rather than a pin hung above it on the name row.
+        drawMilestoneConstraintMark(ctx, rect.x + rect.w / 2, rect.y + rect.h / 2, palette);
+      } else {
+        const edgeX = isMilestone(activity.type)
+          ? rect.x + rect.w / 2
+          : activity.constraint === 'finish'
+            ? rect.x + rect.w
+            : rect.x;
+        drawConstraintPin(ctx, edgeX, cues.pinTipY, palette, scene.visualRefresh === true);
+      }
     }
     // Placement conflict (ADR-0033): never auto-moved, only flagged. The mapping seam gates this to
     // the placed basis, so a Late-overlay bar never shows it.

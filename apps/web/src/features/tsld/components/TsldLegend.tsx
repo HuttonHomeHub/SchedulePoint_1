@@ -32,7 +32,7 @@ type LegendItem =
   | { label: string; lagPlate: true }
   | { label: string; gapLabel: true }
   | { label: string; attachDot: true }
-  | { label: string; milestone: true }
+  | { label: string; milestone: true; constrained?: true }
   | { label: string; pin: true }
   | { label: string; today: true }
   | { label: string; dataDate: true }
@@ -134,6 +134,9 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
         // A milestone is a downward triangle (NetPoint grammar M5, spec §4.2 G8), filled in its rung's
         // colour and outlined by weight when critical or near, as the criticality rows above say.
         { label: 'Milestone', milestone: true } as const,
+        // A constrained milestone carries a "!" cut into its triangle rather than the task pin,
+        // which would sit on its name (`drawMilestoneConstraintMark`, TECH_DEBT #392).
+        { label: 'Constrained milestone', milestone: true, constrained: true } as const,
         { label: 'Level of effort', loe: true } as const,
         { label: 'WBS summary', summary: true } as const,
         { label: 'Progress', progress: true } as const,
@@ -393,6 +396,14 @@ export function TsldLegend({
                   d="M0 0 L14 0 L7 12 Z"
                   style={{ fill: 'var(--canvas-bar)' }}
                 />
+                {'constrained' in item ? (
+                  // The "!" in the ground colour, the painter's stem-and-dot geometry scaled into
+                  // this 14 x 12 box (the triangle's top edge sits at y 0 here).
+                  <g data-legend-milestone-constraint="" style={{ fill: 'var(--canvas)' }}>
+                    <rect x="6" y="1.3" width="2" height="4" />
+                    <rect x="6" y="6.3" width="2" height="1.8" />
+                  </g>
+                ) : null}
               </svg>
             </span>
           ) : 'loe' in item ? (
