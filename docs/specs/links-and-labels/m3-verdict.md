@@ -156,10 +156,12 @@ pass I made the block that runs it unreachable, which also skipped phase 2 and t
 it read `routeFrame` 2.4 ms and Tidy 5.4 s and credited all of the difference to the pass. The pass
 alone, timed inside `routeFrame` in node, was 2.6 s of Tidy, and the bypass above is the figure used.
 
-**The miss goes to the product owner.** The conditions give FC-Q1 no stop clause, and the choices
-are theirs: accept the cost, as CQ-1 did for Tidy; run the pass in the painter only and not in Tidy's
-objective (Tidy would then score a picture a few pixels different from the one drawn); or withdraw
-M3. FC-Q5 (dropped frames on the product owner's hardware) is owed and not claimed.
+**The miss went to the product owner, who accepted the cost** (2026-09-25). The conditions give
+FC-Q1 no stop clause, and three choices were put with these figures: accept the cost, as CQ-1 did
+for Tidy; run the pass in the painter only and not in Tidy's objective (Tidy would then score a
+picture a few pixels different from the one drawn, and the frame cost would barely change); or
+withdraw M3. **FC-Q1 is recorded as a miss that was accepted, not as a pass**, and its bar is not
+moved. FC-Q5 (dropped frames on the product owner's hardware) is owed and not claimed.
 
 FC-Q3 (`scale-300` packed, `PLANS=scale300 node scripts/measure-netpoint-optimise.mjs`, reported
 beside FC-Q2): **24.9 s** on the final tree (`9b84cabc`), against M0's 16.4 s: 1.52 ×, 1,817

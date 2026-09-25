@@ -109,8 +109,10 @@ other on one stroke read as neither link.
   against 17.45 ms). **`routeFrame` p95 misses FC-Q1**: 8.55 ms against 8 ms and against 1.3 × its
   5.03 ms baseline. The track pass adds about 2.8 ms of it; M2's text term had already used most of
   the allowance. The first reading was 12.73 ms and 18.8 s, and four changes that move no line cut
-  it to these figures (`m3-verdict.md`, "Cost"). Dropped frames on the product owner's hardware
-  (FC-Q5) are owed.
+  it to these figures (`m3-verdict.md`, "Cost"). **The product owner accepted the miss**
+  (2026-09-25), over running the pass in the painter only or withdrawing M3; the bar is not moved
+  and the miss stays recorded as a miss. Dropped frames on the product owner's hardware (FC-Q5) are
+  owed.
 - **No schema, API or engine change.** `computeSchedule` is not imported and no migration runs.
 
 ## References
