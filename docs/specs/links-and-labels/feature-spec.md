@@ -1,6 +1,6 @@
 # Feature Spec: Links that read the labels, and two-way tracks at crowded nodes
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved — product owner, 2026-09-25: plan approved as written; **CQ-1 answered "accept the cost"** (FC-Q2 is recorded, never a stop); **CQ-2 answered "yes, inside the circle"** (an end exactly `PORT_OFFSET_PX` from a task node centre counts as attached)
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-09-25
 - **Tracking issue / epic:** none yet. Combines `docs/TECH_DEBT.md` #393 and #394, both approved for
