@@ -169,6 +169,44 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
     expect(paint([A, B], [twice[0]!]).filter((l) => l.includes('fillText(["6d"'))).toHaveLength(1);
   });
 
+  it('moves a gap label along its own run before withholding it (links-and-labels M4 review)', () => {
+    // The UX review's Unit 300 case in miniature: two waiting links share one long run, so both
+    // labels want its midpoint. The second used to be withheld, leaving nothing on screen to say a
+    // second relationship waits there. It now moves along the run to the first free point. Here A
+    // finishes 5 Jan and B starts 20 Feb: 45 days, 540 px, room for both labels side by side.
+    const late = act('B', 2, '2026-02-20', '2026-02-24');
+    const twice = [
+      edge({ id: 'e1', predecessorId: 'A', successorId: 'B' }),
+      edge({ id: 'e2', predecessorId: 'A', successorId: 'B' }),
+    ];
+    const chips = (log: readonly string[]) =>
+      log.flatMap((l, i) =>
+        l.includes('fillText(["45d"')
+          ? [
+              JSON.parse(
+                log
+                  .slice(0, i)
+                  .reverse()
+                  .find((m) => m.startsWith('fillRect('))!
+                  .slice('fillRect('.length, -1),
+              ) as number[],
+            ]
+          : [],
+      );
+    const drawn = chips(paint([A, late], twice));
+    expect(drawn).toHaveLength(2);
+    // Side by side, not on top of each other, and both inside the waiting interval less a node's
+    // reach: A's right edge is day 5 (x 120), B's start day 50 (x 660).
+    const [p = [], q = []] = drawn;
+    expect(Math.abs((p[0] ?? 0) - (q[0] ?? 0))).toBeGreaterThanOrEqual(p[2] ?? Infinity);
+    for (const [x = NaN, , w = NaN] of drawn) {
+      expect(x).toBeGreaterThanOrEqual(120 + NODE_REACH_PX);
+      expect(x + w).toBeLessThanOrEqual(660 - NODE_REACH_PX);
+    }
+    // The first label is where it always was: the midpoint of the run.
+    expect(chips(paint([A, late], [twice[0]!]))[0]).toEqual(p);
+  });
+
   it('withholds a gap too short to clear both end nodes, rather than print it on a disc', () => {
     // Same lane, two days apart at 12 px a day: a straight 24 px run from A's node to B's. "2d" on
     // its chip is 18 px, which fits the run (≥ label + 4) but not the run less a node's reach at

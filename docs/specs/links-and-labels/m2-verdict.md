@@ -90,6 +90,20 @@ plate input and drew different lines from the painter.
 brief 0 / 0 / 1, small-17 0 / 1 / 5, reference-netpoint 0 / 17 / 17, Unit 300 0 / 27 / 35: every
 cell at or above its bar (Unit 300's is ≥ 0 / 26 / 32).
 
+**The count passed while one label was lost, and the count could not see it.** The M4 UX review
+found it in the Unit 300 picture: the text-aware router moves A2210's `106 cal d` link off its own
+row into the gutter A2200's `143 cal d` link already used, the two runs 3 px apart (ADR-0150's
+channel pitch). Both labels wanted the same midpoint, and a gap label had exactly one position, so
+`143 cal d` was withheld and nothing on screen said a second relationship waited there. A gap label
+now takes the first free position along its own run inside the waiting interval, the lag plate's
+rule less its vertical runs (`gapLabelCandidates`, `link-marks.ts`); the first candidate is the
+midpoint it always took, so a label that fitted is where it was. Unit 300 then draws 0 / **30** /
+**39**; no other cell changes and every route fingerprint is identical
+(`node scripts/measure-attachment.mjs --json`, with and without the change). Pinned by
+`paint.link-marks.test.ts`, "moves a gap label along its own run before withholding it", verified
+red first. The two runs sharing a gutter at 3 px is ADR-0150's channel design and is not changed
+here.
+
 ## FC-T5: determinism — PASSED
 
 200 seeded shuffles of `scene.edges` draw identical lines on all four fixtures.

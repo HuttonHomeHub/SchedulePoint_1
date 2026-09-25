@@ -101,31 +101,58 @@ export function chevronsAlong(line: readonly Point[]): [Point, Point, Point][] {
 }
 
 /**
- * Where a link's GAP label is centred (NetPoint grammar M3-T3): the midpoint of the longest stretch
- * of the route's horizontal segments that lies inside the waiting interval `[x0, x1]`, provided that
- * stretch is at least `minPx` long; otherwise nowhere, and the label is withheld.
+ * Where a link's GAP label may be centred (NetPoint grammar M3-T3), in order of preference: on each
+ * stretch of the route's horizontal segments that lies inside the waiting interval `[x0, x1]` and is
+ * at least `minPx` long, longest first, the midpoint first and then the quarter and eighth points of
+ * the room left once the label is inside the stretch. Empty when no stretch is long enough, and the
+ * label is withheld.
+ *
+ * The first candidate is the midpoint of the longest stretch, which is where the label always went.
+ * The rest exist because two waiting links can share one run (a gutter), and then both labels want
+ * the same midpoint: before, the second was withheld and nothing on screen said a second
+ * relationship waited there (links-and-labels M4 review, the UX finding on Unit 300). The rule is
+ * the lag plate's (`lagPlateCandidates`), less its vertical runs.
  *
  * Only horizontal segments are candidates, because the waiting interval is a span of time and only a
  * horizontal run of a time-scaled diagram measures time. Only the link's own segments, so the label
  * can only ever sit on the line it labels.
  */
+export function gapLabelCandidates(
+  line: readonly Point[],
+  x0: number,
+  x1: number,
+  minPx: number,
+): Point[] {
+  const runs: { lo: number; len: number; y: number }[] = [];
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    if (a.y !== b.y) continue;
+    const lo = Math.max(Math.min(a.x, b.x), x0);
+    const len = Math.min(Math.max(a.x, b.x), x1) - lo;
+    if (len >= minPx) runs.push({ lo, len, y: a.y });
+  }
+  // Stable: equal stretches keep line order, so the first candidate is the one gapLabelAt chose.
+  runs.sort((p, q) => q.len - p.len);
+  const out: Point[] = [];
+  for (const { lo, len, y } of runs) {
+    // The label stays inside the stretch: its centre ranges over the room less half a label each end.
+    const room = len - minPx;
+    for (const t of GAP_LABEL_STOPS) out.push({ x: lo + minPx / 2 + room * t, y });
+  }
+  return out;
+}
+
+const GAP_LABEL_STOPS = [0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875] as const;
+
+/** The first of `gapLabelCandidates`: where the label goes when nothing is in the way. */
 export function gapLabelAt(
   line: readonly Point[],
   x0: number,
   x1: number,
   minPx: number,
 ): Point | null {
-  let best: { x: number; y: number; len: number } | null = null;
-  for (let i = 1; i < line.length; i += 1) {
-    const a = line[i - 1]!;
-    const b = line[i]!;
-    if (a.y !== b.y) continue;
-    const lo = Math.max(Math.min(a.x, b.x), x0);
-    const hi = Math.min(Math.max(a.x, b.x), x1);
-    const len = hi - lo;
-    if (len >= minPx && (best === null || len > best.len)) best = { x: (lo + hi) / 2, y: a.y, len };
-  }
-  return best ? { x: best.x, y: best.y } : null;
+  return gapLabelCandidates(line, x0, x1, minPx)[0] ?? null;
 }
 
 /** A lag as a planner writes it: `+2d`, `−1d` (a true minus sign, not a hyphen). */

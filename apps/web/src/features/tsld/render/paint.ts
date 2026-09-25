@@ -19,7 +19,7 @@ import { linkFactsOf, plateScoringOf } from './link-facts';
 import {
   chevronsAlong,
   freePlatePosition,
-  gapLabelAt,
+  gapLabelCandidates,
   lagPlateCandidates,
   linkRung,
 } from './link-marks';
@@ -2473,16 +2473,24 @@ export function paintScene(
       // The waiting interval runs node to node, and a node paints over the line for its reach
       // at each end, so the label is placed inside the interval less that reach: a gap label on
       // a disc is row text on a node (FC-G5), measured at 4 before this inset and 0 after.
-      const at = gapLabelAt(
+      // The first free position along its own run inside the interval (links-and-labels M4
+      // review): withheld only where every one would sit on text already placed, and the gap is
+      // still in the listbox.
+      let chip: Rect | null = null;
+      let at: Point | null = null;
+      for (const c of gapLabelCandidates(
         line,
         Math.min(x0, x1) + NODE_REACH_PX,
         Math.max(x0, x1) - NODE_REACH_PX,
         w + 4,
-      );
-      if (!at) continue;
-      const chip: Rect = { x: at.x - w / 2, y: at.y - SLACK_CHIP_H / 2, w, h: SLACK_CHIP_H };
-      // Withheld where it would sit on text already placed; the gap is still in the listbox.
-      if (placedText.some((r) => rectsIntersect(r, chip))) continue;
+      )) {
+        const box: Rect = { x: c.x - w / 2, y: c.y - SLACK_CHIP_H / 2, w, h: SLACK_CHIP_H };
+        if (placedText.some((r) => rectsIntersect(r, box))) continue;
+        chip = box;
+        at = c;
+        break;
+      }
+      if (!chip || !at) continue;
       placedText.push(chip);
       ctx.fillStyle = palette.canvasGround;
       ctx.fillRect(chip.x, chip.y, chip.w, chip.h);
