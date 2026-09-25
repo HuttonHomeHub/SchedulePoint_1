@@ -52,14 +52,19 @@ function bar(
   };
 }
 
+/** The ordinary shapes: every candidate phases 1 and 2 may pick (the escapes are pinned apart). */
 const shapes = (lane1: number, lane2: number, pred: LinkEnd, succ: LinkEnd): RouteShape[] =>
-  routeCandidates(pred, succ, lane1, lane2, VIEW).map((c) => c.shape);
+  routeCandidates(pred, succ, lane1, lane2, VIEW)
+    .filter((c) => !c.escape)
+    .map((c) => c.shape);
 
 describe('routeCandidates', () => {
   it('FS between adjacent lanes offers VH before HV, then HVH, then the gutter', () => {
     const a = bar('a', 0, 100, 60);
     const b = bar('b', 1, 260, 60);
-    const got = routeCandidates(a.end(a.finish), b.end(b.start), 0, 1, VIEW);
+    const got = routeCandidates(a.end(a.finish), b.end(b.start), 0, 1, VIEW).filter(
+      (c) => !c.escape,
+    );
     expect(got.map((c) => c.shape)).toEqual(['VH', 'HV', 'HVH', 'HVH', 'HVH', 'HVH', 'HVH', 'VHV']);
     expect(got[0]!.line).toEqual([a.finish, { x: 160, y: 90 }, b.start]);
     expect(got.at(-1)!.line).toEqual([a.finish, { x: 160, y: 60 }, { x: 260, y: 60 }, b.start]);
@@ -117,12 +122,59 @@ describe('routeCandidates', () => {
     const a = bar('a', 0, 100, 60);
     const b = bar('b', 4, 300, 60);
     const vhv = routeCandidates(a.end(a.finish), b.end(b.start), 0, 4, VIEW).filter(
-      (c) => c.shape === 'VHV',
+      (c) => c.shape === 'VHV' && !c.escape,
     );
     expect(vhv.map((c) => c.line[1]!.y)).toEqual([gutterBelow(0, VIEW), gutterBelow(3, VIEW)]);
   });
 
-  it('every candidate obeys both ports and there are never more than eleven', () => {
+  /**
+   * **The four escapes** (product owner, 2026-09-25, on `web-v0.150.0`): the gutters outside the two
+   * lanes, and the HVH positions outside both ends of a forward link. Marked, and numbered after the
+   * eleven, so no ordinary shape's place in the tie-break moves.
+   */
+  it('offers the gutters outside the two lanes as escapes, after every ordinary shape', () => {
+    const a = bar('a', 1, 100, 60);
+    const b = bar('b', 3, 300, 60);
+    const got = routeCandidates(a.end(a.finish), b.end(b.start), 1, 3, VIEW);
+    const escapes = got.filter((c) => c.escape);
+    expect(escapes.map((c) => [c.shape, c.line[1]!.y, c.order])).toEqual([
+      ['VHV', gutterBelow(0, VIEW), 13],
+      ['VHV', gutterBelow(3, VIEW), 14],
+    ]);
+    expect(Math.max(...got.filter((c) => !c.escape).map((c) => c.order))).toBeLessThan(11);
+  });
+
+  it('lets an FF arrive at a finish node from the east, by going round it', () => {
+    // Every between position arrives from the west, over the successor's own bar, so without the
+    // escape an FF into a finish node could only come up or down its vertical.
+    const a = bar('a', 2, 100, 60);
+    const b = bar('b', 1, 300, 100);
+    const got = routeCandidates(a.end(a.finish), b.end(b.finish), 2, 1, VIEW);
+    expect(got.filter((c) => !c.escape && c.shape === 'HVH')).toEqual([]);
+    const round = got.find((c) => c.escape && c.shape === 'HVH')!;
+    expect(round.line).toEqual([
+      a.finish,
+      { x: 417, y: a.finish.y },
+      { x: 417, y: b.finish.y },
+      b.finish,
+    ]);
+    expect(round.order).toBe(12);
+  });
+
+  it('offers a same-lane or aligned link no escape', () => {
+    const a = bar('a', 2, 100, 60);
+    const b = bar('b', 2, 200, 60);
+    expect(routeCandidates(a.end(a.finish), b.end(b.start), 2, 2, VIEW).some((c) => c.escape)).toBe(
+      false,
+    );
+    const c = bar('c', 0, 100, 60);
+    const d = bar('d', 3, 160, 60);
+    expect(routeCandidates(c.end(c.finish), d.end(d.start), 0, 3, VIEW).some((x) => x.escape)).toBe(
+      false,
+    );
+  });
+
+  it('every candidate obeys both ports and there are never more than fifteen', () => {
     let rng = 7;
     const rand = (n: number): number => {
       rng = (rng * 1103515245 + 12345) % 2147483648;

@@ -143,7 +143,24 @@ export function obstructions(
   own: readonly OwnSpan[],
   view: Viewport,
 ): number {
+  return obstructionCounts(line, glyphs, own, view).total;
+}
+
+/**
+ * {@link obstructions}, with the part of it that is a **horizontal** leg kept apart. The two are one
+ * term to phases 1 and 2, and they do not look alike: a vertical through a bar is a short gap in
+ * the line, a horizontal along one is a run of the link hidden behind it (links paint under bars) —
+ * the thing ADR-0150 and ADR-0158 spent two epics removing. Phase 3 trades lines to remove opposed
+ * overlaps and must never pay for it in hidden runs, so it reads `legs` on its own.
+ */
+function obstructionCounts(
+  line: readonly Point[],
+  glyphs: GlyphIndex,
+  own: readonly OwnSpan[],
+  view: Viewport,
+): { total: number; legs: number } {
   let count = 0;
+  let legs = 0;
   for (let i = 1; i < line.length; i += 1) {
     const a = line[i - 1]!;
     const b = line[i]!;
@@ -158,7 +175,10 @@ export function obstructions(
         const [x0, x1] = row.spans[k]!;
         if (x0 >= hi) break;
         if (Math.min(hi, x1) - Math.max(lo, x0) <= LEG_CLEARANCE_PX) continue;
-        if (!isOwn(own, lane, x0, x1)) count += 1;
+        if (!isOwn(own, lane, x0, x1)) {
+          count += 1;
+          legs += 1;
+        }
       }
     } else if (Math.abs(a.x - b.x) <= EPS) {
       const lo = Math.min(a.y, b.y);
@@ -179,7 +199,7 @@ export function obstructions(
       }
     }
   }
-  return count;
+  return { total: count, legs };
 }
 
 function lengthOf(line: readonly Point[]): number {
@@ -236,6 +256,11 @@ function segmentsOf(line: readonly Point[]): Segments {
 /** Terms 1, 4, 5 and 6 — everything a link can know about itself alone. */
 export interface Phase1Score {
   obstructions: number;
+  /**
+   * How many of `obstructions` are horizontal legs hidden behind a bar. Not a ranked term: phase 3
+   * refuses any move that raises it. Absent on a hand-built score, where it reads as zero.
+   */
+  hiddenLegs?: number;
   length: number;
   bends: number;
   order: number;
@@ -273,16 +298,26 @@ function scoreCandidates(
   own: readonly OwnSpan[],
   view: Viewport,
 ): ScoredCandidate[] {
-  return candidates
-    .map((c) =>
-      toScored(c, {
-        obstructions: obstructions(c.line, glyphs, own, view),
-        length: lengthOf(c.line),
-        bends: c.line.length - 2,
-        order: c.order,
-      }),
-    )
-    .sort((p, q) => comparePhase1(p.phase1, q.phase1));
+  return (
+    candidates
+      .map((c) => {
+        const counts = obstructionCounts(c.line, glyphs, own, view);
+        return toScored(c, {
+          obstructions: counts.total,
+          hiddenLegs: counts.legs,
+          length: lengthOf(c.line),
+          bends: c.line.length - 2,
+          order: c.order,
+        });
+      })
+      // An escape sorts after every ordinary shape, so phase 1's pick is one only when nothing else
+      // obeys both ports; phase 3 is the one pass that looks past the first.
+      .sort(
+        (p, q) =>
+          Number(p.escape === true) - Number(q.escape === true) ||
+          comparePhase1(p.phase1, q.phase1),
+      )
+  );
 }
 
 /** One link's two ends, as the frame has already resolved them. */
@@ -503,8 +538,11 @@ export function chooseRoutesByCrossing(
     if (bestScore.crossings === 0 && bestScore.overlaps === 0) return best;
     for (let k = 1; k < link.candidates.length; k += 1) {
       const candidate = link.candidates[k]!;
-      // Obstructions lead the vector, so a candidate through more glyphs can never win.
+      // Obstructions lead the vector, so a candidate through more glyphs can never win. An escape
+      // may not trade a vertical through a bar for a run hidden behind one (see phase 3).
       if (candidate.phase1.obstructions > bestScore.obstructions) continue;
+      if (candidate.escape && (candidate.phase1.hiddenLegs ?? 0) > (current.phase1.hiddenLegs ?? 0))
+        continue;
       const s = scoreAgainst(frozen, i, candidate);
       if (comparePhase2(s, bestScore) < 0) {
         best = candidate;
@@ -577,8 +615,13 @@ function resolveOpposed(
     let best = current;
     let bestScore = scoreAgainst(snapshot, i, current);
     if (bestScore.opposed === 0) continue; // an earlier move cleared it
+    const hiddenNow = current.phase1.hiddenLegs ?? 0;
     for (const candidate of links[i]!.candidates) {
       if (candidate === current || candidate.phase1.obstructions > bestScore.obstructions) continue;
+      // Never trade an opposed overlap for a run hidden behind a bar: both are one obstruction to
+      // the ranking, and only the first is what this pass exists to remove. Measured without this
+      // guard, Unit 300's links hidden behind a foreign bar rose by two or three a frame.
+      if ((candidate.phase1.hiddenLegs ?? 0) > hiddenNow) continue;
       const s = scoreAgainst(snapshot, i, candidate);
       if (comparePhase3(s, bestScore) < 0) {
         best = candidate;
