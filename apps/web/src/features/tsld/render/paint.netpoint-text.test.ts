@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_VIEW_TOGGLES, paintScene, type TsldPalette, type TsldScene } from './paint';
 import {
+  activityRect,
+  MILESTONE_RADIUS,
   ROW_TEXT_GAP_PX,
   WRAP_LINE_H,
   wrappedNameYs,
@@ -212,6 +214,42 @@ describe('the tiers (M4-T4, spec §4.2 G11)', () => {
     const plate = (log: string[]): boolean => texts(log).some((t) => t.startsWith('+2d'));
     expect(plate(paint([a, b], 5, {}, lagged))).toBe(false);
     expect(plate(paint([a, b], 8, {}, lagged))).toBe(true);
+  });
+
+  /**
+   * **An arrowhead into a milestone stops at the triangle** (node-to-node links M3, the
+   * accessibility gate's suggestion). A vertical arrives at a milestone's centre port, and the
+   * triangle paints after the links, so a head drawn to the centre would sit mostly under the glyph:
+   * direction is the one non-colour cue a link carries (WCAG 1.4.1). `headLineFor` trims the head's
+   * line by `MILESTONE_RADIUS`. Checked here on the recorded paths: no path vertex lies inside the
+   * glyph's radius except the stroked line's own end.
+   */
+  it('stops an arrowhead into a milestone at the triangle, not under it', () => {
+    const d = (n: number): string => new Date(Date.UTC(2026, 0, n)).toISOString().slice(0, 10);
+    const task = act({ id: 't', label: 'T', laneIndex: 0, earlyStart: d(2), earlyFinish: d(9) });
+    const milestone = act({
+      id: 'm',
+      label: 'M',
+      type: 'START_MILESTONE',
+      laneIndex: 2,
+      earlyStart: d(10),
+      earlyFinish: d(10),
+    });
+    const log = paint([task, milestone], 12, {}, [
+      { id: 'e', predecessorId: 't', successorId: 'm', type: 'FS', isDriving: true },
+    ]);
+    const rect = activityRect(milestone, VIEW12, DATA_DATE)!;
+    const centre = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    const points = log
+      .filter((l) => l.startsWith('moveTo(') || l.startsWith('lineTo('))
+      .map((l) => JSON.parse(l.slice(l.indexOf('(') + 1, -1)) as [number, number]);
+    const inside = points.filter(
+      ([x, y]) => Math.hypot(x - centre.x, y - centre.y) < MILESTONE_RADIUS - 0.5,
+    );
+    // Exactly one path point inside the glyph: the stroked line's own end, on the centre port. An
+    // untrimmed head would add its tip there too.
+    expect(inside).toHaveLength(1);
+    expect(Math.hypot(inside[0]![0] - centre.x, inside[0]![1] - centre.y)).toBeLessThanOrEqual(0.5);
   });
 
   it('every tier gate in the painter reads lodTier, never a copy of its thresholds', () => {

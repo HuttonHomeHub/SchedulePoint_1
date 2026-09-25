@@ -16,7 +16,14 @@ import { labelWidths } from './layers/text-measure';
 import { createWrapClearance } from './layers/wrap-clearance';
 import type { GhostBar, LevelledGhost } from './lenses';
 import { formatLinkGap, linkGapSpan } from './link-gap';
-import { chevronsAlong, formatLag, gapLabelAt, lagPlateAt, linkRung } from './link-marks';
+import {
+  chevronsAlong,
+  formatLag,
+  freePlatePosition,
+  gapLabelAt,
+  lagPlateCandidates,
+  linkRung,
+} from './link-marks';
 import { buildPaintFrame } from './paint-frame';
 import {
   arrowhead,
@@ -1369,6 +1376,15 @@ export function paintScene(
    * order decides between two labels, so the choice is deterministic.
    */
   const pendingGapLabels: { text: string; line: Point[]; x0: number; x1: number }[] = [];
+  /**
+   * The lag plates, collected by the link layer and placed with the gap labels, after every name
+   * and date (node-to-node links M3). Node-to-node routing moves which segment of a link is
+   * longest, and a plate placed with no knowledge of the text rows landed on an activity's own
+   * code or date ("+1d" over "A108" on the small plan). Each plate now takes the first position on
+   * its own line whose box meets no text, and is withheld where none is free; the lag is still in
+   * the listbox. Plates are placed before gap labels, so a plate keeps its place over a label.
+   */
+  const pendingPlates: { text: string; line: Point[]; ink: string }[] = [];
   const placedText: Rect[] = [];
   const noteText = (x: number, w: number, y: number, align: 'left' | 'right' | 'center'): void => {
     const left = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
@@ -1376,7 +1392,7 @@ export function paintScene(
   };
   if (scene.edges.length > 0) {
     const route = routeFrame(scene, view, visibleIds, byId, rectCache);
-    const { workingWalk, refresh, laneIndex, lineOf, lines } = route;
+    const { workingWalk, refresh, glyphs, lineOf, lines } = route;
     lagRuns = route.lagRuns;
     lagHandlePoints = route.lagHandlePoints;
     routed = route;
@@ -1547,7 +1563,7 @@ export function paintScene(
         bucket.marks.push(...chevronsAlong(line));
         if (workingWalk) {
           const headLine = headLineFor(edge, line);
-          const head = laneIndex
+          const head = glyphs
             ? arrowhead(headLine, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
             : arrowhead(headLine);
           if (head) bucket.marks.push(head);
@@ -1588,32 +1604,7 @@ export function paintScene(
         const bucket = lit.get(key);
         if (bucket) drawBucket(bucket);
       }
-      if (plates.length > 0) {
-        ctx.font = LABEL_FONT;
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 1;
-        for (const { text, line, ink } of plates) {
-          const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
-          const at = lagPlateAt(line, w, SLACK_CHIP_H);
-          if (!at) continue;
-          // The border is the link's own ink (U2/X2): ≥ 3:1 on the ground, so the plate is a
-          // perceivable box, and it says which link the figure belongs to.
-          ctx.strokeStyle = ink;
-          ctx.fillStyle = palette.canvasGround;
-          ctx.fillRect(at.x - w / 2, at.y - SLACK_CHIP_H / 2, w, SLACK_CHIP_H);
-          ctx.strokeRect(
-            at.x - w / 2 + 0.5,
-            at.y - SLACK_CHIP_H / 2 + 0.5,
-            w - 1,
-            SLACK_CHIP_H - 1,
-          );
-          ctx.fillStyle = palette.labelBeside;
-          ctx.fillText(text, at.x, at.y);
-          placedText.push({ x: at.x - w / 2, y: at.y - SLACK_CHIP_H / 2, w, h: SLACK_CHIP_H });
-        }
-        ctx.textAlign = 'left';
-      }
+      pendingPlates.push(...plates);
       ctx.lineWidth = 1;
       ctx.strokeStyle = palette.edge;
     };
@@ -1634,7 +1625,7 @@ export function paintScene(
           // link is a few pixels of rule, without a barb crossing its neighbour in a fanned bundle.
           // It rides the routing flag, so flag-off is the same five-pixel head it has always been.
           const headLine = headLineFor(edge, line);
-          const head = laneIndex
+          const head = glyphs
             ? arrowhead(headLine, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
             : arrowhead(headLine);
           if (head) heads.push(head);
@@ -2852,8 +2843,51 @@ export function paintScene(
     if (styled) ctx.textAlign = 'left';
   }
 
-  // Layer 3.9: the GAP LABELS (NetPoint grammar M3-T3), collected by the link layer and placed here,
-  // after every other row text, so each can be withheld where it would sit on text already drawn.
+  // Layer 3.9: the LAG PLATES and then the GAP LABELS, collected by the link layer and placed here,
+  // after every other row text, so each can move or be withheld where it would sit on text already
+  // drawn (NetPoint grammar M3-T3; plates since node-to-node links M3).
+  if (pendingPlates.length > 0) {
+    ctx.font = LABEL_FONT;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 1;
+    // A plate is drawn after the bars now, so it also keeps off every bar and its two nodes: before,
+    // a bar painted over a plate that landed on it, and now the plate would paint over the bar.
+    // A text row's box is its line height, leading included; a plate on a lane's centre line grazes
+    // the rows either side by 1.5 px of leading and none of the ink, so only a real overlap counts.
+    const PLATE_GRAZE_PX = 2;
+    const glyphBoxes: Rect[] = [];
+    for (const a of scene.activities) {
+      if (!visibleIds.has(a.id)) continue;
+      const r = activityRect(a, view, scene.dataDate, rectCache);
+      if (!r) continue;
+      const reach = barGlyphKind(a.type) === 'bar' ? NODE_REACH_PX : 0;
+      glyphBoxes.push({ x: r.x - reach, y: r.y - reach, w: r.w + 2 * reach, h: r.h + 2 * reach });
+    }
+    for (const { text, line, ink } of pendingPlates) {
+      const w = labelWidths.measure(text, (t) => ctx.measureText(t).width) + LABEL_PAD_PX * 2;
+      const at = freePlatePosition(
+        lagPlateCandidates(line, w, SLACK_CHIP_H),
+        w,
+        SLACK_CHIP_H,
+        placedText,
+        glyphBoxes,
+        PLATE_GRAZE_PX,
+      );
+      if (!at) continue;
+      // The border is the link's own ink (U2/X2): ≥ 3:1 on the ground, so the plate is a
+      // perceivable box, and it says which link the figure belongs to.
+      ctx.strokeStyle = ink;
+      ctx.fillStyle = palette.canvasGround;
+      ctx.fillRect(at.x - w / 2, at.y - SLACK_CHIP_H / 2, w, SLACK_CHIP_H);
+      ctx.strokeRect(at.x - w / 2 + 0.5, at.y - SLACK_CHIP_H / 2 + 0.5, w - 1, SLACK_CHIP_H - 1);
+      ctx.fillStyle = palette.labelBeside;
+      ctx.fillText(text, at.x, at.y);
+      placedText.push({ x: at.x - w / 2, y: at.y - SLACK_CHIP_H / 2, w, h: SLACK_CHIP_H });
+    }
+    ctx.textAlign = 'left';
+    ctx.lineWidth = 1;
+  }
   if (pendingGapLabels.length > 0) {
     // Borderless, on an opaque ground chip that knocks the line out beneath it, the text in the
     // mark ink (≥ 4.5:1 on the ground; the minor line ink is not, `m0-solved.md`). Placed on

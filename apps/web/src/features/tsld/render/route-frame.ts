@@ -1,9 +1,11 @@
+import { isLaneBoundary } from './link-candidates';
 import {
   chooseRoutesByCrossing,
   glyphIndex,
   isLaneCentre,
   routeNodeToNode,
   type FrameLink,
+  type GlyphIndex,
 } from './link-score';
 import type { TsldScene } from './paint';
 import {
@@ -14,7 +16,6 @@ import {
   ELAPSED_DAY_WALK,
   lagAnchorPoints,
   lagRunSegment,
-  LANE_HEIGHT,
   makeWorkingDayWalk,
   packGutterChannels,
   routeOrthogonal,
@@ -57,10 +58,10 @@ export interface RouteFrame {
   /** The refreshed link path (`scene.visualRefresh`). */
   readonly refresh: boolean;
   /**
-   * The frame's glyph index (every visible bar, widened by its nodes), or null when routing is off.
-   * The painter reads it only as "is node-to-node routing on".
+   * The frame's glyph index (every visible bar, widened by its nodes), or null when node-to-node
+   * routing is off. The painter reads it only as that switch.
    */
-  readonly laneIndex: ReturnType<typeof glyphIndex> | null;
+  readonly glyphs: GlyphIndex | null;
   /**
    * The per-edge geometry seam. Exposed because the revision overlay routes removed links through
    * the SAME closure with a synthetic edge.
@@ -85,12 +86,6 @@ export interface RouteFrame {
    * still be called after `routeFrame` returns and may set it.
    */
   activeLagHandle: Point | null;
-}
-
-/** Whether `y` is a lane boundary: the gutter datum (ADR-0150), where a VHV route runs. */
-function isLaneBoundary(y: number, view: Viewport): boolean {
-  const r = (((y - view.originY) % LANE_HEIGHT) + LANE_HEIGHT) % LANE_HEIGHT;
-  return r <= 0.5 || r >= LANE_HEIGHT - 0.5;
 }
 
 export function routeFrame(
@@ -133,7 +128,7 @@ export function routeFrame(
    * over the whole plan would make an O(N) pass out of a layer whose budget argument is that it is
    * O(visible). Rebuilt each frame because it is a function of the viewport.
    */
-  const laneIndex =
+  const glyphs =
     refresh && scene.linkRouting === true
       ? glyphIndex(
           scene.activities.filter((a) => visibleIds.has(a.id)),
@@ -224,7 +219,7 @@ export function routeFrame(
     }
     const from = anchors.pred;
     const to = anchors.succ;
-    if (!laneIndex) return routeOrthogonal(from, to, edge.type, view);
+    if (!glyphs) return routeOrthogonal(from, to, edge.type, view);
     const predRect = activityRect(pred, view, scene.dataDate, rectCache);
     const succRect = activityRect(succ, view, scene.dataDate, rectCache);
     // `lagAnchorPoints` returned anchors, so both rects exist; this is the type system's check.
@@ -244,11 +239,13 @@ export function routeFrame(
         fromRect: predRect,
         toRect: succRect,
       },
-      laneIndex,
+      glyphs,
       view,
     );
     if (collecting) candidatesByEdge.set(edge, { candidates: scored, ends: [from, to] });
-    return scored[0]!.line.map((p) => ({ x: p.x, y: p.y }));
+    // Not copied: a multi-link frame replaces it with a copy of phase 2's choice below, and a single
+    // link is never packed, so nothing mutates the candidate's array.
+    return scored[0]!.line;
   };
   /**
    * Every visible edge's line, computed **once** for the frame (ADR-0065 M3). It was previously
@@ -270,7 +267,7 @@ export function routeFrame(
     if (line) lines.set(edge, line);
   }
   collecting = false;
-  if (laneIndex && lines.size > 1) {
+  if (glyphs && lines.size > 1) {
     /**
      * **Phase 2, then gutter channels** (node-to-node links M2, spec §4.4), and the order is the
      * decision. Phase 2 re-chooses each link's shape against a frozen snapshot of the phase-1
@@ -290,13 +287,14 @@ export function routeFrame(
       line,
       fromLane: byId.get(edge.predecessorId)?.laneIndex ?? 0,
       toLane: byId.get(edge.successorId)?.laneIndex ?? 0,
+      key: edge.id ?? `${edge.predecessorId}>${edge.successorId}:${edge.type}`,
     }));
     packGutterChannels(corridors, rowSlots(0).clearHalfBandPx, (y) => isLaneBoundary(y, view));
   }
   const frame: RouteFrame = {
     workingWalk,
     refresh,
-    laneIndex,
+    glyphs,
     lineOf,
     lines,
     lagRuns,

@@ -5854,7 +5854,7 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   written. Two of FC-G7's counting budgets were unwritten, and the pictures had been judged at M2
   only. **The CPM engine is not imported and no migration runs.**
 
-- **ADR-0158** _(Accepted; M0–M2 landed 2026-09-25)_ — A link leaves and enters at its node. The
+- **ADR-0158** _(Accepted; M0–M3 landed 2026-09-25)_ — A link leaves and enters at its node. The
   product owner asked for logic links that "come directly to the nodes unless a lead/lag is there",
   NetPoint-style. ADR-0151 already said every link converges on the node glyph; the router never
   made it true, because its elbow sat 4–12 px outside the anchored edge, inside a 9 px node reach, so
@@ -5874,8 +5874,16 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   the trade with the pictures in front of them.** Two conditions were corrected rather than passed:
   FC-T2's false-junction metric now exempts a sibling's node (the bus the spec asked for), with the
   baseline re-measured the same way, and the text-crossing remedy is filed (`docs/TECH_DEBT.md` #393)
-  because the router cannot see measured text. Tidy's cost is **INDETERMINATE** at 1.45× on the means
-  against a 1.5× bar. Diagonals (M4) are judged against these numbers and dropped on any failure.
+  because the router cannot see measured text. **The M3 gate pass blocked on three of four reviews
+  and found two defects no condition could see.** Lag plates had moved with their links onto names
+  and dates, character for character; they are now placed after the text at the first free point on
+  their own link, or withheld, which costs one FC-T7 cell (3 of 4 plates on the 17-activity plan at
+  12 px/day), recorded as a miss. And FC-T5, tested only as a unit property, **failed on Unit 300**
+  once the harness shuffled the fixture's edges (39 of 200 orders drew different lines), because the
+  gutter packer broke ties by input position; it now breaks them by edge id. Four cost changes that
+  move no route (binary search, lazily cut segments, an index range for a generator, an early exit)
+  took Tidy from INDETERMINATE to **1.21× its baseline in one sitting**, inside the 1.5× bar.
+  Diagonals (M4) are judged against these numbers and dropped on any failure.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

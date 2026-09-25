@@ -113,6 +113,11 @@ condition, applied as written.
 
 - **(a)** At most 11 candidates per edge, and a bounded number of obstruction tests per edge. Both
   pinned by a counting gate in jsdom (`paint.routing-budget.test.ts`).
+  **Corrected at the M3 gate pass:** only the candidate cap is counted by that gate (it routes all
+  1,493 links of the 2,000-activity dense plan and asserts at most 11 shapes each). The obstruction
+  bound follows by construction and is not counted: `scoreCandidates` scores each candidate exactly
+  once, so there are at most 11 obstruction tests per edge, and each one binary-searches to the first
+  glyph that can reach the segment. The sentence above claimed a count that was never written.
 - **(b)** `routeFrame` p95 ≤ 8 ms at scale-2000, Week. Baseline: p50 0.80 ms; p95 5.90 and 2.30 ms
   (spread 3.60 ms). Judged under decision 2 above.
 - **(c)** The staff-console paint probe on the product owner's hardware, Week at 2,000: the

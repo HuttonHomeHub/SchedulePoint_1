@@ -396,7 +396,8 @@ now arrives vertically into a node that has a name above it (FC-T6).
 - **Paint path.** Per link: at most 11 candidates, each tested against the culled lane index with
   binary searches. Today's router tries up to 5 corridors and the crossing chooser up to 17 more
   positions (`link-routing.ts:421-426`, `:1063`), so the order of work is similar. A counting gate
-  pins the bound (`paint.routing-budget.test.ts` gains the assertion). Phase 2 reuses the existing
+  pins the candidate cap (`paint.routing-budget.test.ts`); the obstruction tests follow from it, one
+  per candidate (corrected at M3, see `conditions.md` FC-T8 (a)). Phase 2 reuses the existing
   snapshot index (`link-routing.ts:1086-1163`).
 - **Tidy.** Every Tidy evaluation calls `routeFrame` (`layout-objective.ts:84-90`). The search uses
   count caps, not time (ADR-0152), so its answer cannot depend on the machine, but its wall time can

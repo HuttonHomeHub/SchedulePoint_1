@@ -92,6 +92,15 @@ export function gutterBelow(lane: number, view: Viewport): number {
 }
 
 /**
+ * Whether screen-y `y` is a lane boundary: {@link gutterBelow}'s inverse, and the test
+ * `packGutterChannels` uses to find a gutter run by geometry.
+ */
+export function isLaneBoundary(y: number, view: Viewport): boolean {
+  const r = (((y - view.originY) % LANE_HEIGHT) + LANE_HEIGHT) % LANE_HEIGHT;
+  return r <= 0.5 || r >= LANE_HEIGHT - 0.5;
+}
+
+/**
  * Every valid candidate for one link, in the fixed order. `fromLane`/`toLane` are the two
  * activities' lanes, which decide same-lane shapes and which gutters exist.
  */

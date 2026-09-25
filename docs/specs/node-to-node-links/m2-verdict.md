@@ -1,10 +1,11 @@
 # M2 verdict: node-to-node links. Stopped at FC-T3, then accepted by the product owner
 
-**Status:** Measured 2026-09-25 on the M1 router wired into `routeFrame`. The wiring is **not
-committed to the product**. It is saved as [`m2-wiring.diff`](./m2-wiring.diff), so the numbers
-below can be reproduced exactly. `conditions.md` says: _"Past the bar at any zoom, the work stops and
-the numbers go to the product owner. It is not withdrawn automatically."_ It is past the bar, so
-work has stopped here.
+**Status:** Measured 2026-09-25 on the M1 router wired into `routeFrame`, when the wiring was still
+saved as [`m2-wiring.diff`](./m2-wiring.diff). The wiring is now committed (`e6da09ba`), and the M3
+gate pass below changed it again. The tables in the first two sections are the M2 readings as taken,
+kept so the stop can be read as it happened. `conditions.md` says: _"Past the bar at any zoom, the
+work stops and the numbers go to the product owner. It is not withdrawn automatically."_ It was past
+the bar, so work stopped here until the product owner answered.
 
 Reproduce: apply `m2-wiring.diff`, then from `apps/web` run `node scripts/measure-attachment.mjs`.
 Every count was identical at all four pans, so each cell below is one zoom (1 / 4 / 12 px/day).
@@ -142,3 +143,82 @@ Harnesses: `netpoint-evaluate.ts` is re-pointed at the new router. `crossing-pro
 `measure-crossing-pass.mjs` are deleted. Each measured a property of the corridor router that no
 longer exists. Their verdicts stay in ADR-0149, ADR-0150 and `docs/specs/logic-legibility/`, and
 those figures are not reproducible from this tree.
+
+## M3 gate pass (2026-09-25)
+
+Four reviews ran over the wired router: component, performance, UX and accessibility.
+Accessibility found nothing blocking: the spoken logic summary and the listbox never read a route,
+and the milestone arrowhead was measured clear of the triangle. The other three blocked. Every fix
+below leaves the routes unchanged except where it says otherwise, and the attachment measure was
+re-run after each.
+
+**UX: lag plates landed on names and dates.** In `m2-small-17-after.png` one plate sat across A105's
+start date and another across the code "A108", the two texts interleaved. The plate had moved with
+its link, and nothing placed it against text. Plates are now drawn in layer 3.9, after names and
+dates, at the first free position on their own link (`lagPlateCandidates` and `freePlatePosition` in
+`link-marks.ts`). A position is free when it misses every drawn name and date (with a 2 px graze
+allowance) and every glyph box. If no position is free the plate is withheld, as a gap label already
+is. Plates on text (`p/txt` in the measure) are now **0 on every fixture, zoom and pan**.
+
+That fix costs one FC-T7 cell, and it is recorded as a miss, not moved:
+
+| Fixture   | Lag plates at 12 px/day | Floor | Verdict  |
+| --------- | ----------------------- | ----- | -------- |
+| brief     | 2                       | ≥ 2   | PASS     |
+| small-17  | **3**                   | ≥ 4   | **MISS** |
+| reference | 4                       | ≥ 4   | PASS     |
+| Unit 300  | 32                      | ≥ 32  | PASS     |
+
+On `small-17` four links carry a lag and three plates are drawn: the fourth has no free position,
+because every candidate point on its link meets a name, a date or a node. A plate drawn anyway is the illegible overprint the review
+blocked on, so it is withheld. The lag is still in the link's spoken logic summary. The miss is the
+same class as FC-T6 and has the same remedy, `docs/TECH_DEBT.md` #393: once the router can read the
+painter's text layout, it can choose a route that leaves room for its plate.
+
+**Component: four findings.**
+
+1. `isLaneBoundary` was defined twice, in `route-frame.ts` and in `netpoint-evaluate.ts`. It now
+   lives once, beside `gutterBelow` in `link-candidates.ts`, and both import it.
+2. `RouteFrame.laneIndex` was not a lane index. It is now `glyphs: GlyphIndex | null`.
+3. `BundleCandidate` named the retired bundler. It is now `RoutedLine`.
+4. FC-T8(a) claimed a counted bound on obstruction tests that no test counted. `conditions.md`
+   now says what is counted (shapes per link) and why the obstruction bound follows from it.
+
+The same review found FC-T5 tested only as a unit property, while the spec required it on the
+fixtures. `measure-attachment.mjs` now shuffles `scene.edges` 200 times per fixture. **Unit 300
+failed that check: 39 of 200 orders drew different lines.** The cause was `packGutterChannels`,
+which broke ties between gutter runs by their position in the input. It now breaks them by a stable
+link key (the edge id). The fix was verified red, and all four fixtures are now identical across 200
+shuffles. The phase-1 and phase-2 internals of `link-score.ts`
+(`comparePhase1`, `Phase2Score`, `scoreCandidates`) are no longer exported.
+
+**Performance: FC-T8(d) had no accepted disposition.** The product owner's "Accept and ship"
+predates the cost reading, so INDETERMINATE could not stand. Four changes, none of which change a
+route (the measure's fingerprints are identical before and after):
+
+- `obstructions()` binary-searches to the first glyph that can reach a segment, instead of scanning
+  each lane from the start.
+- A candidate's segments are cut once, lazily, and reused by phase 2.
+- `SegmentBuckets.between()` returns an index range, not a generator.
+- `lineOf` no longer clones every routed line twice. Phase 2 also stops early on a link whose best
+  shape already crosses and overlaps nothing, because no move can strictly improve it.
+
+Re-measured in one sitting, baseline (`7b7c0ec8`) and this tree interleaved, BASE → NEW → BASE →
+NEW:
+
+| Limb                                   | Baseline       | This tree      | Bar              | Verdict  |
+| -------------------------------------- | -------------- | -------------- | ---------------- | -------- |
+| (b) `routeFrame` p95, scale-2000, Week | 1.20–1.90 ms   | 3.20–4.00 ms   | ≤ 8 ms           | **PASS** |
+| (b) `routeFrame` p50                   | 0.70–0.90 ms   | 1.40–1.70 ms   | (read with p95)  | —        |
+| (d) Tidy on Unit 300 (node proxy)      | 3,868–4,003 ms | 4,631–4,970 ms | ≤ 1.5 × baseline | **PASS** |
+| (a) shapes per link                    | —              | ≤ 11           | ≤ 11             | **PASS** |
+| (c) staff-console paint probe          | —              | not taken      | owed             | owed     |
+
+Tidy's means are 4,770 against 3,927 ms, 1.21×. The worst reading against the best baseline reading
+is 4,970 against 3,868 ms, 1.28×. Every reading is also under the committed absolute of 6,963 ms.
+FC-T8(c) is still owed and is not claimed.
+
+**Also changed, each with a test verified red first:** an arrowhead into a milestone's centre port
+stops at the triangle (`paint.netpoint-text.test.ts`); the gutter tie-break key
+(`link-routing.test.ts`); and plate placement (`link-marks.test.ts`, pure cases rather than a scene,
+because the first scene test passed against the defect).

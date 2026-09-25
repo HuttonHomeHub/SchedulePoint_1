@@ -30,7 +30,7 @@
  *
  * Unit 300 is run in both modes, so the filter's cost in quality is measured, not assumed.
  */
-import { laneIntervalIndex } from '../src/features/tsld/render/link-routing';
+import { glyphIndex } from '../src/features/tsld/render/link-score';
 import type { Point } from '../src/features/tsld/render/render-model';
 
 import type { Layout } from './crossing-probe';
@@ -338,7 +338,7 @@ function localDelta(
   const touched = model.scene.activities
     .map((a) => model.byId.get(a.id)!)
     .filter((a) => a.laneIndex === from || a.laneIndex === to);
-  const patch = laneIntervalIndex(touched, model.view, model.scene.dataDate);
+  const patch = glyphIndex(touched, model.view, model.scene.dataDate);
   const next = new Map(model.index);
   next.delete(from);
   next.delete(to);

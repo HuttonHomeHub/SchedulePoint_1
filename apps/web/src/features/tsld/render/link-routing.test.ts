@@ -421,6 +421,23 @@ describe('packGutterChannels', () => {
   });
 
   /**
+   * **Two runs with the same geometry take channels by their link's key, not by arrival order**
+   * (node-to-node links M3). The sort's last term was list position, which is the order
+   * `scene.edges` arrived in; a 200-order shuffle of Unit 300 found 39 orders that moved a link.
+   */
+  it('gives identical runs the same channels whatever order they arrive in', () => {
+    const keyed = (key: string) => ({ ...vhv(100, 0, 100), key });
+    const channelOf = (order: string[]): Record<string, number> => {
+      const cs = order.map(keyed);
+      packGutterChannels(cs, CLEAR_HALF_BAND, GUTTER);
+      return Object.fromEntries(cs.map((c) => [c.key, c.line[1]!.y]));
+    };
+    const forward = channelOf(['a', 'b']);
+    expect(forward.a).not.toBe(forward.b);
+    expect(channelOf(['b', 'a'])).toEqual(forward);
+  });
+
+  /**
    * **Surplus SPREADS, and never into a bar.** Seven mutually overlapping runs in a three-channel
    * gutter cannot be separated; what the pass controls is whether the excess piles onto one line or
    * is shared. FC-L3's second limb asks for `max legs on one y <= ceil(peak overlap / channels)`,

@@ -75,13 +75,39 @@ Measured on four fixtures at 1, 4 and 12 px/day and four pans (`m2-verdict.md`):
 - **Links crossing names and dates are not scored.** The painter places text using measured widths
   the router cannot see, and an approximation would be a second opinion about where text sits. Two
   small misses (FC-T6) were accepted with the rest. The fix is filed as `docs/TECH_DEBT.md` #393.
-- **Cost.** `routeFrame` p95 at 2,000 activities is 3.6–4.3 ms against 1.2–1.9 ms before, inside the
-  8 ms bar. Tidy on Unit 300 takes 5.6–6.8 s against 4.1–4.3 s in the same sitting. That is 1.45× on
-  the means against a 1.5× bar, with readings on both sides, so it is recorded as INDETERMINATE
-  (ADR-0128), not as a pass. The staff-console paint reading on the product owner's hardware is owed.
+- **Cost.** Re-measured after the M3 gate pass, in one sitting with the baseline interleaved:
+  `routeFrame` p95 at 2,000 activities is 3.2–4.0 ms against 1.2–1.9 ms before, inside the 8 ms bar.
+  Tidy on Unit 300 takes 4,631–4,970 ms against 3,868–4,003 ms: 1.21× on the means and 1.28× worst
+  against best, inside the 1.5× bar. At M2 it was 1.45× with readings either side of the bar
+  (INDETERMINATE); four changes that move no route brought it down (below). The staff-console paint
+  reading on the product owner's hardware is still owed.
 - **Harnesses.** Three scripts that measured properties of the retired router are deleted. Their
   figures, in ADR-0149, ADR-0150 and `docs/specs/logic-legibility/`, cannot be reproduced from this
   tree.
+
+## The M3 gate pass
+
+Four reviews ran: component, performance, UX and accessibility. Accessibility found nothing
+blocking. The other three did, and two of their findings were defects that no committed condition
+could see:
+
+- **Lag plates landed on names and dates.** A plate moved with its link and nothing placed it
+  against text, so on the 17-activity plan one plate covered a start date and another interleaved
+  with an activity code. Plates are now drawn after names and dates, at the first point on their own
+  link that misses text and glyphs, and withheld when there is none (`render/link-marks.ts`). Plates
+  on text are now zero everywhere. The cost is one FC-T7 cell: on that plan at 12 px/day three of
+  four plates are drawn against a floor of four. It is recorded as a miss, with the same remedy as
+  the text crossings (`docs/TECH_DEBT.md` #393).
+- **FC-T5 failed on a real plan.** It had been tested as a unit property only. Shuffling Unit 300's
+  edges 200 times drew different lines in 39 orders, because `packGutterChannels` broke ties by
+  input position. It now breaks them by edge id, and all four fixtures are identical across 200
+  shuffles.
+
+The rest were fixed as reported: `isLaneBoundary` lives once; the frame's glyph index is no longer
+misnamed `laneIndex`; the retired bundler's type name is gone; the obstruction scan binary-searches;
+segments are cut once and reused; phase 2 walks an index range, not a generator; lines are cloned
+once; and phase 2 stops early on a link that crosses and overlaps nothing. None of the cost changes
+moves a route: the attachment measure's fingerprints are identical before and after.
 
 ## Diagonals
 

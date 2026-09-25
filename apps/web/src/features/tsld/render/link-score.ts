@@ -28,7 +28,6 @@ import {
   LANE_HEIGHT,
   LEG_CLEARANCE_PX,
   NODE_REACH_PX,
-  type LaneIntervalIndex,
   type LaneIntervals,
   type Point,
   type Rect,
@@ -46,12 +45,23 @@ const EPS = 1e-6;
  * Unlike that index this one does **not** merge spans, because counting what a line passes through
  * needs each glyph separately; the spans are sorted by start for the binary search.
  */
+/** One lane of the glyph index: its spans sorted by start, and the widest span's width. */
+export interface GlyphLane extends LaneIntervals {
+  /**
+   * The widest span in the lane. Spans are NOT merged, so their ends are not sorted; this bound is
+   * what lets a query binary-search to the first span that could still reach it.
+   */
+  readonly maxLen: number;
+}
+
+export type GlyphIndex = ReadonlyMap<number, GlyphLane>;
+
 export function glyphIndex(
   activities: readonly RenderActivity[],
   view: Viewport,
   dataDate: string,
   cache?: RectCache,
-): LaneIntervalIndex {
+): GlyphIndex {
   const byLane = new Map<number, [number, number][]>();
   for (const a of activities) {
     const rect = activityRect(a, view, dataDate, cache);
@@ -61,10 +71,10 @@ export function glyphIndex(
     list.push([rect.x - widen, rect.x + rect.w + widen]);
     byLane.set(a.laneIndex, list);
   }
-  const index = new Map<number, LaneIntervals>();
+  const index = new Map<number, GlyphLane>();
   for (const [lane, spans] of byLane) {
     spans.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
-    index.set(lane, { spans });
+    index.set(lane, { spans, maxLen: Math.max(...spans.map(([x0, x1]) => x1 - x0)) });
   }
   return index;
 }
@@ -93,6 +103,23 @@ export function ownSpanOf(activity: RenderActivity, rect: Rect): OwnSpan {
   return { lane: activity.laneIndex, x0: rect.x - widen, x1: rect.x + rect.w + widen };
 }
 
+/**
+ * The index of the first span in `lane` that could reach `x` or beyond: the first whose start is at
+ * least `x - maxLen`. Every earlier span ends before `x`, so a scan may begin here and count exactly
+ * what a scan from zero counts.
+ */
+function firstReaching(lane: GlyphLane, x: number): number {
+  const target = x - lane.maxLen;
+  let lo = 0;
+  let hi = lane.spans.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (lane.spans[mid]![0] < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 function isOwn(own: readonly OwnSpan[], lane: number, x0: number, x1: number): boolean {
   return own.some(
     (o) => o.lane === lane && Math.abs(o.x0 - x0) <= EPS && Math.abs(o.x1 - x1) <= EPS,
@@ -112,7 +139,7 @@ function isOwn(own: readonly OwnSpan[], lane: number, x0: number, x1: number): b
  */
 export function obstructions(
   line: readonly Point[],
-  glyphs: LaneIntervalIndex,
+  glyphs: GlyphIndex,
   own: readonly OwnSpan[],
   view: Viewport,
 ): number {
@@ -125,7 +152,10 @@ export function obstructions(
       if (lane === null) continue;
       const lo = Math.min(a.x, b.x);
       const hi = Math.max(a.x, b.x);
-      for (const [x0, x1] of glyphs.get(lane)?.spans ?? []) {
+      const row = glyphs.get(lane);
+      if (!row) continue;
+      for (let k = firstReaching(row, lo); k < row.spans.length; k += 1) {
+        const [x0, x1] = row.spans[k]!;
         if (x0 >= hi) break;
         if (Math.min(hi, x1) - Math.max(lo, x0) <= LEG_CLEARANCE_PX) continue;
         if (!isOwn(own, lane, x0, x1)) count += 1;
@@ -138,7 +168,10 @@ export function obstructions(
         const cy = view.originY + lane * LANE_HEIGHT + LANE_HEIGHT / 2;
         if (cy >= hi - EPS) break;
         if (cy <= lo + EPS) continue;
-        for (const [x0, x1] of glyphs.get(lane)?.spans ?? []) {
+        const row = glyphs.get(lane);
+        if (!row) continue;
+        for (let k = firstReaching(row, a.x); k < row.spans.length; k += 1) {
+          const [x0, x1] = row.spans[k]!;
           if (x0 > a.x) break;
           if (x1 < a.x) continue;
           if (!isOwn(own, lane, x0, x1)) count += 1;
@@ -157,6 +190,34 @@ function lengthOf(line: readonly Point[]): number {
   return total;
 }
 
+/** One axis-aligned segment: its fixed coordinate and its extent along the other axis. */
+interface Seg {
+  fixed: number;
+  lo: number;
+  hi: number;
+}
+
+/** A line cut into its horizontals and verticals; a zero-length segment is neither. */
+interface Segments {
+  h: readonly Seg[];
+  v: readonly Seg[];
+}
+
+function segmentsOf(line: readonly Point[]): Segments {
+  const h: Seg[] = [];
+  const v: Seg[] = [];
+  for (let i = 1; i < line.length; i += 1) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    if (Math.abs(a.y - b.y) <= EPS && Math.abs(a.x - b.x) > EPS) {
+      h.push({ fixed: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
+    } else if (Math.abs(a.x - b.x) <= EPS && Math.abs(a.y - b.y) > EPS) {
+      v.push({ fixed: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
+    }
+  }
+  return { h, v };
+}
+
 /** Terms 1, 4, 5 and 6 — everything a link can know about itself alone. */
 export interface Phase1Score {
   obstructions: number;
@@ -165,7 +226,7 @@ export interface Phase1Score {
   order: number;
 }
 
-export function comparePhase1(a: Phase1Score, b: Phase1Score): number {
+function comparePhase1(a: Phase1Score, b: Phase1Score): number {
   return (
     a.obstructions - b.obstructions || a.length - b.length || a.bends - b.bends || a.order - b.order
   );
@@ -173,25 +234,39 @@ export function comparePhase1(a: Phase1Score, b: Phase1Score): number {
 
 export interface ScoredCandidate extends RouteCandidate {
   phase1: Phase1Score;
+  /**
+   * The line's horizontal and vertical segments, cut the first time phase 2 needs them and kept.
+   * Most candidates are never scored by phase 2, so cutting them all up front was pure garbage.
+   */
+  segments?: Segments;
+}
+
+function segmentsFor(candidate: ScoredCandidate): Segments {
+  candidate.segments ??= segmentsOf(candidate.line);
+  return candidate.segments;
+}
+
+/** A candidate with its phase-1 score. */
+export function toScored(candidate: RouteCandidate, phase1: Phase1Score): ScoredCandidate {
+  return { ...candidate, phase1 };
 }
 
 /** Score every candidate and return them, best first by phase 1. */
-export function scoreCandidates(
+function scoreCandidates(
   candidates: readonly RouteCandidate[],
-  glyphs: LaneIntervalIndex,
+  glyphs: GlyphIndex,
   own: readonly OwnSpan[],
   view: Viewport,
 ): ScoredCandidate[] {
   return candidates
-    .map((c) => ({
-      ...c,
-      phase1: {
+    .map((c) =>
+      toScored(c, {
         obstructions: obstructions(c.line, glyphs, own, view),
         length: lengthOf(c.line),
         bends: c.line.length - 2,
         order: c.order,
-      },
-    }))
+      }),
+    )
     .sort((p, q) => comparePhase1(p.phase1, q.phase1));
 }
 
@@ -212,7 +287,7 @@ export interface LinkRouteInput {
  */
 export function routeNodeToNode(
   input: LinkRouteInput,
-  glyphs: LaneIntervalIndex,
+  glyphs: GlyphIndex,
   view: Viewport,
 ): ScoredCandidate[] {
   const pred = linkEndOf(input.from, input.fromAnchor, input.fromRect);
@@ -227,12 +302,10 @@ export function routeNodeToNode(
   if (scored.length > 0) return scored;
   const line = [input.fromAnchor, input.toAnchor];
   return [
-    {
-      shape: 'fallback',
-      line,
-      order: MAX_ROUTE_CANDIDATES,
-      phase1: { obstructions: 0, length: lengthOf(line), bends: 0, order: MAX_ROUTE_CANDIDATES },
-    },
+    toScored(
+      { shape: 'fallback', line, order: MAX_ROUTE_CANDIDATES },
+      { obstructions: 0, length: lengthOf(line), bends: 0, order: MAX_ROUTE_CANDIDATES },
+    ),
   ];
 }
 
@@ -245,42 +318,30 @@ export interface FrameLink {
   ends: readonly [Point, Point];
 }
 
-interface Seg {
+/** A snapshot segment, tagged with the link that drew it. */
+interface OwnedSeg extends Seg {
   link: number;
-  fixed: number;
-  lo: number;
-  hi: number;
-}
-
-function segmentsOf(line: readonly Point[], link: number): { h: Seg[]; v: Seg[] } {
-  const h: Seg[] = [];
-  const v: Seg[] = [];
-  for (let i = 1; i < line.length; i += 1) {
-    const a = line[i - 1]!;
-    const b = line[i]!;
-    if (Math.abs(a.y - b.y) <= EPS && Math.abs(a.x - b.x) > EPS) {
-      h.push({ link, fixed: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
-    } else if (Math.abs(a.x - b.x) <= EPS && Math.abs(a.y - b.y) > EPS) {
-      v.push({ link, fixed: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
-    }
-  }
-  return { h, v };
 }
 
 /** Segments bucketed by their fixed coordinate, sorted, for range queries. */
 class SegmentBuckets {
   private readonly keys: number[];
-  private readonly buckets = new Map<number, Seg[]>();
-  constructor(segs: readonly Seg[]) {
+  private readonly lists: OwnedSeg[][];
+  private readonly byKey = new Map<number, OwnedSeg[]>();
+  constructor(segs: readonly OwnedSeg[]) {
     for (const s of segs) {
-      const list = this.buckets.get(s.fixed) ?? [];
+      const list = this.byKey.get(s.fixed) ?? [];
       list.push(s);
-      this.buckets.set(s.fixed, list);
+      this.byKey.set(s.fixed, list);
     }
-    this.keys = [...this.buckets.keys()].sort((p, q) => p - q);
+    this.keys = [...this.byKey.keys()].sort((p, q) => p - q);
+    this.lists = this.keys.map((k) => this.byKey.get(k)!);
   }
-  /** Buckets whose fixed coordinate lies strictly inside `(lo, hi)`. */
-  *between(lo: number, hi: number): Iterable<Seg[]> {
+  /**
+   * The index range `[start, end)` of the buckets whose fixed coordinate lies strictly inside
+   * `(lo, hi)`: a plain range rather than a generator, because it runs in phase 2's innermost loop.
+   */
+  between(lo: number, hi: number): [number, number] {
     let left = 0;
     let right = this.keys.length;
     while (left < right) {
@@ -288,22 +349,25 @@ class SegmentBuckets {
       if (this.keys[mid]! <= lo + EPS) left = mid + 1;
       else right = mid;
     }
-    for (let i = left; i < this.keys.length && this.keys[i]! < hi - EPS; i += 1) {
-      yield this.buckets.get(this.keys[i]!)!;
-    }
+    let end = left;
+    while (end < this.keys.length && this.keys[end]! < hi - EPS) end += 1;
+    return [left, end];
   }
-  at(fixed: number): readonly Seg[] {
-    return this.buckets.get(fixed) ?? [];
+  bucket(i: number): readonly OwnedSeg[] {
+    return this.lists[i]!;
+  }
+  at(fixed: number): readonly OwnedSeg[] {
+    return this.byKey.get(fixed) ?? [];
   }
 }
 
 /** Phase 2's full score: phase 1 plus crossings and overlaps against the frozen snapshot. */
-export interface Phase2Score extends Phase1Score {
+interface Phase2Score extends Phase1Score {
   crossings: number;
   overlaps: number;
 }
 
-export function comparePhase2(a: Phase2Score, b: Phase2Score): number {
+function comparePhase2(a: Phase2Score, b: Phase2Score): number {
   return (
     a.obstructions - b.obstructions ||
     a.crossings - b.crossings ||
@@ -332,12 +396,14 @@ export function chooseRoutesByCrossing(
 ): Point[][] {
   const chosen = links.map((l) => l.candidates[0]?.line ?? []);
   if (links.length < 2) return chosen;
-  const hs: Seg[] = [];
-  const vs: Seg[] = [];
-  chosen.forEach((line, i) => {
-    const { h, v } = segmentsOf(line, i);
-    hs.push(...h);
-    vs.push(...v);
+  const hs: OwnedSeg[] = [];
+  const vs: OwnedSeg[] = [];
+  links.forEach((link, i) => {
+    const first = link.candidates[0];
+    if (!first) return;
+    const segments = segmentsFor(first);
+    for (const s of segments.h) hs.push({ ...s, link: i });
+    for (const s of segments.v) vs.push({ ...s, link: i });
   });
   const hBuckets = new SegmentBuckets(hs);
   const vBuckets = new SegmentBuckets(vs);
@@ -347,12 +413,13 @@ export function chooseRoutesByCrossing(
     links[i]!.ends.some((p) => links[j]!.ends.some((q) => near(p, q)));
 
   const score = (i: number, candidate: ScoredCandidate): Phase2Score => {
-    const { h, v } = segmentsOf(candidate.line, i);
+    const { h, v } = segmentsFor(candidate);
     let crossings = 0;
     let overlaps = 0;
     for (const s of h) {
-      for (const bucket of vBuckets.between(s.lo, s.hi)) {
-        for (const t of bucket) {
+      const [start, end] = vBuckets.between(s.lo, s.hi);
+      for (let b = start; b < end; b += 1) {
+        for (const t of vBuckets.bucket(b)) {
           if (t.link === i) continue;
           if (s.fixed > t.lo + EPS && s.fixed < t.hi - EPS) crossings += 1;
         }
@@ -366,8 +433,9 @@ export function chooseRoutesByCrossing(
       }
     }
     for (const s of v) {
-      for (const bucket of hBuckets.between(s.lo, s.hi)) {
-        for (const t of bucket) {
+      const [start, end] = hBuckets.between(s.lo, s.hi);
+      for (let b = start; b < end; b += 1) {
+        for (const t of hBuckets.bucket(b)) {
           if (t.link === i) continue;
           if (s.fixed > t.lo + EPS && s.fixed < t.hi - EPS) crossings += 1;
         }
@@ -386,6 +454,9 @@ export function chooseRoutesByCrossing(
     if (!current) return [];
     let best = current;
     let bestScore = score(i, current);
+    // Nothing can beat a pick with no crossings and no overlaps: phase 1 already made it the best
+    // on every other term, and phase 2 only inserts those two. Exact, and most links stop here.
+    if (bestScore.crossings === 0 && bestScore.overlaps === 0) return best.line;
     for (let k = 1; k < link.candidates.length; k += 1) {
       const candidate = link.candidates[k]!;
       // Obstructions lead the vector, so a candidate through more glyphs can never win.

@@ -251,10 +251,17 @@ export function routeOrthogonal(
 }
 
 /** One routed line, with the lanes its ends sit in — what {@link packGutterChannels} reads. */
-export interface BundleCandidate {
+export interface RoutedLine {
   line: Point[];
   fromLane: number;
   toLane: number;
+  /**
+   * A stable identity for the link (its dependency id), the last tie-break between two gutter runs
+   * with the same geometry. Without it that tie fell to list position, which is the order
+   * `scene.edges` arrived in, and a 200-order shuffle of Unit 300 found 39 orders giving a link a
+   * different channel (node-to-node links M3, FC-T5).
+   */
+  key?: string;
 }
 
 // ── Gutter channels (logic-legibility M1) ───────────────────────────────────────────────────────
@@ -318,11 +325,14 @@ export function gutterChannels(clearHalfBandPx: number): number[] {
  *    recorded oscillation with a third subject.
  * 2. **It moves y only.** Lag anchors, drag handles and hit zones keep today's geometry — they are
  *    computed before this runs and are not passed in. Structural, not remembered: the
- *    {@link BundleCandidate} argument shape cannot reach them.
+ *    {@link RoutedLine} argument shape cannot reach them.
  * 3. **It is deterministic and permutation-independent.** Runs are sorted by (gutter y, left x,
- *    right x, candidate index) — a total order over the geometry, never the order `scene.edges`
- *    happened to arrive in, which is a server response. A channel that varied between frames would
- *    move a line while the viewport stood still.
+ *    right x, the link's key) — never the order `scene.edges` happened to arrive in, which is a
+ *    server response. A channel that varied between frames would move a line while the viewport
+ *    stood still. This said "candidate index" was a total order over the geometry until node-to-node
+ *    links M3: it is list position, so two runs with the same geometry took channels by arrival
+ *    order, and a 200-order shuffle of Unit 300 found 39 orders that moved a link. The key closes
+ *    it; list position is left only for a caller that passes no key.
  * 4. **Surplus spreads to the LEAST-LOADED channel, never into a bar.** A gutter carrying more
  *    simultaneous runs than it has channels cannot separate them all; the rest go to whichever
  *    channel already carries the fewest runs overlapping them, so the excess is shared evenly
@@ -332,7 +342,7 @@ export function gutterChannels(clearHalfBandPx: number): number[] {
  *    is the property that must not be traded for a cosmetic gain.
  */
 export function packGutterChannels(
-  candidates: readonly BundleCandidate[],
+  candidates: readonly RoutedLine[],
   clearHalfBandPx: number,
   /** Whether a y is a lane boundary: the gutter datum (ADR-0150). */
   isGutter: (y: number) => boolean,
@@ -343,7 +353,7 @@ export function packGutterChannels(
   // A gutter run is the horizontal leg of a VHV route, found by geometry: any interior horizontal
   // segment lying on a lane boundary. Its y is a lane boundary by construction, so grouping by that
   // y groups by gutter.
-  type Run = { candidate: number; at: number; y: number; x0: number; x1: number };
+  type Run = { candidate: number; at: number; y: number; x0: number; x1: number; key: string };
   const runs: Run[] = [];
   candidates.forEach((candidate, c) => {
     const line = candidate.line;
@@ -354,12 +364,26 @@ export function packGutterChannels(
     for (const i of at) {
       const a = line[i]!;
       const b = line[i + 1]!;
-      runs.push({ candidate: c, at: i, y: a.y, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x) });
+      runs.push({
+        candidate: c,
+        at: i,
+        y: a.y,
+        x0: Math.min(a.x, b.x),
+        x1: Math.max(a.x, b.x),
+        key: candidate.key ?? '',
+      });
     }
   });
   if (runs.length < 2) return 0;
 
-  runs.sort((p, q) => p.y - q.y || p.x0 - q.x0 || p.x1 - q.x1 || p.candidate - q.candidate);
+  runs.sort(
+    (p, q) =>
+      p.y - q.y ||
+      p.x0 - q.x0 ||
+      p.x1 - q.x1 ||
+      (p.key < q.key ? -1 : p.key > q.key ? 1 : 0) ||
+      p.candidate - q.candidate,
+  );
 
   let moved = 0;
   let start = 0;

@@ -27,8 +27,9 @@ import {
  *    carries two changes — the corridor and the T17 arrowhead — so the corridor assertions compare
  *    the **line**, and the head has its own test. Comparing the trace whole would fail for the one
  *    reason those tests are not about.
- * 2. **The cost is bounded and proportionate.** Routing adds a per-frame interval index over the
- *    culled set plus, per edge, a binary search per crossed lane. The failure mode this guards is
+ * 2. **The cost is bounded and proportionate.** Node-to-node routing (ADR-0158) adds a per-frame
+ *    glyph index over the culled set plus, per edge, at most eleven shapes, each scored once with a
+ *    binary search into each lane it touches. The failure mode this guards is
  *    the one every obstacle-avoidance implementation reaches for first: an unbounded search that
  *    looks free on a ten-bar fixture and blows the ADR-0026 ≤4 ms budget at two thousand.
  *

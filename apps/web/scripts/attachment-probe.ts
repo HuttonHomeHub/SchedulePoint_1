@@ -251,6 +251,8 @@ export interface AttachmentReading {
   falseJunctionLinks: number;
   overlaps: number;
   textCrossings: number;
+  /** Lag plates whose text meets a name or date. */
+  platesOnText: number;
   gapLabels: number;
   lagPlates: number;
   crossings: number;
@@ -425,10 +427,22 @@ export function readAttachment(
   let gapLabels = 0;
   let lagPlates = 0;
   const boxes: ReturnType<typeof textBox>[] = [];
+  const plateBoxes: ReturnType<typeof textBox>[] = [];
   for (const t of texts) {
-    if (LAG_PLATE.test(t.text)) lagPlates += 1;
-    else if (GAP_LABEL.test(t.text)) gapLabels += 1;
+    if (LAG_PLATE.test(t.text)) {
+      lagPlates += 1;
+      plateBoxes.push(textBox(t));
+    } else if (GAP_LABEL.test(t.text)) gapLabels += 1;
     else boxes.push(textBox(t));
+  }
+  // A plate's TEXT meeting a name or date (node-to-node links M3, the UX gate's finding): the one
+  // text-on-text case the line-segment count above cannot see, because a plate is not a segment.
+  // Text boxes are the ink's, one font size high, so a graze into a row's leading does not count.
+  let platesOnText = 0;
+  for (const p of plateBoxes) {
+    if (boxes.some((b) => p.x0 < b.x1 && b.x0 < p.x1 && p.y0 < b.y1 && b.y0 < p.y1)) {
+      platesOnText += 1;
+    }
   }
   let textCrossings = 0;
   for (const e of entries) {
@@ -454,6 +468,7 @@ export function readAttachment(
     falseJunctionLinks,
     overlaps: overlapping.size,
     textCrossings,
+    platesOnText,
     gapLabels,
     lagPlates,
     crossings,
@@ -463,6 +478,39 @@ export function readAttachment(
     bends,
     fingerprint: digest.digest('hex').slice(0, 12),
   };
+}
+
+/**
+ * **FC-T5 on the fixtures**: route the frame with `scene.edges` in `runs` seeded shuffles and
+ * return how many orders gave any link a different line. Lines are keyed by the link, never by
+ * position, so a shuffle that changes only the order of the map is not a difference.
+ */
+export function shuffleDifferences(scene: TsldScene, view: Viewport, runs: number): number {
+  const byId = new Map(scene.activities.map((a) => [a.id, a]));
+  const visible = new Set(byId.keys());
+  const keyOf = (e: RenderEdge): string => `${e.predecessorId}>${e.successorId}:${e.type}`;
+  const linesOf = (edges: readonly RenderEdge[]): Map<string, string> => {
+    const frame = routeFrame({ ...scene, edges: [...edges] }, view, visible, byId, new Map());
+    const out = new Map<string, string>();
+    for (const [edge, line] of frame.lines) {
+      out.set(keyOf(edge), line.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';'));
+    }
+    return out;
+  };
+  const reference = linesOf(scene.edges);
+  let seed = 2026;
+  let differing = 0;
+  for (let run = 0; run < runs; run += 1) {
+    const order = [...scene.edges];
+    for (let i = order.length - 1; i > 0; i -= 1) {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      const j = seed % (i + 1);
+      [order[i], order[j]] = [order[j]!, order[i]!];
+    }
+    const got = linesOf(order);
+    if ([...reference].some(([k, v]) => got.get(k) !== v)) differing += 1;
+  }
+  return differing;
 }
 
 // ── The brief's fixture ──────────────────────────────────────────────────────────────────────────

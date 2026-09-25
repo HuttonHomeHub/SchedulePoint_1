@@ -7,6 +7,7 @@ import {
   obstructions,
   ownSpanOf,
   routeNodeToNode,
+  toScored,
   type FrameLink,
   type LinkRouteInput,
 } from './link-score';
@@ -205,12 +206,12 @@ describe('chooseRoutesByCrossing', () => {
 
   /** A link from literal lines, phase 1 already ranked (index 0 is the pick). */
   const mk = (points: Point[][]): FrameLink => ({
-    candidates: points.map((line, order) => ({
-      shape: order === 0 ? 'VH' : 'HV',
-      line,
-      order,
-      phase1: { obstructions: 0, length: 100, bends: 1, order },
-    })),
+    candidates: points.map((line, order) =>
+      toScored(
+        { shape: order === 0 ? 'VH' : 'HV', line, order },
+        { obstructions: 0, length: 100, bends: 1, order },
+      ),
+    ),
     ends: [points[0]![0]!, points[0]!.at(-1)!],
   });
 

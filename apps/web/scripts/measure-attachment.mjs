@@ -82,6 +82,7 @@ if (json) {
     'text'.padStart(5),
     'gap'.padStart(4),
     'plate'.padStart(5),
+    'p/txt'.padStart(5),
     'x/link'.padStart(6),
     'occl'.padStart(5),
     'bends'.padStart(5),
@@ -95,8 +96,21 @@ if (json) {
         `${String(r.unattachedEnds).padStart(5)} ${String(r.falseJunctions).padStart(6)} ` +
         `${String(r.overlaps).padStart(4)} ${String(r.textCrossings).padStart(5)} ` +
         `${String(r.gapLabels).padStart(4)} ${String(r.lagPlates).padStart(5)} ` +
+        `${String(r.platesOnText).padStart(5)} ` +
         `${r.crossingsPerLink.toFixed(3).padStart(6)} ${String(r.foreignOccludedLinks).padStart(5)} ` +
         `${String(r.bends).padStart(5)} ${r.fingerprint.padStart(12)}`,
+    );
+  }
+  // FC-T5 on the fixtures: 200 seeded shuffles of each fixture's edges at 4 px/day, pan 32.
+  console.log('\n  FC-T5 (200 shuffles of scene.edges, 4 px/day, pan 32):');
+  for (const fx of probe.fixtures(FIXTURE)) {
+    const differing = probe.shuffleDifferences(
+      fx.scene,
+      { pxPerDay: 4, originX: 40, originY: 32 },
+      200,
+    );
+    console.log(
+      `    ${fx.name.padEnd(18)} ${differing === 0 ? 'identical' : `${differing} orders differ`}`,
     );
   }
   console.log('\n  reasons (4 px/day, pan 32):');

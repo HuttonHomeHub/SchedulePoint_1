@@ -31,17 +31,15 @@
 import { createHash } from 'node:crypto';
 
 import { activityRect, LANE_HEIGHT, rowSlots } from '../src/features/tsld/render/geometry';
-import {
-  lagAnchorPoints,
-  type LaneIntervalIndex,
-  packGutterChannels,
-} from '../src/features/tsld/render/link-routing';
+import { isLaneBoundary } from '../src/features/tsld/render/link-candidates';
+import { lagAnchorPoints, packGutterChannels } from '../src/features/tsld/render/link-routing';
 import {
   chooseRoutesByCrossing,
   glyphIndex,
   isLaneCentre,
   routeNodeToNode,
   type FrameLink,
+  type GlyphIndex,
 } from '../src/features/tsld/render/link-score';
 import { paintScene, type TsldScene } from '../src/features/tsld/render/paint';
 import type { Point, RenderActivity, Viewport } from '../src/features/tsld/render/render-model';
@@ -78,7 +76,7 @@ export interface Model {
   byId: Map<string, RenderActivity>;
   /** Per edge (scene order): the route BEFORE the post-passes, or null if it has no anchors. */
   raw: (Point[] | null)[];
-  index: LaneIntervalIndex;
+  index: GlyphIndex;
 }
 
 const VIEW = (pxPerDay: number): Viewport => ({ pxPerDay, originX: 40, originY: 32 });
@@ -116,11 +114,6 @@ export function routeOne(model: Model, e: number): Point[] | null {
   return link ? link.candidates[0]!.line.map((p) => ({ x: p.x, y: p.y })) : null;
 }
 
-const isLaneBoundary = (y: number, view: Viewport): boolean => {
-  const r = (((y - view.originY) % LANE_HEIGHT) + LANE_HEIGHT) % LANE_HEIGHT;
-  return r <= 0.5 || r >= LANE_HEIGHT - 0.5;
-};
-
 /**
  * The two whole-set passes, in the painter's order. Phase 2 needs every link's candidates, which
  * `raw` does not carry, so they are re-derived here for the edges that have a route.
@@ -145,6 +138,7 @@ function postPasses(model: Model): { lines: Point[][]; fromLane: number[]; edges
       line: line.map((p) => ({ x: p.x, y: p.y })),
       fromLane: model.byId.get(edge.predecessorId)!.laneIndex,
       toLane: model.byId.get(edge.successorId)!.laneIndex,
+      key: edge.id ?? `${edge.predecessorId}>${edge.successorId}:${edge.type}`,
     };
   });
   if (corridors.length > 1) {
