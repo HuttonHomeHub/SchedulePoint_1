@@ -13,6 +13,8 @@ import {
   allItems,
   layoutRowText,
   sceneRowText,
+  sceneRowTextItems,
+  type PlacedText,
   textWidthKey,
   textWidthKeys,
 } from './row-text-layout';
@@ -164,5 +166,48 @@ describe('textWidthKeys', () => {
     }
     // Not vacuous: the plans really do propose wraps.
     expect(wraps).toBeGreaterThan(0);
+  });
+
+  /**
+   * **A lane at a time, and remembered, is the same text** (links-and-labels M2-T6b, spec §4.9).
+   * Tidy lays the text out once per distinct lane content; that is sound only because every rule
+   * reads one lane's row. This holds the per-lane items to the whole-plan layout's, both fresh and
+   * through a memo warmed on the plan before one activity moved lane.
+   */
+  it('lays out a lane at a time, through a memo, exactly as the whole plan', () => {
+    const key = (t: PlacedText): string =>
+      `${t.lane}|${t.x}|${t.y}|${t.kind}|${t.text}|${t.activityId}`;
+    const sorted = (items: readonly PlacedText[]): string[] => items.map(key).sort();
+    const size = { width: 5000, height: 0 };
+    let memoHits = 0; // lanes answered from the memo after a move
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const activities = plan(seed);
+      for (const toggles of TOGGLES) {
+        for (const pxPerDay of [1, 4, 12]) {
+          const view: Viewport = { pxPerDay, originX: 0, originY: 0 };
+          const scene = { activities, dataDate: '2026-01-01', visualRefresh: true };
+          const measure = (t: string): number => t.length * 6;
+          const whole = sorted(allItems(sceneRowText(scene, view, size, toggles, measure)));
+          expect(sorted(sceneRowTextItems(scene, view, size, toggles, measure))).toEqual(whole);
+          // A memo warmed on this plan, then one activity moved: only its two lanes are new.
+          const memo = new Map<string, readonly PlacedText[]>();
+          sceneRowTextItems(scene, view, size, toggles, measure, new Map(), memo);
+          const moved = activities.map((a, i) =>
+            i === seed % activities.length ? { ...a, laneIndex: a.laneIndex + 1 } : a,
+          );
+          const movedScene = { ...scene, activities: moved };
+          const before = memo.size;
+          const got = sceneRowTextItems(movedScene, view, size, toggles, measure, new Map(), memo);
+          expect(sorted(got)).toEqual(
+            sorted(allItems(sceneRowText(movedScene, view, size, toggles, measure))),
+          );
+          // Only the two lanes the move touched were laid out again; every other came from memo.
+          expect(memo.size - before).toBeLessThanOrEqual(2);
+          memoHits += before - (memo.size - before);
+        }
+      }
+    }
+    // Not vacuous: the memo really was answered from, not just filled.
+    expect(memoHits).toBeGreaterThan(0);
   });
 });

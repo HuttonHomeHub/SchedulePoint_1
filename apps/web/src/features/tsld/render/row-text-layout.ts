@@ -922,6 +922,66 @@ export function sceneRowText(
   });
 }
 
+/**
+ * {@link sceneRowText}'s items, laid out **a lane at a time** and, given a `memo`, remembered by what
+ * each lane holds (links-and-labels M2-T6b, spec §4.9). Every placement rule in {@link
+ * layoutRowText} reads one lane's row and nothing else, so a lane's items depend only on its own
+ * activities, in order, at a fixed view, width and set of toggles: a Tidy move changes one or two
+ * lanes and every other lane is answered from the memo. A property test holds the items equal to
+ * the whole-plan layout's.
+ *
+ * The memo is valid for ONE view, canvas width, set of toggles, measure and set of activity dates:
+ * its owner (`optimiseLayout`) creates one per search, where all of those are fixed and only the
+ * lanes move.
+ */
+export function sceneRowTextItems(
+  scene: {
+    activities: readonly RenderActivity[];
+    dataDate: string;
+    visualRefresh?: boolean | undefined;
+  },
+  view: Viewport,
+  size: { width: number; height: number },
+  toggles: TsldViewToggles,
+  measure: TextMeasure,
+  rectCache: RectCache = new Map(),
+  memo?: Map<string, readonly PlacedText[]>,
+): PlacedText[] {
+  const byId = new Map(scene.activities.map((a) => [a.id, a]));
+  const rects = new Map<string, Rect>();
+  for (const a of scene.activities) {
+    const r = activityRect(a, view, scene.dataDate, rectCache);
+    if (r) rects.set(a.id, r);
+  }
+  const withCodes = toggles.activityCodes === true;
+  const reservesTextRows = rowReservesTextRows();
+  const out: PlacedText[] = [];
+  for (const [lane, row] of laneRowsOf(rects, byId)) {
+    const key = memo ? `${String(lane)}|${row.map((r) => r.activity.id).join(',')}` : null;
+    const hit = key === null ? undefined : memo!.get(key);
+    if (hit) {
+      out.push(...hit);
+      continue;
+    }
+    const items = allItems(
+      layoutRowText({
+        rows: () => new Map([[lane, row]]),
+        view,
+        size,
+        toggles,
+        visualRefresh: scene.visualRefresh === true,
+        reservesTextRows,
+        measure,
+        labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
+        oneLineOnly: true,
+      }),
+    );
+    if (key !== null) memo!.set(key, items);
+    out.push(...items);
+  }
+  return out;
+}
+
 /** A width table key: the memo's own (`measure.ts`), the font only when one is given. */
 export const textWidthKey = (text: string, font: string | undefined): string =>
   font === undefined ? text : `${font}\u0000${text}`;

@@ -45,7 +45,8 @@ import {
   type RenderActivity,
   type Viewport,
 } from './render-model';
-import { textBoxesOverlapping, type TextIndex } from './text-index';
+import type { TextBox } from './row-text-layout';
+import { firstTextReaching, type TextIndex } from './text-index';
 
 const EPS = 1e-6;
 
@@ -228,7 +229,10 @@ export function textCrossings(
   view: Viewport,
 ): number {
   if (text === null || text.size === 0) return 0;
-  const met = new Set<object>();
+  // Called for every candidate of every link, every frame and every Tidy evaluation, and almost
+  // every line meets no text: so it allocates nothing until it finds a box (links-and-labels M2's
+  // cost sitting profiled a Set and a result array per call as the largest share of the term).
+  let met: TextBox[] | null = null;
   for (let i = 1; i < line.length; i += 1) {
     const a = line[i - 1]!;
     const b = line[i]!;
@@ -239,12 +243,19 @@ export function textCrossings(
     const firstLane = Math.floor((y0 - view.originY) / LANE_HEIGHT);
     const lastLane = Math.floor((y1 - view.originY) / LANE_HEIGHT);
     for (let lane = firstLane; lane <= lastLane; lane += 1) {
-      for (const box of textBoxesOverlapping(text, lane, x0, x1)) {
-        if (y0 < box.y + box.h && y1 > box.y) met.add(box);
+      const entry = text.get(lane);
+      if (!entry) continue;
+      const boxes = entry.boxes;
+      for (let k = firstTextReaching(entry, x0); k < boxes.length; k += 1) {
+        const box = boxes[k]!;
+        if (box.x >= x1) break;
+        if (box.x + box.w <= x0 || y0 >= box.y + box.h || y1 <= box.y) continue;
+        if (met === null) met = [box];
+        else if (!met.includes(box)) met.push(box);
       }
     }
   }
-  return met.size;
+  return met === null ? 0 : met.length;
 }
 
 function lengthOf(line: readonly Point[]): number {
@@ -373,7 +384,8 @@ function scoreCandidates(
           obstructions: counts.total,
           hiddenLegs: counts.legs,
           text: textCrossings(c.line, text, view),
-          ...(plate ? { plateBlocked: plate.room.hasRoom(c.line, plate.width) ? 0 : 1 } : {}),
+          // Always a number, never a conditional spread: this runs per candidate per evaluation.
+          plateBlocked: plate === null || plate.room.hasRoom(c.line, plate.width) ? 0 : 1,
           length: lengthOf(c.line),
           bends: c.line.length - 2,
           order: c.order,

@@ -146,6 +146,34 @@ describe('phase 1: text breaks the ties the terms above it leave', () => {
   });
 });
 
+describe('textCrossings', () => {
+  it('counts a box once however many segments meet it, and touching is not meeting', () => {
+    const text = textIndexOf([name(1, 100, 20)]);
+    const inside = centre(1) - 12;
+    // A vertical through the box, then a horizontal back through it: one box, counted once.
+    const through = [
+      { x: 110, y: 0 },
+      { x: 110, y: inside },
+      { x: 90, y: inside },
+    ];
+    expect(textCrossings(through, text, VIEW)).toBe(1);
+    // A vertical exactly on either edge only touches it.
+    for (const x of [100, 120]) {
+      expect(
+        textCrossings(
+          [
+            { x, y: 0 },
+            { x, y: 200 },
+          ],
+          text,
+          VIEW,
+        ),
+      ).toBe(0);
+    }
+    expect(textCrossings(through, null, VIEW)).toBe(0);
+  });
+});
+
 describe('phase 2: text is never bought with a crossing, an overlap or a hidden run', () => {
   // `one`'s pick crosses `two`'s vertical (x 50, y 90..210); its alternative does not.
   const onePick = [

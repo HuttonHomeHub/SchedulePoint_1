@@ -8,6 +8,7 @@ import {
   type LayoutScene,
 } from './layout-objective';
 import { axisDayOf, type RenderActivity, type RenderEdge } from './render-model';
+import type { PlacedText } from './row-text-layout';
 
 /**
  * **Tidy and Re-layout: a bounded search over lane layouts** (NetPoint-layout M4-T3, spec §4.5).
@@ -133,6 +134,9 @@ export function optimiseLayout(
   const budget = options.budget ?? rowsOf(seedLanes);
 
   let evaluations = 0;
+  // One text memo per search (spec §4.9): the view, widths and toggles are fixed here and only
+  // lanes move, so a lane's text is laid out once per distinct content (links-and-labels M2-T6b).
+  const text = { ...input.text, memo: new Map<string, readonly PlacedText[]>() };
   const evaluate = (lanes: ReadonlyMap<string, number>): LayoutObjective => {
     evaluations += 1;
     options.onProgress?.(evaluations);
@@ -142,7 +146,7 @@ export function optimiseLayout(
         edges,
         dataDate: input.dataDate,
         isWorkingDay: input.isWorkingDay,
-        text: input.text,
+        text,
       },
       LAYOUT_REFERENCE_PX_PER_DAY,
     );

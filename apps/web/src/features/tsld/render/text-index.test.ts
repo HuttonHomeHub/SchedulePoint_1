@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PlacedText } from './row-text-layout';
-import { firstTextReaching, textBoxesOverlapping, textIndexOf } from './text-index';
+import { firstTextReaching, textIndexOf } from './text-index';
 
 const item = (lane: number, x: number, w: number): PlacedText => ({
   activityId: `${lane}:${x}`,
@@ -34,29 +34,17 @@ describe('the text index (links-and-labels M1-T3)', () => {
     expect(firstTextReaching(lane, 50)).toBe(0);
   });
 
-  it('a query returns exactly the boxes a full scan would', () => {
+  it('skips only boxes that end before x, whatever the widths', () => {
     const items = Array.from({ length: 60 }, (_, i) =>
       item(0, (i * 37) % 900, 10 + ((i * 13) % 70)),
     );
-    const index = textIndexOf(items);
-    for (const [x0, x1] of [
-      [0, 10],
-      [100, 140],
-      [500, 900],
-      [880, 1000],
-    ] as const) {
-      const scanned = items
-        .map((i) => i.ink)
-        .filter((b) => b.x < x1 && b.x + b.w > x0)
-        .sort((p, q) => p.x - q.x || p.w - q.w);
-      expect(textBoxesOverlapping(index, 0, x0, x1)).toEqual(scanned);
+    const lane = textIndexOf(items).get(0)!;
+    for (const x of [0, 10, 100, 140, 500, 880, 1000]) {
+      const first = firstTextReaching(lane, x);
+      // Every box before the start ends before x, so a scan from there loses nothing…
+      for (const box of lane.boxes.slice(0, first)) expect(box.x + box.w).toBeLessThan(x);
+      // …and the start is as far along as the bound allows.
+      if (first > 0) expect(lane.boxes[first - 1]!.x).toBeLessThan(x - lane.maxW);
     }
-  });
-
-  it('touching is not meeting, and an empty lane has nothing', () => {
-    const index = textIndexOf([item(1, 100, 20)]);
-    expect(textBoxesOverlapping(index, 1, 120, 130)).toEqual([]);
-    expect(textBoxesOverlapping(index, 1, 80, 100)).toEqual([]);
-    expect(textBoxesOverlapping(index, 3, 0, 1000)).toEqual([]);
   });
 });

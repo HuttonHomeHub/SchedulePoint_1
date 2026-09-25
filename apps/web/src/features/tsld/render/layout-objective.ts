@@ -9,7 +9,7 @@ import {
   type Viewport,
 } from './render-model';
 import { routeFrame, type RouteFrameScene } from './route-frame';
-import { allItems, sceneRowText, type TextMeasure } from './row-text-layout';
+import { sceneRowTextItems, type PlacedText, type TextMeasure } from './row-text-layout';
 import { textIndexOf, type TextIndex } from './text-index';
 import type { TsldViewToggles } from './view-toggles';
 
@@ -55,6 +55,11 @@ export const LAYOUT_REFERENCE_PX_PER_DAY = 4;
 export interface LayoutText {
   measure: TextMeasure;
   toggles: TsldViewToggles;
+  /**
+   * Each lane's text items, remembered by what the lane holds (spec §4.9): optional, and owned by
+   * one search (`optimiseLayout`), where the view, widths and toggles are fixed and only lanes move.
+   */
+  memo?: Map<string, readonly PlacedText[]>;
 }
 
 /** The scene fields the objective reads. The lanes come from `activities[].laneIndex`. */
@@ -104,15 +109,17 @@ export function layoutTextIndex(
     const r = activityRect(a, view, scene.dataDate, rectCache);
     if (r) right = Math.max(right, r.x + r.w);
   }
-  const layout = sceneRowText(
-    { activities: scene.activities, dataDate: scene.dataDate, visualRefresh: true },
-    view,
-    { width: right + view.originX, height: 0 },
-    scene.text.toggles,
-    scene.text.measure,
-    rectCache,
+  return textIndexOf(
+    sceneRowTextItems(
+      { activities: scene.activities, dataDate: scene.dataDate, visualRefresh: true },
+      view,
+      { width: right + view.originX, height: 0 },
+      scene.text.toggles,
+      scene.text.measure,
+      rectCache,
+      scene.text.memo,
+    ),
   );
-  return textIndexOf(allItems(layout));
 }
 
 /** The whole plan's routed lines at the reference zoom, each with the ids it connects. */

@@ -5,7 +5,7 @@ import type { PlacedText, TextBox } from './row-text-layout';
  *
  * The text layout's ink boxes grouped by lane, in the glyph index's shape (`link-score.ts`
  * `GlyphLane`): each lane's boxes sorted by left edge, with the widest box's width kept so a query
- * can binary-search to the first box that could still reach it. A box is not merged with its
+ * can binary-search to the first box that could still reach it (`link-score.ts` `textCrossings`). A box is not merged with its
  * neighbours, because a line meeting two names meets two texts. M1 builds it; M2's router reads it.
  */
 export interface TextLane {
@@ -47,22 +47,4 @@ export function firstTextReaching(lane: TextLane, x: number): number {
     else hi = mid;
   }
   return lo;
-}
-
-/** The boxes in `lane` whose x-range overlaps `[x0, x1]` (open at the ends: touching is not meeting). */
-export function textBoxesOverlapping(
-  index: TextIndex,
-  lane: number,
-  x0: number,
-  x1: number,
-): TextBox[] {
-  const entry = index.get(lane);
-  if (!entry) return [];
-  const out: TextBox[] = [];
-  for (let i = firstTextReaching(entry, x0); i < entry.boxes.length; i += 1) {
-    const box = entry.boxes[i]!;
-    if (box.x >= x1) break;
-    if (box.x + box.w > x0) out.push(box);
-  }
-  return out;
 }

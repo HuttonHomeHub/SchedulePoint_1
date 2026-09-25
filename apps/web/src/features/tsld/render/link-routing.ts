@@ -481,27 +481,40 @@ function orderSameExtentRuns(
   chosen: number[],
   candidates: readonly RoutedLine[],
 ): void {
+  // Only runs with the identical extent are compared, so group by it first: a gutter carries
+  // dozens of runs on a large plan and most extents are unique, so pairing every run with every
+  // other made this pass quadratic in the gutter's population for almost no pairs.
+  const byExtent = new Map<string, number[]>();
   for (let i = start; i < end; i += 1) {
-    for (let j = i + 1; j < end; j += 1) {
-      const a = runs[i]!;
-      const b = runs[j]!;
-      if (a.x0 !== b.x0 || a.x1 !== b.x1) continue;
-      if (chosen[i - start] === chosen[j - start]) continue;
-      // +1: `a` should be above `b`; -1: below; 0: no end asks; NaN: the two ends disagree.
-      let want = 0;
-      for (const x of [a.x0, a.x1]) {
-        const sa = verticalSideAt(candidates[a.candidate]!.line, a.at, a.y, x);
-        const sb = verticalSideAt(candidates[b.candidate]!.line, b.at, b.y, x);
-        if (sa === null || sb === null || sa === sb) continue;
-        const here = sa === 'above' ? 1 : -1;
-        want = want === 0 || want === here ? here : Number.NaN;
+    const key = `${runs[i]!.x0}:${runs[i]!.x1}`;
+    const group = byExtent.get(key);
+    if (group) group.push(i);
+    else byExtent.set(key, [i]);
+  }
+  for (const group of byExtent.values()) {
+    for (let gi = 0; gi < group.length; gi += 1) {
+      for (let gj = gi + 1; gj < group.length; gj += 1) {
+        const i = group[gi]!;
+        const j = group[gj]!;
+        const a = runs[i]!;
+        const b = runs[j]!;
+        if (chosen[i - start] === chosen[j - start]) continue;
+        // +1: `a` should be above `b`; -1: below; 0: no end asks; NaN: the two ends disagree.
+        let want = 0;
+        for (const x of [a.x0, a.x1]) {
+          const sa = verticalSideAt(candidates[a.candidate]!.line, a.at, a.y, x);
+          const sb = verticalSideAt(candidates[b.candidate]!.line, b.at, b.y, x);
+          if (sa === null || sb === null || sa === sb) continue;
+          const here = sa === 'above' ? 1 : -1;
+          want = want === 0 || want === here ? here : Number.NaN;
+        }
+        if (want === 0 || Number.isNaN(want)) continue;
+        const aAbove = chosen[i - start]! < chosen[j - start]!;
+        if ((want === 1) === aAbove) continue;
+        const swap = chosen[i - start]!;
+        chosen[i - start] = chosen[j - start]!;
+        chosen[j - start] = swap;
       }
-      if (want === 0 || Number.isNaN(want)) continue;
-      const aAbove = chosen[i - start]! < chosen[j - start]!;
-      if ((want === 1) === aAbove) continue;
-      const swap = chosen[i - start]!;
-      chosen[i - start] = chosen[j - start]!;
-      chosen[j - start] = swap;
     }
   }
 }
