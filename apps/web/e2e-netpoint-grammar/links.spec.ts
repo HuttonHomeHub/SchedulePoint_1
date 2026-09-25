@@ -10,6 +10,7 @@ import {
   seedActivities,
   seedDependency,
 } from '../e2e-arrange/support';
+import { pickZoomPreset } from '../e2e-search-nav/support';
 
 /**
  * **NetPoint grammar M3 — the link language on the real canvas** (spec §4.2 G5, G6, G12).
@@ -27,7 +28,8 @@ import {
  * - an `SS + 2` link puts a dot on its predecessor's bar, and the same plan before that link has
  *   none;
  * - a link leaves its predecessor through the node (node-to-node links M2, ADR-0158): the vertical
- *   that crosses an empty lane runs up into the node's ring, not one gap east of it.
+ *   that crosses an empty lane runs up into the node's ring, not one gap east of it;
+ * - a link runs round a name rather than through it where it can (links-and-labels M2, #393).
  */
 
 /** A token's colour as the browser paints it, read inside the canvas scope. */
@@ -337,5 +339,174 @@ test.describe('NetPoint grammar — links', () => {
     expect(probe!.above, 'nothing above the link: it turned at a corner').toBe(true);
     expect(probe!.gap).toBeGreaterThan(6);
     expect(probe!.gap).toBeLessThan(18);
+  });
+
+  /**
+   * **Links-and-labels M2 (#393): a link runs round a name where it can.** A → B leaves A's finish
+   * node and has two one-bend shapes, both through no bar: down first (through lane 1) or along
+   * first (lane 0's centre line, then down into B). Text-blind, the router took the first by
+   * candidate order, and here it runs straight through the long name of M, the activity between
+   * them. Reading text, it takes the second.
+   *
+   * Text is found as ink: connected runs of dark, unsaturated pixels no taller than a line of text,
+   * so a grid rule cannot pass for a name. The assertion is that no link ink falls inside any of
+   * them; the controls are that the link is drawn and that M's name is found at all.
+   */
+  test('a link runs round a name rather than through it where it can', async ({ page }) => {
+    const stamp = Date.now();
+    const orgSlug = await onboard(page, stamp);
+    await openProject(page);
+    await createPlan(page, 'Round the name');
+    await ensurePen(page);
+    const made = await seedActivities(page, orgSlug, [
+      { name: 'A', laneIndex: 0, durationDays: 3 },
+      {
+        name: 'Temporary works design and approval by the engineer',
+        laneIndex: 1,
+        durationDays: 1,
+      },
+      { name: 'B', laneIndex: 2, durationDays: 4 },
+    ]);
+    const [a, , b] = made;
+    if (!a || !b) throw new Error('the fixture did not seed its activities');
+    await seedLink(page, orgSlug, a.id, b.id, 'FS', 8);
+    await recalculate(page, orgSlug);
+    await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
+    await pickZoomPreset(page, 'Week');
+    // The data-date line is a dark vertical through every row: off, so it is not read as text.
+    const view = page.getByRole('button', { name: 'View', exact: true });
+    if ((await view.getAttribute('aria-expanded')) !== 'true') await view.click();
+    await page.getByRole('checkbox', { name: 'Data date line', exact: true }).uncheck();
+    await page.keyboard.press('Escape');
+
+    const ground = await paintedRgb(page, '--canvas');
+    const inks = [
+      await paintedRgb(page, '--canvas-link'),
+      await paintedRgb(page, '--canvas-link-minor'),
+      await paintedRgb(page, '--canvas-link-mark'),
+      await paintedRgb(page, '--destructive'),
+      await paintedRgb(page, '--warning'),
+    ];
+    const read = (): Promise<{
+      link: number;
+      widest: number;
+      boxes: number;
+      through: number;
+      debug: string;
+    }> =>
+      page.evaluate(
+        ({ ground, inks }) => {
+          const canvases = [...document.querySelectorAll('canvas')];
+          const canvas = canvases.reduce((p, q) =>
+            p.width * p.height >= q.width * q.height ? p : q,
+          );
+          const { width, height } = canvas;
+          const data = canvas.getContext('2d')!.getImageData(0, 0, width, height).data;
+          const dpr = window.devicePixelRatio || 1;
+          const [gr, gg, gb] = ground;
+          // The scene canvas is transparent where nothing is drawn (the ground is painted beneath
+          // it), so an anti-aliased edge has a partial alpha: every pixel is judged as it
+          // composites over the ground, which is what a reader sees.
+          const rgb = (i: number): [number, number, number] => {
+            const a = (data[i + 3] ?? 0) / 255;
+            return [
+              (data[i] ?? 0) * a + gr * (1 - a),
+              (data[i + 1] ?? 0) * a + gg * (1 - a),
+              (data[i + 2] ?? 0) * a + gb * (1 - a),
+            ];
+          };
+          const dark = (i: number): boolean => {
+            const [r, g, b] = rgb(i);
+            // Anti-aliased grey text: most of a glyph's pixels are mid-grey, not dark (measured on
+            // this journey's first red run, where a sum under 450 found only the stems).
+            return r + g + b < 600 && Math.max(r, g, b) - Math.min(r, g, b) < 30;
+          };
+          const isLink = (i: number): boolean => {
+            const [cr, cg, cb] = rgb(i);
+            return inks.some(([r, g, bl]) => {
+              const dr = r - gr;
+              const dg = g - gg;
+              const db = bl - gb;
+              const len2 = dr * dr + dg * dg + db * db;
+              if (len2 === 0) return false;
+              const pr = cr - gr;
+              const pg = cg - gg;
+              const pb = cb - gb;
+              const t = (pr * dr + pg * dg + pb * db) / len2;
+              return (
+                t >= 0.35 && t <= 1.1 && Math.hypot(pr - t * dr, pg - t * dg, pb - t * db) < 12
+              );
+            });
+          };
+          // Text boxes: dark pixels joined across a word's letter gaps, no taller than one line.
+          const seen = new Uint8Array(width * height);
+          const reachX = Math.round(4 * dpr);
+          const boxes: { x0: number; x1: number; y0: number; y1: number }[] = [];
+          for (let y = 0; y < height; y += 1) {
+            for (let x = 0; x < width; x += 1) {
+              const k = y * width + x;
+              if (seen[k] || !dark(k * 4)) continue;
+              const box = { x0: x, x1: x, y0: y, y1: y };
+              const stack = [k];
+              seen[k] = 1;
+              while (stack.length > 0) {
+                const at = stack.pop()!;
+                const px = at % width;
+                const py = (at - px) / width;
+                box.x0 = Math.min(box.x0, px);
+                box.x1 = Math.max(box.x1, px);
+                box.y0 = Math.min(box.y0, py);
+                box.y1 = Math.max(box.y1, py);
+                for (let dy = -1; dy <= 1; dy += 1) {
+                  for (let dx = -reachX; dx <= reachX; dx += 1) {
+                    const nx = px + dx;
+                    const ny = py + dy;
+                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                    const n = ny * width + nx;
+                    if (seen[n] || !dark(n * 4)) continue;
+                    seen[n] = 1;
+                    stack.push(n);
+                  }
+                }
+              }
+              const h = (box.y1 - box.y0 + 1) / dpr;
+              const w = (box.x1 - box.x0 + 1) / dpr;
+              if (h >= 4 && h <= 16 && w >= 4) boxes.push(box);
+            }
+          }
+          let link = 0;
+          let through = 0;
+          for (let y = 0; y < height; y += 1) {
+            for (let x = 0; x < width; x += 1) {
+              if (!isLink((y * width + x) * 4)) continue;
+              link += 1;
+              if (boxes.some((b) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1)) through += 1;
+            }
+          }
+          const widest = Math.max(0, ...boxes.map((b) => (b.x1 - b.x0 + 1) / dpr));
+          const top = [...boxes]
+            .sort((p, q) => q.x1 - q.x0 - (p.x1 - p.x0))
+            .slice(0, 6)
+            .map((b) => [b.x0, b.x1, b.y0, b.y1]);
+          return {
+            link,
+            widest,
+            boxes: boxes.length,
+            through,
+            debug: JSON.stringify({ dpr, width, height, n: canvases.length, top }),
+          };
+        },
+        { ground, inks },
+      );
+    // The zoom preset and the switch repaint on the next frame: wait for the settled picture, in
+    // which M's long name is one run of text (this journey's second red run read the frame before).
+    await expect
+      .poll(async () => (await read()).widest, { message: 'M’s name was not found as text' })
+      .toBeGreaterThan(150);
+    const got = await read();
+    // The controls: the link is drawn, and M's long name is found as text.
+    expect(got.link, 'no link ink on the canvas').toBeGreaterThan(50);
+    expect(got.widest, `M’s name was not found as text ${got.debug}`).toBeGreaterThan(150);
+    expect(got.through, `link ink inside a name or date ${got.debug}`).toBe(0);
   });
 });
