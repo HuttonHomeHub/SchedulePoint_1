@@ -105,6 +105,8 @@ export interface TrackSplit {
   /** Tracks split, and segments moved. */
   split: number;
   segments: number;
+  /** The x of each track split, before the move: its two lines now sit either side of it. */
+  splitAt: number[];
   /** Tracks left as they were, by the first guard both sides failed. */
   refused: Partial<Record<TrackRefusal, number>>;
 }
@@ -264,6 +266,7 @@ export function splitResidueTracks(
   const refused: TrackSplit['refused'] = {};
   let split = 0;
   let segments = 0;
+  const splitAt: number[] = [];
 
   // The pre-pass picture every guard reads, so no track's decision depends on another's.
   const allSpans = verticalSpans(before);
@@ -396,6 +399,7 @@ export function splitResidueTracks(
       }
       split += 1;
       segments += track.length;
+      splitAt.push(x);
       // Applied onto the output rather than copied from `chosen`: a link can lie on two tracks
       // (one at each end), and each track's evaluation started from the pre-pass line.
       const downDx = chosen === west ? -delta : delta;
@@ -410,5 +414,5 @@ export function splitResidueTracks(
       }
     }
   }
-  return { lines: out, split, segments, refused };
+  return { lines: out, split, segments, splitAt, refused };
 }

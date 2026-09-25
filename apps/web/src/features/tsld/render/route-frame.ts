@@ -73,7 +73,7 @@ export interface RouteFrame {
    * What the two-way track pass did this frame (links-and-labels M3): tracks split, segments moved,
    * and tracks left by reason. Null where node-to-node routing is off or the frame has one link.
    */
-  readonly tracks: Pick<TrackSplit, 'split' | 'segments' | 'refused'> | null;
+  readonly tracks: Pick<TrackSplit, 'split' | 'segments' | 'splitAt' | 'refused'> | null;
   /** The time-true day walk, or null on the legacy extreme-end routing. */
   readonly workingWalk: ReturnType<typeof makeWorkingDayWalk> | null;
   /** The refreshed link path (`scene.visualRefresh`). */
@@ -359,7 +359,12 @@ export function routeFrame(
     }
     const split = splitResidueTracks(trackLinks, glyphs, text, view, nodes);
     edges.forEach((edge, i) => lines.set(edge, split.lines[i]!));
-    tracks = { split: split.split, segments: split.segments, refused: split.refused };
+    tracks = {
+      split: split.split,
+      segments: split.segments,
+      splitAt: split.splitAt,
+      refused: split.refused,
+    };
   }
   const frame: RouteFrame = {
     tracks,

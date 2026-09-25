@@ -70,7 +70,11 @@ import {
   type RenderEdge,
   type Viewport,
 } from '../src/features/tsld/render/render-model';
-import { routeFrame, type PlateScoring } from '../src/features/tsld/render/route-frame';
+import {
+  routeFrame,
+  type PlateScoring,
+  type RouteFrame,
+} from '../src/features/tsld/render/route-frame';
 import {
   allItems,
   layoutRowText,
@@ -83,7 +87,9 @@ import { textIndexOf } from '../src/features/tsld/render/text-index';
 import {
   countCrossings,
   countOcclusions,
+  LINK_SENTINELS,
   linkPaths,
+  NODE_SENTINELS,
   PALETTE,
   recordingCtx,
   type RecordedPath,
@@ -523,7 +529,76 @@ export interface AttachmentReading {
   foreignOccludedLinks: number;
   diagonal: number;
   bends: number;
+  /**
+   * The two-way track pass (links-and-labels M3): tracks split, segments moved, and tracks left by
+   * the guard that refused them — FC-K1's listing. Null where the frame has no router.
+   */
+  tracks: RouteFrame['tracks'];
+  /**
+   * FC-K4: every pair of stroked link verticals either side of a split track (`tracks.splitAt`),
+   * exactly 2 × `PORT_OFFSET_PX` apart and running side by side, and the smallest ink gap between them — each line's stroke half-width or, wider, any
+   * link mark (chevron or arrowhead) lying across it within the pair's shared y-range. Conservative:
+   * a mark anywhere in that range counts against the whole range. `minGap` is null with no pair.
+   */
+  trackInk: { pairs: number; minGap: number | null };
   fingerprint: string;
+}
+
+/** FC-K4 (links-and-labels M3): see `AttachmentReading.trackInk`. */
+function trackInkGap(
+  strokes: readonly RecordedPath[],
+  paths: readonly RecordedPath[],
+  splitAt: readonly number[],
+): AttachmentReading['trackInk'] {
+  const markInks = new Set<string>([...Object.values(LINK_SENTINELS), NODE_SENTINELS.linkMark]);
+  const marks = paths
+    .filter((p) => p.flush === 'fill' && markInks.has(p.fillStyle) && p.pts.length >= 3)
+    .map((p) => ({
+      x0: Math.min(...p.pts.map((q) => q.x)),
+      x1: Math.max(...p.pts.map((q) => q.x)),
+      y0: Math.min(...p.pts.map((q) => q.y)),
+      y1: Math.max(...p.pts.map((q) => q.y)),
+    }));
+  const verticals = strokes.flatMap((p, path) =>
+    p.pts.slice(1).flatMap((q, i) => {
+      const a = p.pts[i]!;
+      return Math.abs(a.x - q.x) < 1e-6 && Math.abs(a.y - q.y) > 1e-6
+        ? [{ path, x: a.x, y0: Math.min(a.y, q.y), y1: Math.max(a.y, q.y), half: p.lineWidth / 2 }]
+        : [];
+    }),
+  );
+  // How far a line's ink reaches from its own x towards `side` (+1 east, −1 west) over [y0, y1].
+  const reach = (v: (typeof verticals)[number], y0: number, y1: number, side: 1 | -1): number => {
+    let r = v.half;
+    for (const m of marks) {
+      if (m.y1 <= y0 || m.y0 >= y1 || m.x0 > v.x + 0.5 || m.x1 < v.x - 0.5) continue;
+      r = Math.max(r, side === 1 ? m.x1 - v.x : v.x - m.x0);
+    }
+    return r;
+  };
+  let pairs = 0;
+  let minGap: number | null = null;
+  const measuredAt = new Set<number>();
+  for (const w of verticals) {
+    for (const e of verticals) {
+      if (w.path === e.path || Math.abs(e.x - w.x - 2 * PORT_OFFSET_PX) > 0.01) continue;
+      const at = splitAt.find((x) => Math.abs(x - PORT_OFFSET_PX - w.x) < 0.01);
+      if (at === undefined) continue;
+      const y0 = Math.max(w.y0, e.y0);
+      const y1 = Math.min(w.y1, e.y1);
+      if (y1 - y0 <= 0.5) continue;
+      pairs += 1;
+      measuredAt.add(at);
+      const gap = e.x - w.x - reach(w, y0, y1, 1) - reach(e, y0, y1, -1);
+      minGap = minGap === null ? gap : Math.min(minGap, gap);
+    }
+  }
+  // The control: every split track must yield at least one measured pair, or the measure missed the
+  // lines it exists to judge and a null gap would read as a pass.
+  if (measuredAt.size < new Set(splitAt).size) {
+    throw new Error(`FC-K4: ${splitAt.length} split track(s) but only ${pairs} measured pair(s)`);
+  }
+  return { pairs, minGap };
 }
 
 /** Harness-only options (links-and-labels M0-T3). Absent, the reading is exactly the shipped one. */
@@ -913,6 +988,8 @@ export function readAttachment(
     foreignOccludedLinks: occlusion.foreignLinks,
     diagonal,
     bends,
+    tracks: frame.tracks,
+    trackInk: trackInkGap(painted, paths, frame.tracks?.splitAt ?? []),
     fingerprint: digest.digest('hex').slice(0, 12),
   };
 }
