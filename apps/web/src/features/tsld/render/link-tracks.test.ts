@@ -244,6 +244,39 @@ describe('splitResidueTracks', () => {
       expect(got.refused).toEqual({ obstruction: 1 });
     });
 
+    it('hidden-leg: a side that clears a vertical but runs a horizontal behind a bar', () => {
+      // The test review's shape: each link turns onto the shared vertical from the east. A bar in
+      // lane 2 (y 150) sits on x 100, so both verticals cross it before the move; a bar in lane 1
+      // (y 90) and one in lane 3 (y 210) end exactly at x 100, so neither horizontal enters them.
+      // Whichever side a link moves west on, its vertical leaves the lane-2 bar (one obstruction
+      // fewer) and its horizontal, lengthened by δ, runs into its own lane's bar (one hidden leg
+      // more): the obstruction count holds, so only the hidden-leg guard can refuse it.
+      const glyphs: GlyphIndex = new Map([
+        [1, { spans: [[90, 100]], maxLen: 10 }],
+        [2, { spans: [[98, 102]], maxLen: 4 }],
+        [3, { spans: [[90, 100]], maxLen: 10 }],
+      ]);
+      const down = link(
+        [
+          { x: 140, y: 90 },
+          { x: 100, y: 90 },
+          { x: 100, y: 210 },
+        ],
+        'start-node',
+      );
+      const up = link(
+        [
+          { x: 140, y: 210 },
+          { x: 100, y: 210 },
+          { x: 100, y: 90 },
+        ],
+        'start-node',
+      );
+      const got = splitResidueTracks([down, up], glyphs, null, VIEW, nodesOf([down, up]));
+      expect(got.split).toBe(0);
+      expect(got.refused).toEqual({ 'hidden-leg': 1 });
+    });
+
     it('node: a side that would bring a line within reach of a neighbour’s node', () => {
       const [up, down] = straightPair();
       const clear = NODE_REACH_PX + 1;

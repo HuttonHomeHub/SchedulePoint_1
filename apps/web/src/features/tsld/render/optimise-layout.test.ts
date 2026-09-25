@@ -80,6 +80,8 @@ function generated(seed: number): { activities: RenderActivity[]; edges: RenderE
 }
 
 describe('optimiseLayout', () => {
+  // Two hundred searches, each routing the whole plan: a count cap, not a time budget (FC-N3), so
+  // the test's own clock gets room it does not need on a quiet runner (links-and-labels M4 review).
   it('is never worse than its repaired seed, on 200 generated plans (FC-N3)', () => {
     let improved = 0;
     for (let seed = 1; seed <= 200; seed += 1) {
@@ -102,7 +104,7 @@ describe('optimiseLayout', () => {
     }
     // A sweep in which nothing ever improves would pass the inequality above vacuously.
     expect(improved).toBeGreaterThan(20);
-  });
+  }, 20_000);
 
   it('never uses more rows than the seed when the seed has no overlap (CQ-1: no extra rows)', () => {
     for (let seed = 1; seed <= 20; seed += 1) {
