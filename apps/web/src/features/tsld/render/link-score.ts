@@ -190,11 +190,16 @@ function lengthOf(line: readonly Point[]): number {
   return total;
 }
 
-/** One axis-aligned segment: its fixed coordinate and its extent along the other axis. */
+/**
+ * One axis-aligned segment: its fixed coordinate, its extent along the other axis, and which way the
+ * link travels along it (`1` towards `hi`, `-1` towards `lo`) — what tells an opposed overlap from a
+ * shared stem.
+ */
 interface Seg {
   fixed: number;
   lo: number;
   hi: number;
+  dir: 1 | -1;
 }
 
 /** A line cut into its horizontals and verticals; a zero-length segment is neither. */
@@ -210,9 +215,19 @@ function segmentsOf(line: readonly Point[]): Segments {
     const a = line[i - 1]!;
     const b = line[i]!;
     if (Math.abs(a.y - b.y) <= EPS && Math.abs(a.x - b.x) > EPS) {
-      h.push({ fixed: a.y, lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) });
+      h.push({
+        fixed: a.y,
+        lo: Math.min(a.x, b.x),
+        hi: Math.max(a.x, b.x),
+        dir: b.x > a.x ? 1 : -1,
+      });
     } else if (Math.abs(a.x - b.x) <= EPS && Math.abs(a.y - b.y) > EPS) {
-      v.push({ fixed: a.x, lo: Math.min(a.y, b.y), hi: Math.max(a.y, b.y) });
+      v.push({
+        fixed: a.x,
+        lo: Math.min(a.y, b.y),
+        hi: Math.max(a.y, b.y),
+        dir: b.y > a.y ? 1 : -1,
+      });
     }
   }
   return { h, v };
@@ -361,10 +376,24 @@ class SegmentBuckets {
   }
 }
 
-/** Phase 2's full score: phase 1 plus crossings and overlaps against the frozen snapshot. */
+/**
+ * Phase 2's full score: phase 1 plus crossings and overlaps against the frozen snapshot, and the
+ * opposed overlaps phase 3 ranks on (phase 2 counts them and does not rank on them).
+ */
 interface Phase2Score extends Phase1Score {
+  opposed: number;
   crossings: number;
   overlaps: number;
+}
+
+/**
+ * Phase 3's order: phase 2's with **opposed overlaps ranked above crossings** (product owner,
+ * 2026-09-25, on `web-v0.150.0`: "the logic should avoid routing lines in opposing direction on each
+ * other"). Two crossing lines are still two lines; two lines on one track running opposite ways read
+ * as neither, because their arrowheads point at each other along one stroke.
+ */
+function comparePhase3(a: Phase2Score, b: Phase2Score): number {
+  return a.obstructions - b.obstructions || a.opposed - b.opposed || comparePhase2(a, b);
 }
 
 function comparePhase2(a: Phase2Score, b: Phase2Score): number {
@@ -396,26 +425,43 @@ export function chooseRoutesByCrossing(
 ): Point[][] {
   const chosen = links.map((l) => l.candidates[0]?.line ?? []);
   if (links.length < 2) return chosen;
-  const hs: OwnedSeg[] = [];
-  const vs: OwnedSeg[] = [];
-  links.forEach((link, i) => {
-    const first = link.candidates[0];
-    if (!first) return;
-    const segments = segmentsFor(first);
-    for (const s of segments.h) hs.push({ ...s, link: i });
-    for (const s of segments.v) vs.push({ ...s, link: i });
-  });
-  const hBuckets = new SegmentBuckets(hs);
-  const vBuckets = new SegmentBuckets(vs);
   const near = (p: Point, q: Point): boolean =>
     Math.abs(p.x - q.x) <= 0.5 && Math.abs(p.y - q.y) <= 0.5;
   const shareEnd = (i: number, j: number): boolean =>
     links[i]!.ends.some((p) => links[j]!.ends.some((q) => near(p, q)));
 
-  const score = (i: number, candidate: ScoredCandidate): Phase2Score => {
+  /** Every link's segments for one pick per link, bucketed for the range queries below. */
+  const index = (picks: readonly (ScoredCandidate | undefined)[]) => {
+    const hs: OwnedSeg[] = [];
+    const vs: OwnedSeg[] = [];
+    picks.forEach((pick, i) => {
+      if (!pick) return;
+      const segments = segmentsFor(pick);
+      for (const s of segments.h) hs.push({ ...s, link: i });
+      for (const s of segments.v) vs.push({ ...s, link: i });
+    });
+    return { hBuckets: new SegmentBuckets(hs), vBuckets: new SegmentBuckets(vs) };
+  };
+
+  /** One candidate for link `i`, scored against `snapshot` (every other link's pick). */
+  const scoreAgainst = (
+    snapshot: ReturnType<typeof index>,
+    i: number,
+    candidate: ScoredCandidate,
+  ): Phase2Score => {
+    const { hBuckets, vBuckets } = snapshot;
     const { h, v } = segmentsFor(candidate);
     let crossings = 0;
     let overlaps = 0;
+    let opposed = 0;
+    // A collinear pair running the same way is an overlap unless the two share an end (the bus);
+    // running opposite ways it is opposed, shared end or not — a shared end is exactly where the
+    // report found one, links rising into a finish node up the vertical its successor link came down.
+    const collinear = (s: Seg, t: OwnedSeg): void => {
+      if (Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo) <= 0.5) return;
+      if (s.dir !== t.dir) opposed += 1;
+      else if (!shareEnd(i, t.link)) overlaps += 1;
+    };
     for (const s of h) {
       const [start, end] = vBuckets.between(s.lo, s.hi);
       for (let b = start; b < end; b += 1) {
@@ -426,9 +472,7 @@ export function chooseRoutesByCrossing(
       }
       if (laneCentre(s.fixed)) {
         for (const t of hBuckets.at(s.fixed)) {
-          if (t.link === i) continue;
-          if (Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo) > 0.5 && !shareEnd(i, t.link))
-            overlaps += 1;
+          if (t.link !== i) collinear(s, t);
         }
       }
     }
@@ -441,32 +485,109 @@ export function chooseRoutesByCrossing(
         }
       }
       for (const t of vBuckets.at(s.fixed)) {
-        if (t.link === i) continue;
-        if (Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo) > 0.5 && !shareEnd(i, t.link))
-          overlaps += 1;
+        if (t.link !== i) collinear(s, t);
       }
     }
-    return { ...candidate.phase1, crossings, overlaps };
+    return { ...candidate.phase1, opposed, crossings, overlaps };
   };
 
-  return links.map((link, i) => {
+  // ── Phase 2: one frozen snapshot, unchanged ranking. ──
+  const frozen = index(links.map((l) => l.candidates[0]));
+  const picks: (ScoredCandidate | undefined)[] = links.map((link, i) => {
     const current = link.candidates[0];
-    if (!current) return [];
+    if (!current) return undefined;
     let best = current;
-    let bestScore = score(i, current);
+    let bestScore = scoreAgainst(frozen, i, current);
     // Nothing can beat a pick with no crossings and no overlaps: phase 1 already made it the best
     // on every other term, and phase 2 only inserts those two. Exact, and most links stop here.
-    if (bestScore.crossings === 0 && bestScore.overlaps === 0) return best.line;
+    if (bestScore.crossings === 0 && bestScore.overlaps === 0) return best;
     for (let k = 1; k < link.candidates.length; k += 1) {
       const candidate = link.candidates[k]!;
       // Obstructions lead the vector, so a candidate through more glyphs can never win.
       if (candidate.phase1.obstructions > bestScore.obstructions) continue;
-      const s = score(i, candidate);
+      const s = scoreAgainst(frozen, i, candidate);
       if (comparePhase2(s, bestScore) < 0) {
         best = candidate;
         bestScore = s;
       }
     }
-    return best.line;
+    return best;
   });
+
+  resolveOpposed(links, picks, index, scoreAgainst);
+  return picks.map((pick) => pick?.line ?? []);
+}
+
+/**
+ * **Phase 3: two lines on one track, running opposite ways** (product owner, 2026-09-25, on
+ * `web-v0.150.0`). Phase 2 counts crossings and overlaps against one frozen snapshot, which is what
+ * makes it independent of the order links arrive in (FC-T5) — and what makes it the wrong tool
+ * here. Both halves of an opposed pair see the conflict, so both move, and at a node they meet
+ * again from the other side: measured on the report's own shape, the links arriving at the finish
+ * node moved to come in over the top, and so did the link leaving it.
+ *
+ * So the opposed pairs phase 2 leaves are resolved **one link at a time against the picture as it
+ * now stands**: each link still opposed re-chooses on {@link comparePhase3} (opposed overlaps above
+ * crossings) and moves only on a strict improvement, so the second half of a pair sees the first
+ * half's move and has no reason to follow it. Which half moves is whichever has a better line to
+ * move to, not a fixed role: at a far zoom the link leaving the node can turn east first; at a
+ * whole-plan zoom it cannot (its successor is closer than the stub rule), and an arriving link
+ * comes in over the top instead.
+ *
+ * The order is fixed by the links' own geometry (source then target, x then y), never by the order
+ * they arrive in, so FC-T5 still holds. Most frames have no opposed pair and pay one index build.
+ */
+function resolveOpposed(
+  links: readonly FrameLink[],
+  picks: (ScoredCandidate | undefined)[],
+  index: (p: readonly (ScoredCandidate | undefined)[]) => {
+    hBuckets: SegmentBuckets;
+    vBuckets: SegmentBuckets;
+  },
+  scoreAgainst: (
+    snapshot: { hBuckets: SegmentBuckets; vBuckets: SegmentBuckets },
+    i: number,
+    candidate: ScoredCandidate,
+  ) => Phase2Score,
+): void {
+  let snapshot = index(picks);
+  const opposedNow = picks
+    .map((pick, i) => (pick && scoreAgainst(snapshot, i, pick).opposed > 0 ? i : -1))
+    .filter((i) => i >= 0);
+  if (opposedNow.length === 0) return;
+  const key = (i: number): number[] => {
+    const [p, q] = links[i]!.ends;
+    return [p.x, p.y, q.x, q.y];
+  };
+  opposedNow.sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    for (let k = 0; k < ka.length; k += 1) {
+      if (ka[k] !== kb[k]) return ka[k]! - kb[k]!;
+    }
+    return 0;
+  });
+  let stale = false;
+  for (const i of opposedNow) {
+    if (stale) {
+      snapshot = index(picks);
+      stale = false;
+    }
+    const current = picks[i]!;
+    let best = current;
+    let bestScore = scoreAgainst(snapshot, i, current);
+    if (bestScore.opposed === 0) continue; // an earlier move cleared it
+    for (const candidate of links[i]!.candidates) {
+      if (candidate === current || candidate.phase1.obstructions > bestScore.obstructions) continue;
+      const s = scoreAgainst(snapshot, i, candidate);
+      if (comparePhase3(s, bestScore) < 0) {
+        best = candidate;
+        bestScore = s;
+      }
+    }
+    if (best !== current) {
+      picks[i] = best;
+      stale = true;
+    }
+  }
 }

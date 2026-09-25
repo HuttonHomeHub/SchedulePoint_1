@@ -14,13 +14,14 @@
  * | **H**   | P → S                     | same lane                                              |
  * | **VH**  | P → (Px, Sy) → S          | different lanes                                        |
  * | **HV**  | P → (Sx, Py) → S          | different lanes                                        |
- * | **HVH** | P → (c, Py) → (c, Sy) → S | different lanes; up to five `c` between the stubs      |
- * | **VHV** | P → (Px, g) → (Sx, g) → S | always; `g` a lane boundary (the gutter), up to two    |
+ * | **HVH** | P → (c, Py) → (c, Sy) → S | different lanes; up to five `c` between the stubs, and |
+ * |         |                           | the two outside them                                   |
+ * | **VHV** | P → (Px, g) → (Sx, g) → S | always; `g` a lane boundary (the gutter), up to four   |
  *
  * The order above is the tie-break (spec D-2's last term), with VH before HV (D-3), so among equal
  * scores a hub's links share a vertical stem from its node: the reference picture's bus.
  *
- * **At most eleven per link** ({@link MAX_ROUTE_CANDIDATES}), and a milestone does not raise that:
+ * **At most fifteen per link** ({@link MAX_ROUTE_CANDIDATES}), and a milestone does not raise that:
  * each shape takes the port its first and last segments need (horizontal at the side anchor,
  * vertical at the centre), so a shape is built once, not once per port pair.
  */
@@ -49,8 +50,8 @@ export interface RouteCandidate {
   order: number;
 }
 
-/** V, H, VH, HV, five HVH, two VHV. Pinned by `link-candidates.test.ts`. */
-export const MAX_ROUTE_CANDIDATES = 11;
+/** V, H, VH, HV, seven HVH, four VHV. Pinned by `link-candidates.test.ts`. */
+export const MAX_ROUTE_CANDIDATES = 15;
 
 const EPS = 0.5;
 
@@ -149,41 +150,63 @@ export function routeCandidates(
     !sameLane && Math.abs(P.x - S.x) > EPS ? [P, { x: S.x, y: P.y }, S] : null,
   );
   // HVH: a vertical between the two stubs. Forward (the successor later in time) gives a range and
-  // five positions in it; otherwise one position outside both ends, for an SS or FF that goes
-  // round. A backward run (east then west) is never built: its first leg would turn back on itself.
+  // five positions in it; then, always, one position outside both ends on each side, for an SS or
+  // FF that goes round. A backward run (east then west) is never built: its first leg would turn
+  // back on itself.
+  //
+  // **The outside positions are offered on a forward link too** (product owner, 2026-09-25). An FF
+  // into a finish node can only arrive from the east, the north or the south — never from the west,
+  // over its own bar — so every between position is illegal for it and, before this, its only way
+  // in was up or down the node's vertical. When the link leaving that node needs the same vertical,
+  // the two run opposite ways on one stroke; going round and coming back in from the east is the
+  // route that shares nothing with it.
   const hvhAt = (P: Point, S: Point): number[] => {
     if (!pH || !sH) return [];
     const lo = P.x + predecessorStub(pH.reach);
     const hi = S.x - successorStub(sH.reach);
-    if (S.x > P.x && hi >= lo) {
-      const span = hi - lo;
-      return [lo, lo + span / 4, lo + span / 2, lo + (3 * span) / 4, hi].filter(
-        (c, i, all) => all.findIndex((d) => Math.abs(d - c) <= EPS) === i,
-      );
-    }
-    return [
+    const outside = [
       Math.min(P.x - predecessorStub(pH.reach), S.x - successorStub(sH.reach)),
       Math.max(P.x + predecessorStub(pH.reach), S.x + successorStub(sH.reach)),
     ];
+    if (S.x > P.x && hi >= lo) {
+      const span = hi - lo;
+      const between = [lo, lo + span / 4, lo + span / 2, lo + (3 * span) / 4, hi].filter(
+        (c, i, all) => all.findIndex((d) => Math.abs(d - c) <= EPS) === i,
+      );
+      // Five slots each, so an outside position never shifts a between one's place in the order.
+      return [...between, ...Array<undefined>(5 - between.length), ...outside] as number[];
+    }
+    return outside;
   };
   const hvh = pH && sH && !sameLane ? hvhAt(pH.point, sH.point) : [];
-  for (let k = 0; k < 5; k += 1) {
+  for (let k = 0; k < 7; k += 1) {
     const c = hvh[k];
     offer('HVH', pH, sH, (P, S) =>
       c === undefined ? null : [P, { x: c, y: P.y }, { x: c, y: S.y }, S],
     );
   }
   // VHV: down to a gutter, along it, up (or down) into the successor. For two lanes the gutter
-  // below the upper lane and the one above the lower lane (one boundary when they are adjacent);
-  // for one lane, below and above it.
+  // below the upper lane and the one above the lower lane (one boundary when they are adjacent),
+  // then the two OUTSIDE them — above the upper lane and below the lower; for one lane, below and
+  // above it.
+  //
+  // **The outer two exist so a link can arrive at a node from the side its neighbours do not use**
+  // (product owner, 2026-09-25). A finish node whose successor is two days later has only one way
+  // out at a whole-plan zoom — down, because the gap is under the stub rule — and a link into that
+  // node from a lane below could only arrive from below, up the same vertical: two arrowheads on one
+  // stroke pointing at each other. With a gutter above the node's lane it can come in over the top,
+  // which `chooseRoutesByCrossing` now prefers (opposed overlaps rank above crossings). The between
+  // gutters stay first, so an outer one wins only on a score, never on the tie-break.
   const upper = Math.min(fromLane, toLane);
   const lower = Math.max(fromLane, toLane);
-  const gutters = sameLane
-    ? [gutterBelow(fromLane, view), gutterBelow(fromLane - 1, view)]
-    : lower - upper === 1
+  const between =
+    lower - upper === 1
       ? [gutterBelow(upper, view)]
       : [gutterBelow(upper, view), gutterBelow(lower - 1, view)];
-  for (let k = 0; k < 2; k += 1) {
+  const gutters = sameLane
+    ? [gutterBelow(fromLane, view), gutterBelow(fromLane - 1, view)]
+    : [...between, gutterBelow(upper - 1, view), gutterBelow(lower, view)];
+  for (let k = 0; k < 4; k += 1) {
     const g = gutters[k];
     offer('VHV', pV, sV, (P, S) =>
       g === undefined || Math.abs(P.x - S.x) <= EPS

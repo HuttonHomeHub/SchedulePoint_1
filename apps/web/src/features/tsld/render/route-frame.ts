@@ -227,7 +227,7 @@ export function routeFrame(
     /**
      * **Node to node** (node-to-node links M2, spec §4.2–§4.3): the link leaves its predecessor's
      * end and enters its successor's through a side each glyph allows, with any bend clear of the
-     * node, choosing among at most eleven shapes the one through fewest foreign bars, then the
+     * node, choosing among at most fifteen shapes the one through fewest foreign bars, then the
      * shortest. Phase 2 below may move it to reduce crossings.
      */
     const scored = routeNodeToNode(
