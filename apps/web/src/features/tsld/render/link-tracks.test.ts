@@ -311,3 +311,53 @@ describe('splitResidueTracks', () => {
     });
   });
 });
+
+describe('the cost of the pass (links-and-labels M4 review)', () => {
+  /**
+   * A counting stub rather than a timing, the house convention: the shape of the work, never a
+   * runner's milliseconds. The performance review found each split track testing every other line
+   * in the frame, so the work followed the frame rather than the track. A line far from every track
+   * must now be read a fixed number of times however many tracks are split: once for its box and
+   * once for its verticals, never once per track.
+   */
+  function readsOfFarLine(tracks: number): number {
+    let reads = 0;
+    const far = new Proxy(
+      [
+        { x: 0, y: 1030 },
+        { x: 2000, y: 1030 },
+        { x: 2000, y: 1090 },
+      ],
+      {
+        get(target, key, receiver) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) reads += 1;
+          return Reflect.get(target, key, receiver) as unknown;
+        },
+      },
+    );
+    const pairs = Array.from({ length: tracks }, (_, k) => {
+      const x = 100 + 200 * k;
+      return [
+        link([
+          { x, y: 210 },
+          { x, y: 90 },
+        ]),
+        link([
+          { x, y: 90 },
+          { x, y: 210 },
+        ]),
+      ];
+    }).flat();
+    const all = [...pairs, link(far)];
+    const nodes = nodesOf(pairs);
+    reads = 0;
+    const result = splitResidueTracks(all, NO_GLYPHS, null, VIEW, nodes);
+    // Not vacuous: every track really was split, so every one did its guard work.
+    expect(result.split).toBe(tracks);
+    return reads;
+  }
+
+  it('reads a far line a fixed number of times, however many tracks are split', () => {
+    expect(readsOfFarLine(8)).toBe(readsOfFarLine(1));
+  });
+});

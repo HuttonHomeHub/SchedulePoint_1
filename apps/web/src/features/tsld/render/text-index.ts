@@ -27,7 +27,9 @@ export function textIndexOf(items: readonly PlacedText[]): TextIndex {
   const index = new Map<number, TextLane>();
   for (const [lane, boxes] of byLane) {
     boxes.sort((p, q) => p.x - q.x || p.w - q.w);
-    index.set(lane, { boxes, maxW: Math.max(...boxes.map((b) => b.w)) });
+    let maxW = 0;
+    for (const b of boxes) if (b.w > maxW) maxW = b.w;
+    index.set(lane, { boxes, maxW });
   }
   return index;
 }

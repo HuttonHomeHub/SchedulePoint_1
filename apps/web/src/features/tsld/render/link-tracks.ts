@@ -248,6 +248,27 @@ function collinearOverlaps(a: readonly Point[], b: readonly Point[]): number {
   return n;
 }
 
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+function boxOf(line: readonly Point[]): Box {
+  const box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  for (const p of line) {
+    if (p.x < box.x0) box.x0 = p.x;
+    if (p.x > box.x1) box.x1 = p.x;
+    if (p.y < box.y0) box.y0 = p.y;
+    if (p.y > box.y1) box.y1 = p.y;
+  }
+  return box;
+}
+
+const boxesMeet = (a: Box, b: Box): boolean =>
+  a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
+
 /**
  * Split every vertical track that still carries an opposed overlap, where §4.7's guards allow. The
  * input lines are not mutated.
@@ -270,6 +291,8 @@ export function splitResidueTracks(
 
   // The pre-pass picture every guard reads, so no track's decision depends on another's.
   const allSpans = verticalSpans(before);
+  // Each line's box, built once and only when a track is opposed.
+  let boxes: Box[] | undefined;
   const scoreOf = (link: number, line: readonly Point[]) => {
     const counts = obstructionCounts(line, glyphs, links[link]!.own, view);
     return { total: counts.total, legs: counts.legs, text: textCrossings(line, text, view) };
@@ -295,7 +318,21 @@ export function splitResidueTracks(
       }
 
       const trackLinks = [...new Set(track.map((s) => s.link))];
-      const others = before.map((_, i) => i).filter((i) => !trackLinks.includes(i));
+      const onTrack = new Set(trackLinks);
+      // Only a line whose box meets a moved line's box, widened by the move, can cross it or share
+      // a run with it; every other pair counts 0 before and after. So the guards test those lines
+      // alone, and a track's work follows the lines near it, not the frame (the M4 performance
+      // review: every other visible line was tested, and in Tidy that is every line in the plan).
+      boxes ??= before.map(boxOf);
+      const reach = boxOf(trackLinks.flatMap((i) => before[i]!));
+      reach.x0 -= delta + OVERLAP_PX;
+      reach.x1 += delta + OVERLAP_PX;
+      reach.y0 -= OVERLAP_PX;
+      reach.y1 += OVERLAP_PX;
+      const others: number[] = [];
+      for (let i = 0; i < boxes.length; i += 1) {
+        if (!onTrack.has(i) && boxesMeet(boxes[i]!, reach)) others.push(i);
+      }
       const x = Number(key);
 
       // One side: down-travelling segments by `downDx`, up-travelling by its opposite.
