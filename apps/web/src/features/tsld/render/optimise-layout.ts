@@ -89,6 +89,11 @@ export const DEFAULT_EVALUATIONS_PER_PASS = 4_000;
  * The evaluation cap bounds the worst case as a count: evaluations cost 4.73 ms each at 300, so 2,000
  * of them is about 9.5 s there. No measured run needed more than 1,726.
  *
+ * **Those figures are from the router before ADR-0158.** Re-measured 2026-09-25 after its decisions
+ * 7–10 (the opposed-link pass): 15.6 s at 300 generated activities over 1,980 evaluations
+ * (7.87 ms each), against 10.9 s for `web-v0.150.0` in the same sitting. The limit was kept on the
+ * product owner's decision to accept the cost (ADR-0158, "Cost, and a miss accepted").
+ *
  * These are node figures: they bound the algorithm, not the product owner's hardware (#75). Every run
  * that is offered goes to a worker with progress, because the measured runs are past 2,000 ms.
  */

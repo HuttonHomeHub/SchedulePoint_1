@@ -171,3 +171,18 @@ are filled in at M4 from `m2-verdict.md`.
 **Any FC-D failure drops diagonals.** They are recorded as not valid in ADR-0158, and the product
 owner is not asked again (the product owner, 2026-09-25: "if the diagonal is an issue lets leave it
 as not valid").
+
+## Amendment after the opposed-links fix (product owner, 2026-09-25)
+
+ADR-0158 decisions 7–10 answer the product owner's report against `web-v0.150.0` (links into a
+finish node running against the link out of it). Two conditions move, and both are recorded rather
+than passed:
+
+1. **FC-T8 (a) rises from 11 to 15 shapes per link.** The four escapes follow the eleven and are
+   built only when a link asks for them. The counting gate reads `MAX_ROUTE_CANDIDATES`, so it now
+   pins 15.
+2. **FC-T8 (d) is missed, and the miss is accepted.** Measured in one sitting against the pre-epic
+   tree: Tidy on Unit 300 **1.66–1.78×** its time (6.87–7.39 s against 4.08–4.21 s), over the 1.5×
+   bar. Put to the product owner with the numbers and three alternatives, the answer was **"Ship it,
+   accept the cost"**. The bar is not moved; the figures and what was tried are in ADR-0158's
+   amendment.
