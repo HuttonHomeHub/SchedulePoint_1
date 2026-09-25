@@ -502,7 +502,8 @@ export function readAttachment(
     const { runs } = runsOf(line);
     bends += Math.max(0, runs.length - 1);
     const anchors = amended ? anchorsOf(edge) : null;
-    if (amended && !anchors) throw new Error(`no anchors for a drawn link ${edge.dependencyId}`);
+    if (amended && !anchors)
+      throw new Error(`no anchors for a drawn link ${edge.predecessorId}->${edge.successorId}`);
     // The amended judge's own-node exemption is by the ANCHOR, never the line's end point, so an
     // offset end does not make its co-located neighbour a false junction (spec §4.7).
     const predPorts = anchors && predRect ? portsOf(pred, anchors.pred, predRect) : null;

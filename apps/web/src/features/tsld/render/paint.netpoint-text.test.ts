@@ -254,7 +254,11 @@ describe('the tiers (M4-T4, spec §4.2 G11)', () => {
 
   it('every tier gate in the painter reads lodTier, never a copy of its thresholds', () => {
     const here = dirname(fileURLToPath(import.meta.url));
-    const painter = readFileSync(join(here, 'paint.ts'), 'utf8')
+    // The date and centre-item gates moved into `row-text-layout.ts` at links-and-labels M1 (spec
+    // §4.2), so the painter is read together with the module it draws from.
+    const painter = ['paint.ts', 'row-text-layout.ts']
+      .map((f) => readFileSync(join(here, f), 'utf8'))
+      .join('\n')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1');
     // Gap labels, lag plates, attachment dots, dates and the centre item: five gates.

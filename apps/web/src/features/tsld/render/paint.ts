@@ -1,6 +1,6 @@
 import type { ActivityType } from '@repo/types';
 
-import { canvasLabel, centreItemText } from './a11y';
+import { canvasLabel } from './a11y';
 import { activityIndexFor } from './activity-index';
 import { axisMarkers } from './axis-markers';
 import type { Ctx2D } from './ctx-2d';
@@ -32,7 +32,6 @@ import {
   edgeTouches,
   isMilestone,
   isResizeEligibleType,
-  labelPlacement,
   linkHighlightIds,
   loeBracketRects,
   NODE_RADIUS,
@@ -40,25 +39,20 @@ import {
   nodeCentres,
   nodeMarks,
   NODE_REACH_PX,
-  NODE_TEXT_CLEAR_PX,
   trimPolylineEnd,
   NEAR_CRITICAL_DOT_R,
   NODE_RIM_W,
   type NodeMark,
-  sharesNode,
   type CriticalityRung,
   laneAtScreenY,
-  LABEL_ELLIPSIS,
   progressGeometry,
   rectsIntersect,
   rowReservesTextRows,
-  rowSlots,
   screenXOfDay,
   screenYOfLane,
   summaryTabRects,
   spanLineRect,
   truncateToWidth,
-  wrapTwoLines,
   BAR_HEIGHT,
   BAR_PAD,
   BAR_RADIUS,
@@ -68,18 +62,13 @@ import {
   criticalityRung,
   LABEL_FONT,
   MILESTONE_LABEL_FONT,
-  LABEL_GAP_PX,
   activityRect,
-  DATE_LABEL_MIN_PX_PER_DAY,
-  dateLabelSlot,
   edgeGapDays,
   feasibleWindowRect,
-  formatCanvasDate,
   LABEL_MIN_PX_PER_DAY,
   LABEL_PAD_PX,
   LABEL_LINE_H,
   WRAP_LINE_H,
-  wrappedNameYs,
   LANE_HEIGHT,
   MILESTONE_RADIUS,
   PROGRESS_MIN_PX_PER_DAY,
@@ -98,6 +87,7 @@ import {
   type ResourceStripSnapshot,
 } from './resource-strip';
 import { routeFrame, type RouteFrame } from './route-frame';
+import { layoutRowText, type PlacedText } from './row-text-layout';
 import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from './view-toggles';
 import type { WbsBandBar } from './wbs-band';
 
@@ -1390,6 +1380,37 @@ export function paintScene(
     const left = align === 'left' ? x : align === 'right' ? x - w : x - w / 2;
     placedText.push({ x: left, y: y - LABEL_LINE_H / 2, w, h: LABEL_LINE_H });
   };
+  // **The row's text, placed once** (links-and-labels M1, spec §4.2): every name, date and centre
+  // item, by `row-text-layout.ts`, before the edge layer so the router can read where the text is
+  // (M2). Layers 3.6–3.8 below draw these items and place nothing themselves: one opinion about
+  // where the text is, which the painter and the router both read.
+  //
+  // `measure` sets the font only on a memo miss, so a warm frame makes no context call here (the
+  // golden log is byte-identical). A cold miss leaves whichever label font it measured in; every
+  // text layer sets its own font before it draws, which `paint.text-layout-memo.test.ts` holds by
+  // comparing each `fillText`'s font cold and warm.
+  const reservesTextRows = rowReservesTextRows();
+  const withCodes = toggles.activityCodes === true;
+  const textLayout = layoutRowText({
+    rows: frame.laneRows,
+    view,
+    size,
+    toggles,
+    visualRefresh: scene.visualRefresh === true,
+    reservesTextRows,
+    measure: (t, f) =>
+      labelWidths.measure(
+        t,
+        (x) => {
+          ctx.font = f ?? LABEL_FONT;
+          return ctx.measureText(x).width;
+        },
+        f,
+      ),
+    // The canvas label (NetPoint grammar M4-T1): the name, with the code before it only while
+    // `View ▾ ▸ Markers ▸ Activity codes` is on (spec §4.2 G7).
+    labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
+  });
   if (scene.edges.length > 0) {
     const route = routeFrame(scene, view, visibleIds, byId, rectCache);
     const { workingWalk, refresh, glyphs, lineOf, lines } = route;
@@ -2312,39 +2333,14 @@ export function paintScene(
     ctx.textBaseline = 'middle';
   }
 
-  // Lane-bucketed, x-sorted rows — owned by the frame (ADR-0078 §1) and still lazy, so a paint
-  // with both text layers off never builds it.
-  const laneRows = frame.laneRows;
-
-  // Layer 3.6: activity labels (`{code} {name} · {n}d`), so the diagram reads without selecting
-  // (ADR-0026 D1). Gated by the toggle and, off the reserved-row path, a legibility zoom (LABEL_MIN_PX_PER_DAY). Placed inside
-  // a wide-enough task bar (truncated + ellipsised to fit, so no clip needed), beside a short bar or
-  // milestone when the same-lane neighbour leaves clear room, else suppressed. The visible set is
-  // bucketed by lane and x-sorted once (O(v log v)) so each label's right-neighbour is known without
-  // a per-label scan; widths are memoised (font fixed) so a label measures at most once ever.
-  const reservesTextRows = rowReservesTextRows();
-  // **The zoom gate applies only where the row has no text rows** (`docs/TECH_DEBT.md` #378). It
-  // was written when a name lived INSIDE its bar, where a narrow bar genuinely had no room. On the
-  // reserved-row path the name sits in its own row above the bar and is fitted per bar below
-  // (budget = the bar plus half of each neighbour gap, truncated to fit, nothing when nothing
-  // fits), so the gate withheld names that fit — a 900 px bar at whole-plan zoom had no name. The
-  // NetPoint reference plan found it: at NetPoint's own scale (~1 px/day) its picture labels every
-  // bar and ours labelled none.
-  if ((toggles.labels ?? true) && (reservesTextRows || view.pxPerDay >= LABEL_MIN_PX_PER_DAY)) {
+  // Layer 3.6: activity labels (ADR-0026 D1), drawn from `textLayout.names` (placed by
+  // `row-text-layout.ts`, where the placement rules and their reasons now live). The context writes
+  // stay here, in their order: the layer's font and alignment, then per activity a milestone's bold
+  // font set before its name is measured and reset after, even where the name did not fit.
+  if (textLayout.names) {
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    const measure = (s: string): number => labelWidths.measure(s, (t) => ctx.measureText(t).width);
-    // Placement polish (M4): an inside label clears the refreshed bar's rounded corner with a
-    // little extra pad. Flag-off the extra is 0, so the arithmetic (and the paint log) is
-    // byte-for-byte today's. The font is deliberately unchanged — the module-scope width memo is
-    // keyed by text alone, so a metric change would poison it across palettes (export path).
-    const insidePad = LABEL_PAD_PX + (scene.visualRefresh ? 2 : 0);
-    // The canvas label (NetPoint grammar M4-T1): the name, with the code before it only while
-    // `View ▾ ▸ Markers ▸ Activity codes` is on (spec §4.2 G7).
-    const withCodes = toggles.activityCodes === true;
-    const labelOf = (a: RenderActivity): string =>
-      canvasLabel({ code: a.code ?? null, name: a.label }, withCodes);
     // Where a wrapped name's first line may go: the lazy, counted segment index
     // (`layers/wrap-clearance.ts`, NetPoint grammar M4-T2 and the M6 gate pass).
     const lane0Top = screenYOfLane(0, view);
@@ -2353,492 +2349,102 @@ export function paintScene(
       (y) => Math.floor((y - lane0Top) / LANE_HEIGHT),
       SLACK_CHIP_H / 2,
     );
-
-    for (const row of laneRows().values()) {
-      for (let i = 0; i < row.length; i += 1) {
-        const { activity, rect } = row[i]!;
-        const nextLeftX = i + 1 < row.length ? row[i + 1]!.rect.x : Infinity;
-        const besideRoomPx = nextLeftX - (rect.x + rect.w) - LABEL_GAP_PX;
-        const placement = labelPlacement({
-          barWidth: rect.w,
-          barHeight: rect.h,
-          isMilestone: isMilestone(activity.type),
-          besideRoomPx,
-          rowHasNameRow: reservesTextRows,
-        });
-        if (placement === 'none') continue;
-        const cy = rect.y + rect.h / 2;
-        if (placement === 'above') {
-          // The reference's own placement: the name centred over its bar, in the row `rowSlots`
-          // reserves for it. Centred rather than left-aligned because the bar it names is a span
-          // and the eye reads the pair as one object.
-          //
-          // Truncated to the bar's width PLUS the room its neighbour leaves, and **nothing else**.
-          // The name row carries no other bar's ink, so the only thing a name can collide with is
-          // the next name in the same lane — which is exactly what `besideRoomPx` measures. A cap
-          // was written here first and removed on measurement: it bound the commonest case in the
-          // product, a **milestone**, whose bar is 14 px wide, so every milestone's name truncated
-          // in a row that was otherwise empty.
-          //
-          // The residual is stated rather than hidden: a CENTRED name spends half its overhang to
-          // the left, where the room is the PREVIOUS neighbour's and this layer does not compute
-          // it. A name can therefore reach left into a preceding bar's name. Bounded (the previous
-          // bar's own name is centred on itself) and visible in the M3-T3 picture, so it is a
-          // judgement for that review rather than a guess here.
-          // **The lane, never `rect.y - BAR_PAD`.** That subtraction recovers the lane's top for a
-          // task bar and NOT for a milestone, whose rect is centred on the lane rather than
-          // padded into it — so a milestone's name sat 4.5 px above every other name in the row,
-          // a ragged text row nothing but a rendered picture would have shown.
-          //
-          // **A lone ellipsis is not a shorter name, and M3-T3's own claim needed this line.**
-          // That milestone said crowding "truncates a name; it no longer suppresses one … a
-          // planner never loses an activity's identity to density" — and `truncateToWidth` returns
-          // a bare `LABEL_ELLIPSIS` when not even one character fits (`geometry.ts:824`), which
-          // names nothing and reads as content. Found in the M3-T4 picture: a milestone beside a
-          // close neighbour drew `…` and nothing else. So the claim holds while any character
-          // survives, and below that the row shows the bar alone — the name is still on the bar's
-          // option in the parallel listbox (ADR-0026 D7), which is where identity actually lives.
-          const slots = rowSlots(screenYOfLane(activity.laneIndex, view));
-          // **A gap is shared, so each side claims HALF of it.** The residual above was judged by
-          // the M6 UX review against a rendered picture and it garbles: two adjacent names read as
-          // one string (`A.A2300` in `assignment-shipped.png`), which is worse than a shorter name
-          // because it reads as content and is wrong. Halving is what makes non-collision
-          // provable rather than likely — bar i may reach `(gap - LABEL_GAP_PX) / 2` right and bar
-          // i+1 the same distance left, so the two are always `LABEL_GAP_PX` apart. Claiming the
-          // WHOLE gap on each side, which is what the old right-only rule did, lets both do it.
-          //
-          // **And the half is NOT clamped at zero** (NetPoint-layout M1, FC-N6a). A milestone's
-          // diamond is a fixed glyph that is wider than a day at coarse zoom, so its rect can
-          // overlap its neighbour's even though their spans do not. Clamping each side's room at 0
-          // then left both names their whole rect width, and M0-T5 counted 9 collisions on Unit 300
-          // at 4 px/day, every one beside a milestone. A negative room shrinks the budget instead,
-          // so the boundary is the midpoint of the overlap and the non-collision argument above
-          // holds for overlapping rects too; a budget with no room left prints nothing.
-          const halfGap = (raw: number): number =>
-            raw === Infinity ? size.width : (raw - LABEL_GAP_PX) / 2;
-          const rightRoom = halfGap(nextLeftX - (rect.x + rect.w));
-          // **The left bound exists only where a previous name does.** With no neighbour behind
-          // it, a first-in-row name keeps today's free centring — it overhangs into empty lane,
-          // which is where the reference puts it and is nobody's room to lose. The room it may
-          // claim for WIDTH is still zero there, so this fix never makes a label longer than the
-          // rule it replaces; it only stops one reaching into another.
-          const hasPrev = i > 0;
-          const leftRoom = hasPrev
-            ? halfGap(rect.x - (row[i - 1]!.rect.x + row[i - 1]!.rect.w))
-            : 0;
-          const budget = rect.w + leftRoom + rightRoom;
-          if (budget <= 0) continue;
-          // A milestone's name is bold (spec §4.2 G7), measured under its own memo key so the bold
-          // width never answers for the regular string (§4.13 A6).
-          const bold = isMilestone(activity.type);
-          if (bold) ctx.font = MILESTONE_LABEL_FONT;
-          const fit = bold
-            ? (t: string): number =>
-                labelWidths.measure(t, (x) => ctx.measureText(x).width, MILESTONE_LABEL_FONT)
-            : measure;
-          const full = labelOf(activity);
-          let text = truncateToWidth(full, budget, fit);
-          // Wrap where a one-line name would truncate and a second line has room (M4-T2).
-          let upper: string | null = null;
-          if (text !== full) {
-            const lines = wrapTwoLines(full, budget, fit);
-            if (lines) {
-              upper = lines[0];
-              text = lines[1];
-            }
-          }
-          if (!text || text === LABEL_ELLIPSIS) {
-            if (bold) ctx.font = LABEL_FONT;
-            continue;
-          }
-          // Centred on its bar where the room allows, then slid back inside whichever neighbour's
-          // half it would otherwise cross. A milestone's 14 px box with a generous gap on one side
-          // still gets that whole half — the alternative (a symmetric cap) would truncate it for
-          // room it is not using. **Centred on the part of the bar that is on screen**
-          // (`docs/TECH_DEBT.md` #380): a bar longer than the viewport had its name at its middle,
-          // so panning along it showed a line with no name for most of its length.
-          const centreFor = (textW: number): number => {
-            const minCx = hasPrev ? rect.x - leftRoom + textW / 2 : -Infinity;
-            const maxCx = rect.x + rect.w + rightRoom - textW / 2;
-            const visibleLeft = Math.max(rect.x, 0);
-            const visibleRight = Math.min(rect.x + rect.w, size.width);
-            const centreX =
-              visibleRight - visibleLeft >= textW
-                ? Math.min(
-                    Math.max(rect.x + rect.w / 2, visibleLeft + textW / 2),
-                    visibleRight - textW / 2,
-                  )
-                : rect.x + rect.w / 2;
-            return minCx <= maxCx ? Math.min(Math.max(centreX, minCx), maxCx) : centreX;
-          };
-          let cx = centreFor(upper === null ? fit(text) : Math.max(fit(text), fit(upper)));
-          // Spec §4.13 A4: a wrapped pair shares the pad above the bar, so both lines move.
-          const wrapped = wrappedNameYs(slots);
-          const upperY = wrapped.upper;
-          if (
-            upper !== null &&
-            !wrapClearance.clear(activity.laneIndex, cx, fit(upper), upperY, WRAP_LINE_H)
-          ) {
-            // No room above: the one truncated line, exactly as before the wrap existed.
-            upper = null;
-            text = truncateToWidth(full, budget, fit);
-            if (!text || text === LABEL_ELLIPSIS) {
-              if (bold) ctx.font = LABEL_FONT;
-              continue;
-            }
-            cx = centreFor(fit(text));
-          }
-          ctx.fillStyle = palette.labelBeside;
-          ctx.textAlign = 'center';
-          const lowerY = upper !== null ? wrapped.lower : slots.nameY;
-          if (upper !== null) {
-            ctx.fillText(upper, cx, upperY);
-            noteText(cx, fit(upper), upperY, 'center');
-          }
-          ctx.fillText(text, cx, lowerY);
-          noteText(cx, fit(text), lowerY, 'center');
-          ctx.textAlign = 'left';
-          if (bold) ctx.font = LABEL_FONT;
-        } else if (placement === 'inside') {
-          const text = truncateToWidth(labelOf(activity), rect.w - insidePad * 2, measure);
-          if (!text) continue;
+    const { steps, legacy, order } = textLayout.names;
+    for (const entry of order) {
+      if ('legacy' in entry) {
+        const item = legacy[entry.legacy]!;
+        if (item.kind === 'inside') {
           // A Colour-by lens repaints the bar a non-criticality hue, so the criticality-based ink can
           // fail contrast (e.g. white-on-warning-yellow at 2.02:1). `barInkColour` applies the paired,
           // contrast-safe override when the lens carries one (non-default modes only), else falls back
           // to today's criticality ink (absent map / Criticality mode ⇒ byte-for-byte parity, WCAG
           // 1.4.3) — the SAME chain the in-bar progress band draws with.
-          ctx.fillStyle = barInkColour(activity, palette, scene.barInk);
-          ctx.fillText(text, rect.x + insidePad, cy);
-          noteText(rect.x + insidePad, measure(text), cy, 'left');
+          ctx.fillStyle = barInkColour(byId.get(item.activityId)!, palette, scene.barInk);
         } else {
-          const startX = rect.x + rect.w + LABEL_GAP_PX;
-          const maxPx = (nextLeftX === Infinity ? size.width : nextLeftX) - startX - LABEL_PAD_PX;
-          const text = truncateToWidth(labelOf(activity), maxPx, measure);
-          if (!text) continue;
           ctx.fillStyle = palette.labelBeside;
-          ctx.fillText(text, startX, cy);
-          noteText(startX, measure(text), cy, 'left');
+        }
+        ctx.fillText(item.text, item.x, item.y);
+        noteText(item.x, item.width, item.y, item.align);
+        continue;
+      }
+      const step = steps[entry.step]!;
+      if (step.bold) ctx.font = MILESTONE_LABEL_FONT;
+      let upper: PlacedText | null = null;
+      let line: PlacedText | null = step.line;
+      if (step.wrap) {
+        const { wrap } = step;
+        const lane = byId.get(step.activityId)!.laneIndex;
+        if (wrapClearance.clear(lane, wrap.upper.x, wrap.upper.width, wrap.upper.y, WRAP_LINE_H)) {
+          upper = wrap.upper;
+          line = wrap.lower;
+        } else {
+          // No room above: the one truncated line, exactly as before the wrap existed.
+          line = wrap.fallback;
         }
       }
+      if (!line) {
+        if (step.bold) ctx.font = LABEL_FONT;
+        continue;
+      }
+      ctx.fillStyle = palette.labelBeside;
+      ctx.textAlign = 'center';
+      if (upper) {
+        ctx.fillText(upper.text, upper.x, upper.y);
+        noteText(upper.x, upper.width, upper.y, 'center');
+      }
+      ctx.fillText(line.text, line.x, line.y);
+      noteText(line.x, line.width, line.y, 'center');
+      ctx.textAlign = 'left';
+      if (step.bold) ctx.font = LABEL_FONT;
     }
   }
 
-  /**
-   * Whether a bar's two dates fit inside its own ends (the dates ladder's first rung). One function
-   * because two passes ask it — the dates themselves and the centre item that shares their row —
-   * and two copies of the test would let the centre item believe the dates were outside the bar on
-   * exactly the bar where they were drawn inside it, and print over them.
-   */
-  const datesFitInside = (
-    startWidthPx: number,
-    finishWidthPx: number,
-    span: { left: number; right: number },
-  ): boolean => startWidthPx + finishWidthPx + LABEL_GAP_PX <= span.right - span.left;
-
-  /**
-   * How far text under a bar keeps from each of its ends: clear of the node disc there (NetPoint
-   * grammar M2-T3, spec §4.13 A3). A 15 px disc on a 6 px bar reaches into the date row, so a date
-   * written at the bar's own end would print over it. Only a task bar on the refreshed path has
-   * nodes; a milestone, a span and the legacy path keep today's placement exactly.
-   */
-  const nodeTextInset = (activity: RenderActivity): number =>
-    scene.visualRefresh === true && barGlyphKind(activity.type) === 'bar' ? NODE_TEXT_CLEAR_PX : 0;
-
-  /**
-   * The x-range text under bar `i` may use: its own ends, less its own nodes' clearance, and never
-   * into a NEIGHBOUR's node where one abuts it. The second half is the case the first version
-   * missed: an LOE or summary has no nodes of its own, so its text started at its own edge, where
-   * an abutting task's node already sat (FC-G5 found it, as a one-day "1d" on Unit 300).
-   */
-  const textSpan = (
-    row: readonly { activity: RenderActivity; rect: Rect }[],
-    i: number,
-  ): { left: number; right: number } => {
-    const { activity, rect } = row[i]!;
-    const own = nodeTextInset(activity);
-    const prev = row[i - 1];
-    const next = row[i + 1];
-    const left = Math.max(
-      rect.x + own,
-      prev ? prev.rect.x + prev.rect.w + nodeTextInset(prev.activity) : -Infinity,
-    );
-    const right = Math.min(
-      rect.x + rect.w - own,
-      next ? next.rect.x - nodeTextInset(next.activity) : Infinity,
-    );
-    return { left, right };
-  };
-
-  // Layer 3.7: flanking start/finish DATES (ADR-0054 §3) — the start date left of the bar, the
-  // finish date right of it, never inside (an inside date competes with the name label for the
-  // same pixels and vanishes on any bar narrower than its text). Gated by the `dates` toggle AND
-  // a zoom well above the label LOD, because this is two strings + two measurements per bar
-  // against the ADR-0026 draw budget. Absent toggle ⇒ not one call ⇒ byte-for-byte parity.
-  // Same rule as the names above (#378): the reserved-row branch below fits both dates inside the
-  // bar, or flanks each end on its half of the gap, or draws nothing, so the zoom gate only ever
-  // withheld dates that fit. It still guards the centre-line path, which has no such room test.
-  // **Withheld at the overview tier** (NetPoint grammar M4-T4, spec §4.2 G11): at Year and Fit a
-  // dense plan's dates collide more than they fit (`m0-lod.md`: Unit 300 withheld 46 % at 4 px a
-  // day and 75 % at 1), and the ruler still states position.
-  const datesTier = lodTier(view.pxPerDay) !== 'overview';
-  if (
-    toggles.dates === true &&
-    datesTier &&
-    (reservesTextRows || view.pxPerDay >= DATE_LABEL_MIN_PX_PER_DAY)
-  ) {
+  // Layer 3.7: start/finish DATES (ADR-0054 §3), drawn from `textLayout.dates`. On the reserved-row
+  // path every bar with dates sets the fill even where the ladder withheld both, as it always has.
+  if (textLayout.dates) {
     ctx.font = LABEL_FONT;
     ctx.textBaseline = 'middle';
-    const measure = (t: string): number => labelWidths.measure(t, (x) => ctx.measureText(x).width);
-    // With the float/drift tails ALSO on, the two layers want the same pixels: a tail runs out of
-    // the very edge the date is written beside, so the hatch strikes through the text. The date is
-    // NOT moved clear of the tail — a date printed at the far end of a 200-day tail would sit
-    // 1,200px from the bar and, on a time-scaled diagram, assert the wrong day. Instead each date
-    // gets an opaque plate in the canvas ground behind it: the date keeps the one position that is
-    // true, and the tail visibly passes behind it. One extra fillRect per drawn date, and only
-    // when both toggles are on — with tails off, the draw is byte-for-byte the M3 pass.
-    const plated = toggles.floatTails === true;
-    /**
-     * Whether the bar after `i` starts at `i`'s end AND will write its own start date there —
-     * i.e. whether the node already has its one date. "At the end" means closer than
-     * {@link LABEL_GAP_PX}, the separation the date layer keeps everywhere else, so any gap a
-     * reader could see two dates in is left alone. It asks the same question the next bar's own
-     * pass will ask ({@link datesFitInside}), so the two cannot disagree about whether the start
-     * is drawn and leave the node empty.
-     */
-    const nextDrawsStartAtNode = (
-      row: readonly { activity: RenderActivity; rect: Rect }[],
-      i: number,
-      rect: Rect,
-    ): boolean => {
-      const next = row[i + 1];
-      if (!next) return false;
-      if (!sharesNode(rect, next.rect)) return false;
-      const a = next.activity;
-      if (isMilestone(a.type) || !a.earlyStart || !a.earlyFinish) return false;
-      return datesFitInside(
-        measure(formatCanvasDate(a.earlyStart)),
-        measure(formatCanvasDate(a.earlyFinish)),
-        textSpan(row, i + 1),
-      );
-    };
-    for (const row of laneRows().values()) {
-      for (let i = 0; i < row.length; i += 1) {
-        const { activity, rect } = row[i]!;
-        if (!activity.earlyStart || !activity.earlyFinish) continue; // uncalculated ⇒ no dates
-        const startText = formatCanvasDate(activity.earlyStart);
-        const finishText = formatCanvasDate(activity.earlyFinish);
-        const startWidthPx = measure(startText);
-        const finishWidthPx = measure(finishText);
-        const prevRight = i > 0 ? row[i - 1]!.rect.x + row[i - 1]!.rect.w : 0;
-        const nextLeft = i + 1 < row.length ? row[i + 1]!.rect.x : size.width;
-        const slot = dateLabelSlot({
-          roomLeftPx: rect.x - prevRight,
-          roomRightPx: nextLeft - (rect.x + rect.w),
-          startWidthPx,
-          finishWidthPx,
-        });
-        // **Below the bar when the row reserves a row for it** (M3-T3) — the reference's own
-        // placement, and it disposes of `dateLabelSlot` entirely in that case: a flanking date
-        // competes with the same-lane neighbour for horizontal room and is suppressed when it
-        // loses, which on a dense programme is most of them. A date under its own bar end competes
-        // with its own TWIN instead — see the fit test below, and read it before believing the
-        // first draft of this sentence, which promised "both its dates at every density".
-        //
-        // **The reference's third run — the duration — is drawn by the next layer, not this one**
-        // (NetPoint-layout M1). It used to be withheld here because it was already on screen in
-        // the name row (`{identity} · 5d`); M1 moved it out of the name so that it could live here,
-        // under its bar, beside the float left. It is the activity's `durationDays`, a working-day
-        // figure, never the drawn calendar span, which differs on any calendar with non-working days.
-        if (reservesTextRows) {
-          // **Both dates or neither, and only when the pair fits inside the bar's own width.**
-          // The M6 UX review reproduced the defect against the real painter: this branch measured
-          // nothing, so on any bar narrower than its two dates the start (left-aligned at the bar's
-          // left edge) and the finish (right-aligned at its right edge) overprint each other, and
-          // the surplus spills past both ends into the neighbours' gaps. The comment below this
-          // one claimed the opposite — "every bar states both its dates at every density" — which
-          // is the reservation of a vertical ROW being read as a guarantee about horizontal room.
-          //
-          // The ladder is the one every other label layer here uses, and **suppression is its
-          // last rung rather than its first**: inside the bar's own ends where the pair fits
-          // there, flanking the ends where the row has room beside them, and nothing where it has
-          // neither — with the dates always on the bar's option in the parallel listbox
-          // (ADR-0026 D7). A first draft suppressed outright, and `paint.dates-budget.test.ts`
-          // refused it: at the LOD threshold a five-day bar is 30 px and two dates are ~72, so
-          // every date in that fixture vanished and the budget gate measured nothing — which its
-          // own docblock calls worse than no fixture. The gate was right and the rule was too
-          // blunt.
-          const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
-          const inset = nodeTextInset(activity);
-          ctx.fillStyle = palette.labelBeside;
-          if (isMilestone(activity.type)) {
-            // **One date, centred under the diamond** (NetPoint-layout M1). A milestone's start and
-            // finish are the same day, so the ladder below printed that day twice, once either side
-            // of a 12 px glyph. It is judged against HALF of each neighbour gap plus half the
-            // glyph, the same sharing rule the flanking rung uses.
-            // A neighbouring task's node reaches into the gap from its side (A3), so the date's
-            // share of that gap stops at the node's clearance even when half the gap is more.
-            const halfText = startWidthPx / 2;
-            const prevReach = i > 0 ? nodeTextInset(row[i - 1]!.activity) : 0;
-            const nextReach = i + 1 < row.length ? nodeTextInset(row[i + 1]!.activity) : 0;
-            const gapLeft = rect.x - prevRight;
-            const gapRight = nextLeft - (rect.x + rect.w);
-            const roomLeft = Math.max(0, Math.min(gapLeft / 2, gapLeft - prevReach)) + rect.w / 2;
-            const roomRight =
-              Math.max(0, Math.min(gapRight / 2, gapRight - nextReach)) + rect.w / 2;
-            if (halfText <= roomLeft && halfText <= roomRight) {
-              ctx.textAlign = 'center';
-              ctx.fillText(startText, rect.x + rect.w / 2, below);
-              noteText(rect.x + rect.w / 2, startWidthPx, below, 'center');
-            }
-          } else if (datesFitInside(startWidthPx, finishWidthPx, textSpan(row, i))) {
-            // **Inside its own ends**, which is the reference's placement and reaches nothing: the
-            // start begins at the start node's rim plus a gap, the finish ends at the finish node's.
-            const span = textSpan(row, i);
-            ctx.textAlign = 'left';
-            ctx.fillText(startText, span.left, below);
-            noteText(span.left, startWidthPx, below, 'left');
-            // **One date per node** (`docs/TECH_DEBT.md` #379). Where the next bar in the lane
-            // starts at this bar's end, its start date is written at the same node, and the two ran
-            // together ("31 Jan1 Feb"). NetPoint writes the node once, with the next activity's
-            // start, so the finish is withheld exactly when the next bar will draw its start there.
-            // The finish is still on the bar's option in the parallel listbox (ADR-0026 D7).
-            if (!nextDrawsStartAtNode(row, i, rect)) {
-              ctx.textAlign = 'right';
-              ctx.fillText(finishText, span.right, below);
-              noteText(span.right, finishWidthPx, below, 'right');
-            }
-          } else {
-            // **Otherwise flank the ends it has room beside**, each end judged on its own HALF of
-            // the gap — the same sharing rule the name row uses one line up, and for the same
-            // reason: the whole gap belongs to two bars, so a rule that grants it to each of them
-            // grants it twice. `dateLabelSlot` is the room test the flanking path has always used;
-            // what is new is halving what it is told the room is.
-            // A task's flanking date also stands clear of its own node (A3): the node reaches
-            // `inset` beyond the bar's end, so the date is offset by that and charged for it.
-            const half = (raw: number): number => Math.max(0, raw / 2);
-            const offset = Math.max(LABEL_GAP_PX, inset);
-            const extra = offset - LABEL_GAP_PX;
-            const belowSlot = dateLabelSlot({
-              roomLeftPx: half(rect.x - prevRight),
-              roomRightPx: half(nextLeft - (rect.x + rect.w)),
-              startWidthPx: startWidthPx + extra,
-              finishWidthPx: finishWidthPx + extra,
-            });
-            if (belowSlot.start) {
-              ctx.textAlign = 'right';
-              ctx.fillText(startText, rect.x - offset, below);
-              noteText(rect.x - offset, startWidthPx, below, 'right');
-            }
-            if (belowSlot.finish) {
-              ctx.textAlign = 'left';
-              ctx.fillText(finishText, rect.x + rect.w + offset, below);
-              noteText(rect.x + rect.w + offset, finishWidthPx, below, 'left');
-            }
-          }
-          ctx.textAlign = 'left';
-          continue;
-        }
-        const cy = rect.y + rect.h / 2;
-        const plate = (x: number, w: number): void => {
-          if (!plated) return;
-          ctx.fillStyle = palette.handleHalo; // the canvas ground, so the plate reads as "behind"
-          ctx.fillRect(x, cy - DATE_PLATE_H / 2, w, DATE_PLATE_H);
-        };
-        if (slot.start) {
-          plate(rect.x - LABEL_GAP_PX - startWidthPx - 1, startWidthPx + 2);
-          ctx.fillStyle = palette.labelBeside;
-          ctx.textAlign = 'right';
-          ctx.fillText(startText, rect.x - LABEL_GAP_PX, cy);
-          noteText(rect.x - LABEL_GAP_PX, startWidthPx, cy, 'right');
-        }
-        if (slot.finish) {
-          plate(rect.x + rect.w + LABEL_GAP_PX - 1, finishWidthPx + 2);
-          ctx.fillStyle = palette.labelBeside;
-          ctx.textAlign = 'left';
-          ctx.fillText(finishText, rect.x + rect.w + LABEL_GAP_PX, cy);
-          noteText(rect.x + rect.w + LABEL_GAP_PX, finishWidthPx, cy, 'left');
-        }
+    for (const step of textLayout.dates.reserved) {
+      ctx.fillStyle = palette.labelBeside;
+      for (const item of step.items) {
+        ctx.textAlign = item.align;
+        ctx.fillText(item.text, item.x, item.y);
+        noteText(item.x, item.width, item.y, item.align);
       }
+      ctx.textAlign = 'left';
+    }
+    for (const { item, plate } of textLayout.dates.flank) {
+      // With the float/drift tails also on, each date gets an opaque plate in the canvas ground
+      // behind it, so the tail visibly passes behind the date (placement: `row-text-layout.ts`).
+      if (plate) {
+        ctx.fillStyle = palette.handleHalo; // the canvas ground, so the plate reads as "behind"
+        ctx.fillRect(plate.x, item.y - DATE_PLATE_H / 2, plate.w, DATE_PLATE_H);
+      }
+      ctx.fillStyle = palette.labelBeside;
+      ctx.textAlign = item.align;
+      ctx.fillText(item.text, item.x, item.y);
+      noteText(item.x, item.width, item.y, item.align);
     }
     ctx.textAlign = 'left';
   }
 
-  // Layer 3.8: the CENTRE ITEM under each bar (NetPoint-layout M1, spec §4.6) — `5d · 3d float
-  // left`, or `5d` where only that fits, or nothing. It rides `Labels` and its LOD, because it
-  // replaces the `· 5d` suffix `Labels` always governed. **It never leaves its own bar**: inside the
-  // gap between the two dates when the dates are drawn inside the bar, inside the whole bar
-  // otherwise. Bars in one row never overlap, so it cannot collide with a neighbour by construction
-  // — the same provability the halved-gap rule gives the dates. Absent `durationDays` (a scene built
-  // before the field existed) ⇒ not one call.
-  // No zoom gate (#378): this layer exists only on the reserved-row path, and it never leaves its
-  // own bar — the room test below is the whole of its legibility rule.
-  // **Off by default, and drawn at the detail tier only** (NetPoint grammar M4-T1/T4, spec §4.2
-  // G7/G11): the reference prints no duration or float under its bars, so the item is behind
-  // `View ▾ ▸ Markers ▸ Duration & float`.
-  if (
-    reservesTextRows &&
-    (toggles.labels ?? true) &&
-    toggles.centreItem === true &&
-    lodTier(view.pxPerDay) === 'detail'
-  ) {
-    // **Every context write is lazy**, so a frame with nothing to print here costs nothing: the
-    // first draft set the font, baseline and alignment up front and the golden log caught three
-    // writes on a scene whose bars carry no duration — a per-frame cost for an empty layer.
-    let fontSet = false;
-    const measure = (t: string): number => {
-      if (!fontSet) {
-        ctx.font = LABEL_FONT;
-        ctx.textBaseline = 'middle';
-        fontSet = true;
-      }
-      return labelWidths.measure(t, (x) => ctx.measureText(x).width);
-    };
-    // Must agree with the dates layer's own condition, which on this path is the toggle and the
-    // tier.
-    const datesDrawn = toggles.dates === true && datesTier;
+  // Layer 3.8: the CENTRE ITEM under each bar (NetPoint-layout M1, spec §4.6), drawn from
+  // `textLayout.centre`. **Every context write is lazy**, as it was: the font only where a
+  // measurement happened, the style only where an item is drawn.
+  if (textLayout.centre) {
+    if (textLayout.centre.measured) {
+      ctx.font = LABEL_FONT;
+      ctx.textBaseline = 'middle';
+    }
     let styled = false;
-    for (const row of laneRows().values()) {
-      for (let i = 0; i < row.length; i += 1) {
-        const { activity } = row[i]!;
-        if (activity.durationDays === undefined) continue;
-        if (!activity.earlyStart || !activity.earlyFinish) continue;
-        const item = {
-          durationDays: activity.durationDays,
-          remainingFloat: activity.remainingFloat,
-          milestone: isMilestone(activity.type),
-          summary: activity.type === 'WBS_SUMMARY',
-        };
-        // A critical activity prints its duration alone (spec §4.2 G7, P7): its float is none, and
-        // "0d float left" under every bar on the critical path is noise.
-        const full = centreItemText(item, activity.isCritical ? 'short' : 'full');
-        if (full === null) continue;
-        // Clear of its own nodes and any abutting neighbour's (A3), whether or not the dates are
-        // drawn inside.
-        const span = textSpan(row, i);
-        let left = span.left;
-        let right = span.right;
-        if (datesDrawn) {
-          const startWidthPx = measure(formatCanvasDate(activity.earlyStart));
-          const finishWidthPx = measure(formatCanvasDate(activity.earlyFinish));
-          if (datesFitInside(startWidthPx, finishWidthPx, span)) {
-            left += startWidthPx + LABEL_GAP_PX;
-            right -= finishWidthPx + LABEL_GAP_PX;
-          }
-        }
-        const room = right - left;
-        const short = centreItemText(item, 'short');
-        const text =
-          measure(full) <= room ? full : short !== null && measure(short) <= room ? short : null;
-        if (text === null) continue;
-        if (!styled) {
-          ctx.fillStyle = palette.labelBeside;
-          ctx.textAlign = 'center';
-          styled = true;
-        }
-        const below = rowSlots(screenYOfLane(activity.laneIndex, view)).belowY;
-        ctx.fillText(text, (left + right) / 2, below);
-        noteText((left + right) / 2, measure(text), below, 'center');
+    for (const item of textLayout.centre.items) {
+      if (!styled) {
+        ctx.fillStyle = palette.labelBeside;
+        ctx.textAlign = 'center';
+        styled = true;
       }
+      ctx.fillText(item.text, item.x, item.y);
+      noteText(item.x, item.width, item.y, 'center');
     }
     if (styled) ctx.textAlign = 'left';
   }
