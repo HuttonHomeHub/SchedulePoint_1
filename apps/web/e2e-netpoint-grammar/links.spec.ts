@@ -517,11 +517,12 @@ test.describe('NetPoint grammar — links', () => {
  * as two lines either side of the node centre, `PORT_OFFSET_PX` (4 px) each way, rather than one
  * stroke carrying two arrowheads that point at each other.
  *
- * The plan was found by searching small FS plans with the real router (`routeFrame`) for one whose
- * residue survives every earlier phase: here Task 2 → Task 5 arrives up the vertical Task 1 → Task 3
- * leaves down, and every other shape runs through a bar. Dated from Monday 2026-01-05, as
- * `createPlan` pins it, it splits at every zoom from 3 to 80 px/day; on other start weekdays it does
- * not, which is why the date is pinned rather than today's.
+ * The plan was found by searching small FS plans with the real router (`routeFrame`, with the row
+ * text) for one whose residue survives every earlier phase, dated from Monday 2026-01-05 as
+ * `createPlan` pins it, on weekdays, each bar ending on its last working day as the app draws it. It
+ * splits at every zoom from 20 to 80 px/day. The first fixture here came from a search whose bars
+ * ended a day late, so its crowded node did not exist in the app and this case failed on its first
+ * run: a fixture found by a model of the product is checked against the product.
  *
  * Read as ink: link-coloured vertical runs, grouped into lines by adjacent columns. The assertion is
  * a pair of lines 8 px apart, side by side — two strokes, not one. Verified red with the pass off.
@@ -536,21 +537,22 @@ test.describe('Links-and-labels — two-way tracks', () => {
     await createPlan(page, 'Two-way track');
     await ensurePen(page);
     const made = await seedActivities(page, orgSlug, [
-      { name: 'Task 0', laneIndex: 0, durationDays: 5 },
+      { name: 'Task 0', laneIndex: 0, durationDays: 8 },
       { name: 'Task 1', laneIndex: 2, durationDays: 3 },
-      { name: 'Task 2', laneIndex: 1, durationDays: 7 },
-      { name: 'Task 3', laneIndex: 1, durationDays: 7 },
-      { name: 'Task 4', laneIndex: 3, durationDays: 4 },
-      { name: 'Task 5', laneIndex: 3, durationDays: 6 },
+      { name: 'Task 2', laneIndex: 3, durationDays: 3 },
+      { name: 'Task 3', laneIndex: 2, durationDays: 6 },
+      { name: 'Task 4', laneIndex: 0, durationDays: 2 },
+      { name: 'Task 5', laneIndex: 0, durationDays: 7 },
     ]);
     if (made.length !== 6) throw new Error('the fixture did not seed its activities');
     for (const [p, s] of [
-      [0, 1],
+      [0, 3],
+      [0, 4],
+      [0, 5],
       [1, 3],
-      [2, 3],
       [2, 4],
-      [2, 5],
       [3, 5],
+      [4, 5],
     ] as const) {
       await seedDependency(page, orgSlug, made[p]!.id, made[s]!.id);
     }
@@ -576,14 +578,18 @@ test.describe('Links-and-labels — two-way tracks', () => {
           const { width, height } = canvas;
           const data = canvas.getContext('2d')!.getImageData(0, 0, width, height).data;
           const dpr = window.devicePixelRatio || 1;
-          const [gr, gg, gb] = ground;
+          // A 1 px link on a whole-pixel x covers two columns at about half alpha each, so its
+          // pixels are judged by their own (un-premultiplied) colour, not composited over the
+          // ground: composited, both halves fall between ink and ground and neither passes. The
+          // scene canvas is transparent wherever nothing is drawn (the first run of this case found
+          // the red line and not the violet one beside it for exactly that reason).
+          void ground;
           const isInk = (x: number, y: number): boolean => {
             const i = (y * width + x) * 4;
-            const a = (data[i + 3] ?? 0) / 255;
-            if (a < 0.6) return false;
-            const r = (data[i] ?? 0) * a + gr * (1 - a);
-            const g = (data[i + 1] ?? 0) * a + gg * (1 - a);
-            const b = (data[i + 2] ?? 0) * a + gb * (1 - a);
+            if ((data[i + 3] ?? 0) / 255 < 0.3) return false;
+            const r = data[i] ?? 0;
+            const g = data[i + 1] ?? 0;
+            const b = data[i + 2] ?? 0;
             return inks.some(
               ([ir, ig, ib]) =>
                 Math.abs(r - ir) <= 40 && Math.abs(g - ig) <= 40 && Math.abs(b - ib) <= 40,

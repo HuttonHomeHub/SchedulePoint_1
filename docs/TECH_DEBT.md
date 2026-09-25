@@ -11838,3 +11838,17 @@ not block on.
 5. **Another whole-visible-set pass per frame** (performance): `glyphIndex`, `plateGlyphBoxes` and
    the track pass's inputs each walk the visible activities. A candidate for one shared derivation if
    a paint reading comes back tight.
+6. **The painter's two label-measure closures differ in their guard** (component). `paint.ts` builds
+   the same measure twice, about 20 lines apart, one guarded by `typeof ctx.measureText` and one not.
+   Behaviour is identical in every real caller; one closure would remove the asymmetry.
+7. **`text-index.ts` repeats the glyph index's shape** (component): bucket by lane, sort by x, keep
+   a maximum width, binary-search the first box that can reach x. Disclosed in its docblock; a shared
+   generic index would remove the second copy.
+8. **Three same-extent gutter runs are untested** (component). `orderSameExtentRuns` is tested for
+   two; with three, its pairwise swaps in one pass may not satisfy every pair's preference.
+9. **`route-frame.ts`'s wiring into the track pass and the painter's offset head trim have no unit
+   case** (test). Both are reached only by the journey; a scene that survives phase 3 with one opposed
+   pair would pin the marshalling and the trimmed arrowhead directly.
+10. **`textWidthTable` has no direct test** (component): its null-context throw and font restore.
+11. **A dead fallback** (test): in `splitResidueTracks`, `west.fail ?? east.fail ?? 'occupied'` is
+    reached only when both sides failed, so the last two operands never apply.
