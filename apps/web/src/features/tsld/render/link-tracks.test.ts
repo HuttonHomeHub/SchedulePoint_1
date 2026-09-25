@@ -5,6 +5,7 @@ import { predecessorStub, type LinkDir, type LinkEnd, type LinkEndKind } from '.
 import { ARROWHEAD_HALF_W_PX } from './link-routing';
 import type { GlyphIndex } from './link-score';
 import {
+  nodeHeadTrim,
   PORT_OFFSET_PX,
   portOffsetBounds,
   splitResidueTracks,
@@ -89,6 +90,24 @@ describe('the port offset', () => {
     expect(PORT_OFFSET_PX).toBeGreaterThanOrEqual(lower);
     expect(PORT_OFFSET_PX).toBeLessThanOrEqual(upper);
     expect(Number.isInteger(PORT_OFFSET_PX)).toBe(true);
+  });
+});
+
+describe('nodeHeadTrim', () => {
+  const centre = { x: 100, y: 90 };
+  it('stops a head at the rim, on a node centre and beside one', () => {
+    expect(nodeHeadTrim(centre, [centre])).toBe(NODE_REACH_PX);
+    // A vertical PORT_OFFSET_PX beside the centre, trimmed back up from below, meets the rim.
+    const tip = { x: 100 + PORT_OFFSET_PX, y: 90 };
+    const trim = nodeHeadTrim(tip, [centre])!;
+    expect(Math.hypot(tip.x - centre.x, tip.y + trim - centre.y)).toBeCloseTo(NODE_REACH_PX, 9);
+    expect(nodeHeadTrim({ x: 100 - PORT_OFFSET_PX, y: 90 }, [centre])).toBe(trim);
+  });
+
+  it('leaves a head alone anywhere else', () => {
+    expect(nodeHeadTrim({ x: 100 + PORT_OFFSET_PX + 1, y: 90 }, [centre])).toBeNull();
+    expect(nodeHeadTrim({ x: 100 + PORT_OFFSET_PX, y: 95 }, [centre])).toBeNull();
+    expect(nodeHeadTrim(centre, [])).toBeNull();
   });
 });
 

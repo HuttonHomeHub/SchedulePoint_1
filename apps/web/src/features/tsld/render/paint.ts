@@ -23,7 +23,7 @@ import {
   lagPlateCandidates,
   linkRung,
 } from './link-marks';
-import { PORT_OFFSET_PX } from './link-tracks';
+import { nodeHeadTrim } from './link-tracks';
 import { buildPaintFrame } from './paint-frame';
 import { PLATE_GRAZE_PX, plateGlyphBoxes, SLACK_CHIP_H } from './plate-room';
 import {
@@ -1488,15 +1488,9 @@ export function paintScene(
         return at(centre) ? trimPolylineEnd(line, MILESTONE_RADIUS) : line;
       }
       if (barGlyphKind(succ.type) !== 'bar') return line;
-      if (nodeCentres(succRect).some(at)) return trimPolylineEnd(line, NODE_REACH_PX);
-      // A two-way track's end (links-and-labels M3, spec §4.7): a vertical arriving exactly
-      // `PORT_OFFSET_PX` beside the node centre. The rim is then √(reach² − δ²) back along the line,
-      // not `NODE_REACH_PX`, so the head still stops at the rim rather than inside the disc.
-      const offsetAt = (c: Point): boolean =>
-        Math.abs(Math.abs(c.x - tip.x) - PORT_OFFSET_PX) < 0.01 && Math.abs(c.y - tip.y) < 0.5;
-      return nodeCentres(succRect).some(offsetAt)
-        ? trimPolylineEnd(line, Math.sqrt(NODE_REACH_PX ** 2 - PORT_OFFSET_PX ** 2))
-        : line;
+      // On a node centre, or a two-way track's end beside one (links-and-labels M3, spec §4.7).
+      const trim = nodeHeadTrim(tip, nodeCentres(succRect));
+      return trim === null ? line : trimPolylineEnd(line, trim);
     };
     const paintLinkLanguage = (): void => {
       interface Bucket {

@@ -57,6 +57,21 @@ export function portOffsetBounds(): { lower: number; upper: number } {
  */
 export const PORT_OFFSET_PX = 4;
 
+/**
+ * How far back from its tip an arrowhead into a task node is drawn, so it stops at the node's rim
+ * rather than under the disc that paints over it: `NODE_REACH_PX` for a tip on a node centre, and
+ * √(reach² − δ²) for a two-way track's tip exactly {@link PORT_OFFSET_PX} beside one — the point
+ * where a vertical δ from the centre meets the rim. `null` where the tip is at neither.
+ */
+export function nodeHeadTrim(tip: Point, centres: readonly Point[]): number | null {
+  const near = (a: number, b: number, tolerance: number): boolean => Math.abs(a - b) < tolerance;
+  if (centres.some((c) => near(c.x, tip.x, 0.5) && near(c.y, tip.y, 0.5))) return NODE_REACH_PX;
+  const offset = centres.some(
+    (c) => near(Math.abs(c.x - tip.x), PORT_OFFSET_PX, 0.01) && near(c.y, tip.y, 0.5),
+  );
+  return offset ? Math.sqrt(NODE_REACH_PX ** 2 - PORT_OFFSET_PX ** 2) : null;
+}
+
 /** One routed link as the pass reads it: its line and the two ends it joins. */
 export interface TrackLink {
   line: Point[];
