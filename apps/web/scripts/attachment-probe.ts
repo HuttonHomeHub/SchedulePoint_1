@@ -39,16 +39,28 @@
 import { createHash } from 'node:crypto';
 
 import { netpointReferencePlan } from '../../seed-cli/src/references/netpoint-power-plant';
+import { canvasLabel } from '../src/features/tsld/render/a11y';
+import {
+  rowReservesTextRows,
+  rowSlots,
+  screenYOfLane,
+  wrappedNameYs,
+} from '../src/features/tsld/render/geometry';
+import { linkFactsOf, plateScoringOf } from '../src/features/tsld/render/link-facts';
+import { PORT_OFFSET_PX } from '../src/features/tsld/render/link-tracks';
 import {
   DEFAULT_VIEW_TOGGLES,
   paintScene,
   type TsldScene,
 } from '../src/features/tsld/render/paint';
+import { buildPaintFrame } from '../src/features/tsld/render/paint-frame';
 import {
   activityRect,
   ARROWHEAD_ROUTED_PX,
   barGlyphKind,
+  ELAPSED_DAY_WALK,
   isMilestone,
+  lagAnchorPoints,
   LANE_HEIGHT,
   LINK_ELBOW_RADIUS,
   NODE_REACH_PX,
@@ -58,14 +70,29 @@ import {
   type RenderEdge,
   type Viewport,
 } from '../src/features/tsld/render/render-model';
-import { routeFrame } from '../src/features/tsld/render/route-frame';
+import {
+  routeFrame,
+  type PlateScoring,
+  type RouteFrame,
+} from '../src/features/tsld/render/route-frame';
+import {
+  allItems,
+  layoutRowText,
+  type PlacedText,
+  type PlacedTextKind,
+  type RowTextLayout,
+} from '../src/features/tsld/render/row-text-layout';
+import { textIndexOf } from '../src/features/tsld/render/text-index';
 
 import {
   countCrossings,
   countOcclusions,
+  LINK_SENTINELS,
   linkPaths,
+  NODE_SENTINELS,
   PALETTE,
   recordingCtx,
+  type RecordedPath,
   sceneFor,
   smallPlanLayouts,
   unit300Layouts,
@@ -166,7 +193,61 @@ export function runsOf(line: readonly Point[]): { runs: Run[]; diagonal: number 
 
 const OPPOSITE: Record<Dir, Dir> = { E: 'W', W: 'E', N: 'S', S: 'N' };
 
-export type Unattached = 'direction' | 'stub';
+export type Unattached = 'direction' | 'stub' | 'detached';
+
+/**
+ * **The draft amended judge's end resolution** (links-and-labels M0-T3, spec §4.7, CQ-2). The shipped
+ * judge classifies an end by where its POINT is, which is right while every end sits on its anchor
+ * and wrong the moment one is offset: an end `PORT_OFFSET_PX` beside a start node is strictly inside
+ * the bar, so `endSpecOf` calls it an embed. This one is told the link's real anchor (from
+ * `lagAnchorPoints`, the painter's own anchor function) and accepts the end only when it is the
+ * anchor, or **exactly** `portOffset` from a task-node anchor, perpendicular to its end segment
+ * (a vertical segment, so a horizontal offset at the anchor's y). Exactly, not "within": a judge
+ * that accepted within δ would pass a drifting end. Anything else is `detached`.
+ *
+ * The probe's default judge since M3-T2 (`ReadOptions.judge`).
+ */
+export function resolveEndAmended(
+  end: Point,
+  ports: readonly { point: Point; spec: EndSpec }[],
+  endSegmentVertical: boolean,
+  portOffset: number,
+): EndSpec | 'detached' {
+  for (const { point, spec } of ports) {
+    if (Math.abs(end.x - point.x) < 0.01 && Math.abs(end.y - point.y) < 0.01) return spec;
+  }
+  for (const { point, spec } of ports) {
+    const taskNode = spec.kind === 'start-node' || spec.kind === 'finish-node';
+    if (
+      taskNode &&
+      endSegmentVertical &&
+      Math.abs(end.y - point.y) < 0.01 &&
+      Math.abs(Math.abs(end.x - point.x) - portOffset) < 0.01
+    ) {
+      return spec;
+    }
+  }
+  return 'detached';
+}
+
+/**
+ * The places a link end may sit for one anchor, each with the spec `endSpecOf` gives it. One, except
+ * a milestone's two (spec D-5 of node-to-node links): its side anchor and the glyph's centre, where a
+ * vertical joins it. Computed here from the rect, not imported from `link-ports.ts`, so the probe and
+ * the router cannot agree by sharing a mistake (ADR-0124).
+ */
+export function portsOf(
+  activity: RenderActivity,
+  anchor: Point,
+  rect: { x: number; y: number; w: number; h: number },
+): { point: Point; spec: EndSpec }[] {
+  const ports = [{ point: anchor, spec: endSpecOf(activity, anchor, rect) }];
+  if (isMilestone(activity.type)) {
+    const centre = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    ports.push({ point: centre, spec: endSpecOf(activity, centre, rect) });
+  }
+  return ports;
+}
 
 /**
  * Judge one link's two ends (spec §4.9). Returns the reason each end is unattached, or null.
@@ -233,8 +314,170 @@ function segmentMeetsBox(a: Point, b: Point, box: ReturnType<typeof textBox>): b
   return sx0 < box.x1 && sx1 > box.x0 && sy0 < box.y1 && sy1 > box.y0;
 }
 
+export type TextKind = 'name' | 'name-wrapped' | 'date' | 'milestone-date' | 'centre';
+
+const DATE_TEXT = /^\d{1,2} [A-Z][a-z]{2}$/;
+
+/**
+ * Which row band a painted text sits on, and so what it is. Throws on a text in no band: the probe
+ * would otherwise count a crossing of something it cannot name.
+ */
+export function textKindOf(t: RecordedText, view: Viewport): TextKind {
+  const lane0 = screenYOfLane(0, view);
+  const lane = Math.floor((t.y - lane0) / LANE_HEIGHT);
+  const slots = rowSlots(screenYOfLane(lane, view));
+  const at = (y: number): boolean => Math.abs(t.y - y) < 0.5;
+  if (at(slots.nameY)) return 'name';
+  const wrapped = wrappedNameYs(slots);
+  if (at(wrapped.upper) || at(wrapped.lower)) return 'name-wrapped';
+  if (at(slots.belowY)) {
+    if (t.align === 'center') return DATE_TEXT.test(t.text) ? 'milestone-date' : 'centre';
+    return 'date';
+  }
+  throw new Error(
+    `text "${t.text}" at y=${t.y.toFixed(2)} is on no row band (lane ${lane}); refusing to classify it`,
+  );
+}
+
 const GAP_LABEL = /^\d+d$|^\d+ cal d$/;
 const LAG_PLATE = /^[+−]\d/;
+
+/**
+ * **The text layout the painter drew, recomputed** (links-and-labels M1-T3, FC-W0). The module is
+ * run on the painter's own frame (`buildPaintFrame`'s `laneRows`) with the recording context's
+ * width, 6 px a character whatever the font (`crossing-probe.ts` `recordingCtx`), so its items and
+ * the recorded `fillText` calls are comparable exactly.
+ */
+export function moduleLayout(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+): RowTextLayout {
+  const { ctx } = recordingCtx();
+  const frame = buildPaintFrame(ctx as Parameters<typeof buildPaintFrame>[0], scene, view, size);
+  const withCodes = frame.toggles.activityCodes === true;
+  return layoutRowText({
+    rows: frame.laneRows,
+    view,
+    size,
+    toggles: frame.toggles,
+    visualRefresh: scene.visualRefresh === true,
+    reservesTextRows: rowReservesTextRows(),
+    measure: (t) => t.length * 6,
+    labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
+  });
+}
+
+/**
+ * The painter's plate sub-term input for this frame (links-and-labels M2, spec D-5), built as the
+ * painter builds it (`link-facts.ts`) with the recording context's widths, so the probe's router
+ * copy scores plates exactly as the painter's does. Null where plates are not drawn.
+ */
+export function probePlates(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+  visible: ReadonlySet<string>,
+  byId: ReadonlyMap<string, RenderActivity>,
+  rectCache: RectCache,
+  textLayout: RowTextLayout,
+): PlateScoring | null {
+  const { ctx } = recordingCtx();
+  const frame = buildPaintFrame(ctx as Parameters<typeof buildPaintFrame>[0], scene, view, size);
+  const facts = linkFactsOf(scene, view, frame.toggles, (t) => t.length * 6);
+  return plateScoringOf(facts, scene, view, visible, byId, rectCache, textLayout);
+}
+
+export interface TextAgreement {
+  /** Recorded texts matched to a module item, by index into `texts`, with the item's kind. */
+  kinds: Map<number, PlacedTextKind>;
+  /** Wrap proposals the painter took (both lines drawn), and ones it fell back from. */
+  wrapsTaken: number;
+  wrapsFallenBack: number;
+  /** Module items the painter did not draw, and non-link texts it drew that no item placed. */
+  mismatches: string[];
+}
+
+const textKey = (text: string, x: number, y: number, align: string): string =>
+  `${text}|${x.toFixed(2)}|${y.toFixed(2)}|${align}`;
+
+/**
+ * FC-W0: the module's items against the recorded `fillText` calls. A wrap proposal is judged by what
+ * the painter did with it: both lines drawn is a wrap taken (listed, not failed), otherwise the
+ * fallback line is expected. Link labels (lag plates, gap labels) are not the module's and are left
+ * out of the drawn side. Exact: same text, x, y and alignment, to 0.01 px.
+ */
+export function textAgreement(
+  layout: RowTextLayout,
+  texts: readonly RecordedText[],
+): TextAgreement {
+  const drawn = new Map<string, number[]>();
+  texts.forEach((t, i) => {
+    const key = textKey(t.text, t.x, t.y, String(t.align));
+    drawn.set(key, [...(drawn.get(key) ?? []), i]);
+  });
+  const kinds = new Map<number, PlacedTextKind>();
+  const mismatches: string[] = [];
+  const take = (item: PlacedText): boolean => {
+    const list = drawn.get(textKey(item.text, item.x, item.y, item.align));
+    const i = list?.shift();
+    if (i === undefined) return false;
+    kinds.set(i, item.kind);
+    return true;
+  };
+  const expect = (item: PlacedText): void => {
+    if (!take(item))
+      mismatches.push(
+        `not drawn: ${item.kind} "${item.text}" at ${item.x.toFixed(2)},${item.y.toFixed(2)}`,
+      );
+  };
+  let wrapsTaken = 0;
+  let wrapsFallenBack = 0;
+  if (layout.names) {
+    for (const step of layout.names.steps) {
+      if (step.line) expect(step.line);
+      else if (step.wrap) {
+        const { upper, lower, fallback } = step.wrap;
+        const u = drawn.get(textKey(upper.text, upper.x, upper.y, upper.align));
+        const l = drawn.get(textKey(lower.text, lower.x, lower.y, lower.align));
+        if (u?.length && l?.length) {
+          wrapsTaken += 1;
+          take(upper);
+          take(lower);
+        } else {
+          wrapsFallenBack += 1;
+          if (fallback) expect(fallback);
+        }
+      }
+    }
+    layout.names.legacy.forEach(expect);
+  }
+  if (layout.dates) {
+    for (const step of layout.dates.reserved) step.items.forEach(expect);
+    for (const f of layout.dates.flank) expect(f.item);
+  }
+  if (layout.centre) layout.centre.items.forEach(expect);
+  texts.forEach((t, i) => {
+    if (kinds.has(i) || LAG_PLATE.test(t.text) || GAP_LABEL.test(t.text)) return;
+    mismatches.push(`drawn but not placed: "${t.text}" at ${t.x.toFixed(2)},${t.y.toFixed(2)}`);
+  });
+  return { kinds, wrapsTaken, wrapsFallenBack, mismatches };
+}
+
+/** The probe's text kinds, from the module's (M1-T3). */
+const KIND_OF: Record<PlacedTextKind, TextKind> = {
+  name: 'name',
+  'name-upper': 'name-wrapped',
+  'name-lower': 'name-wrapped',
+  'date-start': 'date',
+  'date-finish': 'date',
+  'milestone-date': 'milestone-date',
+  centre: 'centre',
+  inside: 'name',
+  beside: 'name',
+  'flank-start': 'date',
+  'flank-finish': 'date',
+};
 
 export interface AttachmentReading {
   edges: number;
@@ -249,12 +492,36 @@ export interface AttachmentReading {
   examples: string[];
   falseJunctions: number;
   falseJunctionLinks: number;
+  /**
+   * The end kind each end was judged as (links-and-labels M0-T3): the point's own kind under the
+   * shipped judge, the resolved port's kind (or `detached`) under the amended one. This is how an
+   * offset end being misread as an embed is SEEN rather than inferred from a verdict.
+   */
+  endKinds: Record<string, number>;
   overlaps: number;
   /** Link pairs running opposite ways along one track, shared end or not. */
   opposed: number;
   /** The opposed pairs by how the two links meet: at one node (arrive-leave), or not at all. */
   opposedByRole: Record<string, number>;
+  /** Opposed pairs by the orientation of the track they share: the two-way pass (M3) splits vertical ones only. */
+  opposedByOrientation: { h: number; v: number };
   textCrossings: number;
+  /**
+   * `textCrossings` split by what the text is (links-and-labels M0-T2). Classified by the text's row
+   * band from `rowSlots`, not by the painter's own kinds: a name sits on the name row, a wrapped name
+   * on one of `wrappedNameYs`' two lines, and everything on the row below the bar is a date (left or
+   * right aligned), a milestone's single date (centred, a date) or the centre item (centred, not a
+   * date). M1 replaces this with the layout module's own kinds; until then a text outside every band
+   * throws rather than being counted as something it is not.
+   */
+  textCrossingsByKind: Record<TextKind, number>;
+  /** FC-W0: wraps the painter took and fell back from; the agreement itself is enforced (throws). */
+  wrapsTaken: number;
+  wrapsFallenBack: number;
+  /** Non-link texts drawn (the module's items the painter drew). FC-W0's vacuity count. */
+  textsDrawn: number;
+  /** `textCrossings` by the orientation of the first segment that met the text: `h` or `v`. */
+  textCrossingsByOrientation: { h: number; v: number };
   /** Lag plates whose text meets a name or date. */
   platesOnText: number;
   gapLabels: number;
@@ -264,7 +531,97 @@ export interface AttachmentReading {
   foreignOccludedLinks: number;
   diagonal: number;
   bends: number;
+  /**
+   * The two-way track pass (links-and-labels M3): tracks split, segments moved, and tracks left by
+   * the guard that refused them — FC-K1's listing. Null where the frame has no router.
+   */
+  tracks: RouteFrame['tracks'];
+  /**
+   * FC-K4: every pair of stroked link verticals either side of a split track (`tracks.splitAt`),
+   * exactly 2 × `PORT_OFFSET_PX` apart and running side by side, and the smallest ink gap between them — each line's stroke half-width or, wider, any
+   * link mark (chevron or arrowhead) lying across it within the pair's shared y-range. Conservative:
+   * a mark anywhere in that range counts against the whole range. `minGap` is null with no pair.
+   */
+  trackInk: { pairs: number; minGap: number | null };
   fingerprint: string;
+}
+
+/** FC-K4 (links-and-labels M3): see `AttachmentReading.trackInk`. */
+function trackInkGap(
+  strokes: readonly RecordedPath[],
+  paths: readonly RecordedPath[],
+  splitAt: readonly number[],
+): AttachmentReading['trackInk'] {
+  const markInks = new Set<string>([...Object.values(LINK_SENTINELS), NODE_SENTINELS.linkMark]);
+  const marks = paths
+    .filter((p) => p.flush === 'fill' && markInks.has(p.fillStyle) && p.pts.length >= 3)
+    .map((p) => ({
+      x0: Math.min(...p.pts.map((q) => q.x)),
+      x1: Math.max(...p.pts.map((q) => q.x)),
+      y0: Math.min(...p.pts.map((q) => q.y)),
+      y1: Math.max(...p.pts.map((q) => q.y)),
+    }));
+  const verticals = strokes.flatMap((p, path) =>
+    p.pts.slice(1).flatMap((q, i) => {
+      const a = p.pts[i]!;
+      return Math.abs(a.x - q.x) < 1e-6 && Math.abs(a.y - q.y) > 1e-6
+        ? [{ path, x: a.x, y0: Math.min(a.y, q.y), y1: Math.max(a.y, q.y), half: p.lineWidth / 2 }]
+        : [];
+    }),
+  );
+  // How far a line's ink reaches from its own x towards `side` (+1 east, −1 west) over [y0, y1].
+  const reach = (v: (typeof verticals)[number], y0: number, y1: number, side: 1 | -1): number => {
+    let r = v.half;
+    for (const m of marks) {
+      if (m.y1 <= y0 || m.y0 >= y1 || m.x0 > v.x + 0.5 || m.x1 < v.x - 0.5) continue;
+      r = Math.max(r, side === 1 ? m.x1 - v.x : v.x - m.x0);
+    }
+    return r;
+  };
+  let pairs = 0;
+  let minGap: number | null = null;
+  const measuredAt = new Set<number>();
+  for (const w of verticals) {
+    for (const e of verticals) {
+      if (w.path === e.path || Math.abs(e.x - w.x - 2 * PORT_OFFSET_PX) > 0.01) continue;
+      const at = splitAt.find((x) => Math.abs(x - PORT_OFFSET_PX - w.x) < 0.01);
+      if (at === undefined) continue;
+      const y0 = Math.max(w.y0, e.y0);
+      const y1 = Math.min(w.y1, e.y1);
+      if (y1 - y0 <= 0.5) continue;
+      pairs += 1;
+      measuredAt.add(at);
+      const gap = e.x - w.x - reach(w, y0, y1, 1) - reach(e, y0, y1, -1);
+      minGap = minGap === null ? gap : Math.min(minGap, gap);
+    }
+  }
+  // The control: every split track must yield at least one measured pair, or the measure missed the
+  // lines it exists to judge and a null gap would read as a pass.
+  if (measuredAt.size < new Set(splitAt).size) {
+    throw new Error(`FC-K4: ${splitAt.length} split track(s) but only ${pairs} measured pair(s)`);
+  }
+  return { pairs, minGap };
+}
+
+/** Harness-only options (links-and-labels M0-T3). Absent, the reading is exactly the shipped one. */
+export interface ReadOptions {
+  /**
+   * Move the routed lines after the painter control and before every metric, so a prototype can be
+   * judged without the product drawing it. The control still holds the ROUTED lines to the painter;
+   * everything after it (ends, junctions, overlaps, opposed, text, crossings, occlusion) reads the
+   * transformed set, and `fingerprint` hashes it.
+   */
+  transform?: (
+    lines: Map<RenderEdge, Point[]>,
+    frame: ReturnType<typeof routeFrame>,
+  ) => Map<RenderEdge, Point[]>;
+  /**
+   * The judge. **Default since links-and-labels M3-T2: `amended`** at the product's
+   * `PORT_OFFSET_PX` (CQ-2: an end exactly that far from a task node's centre, inside the disc, is
+   * attached; `resolveEndAmended`, junction exemption by anchor id). `shipped` is the pre-M3 judge,
+   * kept so a reading can be compared across the change.
+   */
+  judge?: { kind: 'shipped' } | { kind: 'amended'; portOffset: number };
 }
 
 /**
@@ -275,11 +632,23 @@ export function readAttachment(
   scene: TsldScene,
   view: Viewport,
   size: { width: number; height: number },
+  options: ReadOptions = {},
 ): AttachmentReading {
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const visible = new Set(byId.keys());
   const rectCache: RectCache = new Map();
-  const frame = routeFrame(scene, view, visible, byId, rectCache);
+  // The text the painter routes around, from the painter's own frame (links-and-labels M2-T2); the
+  // same layout FC-W0 below holds the painted text to.
+  const textLayout = moduleLayout(scene, view, size);
+  const frame = routeFrame(
+    scene,
+    view,
+    visible,
+    byId,
+    rectCache,
+    textIndexOf(allItems(textLayout)),
+    probePlates(scene, view, size, visible, byId, rectCache, textLayout),
+  );
 
   const { ctx, paths, texts } = recordingCtx();
   paintScene(ctx as Parameters<typeof paintScene>[0], scene, view, size, PALETTE, 1);
@@ -295,8 +664,54 @@ export function readAttachment(
         'Something other than a lag run is dashed in a link ink; refusing to set it aside.',
     );
   }
-  const { crossings, diagonal } = countCrossings(painted);
-  const occlusion = countOcclusions(painted, scene, view);
+  // **The point-by-point control** (links-and-labels M0-T2). Equal counts are not equal lines: a probe
+  // that routed differently from the painter (after M2, without the painter's text index) would still
+  // pass a count. So the routed lines and the stroked link polylines must be the same multiset of
+  // point sequences, to 0.01 px.
+  const keyOf = (pts: readonly Point[]): string =>
+    pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const routedKeys = [...frame.lines.values()].map(keyOf).sort();
+  const paintedKeys = painted.map((p) => keyOf(p.pts)).sort();
+  const firstDiff = routedKeys.findIndex((k, i) => k !== paintedKeys[i]);
+  if (routedKeys.length !== paintedKeys.length || firstDiff >= 0) {
+    throw new Error(
+      `the probe's routes are not the painter's lines (${routedKeys.length} routed, ` +
+        `${paintedKeys.length} painted; first difference at sorted index ${firstDiff}). Refusing ` +
+        'to measure a copy of the router.',
+    );
+  }
+  const judged = options.transform ? options.transform(new Map(frame.lines), frame) : frame.lines;
+  const measured: RecordedPath[] = options.transform
+    ? [...judged.values()].map((pts) => ({
+        pts: pts.map((p) => ({ x: p.x, y: p.y })),
+        batch: 0,
+        flush: 'stroke',
+        strokeStyle: '',
+        fillStyle: '',
+        lineWidth: 1,
+        dashed: false,
+      }))
+    : painted;
+  const { crossings, diagonal } = countCrossings(measured);
+  const occlusion = countOcclusions(measured, scene, view);
+  const amended =
+    options.judge?.kind === 'shipped'
+      ? null
+      : (options.judge ?? { kind: 'amended' as const, portOffset: PORT_OFFSET_PX });
+  const anchorsOf = (edge: RenderEdge): { pred: Point; succ: Point } | null => {
+    const walk = edge.lagCalendar === 'TWENTY_FOUR_HOUR' ? ELAPSED_DAY_WALK : frame.workingWalk;
+    if (!walk) throw new Error('the amended judge needs the time-true router (a working walk)');
+    return lagAnchorPoints(
+      byId.get(edge.predecessorId)!,
+      byId.get(edge.successorId)!,
+      edge.type,
+      edge.lagDays ?? 0,
+      view,
+      scene.dataDate,
+      walk,
+      rectCache,
+    );
+  };
 
   // Node centres, for false junctions: both ends of every bar-glyph activity.
   const nodeCentres: { id: string; point: Point }[] = [];
@@ -317,6 +732,7 @@ export function readAttachment(
   let unattachedLinks = 0;
   let falseJunctions = 0;
   let falseJunctionLinks = 0;
+  const endKinds: Record<string, number> = {};
   let bends = 0;
   const entries: { edge: RenderEdge; line: Point[]; ends: [Point, Point] }[] = [];
   const digest = createHash('sha256');
@@ -328,7 +744,7 @@ export function readAttachment(
     if (!predsOf.has(e.successorId)) predsOf.set(e.successorId, new Set());
     predsOf.get(e.successorId)!.add(e.predecessorId);
   }
-  for (const [edge, line] of frame.lines) {
+  for (const [edge, line] of judged) {
     for (const pt of line) digest.update(`${pt.x.toFixed(2)},${pt.y.toFixed(2)};`);
     digest.update('|');
     const pred = byId.get(edge.predecessorId)!;
@@ -340,12 +756,36 @@ export function readAttachment(
     entries.push({ edge, line, ends: [from, to] });
     const { runs } = runsOf(line);
     bends += Math.max(0, runs.length - 1);
+    const anchors = amended ? anchorsOf(edge) : null;
+    if (amended && !anchors)
+      throw new Error(`no anchors for a drawn link ${edge.predecessorId}->${edge.successorId}`);
+    // The amended judge's own-node exemption is by the ANCHOR, never the line's end point, so an
+    // offset end does not make its co-located neighbour a false junction (spec §4.7).
+    const predPorts = anchors && predRect ? portsOf(pred, anchors.pred, predRect) : null;
+    const succPorts = anchors && succRect ? portsOf(succ, anchors.succ, succRect) : null;
+    const exemptPoints =
+      predPorts && succPorts ? [...predPorts, ...succPorts].map((p) => p.point) : [from, to];
     if (predRect && succRect) {
-      const verdict = judgeEnds(
+      const vertical = (a: Point, b: Point): boolean => Math.abs(a.x - b.x) < 1e-6;
+      const predSpec = predPorts
+        ? resolveEndAmended(from, predPorts, vertical(from, line[1] ?? from), amended!.portOffset)
+        : endSpecOf(pred, from, predRect);
+      const succSpec = succPorts
+        ? resolveEndAmended(to, succPorts, vertical(line.at(-2) ?? to, to), amended!.portOffset)
+        : endSpecOf(succ, to, succRect);
+      for (const spec of [predSpec, succSpec]) {
+        const k = spec === 'detached' ? 'detached' : spec.kind;
+        endKinds[k] = (endKinds[k] ?? 0) + 1;
+      }
+      const judgedEnds = judgeEnds(
         line,
-        endSpecOf(pred, from, predRect),
-        endSpecOf(succ, to, succRect),
+        predSpec === 'detached' ? endSpecOf(pred, from, predRect) : predSpec,
+        succSpec === 'detached' ? endSpecOf(succ, to, succRect) : succSpec,
       );
+      const verdict = {
+        pred: predSpec === 'detached' ? ('detached' as const) : judgedEnds.pred,
+        succ: succSpec === 'detached' ? ('detached' as const) : judgedEnds.succ,
+      };
       const bad = [
         verdict.pred ? `pred:${verdict.pred}` : null,
         verdict.succ ? `succ:${verdict.succ}` : null,
@@ -368,12 +808,7 @@ export function readAttachment(
     ]);
     for (const { id, point: c } of nodeCentres) {
       if (siblings.has(id)) continue;
-      if (
-        Math.hypot(c.x - from.x, c.y - from.y) < 0.5 ||
-        Math.hypot(c.x - to.x, c.y - to.y) < 0.5
-      ) {
-        continue;
-      }
+      if (exemptPoints.some((e) => Math.hypot(c.x - e.x, c.y - e.y) < 0.5)) continue;
       for (let i = 1; i < line.length; i += 1) {
         if (distToSegment(c, line[i - 1]!, line[i]!) < NODE_REACH_PX) {
           hit += 1;
@@ -432,7 +867,12 @@ export function readAttachment(
   // its successor link came down), which the overlap count above exempts as a bus.
   const opposing = new Set<string>();
   const opposedByRole: Record<string, number> = {};
-  for (const bucket of [...horizontal.values(), ...vertical.values()]) {
+  const opposedByOrientation = { h: 0, v: 0 };
+  const buckets = [
+    ...[...horizontal.values()].map((b) => ['h', b] as const),
+    ...[...vertical.values()].map((b) => ['v', b] as const),
+  ];
+  for (const [orientation, bucket] of buckets) {
     for (let i = 0; i < bucket.length; i += 1) {
       for (let j = i + 1; j < bucket.length; j += 1) {
         const s = bucket[i]!;
@@ -453,6 +893,7 @@ export function readAttachment(
                     ? 'same-target'
                     : 'unrelated';
             opposedByRole[role] = (opposedByRole[role] ?? 0) + 1;
+            opposedByOrientation[orientation] += 1;
           }
         }
         if (shareEnd(entries[s.link]!, entries[t.link]!)) continue;
@@ -464,14 +905,36 @@ export function readAttachment(
   let gapLabels = 0;
   let lagPlates = 0;
   const boxes: ReturnType<typeof textBox>[] = [];
+  const kinds: TextKind[] = [];
   const plateBoxes: ReturnType<typeof textBox>[] = [];
-  for (const t of texts) {
-    if (LAG_PLATE.test(t.text)) {
+  // **FC-W0, enforced on every reading** (links-and-labels M1-T3): every non-link text the painter
+  // drew must be a module item at the same text, x, y and alignment, and every item the module
+  // placed must be drawn. A reading of text the module did not place would be a reading of a
+  // different layout from the one the router reads (M2), so the probe refuses it.
+  const agreement = textAgreement(textLayout, texts);
+  if (agreement.mismatches.length > 0) {
+    throw new Error(
+      `FC-W0: the painter's text and the module's disagree (${agreement.mismatches.length}): ` +
+        agreement.mismatches.slice(0, 5).join('; '),
+    );
+  }
+  texts.forEach((t, i) => {
+    const kind = agreement.kinds.get(i);
+    if (kind !== undefined) {
+      boxes.push(textBox(t));
+      // The module's kind, cross-checked against the row band the text sits in (M0-T2's
+      // classifier): two classifiers that share no code, agreeing, on every text.
+      const mapped = KIND_OF[kind];
+      const byBand = textKindOf(t, view);
+      if (mapped !== byBand) {
+        throw new Error(`text "${t.text}": the module says ${mapped}, its row band says ${byBand}`);
+      }
+      kinds.push(mapped);
+    } else if (LAG_PLATE.test(t.text)) {
       lagPlates += 1;
       plateBoxes.push(textBox(t));
     } else if (GAP_LABEL.test(t.text)) gapLabels += 1;
-    else boxes.push(textBox(t));
-  }
+  });
   // A plate's TEXT meeting a name or date (node-to-node links M3, the UX gate's finding): the one
   // text-on-text case the line-segment count above cannot see, because a plate is not a segment.
   // Text boxes are the ink's, one font size high, so a graze into a row's leading does not count.
@@ -482,20 +945,32 @@ export function readAttachment(
     }
   }
   let textCrossings = 0;
+  const textCrossingsByKind: Record<TextKind, number> = {
+    name: 0,
+    'name-wrapped': 0,
+    date: 0,
+    'milestone-date': 0,
+    centre: 0,
+  };
+  const textCrossingsByOrientation = { h: 0, v: 0 };
   for (const e of entries) {
-    for (const box of boxes) {
+    boxes.forEach((box, b) => {
       for (let i = 1; i < e.line.length; i += 1) {
-        if (segmentMeetsBox(e.line[i - 1]!, e.line[i]!, box)) {
+        const a = e.line[i - 1]!;
+        const c = e.line[i]!;
+        if (segmentMeetsBox(a, c, box)) {
           textCrossings += 1;
+          textCrossingsByKind[kinds[b]!] += 1;
+          textCrossingsByOrientation[Math.abs(a.y - c.y) < 1e-6 ? 'h' : 'v'] += 1;
           break;
         }
       }
-    }
+    });
   }
 
   return {
     edges: scene.edges.length,
-    links: frame.lines.size,
+    links: judged.size,
     painted: painted.length,
     unattachedEnds,
     unattachedLinks,
@@ -503,18 +978,27 @@ export function readAttachment(
     examples,
     falseJunctions,
     falseJunctionLinks,
+    endKinds,
     overlaps: overlapping.size,
     opposed: opposing.size,
+    opposedByOrientation,
     opposedByRole,
     textCrossings,
+    textCrossingsByKind,
+    textCrossingsByOrientation,
+    wrapsTaken: agreement.wrapsTaken,
+    wrapsFallenBack: agreement.wrapsFallenBack,
+    textsDrawn: agreement.kinds.size,
     platesOnText,
     gapLabels,
     lagPlates,
     crossings,
-    crossingsPerLink: painted.length === 0 ? 0 : crossings / painted.length,
+    crossingsPerLink: measured.length === 0 ? 0 : crossings / measured.length,
     foreignOccludedLinks: occlusion.foreignLinks,
     diagonal,
     bends,
+    tracks: frame.tracks,
+    trackInk: trackInkGap(painted, paths, frame.tracks?.splitAt ?? []),
     fingerprint: digest.digest('hex').slice(0, 12),
   };
 }
@@ -524,12 +1008,23 @@ export function readAttachment(
  * return how many orders gave any link a different line. Lines are keyed by the link, never by
  * position, so a shuffle that changes only the order of the map is not a difference.
  */
-export function shuffleDifferences(scene: TsldScene, view: Viewport, runs: number): number {
+export function shuffleDifferences(
+  scene: TsldScene,
+  view: Viewport,
+  size: { width: number; height: number },
+  runs: number,
+): number {
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const visible = new Set(byId.keys());
+  // The text does not depend on the order of the edges, so one index serves every shuffle.
+  const layout = moduleLayout(scene, view, size);
+  const text = textIndexOf(allItems(layout));
   const keyOf = (e: RenderEdge): string => `${e.predecessorId}>${e.successorId}:${e.type}`;
   const linesOf = (edges: readonly RenderEdge[]): Map<string, string> => {
-    const frame = routeFrame({ ...scene, edges: [...edges] }, view, visible, byId, new Map());
+    const shuffled = { ...scene, edges: [...edges] };
+    const rectCache: RectCache = new Map();
+    const plates = probePlates(shuffled, view, size, visible, byId, rectCache, layout);
+    const frame = routeFrame(shuffled, view, visible, byId, rectCache, text, plates);
     const out = new Map<string, string>();
     for (const [edge, line] of frame.lines) {
       out.set(keyOf(edge), line.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(';'));
@@ -821,6 +1316,94 @@ export function selfTest(): void {
       throw new Error(
         `attachment-probe self-test "${c.name}": got ${JSON.stringify(got)}, want ${JSON.stringify(c.want)}`,
       );
+    }
+  }
+  selfTestTextKinds();
+  selfTestAmendedJudge();
+}
+
+/**
+ * The draft amended judge's cases (links-and-labels M0-T3, plan M3-T2's three). The offset is 4,
+ * inside the derived [3.25, 4.5] window. Each names the judge it would pass against.
+ */
+function selfTestAmendedJudge(): void {
+  const delta = 4;
+  const anchor: Point = { x: 100, y: 50 };
+  const start: EndSpec = { kind: 'start-node', reach: NODE_REACH_PX, allowed: WNS };
+  const embed: EndSpec = { kind: 'embed', reach: 2, allowed: NS };
+  const cases: { name: string; end: Point; spec: EndSpec; vertical: boolean; want: string }[] = [
+    // On the anchor: today's verdicts must reproduce. Fails if the anchor case is dropped.
+    { name: 'on the anchor', end: anchor, spec: start, vertical: false, want: 'start-node' },
+    // Exactly δ beside a task node, vertical end segment: attached (CQ-2). Fails if the offset is
+    // not accepted at all.
+    { name: 'δ attached', end: { x: 104, y: 50 }, spec: start, vertical: true, want: 'start-node' },
+    // δ + 1: a drifting end. Fails against a judge that accepts "within δ + 1" or "inside the disc".
+    { name: 'δ + 1', end: { x: 105, y: 50 }, spec: start, vertical: true, want: 'detached' },
+    // δ − 1: equally a drift. Fails against a judge that accepts "within δ".
+    { name: 'δ − 1', end: { x: 103, y: 50 }, spec: start, vertical: true, want: 'detached' },
+    // Offset at an embed: an embed's dot has radius 2 and cannot absorb it. Fails if the offset rule
+    // is applied to any anchor rather than to task nodes.
+    { name: 'embed offset', end: { x: 104, y: 50 }, spec: embed, vertical: true, want: 'detached' },
+    // Offset along the segment rather than across it: a horizontal end segment offset in x is a
+    // shorter leg, not a parallel track. Fails if perpendicularity is not checked.
+    {
+      name: 'not perpendicular',
+      end: { x: 104, y: 50 },
+      spec: start,
+      vertical: false,
+      want: 'detached',
+    },
+  ];
+  for (const c of cases) {
+    const got = resolveEndAmended(c.end, [{ point: anchor, spec: c.spec }], c.vertical, delta);
+    const kind = got === 'detached' ? 'detached' : got.kind;
+    if (kind !== c.want) {
+      throw new Error(
+        `attachment-probe amended-judge self-test "${c.name}": got ${kind}, want ${c.want}`,
+      );
+    }
+  }
+}
+
+/**
+ * The text classifier's own cases (links-and-labels M0-T2). Each names the mistake it fails on.
+ * Built on lane 2 of a panned view, so a classifier that forgot the pan or the lane fails too.
+ */
+function selfTestTextKinds(): void {
+  const view: Viewport = { pxPerDay: 4, originX: 40, originY: 32 };
+  const slots = rowSlots(screenYOfLane(2, view));
+  const wrapped = wrappedNameYs(slots);
+  const text = (t: string, y: number, align: CanvasTextAlign): RecordedText => ({
+    text: t,
+    x: 100,
+    y,
+    width: 30,
+    fontPx: 11,
+    align,
+    baseline: 'middle',
+  });
+  const cases: { name: string; t: RecordedText; want: TextKind | 'throws' }[] = [
+    // Fails if names are read from the below row or the pan is ignored.
+    { name: 'name', t: text('A1010', slots.nameY, 'center'), want: 'name' },
+    // Fails if a wrapped line is folded into the single-line name row.
+    { name: 'wrapped upper', t: text('Install', wrapped.upper, 'center'), want: 'name-wrapped' },
+    // Fails if an aligned date is taken for a milestone's centred one.
+    { name: 'flanking date', t: text('20 Jan', slots.belowY, 'left'), want: 'date' },
+    // Fails if every centred below-row text is called a date.
+    { name: 'milestone date', t: text('3 Sep', slots.belowY, 'center'), want: 'milestone-date' },
+    { name: 'centre item', t: text('5d · 3d float', slots.belowY, 'center'), want: 'centre' },
+    // Fails if an unknown text is quietly given a kind.
+    { name: 'no band', t: text('?', slots.barY + 1, 'left'), want: 'throws' },
+  ];
+  for (const c of cases) {
+    let got: TextKind | 'throws';
+    try {
+      got = textKindOf(c.t, view);
+    } catch {
+      got = 'throws';
+    }
+    if (got !== c.want) {
+      throw new Error(`attachment-probe self-test text "${c.name}": got ${got}, want ${c.want}`);
     }
   }
 }

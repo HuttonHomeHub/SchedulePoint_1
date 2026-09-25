@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { LANE_HEIGHT } from './geometry';
+import { textCrossings } from './link-score';
 import { paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, RenderEdge, Viewport } from './render-model';
+import { routeFrame } from './route-frame';
+import { allItems, sceneRowText } from './row-text-layout';
 import { recordingCtx } from './test-support/recording-ctx';
+import { textIndexOf } from './text-index';
+import { DEFAULT_VIEW_TOGGLES } from './view-toggles';
 
 /**
  * **The whole-scene golden log** (ADR-0078 S1) — the oracle every later decomposition step is
@@ -389,5 +394,28 @@ describe('paintScene — whole-scene golden (ADR-0078 S1)', () => {
     // optional layer unconditional, the two logs converge and this fails — whereas both snapshots
     // would simply be re-recorded.
     expect(logOf(MINIMAL).length).toBeLessThan(logOf(MAXIMAL).length);
+  });
+});
+
+/**
+ * **Why links-and-labels M2 left this log byte-identical** (M2-T4). The prediction written before
+ * the router read text: the maximal scene's four links each run through a name or date, and no
+ * shape any of them has goes round it, so the text term breaks no tie here and every line stays
+ * where it was. This pins the premise rather than trusting it: if a change to this scene gives a
+ * link a way round its text, the log above changes for a reason this case names.
+ */
+describe('the text term in the maximal scene', () => {
+  it('meets text on every link and changes no line, so the log above is unchanged', () => {
+    const byId = new Map(MAXIMAL.activities.map((a) => [a.id, a]));
+    const toggles = { ...DEFAULT_VIEW_TOGGLES, ...MAXIMAL.view };
+    const text = textIndexOf(
+      allItems(sceneRowText(MAXIMAL, VIEW, SIZE, toggles, (t) => t.length * 6)),
+    );
+    const visible = new Set(byId.keys());
+    const blind = routeFrame(MAXIMAL, VIEW, visible, byId, new Map(), null);
+    const aware = routeFrame(MAXIMAL, VIEW, visible, byId, new Map(), text);
+    const met = [...blind.lines.values()].map((line) => textCrossings(line, text, VIEW));
+    expect(met).toEqual([1, 1, 1, 4]);
+    for (const [edge, line] of blind.lines) expect(aware.lines.get(edge)).toEqual(line);
   });
 });

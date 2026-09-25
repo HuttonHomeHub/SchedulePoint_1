@@ -143,7 +143,7 @@ describe('routeNodeToNode', () => {
     const foundations = task('Foundations', 0, '2026-01-01', '2026-01-05');
     const frame = task('Frame', 1, '2026-01-09', '2026-01-15');
     const glyphs = glyphIndex([foundations, frame], VIEW, DATA_DATE);
-    const best = routeNodeToNode(fs(foundations, frame), glyphs, VIEW)[0]!;
+    const best = routeNodeToNode(fs(foundations, frame), glyphs, VIEW, null)[0]!;
     expect(best.shape).toBe('VH');
     expect(best.phase1.obstructions).toBe(0);
   });
@@ -153,7 +153,7 @@ describe('routeNodeToNode', () => {
     const inTheWay = task('way', 1, '2026-01-07', '2026-01-10');
     const b = task('b', 1, '2026-01-16', '2026-01-20');
     const glyphs = glyphIndex([a, inTheWay, b], VIEW, DATA_DATE);
-    const scored = routeNodeToNode(fs(a, b), glyphs, VIEW);
+    const scored = routeNodeToNode(fs(a, b), glyphs, VIEW, null);
     expect(scored[0]!.phase1.obstructions).toBe(0);
     expect(scored[0]!.shape).not.toBe('VH'); // the VH runs along lane 1 through `way`
     expect(scored.find((c) => c.shape === 'VH')!.phase1.obstructions).toBe(1);
@@ -164,7 +164,7 @@ describe('routeNodeToNode', () => {
     const b = task('b', 0, '2026-01-06', '2026-01-10');
     const input = fs(a, b);
     expect(input.fromAnchor).toEqual(input.toAnchor);
-    const got = routeNodeToNode(input, glyphIndex([a, b], VIEW, DATA_DATE), VIEW);
+    const got = routeNodeToNode(input, glyphIndex([a, b], VIEW, DATA_DATE), VIEW, null);
     expect(got).toHaveLength(1);
     expect(got[0]!.shape).toBe('fallback');
   });
@@ -197,7 +197,7 @@ describe('chooseRoutesByCrossing', () => {
     const links = pairs.map(([p, s]) => {
       const input = fs(byId.get(p!)!, byId.get(s!)!);
       return {
-        candidates: routeNodeToNode(input, glyphs, VIEW),
+        candidates: routeNodeToNode(input, glyphs, VIEW, null),
         ends: [input.fromAnchor, input.toAnchor] as const,
       };
     });
@@ -432,6 +432,7 @@ describe('chooseRoutesByCrossing', () => {
       },
       glyphIndex([a, b, blocker], VIEW, DATA_DATE),
       VIEW,
+      null,
     );
     const escapes = got.filter((c) => c.escape);
     const ordinary = got.filter((c) => !c.escape);

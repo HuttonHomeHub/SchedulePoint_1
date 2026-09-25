@@ -346,6 +346,71 @@ describe('packGutterChannels', () => {
     }
   });
 
+  /**
+   * **Two runs with the same extent are ordered by where their verticals go** (links-and-labels M2).
+   * First fit gives the first run (by key) the boundary and the second the channel above it. Here
+   * that stacks them so `up`'s right-hand vertical runs down into the channel `down` leaves by, the
+   * opposite way: the two overlap between the channels with their heads pointing at each other.
+   */
+  it('puts the run whose vertical lies above the gutter on the upper channel', () => {
+    const up = {
+      key: 'a',
+      fromLane: 0,
+      toLane: 0,
+      line: [
+        { x: 0, y: 70 },
+        { x: 0, y: 100 },
+        { x: 50, y: 100 },
+        { x: 50, y: 70 },
+      ],
+    };
+    const down = {
+      key: 'b',
+      fromLane: 0,
+      toLane: 3,
+      line: [
+        { x: 0, y: 70 },
+        { x: 0, y: 100 },
+        { x: 50, y: 100 },
+        { x: 50, y: 130 },
+      ],
+    };
+    packGutterChannels([up, down], CLEAR_HALF_BAND, GUTTER);
+    // `up` ends above the gutter and `down` below it, so `up` must sit above `down`.
+    expect(up.line[1]!.y).toBeLessThan(down.line[1]!.y);
+    // Both runs still move as one piece (the pass moves y only, and both ends of a run together).
+    expect(up.line[2]!.y).toBe(up.line[1]!.y);
+    expect(down.line[2]!.y).toBe(down.line[1]!.y);
+  });
+
+  it('leaves two same-extent runs alone when their two ends ask for opposite orders', () => {
+    const zig = {
+      key: 'a',
+      fromLane: 0,
+      toLane: 3,
+      line: [
+        { x: 0, y: 70 },
+        { x: 0, y: 100 },
+        { x: 50, y: 100 },
+        { x: 50, y: 130 },
+      ],
+    };
+    const zag = {
+      key: 'b',
+      fromLane: 3,
+      toLane: 0,
+      line: [
+        { x: 0, y: 130 },
+        { x: 0, y: 100 },
+        { x: 50, y: 100 },
+        { x: 50, y: 70 },
+      ],
+    };
+    packGutterChannels([zig, zag], CLEAR_HALF_BAND, GUTTER);
+    // First fit's answer stands: the boundary for the first by key, the channel above for the next.
+    expect([zig.line[1]!.y, zag.line[1]!.y]).toEqual([100, 97]);
+  });
+
   it('leaves one run on the boundary and moves nothing', () => {
     const cs = [vhv(100, 0, 50)];
     expect(packGutterChannels(cs, CLEAR_HALF_BAND, GUTTER)).toBe(0);

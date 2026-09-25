@@ -9,6 +9,9 @@ import {
   type Viewport,
 } from './render-model';
 import { routeFrame, type RouteFrameScene } from './route-frame';
+import { sceneRowTextItems, type PlacedText, type TextMeasure } from './row-text-layout';
+import { textIndexOf, type TextIndex } from './text-index';
+import type { TsldViewToggles } from './view-toggles';
 
 /**
  * **What a lane layout costs a reader** (NetPoint-layout M4-T2, spec §4.5).
@@ -44,11 +47,28 @@ export interface LayoutObjective {
 /** The zoom a layout is judged at: the M0 reference, where a bar's length is its days × 4 px. */
 export const LAYOUT_REFERENCE_PX_PER_DAY = 4;
 
+/**
+ * The text the routes read (links-and-labels M2, spec D-7): the planner's text toggles and a width
+ * source, so the search routes around the names and dates the canvas draws. **Required**: a layout
+ * scored on text-blind routes would be scored on a picture the canvas does not draw (ADR-0149).
+ */
+export interface LayoutText {
+  measure: TextMeasure;
+  toggles: TsldViewToggles;
+  /**
+   * Each lane's text items, remembered by what the lane holds (spec §4.9): optional, and owned by
+   * one search (`optimiseLayout`), where the view, widths and toggles are fixed and only lanes move.
+   */
+  memo?: Map<string, readonly PlacedText[]>;
+}
+
 /** The scene fields the objective reads. The lanes come from `activities[].laneIndex`. */
 export type LayoutScene = Pick<
   RouteFrameScene,
   'activities' | 'edges' | 'dataDate' | 'isWorkingDay'
->;
+> & {
+  text: LayoutText;
+};
 
 /** Crossing tolerance, the harness's (`netpoint-evaluate.ts`), so FC-N0 can hold exactly. */
 const EPS = 0.001;
@@ -73,6 +93,35 @@ export function compareObjectives(a: LayoutObjective, b: LayoutObjective): numbe
   );
 }
 
+/**
+ * **The text the search routes around**: the scene's text layout at `view`, over the whole plan
+ * (links-and-labels M2-T2). The plan is the frame here, so the canvas the text is laid out in is the
+ * plan's own extent: nothing is clipped, as nothing is culled. Exported so a harness that routes a
+ * layout outside this module (`scripts/netpoint-evaluate.ts`) reads the same text.
+ */
+export function layoutTextIndex(
+  scene: LayoutScene,
+  view: Viewport,
+  rectCache: RectCache = new Map(),
+): TextIndex {
+  let right = 0;
+  for (const a of scene.activities) {
+    const r = activityRect(a, view, scene.dataDate, rectCache);
+    if (r) right = Math.max(right, r.x + r.w);
+  }
+  return textIndexOf(
+    sceneRowTextItems(
+      { activities: scene.activities, dataDate: scene.dataDate, visualRefresh: true },
+      view,
+      { width: right + view.originX, height: 0 },
+      scene.text.toggles,
+      scene.text.measure,
+      rectCache,
+      scene.text.memo,
+    ),
+  );
+}
+
 /** The whole plan's routed lines at the reference zoom, each with the ids it connects. */
 export function layoutLines(
   scene: LayoutScene,
@@ -81,12 +130,14 @@ export function layoutLines(
   const view: Viewport = { pxPerDay, originX: 40, originY: 32 };
   const byId = new Map(scene.activities.map((a) => [a.id, a]));
   const all = new Set(byId.keys());
+  const rectCache: RectCache = new Map();
   const { lines } = routeFrame(
     { ...scene, timeTrueLinks: true, visualRefresh: true, linkRouting: true },
     view,
     all,
     byId,
-    new Map(),
+    rectCache,
+    layoutTextIndex(scene, view, rectCache),
   );
   return [...lines].map(([edge, line]) => ({
     line,

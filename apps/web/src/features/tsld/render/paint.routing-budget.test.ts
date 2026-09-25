@@ -12,6 +12,9 @@ import {
   type RenderEdge,
   type Viewport,
 } from './render-model';
+import { allItems, sceneRowText } from './row-text-layout';
+import { FIXED_WIDTH_TEXT } from './test-support/fixed-width-text';
+import { textIndexOf } from './text-index';
 
 /**
  * **The M2 routing gate** (ADR-0064 M2, plan tasks T15/T19).
@@ -365,11 +368,73 @@ describe('link routing — draw-budget gate at 2,000 activities (T19)', () => {
         },
         glyphs,
         view,
+        null,
       );
       most = Math.max(most, shapes.length);
     }
     expect(most).toBeGreaterThan(1);
     expect(most).toBeLessThanOrEqual(MAX_ROUTE_CANDIDATES);
+  });
+
+  /**
+   * **The text term's cost is lookups, not a scan** (links-and-labels M2-T1). Each candidate asks
+   * the text index once per lane each of its segments spans — a binary search per ask — so the
+   * number of asks is fixed by the shapes, not by how much text the plan carries.
+   */
+  it('asks the text index only for the lanes each candidate’s segments span (M2-T1)', () => {
+    const activities = densePlan();
+    const byId = new Map(activities.map((a) => [a.id, a]));
+    // The detail tier, where names and dates are drawn in full.
+    const view: Viewport = { pxPerDay: 12, originX: 0, originY: 0 };
+    const glyphs = glyphIndex(activities, view, DATA_DATE);
+    const layout = sceneRowText(
+      { activities, dataDate: DATA_DATE, visualRefresh: true },
+      view,
+      { width: 100_000, height: 0 },
+      FIXED_WIDTH_TEXT.toggles,
+      FIXED_WIDTH_TEXT.measure,
+    );
+    const items = allItems(layout);
+    let asks = 0;
+    const counting = new Map(textIndexOf(items));
+    const get = counting.get.bind(counting);
+    counting.get = (lane: number) => {
+      asks += 1;
+      return get(lane);
+    };
+    let expected = 0;
+    let crossingText = 0;
+    for (const e of denseEdges()) {
+      const from = byId.get(e.predecessorId)!;
+      const to = byId.get(e.successorId)!;
+      const fromRect = activityRect(from, view, DATA_DATE)!;
+      const toRect = activityRect(to, view, DATA_DATE)!;
+      const shapes = routeNodeToNode(
+        {
+          from,
+          to,
+          fromRect,
+          toRect,
+          fromAnchor: { x: fromRect.x + fromRect.w, y: fromRect.y + fromRect.h / 2 },
+          toAnchor: { x: toRect.x, y: toRect.y + toRect.h / 2 },
+        },
+        glyphs,
+        view,
+        counting,
+      );
+      for (const shape of shapes) {
+        if ((shape.phase1.text ?? 0) > 0) crossingText += 1;
+        for (let i = 1; i < shape.line.length; i += 1) {
+          const y0 = Math.min(shape.line[i - 1]!.y, shape.line[i]!.y);
+          const y1 = Math.max(shape.line[i - 1]!.y, shape.line[i]!.y);
+          expected += Math.floor(y1 / LANE_HEIGHT) - Math.floor(y0 / LANE_HEIGHT) + 1;
+        }
+      }
+    }
+    // Not vacuous: the plan carries text and some shapes do run through it.
+    expect(items.length).toBeGreaterThan(0);
+    expect(crossingText).toBeGreaterThan(0);
+    expect(asks).toBe(expected);
   });
 
   it('reports its measurement so the T21 default-on decision is made on data', () => {

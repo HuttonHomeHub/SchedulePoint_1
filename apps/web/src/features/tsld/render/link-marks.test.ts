@@ -10,6 +10,7 @@ import {
   lagPlateCandidates,
   linkRung,
   gapLabelAt,
+  gapLabelCandidates,
 } from './link-marks';
 
 const crit = { isCritical: true, isNearCritical: false };
@@ -134,6 +135,34 @@ describe('gapLabelAt (NetPoint grammar M3-T3)', () => {
     ];
     expect(gapLabelAt(line, 0, 30, 31)).toBeNull();
     expect(gapLabelAt(line, 0, 30, 30)).toEqual({ x: 15, y: 100 });
+  });
+});
+
+describe('gapLabelCandidates (links-and-labels M4 review)', () => {
+  const line = [
+    { x: 0, y: 10 },
+    { x: 50, y: 10 },
+    { x: 50, y: 40 },
+    { x: 200, y: 40 },
+  ];
+
+  it("starts at gapLabelAt's midpoint, then keeps the label inside each stretch, longest first", () => {
+    const all = gapLabelCandidates(line, 30, 180, 20);
+    expect(all[0]).toEqual(gapLabelAt(line, 30, 180, 20));
+    // 130 px stretch from 50: centres range over [60, 170]; then the 20 px stretch, which has no room.
+    expect(all.slice(0, 7).map((p) => p.x)).toEqual([
+      115, 87.5, 142.5, 73.75, 101.25, 128.75, 156.25,
+    ]);
+    expect(all.slice(7).every((p) => p.x === 40 && p.y === 10)).toBe(true);
+    for (const p of all) {
+      const [lo, hi] = p.y === 40 ? [50, 180] : [30, 50];
+      expect(p.x - 10).toBeGreaterThanOrEqual(lo);
+      expect(p.x + 10).toBeLessThanOrEqual(hi);
+    }
+  });
+
+  it('is empty where no stretch holds the label', () => {
+    expect(gapLabelCandidates(line, 30, 180, 131)).toEqual([]);
   });
 });
 

@@ -1,17 +1,17 @@
 {
   "_": "What the web app's first paint may cost, and what a raise means. THREE quantities: the JS entry graph, the ceiling on any one lazy chunk, and the render-blocking CSS — the last added at the M5 gate pass, when the performance review found it measured in the report and read by nothing, under a docblock claiming to cover everything the browser parses first. See apps/web/scripts/check-bundle-size.mjs. A raise carries a one-line reason in `raisedBecause` — a budget quietly moved up is a budget that never says no.",
-  "measuredAt": "2026-09-16",
-  "measuredBy": "pnpm --filter @repo/web build (writes bundle-report.json), run against origin/main at b85a6d31 — the floor is what main costs, never what a branch costs, or the branch under test sets its own bar.",
+  "measuredAt": "2026-09-25",
+  "measuredBy": "pnpm exec vite build in apps/web (writes bundle-report.json), run against origin/main's apps/web/src at a841768f — the floor is what main costs, never what a branch costs, or the branch under test sets its own bar.",
   "floor": {
-    "_": "The measurement the budget is derived from, kept so a later reader can see how much headroom has been spent without re-running the build. RE-FLOORED 2026-09-16, replacing the 2026-09-11 measurement of 404744 / 128583 / 15141 — which is the record of the spend the re-floor would otherwise erase, since `check-bundle-size.mjs` B7 reads a fixed key set and a `previousFloor` key would fail the gate. The entry graph grew 404744 → 425798 (+20.56 kB) in five days across eight ADRs, none of which added a package: the headroom ratio had been spent as designed, on ordinary features, and only the entry-graph budget moves as a result — 1.05 × today's CSS and largest-lazy-chunk round to the same whole kB they already held.",
-    "entryGraphGzipBytes": 425798,
-    "maxNonEntryChunkGzipBytes": 128582,
-    "cssGzipBytes": 15433
+    "_": "The measurement the budget is derived from, kept so a later reader can see how much headroom has been spent without re-running the build. RE-FLOORED 2026-09-25 on the product owner's instruction, replacing the 2026-09-16 measurement of 425798 / 128582 / 15433, which is recorded here because `check-bundle-size.mjs` B7 reads a fixed key set and a `previousFloor` key would fail the gate. The entry graph grew 425798 → 445254 (+19.00 kB) in nine days across the NetPoint, layout-interchange and link-routing epics, none of which added a package: the headroom was spent as designed, on ordinary features.",
+    "entryGraphGzipBytes": 445254,
+    "maxNonEntryChunkGzipBytes": 128584,
+    "cssGzipBytes": 15779
   },
   "headroomRatio": 1.05,
   "headroomRatioIsAJudgement": "1.05 is a CHOICE, not a measurement (product-owner decision, docs/specs/delivery-gates/ CQ-2). It is about 20 kB gzip on the entry graph — room for an ordinary feature without a conversation, and not room for a library. There is no evidence behind the number; it is the smallest margin that does not make the gate fire on routine work.",
-  "entryGraphGzipBytes": 447488,
+  "entryGraphGzipBytes": 467968,
   "maxNonEntryChunkGzipBytes": 135168,
-  "cssGzipBytes": 16384,
-  "raisedBecause": "The 2026-09-11 headroom was spent and the page-consistency epic (ADR-0145) was the 0.58 kB that tipped it: main measured 415.82 kB against a 416.00 kB budget with 0.18 kB left, and the epic's 61 changed source files add 0.76 kB. Measured rather than assumed — the entry graph's package set is IDENTICAL across the two builds (26 either side, nothing new, nothing gone) and `paint.js`/`rolldown.js` are byte-identical, so the whole +783 gzip bytes is application code in the entry chunk, which is exactly what `headroomRatio` exists to admit. Each budget is the smallest whole kB at or above floor × 1.05, the rule the 2026-09-11 numbers were derived by; re-deriving moves only the entry graph, to 437 kB."
+  "cssGzipBytes": 17408,
+  "raisedBecause": "Raised on the product owner's instruction (2026-09-25). The 2026-09-16 headroom was spent and the links-and-labels epic (ADR-0159) was the 4.39 kB that tipped it: main measured 434.82 kB against a 437.00 kB budget with 2.18 kB left, and the epic takes the entry graph to 439.21 kB. Measured rather than assumed — the entry graph's package set is IDENTICAL across the two builds (26 either side, nothing new, nothing gone), and 4.29 of the 4.39 kB is the statically-imported `paint` chunk, which now carries the shared row-text layout and the track split, so the growth is application code, which is what `headroomRatio` exists to admit. Each budget is the smallest whole kB at or above floor × 1.05, the rule the earlier numbers were derived by; re-deriving moves the entry graph to 457 kB and the CSS to 17 kB (main's CSS grew 15433 → 15779 since the last floor), and leaves the lazy-chunk ceiling at 132 kB."
 }

@@ -9,6 +9,7 @@ import { optimiseLayout } from '../src/features/tsld/render/optimise-layout';
 
 import {
   chainPlacedLayouts,
+  HARNESS_TEXT,
   packedOnDrawn,
   scalePlan,
   sceneFor,
@@ -42,10 +43,11 @@ export function run(which: string): unknown[] {
   return cases.map(({ name, asap, layout }) => {
     const { scene } = sceneFor(asap as never, layout as never);
     const t0 = performance.now();
-    const r = optimiseLayout(scene);
+    const r = optimiseLayout({ ...scene, text: HARNESS_TEXT });
     const ms = performance.now() - t0;
     const rev = optimiseLayout({
       ...scene,
+      text: HARNESS_TEXT,
       activities: [...scene.activities].reverse(),
       edges: [...scene.edges].reverse(),
     });

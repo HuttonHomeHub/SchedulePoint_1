@@ -45,6 +45,21 @@ const probe = await import(pathToFileURL(bundle).href);
 probe.selfTest();
 const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD']).toString().trim();
 
+/**
+ * **FC-W0's vacuity floor** (links-and-labels M1-T3). `readAttachment` throws unless every non-link
+ * text the painter drew is a module item and every item is drawn, which an empty layout satisfies
+ * perfectly. So the count of texts drawn is pinned per fixture and zoom (it is the same at every
+ * pan). Taken at M1-T3, where the picture is byte-identical to M0's (the golden log, and every M0
+ * count and fingerprint re-read equal): a change to it is a change to what the canvas prints, and
+ * belongs to a milestone that means to make one.
+ */
+const TEXTS_DRAWN = {
+  brief: [9, 21, 27],
+  'small-17': [6, 21, 31],
+  'reference-netpoint': [58, 136, 136],
+  'Unit 300': [83, 219, 320],
+};
+
 const rows = [];
 for (const fx of probe.fixtures(FIXTURE)) {
   for (const pxPerDay of [1, 4, 12]) {
@@ -55,6 +70,13 @@ for (const fx of probe.fixtures(FIXTURE)) {
         throw new Error(
           `VACUOUS: ${fx.name} at ${pxPerDay} px/day, pan ${originY}: ${r.links} routed, ` +
             `${r.painted} painted, ${r.edges} edges. Refusing to judge.`,
+        );
+      }
+      const pinned = TEXTS_DRAWN[fx.name]?.[[1, 4, 12].indexOf(pxPerDay)];
+      if (r.textsDrawn !== pinned) {
+        throw new Error(
+          `FC-W0 vacuity: ${fx.name} at ${pxPerDay} px/day drew ${r.textsDrawn} texts, pinned ` +
+            `${pinned}. Refusing to judge an agreement over a different set of texts.`,
         );
       }
       if (r.diagonal !== 0) {
@@ -107,6 +129,7 @@ if (json) {
     const differing = probe.shuffleDifferences(
       fx.scene,
       { pxPerDay: 4, originX: 40, originY: 32 },
+      fx.sizeAt(4, 32),
       200,
     );
     console.log(

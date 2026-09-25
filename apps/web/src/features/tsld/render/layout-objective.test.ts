@@ -13,6 +13,7 @@ import {
   type LayoutScene,
 } from './layout-objective';
 import type { RenderActivity, RenderEdge } from './render-model';
+import { FIXED_WIDTH_TEXT } from './test-support/fixed-width-text';
 
 /**
  * **The layout objective's terms, one at a time** (NetPoint-layout M4-T2).
@@ -44,7 +45,7 @@ function link(pred: string, succ: string): RenderEdge {
 }
 
 function scene(activities: RenderActivity[], edges: RenderEdge[] = []): LayoutScene {
-  return { activities, edges, dataDate: '2026-01-01' };
+  return { activities, edges, dataDate: '2026-01-01', text: FIXED_WIDTH_TEXT };
 }
 
 const BASE: LayoutObjective = {

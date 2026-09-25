@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_VIEW_TOGGLES, type TsldScene } from './paint';
 import type { Point, RectCache, RenderActivity, RenderEdge, Viewport } from './render-model';
 import { routeFrame } from './route-frame';
+import { allItems, sceneRowText } from './row-text-layout';
+import { FIXED_WIDTH_TEXT } from './test-support/fixed-width-text';
+import { textIndexOf } from './text-index';
 
 /**
  * **No two links on one track running opposite ways** (product owner, 2026-09-25, on
@@ -134,7 +137,20 @@ function route(pxPerDay: number): Map<RenderEdge, Point[]> {
   const view: Viewport = { pxPerDay, originX: 0, originY: 0 };
   const byId = new Map(s.activities.map((a) => [a.id, a]));
   const rectCache: RectCache = new Map();
-  return routeFrame(s, view, new Set(byId.keys()), byId, rectCache).lines;
+  // The text the painter would route around (links-and-labels M2-T2): this scene's own layout.
+  const text = textIndexOf(
+    allItems(
+      sceneRowText(
+        s,
+        view,
+        { width: 4000, height: 1000 },
+        FIXED_WIDTH_TEXT.toggles,
+        FIXED_WIDTH_TEXT.measure,
+        rectCache,
+      ),
+    ),
+  );
+  return routeFrame(s, view, new Set(byId.keys()), byId, rectCache, text).lines;
 }
 
 describe('routeFrame: links on one track never run opposite ways', () => {

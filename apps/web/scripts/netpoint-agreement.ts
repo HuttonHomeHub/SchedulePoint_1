@@ -12,7 +12,13 @@
  */
 import { evaluateLayout } from '../src/features/tsld/render/layout-objective';
 
-import { sceneFor, smallPlanLayouts, chainPlacedLayouts, unit300Layouts } from './crossing-probe';
+import {
+  HARNESS_TEXT,
+  sceneFor,
+  smallPlanLayouts,
+  chainPlacedLayouts,
+  unit300Layouts,
+} from './crossing-probe';
 import { evaluateFull, setAttribution, setCounters } from './netpoint-evaluate';
 import { rowReading } from './netpoint-row-probe';
 
@@ -46,7 +52,7 @@ export function agreement(): { name: string; ok: boolean; harness: string; produ
       rows: h.rows,
     };
     const { scene } = sceneFor(asap as never, layout);
-    const product = evaluateLayout(scene, 4);
+    const product = evaluateLayout({ ...scene, text: HARNESS_TEXT }, 4);
     const a = JSON.stringify(harness);
     const b = JSON.stringify(product);
     return { name, ok: a === b, harness: a, product: b };

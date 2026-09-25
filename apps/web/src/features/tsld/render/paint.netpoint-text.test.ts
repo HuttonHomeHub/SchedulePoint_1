@@ -162,8 +162,22 @@ describe('the wrap (M4-T2, spec §4.2 G7)', () => {
     expect(names(paint(plan(6), 12))).toEqual(['ABCDE', 'FGHI…']);
   });
 
+  it('routes round the one-line name where it can, which leaves the first line room (#393)', () => {
+    // Before links-and-labels M2 the router could not see the name, and P finishing on day 7 dropped
+    // its link straight through it, so this case kept one truncated line. The text-aware router
+    // takes the lane-0 horizontal and comes down at S instead: same length, clear of the name.
+    expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCDE', 'FGHI…']);
+  });
+
   it('keeps one truncated line where a routed link passes where the first line would go', () => {
-    expect(names(paint(plan(7), 12, {}, link))).toEqual(['ABCD…']);
+    // The fallback, which still happens where the router has no text-free shape as cheap: a bar
+    // after P in lane 0 puts the lane-0 horizontal through a foreign glyph, so the link runs the
+    // gutter above lane 1 instead, clear of the one-line name and across the wrap's first line.
+    const blocked = [
+      ...plan(7),
+      act({ id: 'q', laneIndex: 0, earlyStart: d(9), earlyFinish: d(30), label: 'Q' }),
+    ];
+    expect(names(paint(blocked, 12, {}, link))).toEqual(['ABCD…']);
   });
 
   it('wraps beside a link that passes clear of the first line', () => {
@@ -254,7 +268,12 @@ describe('the tiers (M4-T4, spec §4.2 G11)', () => {
 
   it('every tier gate in the painter reads lodTier, never a copy of its thresholds', () => {
     const here = dirname(fileURLToPath(import.meta.url));
-    const painter = readFileSync(join(here, 'paint.ts'), 'utf8')
+    // The date and centre-item gates moved into `row-text-layout.ts` at links-and-labels M1 (spec
+    // §4.2), and the gap-label and lag-plate gates into `link-facts.ts` at M2 (spec D-5, so the
+    // router can read them before routing), so the painter is read with the modules it draws from.
+    const painter = ['paint.ts', 'row-text-layout.ts', 'link-facts.ts']
+      .map((f) => readFileSync(join(here, f), 'utf8'))
+      .join('\n')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1');
     // Gap labels, lag plates, attachment dots, dates and the centre item: five gates.

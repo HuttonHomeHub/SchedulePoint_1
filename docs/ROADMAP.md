@@ -357,6 +357,13 @@ keep `main` releasable.
   hidden links from 58 to 17 and crossings from 360 to 204 without adding a row. The prompt at the
   foot of the diagram now appears only when activities overlap in a lane.
 
+- **Links go round names, and two-way links are drawn apart** (ADR-0159, amending ADR-0158). A
+  link now avoids running through an activity's name or dates wherever it can do so without passing
+  through a bar or adding a crossing, and leaves room for its lag label. Where one link arrives at a
+  node and another leaves it along the same line, they are drawn as two lines a few pixels apart
+  instead of one line with an arrowhead at each end. A waiting link's label moves along its line
+  rather than disappearing when another label is already there.
+
 - **Links join at the nodes** (ADR-0158, amending ADR-0065/0149/0150). Every logic link now leaves
   its predecessor's node and enters its successor's from a side the node allows, with any bend clear
   of the glyph, choosing the shortest of up to eleven shapes that avoid other bars. Links from one

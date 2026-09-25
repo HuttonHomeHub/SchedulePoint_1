@@ -22,6 +22,10 @@ function code(file: string): string {
  * one-implementation rule). So both ask `sharesNode`, and this file fails if the date layer grows
  * its own gap test back or the node pass stops going through `nodeMarks`.
  *
+ * The date layer's placement moved into `row-text-layout.ts` at links-and-labels M1 (spec §4.2), so
+ * the first case reads that file for the predicate, and holds the painter to having no inline gap
+ * test of its own either, since that is where one would be restored.
+ *
  * Its blind spot: it reads source text, so an adjacency test written with different variable names
  * would pass it. What it catches is the likely edit, which is restoring the inline comparison that
  * was there before.
@@ -30,8 +34,11 @@ describe('the node and date layers share one adjacency predicate', () => {
   const paint = code('paint.ts');
 
   it('the date layer asks sharesNode, and no inline gap test remains', () => {
-    expect(paint).toMatch(/!sharesNode\(rect, next\.rect\)/);
-    expect(paint).not.toMatch(/next\.rect\.x\s*-\s*\(rect\.x\s*\+\s*rect\.w\)/);
+    const layout = code('row-text-layout.ts');
+    expect(layout).toMatch(/!sharesNode\(rect, next\.rect\)/);
+    for (const source of [layout, paint]) {
+      expect(source).not.toMatch(/next\.rect\.x\s*-\s*\(rect\.x\s*\+\s*rect\.w\)/);
+    }
   });
 
   it('the node pass takes its nodes from nodeMarks, which asks sharesNode', () => {
