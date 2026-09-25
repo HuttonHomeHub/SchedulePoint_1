@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.149.1
+
+### Patch Changes
+
+- [#691](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/691) [`21d3217`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/21d3217d19ba785c38752c799d697c65cfbcc77d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A near-critical activity's nodes now carry a small centre dot, so near-critical reads apart from
+  on-schedule and critical without relying on colour or on comparing ring thicknesses. The legend's
+  node key shows the same dot.
+
 ## 0.149.0
 
 ### Minor Changes
