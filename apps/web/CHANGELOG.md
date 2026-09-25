@@ -1,5 +1,12 @@
 # @repo/web
 
+## 0.149.3
+
+### Patch Changes
+
+- [#695](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/695) [`66ddcab`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/66ddcaba5c97990e630cd12527e1c40f99e07920) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A constrained milestone now shows a "!" inside its triangle instead of a pin above it, so the mark
+  no longer sits on the milestone's name. The legend shows the new mark.
+
 ## 0.149.2
 
 ### Patch Changes
