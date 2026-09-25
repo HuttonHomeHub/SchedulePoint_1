@@ -1,6 +1,6 @@
 # Implementation Plan: Links that read the labels, and two-way tracks at crowded nodes
 
-- **Status:** Approved — product owner, 2026-09-25: plan approved as written; **CQ-1 answered "accept the cost"** (FC-Q2 is recorded, never a stop); **CQ-2 answered "yes, inside the circle"** (an end exactly `PORT_OFFSET_PX` from a task node centre counts as attached)
+- **Status:** Approved — product owner, 2026-09-25: plan approved as written; **CQ-1 answered "accept the cost"** (FC-Q2 is recorded, never a stop); **CQ-2 answered "yes, inside the circle"** (an end exactly `PORT_OFFSET_PX` from a task node centre counts as attached). Built under this plan; recorded as ADR-0159
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Owner:** feature-analyst draft; build owner to be named on approval
 

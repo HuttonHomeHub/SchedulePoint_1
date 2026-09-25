@@ -1,13 +1,13 @@
 # Feature Spec: Links that read the labels, and two-way tracks at crowded nodes
 
-- **Status:** Approved — product owner, 2026-09-25: plan approved as written; **CQ-1 answered "accept the cost"** (FC-Q2 is recorded, never a stop); **CQ-2 answered "yes, inside the circle"** (an end exactly `PORT_OFFSET_PX` from a task node centre counts as attached)
+- **Status:** Approved — product owner, 2026-09-25: plan approved as written; **CQ-1 answered "accept the cost"** (FC-Q2 is recorded, never a stop); **CQ-2 answered "yes, inside the circle"** (an end exactly `PORT_OFFSET_PX` from a task node centre counts as attached). Built under this plan; recorded as ADR-0159
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-09-25
 - **Tracking issue / epic:** none yet. Combines `docs/TECH_DEBT.md` #393 and #394, both approved for
   one epic by the product owner on 2026-09-25.
 - **Roadmap link:** the TSLD legibility programme (`docs/specs/node-to-node-links/`,
   `docs/specs/netpoint-grammar/`, `docs/specs/netpoint-layout/`)
-- **Related ADR(s):** ADR-0159 (to be filed at M4; outline in §4.12). It amends ADR-0158 decisions 1,
+- **Related ADR(s):** [ADR-0159](../../adr/0159-a-route-reads-the-text-it-is-drawn-beside.md) (filed at M4; outline in §4.12). It amends ADR-0158 decisions 1,
   2, 4 and 8. It moves ADR-0157's text placement into a module without changing it.
 
 ## 0. How to read this

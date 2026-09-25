@@ -5906,6 +5906,30 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   The pairs that remain sit at crowded shared nodes, or can escape only through a bar: #394.
   **The CPM engine is not imported and no migration runs.**
 
+- **ADR-0159** _(Accepted; links-and-labels M0–M4 landed 2026-09-25)_ — A route reads the text it
+  is drawn beside, and a two-way track splits at its node. ADR-0158 left two residues: a link could
+  run through a name or a date (#393), because the router never saw text and ADR-0158 refused to
+  estimate it; and some opposed pairs remained at crowded shared nodes (#394), where one bar's finish
+  and the next bar's start share a node and no reordering separates an arrival from a departure.
+  **Row text is now placed by one pure module** (`row-text-layout.ts`) taking a width function, which
+  the painter, the router and the Tidy worker all read, so there is no second opinion to drift; Tidy
+  gets the painter's widths as a table and fails with a message on a missing key rather than
+  guessing. **Text is a score term after overlaps** (after hidden legs in phases 1 and 2), with a
+  plate-room sub-term after it: text crossings on Unit 300 fell 163 / 165 / 93 → 150 / 141 / 93, and
+  one cell (`small-17` at 1 px a day) misses because no candidate the router has crosses less there.
+  **A vertical track still opposed after phase 3 is split by travel direction**, each side moved
+  `PORT_OFFSET_PX` (4 px) into the node's disc, under guards against every higher-ranked term, and
+  "attached" is amended to admit exactly that offset (CQ-2). It does less than M0's prototype
+  suggested — Unit 300's opposed pairs 32 / 27 / 23 → 31 / 24 / 20 — because the guards refuse most
+  tracks, every refusal named per cell; the crossing guard is the one worth revisiting. **The gate pass
+  found a label lost behind an aggregate that passed**: the text term moved one waiting link into a
+  gutter another already used, both gap labels wanted one midpoint, and FC-W6's count stayed inside
+  its bar while `143 cal d` vanished from the Unit 300 picture. A gap label now moves along its own
+  run before it is withheld (3 / 4 labels recovered, no route moved). The performance review found
+  the track pass testing every line in the frame per track, which in Tidy is the whole plan; it now
+  tests only lines whose box meets the track's, pinned by a counting stub. **The CPM engine is not
+  imported and no migration runs.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
