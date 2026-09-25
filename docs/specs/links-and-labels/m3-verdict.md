@@ -135,4 +135,21 @@ _Owed: the FC-Q1 / FC-Q2 sitting on the final tree, and FC-Q3._
 
 ## Pictures
 
-_Owed._
+`node scripts/shoot-tracks.mjs` (from `apps/web`) paints each fixture with the real painter twice:
+with the pass switched off (the frame as before M3) and as shipped, around the split track with the
+most moved segments.
+
+| Fixture                        | Before                                   | After                                  |
+| ------------------------------ | ---------------------------------------- | -------------------------------------- |
+| small-17, 12 px/day, 560 × 300 | [before](./m3-tracks-small17-before.png) | [after](./m3-tracks-small17-after.png) |
+| Unit 300, 4 px/day, 1646 × 900 | [before](./m3-tracks-unit300-before.png) | [after](./m3-tracks-unit300-after.png) |
+
+In `small-17`, the link arriving up into A200's start node from A190 and the link leaving it down to
+the `10 cal d` run were one stroke with an arrowhead at each end; they are now two lines. The track at
+A180 still carries two arrowheads: splitting it would gain a crossing, so the guard refused it. In
+Unit 300, the same happens at A7230's start node and at A5230's finish.
+
+**Where a split appears depends on what is in view.** The painter routes only the activities in its
+viewport, so a track that is residue in the whole plan may not be residue in a crop, and the reverse.
+The first Unit 300 picture, a 560 × 300 crop at 12 px/day, showed no difference at all for that
+reason; the probe's counts route every activity and are the same at every pan.
