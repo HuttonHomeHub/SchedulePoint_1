@@ -214,3 +214,22 @@ neither changed the finding.
    is safe because `hours_per_day_minutes ≤ 1440`. Any other multiply in the migration, the reverse
    or the tests needs the same cast.
    - Suggested: in E28, write `abs(lag_minutes)`, since the pipes break the table cell.
+
+### api-reviewer: confirmed
+
+All four points are confirmed against the code, with no blocking finding.
+
+- **Batching.** Query count is bounded by one `findCalendarIds`, one `findHoursPerDayMinutes` and
+  one query per distinct driven (org, plan). Page size does not change it.
+- **The widened select.** It leaks nothing: both `.from()`s project the endpoint by explicit field
+  list.
+- **The in-plan docblock twins.** Text only, acceptable in the same PR.
+- **M2-T3c.** Every citation is exact, and all four routes call the one `.from()`. The changeset
+  mechanics hold (`privatePackages.version: true`).
+
+Suggested:
+
+- M2-T3b builds the driving-calendar input from the link's own `organizationId`, as
+  `dependencies.service.ts:99-100` does. There is no endpoint `organizationId`.
+- Copy the in-plan "selected, not mapped into the response" sentence
+  (`dependency.repository.ts:9-16`) onto the cross-plan `endpointSelect` docblock.
