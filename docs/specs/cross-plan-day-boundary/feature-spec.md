@@ -54,18 +54,18 @@ The agreement round ([agreement-round.md](./agreement-round.md)) cited code for 
 citation below was opened before it was relied on (CLAUDE.md §19.11). One is sharper than it was
 stated (E28); one line range is approximate (E31); none is wrong.
 
-| #   | Claim                                                                                                                                              | Verdict                                | Established by                                                                                                                                                                                                                                                                                                                                                                                              |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E25 | **A1:** every cross-plan read divides by a hard-coded 1440, and the CRUD loads fetch only `{id, code, name}` per endpoint.                         | True                                   | `cross-plan-dependency-response.dto.ts:8` (`MINUTES_PER_DAY = 1440`), `:74` (`Math.round(entity.lagMinutes / MINUTES_PER_DAY)`); `endpointSelect` at `cross-plan-dependency.repository.ts:9`. Four callers of `.from()`: `cross-plan-dependencies.controller.ts:64` (create), `:75` (get), `plan-cross-plan-dependencies.controller.ts:45` and `activity-cross-plan-dependencies.controller.ts:55` (lists). |
-| E26 | **A1:** the in-plan shape to mirror resolves the factor before `.from()`.                                                                          | True                                   | `dependencies.service.ts:84-129` (`withLagDayFactors` / `withLagDayFactor`); `dependency-response.dto.ts:93` (`minutesToDays(entity.lagMinutes, entity.lagDayFactorMinutes)`).                                                                                                                                                                                                                              |
-| E27 | **A2:** the API docs tell clients to send `lagMinutes`, which a cross-plan link cannot accept, and the shared type claims identical lag semantics. | True                                   | `docs/API.md:704-705` (inside the `:659-708` section); `CreateCrossPlanDependencyDto` has no `lagMinutes` (`create-cross-plan-dependency.dto.ts:15-59`); `packages/types/src/index.ts:864` ("identical semantics to a dependency's"), while `CrossPlanDependencySummary` (`:856-871`) has no `lagMinutes`.                                                                                                  |
-| E28 | **B1:** `lag_minutes * factor` overflows `int4`.                                                                                                   | True, and at a lower bound than stated | Stored lag is `lagDays × 1440` (`cross-plan-dependencies.service.ts:178`), up to 5,256,000 at 3650 days. The product overflows `2^31 − 1` when `                                                                                                                                                                                                                                                            | lag_minutes | × factor > 2,147,483,647`: at factor 480 above ~3,107 days, and at factor **1440** above ~1,035 days. So a factor-1440 row overflows too if the expression is evaluated for it, which the `WITH resolved` form does for every row. Arithmetic, not run. |
-| E29 | **B5:** the driving-resource lookup filters on the partial unique index's predicate and three soft-delete guards.                                  | True                                   | Index: `uq_resource_assignments_activity_driving … WHERE "is_driving" AND "deleted_at" IS NULL` (`migrations/20260717020000_m7_resource_model/migration.sql:168`). Guards: assignment, activity and resource `deletedAt: null`, activity `type: 'RESOURCE_DEPENDENT'` (`driving-calendars.ts:25-34`).                                                                                                       |
-| E30 | The TypeScript factor lookup does not filter calendars by `deleted_at`.                                                                            | True                                   | `calendar.repository.ts:366-384` (`findHoursPerDayMinutes`, "Deliberately **not** filtered by `deleted_at` or `archived_at`"). So database-architect's "no `deleted_at` filter on the calendar join" matches the resolver the differential check compares against.                                                                                                                                          |
-| E31 | **P1:** `resolveProgrammeOrder` has no multi-node entry point.                                                                                     | True; line range approximate           | The function spans `programme-order.ts:45-118` (docblock `:45-57`, body `:58-118`), not `:47-106`. It BFS-es one target's upstream closure (`:74-85`) and runs Kahn over that closure only (`:87-117`). `compareIds` is at `:128-130`. The finding's substance is exact.                                                                                                                                    |
-| E32 | There is no update route for a cross-plan link, and one create path writes rows one at a time.                                                     | True                                   | `cross-plan-dependencies.service.ts` exposes list, get, create, remove only; the only writes are `crossPlanDependency.create` (`cross-plan-dependency.repository.ts:108`) and the soft-delete `updateMany` (`:284`). No `createMany` anywhere under `apps/` (grep). So a `version` bump invalidates no in-flight edit, and the table holds curated rows only.                                               |
-| E33 | The web does not parse cross-plan responses with a strict schema, so an additive response field is safe for the client.                            | True                                   | `apps/web/src/features/cross-plan-dependencies/schemas/cross-plan-schemas.ts` defines only the form schema (`:76`) and a lag formatter (`:64`).                                                                                                                                                                                                                                                             |
-| E34 | The same stale "the rest schedule on the plan calendar today" sentence sits on the **in-plan** lag calendar too.                                   | True; found while checking A2          | `dependency-response.dto.ts:58-61` and `packages/types/src/index.ts:829-833`. Per-activity calendars landed with ADR-0037. Folded into M2-T3 beside its cross-plan copy, so the fix does not point a reader at a twin that is wrong.                                                                                                                                                                        |
+| #   | Claim                                                                                                                                              | Verdict                                      | Established by                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E25 | **A1:** every cross-plan read divides by a hard-coded 1440, and the CRUD loads fetch only `{id, code, name}` per endpoint.                         | True                                         | `cross-plan-dependency-response.dto.ts:8` (`MINUTES_PER_DAY = 1440`), `:74` (`Math.round(entity.lagMinutes / MINUTES_PER_DAY)`); `endpointSelect` at `cross-plan-dependency.repository.ts:9`. Four callers of `.from()`: `cross-plan-dependencies.controller.ts:64` (create), `:75` (get), `plan-cross-plan-dependencies.controller.ts:45` and `activity-cross-plan-dependencies.controller.ts:55` (lists).                                                                                                                                  |
+| E26 | **A1:** the in-plan shape to mirror resolves the factor before `.from()`.                                                                          | True                                         | `dependencies.service.ts:84-129` (`withLagDayFactors` / `withLagDayFactor`); `dependency-response.dto.ts:93` (`minutesToDays(entity.lagMinutes, entity.lagDayFactorMinutes)`).                                                                                                                                                                                                                                                                                                                                                               |
+| E27 | **A2:** the API docs tell clients to send `lagMinutes`, which a cross-plan link cannot accept, and the shared type claims identical lag semantics. | True                                         | `docs/API.md:704-705` (inside the `:659-708` section); `CreateCrossPlanDependencyDto` has no `lagMinutes` (`create-cross-plan-dependency.dto.ts:15-59`); `packages/types/src/index.ts:864` ("identical semantics to a dependency's"), while `CrossPlanDependencySummary` (`:856-871`) has no `lagMinutes`.                                                                                                                                                                                                                                   |
+| E28 | **B1:** `lag_minutes * factor` overflows `int4`.                                                                                                   | True, and at a lower bound than first stated | Stored lag is `lagDays × 1440` (`cross-plan-dependencies.service.ts:178`), up to 5,256,000 at 3650 days. The product overflows when `abs(lag_minutes) × factor > 2,147,483,647`: at factor 1440 from **1,036** days, at factor 480 from **3,107** days, and at the ±3,650-day CHECK bound for **any factor of 409 or more**. So a factor-1440 row overflows too if the expression is evaluated for it, which the `WITH resolved` form does for every row. Arithmetic, confirmed by database-architect in the re-confirmation round; not run. |
+| E29 | **B5:** the driving-resource lookup filters on the partial unique index's predicate and three soft-delete guards.                                  | True                                         | Index: `uq_resource_assignments_activity_driving … WHERE "is_driving" AND "deleted_at" IS NULL` (`migrations/20260717020000_m7_resource_model/migration.sql:168`). Guards: assignment, activity and resource `deletedAt: null`, activity `type: 'RESOURCE_DEPENDENT'` (`driving-calendars.ts:25-34`).                                                                                                                                                                                                                                        |
+| E30 | The TypeScript factor lookup does not filter calendars by `deleted_at`.                                                                            | True                                         | `calendar.repository.ts:366-384` (`findHoursPerDayMinutes`, "Deliberately **not** filtered by `deleted_at` or `archived_at`"). So database-architect's "no `deleted_at` filter on the calendar join" matches the resolver the differential check compares against.                                                                                                                                                                                                                                                                           |
+| E31 | **P1:** `resolveProgrammeOrder` has no multi-node entry point.                                                                                     | True; line range approximate                 | The function spans `programme-order.ts:45-118` (docblock `:45-57`, body `:58-118`), not `:47-106`. It BFS-es one target's upstream closure (`:74-85`) and runs Kahn over that closure only (`:87-117`). `compareIds` is at `:128-130`. The finding's substance is exact.                                                                                                                                                                                                                                                                     |
+| E32 | There is no update route for a cross-plan link, and one create path writes rows one at a time.                                                     | True                                         | `cross-plan-dependencies.service.ts` exposes list, get, create, remove only; the only writes are `crossPlanDependency.create` (`cross-plan-dependency.repository.ts:108`) and the soft-delete `updateMany` (`:284`). No `createMany` anywhere under `apps/` (grep). So a `version` bump invalidates no in-flight edit, and the table holds curated rows only.                                                                                                                                                                                |
+| E33 | The web does not parse cross-plan responses with a strict schema, so an additive response field is safe for the client.                            | True                                         | `apps/web/src/features/cross-plan-dependencies/schemas/cross-plan-schemas.ts` defines only the form schema (`:76`) and a lag formatter (`:64`).                                                                                                                                                                                                                                                                                                                                                                                              |
+| E34 | The same stale "the rest schedule on the plan calendar today" sentence sits on the **in-plan** lag calendar too.                                   | True; found while checking A2                | `dependency-response.dto.ts:58-61` and `packages/types/src/index.ts:829-833`. Per-activity calendars landed with ADR-0037. Folded into M2-T3 beside its cross-plan copy, so the fix does not point a reader at a twin that is wrong.                                                                                                                                                                                                                                                                                                         |
 
 **E6 and E7 matter most.** The brief framed the lag defect as calendar days versus working days.
 The stored value itself is in the wrong unit on any calendar whose hours-per-day is not 1440, and
@@ -202,10 +202,13 @@ These are falsification conditions. They are written now so the measurement cann
   - **Changed rows** get the new `lag_minutes` and `version + 1`, and keep `updated_at`.
   - **The reverse** restores every changed row's `lag_minutes` exactly and bumps `version` again. An
     optimistic-lock version never goes backwards, so "byte-for-byte" is claimed for `lag_minutes`
-    and never for `version`.
+    and never for `version`. Its checks are two: recorded rows equal `prior_lag_minutes`; unrecorded
+    rows are multiples of 1440 (§4.4, Reversal).
   - **No overflow.** A row at ±3650 days on a 480-minute calendar and a row at ±3650 days on a
     1440-minute calendar convert correctly; the test is verified red against `int4` arithmetic
-    (E28).
+    (E28). Every multiply in the tests' own SQL carries the `::numeric` cast too.
+  - **A non-multiple of 1440** (one seeded row) converts by the formula and is restored exactly by
+    the reverse.
 - **FC-8, one re-derivation.** After the first boot on the release, every live, calculated plan
   with an active cross-plan edge and a `schedule_computed_at` before the migration's `finished_at`
   has been recalculated once, upstream-first. No plan is left `scheduleStale` that was not stale
@@ -383,7 +386,8 @@ through verbatim. If the derived value wins, pass it as a timed instant string.
 | `ignoreExternalRelationships` on                              | The derived value is still computed and dropped by the engine, as today (§30.4).                                                                                     |
 | Soft-deleted cross-plan link (lag migration)                  | Re-encoded too, so a restore does not bring back the old unit. Confirmed by database-architect (§4.4).                                                               |
 | LOE upstream (forward)                                        | No bound, and **not** counted in `upstreamMissingCount` (§1, assumed defaults). Distinct from N32.                                                                   |
-| Lag of ±3650 days (lag migration)                             | Converted in `numeric`, so no `int4` overflow on any calendar, including 1440 (E28).                                                                                 |
+| Lag of ±3650 days (lag migration)                             | Converted in `numeric`, so no `int4` overflow on any calendar; without it, any factor ≥ 409 overflows at the bound (E28).                                            |
+| Stored lag not a multiple of 1440 (lag migration)             | Converted by the same formula, no `RAISE`, recorded with its prior value; the reverse restores it exactly (§4.4).                                                    |
 | Link whose denormalised plan id disagrees with its activity's | Irrelevant by construction: every plan is resolved through the endpoint activity's `plan_id` (D5, database-architect B5).                                            |
 
 ### Permissions
@@ -544,8 +548,10 @@ sequenceDiagram
 ### 4.4 Database changes (CQ-1): a data migration and a record table
 
 **Designed by database-architect in the agreement round** (its §b, recorded in
-[agreement-round.md](./agreement-round.md)), which is what this section now states. CQ-1 and CQ-2
-are ratified. The migration **as written** goes back to the agent before its PR is opened (M2-T1)
+[agreement-round.md](./agreement-round.md)), which is what this section now states, with the
+corrections from the re-confirmation of the fold (the final column list, the strict-subset wording,
+the two reverse checks, the corrected reverse, and the overflow figures). CQ-1 and CQ-2 are
+ratified. The migration **as written** goes back to the agent before its PR is opened (M2-T1)
 and again at the gate pass (M4-T1), without exception (CLAUDE.md §19.3).
 
 **The only new schema object is a record table.** `cross_plan_dependencies` needs no new column,
@@ -553,46 +559,79 @@ index or constraint.
 
 #### The record table `cross_plan_lag_migrations`
 
-- `plan_id` references `plans` **`ON DELETE CASCADE`**, so the ADR-0096 hierarchy expiry deletes a
-  plan's records with it. It is the link's home plan, resolved through the **successor activity's**
-  `plan_id` (B5).
-- **No foreign key on the cross-plan dependency id or on the calendar id.** The record must outlive a
-  hard-deleted link or a deleted calendar, and it is evidence of what the migration did rather than a
-  live reference.
-- **`UNIQUE (cross_plan_dependency_id)`**: one record per link, so the reverse can never restore a
-  link twice.
-- **Columns the findings require:** `cross_plan_dependency_id`, `plan_id`, `lag_calendar`, the
-  resolved calendar id (nullable, for `TWENTY_FOUR_HOUR` and an unresolved calendar),
-  **`day_factor_minutes`** (B2's differential check reads it), the prior `lag_minutes` and the new one,
-  and `migrated_at`. database-architect's M2-T1 design is final on the exact column list, the
-  `organization_id` column and any index; the precedent is `finish_milestone_date_migrations`, which
-  indexes `plan_id` so the cascade can find its children
-  (`migrations/20260923120000_finish_milestone_end_of_day_placements/migration.sql:154-157`).
-- **It records every row the statement resolves, including rows whose value does not change.** This
-  spec's reading of §b, stated so database-architect can confirm it (M2-T1): the B2 differential
-  compares `day_factor_minutes` with the TypeScript resolver for **every** seeded row, and the
-  failure it exists to catch is an eight-hour row wrongly resolved to 1440. That row would be left
-  unchanged; if unchanged rows were not recorded, the check would have nothing to compare and would
-  pass. The reverse only touches rows whose prior and new values differ.
+**The final column list** (database-architect, re-confirmation round), on the `FmDateMigration`
+precedent (`schema.prisma:3001-3039`, table `finish_milestone_date_migrations`):
+
+| Column                     | Source / type                                                        | Key                                     |
+| -------------------------- | -------------------------------------------------------------------- | --------------------------------------- |
+| `id`                       | UUID v7, from the migration's `clock_timestamp()` UUID v7 expression | primary key                             |
+| `organization_id`          | copied from the **link**                                             | FK `RESTRICT`, **no index**             |
+| `plan_id`                  | the **successor activity's** `plan_id` (B5), the link's home plan    | FK `ON DELETE CASCADE`, **plain index** |
+| `cross_plan_dependency_id` | the link id                                                          | **`UNIQUE`**, **no FK**                 |
+| `lag_calendar`             | the link's `lag_calendar`                                            | —                                       |
+| `lag_calendar_id`          | the resolved calendar id; null for `TWENTY_FOUR_HOUR` or unresolved  | **no FK**                               |
+| `day_factor_minutes`       | the resolved factor (B2's differential check reads it)               | —                                       |
+| `prior_lag_minutes`        | `lag_minutes` before the migration                                   | —                                       |
+| `new_lag_minutes`          | `lag_minutes` after the migration                                    | —                                       |
+| `migrated_at`              | transaction start time                                               | —                                       |
+
+- **Write-once, like the precedent:** no `version`, no `created_at`/`updated_at` pair, no soft
+  delete. A Prisma model with back-relations on `Organization` and `Plan`.
+- **`ON DELETE CASCADE` on `plan_id`** lets the ADR-0096 hierarchy expiry delete a plan's records
+  with it, and the plain `plan_id` index lets the cascade find them (the precedent's reason,
+  `schema.prisma:3033-3037`). `organization_id` gets no index: organisations are never hard-deleted,
+  so its `RESTRICT` check never runs.
+- **No foreign key on the link id or on the calendar id.** The record must outlive a hard-deleted
+  link or a deleted calendar; it is evidence of what the migration did, not a live reference.
+- **The `UNIQUE (cross_plan_dependency_id)` diverges from the precedent, and the migration comment
+  must say why it cannot fire.** The precedent has no unique constraint because a refusal would fail
+  the migration and therefore the API's boot (`schema.prisma:3036-3037`). Here it cannot fire: the
+  table is created empty by the same migration, the statement runs once, and each link yields exactly
+  one resolved row, because every join in the CTE is at most one-to-one (one successor activity, one
+  plan per activity, and the driving join on the partial unique index's predicate). It is kept
+  because the reverse depends on one record per link: step 3's selector reads "no record" as
+  "created after the release".
+- **Every row the statement resolves is recorded, including rows whose value does not change.**
+  Confirmed by database-architect, for two reasons:
+  1. **The B2 differential.** It compares `day_factor_minutes` with the TypeScript resolver for every
+     seeded row. The failure it exists to catch is an eight-hour row wrongly resolved to 1440, which
+     would be left unchanged; if unchanged rows were not recorded, the check would have nothing to
+     compare and would pass.
+  2. **The reverse's step-3 selector.** "No record ⇒ created after the release" is exact only if
+     every pre-release link has a record. A link skipped because its value did not change would be
+     misread as post-release and converted by the reverse.
 
 #### The conversion: one statement, last in the file
 
-- **One `WITH resolved AS (…)` statement**, placed **after** the record table's DDL. The CTE
-  resolves each row's factor once; the same statement inserts the record rows and updates the
-  changed links, so the recorded set and the converted set are one set by construction (the
-  ADR-0148 shape).
+- **One statement**, placed **after** the record table's DDL, in three parts:
+  1. `WITH resolved AS (…)` resolves each row's factor once and computes the new value;
+  2. `recorded AS (INSERT INTO "cross_plan_lag_migrations" … SELECT … FROM resolved RETURNING …)`
+     inserts one record per resolved row;
+  3. `UPDATE "cross_plan_dependencies" … FROM recorded` updates **only** the returned rows whose
+     `new_lag_minutes <> prior_lag_minutes`.
+
+  So the **converted set is a strict subset of the recorded set** by construction, not one set:
+  every converted row is recorded, and every unchanged row is recorded too, for the two reasons
+  above. (This bullet said the two sets were "one set by construction" until the re-confirmation
+  round; database-architect corrected it.)
+
 - **Every row, soft-deleted included.** A restored link must not come back in the old unit.
 - **`numeric` arithmetic** (B1): `round(lag_minutes::numeric * factor / 1440)::integer`. In `int4`
-  the product overflows before the division: at factor 480 above about 3,107 days and at factor 1440
-  above about 1,035 days (E28), and the `WITH` form evaluates the expression for every row, not only
-  the ones it updates. Overflow on a populated table is ADR-0107's restart loop on the deployed host,
-  and a pristine CI database cannot exhibit it. Stored values are multiples of 1440 (the DTO only
-  ever accepted whole days, `@IsInt`, `create-cross-plan-dependency.dto.ts:43`), so the `round`
-  changes nothing for any row the API could have written; for any other row the record keeps the
-  prior value, so the reverse is still exact. The migration raises no error on such a row, because a
-  `RAISE` on populated data is the same restart loop.
-- **Only rows whose value changes are updated** (B3): `WHERE new_lag_minutes <> lag_minutes`. So
-  factor-1440 rows, `TWENTY_FOUR_HOUR` rows and zero-lag rows are **not touched**: `lag_minutes`,
+  the product overflows before the division (E28): at factor 1440 from **1,036** days, at factor 480
+  from **3,107** days, and **any factor of 409 or more can overflow at the ±3,650-day CHECK bound**.
+  The `WITH` form evaluates the expression for every row, not only the ones it updates. Overflow on a
+  populated table is ADR-0107's restart loop on the deployed host, and a pristine CI database cannot
+  exhibit it. The cast back to `integer` is safe because `hours_per_day_minutes ≤ 1440`, so
+  `abs(new) ≤ abs(old)`. **Every multiply in the migration, the reverse and the tests' SQL carries the
+  same `::numeric` cast**, not only this one.
+- **A non-multiple of 1440 is converted by the same formula, with no `RAISE`** (confirmed). Stored
+  values are multiples of 1440 for every row the API could have written (the DTO only ever accepted
+  whole days, `@IsInt`, `create-cross-plan-dependency.dto.ts:43`), so the `round` changes nothing for
+  them. Any other row converts by the formula (720 at factor 480 becomes 240; 1 can become 0) and is
+  recorded with its prior value, so the reverse restores it exactly. A `RAISE` on populated data
+  would be the same restart loop. The migration test seeds one such row.
+- **Only rows whose value changes are updated** (B3), by the `UPDATE … FROM recorded` filter above.
+  So factor-1440 rows, `TWENTY_FOUR_HOUR` rows and zero-lag rows are **not touched**: `lag_minutes`,
   `version` and `updated_at` all stay. Each class is pinned by the migration test.
 - **Changed rows bump `version` and leave `updated_at` alone.** A planner-owned input is rewritten,
   so optimistic locking must see it (ADR-0148, ADR-0155). There is no update route (E32), so the bump
@@ -612,7 +651,11 @@ index or constraint.
   (`migrations/20260717020000_m7_resource_model/migration.sql:168`), so it matches at most one row
   per activity, plus the soft-delete guards `driving-calendars.ts:25-34` applies (activity and
   resource not deleted, activity type `RESOURCE_DEPENDENT`). A soft-deleted endpoint therefore falls
-  back to its own calendar, which is also what the TypeScript resolver answers for it (E29).
+  back to its own calendar, which is also what the TypeScript resolver answers for it (E29). The
+  index constrains **driving** rows only, so an activity may hold any number of live non-driving
+  assignments; a join that dropped `is_driving` would fan out on them. The no-fan-out seed therefore
+  includes a **live non-driving assignment** beside the live driving one and a soft-deleted driving
+  one (database-architect, re-confirmation round).
 - **The calendar join carries no `deleted_at` filter**, matching `findHoursPerDayMinutes`
   (`calendar.repository.ts:366-384`, E30): an activity may be bound to an archived or deleted
   calendar, and the TypeScript side does not filter either.
@@ -633,14 +676,55 @@ index or constraint.
 A redeploy of the previous image after the migration would read working minutes as `× 1440` days
 and write new rows in the old unit, mixing encodings in one column (the ADR-0107 hazard). So the
 rollback is a documented reverse, in `docs/DEPLOYMENT.md` ("Rolling back past the cross-plan lag
-release"), in this order:
+release"). Corrected in the re-confirmation round by database-architect; the shape follows the
+finish-milestone reverse beside it (`docs/DEPLOYMENT.md:440-482`).
 
-1. Lock the record table.
-2. Restore `lag_minutes` from the record for every changed row, and bump `version` again.
-3. Convert rows **created after the release** (they have no record) back to
-   `round(lag_minutes / factor) × 1440`, resolving the factor by the same rule, in `numeric`.
-4. Run a check query: every row's `lag_minutes` is a multiple of 1440, the old unit's shape.
-5. Drop the record table.
+**Before starting: check for factor drift.** Step 3 re-resolves each post-release link's factor
+**today**. If the calendar it resolves to has had its hours-per-day changed since the release, the
+factor differs from the one the write used, and step 3 turns the stored minutes into the wrong
+number of days. The runbook carries a finder query, built on the migration's CTE copied verbatim,
+listing every **unrecorded** link whose resolved calendar's `updated_at` is later than this
+migration's `_prisma_migrations.finished_at`, or whose `lag_minutes` is not a whole multiple of
+today's factor. It over-reports on purpose (`updated_at` moves on any calendar edit, not only an
+hours change); it must not under-report. Each row it returns is checked by hand, and corrected or its
+day count noted, before the reverse runs.
+
+**The procedure:**
+
+1. **Stop the API container** (leave the database running). The reverse runs with nothing writing.
+2. Run the script below as **one transaction**:
+   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -1 -f - < reverse.sql`.
+   Any failed statement or check rolls the whole reverse back.
+   1. `LOCK TABLE "cross_plan_lag_migrations" IN ACCESS EXCLUSIVE MODE`. This is a **one-shot
+      guard**, not concurrency protection: the API is already stopped. If the reverse has already
+      run, the table is gone, the `LOCK` fails, and nothing applies twice.
+   2. **Restore recorded rows:** for every record with `new_lag_minutes <> prior_lag_minutes`, set
+      `lag_minutes = prior_lag_minutes` and `version = version + 1`. An optimistic-lock version
+      never goes backwards.
+   3. **Convert unrecorded rows** (created after the release): the factor comes from the
+      migration's CTE **copied verbatim**, never re-typed, so the two cannot disagree about the
+      rule. The value is `(floor(lag_minutes::numeric / factor + 0.5) * 1440)::integer`, and the row
+      also gets `version = version + 1`. `floor(x + 0.5)` rather than `round` matches the API's
+      `Math.round` on negative halves (`round(-2.5)` is `-3` in Postgres and `Math.round(-2.5)` is
+      `-2`), so a lead converts back to the day count the planner was shown. The `::numeric` cast is
+      required here as in the migration.
+   4. **Check, recorded rows:** zero records whose link's `lag_minutes <> prior_lag_minutes`. A
+      failure aborts the transaction.
+   5. **Check, unrecorded rows:** zero links without a record whose `lag_minutes % 1440 <> 0`. A
+      failure aborts the transaction.
+
+      The single "every row is a multiple of 1440" check this replaces was wrong: a seeded or legacy
+      non-multiple row is restored to its prior value, which is correctly not a multiple.
+
+   6. `DROP TABLE "cross_plan_lag_migrations"`.
+   7. `DELETE FROM "_prisma_migrations" WHERE "migration_name" = '<this migration>'`, so a later
+      roll-forward applies it afresh (precedent `docs/DEPLOYMENT.md:474-477`).
+3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
+4. **Recalculate the linked plans** (Recalculate programme on each most-downstream plan). Their
+   stored dates were computed under the new rule and stay that way until recalculated, and the
+   previous image has no boot re-derivation to do it.
+
+The runbook's SQL is exercised by the M2-T2 migration test, not only written.
 
 #### Marker and documents
 
@@ -664,7 +748,13 @@ number means.
   (`dependencies.service.ts:84-129`, E26): an async `withLagDayFactor(s)` resolves each row's factor
   before `.from()`, and `.from()` takes `WithLagDayFactor<…>` and uses `minutesToDays`, as
   `dependency-response.dto.ts:93` does. The CRUD loads widen the endpoint select from
-  `{id, code, name}` to add `type`, `calendarId` and `planId`, so the factor rides on the join.
+  `{id, code, name}` to add `type`, `calendarId` and `planId`, so the factor rides on the join. The
+  cross-plan `endpointSelect` docblock carries the in-plan sentence that these fields are "selected,
+  not mapped into the response" (`dependency.repository.ts:9-18`); api-reviewer confirmed both
+  `.from()`s project the endpoint by an explicit field list, so the widened select leaks nothing.
+- **The driving-calendar input takes the link's own `organizationId`**, as the in-plan service
+  takes it from the row (`dependencies.service.ts:99-111`). An endpoint select carries no
+  `organizationId`, and a cross-plan link is same-organisation by construction (ADR-0045 §6).
 - **Batched per page, never per row.** A page from the activity list spans plans (it holds both
   directions), so the lookup collects distinct plan ids across the page (one `findCalendarIds`),
   loads driving calendars through `loadDrivingCalendarMapForRows` (one query per distinct (org, plan)
@@ -788,20 +878,34 @@ and shaped like `FinishMilestoneRederiveService`:
     edges, keeping the same `compareIds` tie-break and the same `ProgrammeCycleError` on a residual
     cycle. `resolveProgrammeOrder` then calls it with its closure, and its existing suite passes
     unedited as the oracle (the ADR-0078 move rule).
-  - The boot service **groups the global pending set by `organizationId`**, loads each
+  - The boot service **groups the global pending set by `organizationId`** and loads each
     organisation's edges once (`loadOrgAdjacency`, `cross-plan-dependency.repository.ts:168-176`;
-    the DAG is guaranteed by ADR-0045 §3), and calls the extracted function once per organisation
-    with that organisation's pending plans as the node set.
+    the DAG is guaranteed by ADR-0045 §3).
+  - **It orders the whole organisation graph, then recalculates only the pending plans in that
+    order.** The node set passed to the extracted function is **every plan in that organisation's
+    `loadOrgAdjacency` result**, not the pending set; the service then walks the returned order and
+    skips any plan that is not pending. This costs one sort over a graph already loaded.
   - **No deadlock risk:** each plan's advisory lock is acquired and released inside its own
     transaction, so the service never holds two plan locks at once.
-  - **Stated edge case.** Ordering is over the pending set, so a chain `A → B → C` with `B` not
-    pending orders `A` and `C` by id alone. That is harmless for `C` (its input from `B` does not
-    change), but recalculating `A` after `B` was computed marks `B` stale. `B` is not pending only if
-    it was recalculated after the migration and before this boot's pending query ran. On a single
-    replica that window is the boot itself (the query is the service's first await, issued from
-    `onApplicationBootstrap`); with several replicas a later replica's boot can see such a `B`. The
-    result is a visible stale flag, not a silent wrong date, and a programme recalculation clears
-    it. Reasoned from the code, not run; recorded rather than engineered around.
+  - **Why the whole graph** (backend-performance-reviewer, re-confirmation round; the design choice
+    is the coordinator's). The first fold passed the **pending** set as the node set, and its prose
+    called the result "harmless for C". It was not. The extracted Kahn step counts in-degree only
+    from edges with both ends in the node set (`programme-order.ts:90-96`), so in `A → B → C` with `B`
+    not pending, `A` and `C` both have in-degree 0 and are ordered by `compareIds` alone. Plan ids
+    are UUID v7, so creation order, and `C` can sort before `A`. `C` would then be recalculated first
+    and read stale against `A`, because staleness reads the **full transitive upstream closure**
+    (`schedule.service.ts:809-818`: `resolveProgrammeOrder` over the organisation's edges, then
+    `computeStaleness`), and an upstream computed later than the target makes it stale
+    (`staleness.ts:32-47`). Ordering over the whole graph keeps the `A → B → C` path, so `A` always
+    precedes `C`, and **the C-before-A case is gone**.
+  - **What remains, stated.** A **non-pending intermediate** `B` is not recalculated. After `A` is,
+    `B`'s `schedule_computed_at` is older than `A`'s, so `B` reads **stale**
+    (`staleness.ts:43-46`, over the closure `schedule.service.ts:809-818`) until a programme
+    recalculation reaches it. `B` is not pending only if it was recalculated after the migration and
+    before this boot's pending query ran. On a single replica that window is the boot itself (the
+    query is the service's first await, issued from `onApplicationBootstrap`); with several replicas
+    a later replica's boot can see such a `B`. The result is a visible stale flag, not a silent wrong
+    date. Reasoned from the code, not run.
 - **How.** `recalculateAsSystem` per plan (`schedule.service.ts:620-625`): no pen, the plan
   advisory lock, not audited, never awaited, never fails the boot. One plan's failure is logged and
   retried next boot.

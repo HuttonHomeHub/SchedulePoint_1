@@ -282,13 +282,22 @@ only the divisor was considered and rejected: it is a throwaway second spelling 
 
 ##### Task M2-T1: the migration design, from the agreement round
 
-- **Description:** database-architect's design is already given (spec §4.4, from its §b). This task
-  writes it into `m2/migration-design.md` and settles what §b left to the build: the record table's
-  exact columns, its `organization_id` column, its `plan_id` index (the
-  `finish_milestone_date_migrations` precedent), and this spec's reading that the record holds
-  **every** resolved row, unchanged ones included, so the B2 differential can see a row wrongly
-  resolved to 1440. Then the **SQL as written** goes back to database-architect before the PR is
-  opened (CLAUDE.md §19.3).
+- **Description:** database-architect's design is given in full (spec §4.4: its §b plus the
+  re-confirmation corrections). This task writes it into `m2/migration-design.md`, including the
+  **final column list**, on the `FmDateMigration` precedent (`schema.prisma:3001-3039`):
+  - `id`: UUID v7, from the migration's `clock_timestamp()` UUID v7 expression, primary key.
+  - `organization_id`: copied from the link; FK `RESTRICT`; no index.
+  - `plan_id`: the successor activity's `plan_id`; FK `ON DELETE CASCADE`; plain index.
+  - `cross_plan_dependency_id`: `UNIQUE`, no FK.
+  - `lag_calendar`, `lag_calendar_id` (no FK), `day_factor_minutes`, `prior_lag_minutes`,
+    `new_lag_minutes`, `migrated_at`.
+  - Write-once: no `version`, no `created_at`/`updated_at`, no soft delete. A Prisma model with
+    back-relations on `Organization` and `Plan`.
+  - The record holds **every** resolved row, unchanged ones included (confirmed), for two reasons:
+    the B2 differential, and the reverse's step-3 selector ("no record ⇒ created after the
+    release").
+    Then the **SQL as written** goes back to database-architect before the PR is opened (CLAUDE.md
+    §19.3).
 - **Complexity:** S
 - **Dependencies:** M1
 - **Risks:** the agent returns nothing. → Re-run it. The PR is not opened until it has answered.
@@ -298,15 +307,27 @@ only the divisor was considered and rejected: it is a throwaway second spelling 
 ##### Task M2-T2: the migration and its test
 
 - **Description:** one migration file, in this order:
-  1. `CREATE TABLE cross_plan_lag_migrations`: `plan_id` FK `ON DELETE CASCADE`; no FK on the
-     dependency id or the calendar id; `UNIQUE (cross_plan_dependency_id)`; `day_factor_minutes`,
-     prior and new `lag_minutes`, `lag_calendar`, resolved calendar id, `migrated_at` (M2-T1 final).
-  2. **Last in the file, one `WITH resolved AS (…)` statement** that resolves each row's factor
-     once, inserts a record row for every resolved link, and updates the changed links:
+  1. `CREATE TABLE cross_plan_lag_migrations` with M2-T1's column list, its `plan_id` index and its
+     two FKs. **The migration comment states why the `UNIQUE (cross_plan_dependency_id)` cannot
+     fire**, since it diverges from the precedent, which has none because a refusal would fail the
+     boot (`schema.prisma:3036-3037`): the table is created empty by this migration, the statement
+     runs once, and every join in the CTE is at most one-to-one. It exists because the reverse's
+     step-3 selector needs exactly one record per link.
+  2. **Last in the file, one statement** in three parts:
+     `WITH resolved AS (…)` resolves each row's factor and new value once;
+     `recorded AS (INSERT INTO "cross_plan_lag_migrations" … SELECT … FROM resolved RETURNING …)`
+     records **every** resolved link; and `UPDATE "cross_plan_dependencies" … FROM recorded` touches
+     only returned rows with `new_lag_minutes <> prior_lag_minutes`. The converted set is therefore a
+     **strict subset** of the recorded set (database-architect, re-confirmation round; the first fold
+     said "one set").
      - every row, **soft-deleted included**;
-     - `round(lag_minutes::numeric * factor / 1440)::integer` (**B1**; `int4` overflows at factor
-       480 above ~3,107 days and at factor 1440 above ~1,035 days, spec E28);
-     - `UPDATE … WHERE new <> old` only (**B3**), bumping `version` and leaving `updated_at`;
+     - `round(lag_minutes::numeric * factor / 1440)::integer` (**B1**; in `int4` the product
+       overflows at factor 1440 from 1,036 days, at factor 480 from 3,107 days, and at the ±3,650-day
+       bound for any factor ≥ 409, spec E28). **Every multiply in the migration, the reverse and the
+       tests' SQL carries the `::numeric` cast**; the cast back is safe because factor ≤ 1440;
+     - a stored value that is not a multiple of 1440 converts by the same formula with no `RAISE`
+       (720 at 480 becomes 240; 1 can become 0) and is recorded;
+     - the `UPDATE` (**B3**) bumps `version` and leaves `updated_at`;
      - every plan reached through the **endpoint activity's `plan_id`**, never the link's
        `*_plan_id` columns (**B5**);
      - the driving-resource join on the partial unique index's predicate exactly
@@ -322,7 +343,8 @@ only the divisor was considered and rejected: it is a throwaway second spelling 
   - A pristine CI database cannot exhibit a row-dependent failure (ADR-0107). → Seed every path
     before the migration runs: `PROJECT_DEFAULT`, `PREDECESSOR`, `SUCCESSOR` (own calendar,
     inherited from **its own** plan, driven by a resource), `TWENTY_FOUR_HOUR`, a null calendar, a
-    soft-deleted link, a soft-deleted endpoint, a link whose two plans have different calendars.
+    soft-deleted link, a soft-deleted endpoint, a link whose two plans have different calendars,
+    and **one row whose `lag_minutes` is not a multiple of 1440**.
   - The cost comment is copied rather than measured (the ADR-0148 record). → `EXPLAIN ANALYZE` over
     10,000 seeded rows, five runs, on the SQL as shipped; recorded in the header comment and
     `m2/migration-design.md` with the spread.
