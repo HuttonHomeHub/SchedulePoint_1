@@ -358,3 +358,20 @@ Suggested:
 - State in D10/R12 that limb 3 is unconditional on the diff: it fails any push while `active`
   once #384 stops being open, unlike limbs 1–2.
 - On `main`, limbs 1–2 are empty and only limb 3 bites. Say so.
+
+### component-reviewer: confirmed
+
+It checked all four points against the code, with no blocking or suggested correction.
+
+- **C1.** `definitionGate` is an additive field on `SelectionContextInput`, and the only callers are
+  `TsldPanel.tsx:1744` and `plan-workspace-toolbar.tsx:1285`. Edit and Delete gate on
+  `scheduleRefusal`, so they are unaffected. The table already reads `editorGating.general`.
+  - Precision: the Gantt row menu renders `selectionActionItems` directly (`GanttRowMenu.tsx:89-95`),
+    so the bar and the Gantt share one item by construction. The table is the only independent
+    roster.
+- **C2.** A clean seam (`ScheduleHealthPanel.tsx:318-346,410-434`; `HealthPrintDocument.tsx:121-144`).
+- **C3.** Zod 4 strips unknown keys when `.strict()` is omitted, so each level exports a tolerant
+  and a strict schema from one shape. The producer tests switch to the strict names. The commit
+  envelope's own `.strict()` (`use-interchange.ts:111`) drops too.
+- **The label.** Pinned, since the bar and the Gantt share it and M4-T2's structural test pins the
+  table.
