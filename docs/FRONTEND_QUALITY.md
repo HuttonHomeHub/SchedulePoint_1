@@ -73,9 +73,10 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 - **The budget is enforced, and it is the measured floor plus 5%** — not the
   ~200 kB figure this section carried for years, which predates any build being
   looked at. `apps/web/bundle-budget.json` holds the numbers and
-  `pnpm --filter @repo/web check:bundle-size` compares them to a real artefact on
-  every CI run (`docs/specs/delivery-gates/` M3). ADR-0058: a bar set at an
-  aspiration gets deleted rather than met.
+  `pnpm check:web-bundle` builds the app and compares them to a real artefact in
+  `pnpm prepush` and on every CI run (`docs/specs/delivery-gates/` M3; ADR-0160
+  moved it into prepush). ADR-0058: a bar set at an aspiration gets deleted
+  rather than met.
 - **The quantity is the entry GRAPH, not the entry chunk, and the difference is
   33 kB.** The graph is the entry chunk plus the transitive closure of its
   **static** imports — everything the browser must parse before it can render.

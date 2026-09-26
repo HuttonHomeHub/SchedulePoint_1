@@ -20,6 +20,7 @@
  * mirrored: a private mirror of the logic would stay green through the regression it is named for.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { runGate } from '../apps/web/scripts/check-bundle-size.mjs';
 import { packagesIn, staticClosure } from '../apps/web/scripts/bundle-report-plugin.ts';
@@ -209,6 +210,35 @@ it('packagesIn keeps a scoped package whole, and takes the LAST node_modules', (
     'the last node_modules wins — a nested dependency is not its parent',
   );
   assert.deepEqual(packagesIn(['/r/src/app/main.tsx']), [], 'our own source is not a package');
+});
+
+it('the root gate can run on a turbo cache hit, and cannot pass over a stale report', () => {
+  /**
+   * `check:web-bundle` (ADR-0160) runs in `pnpm prepush` and in CI. Two things make its verdict
+   * describe the current tree rather than an old one:
+   *
+   * - `turbo.json` declares the report as a build output. Without it a cache hit restores `dist/`,
+   *   never runs `vite build`, and leaves no report, so the check fails asking for a build on a
+   *   correct bundle. Measured 2026-09-26 before the entry existed. Verified red by removing it.
+   * - The script deletes the report BEFORE the build. Without that, a build that fails leaves the
+   *   previous green report on disk for nothing to overwrite. Verified red by moving the deletion
+   *   after the build.
+   *
+   * Read from the files rather than restated, so the test is about the shipped configuration.
+   */
+  const turbo = JSON.parse(readFileSync(new URL('../turbo.json', import.meta.url), 'utf8'));
+  assert.ok(
+    turbo.tasks.build.outputs.includes('bundle-report.json'),
+    'turbo.json build outputs must include bundle-report.json, or a cache hit leaves no report',
+  );
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const script = pkg.scripts['check:web-bundle'];
+  assert.equal(typeof script, 'string', 'the root check:web-bundle script exists');
+  const clear = script.indexOf('rimraf apps/web/bundle-report.json');
+  const build = script.indexOf('turbo run build --filter=@repo/web');
+  const check = script.indexOf('pnpm --filter @repo/web check:bundle-size');
+  assert.ok(clear >= 0 && build >= 0 && check >= 0, `unexpected script: ${script}`);
+  assert.ok(clear < build && build < check, 'the report is cleared, then built, then checked');
 });
 
 for (const [name, fn] of cases) {

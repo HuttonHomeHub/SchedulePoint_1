@@ -22,23 +22,32 @@
  * download nobody performs. Rollup's own `imports` / `dynamicImports` lists are the source
  * (`scripts/bundle-report-plugin.ts`) — filenames on disk cannot say which kind an import was.
  *
- * ## Why this is not a root `check:*`
+ * ## How it is run: the root gate `check:web-bundle` (ADR-0160)
  *
- * It needs a build. A root gate runs in `pnpm prepush` for everyone on every push, and making a
- * five-second push depend on a thirty-second production build is how a gate gets bypassed. It lives
- * in `apps/web`, is invoked by CI after the build step, and is therefore **deliberately outside
- * `check:ci-roster`'s population** — that gate's docblock says the same thing from the other side,
- * because a rule stated once is a rule one reader will not find.
+ * This script only reads a report; it never builds. The root script `check:web-bundle` deletes the
+ * report, runs `turbo run build --filter=@repo/web`, then calls this. `pnpm prepush` and CI both run
+ * that root command, so a contributor meets an over-budget bundle before CI does.
  *
- * ## A blind spot with a trigger, named because it has not fired yet
+ * Until ADR-0160 this was deliberately CI-only, on the premise that a build would make "a
+ * five-second push" wait thirty seconds. The push gate was never five seconds (the full
+ * `pnpm prepush` is about six minutes), and the build was never measured. Measured 2026-09-26: 16.8 s
+ * cold, 1.5 s on a turbo cache hit. PR #701 then passed prepush and failed CI on this gate, which is
+ * the round trip the pre-push gate exists to save.
  *
- * The report is written OUTSIDE `dist/` so it can never be served — which also puts it outside
- * `turbo.json`'s declared `build` outputs. On a Turbo cache HIT, `dist/**` is restored, `vite build`
- * never runs, and this file is neither written nor restored: the gate would then report "build
- * first" on a perfectly correct bundle. It cannot happen today — `ci.yml` caches nothing for Turbo
- * and configures no remote cache — so the fix is deliberately not pre-emptive. **Adding Turbo
- * caching to CI is the trigger**: declare `apps/web/bundle-report.json` in `turbo.json`'s outputs
- * in the same change. Found by the M5 devops review, and recorded rather than guessed at.
+ * ## The report is a turbo output
+ *
+ * The report is written OUTSIDE `dist/` so it can never be served. That also put it outside
+ * `turbo.json`'s declared `build` outputs, so on a cache hit `dist/**` was restored, `vite build`
+ * never ran, and no report was written. This docblock used to say that "cannot happen today"
+ * because CI caches nothing for Turbo. That was wrong: turbo's LOCAL cache is on by default, and a
+ * second build on one machine already hit it. Worse than asking for a build, it let the check read
+ * whatever report an EARLIER build left: measured 2026-09-26, a bundle with jspdf in its entry graph
+ * passed on a stale green report (`docs/specs/prepush-bundle-gate/m1-red-run.md` §3).
+ *
+ * So `turbo.json` now declares `bundle-report.json` as an output, which makes a cache hit restore
+ * the report for the inputs that produced it, and the root gate deletes the report first, so a
+ * build that writes none cannot be judged by an old one. `scripts/check-bundle-size.test.mjs` pins
+ * both.
  *
  * ## What it does NOT check
  *

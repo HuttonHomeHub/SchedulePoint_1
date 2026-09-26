@@ -21,8 +21,10 @@
 # hiding nine failures behind the first.
 #
 # Usage:
-#   scripts/prepush.sh            # lint, typecheck, unit tests, and all ten check:* gates
-#   scripts/prepush.sh --checks   # the check:* gates only (fast; skips lint/typecheck/test)
+#   scripts/prepush.sh            # lint, typecheck, unit tests, and every root check:* gate
+#   scripts/prepush.sh --checks   # the check:* gates only (skips lint/typecheck/test). One gate,
+#                                 # check:web-bundle, builds the web app: ~17 s cold, ~1.5 s on a
+#                                 # turbo cache hit (ADR-0160).
 #
 # It deliberately does NOT run the e2e half. That needs a database and a browser, takes tens of
 # minutes, and `scripts/e2e-local.sh` already owns it — see docs/TESTING.md "Before you push" for

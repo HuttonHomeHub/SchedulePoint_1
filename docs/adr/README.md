@@ -183,3 +183,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0157](0157-a-marks-class-is-its-hue-and-its-shape.md)                                          | A mark's class is its hue and its shape, and the grid is the quietest mark        | Accepted           |
 | [0158](0158-a-link-leaves-and-enters-at-its-node.md)                                            | A link leaves and enters at its node                                              | Accepted           |
 | [0159](0159-a-route-reads-the-text-it-is-drawn-beside.md)                                       | A route reads the text it is drawn beside, and a two-way track splits at its node | Accepted           |
+| [0160](0160-a-gate-ci-runs-is-a-gate-prepush-runs.md)                                           | A gate CI runs is a gate prepush runs                                             | Accepted           |

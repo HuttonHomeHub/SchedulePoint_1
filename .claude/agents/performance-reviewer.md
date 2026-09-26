@@ -70,8 +70,8 @@ You review; you do not edit code.
 - **Bundle:** any new dependency justified (size, maintenance,
   tree-shakeability)? Imports are by-name (tree-shakeable), not whole-library.
   No obvious duplication/bloat.
-  **The budget is computed, not quoted.** `pnpm --filter @repo/web check:bundle-size`
-  reads `apps/web/bundle-budget.json` — three quantities (the JS entry graph, the
+  **The budget is computed, not quoted.** `pnpm check:web-bundle` (prepush and CI,
+  ADR-0160) builds the app and then `check:bundle-size` reads `apps/web/bundle-budget.json` — three quantities (the JS entry graph, the
   ceiling on any one lazy chunk, and render-blocking CSS), each a measured floor
   times a 1.05 headroom ratio that is a **product-owner judgement and not a
   measurement**. Read the file for today's figures; do not restate them here, and do

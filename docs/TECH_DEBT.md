@@ -9862,6 +9862,18 @@ something that is not a root gate is currently invisible to `check:ci-roster` by
 **Measured cost of doing nothing:** `pnpm format:check` takes ~19 s on this machine over the whole
 tree, so it is not free to add to a five-second gate — which is itself part of the design question.
 
+**The general rule this row is one instance of, recorded 2026-09-26 (ADR-0160, spec CQ-2).** Every
+gate CI runs should be run by `pnpm prepush`, or exempt with a written reason — and nothing asserts
+that in the CI-to-prepush direction. `check:ci-roster` checks only the other way: every root
+`check:*` runs in CI. The web bundle budget was the second instance: CI-only by design, it failed
+PR #701 after `pnpm prepush` passed. ADR-0160 fixed **that gate only**, by making it a root gate, on
+the product owner's decision not to change the shared roster gate inside that change. This row
+stays open for `format:check`, and the fix that would close the class is the bidirectional roster
+assertion described above: every command a CI step runs is either a root gate prepush derives, or
+named in `scripts/ci-roster.json` with a reason. **Note the premise this row shares with the old
+bundle decision:** "a five-second gate" is not what prepush is. The full command measures about six
+minutes (`docs/TESTING.md`), so ~19 s for `format:check` is ~5% of it, not 4×.
+
 ### 300. A required-check list written in prose has no observer, and it named a deleted job for months
 
 **Status:** open · **Verified:** 2026-09-11 · **Raised:** 2026-09-11 (found asking why no ruleset existed) · **Size:** S · **Owner:** repo
