@@ -589,6 +589,12 @@ only the divisor was considered and rejected: it is a throwaway second spelling 
     Also the `TWENTY_FOUR_HOUR` case from US-2, and the two skip cases (test-engineer):
   - **LOE upstream:** no bound, and `upstreamMissingCount === 0`;
   - **null upstream dates (N32):** no bound, and `upstreamMissingCount === 1`.
+  - **A mixed-calendar axis (added from M0's findings).** M0-T1's matrix gives both plans one
+    calendar, so its `PREDECESSOR` and `SUCCESSOR` columns duplicate `PROJECT_DEFAULT` (432 redundant
+    cells), and neither E7 nor CQ-2 is exercised. Add cells in which the two plans, and the two
+    activities, sit on different calendars (Standard against eight-hour), in both directions, for
+    every lag calendar. This is what lets M2 claim D5 and CQ-2. The M0 characterisation is not
+    widened, because its prediction was committed first.
 - **Complexity:** M
 - **Dependencies:** M2-T5
 - **Risks:**
@@ -631,7 +637,9 @@ only the divisor was considered and rejected: it is a throwaway second spelling 
 - **Dependencies:** M2-T5
 - **Risks:** a noisy machine. → Report the baseline spread beside the delta; an indeterminate result
   is reported as indeterminate (ADR-0128), not rounded to a pass.
-- **Development steps:** 1. Measure. 2. `m2/cost.md`.
+- **Development steps:** 1. Measure the M0 baseline and the change **in one sitting on one machine**:
+  M0 ran on Postgres 16.13, while CI and the host run 17. 2. `m2/cost.md`. FC-6's fixture is 10
+  remote plans (5 upstream, 5 downstream), as M0-T4 built it.
 
 ---
 
