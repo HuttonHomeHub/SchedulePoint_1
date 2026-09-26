@@ -120,7 +120,7 @@ enum OrganizationRole {
 }
 
 model Organization {
-  id                   String                @id @default(uuid(7)) @db.Uuid
+  id                   String                  @id @default(uuid(7)) @db.Uuid
   name                 String
   // URL-safe, unique per deployment, immutable in v1. Uniqueness is enforced by
   // a PARTIAL unique index that ignores soft-deleted rows (uq_organizations_slug
@@ -128,12 +128,12 @@ model Organization {
   // added as raw SQL in the migration. This index also serves slug lookups
   // (which always filter deleted_at IS NULL), so no separate @@index is needed.
   slug                 String
-  version              Int                   @default(1)
-  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy            String?               @map("created_by")
-  updatedBy            String?               @map("updated_by")
-  deletedAt            DateTime?             @map("deleted_at") @db.Timestamptz(3)
+  version              Int                     @default(1)
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy            String?                 @map("created_by")
+  updatedBy            String?                 @map("updated_by")
+  deletedAt            DateTime?               @map("deleted_at") @db.Timestamptz(3)
   members              OrgMember[]
   invitations          Invitation[]
   // Audit events scoped to this organisation (ADR-0072). NULLABLE on the child and
@@ -207,6 +207,11 @@ model Organization {
   // (finish-milestone-date M2-T3). Same ownership as placementMigrations: the tenant scope
   // tag is copied from the plan, and the row dies with its plan.
   fmDateMigrations     FmDateMigration[]
+  // The record of cross-plan lags re-encoded from `days × 1440` to working minutes on the
+  // resolved lag calendar (cross-plan-day-boundary M2-T2). The tenant scope tag is copied from
+  // the link; the row dies with the link's home (successor) plan. `xplan` only keeps the field
+  // inside this block's column width, as `fmDateMigrations` does.
+  xplanLagMigrations   CrossPlanLagMigration[]
 
   @@map("organizations")
 }
@@ -953,9 +958,9 @@ model Plan {
   deletedAt                             DateTime?               @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId                         String?                 @map("delete_batch_id") @db.Uuid
 
-  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project             Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  calendar            Calendar?             @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  calendar            Calendar?               @relation(fields: [calendarId], references: [id], onDelete: Restrict)
   activities          Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
   dependencies        ActivityDependency[]
@@ -965,8 +970,8 @@ model Plan {
   // downstream plan), `crossPlanIncoming` where it is the SUCCESSOR (gated BY an
   // upstream plan — the edge's home per ADR-0045 CQ-2). Both FKs are RESTRICT: a
   // schedule edge is never cascade-deleted; soft-delete + restore is service-owned.
-  crossPlanOutgoing   CrossPlanDependency[] @relation("CrossPlanDependencyPredecessorPlan")
-  crossPlanIncoming   CrossPlanDependency[] @relation("CrossPlanDependencySuccessorPlan")
+  crossPlanOutgoing   CrossPlanDependency[]   @relation("CrossPlanDependencyPredecessorPlan")
+  crossPlanIncoming   CrossPlanDependency[]   @relation("CrossPlanDependencySuccessorPlan")
   // Plan-of-record snapshots captured from this plan (M7, ADR-0025). At most one is
   // active at a time (partial unique in the migration). FK is RESTRICT; baseline
   // soft-delete + cascade is service-owned (HierarchyLifecycleService).
@@ -1002,6 +1007,10 @@ model Plan {
   // reading a finish milestone's date as the end of that day (finish-milestone-date M2-T3).
   // ON DELETE CASCADE, for the placementMigrations reason. Non-scheduling.
   fmDateMigrations    FmDateMigration[]
+  // Cross-plan lags whose home is this plan (the successor activity's plan), re-encoded to
+  // working minutes by cross-plan-day-boundary M2-T2. ON DELETE CASCADE, for the same reason.
+  // Non-scheduling: nothing in the application reads it.
+  xplanLagMigrations  CrossPlanLagMigration[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -3037,6 +3046,73 @@ model FmDateMigration {
   // placement_migrations reason: a refusal would fail the migration and the API's boot.
   @@index([planId])
   @@map("finish_milestone_date_migrations")
+}
+
+/// The record of one cross-plan link whose `lag_minutes` was re-encoded from the old unit
+/// (`lagDays × 1440`, whatever the calendar) to working minutes on the link's resolved lag calendar
+/// (cross-plan-day-boundary M2-T2, spec §4.4; migration 20260926120000_cross_plan_lag_working_minutes).
+/// Written once by that migration and never by the application; there is no reader. It exists for
+/// three things: the compensating reverse in docs/DEPLOYMENT.md, M2-T3's differential check of the
+/// SQL's factor against the TypeScript resolver's, and as the only record of the rewrite.
+///
+/// **Every link the statement resolved has a row, including links whose value did not change**
+/// (factor 1440, `TWENTY_FOUR_HOUR`, zero lag). Two readers depend on that. The differential exists
+/// to catch an eight-hour link wrongly resolved to 1440, which would be left unchanged and so, if
+/// unchanged links went unrecorded, would leave the check nothing to compare. And the reverse reads
+/// "no row" as "created after the release": a pre-release link skipped here would be converted a
+/// second time.
+///
+/// Write-once like `finish_milestone_date_migrations`: no `version`, no `created_at`/`updated_at`,
+/// no soft delete. `xplanLagMigrations` is the back-relation on `Organization` and `Plan`.
+model CrossPlanLagMigration {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Tenant scope tag copied from the link by the migration, never client input. RESTRICT, matching
+  /// every sibling; inert in practice because organisations are never hard-deleted.
+  organizationId String @map("organization_id") @db.Uuid
+
+  /// The SUCCESSOR ACTIVITY's `plan_id` (the link's home plan, ADR-0045 CQ-2), read through the
+  /// activity and never from the link's denormalised `successor_plan_id` (spec B5). ON DELETE
+  /// CASCADE: the row dies with its plan, which keeps this table out of the hierarchy-expiry delete
+  /// list (its census follows RESTRICT edges only).
+  planId String @map("plan_id") @db.Uuid
+
+  /// The link's id, as a plain correlation UUID with **no foreign key**: the record must outlive a
+  /// hard-deleted link (ADR-0025's `source_activity_id` leg). **UNIQUE**, which diverges from the
+  /// precedent on purpose: the reverse's "no row ⇒ created after the release" selector needs exactly
+  /// one row per link. It cannot fire inside the migration (the table is created empty by the same
+  /// file, the statement runs once, and every join in it is at most one-to-one); the migration
+  /// header states the argument in full.
+  crossPlanDependencyId String @unique @map("cross_plan_dependency_id") @db.Uuid
+
+  /// The link's `lag_calendar` at migration time.
+  lagCalendar LagCalendarSource @map("lag_calendar")
+
+  /// The calendar the lag was resolved on. NULL for `TWENTY_FOUR_HOUR` (pinned at 1440) and for a
+  /// link with no calendar anywhere on its resolution path (1440 by default). No foreign key: the
+  /// record must outlive a deleted calendar.
+  lagCalendarId String? @map("lag_calendar_id") @db.Uuid
+
+  /// The day↔minute factor the conversion used (`calendars.hours_per_day_minutes`, or 1440).
+  dayFactorMinutes Int @map("day_factor_minutes")
+
+  /// `lag_minutes` before and after. Equal for a link the migration did not change.
+  priorLagMinutes Int @map("prior_lag_minutes")
+  newLagMinutes   Int @map("new_lag_minutes")
+
+  /// Transaction start time (`DEFAULT CURRENT_TIMESTAMP` inside the migration), so every row of the
+  /// run shares one instant.
+  migratedAt DateTime @default(now()) @map("migrated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  // ONE plain index, (plan_id), for the CASCADE: a plan hard-delete must find these rows, and
+  // without it every ADR-0096 expiry would sequentially scan this table. No (organization_id)
+  // index: organisations are never hard-deleted and their ids never change, so the RESTRICT check
+  // on that FK never runs. The UNIQUE on cross_plan_dependency_id is declared on the field above.
+  @@index([planId])
+  @@map("cross_plan_lag_migrations")
 }
 
 // ---------------------------------------------------------------------------

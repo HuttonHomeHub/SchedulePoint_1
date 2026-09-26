@@ -481,6 +481,229 @@ Measured on a populated copy (102,000 activities, 2,266 placed finish milestones
 2,266 rows, step 2 returned 0, every `visual_start` matched its pre-migration value, and a second
 run failed at step 0. The previous API image does not know the dropped table, so nothing reads it.
 
+### Rolling back past the cross-plan lag release
+
+That release (`docs/specs/cross-plan-day-boundary/`, `docs/TECH_DEBT.md` #385) stores a cross-plan
+link's lag as **working minutes on its resolved lag calendar**, the unit an in-plan lag has always
+used. Its migration `20260926120000_cross_plan_lag_working_minutes` rewrote every stored
+`cross_plan_dependencies.lag_minutes` from the old `days × 1440` into that unit and recorded each
+link in `cross_plan_lag_migrations`. A previous API image reads the column as `days × 1440` and
+writes new links that way, so **redeploying the previous images alone mixes two encodings in one
+column**: every re-encoded lag on a calendar shorter than 24 hours reads as fewer days (a one-day
+lag on an eight-hour calendar is 480 minutes, which the old image shows as `0` days), and nothing
+afterwards can tell which rows are in which unit. Roll back with the procedure below instead.
+
+**Before starting: find factor drift.** The reverse converts each link created **after** the release
+back to days using the factor it resolves to **today**. If what a link resolves to has changed since
+the release, today's factor may not be the one its lag was written with, and the reverse turns its
+minutes into the wrong number of days. Run this finder first. It lists every link with no record
+(created after the release) where:
+
+1. the calendar it resolves to was edited after the migration finished (an hours-per-day change is
+   one kind of edit; the column moves on any edit, so this over-reports on purpose);
+2. its `lag_minutes` is not a whole multiple of today's factor; or
+3. **one of its endpoint activities, their plans, or their driving assignments or resources was
+   edited after the migration finished.** This limb was added in M2-T2 and is not in the spec's
+   reversal section: the first two cannot see a change of **resolution path**. A plan switched to a
+   different, unedited calendar, or an activity given its own calendar, changes the factor with no
+   calendar edit, and when the stored minutes happen to be a multiple of the new factor the second
+   limb is silent too. The migration test pins exactly that case.
+
+It must never under-report, and it over-reports freely. Check each row it returns by hand and either
+correct its lag or note the day count the planner expects, before running the reverse.
+
+```sql
+-- cross-plan lag: factor-drift finder
+WITH resolved AS (
+  SELECT
+    d."id" AS "cross_plan_dependency_id",
+    d."organization_id" AS "organization_id",
+    s."plan_id" AS "plan_id",
+    d."lag_calendar" AS "lag_calendar",
+    k."calendar_id" AS "lag_calendar_id",
+    COALESCE(c."hours_per_day_minutes", 1440) AS "day_factor_minutes",
+    d."lag_minutes" AS "prior_lag_minutes",
+    round(d."lag_minutes"::numeric * COALESCE(c."hours_per_day_minutes", 1440) / 1440)::integer AS "new_lag_minutes"
+  FROM "cross_plan_dependencies" d
+  JOIN "activities" p ON p."id" = d."predecessor_id"
+  JOIN "plans" pp ON pp."id" = p."plan_id"
+  JOIN "activities" s ON s."id" = d."successor_id"
+  JOIN "plans" sp ON sp."id" = s."plan_id"
+  LEFT JOIN "resource_assignments" pa
+    ON pa."activity_id" = p."id" AND pa."is_driving" AND pa."deleted_at" IS NULL
+    AND p."type" = 'RESOURCE_DEPENDENT' AND p."deleted_at" IS NULL
+  LEFT JOIN "resources" pr ON pr."id" = pa."resource_id" AND pr."deleted_at" IS NULL
+  LEFT JOIN "resource_assignments" sa
+    ON sa."activity_id" = s."id" AND sa."is_driving" AND sa."deleted_at" IS NULL
+    AND s."type" = 'RESOURCE_DEPENDENT' AND s."deleted_at" IS NULL
+  LEFT JOIN "resources" sr ON sr."id" = sa."resource_id" AND sr."deleted_at" IS NULL
+  CROSS JOIN LATERAL (
+    SELECT CASE d."lag_calendar"
+      WHEN 'TWENTY_FOUR_HOUR' THEN NULL::uuid
+      WHEN 'PROJECT_DEFAULT' THEN sp."calendar_id"
+      WHEN 'PREDECESSOR' THEN COALESCE(pr."calendar_id", p."calendar_id", pp."calendar_id")
+      WHEN 'SUCCESSOR' THEN COALESCE(sr."calendar_id", s."calendar_id", sp."calendar_id")
+    END AS "calendar_id"
+  ) k
+  LEFT JOIN "calendars" c ON c."id" = k."calendar_id"
+),
+released AS (
+  SELECT "finished_at" FROM "_prisma_migrations"
+   WHERE "migration_name" = '20260926120000_cross_plan_lag_working_minutes'
+)
+SELECT r."cross_plan_dependency_id", d."lag_minutes", r."lag_calendar", r."lag_calendar_id",
+       r."day_factor_minutes"
+  FROM resolved r
+  JOIN "cross_plan_dependencies" d ON d."id" = r."cross_plan_dependency_id"
+  CROSS JOIN released rel
+ WHERE NOT EXISTS (
+         SELECT 1 FROM "cross_plan_lag_migrations" m
+          WHERE m."cross_plan_dependency_id" = r."cross_plan_dependency_id"
+       )
+   AND (
+         EXISTS (
+           SELECT 1 FROM "calendars" cal
+            WHERE cal."id" = r."lag_calendar_id" AND cal."updated_at" > rel."finished_at"
+         )
+      OR d."lag_minutes" % r."day_factor_minutes" <> 0
+      OR EXISTS (
+           SELECT 1
+             FROM "activities" a
+             JOIN "plans" ap ON ap."id" = a."plan_id"
+             LEFT JOIN "resource_assignments" ra ON ra."activity_id" = a."id" AND ra."is_driving"
+             LEFT JOIN "resources" rs ON rs."id" = ra."resource_id"
+            WHERE a."id" IN (d."predecessor_id", d."successor_id")
+              AND (a."updated_at" > rel."finished_at" OR ap."updated_at" > rel."finished_at"
+                   OR ra."updated_at" > rel."finished_at" OR rs."updated_at" > rel."finished_at")
+         )
+       )
+ ORDER BY r."cross_plan_dependency_id";
+```
+
+**The procedure:**
+
+1. Stop the API container (leave the database running). The reverse runs with nothing writing.
+2. Run the reverse below as **one transaction**, e.g.
+   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -1 -f - < reverse.sql`.
+   Any failed statement or check rolls the whole reverse back.
+3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
+4. **Recalculate the linked plans** (Recalculate programme on each most-downstream plan). Their
+   stored dates were computed under the new rule and stay that way until recalculated, and the
+   previous image has no boot re-derivation to do it.
+
+```sql
+-- cross-plan lag: reverse
+-- 1. One-shot guard, not concurrency protection (the API is already stopped): if the reverse has
+--    already run, the table is gone, this fails, and nothing applies twice. To keep the record,
+--    \copy "cross_plan_lag_migrations" out before running this.
+LOCK TABLE "cross_plan_lag_migrations" IN ACCESS EXCLUSIVE MODE;
+
+-- 2. Restore every recorded link the migration changed, and bump its version again: an
+--    optimistic-lock version never goes backwards.
+UPDATE "cross_plan_dependencies" d
+   SET "lag_minutes" = m."prior_lag_minutes",
+       "version"     = d."version" + 1
+  FROM "cross_plan_lag_migrations" m
+ WHERE d."id" = m."cross_plan_dependency_id"
+   AND m."new_lag_minutes" <> m."prior_lag_minutes";
+
+-- 3. Convert every link created after the release (no record) back to days x 1440, on the factor
+--    the migration's own resolution gives today. `resolved` is the migration's CTE copied
+--    verbatim. floor(x + 0.5) rather than round() matches the API's Math.round on negative
+--    halves: round(-2.5) is -3 in Postgres and Math.round(-2.5) is -2.
+WITH resolved AS (
+  SELECT
+    d."id" AS "cross_plan_dependency_id",
+    d."organization_id" AS "organization_id",
+    s."plan_id" AS "plan_id",
+    d."lag_calendar" AS "lag_calendar",
+    k."calendar_id" AS "lag_calendar_id",
+    COALESCE(c."hours_per_day_minutes", 1440) AS "day_factor_minutes",
+    d."lag_minutes" AS "prior_lag_minutes",
+    round(d."lag_minutes"::numeric * COALESCE(c."hours_per_day_minutes", 1440) / 1440)::integer AS "new_lag_minutes"
+  FROM "cross_plan_dependencies" d
+  JOIN "activities" p ON p."id" = d."predecessor_id"
+  JOIN "plans" pp ON pp."id" = p."plan_id"
+  JOIN "activities" s ON s."id" = d."successor_id"
+  JOIN "plans" sp ON sp."id" = s."plan_id"
+  LEFT JOIN "resource_assignments" pa
+    ON pa."activity_id" = p."id" AND pa."is_driving" AND pa."deleted_at" IS NULL
+    AND p."type" = 'RESOURCE_DEPENDENT' AND p."deleted_at" IS NULL
+  LEFT JOIN "resources" pr ON pr."id" = pa."resource_id" AND pr."deleted_at" IS NULL
+  LEFT JOIN "resource_assignments" sa
+    ON sa."activity_id" = s."id" AND sa."is_driving" AND sa."deleted_at" IS NULL
+    AND s."type" = 'RESOURCE_DEPENDENT' AND s."deleted_at" IS NULL
+  LEFT JOIN "resources" sr ON sr."id" = sa."resource_id" AND sr."deleted_at" IS NULL
+  CROSS JOIN LATERAL (
+    SELECT CASE d."lag_calendar"
+      WHEN 'TWENTY_FOUR_HOUR' THEN NULL::uuid
+      WHEN 'PROJECT_DEFAULT' THEN sp."calendar_id"
+      WHEN 'PREDECESSOR' THEN COALESCE(pr."calendar_id", p."calendar_id", pp."calendar_id")
+      WHEN 'SUCCESSOR' THEN COALESCE(sr."calendar_id", s."calendar_id", sp."calendar_id")
+    END AS "calendar_id"
+  ) k
+  LEFT JOIN "calendars" c ON c."id" = k."calendar_id"
+)
+UPDATE "cross_plan_dependencies" d
+   SET "lag_minutes" = (floor(d."lag_minutes"::numeric / r."day_factor_minutes" + 0.5) * 1440)::integer,
+       "version"     = d."version" + 1
+  FROM resolved r
+ WHERE d."id" = r."cross_plan_dependency_id"
+   AND NOT EXISTS (
+         SELECT 1 FROM "cross_plan_lag_migrations" m
+          WHERE m."cross_plan_dependency_id" = d."id"
+       );
+
+-- 4. Check, recorded links: every one is back at its value before the migration.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "cross_plan_lag_migrations" m
+      JOIN "cross_plan_dependencies" d ON d."id" = m."cross_plan_dependency_id"
+     WHERE d."lag_minutes" <> m."prior_lag_minutes"
+  ) THEN
+    RAISE EXCEPTION 'cross-plan lag reverse: a recorded link is not back at its prior lag_minutes';
+  END IF;
+END $$;
+
+-- 5. Check, unrecorded links: every one is back in the old unit, a whole number of days x 1440.
+--    (A recorded link may legitimately not be: a stored value that was never a multiple of 1440 is
+--    restored to exactly what it was.)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "cross_plan_dependencies" d
+     WHERE d."lag_minutes" % 1440 <> 0
+       AND NOT EXISTS (
+             SELECT 1 FROM "cross_plan_lag_migrations" m
+              WHERE m."cross_plan_dependency_id" = d."id"
+           )
+  ) THEN
+    RAISE EXCEPTION 'cross-plan lag reverse: an unrecorded link is not a whole number of days';
+  END IF;
+END $$;
+
+-- 6. Drop the record and forget the migration, so a later roll-forward applies it afresh.
+DROP TABLE "cross_plan_lag_migrations";
+DELETE FROM "_prisma_migrations"
+ WHERE "migration_name" = '20260926120000_cross_plan_lag_working_minutes';
+```
+
+Three consequences worth knowing before running it:
+
+- **The value a post-release link comes back as is the day count the release was showing for it**
+  (minutes over today's factor, rounded as the API rounds), which is why a factor that moved since
+  the release has to be found first. A post-release lag whose day count exceeds ±3,650 on today's
+  factor is refused by the lag-range CHECK and rolls the whole reverse back, which is the right way
+  round.
+- **Step 3 bumps `version` on every unrecorded link, changed or not.** There is no update route for
+  a cross-plan link, so a bump invalidates no edit anybody holds.
+- The previous API image does not know the dropped table, so nothing reads it.
+
+The migration test (`apps/api/test/cross-plan-lag-migration.e2e-spec.ts`) runs both blocks above
+**as written in this file**, asserts that each carries the migration's `resolved` CTE verbatim, and
+proves each check can fail.
+
 ### Which switches actually work on a running container, and which do not
 
 This distinction is not obvious from `.env.example`, where both kinds sit in one list

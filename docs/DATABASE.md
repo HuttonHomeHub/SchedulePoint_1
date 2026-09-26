@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 33
-> models across 70 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 34
+> models across 71 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1675,6 +1675,69 @@ back-relations inside their blocks' column widths).
   and delete the migration's `_prisma_migrations` row so a later roll-forward applies it afresh.
   Measured: 2,266 rows restored to their exact pre-migration values; a second run fails at the lock.
 - **Non-scheduling.** The CPM engine never reads it.
+
+### CrossPlanLagMigration: the record of cross-plan lags re-encoded to working minutes (cross-plan-day-boundary M2-T2)
+
+**`cross_plan_dependencies.lag_minutes` changes unit in this release.** Until it, the column held
+`lagDays × 1440` whatever the calendar and was read back as `/ 1440`, while the in-plan
+`dependencies.lag_minutes` holds working minutes on the relationship's lag calendar (ADR-0068 §4).
+The schema comment ("working-MINUTE lag") was therefore false for every cross-plan link on a
+calendar shorter than 24 hours. From migration `20260926120000_cross_plan_lag_working_minutes` the
+two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
+`docs/specs/cross-plan-day-boundary/` §4.4, E6). The migration rewrites every stored value as
+`round(lag_minutes::numeric × factor / 1440)` and records each link in `cross_plan_lag_migrations`
+(Prisma model `CrossPlanLagMigration`; back-relation `xplanLagMigrations`, short only to keep the
+`Organization` and `Plan` blocks' column widths).
+
+- **The factor is the lag calendar's `hours_per_day_minutes`**, resolved per link:
+  `TWENTY_FOUR_HOUR` pinned at 1440; `PROJECT_DEFAULT` the **successor activity's** plan's calendar
+  (CQ-2); `PREDECESSOR`/`SUCCESSOR` that endpoint's scheduling calendar (its driving resource's for
+  a live `RESOURCE_DEPENDENT` activity with an active driver, else its own, else **its own** plan's);
+  1440 when no calendar is on the path. Plans are always reached through the endpoint activity's
+  `plan_id`, never through the link's denormalised `*_plan_id` columns. M2-T3's TypeScript function
+  implements the same rule, and the migration test is where the two are compared.
+- **The driving join uses the partial unique index's predicate exactly**
+  (`is_driving AND deleted_at IS NULL`, `uq_resource_assignments_activity_driving`), plus the
+  activity and resource soft-delete guards. A join that fanned out would fail the statement on the
+  record's `UNIQUE` (measured), which on a deployed database is the ADR-0107 restart loop. The
+  calendar join is deliberately unfiltered, matching `findHoursPerDayMinutes`.
+- **`numeric`, never `int4`.** In `int4` the product overflows before the division: from 1,036 days
+  at factor 1440, from 3,107 days at 480, and at the ±3,650-day CHECK bound for any factor ≥ 409
+  (each threshold run in `psql`). The cast back is safe because the factor is at most 1440.
+- **Soft-deleted links are included**, so a restored link does not come back in the old unit.
+- **Every resolved link is recorded, changed or not; only changed links are updated.** The converted
+  set is a strict subset of the recorded set. Two readers need the unchanged rows: M2-T3's
+  differential (a link wrongly resolved to 1440 is left unchanged), and the reverse, which reads
+  "no record" as "created after the release".
+- **`version` is bumped on changed links; `updated_at` is not touched** (the ADR-0148/ADR-0155
+  reasoning). There is no update route for a cross-plan link, so the bump invalidates no edit.
+- **Write-once, like `FmDateMigration`**: no `version`, timestamps pair or soft delete; `plan_id`
+  (the successor activity's plan) `ON DELETE CASCADE` with a plain index for the cascade, which keeps
+  it out of the hierarchy-expiry census; `organization_id` `RESTRICT`, copied from the link, no
+  index; no FK on the link id or the calendar id, so the record outlives both. Outside
+  `RETENTION_TABLES`.
+- **One deliberate divergence from the precedent: `UNIQUE (cross_plan_dependency_id)`.** The
+  precedent has no unique constraint because a refusal would fail the boot. This one cannot refuse
+  inside the migration: the table is created empty by the same file, the statement runs once, and
+  every join is at most one-to-one. It exists because the reverse needs exactly one record per link.
+  It also makes a manual re-run of the statement refuse rather than convert a second time.
+- **Cost, measured** (PostgreSQL 16.13, 100,000 activities, 10,000 links over all four lag calendars):
+  351.7–399.5 ms across five `EXPLAIN ANALYZE` runs, 415 ms as `prisma migrate deploy` recorded it.
+  Only `lag_minutes` and `version` moved (md5 over every other column and every table read); drift
+  clean on the populated database. The full record is
+  `docs/specs/cross-plan-day-boundary/m2/migration-cost.md`.
+- **Engine-owned dates are not rewritten.** A linked plan's stored dates stay as the old rule
+  computed them until it is recalculated (M3's one-time boot re-derivation, keyed on this
+  migration's `_prisma_migrations.finished_at`).
+- **Reverse** (`docs/DEPLOYMENT.md` "Rolling back past the cross-plan lag release"): first a
+  factor-drift finder. Then, with the API stopped and as one transaction: lock the record (a one-shot
+  guard), restore recorded links (bumping `version` again), convert unrecorded links back to
+  `days × 1440` with the migration's `resolved` CTE copied verbatim and `floor(x + 0.5)` to match
+  `Math.round`, run two checks, drop the record and delete the migration's `_prisma_migrations` row.
+  The migration test runs both blocks as written, and asserts that they carry the CTE verbatim.
+  Measured on the populated database: every link's `(id, lag_minutes)` restored exactly, and a
+  second run refused at the lock.
+- **Non-scheduling.** Nothing in the application reads it.
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 
