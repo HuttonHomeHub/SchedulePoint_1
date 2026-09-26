@@ -166,3 +166,51 @@ neither changed the finding.
 | test: per-cell prediction before M0-T1                            | Spec FC-2; plan M0-T1 step 1 (own commit before the run).                                                                                                                                                                                                                              |
 | test: split LOE and N32 skips                                     | Spec §1 assumed defaults, §2 Workflows step 1, edge-case row; plan M2-T5, M2-T6 (`=== 0` / `=== 1`).                                                                                                                                                                                   |
 | test: M1-T4 gates, no action                                      | Plan M1-T4 "Scope" note.                                                                                                                                                                                                                                                               |
+
+## Re-confirmation of the fold
+
+### database-architect: confirmed with corrections
+
+1. **Every resolved row is recorded: confirmed.** There is a second reason: reverse step 3's "no
+   record ⇒ created after the release" selector is exact only if every pre-release link has a
+   record.
+   - Correct `feature-spec.md:581-583`: the converted set is a strict subset of the recorded set.
+   - Build the `UPDATE … FROM` from the INSERT's `RETURNING`, filtered on a changed value.
+2. **Columns: confirmed, with the final list** (the `FmDateMigration` precedent,
+   `schema.prisma:3001-3039`):
+   - `id`: UUID v7, from the `clock_timestamp()` expression.
+   - `organization_id`: from the link, FK RESTRICT, no index.
+   - `plan_id`: from the successor activity, FK CASCADE, plain index.
+   - `cross_plan_dependency_id`: UNIQUE, no FK.
+   - `lag_calendar`, `lag_calendar_id` (no FK), `day_factor_minutes`, `prior_lag_minutes`,
+     `new_lag_minutes`, `migrated_at`.
+   - Write-once: no `version`, no timestamps pair, no soft delete. Prisma model with
+     back-relations.
+   - The UNIQUE diverges from the precedent. The migration comment says why it cannot fire, and
+     the reason is the step-3 selector.
+   - The no-fan-out seed adds a **live non-driving assignment**, the fan-out the partial index does
+     not prevent.
+3. **No RAISE on a non-multiple of 1440: confirmed.**
+   - The same formula converts such a row (720 at 480 becomes 240; 1 can become 0, which is
+     recorded).
+   - Seed one such row.
+   - **Knock-on (blocking):** reverse step 4's check splits into two checks:
+     - recorded rows equal `prior_lag_minutes`;
+     - unrecorded rows satisfy `% 1440 = 0`.
+4. **Reverse: corrections.**
+   - **Blocking:**
+     - add `DELETE FROM "_prisma_migrations"` for this migration (precedent
+       `docs/DEPLOYMENT.md:472-474`);
+     - stop the API, and run as one transaction (`psql -v ON_ERROR_STOP=1 -1`);
+     - the lock is a one-shot guard, not concurrency protection.
+   - **Suggested:**
+     - step 3 bumps `version` and is spelled `(round(lag_minutes::numeric / factor) * 1440)::integer`;
+     - use `floor(x + 0.5)` to match `Math.round` on negative halves;
+     - document factor drift, with a query to find the offending rows;
+     - copy the migration's CTE verbatim;
+     - add a final recalculation step.
+5. **Overflow: confirmed.** Factor 1440 overflows from 1,036 days, factor 480 from 3,107. Any
+   factor ≥ 409 can overflow at the ±3,650-day CHECK bound. `numeric` covers it, and the cast back
+   is safe because `hours_per_day_minutes ≤ 1440`. Any other multiply in the migration, the reverse
+   or the tests needs the same cast.
+   - Suggested: in E28, write `abs(lag_minutes)`, since the pipes break the table cell.
