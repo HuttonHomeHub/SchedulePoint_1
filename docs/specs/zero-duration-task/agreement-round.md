@@ -397,3 +397,28 @@ Suggested:
     the figure in the Freshness bullet and R11.
 - The M4-T1 api-reviewer gate checks that `docs/API.md` and the `@ApiProperty` description landed
   together (ADR-0146's recorded slip).
+
+### accessibility-reviewer: confirmed
+
+It checked all five points against the code, with no blocking finding.
+
+- **D4's successor table.** Every successor is present and focusable when `showModal()` captures it:
+  - `openAutoArrange` (`TsldPanel.tsx:2329-2335`) and `focusGanttGrid` with its fallback
+    (`plan-workspace-toolbar.tsx:1198-1202`);
+  - the Gantt row, which always has a `tabIndex`;
+  - the table trigger, refocused by `closeRestoring` (`menu.tsx:161-165,441-443`) and kept alive by
+    the row's `key`.
+- **The announcement order** is stricter than `use-focus-handoff.ts:54-61` requires.
+- **The role-sentence residue** is correctly characterised and acceptable as a filed row.
+- **The list roles** are complete for this epic's surfaces. The print lists do sit under Preflight
+  (same document).
+- **The journey correction** is accurate.
+
+Suggested:
+
+- Tighten A1's "on confirm, cancel and error alike": on error the dialog stays open and `close()`
+  is not called (M4-T3 already has it right).
+- `ResourceCollisionResolver.tsx:30` has the same bare-`<ul>` shape.
+  - Decision: fix it in M3-T4, since it renders inside the same import-review dialog this epic
+    changes.
+- M4-T3's size and reach assertion runs at both FC-6 widths, 1646 and 1920.
