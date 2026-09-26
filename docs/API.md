@@ -311,6 +311,32 @@ single-plan recalculation whenever the plan has any active cross-plan edge, so
 `…/recalculate-programme`. A plan with no cross-plan edges is unaffected in
 either route, and no request or response shape changes.
 
+**The lag is working minutes on its lag calendar, and the dates match one plan** (#385,
+2026-09-26). A cross-plan link's lag is stored and applied exactly as an in-plan lag is: `lagDays`
+is converted on write to working minutes on the **lag calendar**, and every read divides by the
+same calendar's hours-per-day. Until this release it was stored as `lagDays × 1440` whatever the
+calendar, so on an eight-hour calendar a one-day lag meant three working days; a migration
+re-encoded every stored link. The lag calendar resolves as for an in-plan link, with one
+difference two plans force: **`PROJECT_DEFAULT` is the successor activity's plan's calendar**, in
+both directions (the link's home plan). `PREDECESSOR` and `SUCCESSOR` are that endpoint's
+scheduling calendar, inheriting from **its own** plan; `TWENTY_FOUR_HOUR` is elapsed time.
+
+- **`lagDays`** (request and response): signed whole working days on the lag calendar, rounded
+  from the stored minutes on read.
+- **`lagMinutes`** (response only): the stored working minutes. A cross-plan link **cannot be
+  created with `lagMinutes`** — the request accepts whole `lagDays` only, so no sub-day cross-plan
+  lag can be written.
+
+The derived bound is now the engine's own link arithmetic on absolute instants: an upstream finish
+is read as the **end** of its day, the lag walks working time on its calendar, FF/SF durations walk
+the successor's own calendar, and a Level-of-Effort endpoint contributes no bound (and is not
+counted as a never-calculated upstream). So a downstream plan's dates equal the dates the same link
+gives inside one plan, for upstream activities that finish on a day boundary. **Linked plans'
+dates change**: most downstream plans move later, and upstream plans lose float, by the amounts the
+old whole-calendar-day arithmetic hid. Two residuals remain and are documented, not fixed: an
+upstream that finishes mid-day is read as the end of that day (persisted dates carry no time), and
+a hand-placed upstream bounds its downstream on its placed dates in both passes (ADR-0148 M-H).
+
 ### Cross-plan revision comparison
 
 `GET …/cross-plan-revision-compare` compares a revision of **one plan** against a
@@ -702,7 +728,9 @@ an endpoint.
 So `durationDays: 5` on an eight-hour calendar is 2,400 working minutes, not 7,200; and the same
 2,400 minutes reads back as `5` there, `2.5` on a sixteen-hour two-shift calendar and `2` (from
 1.67) at twenty-four hours. Clients that assumed a day was always 1440 minutes should send
-`durationMinutes` / `lagMinutes`, which are exact and unaffected.
+`durationMinutes` / `lagMinutes`, which are exact and unaffected. A **cross-plan** link is the one
+exception: it accepts only whole `lagDays` and returns `lagMinutes` read-only (see "Cross-plan
+dependencies" above).
 
 Changing a calendar's `hoursPerDay` does **not** rewrite stored durations and moves no dates. It
 changes what the same stored minutes are reported as.
