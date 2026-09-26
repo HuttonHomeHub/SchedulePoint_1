@@ -212,6 +212,30 @@ is read as the end of that day, and every date it reads back (`earlyStart`/`Fini
 Friday, a finish milestone reads Friday, and sending that Friday as its placement is not a conflict.
 Every other activity type, and every actual date, is unchanged.
 
+**A type change keeps a zero-duration activity's instant** (ADR-0162 decision 3). When an activity's
+**stored** duration is 0 and `PATCH …/activities/:activityId` changes its `type` into or out of
+`FINISH_MILESTONE`, each of `visualStart`, `constraintDate`, `secondaryConstraintDate`,
+`externalEarlyStart` and `externalLateFinish` that is stored **and not in the request** is moved one
+**calendar** day — earlier into `FINISH_MILESTONE`, later out of it — so the activity keeps its
+instant, its successors and its float. The response carries the moved values. So a request that
+sends only `type` can rewrite up to five stored dates; that is the point, and it is the only case
+in which it happens:
+
+- a date **sent** in the same request, including an explicit `null`, is read in the new type's
+  convention and is not moved (you typed it for the new type);
+- a type change that does not cross the convention (`TASK` ↔ `START_MILESTONE`, say), a non-zero
+  stored duration, or a stored `null` moves nothing;
+- the rule keys on the **stored** duration, so `{type: 'TASK', durationDays: 5}` on a finish
+  milestone still moves its dates, and the new task starts at the milestone's instant;
+- `expectedFinish` is never moved (inert at zero duration);
+- the external-date ordering check (422 `EXTERNAL_FINISH_BEFORE_START`) runs on the values that will
+  be persisted, moved ones included.
+
+It applies to every other type (`TASK`, `START_MILESTONE`, `HAMMOCK`, `LEVEL_OF_EFFORT`,
+`WBS_SUMMARY`, `RESOURCE_DEPENDENT`). The instant is guaranteed kept for the first three only: a level
+of effort takes its position from its span, a summary from its branch, and a resource-dependent
+activity from its driving resource's calendar, none of which a type change keeps.
+
 **Two engine-owned read fields carry what a placement costs:**
 
 | Field                  | On             | Meaning                                                                                                                                                                                      |

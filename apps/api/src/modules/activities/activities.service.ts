@@ -54,6 +54,10 @@ import type { UpdateActivityDto } from './dto/update-activity.dto';
 import type { UpdateParentsDto } from './dto/update-parents.dto';
 import type { UpdatePlacementsDto } from './dto/update-placements.dto';
 import type { UpdatePositionsDto } from './dto/update-positions.dto';
+import {
+  reexpressZeroDurationDates,
+  type ReexpressedDateField,
+} from './zero-duration-reexpression';
 
 const MILESTONE_TYPES: readonly ActivityType[] = ['START_MILESTONE', 'FINISH_MILESTONE'];
 
@@ -460,7 +464,16 @@ export class ActivitiesService {
       );
     }
 
+    // A type change across the finish-milestone date convention keeps a zero-duration activity's
+    // instant (ADR-0162 decision 3): each stored date the request did NOT send is re-expressed one
+    // calendar day. Computed here, before the N26 check below, so that check validates the values that
+    // will actually be persisted rather than the pre-rewrite pair (spec S1 / E26).
+    const reexpressed = reexpressZeroDurationDates(existing, dto);
+
     const patch: ActivityPatch = {};
+    for (const [field, value] of Object.entries(reexpressed)) {
+      patch[field as ReexpressedDateField] = parseCalendarDate(value);
+    }
     if (dto.name !== undefined) patch.name = dto.name;
     if (dto.code !== undefined) patch.code = dto.code === '' ? null : dto.code;
     if (dto.description !== undefined) {
@@ -495,18 +508,19 @@ export class ActivitiesService {
     // date sets the bound, null clears it. Enforce N26 on the RESOLVED effective pair (a provided value
     // overrides the stored one, null clears, omitted keeps) so a PATCH of one side is still validated
     // against the other's persisted value — mirrors how updateProgress resolves before its N06 check.
+    // An omitted side resolves to its RE-EXPRESSED value when a type change moved it (ADR-0162), so
+    // the pair checked is the pair persisted. The constraint pairs have no value-ordering check at the
+    // API (only the key-presence pairing above), so N26 is the only check this needs to precede.
     const effectiveExternalEarlyStart =
       dto.externalEarlyStart !== undefined
         ? dto.externalEarlyStart
-        : existing.externalEarlyStart
-          ? formatCalendarDate(existing.externalEarlyStart)
-          : null;
+        : (reexpressed.externalEarlyStart ??
+          (existing.externalEarlyStart ? formatCalendarDate(existing.externalEarlyStart) : null));
     const effectiveExternalLateFinish =
       dto.externalLateFinish !== undefined
         ? dto.externalLateFinish
-        : existing.externalLateFinish
-          ? formatCalendarDate(existing.externalLateFinish)
-          : null;
+        : (reexpressed.externalLateFinish ??
+          (existing.externalLateFinish ? formatCalendarDate(existing.externalLateFinish) : null));
     this.assertExternalDatesOrdered(effectiveExternalEarlyStart, effectiveExternalLateFinish);
     if (dto.externalEarlyStart !== undefined) {
       patch.externalEarlyStart =
