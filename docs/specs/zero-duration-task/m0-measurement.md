@@ -45,6 +45,11 @@ their span from other activities (ADR-0035 §21, ADR-0038), so `0` is how they a
   FC-3's Monday shape is therefore not present in the catalogue today; it lands with M0-T6's `Z`
   only if that row is given a date, and otherwise has to be built by FC-3's own cases.
 
+**After M0-T6** (the same harness, re-run once `Z` was added): **4** zero-duration `TASK`s. The new
+one, `capability-types-and-wbs` `Z`, is assigned (`TW_CREW`), has a predecessor (`T2`), is not placed
+or constrained, has no stored Monday date, and **does carry the project finish** (its finish equals the engine's `projectFinishOffset`, at
+`T2`'s finish). It is the catalogue's only resourced zero-duration task.
+
 ## M0-T2: engine characterisation
 
 `apps/api/src/modules/schedule/engine/compute.zero-task-date.spec.ts`, a new file (no existing engine
