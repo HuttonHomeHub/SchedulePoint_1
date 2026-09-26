@@ -3,6 +3,37 @@
 What M0 of [the plan](./implementation-plan.md) ran, and what it found. Every figure here was
 produced by a command named beside it; nothing in this file is a reading of the code.
 
+## M0-T2: engine characterisation
+
+`apps/api/src/modules/schedule/engine/compute.zero-task-date.spec.ts`, a new file (no existing engine
+spec was edited, so `pnpm check:engine-parity` reports `0 changed`). Run with
+`pnpm --filter @repo/api exec vitest run src/modules/schedule/engine/compute.zero-task-date.spec.ts`:
+**68 passed**.
+
+| Case    | What it pins                                                                                                                                                                                                                                                             | Result |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| (a)     | A zero-duration task reached `FS` from a task ending Fri 9 Jan and one reached `SS` from a task starting Mon 12 Jan: identical offsets, floats and dates; both read Mon 12 Jan.                                                                                          | holds  |
+| (b)     | `finishMilestoneDisplayIndex` applied to the SS-reached task's offset gives A's finish offset − 1, i.e. Fri 9 Jan, a day before the work it is tied to starts. A `FINISH_MILESTONE` SS-after B reads 9 Jan. At the data date the rule's floor keeps it on the data date. | holds  |
+| (c)     | 4 calendars × 5 fields × 3 dates = 60 cases. `TASK` at D and `FINISH_MILESTONE` at D−1 (calendar day): same offsets and floats for Z, same results for every other activity and edge. `START_MILESTONE` at D: identical to the `TASK`, dates included.                   | holds  |
+| (d)     | Mon–Fri, D = Mon 19 Jan: a `FINISH_MILESTONE` at Sun 18 (calendar day) and at Fri 16 (working day) both equal the `TASK` at D. No instant comparison separates the two shifts (spec E34).                                                                                | holds  |
+| control | Every (c) case asserts the field reached the engine: the `TASK` with the field differs from the `TASK` without it, and, where D−1 is working, the `TASK` at D differs from the `TASK` at D−1.                                                                            | holds  |
+
+### Red runs
+
+| Mutation                                                                                         | Result                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test side: the (c) `FINISH_MILESTONE` at D instead of D−1 (the plan's named red check)           | **55 of 60 red.** The 5 that stay green are the exception calendar at D = Mon 12 Jan, where D is itself non-working: the start of D and the end of D both roll forward to the same Tuesday minute, so the two readings coincide. Recorded in the file's docblock.                |
+| Test side: the (c) `START_MILESTONE` at D−1 instead of D                                         | 30 red (the `START_MILESTONE` limb of each case whose D−1 is a working day).                                                                                                                                                                                                     |
+| Engine side: rule 1a wired in (`compute.ts` `reportIndex` applied to a zero-duration `TASK` too) | 62 failed, 6 passed. (a) goes red, but only on its date assertion (`earlyStart` `2026-01-09` against `2026-01-12`); its FS-against-SS equality still holds, because rule 1a moves both tasks' reported day together. `compute.ts` restored with `git checkout`, confirmed clean. |
+
+### What the plan said that did not hold exactly
+
+- M0-T2's red check predicts the whole of (c) goes red. It does not: 5 of 60 stay green, and they are
+  green for a reason (a non-working D), not a defect in the suite. The plan's wording is left; this
+  file and the spec's docblock carry the correction.
+- (a) is not a discriminator for decision 1a by equality alone. Its date assertion is. The case
+  asserts both, so it did go red against rule 1a.
+
 ## M0-T7: `check:engine-parity`
 
 ### The oracle for the row-lookup extraction
