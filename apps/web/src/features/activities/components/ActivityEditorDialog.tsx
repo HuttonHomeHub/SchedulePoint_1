@@ -540,7 +540,7 @@ export function ActivityEditor({
     scope: TabKey,
     patch: Record<string, unknown>,
     label: string,
-    resetTo: () => void,
+    resetTo: (after: ActivitySummary) => void,
   ): void => {
     if (!activity) return;
     setSaveError((current) => (current?.scope === scope ? null : current));
@@ -552,7 +552,7 @@ export function ActivityEditor({
           // The editor stays open (the agreed behaviour): a multi-scope session would be pointless
           // if saving one tab closed the others. Reset marks the scope clean so its dirty marker
           // clears without discarding what the user just saved.
-          resetTo();
+          resetTo(after);
           setSavedScope(scope);
           announce(`${label} saved.`);
         },
@@ -695,8 +695,26 @@ export function ActivityEditor({
                           );
                           return;
                         }
-                        saveScope('general', generalBody(values, hoursPerDay), 'General', () =>
-                          general.form.reset(values),
+                        saveScope(
+                          'general',
+                          generalBody(values, hoursPerDay),
+                          'General',
+                          (after) => {
+                            general.form.reset(values);
+                            // A type change across the finish-milestone convention made the server
+                            // re-express the stored dates (ADR-0162 decision 3), and the Scheduling
+                            // form still shows the old ones: a later edit there would send them back
+                            // and undo the move. Re-seed it from the saved row — but only when clean,
+                            // because a dirty Scheduling tab holds dates the reader typed, and
+                            // replacing them would discard work (plan M2-T2 risk R2; the Type hint
+                            // says a later Scheduling save is read the new way).
+                            if (
+                              after.type !== activity?.type &&
+                              !scheduling.form.formState.isDirty
+                            ) {
+                              scheduling.form.reset(seedScheduling(after));
+                            }
+                          },
                         );
                       })(event);
                     }}
@@ -712,6 +730,9 @@ export function ActivityEditor({
                         form={general.form}
                         hoursPerDay={hoursPerDay}
                         {...(activity?.type === undefined ? {} : { savedType: activity.type })}
+                        {...(activity === undefined
+                          ? {}
+                          : { savedDurationMinutes: activity.durationMinutes })}
                       />
 
                       {/* The WBS hint is invariant to loading (mirrors the calendar picker), so it

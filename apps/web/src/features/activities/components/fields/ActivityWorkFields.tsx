@@ -13,6 +13,10 @@ import {
   durationLabel,
 } from '@/features/activities/model/duration-field';
 import {
+  TYPE_CHANGE_DATES_HINT,
+  typeChangeReexpressesDates,
+} from '@/features/activities/model/type-change-dates';
+import {
   ACTIVITY_TYPE_LABELS,
   DURATION_TYPE_LABELS,
   isDurationDerivedType,
@@ -56,20 +60,33 @@ export function ActivityWorkFields({
   form,
   hoursPerDay,
   savedType,
+  savedDurationMinutes,
 }: GroupProps<ActivityGeneralValues> & {
   /** The working-hours factor for the calendar the SCHEDULING scope currently selects (ADR-0070). */
   hoursPerDay: number | undefined;
   /** The stored row's type, or absent when creating. Anchors the option list, never visibility. */
   savedType?: ActivityType;
+  /**
+   * The stored row's duration, or absent when creating. With `savedType` it decides whether the
+   * type hint below applies (ADR-0162 decision 3), and like `savedType` it is the host's stored
+   * row rather than the live field: the server keys the date rule on the stored duration.
+   */
+  savedDurationMinutes?: number;
 }): JSX.Element {
   const { errors } = form.formState;
   const type = useWatch({ control: form.control, name: 'type' });
   const derived = isDurationDerivedType(type);
+  const reexpresses = typeChangeReexpressesDates(savedType, savedDurationMinutes, type);
 
   return (
     <FormSection title="Work" description="What kind of activity this is, and how long it takes.">
       <FieldGrid>
-        <SelectField label="Type" error={errors.type?.message} {...form.register('type')}>
+        <SelectField
+          label="Type"
+          error={errors.type?.message}
+          hint={reexpresses ? TYPE_CHANGE_DATES_HINT : undefined}
+          {...form.register('type')}
+        >
           {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, savedType).map((value) => (
             <option key={value} value={value}>
               {ACTIVITY_TYPE_LABELS[value]}

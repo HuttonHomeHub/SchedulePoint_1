@@ -37,10 +37,12 @@ function Harness({
   type = 'TASK',
   hoursPerDay,
   savedType,
+  savedDurationMinutes,
 }: {
   type?: ActivityType;
   hoursPerDay?: number;
   savedType?: ActivityType;
+  savedDurationMinutes?: number;
 }): JSX.Element {
   const form = useForm<ActivityGeneralValues>({
     resolver: zodResolver(activityGeneralSchema as never) as never,
@@ -61,6 +63,7 @@ function Harness({
         form={form}
         hoursPerDay={hoursPerDay}
         {...(savedType === undefined ? {} : { savedType })}
+        {...(savedDurationMinutes === undefined ? {} : { savedDurationMinutes })}
       />
     </FieldGridContainer>
   );
@@ -167,5 +170,47 @@ describe('ActivityWorkFields', () => {
       expect(control).toBeVisible();
       expect(control).toHaveAttribute('name', 'duration');
     });
+  });
+});
+
+describe('ActivityWorkFields — the type-change dates hint (ADR-0162, M2-T2)', () => {
+  const HINT = /its dates will be re-expressed/i;
+
+  it('says the dates will be re-expressed when a stored zero-duration task is set to a finish milestone', () => {
+    render(<Harness type="TASK" savedType="TASK" savedDurationMinutes={0} />);
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'FINISH_MILESTONE' } });
+    // Linked to the control, not only printed beside it: the reader hears it on the Type field.
+    expect(screen.getByLabelText('Type')).toHaveAccessibleDescription(HINT);
+  });
+
+  it('says so when a stored finish milestone is set to any other type', () => {
+    render(
+      <Harness type="FINISH_MILESTONE" savedType="FINISH_MILESTONE" savedDurationMinutes={0} />,
+    );
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+  });
+
+  it('is absent while the type is unchanged', () => {
+    render(<Harness type="TASK" savedType="TASK" savedDurationMinutes={0} />);
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it('is absent for a change that stays in one convention (task to start milestone)', () => {
+    render(<Harness type="TASK" savedType="TASK" savedDurationMinutes={0} />);
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'START_MILESTONE' } });
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it('is absent when the stored duration is not zero', () => {
+    render(<Harness type="TASK" savedType="TASK" savedDurationMinutes={2400} />);
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'FINISH_MILESTONE' } });
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it('is absent when creating (there is no stored row)', () => {
+    render(<Harness type="TASK" />);
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'FINISH_MILESTONE' } });
+    expect(screen.queryByText(HINT)).toBeNull();
   });
 });
