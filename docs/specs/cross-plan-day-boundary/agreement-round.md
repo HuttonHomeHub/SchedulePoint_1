@@ -78,3 +78,31 @@ Suggested:
 - It suggested **not** bumping `version`. **Overruled** in favour of database-architect B3/§b:
   ADR-0148 and ADR-0155 bump `version` when a migration rewrites a planner-owned input, and with no
   update route the bump invalidates no in-flight edit.
+
+## backend-performance-reviewer: AGREE-WITH-CHANGES
+
+The derivation redesign, the cost profile of the widened loads and the FC-6 method are sound. It
+spot-checked E2, E5, E6, E7, E9, E10, E11, E12, E13 and E23, and all were accurate.
+
+Blocking:
+
+- **P1: M3-T1's "reuse its sort over the whole adjacency" cites a function that cannot do it.**
+  `resolveProgrammeOrder(targetPlanId, edges)` (`programme-order.ts:47-106`) BFS-es one target's
+  upstream closure, then runs Kahn over that closure. There is no multi-node entry point.
+  - Extract its Kahn step as an exported function taking an explicit node `Set` plus edges, keeping
+    the same `compareIds` tie-break. `resolveProgrammeOrder` then calls it.
+  - The boot service groups the global pending set by organisation and calls the extracted function
+    per organisation over that organisation's edges.
+  - There is no deadlock risk: each plan's lock is acquired and released inside its own transaction.
+
+Suggested:
+
+- M2-T4 names `loadDrivingCalendarMapForRows` (`driving-calendars.ts`) for remote
+  `RESOURCE_DEPENDENT` endpoints, which is one query per distinct (org, plan) and never per edge.
+- The FC-6 counting stub asserts equal query and calendar-resolve counts at 10 and 100 edges with
+  plans and calendars held fixed.
+- §4.4 states the expected scale of `cross_plan_dependencies`: curated one row at a time, with no
+  bulk path, so one statement needs no ctid batching.
+- The ADR's Consequences note that `FinishMilestoneRederiveService` and the new service can both
+  recalculate one plan at boot, per replica. That is harmless (idempotent, serialised by the plan
+  lock) and should be stated.
