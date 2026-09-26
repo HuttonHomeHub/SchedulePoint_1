@@ -470,3 +470,27 @@ Folded 2026-09-26 by feature-analyst. Headers stay Approved. Each cited line was
 
 Nothing was left unfolded. One instruction was corrected rather than followed literally: the
 non-existent debt-gate suite (above).
+
+## Build-time decision: the selection-bar label (M0-T5)
+
+M0-T5 measured every labelled candidate at 1646 (`m0-measurement.md`), and **none fits**. With an
+unplaced zero-duration task selected the bar has 70 px of room. The shortest label, `Milestone…`,
+needs 116 px, so every labelled candidate wraps and costs the diagram 36 px. Only an icon-only
+control (about 38 px) fits.
+
+**Decision (product owner delegated the open choices): icon-only on the selection bar, with an
+ADR-0117 tooltip.**
+
+- ADR-0115 established that selecting an activity must not wrap the foot row: its `dock.spec.ts`
+  asserts 41 px in both states at 1646. Spending 36 px of diagram on a rare selection reverses that
+  on the product owner's own screen.
+- The accessible name keeps the verb, `Make milestone`. That is the accessibility review's
+  suggestion and the `zoom-to-selection` WCAG 2.4.6 lesson. The tooltip uses `purpose: 'name-echo'`,
+  so the name is not read twice (ADR-0117).
+- The Gantt row menu and the activities-table row menu are menus, not a width-bounded row, so they
+  keep the full label `Make milestone…`. The structural label test (M4-T2) pins the one exported
+  label string. The bar renders it as the accessible name and the tooltip; the menus render it as
+  text.
+- M4-T3's journey asserts the item is 24 × 24 or larger and reachable at 1646 and at 1920. It also
+  asserts that the foot row's height with a zero-duration task selected equals its height with an
+  ordinary task selected (FC-6 as an equality, not a bound).
