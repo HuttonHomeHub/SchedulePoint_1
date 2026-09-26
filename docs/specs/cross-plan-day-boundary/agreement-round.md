@@ -303,3 +303,14 @@ not `:472-474` (the substance is exact).
     and the stated non-pending-`B` staleness, citing `staleness.ts:32-47`, `:43-46` and
     `schedule.service.ts:809-818`.
   - Plan M3-T1 description, the new A→B→C unit case (`C`'s id before `A`'s), and the risks table.
+
+## Build-time decision: the factor-drift finder's third limb
+
+The spec's two-limb finder (resolved calendar edited after the migration; lag not a multiple of
+today's factor) under-reports. It cannot see a change of **resolution path**, such as a successor
+moved to a different, unedited calendar on which 2,400 minutes is still a whole number of days.
+database-architect added a third limb, found by its own test case: an endpoint activity, its plan,
+or its driving assignment or resource edited after the migration finished. That keeps the spec's
+own requirement that the finder never under-reports. **Ratified** as the robust option. It
+over-reports by design, as the first limb already does. See `docs/DEPLOYMENT.md` and
+`m2/migration-design.md`.
