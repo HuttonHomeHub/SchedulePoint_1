@@ -422,3 +422,51 @@ Suggested:
   - Decision: fix it in M3-T4, since it renders inside the same import-review dialog this epic
     changes.
 - M4-T3's size and reach assertion runs at both FC-6 widths, 1646 and 1920.
+
+## Second fold
+
+Folded 2026-09-26 by feature-analyst. Headers stay Approved. Each cited line was re-read first.
+
+- **devops O1 (blocking): limb 3's row lookup.**
+  - Spec D10 and plan M0-T7 now extract the numbered-row parse from `check-debt-status.mjs` into
+    `scripts/lib/doc-register.mjs`. It is exposed as `detailedRows(md)` (both heading levels,
+    `NOT_ITEMS` excluded) and `openDetailedRow(md, number)` (that row when `**Status:**` reads
+    `open`). The debt gate uses the first and the new gate the second. The parse sits at
+    `check-debt-status.mjs:36-67` (`NOT_ITEMS` `:36`, `rowNumber` `:39-42`, merge `:64-67`), which
+    covers the `:39-66` cited.
+  - **Correction to the instruction:** there is no `check-debt-status.test.mjs`, so "its own suite"
+    cannot be the oracle. The only fixture suite behind that gate is `scripts/lib/doc-register.test.mjs`
+    (its docblock, `:3-8`, says so). The oracle is therefore that suite passing unedited, plus
+    `check-debt-status --report` giving identical output on the real register before and after.
+  - `check-reconcile-due.mjs:111` is **not** moved. It reads dated headings in `docs/DECISIONS.md`,
+    with no row numbers and no `NOT_ITEMS`, and shares only the two-level `sections` call. A one-line
+    comment beside it records that.
+  - A sixth mutation uses a fixture in #384's real `###` form (`docs/TECH_DEBT.md:11712`, confirmed),
+    verified red against a `sections(md, 2)`-only lookup. It comes with a `deferred`-status negative
+    case.
+  - D10 and R12 now state that limb 3 is unconditional on the diff, and that on `main` limbs 1–2 are
+    empty.
+- **test-engineer: both blind-spot forms.** Spec D10 and plan M0-T7 name `//` and `/* */` inside a
+  string or template literal. The docblocks of the `.mjs` port and of the TS original (comment only)
+  carry both, and a test pins each as a known pass-through.
+- **backend-performance.**
+  - Spec D8 "Freshness" and plan M4-T1 invalidate `activityKeys.listByPlan(orgSlug, planId)`, never
+    `.all`. The real signature takes `orgSlug` too (`use-activities.ts:37`). The invalidation uses the
+    histogram's `planId`-known condition (`use-resources.ts:395-400`), and a spy asserts `.all` is not
+    touched.
+  - The client cost (about 20 sequential page requests per assign or unassign at 2,000 activities) is
+    stated in D8, M4-T1's risks and R11.
+  - M4-T1's api-reviewer gate checks that `docs/API.md` and the `@ApiProperty` description landed in
+    one commit.
+- **component: the precision.** Spec D6 and plan M4-T2 record that the canvas bar and the Gantt row
+  menu share one registry item by construction (`GanttRowMenu.tsx:89-101`), and the table is the one
+  independent roster. The table's `===` assertion is the meaningful one. It is verified red against a
+  freshly built gate object; the two bar-side assertions are confirmation.
+- **accessibility.**
+  - Spec US-3 and plan M4-T3 say that on error the dialog stays open and `close()` is not called.
+  - `ResourceCollisionResolver.tsx:30` (a `list-none` `<ul>`, confirmed) joins M3-T4's list-role
+    fix, and the spec's component changes.
+  - M4-T3's size and reach assertion runs at 1646 and 1920.
+
+Nothing was left unfolded. One instruction was corrected rather than followed literally: the
+non-existent debt-gate suite (above).

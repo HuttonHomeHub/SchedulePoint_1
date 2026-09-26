@@ -216,33 +216,65 @@ rows to it (M0-T4 asserts they render).
   TypeScript module), and the root script `"check:engine-parity"` in `package.json`. The three limbs
   are spec D10's: a non-test engine file differs from the merge base; an engine spec that exists at the
   merge base differs in comment-stripped content; the declared debt row is no longer an open detailed
-  row in `docs/TECH_DEBT.md` (read with `scripts/lib/doc-register.mjs`). Inactive: prints "skipped"
-  and exits 0. A base ref that cannot be diffed fails loudly, as `check:frontend-only` does
+  row in `docs/TECH_DEBT.md`. Limb 3 reads the row through `openDetailedRow(md, number)`, extracted
+  into `scripts/lib/doc-register.mjs` in this task (below), never a new lookup. Inactive: prints
+  "skipped" and exits 0. A base ref that cannot be diffed fails loudly, as `check:frontend-only` does
   (`check-frontend-only.mjs:104-110`).
+- **The shared row lookup (devops O1).** Move the numbered-row parse out of
+  `check-debt-status.mjs:36-67` (`NOT_ITEMS`, `rowNumber`, and the `sections(md, 2)` +
+  `sections(md, 3)` merge in document order) into `doc-register.mjs` as `detailedRows(md)`, and add
+  `openDetailedRow(md, number)` on top of it: the row numbered `number` whose `**Status:**` field (read
+  with the existing `fieldValue`) is `open`, else `null`. `check-debt-status.mjs` replaces its private
+  copy with `detailedRows`. **There is no `check-debt-status.test.mjs`** (checked: the gate's only
+  fixture suite is `scripts/lib/doc-register.test.mjs`, whose docblock calls itself "the only safety
+  net both gates have"), so the oracle is two things: `doc-register.test.mjs`'s existing cases pass
+  **unedited**, and `node scripts/check-debt-status.mjs --report` against the real register prints a
+  byte-identical summary line and finding list before and after the move (captured into the PR). `check-reconcile-due.mjs:111`'s two-level `sections` call
+  is **not** moved: it reads dated headings (`YYYY-MM-DD …`) in `docs/DECISIONS.md`, with no row
+  numbers and no `NOT_ITEMS`, so it is a different lookup that happens to share one call; the reason
+  is written beside it as a one-line comment pointing at `detailedRows`, so the next reader does not
+  "unify" them.
 - **Complexity:** S
 - **Dependencies:** none
 - **Risks:**
   - **The declaration goes stale** (`docs/TECH_DEBT.md` #194's failure in `check:frontend-only`) →
     limb 3 makes the stale state a failure with its own message, and M6 deactivates it in the commit
     that closes #384.
-  - **The stripper's blind spot**: `//` inside a string literal is read as a comment, so an edit after
-    `//` in a string is invisible. Stated in the stripper's docblock rather than fixed; the two copies
-    (TS and `.mjs`) keep the same two regexes so they fail the same way.
+  - **Limb 3 is unconditional on the diff** (R12). Limbs 1–2 read `BASE...HEAD` and find nothing on
+    `main`, or on any branch with no engine change; limb 3 reads the working tree's register and
+    fails every push, on every branch, while the declaration is active and #384 is not open. That is
+    the intended behaviour, and why M6's closing commit deactivates it.
+  - **Limb 3 reads the wrong heading level** (devops O1): #384 is a `###` row
+    (`docs/TECH_DEBT.md:11712`), so a `sections(md, 2)`-only lookup would call the declaration stale
+    on this task's own first commit. Closed by the shared `detailedRows` and pinned by mutation (6).
+  - **The stripper's blind spot has two forms**: a `//` and a `/* … */` inside a string or template
+    literal are both stripped as if they were comments, so an edit after `//`, or inside `/* */`, in a
+    string is invisible to limb 2. Both forms are named in the `.mjs` port's docblock (and, as a
+    comment-only edit, in the TS original's) rather than fixed; the two copies keep the same two
+    regexes so they fail the same way. A test pins each form as a known pass-through, so the blind
+    spot is recorded behaviour rather than a surprise.
   - **A gate that cannot fail** → a pinned positive case: an active declaration over a fixture diff
     with no engine change must report "checked N files", never "skipped".
-- **Testing:** `scripts/check-engine-parity.test.mjs` over fixture diffs. Verified red, each against a
-  named mutation: (1) an `expect` value changed in the same commit as a docblock edit (the reviewer's
-  case) — must fail, naming the file; (2) a docblock-only edit — must pass; (3) a one-character change
-  to a non-test engine file — must fail; (4) the declared row absent from a fixture register — must
-  fail with the stale-declaration message; (5) a new engine spec file — must pass.
+- **Testing:** `scripts/check-engine-parity.test.mjs` over fixture diffs, and new cases in
+  `scripts/lib/doc-register.test.mjs` for `detailedRows` and `openDetailedRow`. Verified red, each
+  against a named mutation: (1) an `expect` value changed in the same commit as a docblock edit (the
+  reviewer's case) — must fail, naming the file; (2) a docblock-only edit — must pass; (3) a
+  one-character change to a non-test engine file — must fail; (4) the declared row absent from a
+  fixture register — must fail with the stale-declaration message; (5) a new engine spec file — must
+  pass; (6) **a fixture register holding the declared row in #384's real form** (`### 384. …` at
+  column 0, `**Status:** open · …` below it, inside `## Detailed items`) — must pass, and is verified
+  red against a `sections(md, 2)`-only lookup, which reports it stale. Plus: the same fixture with the
+  status changed to `deferred` must fail limb 3 (open means `open`).
 - **Development steps:**
-  1. Stripper, script, declaration, test.
-  2. Add a CI step to the `quality` job directly after "Check the frontend-only boundary"
+  1. Capture `check-debt-status.mjs --report`; extract `detailedRows` / `openDetailedRow`; re-run it
+     and `doc-register.test.mjs` unedited and diff the output; add the `check-reconcile-due` comment.
+  2. Stripper (with both blind-spot forms in its docblock), script, declaration, test.
+  3. Add a CI step to the `quality` job directly after "Check the frontend-only boundary"
      (`ci.yml:147-148`), which already has `fetch-depth: 0` and fetches `main` (`ci.yml:25-32`,
      `:145`). `scripts/ci-roster.json` stays `exempt: {}`: the CI step is what satisfies
      `check:ci-roster`. Confirm `check:ci-roster` refuses the commit with the `package.json` script and
      no CI step, then passes with the step.
-  3. `pnpm prepush` derives the gate from `package.json`; confirm it appears there.
+  4. `pnpm prepush` derives the gate from `package.json`; confirm it appears there.
 
 ---
 
@@ -547,7 +579,9 @@ fourteen-row count is scoped to the metrics list (M3-T2).
 
 - **Description:** `advisories?` on the report schema (both modes; absent when empty) and an
   "Advisories" group in the import review dialog. `InterchangeReportTable`'s lists
-  (`InterchangeReportTable.tsx:87`) gain explicit roles (A3). Nothing produces the key yet.
+  (`InterchangeReportTable.tsx:87`) and `ResourceCollisionResolver`'s bare `<ul>`
+  (`ResourceCollisionResolver.tsx:30`, `list-none`, rendered in the same import-review dialog) gain
+  explicit `role="list"` / `role="listitem"` (A3). Nothing produces the key yet.
 - **Complexity:** S
 - **Dependencies:** M3-T3
 - **Risks:** a producer merged in the same release breaks a browser tab from **before** M3, which
@@ -555,9 +589,10 @@ fourteen-row count is scoped to the metrics list (M3-T2).
   milestone order gives (M4 releases in between). This is needed once: after M3's release no later
   field needs it (spec D9).
 - **Testing:** schema accepts a report with and without the key; dialog renders the group from a
-  fixture; a report without the key renders byte-identically (FC-5 (a)).
+  fixture; a report without the key renders byte-identically (FC-5 (a)); both components' lists expose
+  `list` / `listitem` roles.
 - **Development steps:**
-  1. Schema; dialog; tests.
+  1. Schema; dialog; list roles; tests.
   2. Changeset (minor: web).
 
 ---
@@ -592,8 +627,11 @@ item from the Gantt, converts, and asserts focus is on the activity's Gantt row.
   shared decoration step (`activities.service.ts:123-144`), beside the driving-calendar lookup it
   already makes: `resourceAssignment.groupBy({ by: ['activityId'], where: { activityId: { in: rowIds
 }, ...liveAssignmentWhere(organizationId) }, _count: true })`. The web's assignment create and delete
-  mutations (`use-resources.ts:388-404`, `:492-506`) add an invalidation of the plan's activities
-  query (spec E28).
+  mutations (`use-resources.ts:388-404`, `:492-506`) add an invalidation of
+  `activityKeys.listByPlan(orgSlug, planId)` (spec E28 and D8 "Freshness"), under the same
+  `planId`-known condition as their histogram invalidation (`:395-400`) — **never
+  `activityKeys.all`**, which is organisation-wide. Every caller of the two hooks is checked to pass
+  `planId`.
 - **Complexity:** M
 - **Dependencies:** M3-T1
 - **Risks:**
@@ -606,6 +644,13 @@ item from the Gantt, converts, and asserts focus is on the activity's Gantt row.
   - **The guest view gains the field** → a case asserts `GuestActivityDto` has no such key.
   - **Every web test fixture that builds an `ActivitySummary` literal** gains the field because the
     compiler requires it; no assertion changes. Use the existing fixture helpers where they exist.
+  - **The client refetch cost** (R11): the activities list is read with `apiFetchAllPages` at 100
+    rows a page, so each assign or unassign re-pages the whole plan, about 20 sequential requests at
+    2,000 activities, each carrying the one extra count query. FC-9 bounds only the server; this
+    figure is stated in spec D8 and accepted there.
+  - **The contract lands in two places or neither**: `docs/API.md` and the `ActivityResponseDto`
+    `@ApiProperty` description change in the same commit (ADR-0146 records one shipping without the
+    other).
 - **Testing:**
   - Unit: the decoration returns 0 for an activity with no assignment, N for N live ones, and ignores a
     soft-deleted assignment and an assignment to a soft-deleted resource.
@@ -614,14 +659,16 @@ item from the Gantt, converts, and asserts focus is on the activity's Gantt row.
     count and the `zero-duration-tasks-resourced` diagnostic agree, with one live assignment, one
     soft-deleted assignment and one assignment to a soft-deleted resource present. Verified red by
     dropping the `resource.deletedAt` condition from one of the three.
-  - Web: the create and delete assignment mutations invalidate the activities query (a query-client
-    spy).
+  - Web: the create and delete assignment mutations invalidate `activityKeys.listByPlan(orgSlug,
+planId)` and do **not** invalidate `activityKeys.all` (a query-client spy asserting both).
 - **Development steps:**
   1. Measure (FC-9), record, decide.
-  2. Types; DTO; query; invalidation; tests.
+  2. Types; DTO (`@ApiProperty` description) and `docs/API.md`, in one commit; query; invalidation;
+     tests.
   3. Changeset (minor: api, a new response field).
-  4. **Re-confirmation:** api-reviewer (the activity DTO changes) and backend-performance-reviewer
-     (the query and its measurement) review this task before merge.
+  4. **Re-confirmation:** api-reviewer (the activity DTO changes; the gate includes checking that
+     `docs/API.md` and the `@ApiProperty` description landed together) and
+     backend-performance-reviewer (the query and its measurement) review this task before merge.
 
 #### Feature: the action
 
@@ -648,7 +695,10 @@ item from the Gantt, converts, and asserts focus is on the activity's Gantt row.
 - **Dependencies:** M2, M3-T1 (the predicate), M4-T1
 - **Risks:**
   - The table's hand-kept roster is forgotten (the "one control and not its neighbour" shape) → the
-    identity test below, and the label pin.
+    identity test below, and the label pin. The canvas bar and the Gantt row menu share **one**
+    registry item by construction (the row menu renders `selectionActionItems` directly,
+    `GanttRowMenu.tsx:89-101`), so they cannot drift from each other; the table is the only
+    independent roster and is where drift can happen.
   - `selection-duplication.structural.test.ts` → the item is on object surfaces only; the gate passes
     unedited.
   - **Two role sentences on one bar** (spec D6's residue): Edit says "Your role cannot change this
@@ -659,7 +709,9 @@ item from the Gantt, converts, and asserts focus is on the activity's Gantt row.
   - Gate unit tests: every branch, including omit for a non-zero task, a milestone and a summary;
     **pen/role wins over resourced** when both apply (the `GanttRowMenu.tsx:184-194` precedence).
   - **Identity**: the canvas bar context's gate, the Gantt context's gate and the table's gate are each
-    `===` the model's `activityEditorGating.general`.
+    `===` the model's `activityEditorGating.general`. The **table** assertion is the meaningful one
+    (verified red against a table handed a freshly built `{ writable, reason }` object); the two
+    bar-side assertions are confirmation, since those surfaces share one item.
   - **Label pin** (structural): the registry item and the table action both use
     `MAKE_MILESTONE_LABEL`, and the table file contains no string literal equal to it. Verified red
     against a table that spells the label inline.
@@ -686,7 +738,9 @@ item from the Gantt, converts, and asserts focus is on the activity's Gantt row.
   restore returns focus to the successor → one Undo entry (inverse `PATCH {version, type: 'TASK'}`) →
   recalculation → **then** the announcement, read from the recalculated row: "{name} is now a finish
   milestone, dated {weekday date}. Its successors and float are unchanged." On failure the dialog
-  stays open with a `NoticeStrip` (`role="alert"`) in its body, as `ArrangeDialog` does.
+  stays open with a `NoticeStrip` (`role="alert"`) in its body, as `ArrangeDialog` does, and `close()`
+  is **not** called; the native restore to the successor happens only when the planner later cancels
+  or a retry succeeds.
 - **Complexity:** M
 - **Dependencies:** M4-T2
 - **Risks:**
@@ -704,7 +758,8 @@ item from the Gantt, converts, and asserts focus is on the activity's Gantt row.
     the selection-bar item is **wrong**: its sweep roots are the command deck, the plan header, the
     Project Explorer and the Gantt grid (`command-surface.spec.ts:754-755`, `:881-892`), not the dock.
     So the journey asserts the item's pointer target is at least 24 × 24 and pointer-reachable
-    (`elementFromPoint`), and the dialog's radio cards and buttons likewise.
+    (`elementFromPoint`), and the dialog's radio cards and buttons likewise, **at both FC-6 widths,
+    1646 and 1920**.
 - **Testing:** dialog unit and axe (states: default, pending, error); the announcer-order case; the
   preselection predicate (with and without a predecessor); ADR-0153 census passes; the journey above,
   including the focus-target assertions for canvas and Gantt; accessibility-reviewer before merge (the
@@ -798,20 +853,20 @@ impact), plus the epic's standing rules above. CI is read per CLAUDE.md §19.9 b
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                           | Likelihood                     | Impact  | Mitigation                                                                                                                      |
-| ------------------------------------------------------------------------------------------- | ------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| R1: the `PATCH` rule rewrites dates a caller did not send                                   | certain (by design)            | med     | Documented in OpenAPI and `docs/API.md`; api-reviewer before M2 merges; CQ-1 answered (server).                                 |
-| R2: a dirty Scheduling tab sends old-convention dates with a type change                    | low                            | low     | Hint under Type; ADR-0108 guard; recorded.                                                                                      |
-| R3: the convention table drifts from the engine                                             | low                            | high    | Structural test over the engine's `FINISH_MILESTONE` branches (M2-T1).                                                          |
-| R4: the glyph moves across a non-working gap and reads as "it moved"                        | med                            | low     | The dialog says a finish milestone is drawn at the end of its day; copy names what is unchanged (U1); ADR states the move.      |
-| R5: import advisory producer ships before its reader is deployed                            | low                            | low     | The reader tolerates unknown keys (D9); the one remaining window (tabs from before M3) is covered by the milestone order, once. |
-| R6: the selection bar wraps at 1646 for a zero-duration selection                           | med                            | low     | M0-T5 picks the label; FC-6.                                                                                                    |
-| R7: converting changes EV, revision compare, project finish label or a cross-plan successor | certain in those cases         | low–med | Stated in the ADR; the project-finish case is stated in the dialog; cross-plan is `#385`.                                       |
-| R8: N26 validated on the pre-rewrite pair                                                   | certain without the fix        | med     | Re-express before the check (M2-T1); both directions tested, red first.                                                         |
-| R9: a converted LOE, summary or resource-dependent activity moves                           | certain in those cases         | low     | D3's table states FC-2 is not claimed for them; characterised in M2-T1.                                                         |
-| R10: the activity-read count query costs more than FC-9 allows                              | low                            | med     | Measured before shipping (M4-T1); remedy ladder written in advance.                                                             |
-| R11: `resourceAssignmentCount` is stale after an assignment edit                            | med without the fix            | low     | Assignment mutations invalidate the activities query (M4-T1); a peer's edit is covered by refetch and the error table.          |
-| R12: the engine-parity declaration outlives the epic                                        | med (recorded twice elsewhere) | med     | Limb 3 fails when #384 is no longer open; M6 deactivates it in the closing commit.                                              |
-| A1: zero-duration tasks are rare                                                            | —                              | —       | M0-T1 and M0-T4 measure; bulk conversion reopens at more than 20 in one import.                                                 |
-| A2: the action does not offer `RESOURCE_DEPENDENT`                                          | —                              | —       | M0-T1 counts; a non-zero count becomes a register row. The server rule still covers it (D3).                                    |
-| A3: ADR number 0162                                                                         | —                              | —       | Assumes `#385`'s spec takes 0161; check `docs/adr/` at filing.                                                                  |
+| Risk / assumption                                                                           | Likelihood                     | Impact  | Mitigation                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------- | ------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1: the `PATCH` rule rewrites dates a caller did not send                                   | certain (by design)            | med     | Documented in OpenAPI and `docs/API.md`; api-reviewer before M2 merges; CQ-1 answered (server).                                                                                                                                                                                    |
+| R2: a dirty Scheduling tab sends old-convention dates with a type change                    | low                            | low     | Hint under Type; ADR-0108 guard; recorded.                                                                                                                                                                                                                                         |
+| R3: the convention table drifts from the engine                                             | low                            | high    | Structural test over the engine's `FINISH_MILESTONE` branches (M2-T1).                                                                                                                                                                                                             |
+| R4: the glyph moves across a non-working gap and reads as "it moved"                        | med                            | low     | The dialog says a finish milestone is drawn at the end of its day; copy names what is unchanged (U1); ADR states the move.                                                                                                                                                         |
+| R5: import advisory producer ships before its reader is deployed                            | low                            | low     | The reader tolerates unknown keys (D9); the one remaining window (tabs from before M3) is covered by the milestone order, once.                                                                                                                                                    |
+| R6: the selection bar wraps at 1646 for a zero-duration selection                           | med                            | low     | M0-T5 picks the label; FC-6.                                                                                                                                                                                                                                                       |
+| R7: converting changes EV, revision compare, project finish label or a cross-plan successor | certain in those cases         | low–med | Stated in the ADR; the project-finish case is stated in the dialog; cross-plan is `#385`.                                                                                                                                                                                          |
+| R8: N26 validated on the pre-rewrite pair                                                   | certain without the fix        | med     | Re-express before the check (M2-T1); both directions tested, red first.                                                                                                                                                                                                            |
+| R9: a converted LOE, summary or resource-dependent activity moves                           | certain in those cases         | low     | D3's table states FC-2 is not claimed for them; characterised in M2-T1.                                                                                                                                                                                                            |
+| R10: the activity-read count query costs more than FC-9 allows                              | low                            | med     | Measured before shipping (M4-T1); remedy ladder written in advance.                                                                                                                                                                                                                |
+| R11: `resourceAssignmentCount` is stale after an assignment edit                            | med without the fix            | low     | Assign/unassign invalidate `activityKeys.listByPlan` (never `.all`) (M4-T1); a peer's edit is covered by refetch and the error table. Client cost stated: each assign or unassign re-pages the plan, about 20 sequential requests at 2,000 activities (spec D8).                   |
+| R12: the engine-parity declaration outlives the epic                                        | med (recorded twice elsewhere) | med     | Limb 3 fails when #384 is no longer open, read through the shared `openDetailedRow` (both heading levels; #384 is `###`). It is unconditional on the diff: limbs 1–2 are empty on `main`, limb 3 fails every push while active and stale. M6 deactivates it in the closing commit. |
+| A1: zero-duration tasks are rare                                                            | —                              | —       | M0-T1 and M0-T4 measure; bulk conversion reopens at more than 20 in one import.                                                                                                                                                                                                    |
+| A2: the action does not offer `RESOURCE_DEPENDENT`                                          | —                              | —       | M0-T1 counts; a non-zero count becomes a register row. The server rule still covers it (D3).                                                                                                                                                                                       |
+| A3: ADR number 0162                                                                         | —                              | —       | Assumes `#385`'s spec takes 0161; check `docs/adr/` at filing.                                                                                                                                                                                                                     |

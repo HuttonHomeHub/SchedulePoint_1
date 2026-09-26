@@ -310,7 +310,9 @@ was invisible because both read the same.
 >   (`role="alert"`) in its body, as `ArrangeDialog` does.
 > - **After** conversion the control disappears (the activity is now a milestone). Focus is already on
 >   the activity, because it was moved there before the dialog opened; the dialog's native `close()`
->   returns there on confirm, cancel and error alike. It is never on `<body>`.
+>   returns there on confirm and on cancel. On error the dialog stays open and `close()` is not called:
+>   focus stays inside the dialog until the planner cancels or retries, and the same restore applies
+>   then. It is never on `<body>`.
 
 > **US-4** — As a planner, I want changing a zero-duration activity's type in the editor never to move
 > it.
@@ -566,7 +568,8 @@ string | null; detail: string }[]`, absent when empty. Readers strip unknown key
   explicit `role="list"` / `role="listitem"` (A3), including the metrics list, which also gains the
   accessible name "DCMA metrics".
 - Import review dialog: an "Advisories" group beside approximations/repairs/drops;
-  `InterchangeReportTable`'s lists gain explicit roles (A3).
+  `InterchangeReportTable`'s lists and `ResourceCollisionResolver`'s bare `<ul>`
+  (`ResourceCollisionResolver.tsx:30`, in the same dialog) gain explicit roles (A3).
 - `selection-actions.tsx`: item `make-milestone` (`group: 'object'`, `penGated`, `isVisible` =
   applies, `isEnabled` and `disabledReason` from `deriveMakeMilestoneGate`, `lostReason` for ADR-0135).
   Its label is an exported constant `MAKE_MILESTONE_LABEL`, which the table imports. The Gantt row
@@ -675,7 +678,12 @@ object the table and the editor already receive by identity. It is chosen over `
 because it is the one mechanism already derived once and identity-pinned (E27), and an object can be
 asserted `===`. `buildSelectionBarContext` gains it as an input and passes it through untouched; an
 identity test asserts the bar context's gate, the Gantt context's gate and the table's gate are `===`
-to the model's `activityEditorGating.general`. Pen/role wins over resourced for the reason
+to the model's `activityEditorGating.general`. **Of those three, the table's is the comparison that
+means something.** The canvas bar and the Gantt row menu share one registry item by construction: the
+Gantt row menu renders `selectionActionItems` directly (`GanttRowMenu.tsx:89-101`), so the item, its
+label and its gate reach both from one place. The activities table is the one independent,
+hand-kept roster (`ActivitiesTable.tsx:388`), and it is the one that can drift; the two bar-side
+assertions are cheap confirmation, the table assertion is the guard. Pen/role wins over resourced for the reason
 `GanttRowMenu`'s structure items give (`GanttRowMenu.tsx:184-194`): a reader without the pen should be
 told that, not a fact they cannot act on yet. **Accepted residue:** the bar's other items keep
 `scheduleRefusal`, so a role-shut reader reads "Your role cannot change this activity." on Edit and
@@ -707,8 +715,16 @@ in: rowIds }, ...liveAssignmentWhere(orgId) }, _count: true })` inside the share
   two `deleted_at IS NULL` conditions; FC-10 proves the three agree on data.
 - **Precedent**: `drivingResourceCalendarId` is already derived on read for exactly this reason, "a
   table, a Gantt grid or a lag field would need one request per row" (`packages/types/src/index.ts:501-513`).
-- **Freshness**: the assignment create and delete mutations gain an invalidation of the plan's
-  activities query (E28), with a test.
+- **Freshness**: the assignment create and delete mutations gain an invalidation of
+  `activityKeys.listByPlan(orgSlug, planId)` (E28), with a test, and never `activityKeys.all`, which
+  is organisation-wide and would refetch every plan's activities in the cache. The hooks already take
+  an optional `planId` for the histogram invalidation (`use-resources.ts:395-400`); the activities
+  invalidation uses the same condition, and M4-T1 checks every caller passes it. **The client cost is
+  stated, not hidden behind FC-9**, which bounds only the server: the activities list is read with
+  `apiFetchAllPages` at 100 rows a page, so one assign or unassign re-pages the whole plan, about 20
+  sequential requests at 2,000 activities, each carrying D8's one extra query. Accepted because
+  assign and unassign are deliberate, infrequent edits and the list already re-pages after every
+  other activity write; recorded as R11.
 - **Cost**: bounded by FC-9, with its remedy ladder written before the run.
 
 **D9 — the import report's readers tolerate unknown keys (#387, C3).** The report schema is built once
@@ -739,17 +755,41 @@ While active it fails when:
    merge base;
 2. any `engine/*.spec.ts` that exists at the merge base has different comment-stripped content at
    `HEAD` (new spec files are exempt);
-3. the declared `debtRow` is no longer an open detailed row in `docs/TECH_DEBT.md` (read with
-   `scripts/lib/doc-register.mjs`): the declaration has outlived its epic.
+3. the declared `debtRow` is no longer an open detailed row in `docs/TECH_DEBT.md`: the declaration
+   has outlived its epic.
+
+**Limb 3's row lookup is shared code, not a new copy (devops O1).** `scripts/lib/doc-register.mjs`
+exports no numbered-row lookup today; the working one (`rowNumber`, `NOT_ITEMS`, and
+`sections(md, 2)` **and** `sections(md, 3)`) is private to `check-debt-status.mjs:36-67`. The obvious
+reimplementation, `sections(md, 2)` alone, would miss #384 itself, which is a `###` row
+(`docs/TECH_DEBT.md:11712`), and report the declaration stale on M0's first commit; that same
+single-level read is the defect `check-debt-status.mjs:57-63` records shipping once already. So the
+parse moves into `doc-register.mjs` as two exports: `detailedRows(md)` (both heading levels,
+`NOT_ITEMS` excluded, a row number on each, in document order) and `openDetailedRow(md, number)` (that
+row when its `**Status:**` field reads `open`, else `null`). `check-debt-status.mjs` calls
+`detailedRows` in place of its private copy and the new gate calls `openDetailedRow`. The debt gate
+has no suite of its own (`scripts/lib/doc-register.test.mjs` is the only fixture suite behind it,
+`doc-register.test.mjs:3-8`), so the oracle is that suite passing unedited plus
+`check-debt-status --report` printing identical output on the real register before and after. `check-reconcile-due.mjs:111` also reads both heading levels, but it
+is **not** the same lookup and does not move: it reads **dated** headings (`YYYY-MM-DD …`) in
+`docs/DECISIONS.md`, with no row numbers and no `NOT_ITEMS`, so the only thing it shares is the
+two-level `sections` call.
+
+**Limb 3 is unconditional on the diff; limbs 1–2 are not.** Limbs 1–2 inspect `BASE...HEAD`, so on
+`main` itself (and on any branch with no engine change) they find nothing and pass. Limb 3 reads the
+working tree's `docs/TECH_DEBT.md` and fails **every** push, on every branch, while the declaration is
+`active` and #384 is not an open detailed row, whatever the push changes. That is deliberate (a stale
+declaration must stop somebody) and it is why M6 deactivates it in the same commit that closes #384.
 
 Limb 3 is the answer to `check:frontend-only`'s recorded failure, a declaration that goes stale and
 then blocks a different epic (`docs/TECH_DEBT.md` #194, `check-frontend-only.mjs:41-48`): here the
-stale state is a failure with its own message, and M6 deactivates the declaration in the commit that
-closes #384. While inactive it prints "skipped" and exits 0. The comment stripper is a port of
-`stripComments` (`apps/api/src/common/contracts/cost-key-scan.ts:31-33`) into
-`scripts/lib/strip-comments.mjs`, because a root `.mjs` gate cannot import a TypeScript module. Its
-blind spot is inherited and stated in its docblock: `//` inside a string literal is treated as a
-comment, so an edit after `//` in a string is invisible. It runs in `pnpm prepush` (derived from
+stale state is a failure with its own message naming the row. While inactive it prints "skipped" and
+exits 0. The comment stripper is a port of `stripComments`
+(`apps/api/src/common/contracts/cost-key-scan.ts:31-33`) into `scripts/lib/strip-comments.mjs`,
+because a root `.mjs` gate cannot import a TypeScript module. Its blind spot is inherited and has
+**two forms**, both named in its docblock: a `//` and a `/* … */` inside a string or template literal
+are both stripped as if they were comments, so an edit after `//`, or inside `/* */`, in a string is
+invisible to limb 2. It runs in `pnpm prepush` (derived from
 `package.json`) and in CI's `quality` job after the frontend-only step, which is what satisfies
 `check:ci-roster` (`scripts/ci-roster.json` stays `exempt: {}`). ADR-0105 lists a shared gate as a
 full-spec trigger; this spec is that spec.
