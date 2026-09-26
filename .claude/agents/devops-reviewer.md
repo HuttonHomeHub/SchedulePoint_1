@@ -57,9 +57,12 @@ not edit code.
   root `check:*` script runs in no CI step, or a step names a script that does not exist.
   Adding a gate means adding both, in one commit. Also live: `check:licenses` (an SPDX
   allow-list over the whole resolved tree), `check:browser-safe`, a PR-title workflow that
-  validates the title as the squash subject it becomes, and a web bundle budget
-  (`pnpm --filter @repo/web check:bundle-size`) — the last deliberately NOT a root
-  `check:*`, because it needs a production build.
+  validates the title as the squash subject it becomes, and a web bundle budget,
+  `check:web-bundle` — a root gate since ADR-0160, so `pnpm prepush` runs it too. It
+  deletes `apps/web/bundle-report.json`, runs a turbo web build (a cache hit when the
+  app is unchanged, because `turbo.json` declares the report as a build output), then
+  calls the workspace `check:bundle-size`. It was CI-only before that, and PR #701
+  passed prepush and failed CI on it.
 - **`pnpm format:check` runs in CI and in no local gate** (TECH_DEBT #299), so formatting
   failures are only ever found after a push.
 - **Known gap:** the image build has no GHA-backed layer cache, so both images
