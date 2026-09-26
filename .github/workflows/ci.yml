@@ -265,12 +265,15 @@ jobs:
       # `jspdf` behind an `await import()` costs the first paint nothing, and counting it would make
       # the number describe a download nobody performs.
       #
-      # **Not a root `check:*`, deliberately**, which is why `check:ci-roster` does not see it: it
-      # needs a production build, and making a five-second `pnpm prepush` wait thirty seconds for
-      # one is how a gate gets bypassed. It runs here, immediately after the build that produces its
-      # input.
+      # **A root `check:*` since ADR-0160**, so `pnpm prepush` runs the same command and a
+      # contributor meets an over-budget bundle before CI does. It deletes the report, then asks
+      # turbo for the web build — a cache hit here, because the step above has just built it and
+      # `turbo.json` declares `bundle-report.json` as a build output, so the hit restores the report
+      # the check reads. Keep it AFTER the build step: without that the rebuild lands in `quality`,
+      # the job that bounds whole-CI wall clock (ADR-0138). It was a workspace call until then, on a
+      # premise ("a five-second prepush") that no measurement supported (the spec, E8).
       - name: Check the web bundle budget
-        run: pnpm --filter @repo/web check:bundle-size
+        run: pnpm check:web-bundle
 
   e2e-api:
     name: End-to-end tests (API)

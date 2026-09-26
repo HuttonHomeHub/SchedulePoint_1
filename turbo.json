@@ -7,7 +7,7 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.test.*", "!**/*.spec.*"],
-      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"],
+      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**", "bundle-report.json"],
       "env": ["VITE_*"]
     },
     "dev": {
