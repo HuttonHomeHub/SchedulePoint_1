@@ -471,8 +471,23 @@ function verticalSideAt(
 
 /**
  * The same-extent repair in {@link packGutterChannels}'s docblock, over one gutter's runs
- * `runs[start..end)` with their chosen offsets `chosen[i - start]`, in place. Pairs are visited in
- * the runs' own sorted order, so the result is as deterministic as the first fit before it.
+ * `runs[start..end)` with their chosen offsets `chosen[i - start]`, in place.
+ *
+ * ## A rank, not pairwise swaps
+ *
+ * Each run is ranked by its two ends: -1 for a vertical above the gutter, +1 for one below, 0 where
+ * it has none. The group's channels are then handed out in rank order, upper channel to lowest
+ * rank. That satisfies every pair whose ends agree on an order: where two runs differ at one end and
+ * not the other, or at both ends the same way, their ranks differ in that direction. A pair whose
+ * two ends disagree (up-then-down beside down-then-up) ranks equal and keeps first fit's order,
+ * since no order satisfies both.
+ *
+ * It replaced a single sweep of pairwise swaps (`docs/TECH_DEBT.md` #395 item 8). That settles two
+ * runs and not three, because a later swap can undo an earlier one: enumerating all 64 three-run
+ * groups found two left in the wrong order. Handing out a group's own channels among its members is
+ * free for the same reason the swap was: the runs share an extent, so each channel's occupancy is
+ * unchanged. The sort is stable and ties fall back to the order first fit chose, so the result is as
+ * deterministic as the first fit before it.
  */
 function orderSameExtentRuns(
   runs: readonly { candidate: number; at: number; y: number; x0: number; x1: number }[],
@@ -482,8 +497,7 @@ function orderSameExtentRuns(
   candidates: readonly RoutedLine[],
 ): void {
   // Only runs with the identical extent are compared, so group by it first: a gutter carries
-  // dozens of runs on a large plan and most extents are unique, so pairing every run with every
-  // other made this pass quadratic in the gutter's population for almost no pairs.
+  // dozens of runs on a large plan and most extents are unique.
   const byExtent = new Map<string, number[]>();
   for (let i = start; i < end; i += 1) {
     const key = `${runs[i]!.x0}:${runs[i]!.x1}`;
@@ -492,30 +506,24 @@ function orderSameExtentRuns(
     else byExtent.set(key, [i]);
   }
   for (const group of byExtent.values()) {
-    for (let gi = 0; gi < group.length; gi += 1) {
-      for (let gj = gi + 1; gj < group.length; gj += 1) {
-        const i = group[gi]!;
-        const j = group[gj]!;
-        const a = runs[i]!;
-        const b = runs[j]!;
-        if (chosen[i - start] === chosen[j - start]) continue;
-        // +1: `a` should be above `b`; -1: below; 0: no end asks; NaN: the two ends disagree.
-        let want = 0;
-        for (const x of [a.x0, a.x1]) {
-          const sa = verticalSideAt(candidates[a.candidate]!.line, a.at, a.y, x);
-          const sb = verticalSideAt(candidates[b.candidate]!.line, b.at, b.y, x);
-          if (sa === null || sb === null || sa === sb) continue;
-          const here = sa === 'above' ? 1 : -1;
-          want = want === 0 || want === here ? here : Number.NaN;
-        }
-        if (want === 0 || Number.isNaN(want)) continue;
-        const aAbove = chosen[i - start]! < chosen[j - start]!;
-        if ((want === 1) === aAbove) continue;
-        const swap = chosen[i - start]!;
-        chosen[i - start] = chosen[j - start]!;
-        chosen[j - start] = swap;
+    if (group.length < 2) continue;
+    const rankOf = (i: number): number => {
+      const run = runs[i]!;
+      let rank = 0;
+      for (const x of [run.x0, run.x1]) {
+        const side = verticalSideAt(candidates[run.candidate]!.line, run.at, run.y, x);
+        if (side === 'above') rank -= 1;
+        else if (side === 'below') rank += 1;
       }
-    }
+      return rank;
+    };
+    const channels = group.map((i) => chosen[i - start]!).sort((p, q) => p - q);
+    const ordered = group
+      .map((i) => ({ i, rank: rankOf(i), offset: chosen[i - start]! }))
+      .sort((p, q) => p.rank - q.rank || p.offset - q.offset);
+    ordered.forEach(({ i }, k) => {
+      chosen[i - start] = channels[k]!;
+    });
   }
 }
 
