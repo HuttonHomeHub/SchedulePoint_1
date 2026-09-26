@@ -360,16 +360,42 @@ only the divisor was considered and rejected: it is a throwaway second spelling 
   - **Changed rows:** `version + 1`, `updated_at` unchanged. Red against a statement that sets
     `updated_at`.
   - **Overflow** (**B1**): ±3650 days on a 480-minute calendar **and** on a 1440-minute calendar.
-    Red against `int4` arithmetic.
+    Red against `int4` arithmetic. The test's own expected-value SQL uses `::numeric` too.
   - **No fan-out** (**B5**): a `RESOURCE_DEPENDENT` endpoint with a soft-deleted driving assignment
-    beside the live one produces exactly one record row.
-  - **The reverse** (the `docs/DEPLOYMENT.md` procedure, run as SQL in the test): restores every
-    changed row's `lag_minutes` exactly, bumps `version` again (it never goes backwards), converts a
-    row created after the migration back to the old unit, and the check query passes.
+    **and a live non-driving assignment** beside the live driving one produces exactly one record
+    row. The live non-driving row is the fan-out the partial index does not prevent; red against a
+    join that drops `is_driving`.
+  - **Non-multiple of 1440:** the seeded row converts by the formula, is recorded, and the reverse
+    restores its exact prior value.
+  - **Every pre-release link is recorded**, including unchanged ones. Red against an `INSERT` fed
+    only the changed rows (the step-3 selector would then convert an unchanged pre-release link).
+  - **The reverse** (the `docs/DEPLOYMENT.md` script, run as SQL in the test inside one
+    transaction): restores every changed row's `lag_minutes` exactly and bumps `version` again (it
+    never goes backwards); converts a row created after the migration with
+    `(floor(lag_minutes::numeric / factor + 0.5) * 1440)::integer` and bumps its `version`,
+    including a **negative half** case where `round` and `Math.round` differ; passes **both**
+    checks (recorded rows equal `prior_lag_minutes`; unrecorded rows are `% 1440 = 0`); drops the
+    table and deletes the `_prisma_migrations` row; and a **second run fails at the `LOCK`**,
+    applying nothing.
 - **Development steps:** 1. Write. 2. Seed every path. 3. Verify red per case. 4. `EXPLAIN ANALYZE`
   ×5. 5. `docs/DATABASE.md` (the re-encoding and the record table). 6. `docs/DEPLOYMENT.md`
-  ("Rolling back past the cross-plan lag release": lock the record table, restore, convert rows
-  created after the release, check query, drop).
+  ("Rolling back past the cross-plan lag release", spec §4.4 Reversal, on the shape of the
+  finish-milestone reverse at `docs/DEPLOYMENT.md:440-482`):
+  - a **factor-drift** section with a finder query (unrecorded links whose resolved calendar's
+    `updated_at` is later than the migration's `finished_at`, or whose `lag_minutes` is not a whole
+    multiple of today's factor), run before the reverse;
+  - stop the API, then run the script as **one transaction**
+    (`psql -v ON_ERROR_STOP=1 -1`):
+    1. `LOCK` the record table, stated as a **one-shot guard**, not concurrency protection;
+    2. restore recorded rows and bump `version`;
+    3. convert unrecorded rows with the migration's CTE **copied verbatim**, using
+       `floor(x + 0.5)` and bumping `version`;
+    4. check recorded rows equal `prior_lag_minutes`;
+    5. check unrecorded rows are `% 1440 = 0`;
+    6. `DROP TABLE`;
+    7. `DELETE FROM "_prisma_migrations"` for this migration (precedent `docs/DEPLOYMENT.md:474-477`);
+  - pin the previous API and web images;
+  - a **final recalculation step** for the linked plans.
 
 ##### Task M2-T3: the write path and the one lag-calendar function
 
@@ -406,7 +432,13 @@ only the divisor was considered and rejected: it is a throwaway second spelling 
   `lagDays: 0`. Mirror the in-plan shape (`dependencies.service.ts:84-129`,
   `dependency-response.dto.ts:93`):
   - The repository's `endpointSelect` (`cross-plan-dependency.repository.ts:9`) adds `type`,
-    `calendarId` and `planId`.
+    `calendarId` and `planId`. Its docblock copies the in-plan sentence that the fields are
+    "selected, not mapped into the response" (`dependency.repository.ts:9-18`), so a later reader
+    does not add them to the DTO (api-reviewer, re-confirmation round).
+  - The driving-calendar input to `loadDrivingCalendarMapForRows` is built from the **link's own
+    `organizationId`** with each endpoint's `planId` and `type`, as the in-plan service reads the
+    organisation from the row (`dependencies.service.ts:99-111`). The endpoint select carries no
+    `organizationId`.
   - An async `withLagDayFactor(s)` in the service resolves each row's factor with the T3 function
     before any `.from()`; `get`, `create`, `listByPlan` and `listByActivity` return
     `WithLagDayFactor<…>`.
@@ -649,11 +681,23 @@ on plans they did not touch.`
 - **Description:** mirror `finish-milestone-rederive.service.ts`: `pendingPlans()` (live, data date
   set, at least one active cross-plan edge in either direction, `schedule_computed_at` before the
   lag migration's `finished_at` read from `_prisma_migrations`), returning `organizationId` with
-  each plan. **Group the global pending set by organisation** (P1); for each organisation load
-  `loadOrgAdjacency` once and call M3-T0's function with that organisation's pending plans as the
-  node set. Recalculate in that order with `recalculateAsSystem`, one plan at a time; events
+  each plan. **Group the global pending set by organisation** (P1). For each organisation, load
+  `loadOrgAdjacency` once and call M3-T0's function with **every plan in that result** as the node
+  set, so the **whole organisation graph** is ordered; then walk that order and recalculate **only
+  the pending plans**, skipping the rest, with `recalculateAsSystem`, one plan at a time. Events
   `schedule.xplan_rederived` (with `pending`, `recalculated`, `organizations`, `durationMs`) and
   `schedule.xplan_rederive_plan_failed`.
+- **Why the whole graph, not the pending set** (backend-performance-reviewer, re-confirmation round;
+  the design choice is the coordinator's). The extracted step counts in-degree only from edges with
+  both ends in the node set (`programme-order.ts:90-96`). With the pending set as the node set, a
+  chain `A → B → C` whose `B` is not pending gives `A` and `C` in-degree 0 each, so they are ordered
+  by `compareIds` alone. Plan ids are UUID v7 (creation order), so `C` can come first, and it would
+  then read stale against `A`, because staleness reads the full transitive upstream closure
+  (`schedule.service.ts:809-818`, `staleness.ts:32-47`). Ordering the whole graph removes that case.
+  The first fold's prose called it "harmless for C", which was wrong.
+- **What remains:** a non-pending intermediate `B` is not recalculated, so after `A` is, `B` reads
+  stale (`staleness.ts:43-46`) until a programme recalculation reaches it. Stated in spec D8; not
+  engineered around.
 - **Complexity:** M
 - **Dependencies:** M2-T2, M3-T0
 - **Risks:**
@@ -664,9 +708,14 @@ on plans they did not touch.`
   - The finish-milestone service recalculates the same plan at boot. → Harmless (idempotent,
     serialised by the plan lock), stated in the ADR's Consequences with the jump-two-releases case
     (spec D8).
-- **Testing:** unit cases for order within an organisation, two organisations ordered independently
-  (each topological, with one `loadOrgAdjacency` call per organisation), a chain whose middle plan is not pending (spec D8's stated
-  edge case, asserting the documented behaviour), and failure isolation.
+- **Testing:** unit cases for:
+  - order within an organisation;
+  - two organisations ordered independently (each topological, with one `loadOrgAdjacency` call per
+    organisation);
+  - **`A → B → C` with `B` not pending and `C`'s id sorting before `A`'s**: asserts `A` is
+    recalculated before `C` and `B` is not recalculated. Verified red against passing the pending
+    set as the node set, which recalculates `C` first;
+  - failure isolation.
 - **Development steps:** 1. Write. 2. Register in the schedule module. 3. Unit tests.
 
 ##### Task M3-T2: API e2e
@@ -765,6 +814,8 @@ Docker build, CI, changelog, version impact). Accessibility is not applicable: n
 | Plans move at boot without a planner pressing anything                                            | high                      | med    | Accepted (CQ-3), as for ADR-0155 D9; logged with counts.                                                                                                             |
 | M2 released without M3                                                                            | low                       | high   | One release; stated in the sequencing.                                                                                                                               |
 | The two boot services recalculate one plan, or the finish-milestone one orders a downstream first | low                       | low    | Idempotent and lock-serialised; a mis-ordered downstream shows stale, not wrong; stated in ADR-0161 (spec D8).                                                       |
+| The boot service recalculates `C` before `A` through a non-pending `B`                            | med (UUID v7 order)       | med    | Order the whole organisation graph, recalculate only pending plans (M3-T1); a unit case with `C`'s id before `A`'s. `B` may still read stale, stated (spec D8).      |
+| The reverse runs twice, or against a live API, or leaves the migration row behind                 | low                       | high   | API stopped; one transaction (`psql -v ON_ERROR_STOP=1 -1`); `LOCK` as a one-shot guard; `_prisma_migrations` row deleted; tested in M2-T2.                          |
 | The sub-day, placed-upstream, progress-mode and expected-finish residuals are read as "fixed"     | med                       | med    | Named in the spec, the ADR and `docs/API.md`; filed with triggers.                                                                                                   |
 | A remote endpoint's inherit sentinel resolves to this plan's calendar (the ADR-0139 shape)        | med                       | high   | Parity matrix cells with the two plans on different calendars and an inheriting remote activity.                                                                     |
 | The cross-plan path gets slower                                                                   | low                       | low    | FC-6 bar committed in the spec; counting stub; no-edge path unchanged.                                                                                               |

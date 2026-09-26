@@ -260,3 +260,46 @@ cell) by hand from the engine's own functions. Both hold. The data date floors n
   after Friday's close, which reads as Friday.
 - The M2-T5 hand-derivation rule and M0-T1's prediction step are enforceable by commit order.
 - The LOE/N32 split is two distinct branches, consistent across the spec and the plan.
+
+## Second fold
+
+Folded into the spec and plan on 2026-09-26. Every citation in the re-confirmation was opened first:
+all hold, except that the `_prisma_migrations` DELETE precedent sits at `docs/DEPLOYMENT.md:474-477`,
+not `:472-474` (the substance is exact).
+
+- **db-architect (1), strict subset and the step-3 selector:**
+  - Spec §4.4 "The conversion": three-part statement, `UPDATE … FROM recorded` filtered on a changed
+    value, and "strict subset" replacing "one set".
+  - Spec §4.4 record table: the second reason for recording every row.
+  - Plan M2-T1, M2-T2 step 2, and M2-T2's "every pre-release link is recorded" case.
+- **db-architect (2), columns, UNIQUE and fan-out seed:**
+  - Spec §4.4 record-table column table and the `UNIQUE` bullet.
+  - Plan M2-T1 column list; M2-T2 step 1 (the migration comment on why the `UNIQUE` cannot fire);
+    M2-T2 no-fan-out case, which adds a live non-driving assignment.
+  - Spec §4.4 fan-out bullet.
+- **db-architect (3), non-multiple row and split check:**
+  - Spec §4.4 conversion bullet, Reversal steps 2.4–2.5, FC-7, and an edge-case row.
+  - Plan M2-T2 seed list, test cases and reverse checks.
+- **db-architect (4), reverse:**
+  - Spec §4.4 Reversal:
+    - stop the API and run as one transaction (`psql -v ON_ERROR_STOP=1 -1`);
+    - `LOCK` as a one-shot guard;
+    - step 3 bumps `version` and uses `floor(lag_minutes::numeric / factor + 0.5)`;
+    - the CTE copied verbatim;
+    - the two checks;
+    - `DROP`, then `DELETE FROM "_prisma_migrations"`;
+    - a factor-drift finder query;
+    - a final recalculation step.
+  - Plan M2-T2 `docs/DEPLOYMENT.md` step list and reverse test (including a negative half and a
+    failing second run), and the risks table.
+- **db-architect (5), overflow:**
+  - Spec E28 (`abs(lag_minutes)`; 1,036 / 3,107 days; any factor ≥ 409), the §4.4 conversion bullet
+    (cast on every multiply in migration, reverse and tests), an edge-case row, and FC-7.
+  - Plan M2-T2 step 2 and its overflow case.
+- **api: link's own `organizationId`:** spec §4.5; plan M2-T3b.
+- **api: "selected, not mapped" docblock:** spec §4.5; plan M2-T3b.
+- **backend-performance D8 decision:**
+  - Spec D8: whole-organisation-graph ordering; the corrected prose, which removes "harmless for C";
+    and the stated non-pending-`B` staleness, citing `staleness.ts:32-47`, `:43-46` and
+    `schedule.service.ts:809-818`.
+  - Plan M3-T1 description, the new A→B→C unit case (`C`'s id before `A`'s), and the risks table.
