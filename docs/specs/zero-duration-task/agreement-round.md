@@ -124,3 +124,34 @@ Suggested:
   dependency data each surface already loads.
 - A structural test pins the make-milestone label across the bar, the Gantt menu and the table
   menu, or records where a shorter bar label is decided.
+
+## test-engineer: AGREE-WITH-CHANGES
+
+It spot-checked E1–E23 and D1–D7 and found no wrong citation, including the D−1 identity
+(`finishMilestoneDateInstant(cal, D−1) === rollForwardToWorking(cal, abs(D))`, calendar-agnostic by
+construction).
+
+Blocking:
+
+- **T1: FC-3 never forces a date next to a weekend.** A plausible wrong implementation shifts by a
+  **working** day instead of a calendar day. It round-trips correctly on any interior weekday and
+  fails only beside a non-working day, which is the Friday/Monday shape this epic exists for. At
+  least one FC-3 undo case uses a date whose D−1 or D+1 crosses a weekend. Reuse M0-T3's
+  Friday/Monday fixture for the undo assertion.
+- **T2: FC-1's second half is enforced by a PR description.** "No `expect` line in
+  `engine/*.spec.ts` changes" is checked by a person reading the diff. Make it a script: compare
+  `stripComments` (`common/contracts/cost-key-scan.ts:31`) of each changed engine spec against the
+  merge base, run in prepush and CI, verified red by changing an `expect` value beside a docblock
+  edit.
+
+Suggested:
+
+- State in M2-T1 why three calendars suffice (the port branches on whether time is non-working,
+  not on why). Optionally add a dated-exception case.
+- M3-T2's advisory rows will break `e2e-health-check`'s panel-wide `getByRole('listitem')` count
+  of 14. Name that assertion's update, or scope the count to the metrics list.
+- The offender note needs a count, and `loadHealthAssignedActivityIds`
+  (`schedule.repository.ts:544-558`) returns presence. Change it to a count map from the same query,
+  so FC-7's "same query count" holds by a named change.
+- Pin the accepted zero-duration `RESOURCE_DEPENDENT` exception with one characterisation case in
+  M2-T1.
