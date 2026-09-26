@@ -422,6 +422,7 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call`           |
 | 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                          |
 | 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**                    |
+| 10a | `git fetch origin main && pnpm check:engine-parity`         | always: reads branch position like step 10, and fails every push once its declared row closes     |
 | 11  | `pnpm check:debt-status`                                    | you added, closed or edited a `docs/TECH_DEBT.md` row (ADR-0120)                                  |
 | 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or any register gate                                   |
 | 13  | `pnpm check:spec-status`                                    | you added a spec, filed an ADR, or shipped an epic (ADR-0131)                                     |
@@ -559,6 +560,12 @@ landed since. It is also the gate most likely to be **stale rather than wrong**:
 declaration (`scripts/frontend-only.json`) that a finished epic is supposed to remove, and on
 2026-08-18 it refused an unrelated branch on behalf of an epic that had shipped three weeks earlier.
 The other checks are cheap and worth running before pushing whether or not the table says you must.
+
+**Step 10a is step 10's sibling for the CPM engine** (`docs/specs/zero-duration-task/` D10). While
+`scripts/engine-parity.json` is active, no non-test file under `apps/api/src/modules/schedule/engine/`
+may differ from the merge base, and no existing engine spec may change anything but its comments. Its
+third limb reads `docs/TECH_DEBT.md` rather than the diff: once the declared row stops being open,
+every push fails until the declaration is set inactive, which is how it avoids step 10's staleness.
 
 Step 9 exists because the web container's config is the one artefact no other
 gate reads. It substitutes `apps/web/nginx.conf` exactly as the container does

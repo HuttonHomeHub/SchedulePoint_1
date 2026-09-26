@@ -147,6 +147,15 @@ jobs:
       - name: Check the frontend-only boundary
         run: pnpm check:frontend-only
 
+      # An epic whose argument is "the CPM engine is not modified" declares itself in
+      # `scripts/engine-parity.json`, and this holds it to that: no non-test engine file changes and
+      # no existing engine spec changes anything but its comments (docs/specs/zero-duration-task/
+      # D10). It needs the full history and the `main` fetch above, like the step before it. Its
+      # third limb reads docs/TECH_DEBT.md and fails every push once the declared row is no longer
+      # open, so the declaration cannot outlive its epic the way frontend-only's did twice.
+      - name: Check the engine-parity declaration
+        run: pnpm check:engine-parity
+
       # Claims about a DEPENDENCY's internals — file-and-line citations into `better-auth`,
       # `better-call`, `nodemailer`, `zod` and others, several of which whole ADRs rest on. (This
       # comment said "34" until 2026-08-13, when the register held 49: a hard number in a comment

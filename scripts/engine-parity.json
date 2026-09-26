@@ -1,0 +1,7 @@
+{
+  "_": "Declares an epic whose CPM-engine parity argument (FC-1) is enforced by `pnpm check:engine-parity` (scripts/check-engine-parity.mjs). While active: no non-test file under apps/api/src/modules/schedule/engine/ may change, and no existing engine spec may change anything but its comments. The declaration expires with its epic: limb 3 fails every push once `debtRow` is no longer an open row in docs/TECH_DEBT.md, so the commit that closes the row must also set `active` to false (zero-duration-task M6).",
+  "active": true,
+  "epic": "zero-duration-task",
+  "spec": "docs/specs/zero-duration-task/feature-spec.md",
+  "debtRow": 384
+}
