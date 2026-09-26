@@ -15,7 +15,7 @@ import {
   type M1ExternalInstant,
   type OutgoingCrossPlanEdge,
 } from '../cross-plan-derivation';
-import { allMinutesWorkCalendar, computeSchedule } from '../engine';
+import { allMinutesWorkCalendar, buildWorkingTimeCalendar, computeSchedule } from '../engine';
 import type {
   EngineActivity,
   EngineEdge,
@@ -527,7 +527,292 @@ export const DIAMOND_FIXTURE: CrossPlanFixture = {
   ],
 };
 
-export const CROSS_PLAN_FIXTURES: CrossPlanFixture[] = [FS_INTERFACE_FIXTURE, DIAMOND_FIXTURE];
+// ---------------------------------------------------------------------------------------------------
+// #385 M2-T6 goldens — the calendars the day-boundary defect needed and the two 24/7 fixtures above
+// could not show. Every expected date is walked by hand in `cross-plan-conformance.spec.ts`.
+// ---------------------------------------------------------------------------------------------------
+
+const weekdayWindows = (open: number, close: number) =>
+  Array.from({ length: 7 }, (_, weekday) =>
+    weekday < 5 ? [{ startMinute: open, endMinute: close }] : [],
+  );
+
+/** Monday to Friday, 00:00–24:00: the organisation stock calendar (#385 E16). A day is 1440. */
+export const STANDARD_CALENDAR = buildWorkingTimeCalendar(weekdayWindows(0, 1440), []);
+/** Monday to Friday, 08:00–16:00. A day is 480 (FC-4). */
+export const EIGHT_HOUR_CALENDAR = buildWorkingTimeCalendar(weekdayWindows(480, 960), []);
+
+/** A task of `days` working days on a calendar whose day is `minutesPerDay`. */
+function taskOn(id: string, days: number, minutesPerDay: number): EngineActivity {
+  return { id, durationMinutes: days * minutesPerDay, type: 'TASK' };
+}
+
+/**
+ * **FC-3: a weekend-spanning lag on the Standard calendar.** Upstream `U` is a 5-day task from Mon
+ * 2026-01-05, so it finishes Fri 01-09; the FS+2 link is two WORKING days, so the downstream starts
+ * Wed 2026-01-14. Today's code added two calendar days to the finish date and got Sun 01-11, rolled
+ * to Mon 01-12.
+ */
+export const FC3_WEEKEND_LAG_FIXTURE: CrossPlanFixture = {
+  id: 'fc3-weekend-lag',
+  description: 'Standard: U (5d, Mon–Fri) → D (3d), FS+2 across a weekend.',
+  targetPlanId: 'PLAN_FC3_DOWN',
+  coverageTags: ['xplan_weekend_lag'],
+  plans: [
+    {
+      id: 'PLAN_FC3_UP',
+      name: 'FC-3 upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('FC3_U', 5, 1440)],
+    },
+    {
+      id: 'PLAN_FC3_DOWN',
+      name: 'FC-3 downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('FC3_D', 3, 1440)],
+    },
+  ],
+  edges: [
+    {
+      id: 'fc3',
+      type: 'FS',
+      lagMinutes: 2 * 1440,
+      predecessorPlanId: 'PLAN_FC3_UP',
+      predecessorActivityId: 'FC3_U',
+      successorPlanId: 'PLAN_FC3_DOWN',
+      successorActivityId: 'FC3_D',
+      coverageTag: 'xplan_weekend_lag',
+    },
+  ],
+};
+
+/**
+ * **FC-4: a one-day lag on an eight-hour calendar.** Upstream `U` is a 2-day task from Mon
+ * 2026-01-05 08:00, finishing Tue 01-06 16:00. One working day is 480 minutes, so the stored lag
+ * is 480 (the migration's encoding) and the downstream starts Thu 2026-01-08. Built with the stored
+ * lag as a parameter so the spec can also show the other two outcomes.
+ */
+export function fc4EightHourFixture(storedLagMinutes: number): CrossPlanFixture {
+  return {
+    id: 'fc4-eight-hour-lag',
+    description: 'Eight-hour: U (2d) → D (2d), FS+1d on the successor plan calendar.',
+    targetPlanId: 'PLAN_FC4_DOWN',
+    coverageTags: ['xplan_eight_hour_lag'],
+    plans: [
+      {
+        id: 'PLAN_FC4_UP',
+        name: 'FC-4 upstream',
+        dataDate: '2026-01-05',
+        calendar: EIGHT_HOUR_CALENDAR,
+        activities: [taskOn('FC4_U', 2, 480)],
+      },
+      {
+        id: 'PLAN_FC4_DOWN',
+        name: 'FC-4 downstream',
+        dataDate: '2026-01-05',
+        calendar: EIGHT_HOUR_CALENDAR,
+        activities: [taskOn('FC4_D', 2, 480)],
+      },
+    ],
+    edges: [
+      {
+        id: 'fc4',
+        type: 'FS',
+        lagMinutes: storedLagMinutes,
+        predecessorPlanId: 'PLAN_FC4_UP',
+        predecessorActivityId: 'FC4_U',
+        successorPlanId: 'PLAN_FC4_DOWN',
+        successorActivityId: 'FC4_D',
+        coverageTag: 'xplan_eight_hour_lag',
+      },
+    ],
+  };
+}
+
+/**
+ * **FC-9: backward FS on the Standard calendar** (US-3). The downstream `S` is a 5-day task pinned
+ * `FNLT` Fri 2026-01-23, so its late start is Mon 01-19; a long downstream task keeps that plan's
+ * own finish from binding. The upstream holds the linked 5-day `U` and an unlinked 20-day `L`, so
+ * `U`'s late finish is set by the link alone: the end of Fri 2026-01-16. Today: Mon 01-19.
+ *
+ * The programme solves upstream first, so the backward bound is read when the UPSTREAM is
+ * recalculated again against the downstream's written dates (the spec's `solveTargetAlone` step).
+ */
+export const FC9_BACKWARD_FS_FIXTURE: CrossPlanFixture = {
+  id: 'fc9-backward-fs',
+  description: 'Standard: U (5d) → S (5d, FNLT Fri 01-23), FS+0; the upstream late finish.',
+  targetPlanId: 'PLAN_FC9_DOWN',
+  coverageTags: ['xplan_backward_fs'],
+  plans: [
+    {
+      id: 'PLAN_FC9_UP',
+      name: 'FC-9 upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('FC9_U', 5, 1440), taskOn('FC9_L', 20, 1440)],
+    },
+    {
+      id: 'PLAN_FC9_DOWN',
+      name: 'FC-9 downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [
+        { ...taskOn('FC9_S', 5, 1440), constraintType: 'FNLT', constraintDate: '2026-01-23' },
+        taskOn('FC9_L2', 30, 1440),
+      ],
+    },
+  ],
+  edges: [
+    {
+      id: 'fc9',
+      type: 'FS',
+      lagMinutes: 0,
+      predecessorPlanId: 'PLAN_FC9_UP',
+      predecessorActivityId: 'FC9_U',
+      successorPlanId: 'PLAN_FC9_DOWN',
+      successorActivityId: 'FC9_S',
+      coverageTag: 'xplan_backward_fs',
+    },
+  ],
+};
+
+/**
+ * **FC-10: forward FF on the Standard calendar.** Upstream `U` is a 5-day task Mon 2026-01-05 to
+ * Fri 01-09; the downstream plan's data date is Mon 2025-12-29, so nothing floors. FF lag 0: a
+ * 3-day downstream finishes with `U` and starts Wed 01-07 (today Tue 01-06); a 6-day downstream
+ * starts Fri 2026-01-02 (today, and a build that fixes only the day boundary, Mon 01-05).
+ */
+export function fc10ForwardFfFixture(downstreamDays: 3 | 6): CrossPlanFixture {
+  return {
+    id: `fc10-forward-ff-${downstreamDays}d`,
+    description: `Standard: U (5d) → D (${downstreamDays}d), FF+0; the downstream early start.`,
+    targetPlanId: 'PLAN_FC10_DOWN',
+    coverageTags: ['xplan_forward_ff'],
+    plans: [
+      {
+        id: 'PLAN_FC10_UP',
+        name: 'FC-10 upstream',
+        dataDate: '2026-01-05',
+        calendar: STANDARD_CALENDAR,
+        activities: [taskOn('FC10_U', 5, 1440)],
+      },
+      {
+        id: 'PLAN_FC10_DOWN',
+        name: 'FC-10 downstream',
+        dataDate: '2025-12-29',
+        calendar: STANDARD_CALENDAR,
+        activities: [taskOn('FC10_D', downstreamDays, 1440)],
+      },
+    ],
+    edges: [
+      {
+        id: 'fc10',
+        type: 'FF',
+        lagMinutes: 0,
+        predecessorPlanId: 'PLAN_FC10_UP',
+        predecessorActivityId: 'FC10_U',
+        successorPlanId: 'PLAN_FC10_DOWN',
+        successorActivityId: 'FC10_D',
+        coverageTag: 'xplan_forward_ff',
+      },
+    ],
+  };
+}
+
+/**
+ * **US-2: an elapsed lag.** A `TWENTY_FOUR_HOUR` lag of two days from `U`'s Friday finish (Standard)
+ * counts every minute: Sat 01-10 00:00 + 2880 is Mon 01-12 00:00. Today's code also said Monday,
+ * by accident (two calendar days from the finish DATE, then a weekend roll).
+ */
+export const US2_ELAPSED_LAG_FIXTURE: CrossPlanFixture = {
+  id: 'us2-elapsed-lag',
+  description: 'Standard: U (5d, Mon–Fri) → D (3d), FS+2 on the 24-hour lag calendar.',
+  targetPlanId: 'PLAN_US2_DOWN',
+  coverageTags: ['xplan_elapsed_lag'],
+  plans: [
+    {
+      id: 'PLAN_US2_UP',
+      name: 'US-2 upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('US2_U', 5, 1440)],
+    },
+    {
+      id: 'PLAN_US2_DOWN',
+      name: 'US-2 downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('US2_D', 3, 1440)],
+    },
+  ],
+  edges: [
+    {
+      id: 'us2',
+      type: 'FS',
+      lagMinutes: 2 * 1440,
+      lagCalendar: 'TWENTY_FOUR_HOUR',
+      predecessorPlanId: 'PLAN_US2_UP',
+      predecessorActivityId: 'US2_U',
+      successorPlanId: 'PLAN_US2_DOWN',
+      successorActivityId: 'US2_D',
+      coverageTag: 'xplan_elapsed_lag',
+    },
+  ],
+};
+
+/**
+ * **An LOE upstream never bounds its downstream** (ADR-0035 §21), across plans as in one. The LOE
+ * has computed dates, so the only thing keeping it from driving is the skip, and it is not counted
+ * as a never-calculated upstream (`upstreamMissingCount === 0`).
+ */
+export const LOE_UPSTREAM_FIXTURE: CrossPlanFixture = {
+  id: 'loe-upstream',
+  description: 'Standard: an LOE upstream → D (3d), FS+0; no bound and no N32 count.',
+  targetPlanId: 'PLAN_LOE_DOWN',
+  coverageTags: ['xplan_loe_upstream'],
+  plans: [
+    {
+      id: 'PLAN_LOE_UP',
+      name: 'LOE upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [{ ...taskOn('LOE_U', 10, 1440), type: 'LEVEL_OF_EFFORT' }],
+    },
+    {
+      id: 'PLAN_LOE_DOWN',
+      name: 'LOE downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('LOE_D', 3, 1440)],
+    },
+  ],
+  edges: [
+    {
+      id: 'loe',
+      type: 'FS',
+      lagMinutes: 0,
+      predecessorPlanId: 'PLAN_LOE_UP',
+      predecessorActivityId: 'LOE_U',
+      successorPlanId: 'PLAN_LOE_DOWN',
+      successorActivityId: 'LOE_D',
+      coverageTag: 'xplan_loe_upstream',
+    },
+  ],
+};
+
+export const CROSS_PLAN_FIXTURES: CrossPlanFixture[] = [
+  FS_INTERFACE_FIXTURE,
+  DIAMOND_FIXTURE,
+  FC3_WEEKEND_LAG_FIXTURE,
+  fc4EightHourFixture(480),
+  FC9_BACKWARD_FS_FIXTURE,
+  fc10ForwardFfFixture(3),
+  fc10ForwardFfFixture(6),
+  US2_ELAPSED_LAG_FIXTURE,
+  LOE_UPSTREAM_FIXTURE,
+];
 
 // ---------------------------------------------------------------------------------------------------
 // Tier-1 structural coverage gate (ADR-0034 §1) — the cross-plan analogue of `checkCoverage`.
@@ -555,6 +840,13 @@ export const REQUIRED_CROSS_PLAN_TAGS: readonly string[] = [
   'xplan_plan_cycle_reject', // N30: a cross-plan edge that would close a plan-level cycle is rejected
   'xplan_same_plan_reject', // N31: a same-plan cross-plan edge is rejected
   'xplan_duplicate_reject', // N33: a duplicate (pred, succ, type) cross-plan edge is rejected
+  // the day boundary and the lag (#385 M2-T6): one link, one rule, whichever plan holds the ends
+  'xplan_weekend_lag', // FC-3: a lag counts working days across a weekend
+  'xplan_eight_hour_lag', // FC-4: a lag day is the lag calendar's day, not 1440 minutes
+  'xplan_backward_fs', // FC-9: the upstream finishes before the downstream's late start
+  'xplan_forward_ff', // FC-10: an FF duration walks the successor's working days
+  'xplan_elapsed_lag', // US-2: a TWENTY_FOUR_HOUR lag counts elapsed time
+  'xplan_loe_upstream', // an LOE upstream contributes no bound and no N32 count
 ];
 
 /**

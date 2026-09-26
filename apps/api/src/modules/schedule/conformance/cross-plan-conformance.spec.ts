@@ -8,11 +8,17 @@ import {
   checkCrossPlanCoverage,
   crossPlanCoverageIndex,
   DIAMOND_FIXTURE,
+  FC3_WEEKEND_LAG_FIXTURE,
+  FC9_BACKWARD_FS_FIXTURE,
+  fc10ForwardFfFixture,
+  fc4EightHourFixture,
   FS_INTERFACE_FIXTURE,
+  LOE_UPSTREAM_FIXTURE,
   REQUIRED_CROSS_PLAN_TAGS,
   solveProgramme,
   solveTargetAlone,
   toPlanEdges,
+  US2_ELAPSED_LAG_FIXTURE,
   type ComputedDates,
   type CrossPlanFixture,
 } from './cross-plan-adapter';
@@ -309,4 +315,140 @@ describe('F7 negatives — N30–N33 (ADR-0035 §30.5–§30.6)', () => {
   it.todo(
     'N33: a duplicate (pred, succ, type) cross-plan edge is rejected 409 DUPLICATE_CROSS_PLAN_DEPENDENCY (F3 service / partial-unique index)',
   );
+});
+
+// --------------------------------------------------------------------------------------------------
+// #385 M2-T6 — the day-boundary goldens. Each expected date is walked below from the calendar and
+// the engine's documented rules (a finish means the end of its day's working time; a start the
+// first working minute; a lag walks working time on its lag calendar), written before the run, and
+// never read off the code. "Today" names what the pre-M2 derivation produced for the same fixture.
+// Calendars: Standard is Mon–Fri 00:00–24:00; eight-hour is Mon–Fri 08:00–16:00. 2026-01-05 is a
+// Monday.
+// --------------------------------------------------------------------------------------------------
+
+describe('#385 golden: FC-3, a weekend-spanning lag (Standard)', () => {
+  it('FS+2 from a Friday finish starts the Wednesday after', () => {
+    // FC3_U: 5 working days from Mon 01-05 00:00 ⇒ Mon, Tue, Wed, Thu, Fri ⇒ finishes at the end of
+    // Fri 01-09, the instant Sat 01-10 00:00. FS+2 on the successor plan's Standard calendar: the
+    // walk skips Sat and Sun and counts Mon 01-12 and Tue 01-13 ⇒ Wed 01-14 00:00. The downstream
+    // starts there. Today: Mon 01-12 (Fri 01-09 + 2 calendar days = Sun, rolled to Mon).
+    const { solve, result } = programmeResults(FC3_WEEKEND_LAG_FIXTURE);
+    expect(result('FC3_U').earlyFinish).toBe('2026-01-09');
+    expect(solve.derivedByActivity.get('FC3_D')!.externalEarlyStart).toBe('2026-01-14T00:00');
+    expect(result('FC3_D').earlyStart).toBe('2026-01-14');
+    expect(result('FC3_D').earlyFinish).toBe('2026-01-16'); // Wed, Thu, Fri
+  });
+});
+
+describe('#385 golden: FC-4, a one-day lag on an eight-hour calendar — three outcomes', () => {
+  // FC4_U: 2 working days of 480 minutes from Mon 01-05 08:00 ⇒ Mon 08–16, Tue 08–16 ⇒ finishes Tue
+  // 01-06 16:00.
+  it('the full fix: a stored 480-minute lag lands one working day later, Thursday', () => {
+    // Lag 1 day = 480 minutes on the eight-hour calendar (the migration's encoding). Tue 16:00 + 480
+    // ⇒ Wed 08–16 ⇒ Wed 01-07 16:00, which is the derived instant. The downstream's first working
+    // minute at or after it is Thu 01-08 08:00. Today: Wed 01-07 (Tue 01-06 + 1 calendar day).
+    const { solve, result } = programmeResults(fc4EightHourFixture(480));
+    expect(result('FC4_U').earlyFinish).toBe('2026-01-06');
+    expect(solve.derivedByActivity.get('FC4_D')!.externalEarlyStart).toBe('2026-01-07T16:00');
+    expect(result('FC4_D').earlyStart).toBe('2026-01-08');
+  });
+
+  it('the fixed derivation WITHOUT the migration: a 1440-minute lag is three working days', () => {
+    // The pre-migration stored value, lagDays × 1440, read by the fixed derivation: Tue 16:00 + 1440
+    // eight-hour minutes ⇒ Wed, Thu, Fri ⇒ Fri 01-09 16:00 ⇒ the downstream starts Mon 01-12 08:00.
+    // This is why the derivation alone is not the fix: the stored value has to be re-encoded.
+    const { solve, result } = programmeResults(fc4EightHourFixture(1440));
+    expect(solve.derivedByActivity.get('FC4_D')!.externalEarlyStart).toBe('2026-01-09T16:00');
+    expect(result('FC4_D').earlyStart).toBe('2026-01-12');
+  });
+});
+
+describe('#385 golden: FC-9, backward FS (Standard)', () => {
+  it('the upstream must finish by the end of the Friday before the downstream late start', () => {
+    // Downstream FC9_S: FNLT Fri 01-23 ⇒ late finish at the end of Fri 01-23 (FC9_L2, 30 days,
+    // keeps the plan's own finish later). 5 working days back ⇒ Fri, Thu, Wed, Tue, Mon ⇒ late start
+    // Mon 01-19 00:00. FS lag 0 ⇒ the upstream's bound is that instant; its last working end at or
+    // before it is the end of Fri 01-16. FC9_L (20 days) keeps the upstream's own finish later
+    // (Fri 01-30), so the link alone sets FC9_U's late finish. Today: Mon 01-19 (the downstream's
+    // late start date read as the END of that day).
+    const programme = solveProgramme(FC9_BACKWARD_FS_FIXTURE);
+    const s = programme.resultsByActivity.get('FC9_S')!;
+    expect(s.lateStart).toBe('2026-01-19');
+    expect(s.lateFinish).toBe('2026-01-23');
+    // Recalculate the upstream against the downstream's written dates, as the product does the next
+    // time the upstream plan is recalculated.
+    const upstream = solveTargetAlone(
+      { ...FC9_BACKWARD_FS_FIXTURE, targetPlanId: 'PLAN_FC9_UP' },
+      programme.computed,
+    );
+    expect(upstream.derived.get('FC9_U')!.externalLateFinish).toBe('2026-01-19T00:00');
+    const u = upstream.output.results.find((r) => r.activityId === 'FC9_U')!;
+    expect(u.lateFinish).toBe('2026-01-16');
+    expect(u.externalDriven).toBe(true);
+  });
+});
+
+describe('#385 golden: FC-10, forward FF (Standard)', () => {
+  // FC10_U: 5 days Mon 01-05 → Fri 01-09, finishing at Sat 01-10 00:00. FF lag 0: the downstream's
+  // finish is bounded there, and its start is that instant walked back by ITS OWN duration in
+  // working days on its own calendar. The downstream plan's data date is Mon 2025-12-29, so nothing
+  // floors.
+  it('a 3-day downstream starts Wednesday', () => {
+    // Back 3 working days from Sat 01-10 00:00: Fri, Thu, Wed ⇒ Wed 01-07 00:00. Today: Tue 01-06
+    // (Fri 01-09 − 3 calendar days).
+    const { solve, result } = programmeResults(fc10ForwardFfFixture(3));
+    expect(solve.derivedByActivity.get('FC10_D')!.externalEarlyStart).toBe('2026-01-07T00:00');
+    expect(result('FC10_D').earlyStart).toBe('2026-01-07');
+    expect(result('FC10_D').earlyFinish).toBe('2026-01-09');
+  });
+
+  it('a 6-day downstream starts the Friday before, across the weekend', () => {
+    // Back 6 working days from Sat 01-10 00:00: Fri 9, Thu 8, Wed 7, Tue 6, Mon 5, then over the
+    // weekend to Fri 01-02 ⇒ Fri 01-02 00:00. Today: Mon 01-05 (Fri 01-09 − 6 calendar days = Sat
+    // 01-03, rolled to Mon); a build fixing only the day boundary also says Mon 01-05 (Sat 01-10 − 6
+    // calendar days = Sun 01-04, rolled). Only walking the duration in working days gives Friday.
+    const { solve, result } = programmeResults(fc10ForwardFfFixture(6));
+    expect(solve.derivedByActivity.get('FC10_D')!.externalEarlyStart).toBe('2026-01-02T00:00');
+    expect(result('FC10_D').earlyStart).toBe('2026-01-02');
+    expect(result('FC10_D').earlyFinish).toBe('2026-01-09');
+  });
+});
+
+describe('#385 golden: US-2, a TWENTY_FOUR_HOUR lag counts elapsed time', () => {
+  it('two elapsed days from a Friday finish is Monday', () => {
+    // US2_U finishes at the end of Fri 01-09, Sat 01-10 00:00. Two elapsed days ⇒ Mon 01-12 00:00,
+    // the downstream's first working minute. Today: Mon 01-12 too, by accident.
+    const { solve, result } = programmeResults(US2_ELAPSED_LAG_FIXTURE);
+    expect(solve.derivedByActivity.get('US2_D')!.externalEarlyStart).toBe('2026-01-12T00:00');
+    expect(result('US2_D').earlyStart).toBe('2026-01-12');
+  });
+});
+
+describe('#385 golden: the two skip cases are different facts', () => {
+  it('an LOE upstream contributes no bound and is NOT counted as never calculated', () => {
+    // LOE_U has computed dates (it is solved first), so only the LOE rule keeps it from driving.
+    // LOE_D therefore starts on its data date and the missing-upstream count stays 0.
+    const { solve, result } = programmeResults(LOE_UPSTREAM_FIXTURE);
+    expect(solve.resultsByActivity.get('LOE_U')).toBeDefined();
+    expect(solve.derivedByActivity.get('LOE_D')).toEqual({
+      externalEarlyStart: null,
+      externalLateFinish: null,
+    });
+    expect(result('LOE_D').earlyStart).toBe('2026-01-05');
+    expect(solve.upstreamMissingCount).toBe(0);
+  });
+
+  it('a never-calculated upstream contributes no bound and IS counted (N32)', () => {
+    // The same downstream against an empty snapshot: no bound, and the count is 1.
+    const alone = solveTargetAlone(LOE_UPSTREAM_FIXTURE, new Map());
+    // LOE is checked before null dates, so even a never-calculated LOE is not N32: use the task
+    // fixture for the N32 half.
+    expect(alone.upstreamMissingCount).toBe(0);
+    const n32 = solveTargetAlone(FC3_WEEKEND_LAG_FIXTURE, new Map());
+    expect(n32.upstreamMissingCount).toBe(1);
+    expect(n32.derived.get('FC3_D')).toEqual({
+      externalEarlyStart: null,
+      externalLateFinish: null,
+    });
+  });
 });
