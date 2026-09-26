@@ -1,6 +1,6 @@
 # Feature Spec: The web bundle budget runs in `pnpm prepush`
 
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0160)
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-09-26
 - **Tracking issue / epic:** none — repository tooling, one milestone

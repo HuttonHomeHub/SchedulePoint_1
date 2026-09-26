@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 33 Prisma models across 70 migrations, 1373 web
 > source files with 46 Playwright suites beside the base journey, and
-> 159 ADRs.
+> 160 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5928,6 +5928,26 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   run before it is withheld (3 / 4 labels recovered, no route moved). The performance review found
   the track pass testing every line in the frame per track, which in Tidy is the whole plan; it now
   tests only lines whose box meets the track's, pinned by a counting stub. **The CPM engine is not
+  imported and no migration runs.**
+
+- **ADR-0160** _(Accepted; landed 2026-09-26)_ — A gate CI runs is a gate prepush runs. ADR-0136
+  shipped the web bundle budget as a CI-only workspace script, on the premise that a production
+  build would make "a five-second `pnpm prepush`" wait thirty seconds. PR #701 then passed
+  `pnpm prepush` and failed CI on it, and re-reading the premise found it stale on one side and
+  unmeasured on the other: the full prepush is about six minutes, and nobody had timed the build.
+  **It is now the root gate `check:web-bundle`** — delete the report, `turbo run build
+--filter=@repo/web`, check — which prepush derives and CI runs in place of the workspace call,
+  after the build so its build is a cache hit. Measured against ceilings committed in the spec
+  first: **16.8 s cold** against 60 s and **1.5 s** on a cache hit against 10 s. The gate needed a
+  second fix under the first: the report sat outside `turbo.json`'s declared outputs, and the
+  docblock said the resulting hazard "cannot happen today" because CI caches nothing — wrong,
+  because turbo's **local** cache is on by default. The red run made it concrete: with the output
+  undeclared and the report not deleted, a bundle with jspdf in its entry graph read a stale green
+  report and **exited 0**. The plan's own test of that protection could not show it — it broke the
+  build, and `&&` stops at a failed build whether or not the report was deleted — so the record
+  says so and runs the case that does. The general rule (every CI gate runs in prepush or is exempt
+  with a reason) is **not** built, on the product owner's decision, and is recorded under
+  `docs/TECH_DEBT.md` #299 with `format:check` as the remaining instance. **The CPM engine is not
   imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

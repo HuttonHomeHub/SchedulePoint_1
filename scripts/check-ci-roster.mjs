@@ -72,11 +72,15 @@ export function runGate(root) {
   /**
    * **A `check:*` in CI is not necessarily a ROOT script, and this gate assumed it was.**
    *
-   * Found by `docs/specs/delivery-gates/` M3: `check:bundle-size` lives in `apps/web` because it
-   * needs a production build, and making a five-second `pnpm prepush` wait for one is how a gate
-   * gets bypassed. It is invoked as `pnpm --filter @repo/web check:bundle-size`, and R2 reported it
-   * as a CI step for a script that does not exist — true of the root manifest and false of the
-   * repository.
+   * Found by `docs/specs/delivery-gates/` M3: `check:bundle-size` lives in `apps/web`, and CI
+   * invoked it as `pnpm --filter @repo/web check:bundle-size`, so R2 reported a CI step for a script
+   * that does not exist — true of the root manifest and false of the repository.
+   *
+   * **No live CI step uses this branch since ADR-0160.** The bundle budget now runs through the root
+   * gate `check:web-bundle`, which prepush runs too; the reason it was kept out of prepush ("a
+   * five-second `pnpm prepush`") did not survive measurement. The branch stays, with its tests,
+   * because the next workspace-level gate will need it, and deleting it would leave R2 wrong about
+   * that step on the day it lands.
    *
    * Exempting it would have been the quick answer and the wrong one: the gate would then be blind
    * to a workspace step naming a script that really had been renamed. So workspace scripts are

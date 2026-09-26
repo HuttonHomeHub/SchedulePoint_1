@@ -11,6 +11,11 @@
 - **Supersedes:** nothing.
 - **Spec:** [`docs/specs/delivery-gates/`](../specs/delivery-gates/)
 
+> **Amended by [ADR-0160](0160-a-gate-ci-runs-is-a-gate-prepush-runs.md) (2026-09-26):** the web
+> bundle budget is no longer a CI-only workspace gate. D1's reason for keeping it out of
+> `pnpm prepush` ("a five-second `pnpm prepush`") did not survive measurement, and PR #701 passed
+> prepush and failed CI on it. It now runs as the root gate `check:web-bundle` in both places.
+
 ## Context
 
 This repository's strongest habit is that **when a rule matters, it gets a computed gate** — a route

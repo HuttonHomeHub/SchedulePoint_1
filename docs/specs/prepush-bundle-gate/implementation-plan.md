@@ -1,7 +1,7 @@
 # Implementation Plan: The web bundle budget runs in `pnpm prepush`
 
 - **Feature spec:** [./feature-spec.md](./feature-spec.md)
-- **Status:** Draft
+- **Status:** Accepted — shipped (ADR-0160)
 - **Owner:** product owner (approval); implementing session (build)
 
 ## Breakdown

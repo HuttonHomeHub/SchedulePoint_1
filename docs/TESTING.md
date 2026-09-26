@@ -364,6 +364,14 @@ clock against CI, whose equivalent job is **11 m 22 s** — it is saving a **rou
 different and better thing. `docs/TECH_DEBT.md` **#191** carries the full breakdown and the one
 remaining lever.
 
+**One `check:*` gate builds, and that is deliberate** (ADR-0160, 2026-09-26). `check:web-bundle`
+deletes `apps/web/bundle-report.json`, runs `turbo run build --filter=@repo/web`, and checks the
+entry graph against `apps/web/bundle-budget.json` — the same command CI runs. Measured on the
+Claude Code container with `date +%s.%N` either side of `pnpm -s check:web-bundle`: **16.8 s cold**
+(median of three, `TURBO_FORCE=true`) and **1.5 s** when turbo's cache holds the web build
+(`docs/specs/prepush-bundle-gate/m1-measurement.md`). Until then the budget ran only in CI, on the
+premise of "a five-second prepush", and PR #701 passed this gate and failed CI on the bundle.
+
 ### One thing the gate structurally cannot check (ADR-0111)
 
 **A change to a shared primitive's keyboard or focus contract gets a specialist review before it is
