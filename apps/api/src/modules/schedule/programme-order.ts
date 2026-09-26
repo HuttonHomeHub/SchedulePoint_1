@@ -59,16 +59,12 @@ export function resolveProgrammeOrder(
   targetPlanId: string,
   edges: readonly PlanCrossEdge[],
 ): string[] {
-  // Predecessors (upstreams) of each plan and successors (downstreams), restricted to this org's edges.
+  // Predecessors (upstreams) of each plan, restricted to this org's edges, for the closure walk.
   const upstreamsOf = new Map<string, string[]>();
-  const downstreamsOf = new Map<string, string[]>();
   for (const edge of edges) {
     (upstreamsOf.get(edge.successorPlanId) ?? setDefault(upstreamsOf, edge.successorPlanId)).push(
       edge.predecessorPlanId,
     );
-    (
-      downstreamsOf.get(edge.predecessorPlanId) ?? setDefault(downstreamsOf, edge.predecessorPlanId)
-    ).push(edge.successorPlanId);
   }
 
   // 1. Upstream closure: BFS backwards from the target over predecessor edges. The target is always in.
@@ -84,34 +80,67 @@ export function resolveProgrammeOrder(
     }
   }
 
-  // 2. Kahn's algorithm over the closure only, with an id-sorted frontier for a deterministic order.
-  //    In-degree = how many upstream (predecessor) edges point at a plan FROM WITHIN the closure.
+  // 2. Kahn's algorithm over the closure only (the shared step below).
+  return orderPlansUpstreamFirst(closure, edges);
+}
+
+/**
+ * **The Kahn step, over an explicit node set** (#385 M3-T0, backend-performance-reviewer P1): order
+ * `nodes` **upstream-first**, so every plan precedes the plans that derive from it, breaking every tie
+ * by plan id over an id-sorted frontier. It is the one topological sort of the plan graph here —
+ * {@link resolveProgrammeOrder} calls it with a target's upstream closure, and the boot re-derivation
+ * (`cross-plan-rederive.service.ts`) with every plan in an organisation's adjacency.
+ *
+ * Only edges with **both** ends in `nodes` count: an edge from or to a plan outside the set neither
+ * raises an in-degree nor releases one. That is why a caller that wants a chain `A → B → C` ordered
+ * must pass `B` too, even if it will not act on `B` — with `B` absent, `A` and `C` are unrelated and
+ * fall to the id tie-break alone.
+ *
+ * @throws {@link ProgrammeCycleError} if a residual cycle among `nodes` leaves some unordered
+ *   (unreachable given the plan-level DAG invariant, ADR-0045 §3; a defensive fail-loud guard).
+ */
+export function orderPlansUpstreamFirst(
+  nodes: ReadonlySet<string>,
+  edges: readonly PlanCrossEdge[],
+): string[] {
+  const upstreamsOf = new Map<string, string[]>();
+  const downstreamsOf = new Map<string, string[]>();
+  for (const edge of edges) {
+    (upstreamsOf.get(edge.successorPlanId) ?? setDefault(upstreamsOf, edge.successorPlanId)).push(
+      edge.predecessorPlanId,
+    );
+    (
+      downstreamsOf.get(edge.predecessorPlanId) ?? setDefault(downstreamsOf, edge.predecessorPlanId)
+    ).push(edge.successorPlanId);
+  }
+
+  // In-degree = how many upstream (predecessor) edges point at a plan FROM WITHIN the node set.
   const inDegree = new Map<string, number>();
-  for (const plan of closure) {
+  for (const plan of nodes) {
     let degree = 0;
     for (const upstream of upstreamsOf.get(plan) ?? []) {
-      if (closure.has(upstream)) degree += 1;
+      if (nodes.has(upstream)) degree += 1;
     }
     inDegree.set(plan, degree);
   }
 
-  // The ready set: closure plans with no remaining in-closure upstream. Kept sorted (ties by id).
-  const ready = [...closure].filter((plan) => inDegree.get(plan) === 0).sort(compareIds);
+  // The ready set: plans with no remaining in-set upstream. Kept sorted (ties by id).
+  const ready = [...nodes].filter((plan) => inDegree.get(plan) === 0).sort(compareIds);
   const order: string[] = [];
   while (ready.length > 0) {
     const plan = ready.shift() as string;
     order.push(plan);
     for (const downstream of downstreamsOf.get(plan) ?? []) {
-      if (!closure.has(downstream)) continue;
+      if (!nodes.has(downstream)) continue;
       const remaining = (inDegree.get(downstream) as number) - 1;
       inDegree.set(downstream, remaining);
       if (remaining === 0) insertSorted(ready, downstream);
     }
   }
 
-  // Every closure plan must have been ordered; a shortfall means a residual cycle (invariant breach).
-  if (order.length !== closure.size) {
-    const unresolved = [...closure].filter((plan) => !order.includes(plan)).sort(compareIds);
+  // Every plan must have been ordered; a shortfall means a residual cycle (invariant breach).
+  if (order.length !== nodes.size) {
+    const unresolved = [...nodes].filter((plan) => !order.includes(plan)).sort(compareIds);
     throw new ProgrammeCycleError(unresolved);
   }
   return order;
