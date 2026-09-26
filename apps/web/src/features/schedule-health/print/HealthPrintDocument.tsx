@@ -4,6 +4,8 @@ import './HealthPrintDocument.css';
 
 import { buildHealthRows } from '../model/health-rows';
 
+import { HealthOffenderPrintSection } from './HealthOffenderPrintSection';
+
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
 
 /**
@@ -121,26 +123,14 @@ export function ScheduleHealthPrintDocument({
       {rows
         .filter((row) => row.metric.offenders.length > 0)
         .map((row) => (
-          <section key={row.metric.id}>
-            <h2>
-              {row.metric.name} — {row.metric.offenderCount}{' '}
-              {row.metric.offenderCount === 1 ? 'finding' : 'findings'}
-            </h2>
-            {row.metric.offendersTruncated ? (
-              <p className="health-print-cap">
-                Showing the first {Math.min(report.offenderCap, row.metric.offenders.length)} of{' '}
-                {row.metric.offenderCount} — open the plan for the full list.
-              </p>
-            ) : null}
-            <ul>
-              {row.metric.offenders.map((offender) => (
-                <li key={`${offender.kind}-${offender.id}`}>
-                  {offender.code === null ? offender.name : `${offender.code} ${offender.name}`} —{' '}
-                  {offender.note}
-                </li>
-              ))}
-            </ul>
-          </section>
+          <HealthOffenderPrintSection
+            key={row.metric.id}
+            name={row.metric.name}
+            offenders={row.metric.offenders}
+            offenderCount={row.metric.offenderCount}
+            offendersTruncated={row.metric.offendersTruncated}
+            offenderCap={report.offenderCap}
+          />
         ))}
 
       <footer>
