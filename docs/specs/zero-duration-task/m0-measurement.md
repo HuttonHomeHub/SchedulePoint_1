@@ -3,6 +3,48 @@
 What M0 of [the plan](./implementation-plan.md) ran, and what it found. Every figure here was
 produced by a command named beside it; nothing in this file is a reading of the code.
 
+## M0-T1: population
+
+`apps/api/scripts/measure-zero-duration.mts`, run with
+`pnpm --filter @repo/api exec vitest run -c scripts/vitest.measure.config.mts scripts/measure-zero-duration.mts`.
+Pure: every count is from a `SeedSpec` or from `importSchedule`'s output, never from a database. The
+plan named `scripts/measure-zero-duration.mts`; it sits in `apps/api/scripts/` beside the #381
+harness because a root `.mjs` cannot import the seed CLI's TypeScript builders.
+
+It read **87 SeedSpecs** (fixture, 20 capability plans, the NetPoint reference, 63 pairwise cases,
+scale at 500 and 2,000) and **2 import fixture files** (`p6_torture_test_v1.xer`,
+`fc7-rich-export.pre-epic.xer`). **There is no MSPDI fixture file**: the MSPDI suites build their XML
+per test (`packages/interchange/src/mspdi.fixtures.ts`), so there is no catalogue of MSPDI plans to
+count. The control (spec E15) found both `A7550` and `N6`, so it would have thrown otherwise.
+
+| Type (`durationMinutes = 0`) | Count | Where                                                                                                            |
+| ---------------------------- | ----: | ---------------------------------------------------------------------------------------------------------------- |
+| `TASK`                       |     3 | fixture `A7550`; `capability-network-shape` `N6`; the torture XER import's `A7550` (the same activity, imported) |
+| `RESOURCE_DEPENDENT`         |     0 | none                                                                                                             |
+| `LEVEL_OF_EFFORT`            |    37 | fixture 5, types-and-wbs 2, pairwise 7 cases × 1, scale 4 + 14, torture import 5                                 |
+| `WBS_SUMMARY`                |   242 | every summary (the spec stores 0 for a summary by definition)                                                    |
+| `HAMMOCK`                    |     0 | none                                                                                                             |
+
+The `LEVEL_OF_EFFORT` and `WBS_SUMMARY` counts are the stored field, not a finding: both types take
+their span from other activities (ADR-0035 §21, ADR-0038), so `0` is how they are stored.
+
+| Zero-duration `TASK`       | Assigned | Placed | Constraint / external | Predecessor | Carries project finish                 | Monday date |
+| -------------------------- | -------- | ------ | --------------------- | ----------- | -------------------------------------- | ----------- |
+| fixture `A7550`            | no       | no     | no                    | yes         | no                                     | none        |
+| network-shape `N6`         | no       | no     | no                    | yes         | no                                     | none        |
+| torture XER import `A7550` | no       | no     | no                    | yes         | not scheduled; not an open end (proxy) | none        |
+
+**Verdict on the spec's defaults.**
+
+- **Single activity only: holds.** No source has more than one zero-duration `TASK`, against the
+  default's reopen threshold of 20. The deployed count is M0-T4's to measure.
+- **The action offers `TASK` only: holds, and nothing needs filing.** Zero-duration
+  `RESOURCE_DEPENDENT` rows: **0**, so no `docs/TECH_DEBT.md` row is filed.
+- **The catalogue has no resourced zero-duration task** (E15 confirmed by run); M0-T6 adds `Z`.
+- **No stored date on any zero-duration task is a Monday**, because none has a stored date at all.
+  FC-3's Monday shape is therefore not present in the catalogue today; it lands with M0-T6's `Z`
+  only if that row is given a date, and otherwise has to be built by FC-3's own cases.
+
 ## M0-T2: engine characterisation
 
 `apps/api/src/modules/schedule/engine/compute.zero-task-date.spec.ts`, a new file (no existing engine
