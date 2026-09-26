@@ -11854,3 +11854,20 @@ the 48 probe rows, so the defect was latent. Item 9 is `route-frame.tracks.test.
 writes the split lines back; the painter trims an offset head to √(reach² − δ²)), item 10 is
 `text-width-table.test.ts`, and item 11's dead fallback is gone. Each new case was run against a
 deliberate break of the code it guards.
+
+### 396. A type change into or out of `WBS_SUMMARY` is not guarded
+
+**Status:** open · **Verified:** 2026-09-26 · **Raised:** 2026-09-26 (zero-duration-task M0-T3,
+spec E29) · **Size:** S · **Owner:** api
+
+`ActivitiesService.update()` has one rule about `type`: a milestone's duration is forced to 0. It
+guards no structural change into or out of `WBS_SUMMARY`, against ADR-0038's invariants (only a
+summary may be a parent; a summary carries no logic). Measured, not read:
+`apps/api/test/zero-duration-type-change.e2e-spec.ts` "characterisation (E29)" sends
+`PATCH {type: 'TASK'}` to a `WBS_SUMMARY` that has a child and gets `200`, leaving a `TASK` whose
+child still names it as its parent. The reverse (an activity with dependencies changed to
+`WBS_SUMMARY`) is the same rule's other half and was not exercised.
+
+It is not the zero-duration epic's to fix: that epic's type-change work (M2) is about dates. The
+remedy is a refusal in `update()` (a 422 naming the children or the links), with the e2e case
+flipped from a characterisation to its acceptance test.

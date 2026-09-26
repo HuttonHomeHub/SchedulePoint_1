@@ -81,6 +81,29 @@ spec was edited, so `pnpm check:engine-parity` reports `0 changed`). Run with
 - (a) is not a discriminator for decision 1a by equality alone. Its date assertion is. The case
   asserts both, so it did go red against rule 1a.
 
+## M0-T3: the type-change defect, through the API
+
+`apps/api/test/zero-duration-type-change.e2e-spec.ts`, run against the local database with
+`pnpm --filter @repo/api exec vitest run -c vitest.e2e.config.mts test/zero-duration-type-change.e2e-spec.ts`:
+**3 passed**. The plan is created with no calendar, so it takes the organisation's five-day default.
+
+**E18 reproduced; it is not withdrawn.** `PRE` (5 days from Mon 5 Jan) ends Fri 9 Jan; `Z` follows it
+FS with an SNET on Mon 12 Jan; `SUCC` (1 day) follows `Z`.
+
+| `Z` before           | Before the PATCH                         | After `PATCH {version, type: 'FINISH_MILESTONE'}` + recalculate                               |
+| -------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
+| zero-duration `TASK` | `Z` 12 Jan, `SUCC` starts **Mon 12 Jan** | SNET still 12 Jan (the PATCH wrote no date); `Z` reports 12 Jan; `SUCC` starts **Tue 13 Jan** |
+| `START_MILESTONE`    | `Z` 12 Jan, `SUCC` starts **Mon 12 Jan** | the same: `SUCC` starts **Tue 13 Jan**                                                        |
+
+The move is one working day and it is the reading rule, not the PATCH: the stored SNET is unchanged
+and is now read as the end of 12 Jan (ADR-0155). The expected successor date is one constant,
+`SUCCESSOR_AFTER_TYPE_CHANGE = '2026-01-13'`, which M2 flips to `'2026-01-12'`. **Verified red:**
+flipping it today fails both cases (`Expected "2026-01-12"`, `Received "2026-01-13"`).
+
+**E29 confirmed.** `PATCH {type: 'TASK'}` on a `WBS_SUMMARY` with a child returns **200**, leaving a
+`TASK` whose child still names it as its parent. Filed as `docs/TECH_DEBT.md` **#396** (status
+`open`), not fixed.
+
 ## M0-T7: `check:engine-parity`
 
 ### The oracle for the row-lookup extraction
