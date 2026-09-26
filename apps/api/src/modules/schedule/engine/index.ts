@@ -15,6 +15,7 @@ export {
   type WeeklyPattern,
 } from './working-time-calendar';
 export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
+export { applyLag, backwardUpperBound, forwardLowerBound } from './edge-bounds';
 export { levelSchedule } from './level';
 export { computeFloatPaths, type FloatPath } from './float-paths';
 export {
