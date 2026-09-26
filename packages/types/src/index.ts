@@ -826,10 +826,10 @@ export interface DependencySummary {
    */
   lagMinutes: number;
   /**
-   * The calendar the lag is measured on (ADR-0036 §6, M3). `PROJECT_DEFAULT` (the default)
-   * and `PREDECESSOR`/`SUCCESSOR` all schedule the lag on the plan calendar today — the last
-   * two are forward-wired for per-activity calendars (M5); only `TWENTY_FOUR_HOUR` is
-   * distinct now, measuring the lag as **elapsed** time (e.g. concrete cure's 168h = 7 days).
+   * The calendar the lag is measured on (ADR-0036 §6, M3). `PROJECT_DEFAULT` (the default) is the
+   * plan calendar; `PREDECESSOR`/`SUCCESSOR` are that endpoint's scheduling calendar (its driving
+   * resource's for a `RESOURCE_DEPENDENT` activity, else its own, else the plan's; ADR-0037);
+   * `TWENTY_FOUR_HOUR` measures the lag as **elapsed** time (e.g. concrete cure's 168h = 7 days).
    */
   lagCalendar: LagCalendarSource;
   predecessor: DependencyEndpoint;
@@ -851,7 +851,6 @@ export interface DependencySummary {
  * It mirrors {@link DependencySummary} but carries BOTH plan ids (denormalised) instead of a
  * single `planId`, and deliberately OMITS `isDriving`: the CPM engine never consumes cross-plan
  * edges (they are DERIVED above it — parity by construction), so there is no per-edge driving flag.
- * `lagDays` is a signed count of working days (a lead is negative).
  */
 export interface CrossPlanDependencySummary {
   id: string;
@@ -860,8 +859,22 @@ export interface CrossPlanDependencySummary {
   /** The plan the successor activity belongs to (the downstream plan — the edge's home, ADR-0045 CQ-2). */
   successorPlanId: string;
   type: DependencyType;
+  /**
+   * Signed working days on this link's **lag calendar** (a lead is negative), rounded from the
+   * stored minutes: an eight-hour calendar counts 480 minutes to the day (ADR-0068 §4, #385).
+   */
   lagDays: number;
-  /** The calendar the lag is measured on (ADR-0036 §6) — identical semantics to a dependency's. */
+  /**
+   * Signed working **minutes** on the lag calendar — what is stored and what the programme
+   * recalculation applies (#385). Read-only: a cross-plan link is created with whole `lagDays`.
+   */
+  lagMinutes: number;
+  /**
+   * The calendar the lag is measured on (ADR-0036 §6). The same labels as a dependency's, with one
+   * difference a link between two plans forces: `PROJECT_DEFAULT` is the **successor activity's
+   * plan's** calendar, in both directions (#385 CQ-2), and `PREDECESSOR`/`SUCCESSOR` inherit from
+   * **that endpoint's own** plan.
+   */
   lagCalendar: LagCalendarSource;
   predecessor: DependencyEndpoint;
   successor: DependencyEndpoint;

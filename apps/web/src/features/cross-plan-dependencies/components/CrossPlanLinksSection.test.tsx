@@ -23,6 +23,7 @@ function link(overrides: Partial<CrossPlanDependencySummary> = {}): CrossPlanDep
     successorPlanId: 'pl1',
     type: 'FS',
     lagDays: 0,
+    lagMinutes: 0,
     lagCalendar: 'PROJECT_DEFAULT',
     predecessor: { id: 'up-act', code: 'A-1', name: 'Deliver steel' },
     successor: { id: 'anchor', code: null, name: 'Pour slab' },
