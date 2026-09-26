@@ -250,3 +250,13 @@ Suggested:
     function, then recalculate only the pending plans in that order. That costs one sort over a
     graph already loaded by `loadOrgAdjacency` and removes the C-before-A case. B, a non-pending
     intermediate, can still read stale until a programme recalculation, and the spec says so.
+
+### test-engineer: confirmed
+
+It re-derived FC-9 (Fri 2026-01-16) and FC-10 (Wed 07 for the 3-day cell, Fri 02 for the 6-day
+cell) by hand from the engine's own functions. Both hold. The data date floors neither.
+
+- FC-9's lag-0 bound is Mon 00:00 unrolled. `rollBackwardToWorking` then lands on the boundary
+  after Friday's close, which reads as Friday.
+- The M2-T5 hand-derivation rule and M0-T1's prediction step are enforceable by commit order.
+- The LOE/N32 split is two distinct branches, consistent across the spec and the plan.
