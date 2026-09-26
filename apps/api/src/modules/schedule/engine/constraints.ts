@@ -1,15 +1,8 @@
 import type { ActivityType, ConstraintType } from '@repo/types';
 
-import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
-
-import {
-  advanceWorking,
-  finishMilestoneDateInstant,
-  rollBackwardToWorking,
-  rollForwardToWorking,
-} from './instants';
+import { advanceWorking, finishDateInstant, startDateInstant } from './instants';
 import type { EngineActivity } from './types';
-import { instantToAbsMinutes, type WorkingTimeCalendar } from './working-time-calendar';
+import type { WorkingTimeCalendar } from './working-time-calendar';
 
 /**
  * The six constraint kinds the engine applies as date-clamp arithmetic. `MANDATORY_START` /
@@ -84,13 +77,6 @@ export function isSummary(type: ActivityType): boolean {
   return type === 'WBS_SUMMARY';
 }
 
-/** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
-function nextCalendarDay(date: string): string {
-  const d = parseCalendarDate(date);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return formatCalendarDate(d);
-}
-
 /**
  * The active constraint on an activity, resolved to **absolute working-instants** on the
  * activity's own calendar (ADR-0037). A constraint is active only when both `constraintType`
@@ -115,20 +101,16 @@ function resolvePair(
 ): ResolvedConstraint | null {
   if (!constraintType || !constraintDate) return null;
   // A finish milestone's constraint date means the END of that day (#381): `FNLT 30 Apr` on a
-  // milestone after a task ending 30 Apr is met exactly, not missed by a day.
-  if (activityType === 'FINISH_MILESTONE') {
-    const at = finishMilestoneDateInstant(calendar, constraintDate);
-    return { kind: normaliseConstraint(constraintType), startAbs: at, finishAbs: at };
-  }
-  const startAbs = rollForwardToWorking(calendar, instantToAbsMinutes(constraintDate));
-  const finishAbs =
-    durationMinutes === 0
-      ? startAbs
-      : rollBackwardToWorking(
-          calendar,
-          dataDateAbs,
-          instantToAbsMinutes(nextCalendarDay(constraintDate)),
-        );
+  // milestone after a task ending 30 Apr is met exactly, not missed by a day. Both readers return
+  // that one instant for a finish milestone, and a zero-duration activity finishes at its start.
+  const startAbs = startDateInstant(calendar, constraintDate, activityType);
+  const finishAbs = finishDateInstant(
+    calendar,
+    dataDateAbs,
+    constraintDate,
+    activityType,
+    durationMinutes,
+  );
   return { kind: normaliseConstraint(constraintType), startAbs, finishAbs };
 }
 
@@ -240,10 +222,7 @@ export function clampExternalForwardStart(
   ignoreExternal: boolean,
 ): number {
   if (ignoreExternal || !activity.externalEarlyStart) return logicEarlyStart;
-  const externalAbs =
-    activity.type === 'FINISH_MILESTONE'
-      ? finishMilestoneDateInstant(calendar, activity.externalEarlyStart)
-      : rollForwardToWorking(calendar, instantToAbsMinutes(activity.externalEarlyStart));
+  const externalAbs = startDateInstant(calendar, activity.externalEarlyStart, activity.type);
   // §30.1 / N25: floor at the data date — an external date in the past can't pull work before it.
   return Math.max(logicEarlyStart, externalAbs, dataDateAbs);
 }
@@ -268,16 +247,13 @@ export function clampExternalBackwardFinish(
   // The bound is the exclusive end of the external day's working time (its last working minute + 1),
   // measured on the activity's calendar — mirroring an FNLT constraint's `finishAbs` (see resolvePair).
   // A zero-duration milestone finishes at its start instant.
-  const externalFinishAbs =
-    activity.type === 'FINISH_MILESTONE'
-      ? finishMilestoneDateInstant(calendar, activity.externalLateFinish)
-      : activity.durationMinutes === 0
-        ? rollForwardToWorking(calendar, instantToAbsMinutes(activity.externalLateFinish))
-        : rollBackwardToWorking(
-            calendar,
-            dataDateAbs,
-            instantToAbsMinutes(nextCalendarDay(activity.externalLateFinish)),
-          );
+  const externalFinishAbs = finishDateInstant(
+    calendar,
+    dataDateAbs,
+    activity.externalLateFinish,
+    activity.type,
+    activity.durationMinutes,
+  );
   return Math.min(logicLateFinish, externalFinishAbs);
 }
 
