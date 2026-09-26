@@ -1,18 +1,20 @@
 # Implementation Plan: A cross-plan link produces the dates the same link would inside one plan
 
 - **Feature spec:** [./feature-spec.md](./feature-spec.md)
-- **Status:** Draft
+- **Status:** Approved — agreement round complete 2026-09-26 (see agreement-round.md); product owner delegated the open questions
 - **Owner:** api
+- **Agreement round:** [./agreement-round.md](./agreement-round.md). Every finding is folded below;
+  its "Folded" section maps each finding to the task that carries it.
 
 ## Breakdown
 
 ```mermaid
 flowchart LR
   E[Epic: cross-plan links match one plan] --> M0[M0 measure first]
-  M0 --> AR{{agreement round:<br/>api · backend-performance ·<br/>test-engineer · database-architect}}
+  M0 --> AR{{agreement round: complete<br/>api · backend-performance ·<br/>test-engineer · database-architect}}
   AR --> M1[M1 one rule in the engine<br/>ships dark]
-  M1 --> M2[M2 derivation on instants<br/>+ lag in working minutes]
-  M2 --> M3[M3 re-derive once at boot]
+  M1 --> M2[M2 derivation on instants<br/>+ lag in working minutes<br/>ONE PR: T2–T7]
+  M2 --> M3[M3 re-derive once at boot<br/>own PR]
   M3 --> M4[M4 gate pass and close]
   M2 -. same release .- M3
 ```
@@ -24,10 +26,13 @@ flowchart LR
 
 ### Review of this plan (before M1 starts)
 
-The plan is reviewed, read-only, by these agents. Their blocking findings are folded or answered in
-writing before M1:
+**Done, 2026-09-26.** All four agents returned AGREE-WITH-CHANGES; every blocking and suggested
+finding is folded into the spec and this plan, except api-reviewer's suggestion not to bump
+`version`, which is overruled in favour of database-architect B3 (the reason is in
+[agreement-round.md](./agreement-round.md)). The list below is the brief they reviewed against.
 
-- **api-reviewer**: the write-path conversion and response factor (spec §4.5); no shape change.
+- **api-reviewer**: the write-path conversion and response factor (spec §4.5). It found the read
+  path unfixed (A1) and the docs contradicting the shape (A2), so the shape now changes additively.
 - **backend-performance-reviewer**: the widened loads, the remote calendar resolution, FC-6, the
   boot re-derivation's cost.
 - **test-engineer**: the parity matrix design (twin construction, especially the backward twin),
@@ -76,8 +81,9 @@ changes. The user-facing change arrives in M2.`
     `backwardUpperBound` for the same edge in the twin. Pin the downstream's late dates identically
     in both worlds (an `FNLT` on the successor) so the only difference is the seam.
   - The twin shares the engine's bound functions after M2, so it cannot catch a defect inside them.
-    → FC-3 and FC-4 are hand-computed and stay as the independent oracle; `compute.spec.ts` covers
-    the functions themselves.
+    → The hand-computed goldens are the independent oracle, and after the agreement round (T1) they
+    cover both directions and both anchor kinds: FC-3/FC-4 (forward FS), FC-9 (backward FS) and
+    FC-10 (forward FF), all in M2-T6. `compute.spec.ts` covers the functions themselves.
 - **Testing:**
   - Matrix axes: link type {FS, SS, FF, SF} × this plan's activity type {task, finish milestone,
     start milestone} × the remote activity type {task, finish milestone} × calendar {24-hour,
@@ -86,12 +92,23 @@ changes. The user-facing change arrives in M2.`
   - Domain: unplaced, unprogressed, whole-day durations (spec §1, "What the decision does not
     settle").
 - **Development steps:**
-  1. Write `conformance/cross-plan-twin.ts` (pure; imports the engine as `cross-plan-adapter.ts`
+  1. **Write the per-cell prediction first, and commit it on its own** (test-engineer, agreement
+     round; spec FC-2). §4.2 fixes only the base case (24-hour calendar, lag 0), and the matrix also
+     varies calendar, lag and lag calendar in both directions, so FC-2's "stop on any disagreement"
+     is empty without a prediction for every cell. Write it as a small pure function
+     (`conformance/cross-plan-prediction.ts`, `predictDisagreement(cell) → 'equal' | { days, sign }`)
+     or a table in `m0/prediction.md`, derived **only** from spec §4.2 plus the E5 (weekend), E6
+     (stored unit), E7 (lag calendar) and E8 (duration) rules, never from running the code. Its
+     commit precedes the run's commit, so the prediction cannot be tuned to the output (the
+     ADR-0128 ordering). A cell with no prediction counts as a disagreement.
+  2. Write `conformance/cross-plan-twin.ts` (pure; imports the engine as `cross-plan-adapter.ts`
      does).
-  2. Run the matrix against today's code. Write `docs/specs/cross-plan-day-boundary/m0/red-run.md`:
-     the full output, and the cells that disagree with the §4.2 prediction.
-  3. **If any cell disagrees with the prediction, stop** and resolve it in the spec before T2.
-  4. Commit the characterisation spec, green, headed with the instruction that M2-T6 inverts it.
+  3. Run the matrix against today's code. Write `docs/specs/cross-plan-day-boundary/m0/red-run.md`:
+     the full output, and every cell where the observed disagreement differs from step 1's
+     prediction.
+  4. **If any cell disagrees with the prediction, stop** and resolve it in the spec before T2. The
+     fix is to the prediction's reasoning, recorded with the cell, not an edit of the number to match.
+  5. Commit the characterisation spec, green, headed with the instruction that M2-T6 inverts it.
 
 ##### Task M0-T2: the population on the seed catalogue
 
@@ -125,7 +142,8 @@ changes. The user-facing change arrives in M2.`
 - **Description:** `apps/api/scripts/measure-cross-plan-derivation.mts`, run against real Postgres:
   a downstream plan with 100 incoming and 100 outgoing cross-plan links from 10 plans on 10 distinct
   calendars. Time `buildEngineGraph`'s cross-plan branch, p50/p95 over repeated runs, and record the
-  query count.
+  query count and the number of calendar resolutions at **10 and at 100 edges**, with the plans and
+  calendars held fixed (the FC-6 counting shape, backend-performance-reviewer).
 - **Complexity:** S
 - **Dependencies:** none
 - **Risks:** the harness bypasses the product's HTTP layer. → Its docblock says so (ADR-0081 §3).
@@ -213,6 +231,10 @@ M2 is the first caller.`
   3. A pinned positive case, so the gates cannot pass by finding nothing (the ADR-0093 shape).
 - **Complexity:** S
 - **Dependencies:** M1-T3
+- **Scope, stated in the gate's docblock:** these gates catch drift in **structure** (who produces a
+  timed string, where the bound switch lives), not in **content**. A wrong value inside a moved
+  function is FC-5's to catch. test-engineer raised this and asked for no action; it is recorded so
+  nobody reads the gates as covering more.
 - **Testing:** the gate file itself; mutations recorded in its docblock.
 - **Development steps:** 1. Write. 2. Mutate, see red, revert. 3. Record.
 
@@ -233,53 +255,180 @@ than skipped.
 **M2 and M3 ship in one release.** The Version Packages PR is not merged between them, because
 between them affected plans are silently wrong.
 
+**M2's product tasks T2–T7 are ONE pull request** (database-architect B4). That PR carries, at
+minimum, the migration (T2), the write-path conversion (T3), the read-path divisor and `lagMinutes`
+(T3b, T3c), and the derivation's lag read (T5, with the loads it needs, T4). Split across PRs,
+`main` would hold `lag_minutes` in two units, and today's readers divide by 1440
+(`schedule.service.ts:1523`, `:1534`; `cross-plan-dependency-response.dto.ts:74`): a one-day lag
+migrated to 480 minutes reads as `Math.round(480 / 1440) = 0`, so every recalculation and every
+response silently drops it. The tests (T6, T7) land in the same PR because each is verified red
+against the pre-M2 code, which needs the before state in the same diff. An interim PR that changed
+only the divisor was considered and rejected: it is a throwaway second spelling of the lag rule.
+
+- **Before the PR:** M2-T1's design document (it changes no code).
+- **In the PR:** M2-T2, T3, T3b, T3c, T4, T5, T6, T7, and the changeset (T3c).
+- **After the PR, before the release:** M2-T8's cost record, and M3 as its own PR.
+
 #### Feature: the lag re-encoding
 
-> **Description:** CQ-1's default. A data migration and the write path that matches it.
+> **Description:** CQ-1, answered: re-encode. A data migration, a record table, the write path and
+> the read path that match it.
 > **Complexity:** M
-> **Dependencies:** M1; database-architect's review
-> **Risks:** rollback by redeploy mixes encodings (spec §4.4). → Rollback is a reverse migration,
-> documented in `docs/DEPLOYMENT.md`, as for ADR-0155.
-> **Testing requirements:** FC-7 against a real database; the round-trip API e2e.
+> **Dependencies:** M1; database-architect's design (agreement round §b)
+> **Risks:** rollback by redeploy mixes encodings (spec §4.4). → Rollback is the documented
+> five-step reverse in `docs/DEPLOYMENT.md`, not a redeploy.
+> **Testing requirements:** FC-7 (as rewritten by B2/B3) against a populated real database; the
+> round-trip API e2e; GET and list reads, not only the create echo.
 
-##### Task M2-T1: database-architect designs the migration
+##### Task M2-T1: the migration design, from the agreement round
 
-- **Description:** hand the agent spec §4.4. It decides: the per-row factor resolution in SQL
-  (including `RESOURCE_DEPENDENT` endpoints and each endpoint's own plan calendar), soft-deleted
-  rows, whether conversions are recorded for exact reversal, and the reverse migration.
+- **Description:** database-architect's design is already given (spec §4.4, from its §b). This task
+  writes it into `m2/migration-design.md` and settles what §b left to the build: the record table's
+  exact columns, its `organization_id` column, its `plan_id` index (the
+  `finish_milestone_date_migrations` precedent), and this spec's reading that the record holds
+  **every** resolved row, unchanged ones included, so the B2 differential can see a row wrongly
+  resolved to 1440. Then the **SQL as written** goes back to database-architect before the PR is
+  opened (CLAUDE.md §19.3).
 - **Complexity:** S
 - **Dependencies:** M1
-- **Risks:** the agent returns nothing. → Re-run it. No SQL is written until it has answered.
-- **Development steps:** 1. Run the agent. 2. Fold its design into `m2/migration-design.md`.
+- **Risks:** the agent returns nothing. → Re-run it. The PR is not opened until it has answered.
+- **Development steps:** 1. Write `m2/migration-design.md`. 2. Draft the SQL. 3. Run the agent on
+  it. 4. Fold its answer.
 
 ##### Task M2-T2: the migration and its test
 
-- **Description:** the migration as designed, and a test that reads its SQL from the shipped file
-  (the ADR-0107 practice) and checks FC-7 against a populated database: `lagDays` unchanged through
-  the API; `TWENTY_FOUR_HOUR` and factor-1440 rows byte-unchanged; reverse restores every row.
+- **Description:** one migration file, in this order:
+  1. `CREATE TABLE cross_plan_lag_migrations`: `plan_id` FK `ON DELETE CASCADE`; no FK on the
+     dependency id or the calendar id; `UNIQUE (cross_plan_dependency_id)`; `day_factor_minutes`,
+     prior and new `lag_minutes`, `lag_calendar`, resolved calendar id, `migrated_at` (M2-T1 final).
+  2. **Last in the file, one `WITH resolved AS (…)` statement** that resolves each row's factor
+     once, inserts a record row for every resolved link, and updates the changed links:
+     - every row, **soft-deleted included**;
+     - `round(lag_minutes::numeric * factor / 1440)::integer` (**B1**; `int4` overflows at factor
+       480 above ~3,107 days and at factor 1440 above ~1,035 days, spec E28);
+     - `UPDATE … WHERE new <> old` only (**B3**), bumping `version` and leaving `updated_at`;
+     - every plan reached through the **endpoint activity's `plan_id`**, never the link's
+       `*_plan_id` columns (**B5**);
+     - the driving-resource join on the partial unique index's predicate exactly
+       (`is_driving AND deleted_at IS NULL`) plus the `driving-calendars.ts:25-34` soft-delete
+       guards, so it cannot fan out (**B5**);
+     - the calendar join with **no** `deleted_at` filter, matching `findHoursPerDayMinutes`
+       (`calendar.repository.ts:366-384`).
+       A test reads the SQL from the shipped file (the ADR-0107 practice) and runs it against a
+       **populated** database seeded on every resolution path first.
 - **Complexity:** M
 - **Dependencies:** M2-T1
-- **Risks:** a pristine CI database cannot exhibit a row-dependent failure (ADR-0107). → The test
-  seeds rows on every resolution path first.
-- **Testing:** each case verified red against the specific defect it guards (for example, resolving
-  `PREDECESSOR` against the successor's plan calendar).
-- **Development steps:** 1. Write. 2. Seed every path. 3. Verify red per case. 4. `docs/DATABASE.md`.
+- **Risks:**
+  - A pristine CI database cannot exhibit a row-dependent failure (ADR-0107). → Seed every path
+    before the migration runs: `PROJECT_DEFAULT`, `PREDECESSOR`, `SUCCESSOR` (own calendar,
+    inherited from **its own** plan, driven by a resource), `TWENTY_FOUR_HOUR`, a null calendar, a
+    soft-deleted link, a soft-deleted endpoint, a link whose two plans have different calendars.
+  - The cost comment is copied rather than measured (the ADR-0148 record). → `EXPLAIN ANALYZE` over
+    10,000 seeded rows, five runs, on the SQL as shipped; recorded in the header comment and
+    `m2/migration-design.md` with the spread.
+- **Testing (FC-7, as rewritten; each verified red against the named defect):**
+  - **Hand-written expected `lag_minutes`** for every seeded row, read from the database (**B2**).
+    Red against: `PREDECESSOR` resolved on the successor's plan calendar; `PROJECT_DEFAULT` resolved
+    on the predecessor's plan; the link's `successor_plan_id` used instead of the activity's.
+  - **Differential** (**B2**): for every seeded row, the record's `day_factor_minutes` equals the
+    factor the M2-T3 TypeScript function returns for the same row. Red against a factor-1440 row
+    that should resolve to 480.
+  - **Unchanged classes** (**B3**): factor-1440, `TWENTY_FOUR_HOUR` and zero-lag rows keep
+    `lag_minutes`, `version` and `updated_at`. Red against an unconditional `UPDATE`.
+  - **Changed rows:** `version + 1`, `updated_at` unchanged. Red against a statement that sets
+    `updated_at`.
+  - **Overflow** (**B1**): ±3650 days on a 480-minute calendar **and** on a 1440-minute calendar.
+    Red against `int4` arithmetic.
+  - **No fan-out** (**B5**): a `RESOURCE_DEPENDENT` endpoint with a soft-deleted driving assignment
+    beside the live one produces exactly one record row.
+  - **The reverse** (the `docs/DEPLOYMENT.md` procedure, run as SQL in the test): restores every
+    changed row's `lag_minutes` exactly, bumps `version` again (it never goes backwards), converts a
+    row created after the migration back to the old unit, and the check query passes.
+- **Development steps:** 1. Write. 2. Seed every path. 3. Verify red per case. 4. `EXPLAIN ANALYZE`
+  ×5. 5. `docs/DATABASE.md` (the re-encoding and the record table). 6. `docs/DEPLOYMENT.md`
+  ("Rolling back past the cross-plan lag release": lock the record table, restore, convert rows
+  created after the release, check query, drop).
 
-##### Task M2-T3: the write path and the response factor
+##### Task M2-T3: the write path and the one lag-calendar function
 
-- **Description:** `cross-plan-dependencies.service.ts:178` converts `lagDays` with the lag
-  calendar's factor, through a cross-plan context whose `PREDECESSOR` and `SUCCESSOR` inherit from
-  **their own** plans and whose `PROJECT_DEFAULT` is the successor plan's calendar (CQ-2). The
-  response divides by the same factor. Correct the stale DTO description
-  (`create-cross-plan-dependency.dto.ts:54`).
+- **Description:** one cross-plan lag-calendar function, built on `schedulingCalendarId` rather than
+  restating its fallback, taking each endpoint's type, calendar id, driving calendar id and **own
+  plan calendar id** (spec D5). `PROJECT_DEFAULT` is the successor activity's plan's calendar
+  (CQ-2). Plan ids come from the endpoint activities, never the link's `*_plan_id` (B5). The write
+  (`cross-plan-dependencies.service.ts:178`) converts `lagDays` through it, and deletes the fixed
+  `MINUTES_PER_DAY` and its docblock (`:27-31`).
+- **Stale descriptions** (api-reviewer A2 and its suggestion to fold `:45-49` here), each checked
+  against the file:
+  - `create-cross-plan-dependency.dto.ts:51-54` ("PREDECESSOR/SUCCESSOR coincide with the plan
+    calendar until per-activity calendars land").
+  - `cross-plan-dependency-response.dto.ts:45-49` ("the rest schedule on the plan calendar today").
+  - `packages/types/src/index.ts:864` ("identical semantics to a dependency's"): say instead that
+    `PROJECT_DEFAULT` means the successor plan's calendar.
+  - The same stale sentence on the **in-plan** side, found while checking: `dependency-response.dto.ts:58-61`
+    and `packages/types/src/index.ts:829-833` (spec E34). Fixed here so the corrected cross-plan
+    text does not sit beside a wrong twin.
 - **Complexity:** S
 - **Dependencies:** M2-T2
-- **Risks:** a second spelling of the lag-calendar rule. → Build the context from
-  `lagCalendarIdFor` and `schedulingCalendarId` (`lag-day-factor.ts:34-55`), extended with a
-  per-endpoint plan calendar, rather than a copy.
-- **Testing:** API e2e: create a one-day lag on an eight-hour calendar, read back `lagDays: 1`, and
-  read `lag_minutes = 480` from the database, not from the DOM or the API under test.
-- **Development steps:** 1. Extend the context. 2. Convert on write, divide on read. 3. e2e.
+- **Risks:** a second spelling of the lag-calendar rule. → One function, used by write, read (T3b)
+  and derivation (T5), and compared against the SQL by T2's differential check.
+- **Testing:** unit cases per lag-calendar source with the two plans on different calendars and an
+  inheriting endpoint; API e2e: create a one-day lag on an eight-hour calendar and read
+  `lag_minutes = 480` from the database, not from the API under test.
+- **Development steps:** 1. The function. 2. Convert on write. 3. Docblocks. 4. Tests.
+
+##### Task M2-T3b: the read path (api-reviewer A1)
+
+- **Description:** every cross-plan read divides by the resolved factor. Today
+  `CrossPlanDependencyResponseDto.from` divides by a hard-coded 1440 (`:8`, `:74`) on create, get
+  and both lists (spec E25), so after the migration an eight-hour one-day lag would read back as
+  `lagDays: 0`. Mirror the in-plan shape (`dependencies.service.ts:84-129`,
+  `dependency-response.dto.ts:93`):
+  - The repository's `endpointSelect` (`cross-plan-dependency.repository.ts:9`) adds `type`,
+    `calendarId` and `planId`.
+  - An async `withLagDayFactor(s)` in the service resolves each row's factor with the T3 function
+    before any `.from()`; `get`, `create`, `listByPlan` and `listByActivity` return
+    `WithLagDayFactor<…>`.
+  - `.from()` takes `WithLagDayFactor<CrossPlanDependencyWithEndpoints>` and uses `minutesToDays`,
+    and the fixed `MINUTES_PER_DAY` (`:7-8`) is deleted.
+  - **Batched per page** (api-reviewer suggestion): collect distinct plan ids across the page (one
+    `plans.findCalendarIds`), driving calendars through `loadDrivingCalendarMapForRows`
+    (`driving-calendars.ts:74-94`, one query per distinct (org, plan) with a `RESOURCE_DEPENDENT`
+    endpoint), and one `findHoursPerDayMinutes` for the page's distinct calendar ids. The
+    activity list spans plans (it holds both directions), which is why the plan calendar is not one
+    lookup as it is in the in-plan service.
+- **Complexity:** M
+- **Dependencies:** M2-T3
+- **Risks:** a read that looks right because it is only tested on create. → **The create echo passes
+  trivially**: the value was just converted with the same factor. So the tests read through **GET**
+  and through **both lists**.
+- **Testing:**
+  - API e2e: an eight-hour one-day lag reads `lagDays: 1` through `GET …/:id`, the plan list and the
+    activity list; a `TWENTY_FOUR_HOUR` two-day lag on the same calendar reads `lagDays: 2`. Verified
+    red against the `/1440` divisor.
+  - A counting stub: a page of 5 and a page of 50 links spanning 3 plans and 3 calendars issue the
+    same number of queries.
+- **Development steps:** 1. Widen the select. 2. `withLagDayFactor(s)`. 3. `.from()`. 4. Tests.
+
+##### Task M2-T3c: `lagMinutes` on the response (api-reviewer A2)
+
+- **Description:** add `lagMinutes` (read-only, the stored working minutes) to
+  `CrossPlanDependencyResponseDto` and to `CrossPlanDependencySummary`
+  (`packages/types/src/index.ts:856-871`). The request is unchanged: create still accepts whole
+  `lagDays` only. Correct `docs/API.md`: the cross-plan section (`:264-312`) says what `lagDays`
+  and `lagMinutes` mean on a cross-plan link and that `PROJECT_DEFAULT` is the successor plan's
+  calendar; the general section `:659-708`, which tells clients to send `lagMinutes` (`:704-705`),
+  gains the sentence that a cross-plan link accepts only `lagDays`.
+- **The changeset lands in this PR** (an additive shape change): `api` minor, covering both the
+  additive field and the corrected dates for linked plans; `@repo/types` minor for the field
+  (`privatePackages.version` is on in `.changeset/config.json`, and the package keeps a
+  `CHANGELOG.md`).
+- **Complexity:** S
+- **Dependencies:** M2-T3b
+- **Risks:** a client that treated the response as closed. → The web parses no cross-plan response
+  with a strict schema (spec E33); the field is additive.
+- **Testing:** the T3b e2e cases also assert `lagMinutes` (480 for the eight-hour one-day lag); the
+  OpenAPI spec shows the field.
+- **Development steps:** 1. DTO and type. 2. `docs/API.md`. 3. Changeset.
 
 #### Feature: the derivation on instants
 
@@ -292,18 +441,22 @@ between them affected plans are silently wrong.
 ##### Task M2-T4: widen the loads
 
 - **Description:** both repository loads (`cross-plan-dependency.repository.ts:204-254`) add
-  `lagCalendar` and, for the remote endpoint, `type`, `durationMinutes`, `calendarId`, and its
-  plan's `calendarId` and `plannedStart`. A remote driving-resource calendar is loaded only when a
-  remote endpoint is `RESOURCE_DEPENDENT` (the #86 cost rule). Remote calendar ports resolve once per
+  `lagCalendar` and, for the remote endpoint, `type`, `durationMinutes`, `calendarId`, `planId`, and
+  its plan's `calendarId` and `plannedStart` **through the activity's plan relation**, never through
+  the link's `*_plan_id` (B5). Remote driving-resource calendars come from
+  **`loadDrivingCalendarMapForRows`** (`driving-calendars.ts:74-94`), which issues no query when no
+  remote endpoint is `RESOURCE_DEPENDENT` and one query per distinct (org, plan) otherwise, never one
+  per edge (backend-performance-reviewer; the #86 cost rule). Remote calendar ports resolve once per
   distinct id into the existing `portByCalId` cache (`schedule.service.ts:1446-1449`).
 - **Complexity:** M
 - **Dependencies:** M1
 - **Risks:**
-  - An N+1 over edges. → FC-6's counting stub: queries do not grow with edges.
+  - An N+1 over edges. → FC-6's counting stub: with plans and calendars held fixed, the query count
+    **and** the calendar-resolve count are equal at 10 and at 100 edges.
   - Tidying the load renames `predecessorPlacedFinish` or invents a placed late basis. →
     `cross-plan-basis.structural.spec.ts` passes unedited.
-- **Testing:** `schedule.service.spec.ts` mocks widened; the counting stub.
-- **Development steps:** 1. Widen selects. 2. Conditional driving query. 3. Resolve ports.
+- **Testing:** `schedule.service.spec.ts` mocks widened; the counting stub at 10 and 100 edges.
+- **Development steps:** 1. Widen selects. 2. `loadDrivingCalendarMapForRows`. 3. Resolve ports.
 
 ##### Task M2-T5: rewrite the derivation and its second producer
 
@@ -312,8 +465,13 @@ between them affected plans are silently wrong.
   types, durations and ports. For each edge it builds the anchor instant with the M1 date readers,
   calls `forwardLowerBound` or `backwardUpperBound`, skips LOE endpoints, composes with the M1
   column as instants (D6: the M1 winner keeps its bare string), and formats a derived winner with
-  `formatExternalInstant`. The conformance adapter changes **in the same commit** (it is the second
-  producer, `cross-plan-adapter.ts:81-85`) and gains the backward direction (E20).
+  `formatExternalInstant`. Lag calendars resolve through the one M2-T3 function. The conformance
+  adapter changes **in the same commit** (it is the second producer, `cross-plan-adapter.ts:81-85`)
+  and gains the backward direction (E20).
+- **The LOE skip and the N32 skip are separate branches** (test-engineer). Today's loop has one
+  `missing` branch that always increments `upstreamMissingCount` (`cross-plan-derivation.ts:224-228`).
+  An LOE upstream must `continue` **without** incrementing it, or every plan with an LOE cross-plan
+  link reports a phantom "upstream never calculated" warning. Only null upstream dates count.
 - **Complexity:** L
 - **Dependencies:** M2-T4
 - **Risks:**
@@ -321,8 +479,15 @@ between them affected plans are silently wrong.
     timed derived value fall on the same day, in both orders.
   - The inverted characterisations are updated to whatever the code now prints. → Each new value is
     written below **before** the run, and a mismatch stops the work.
-- **Testing:** `cross-plan-derivation.spec.ts` rewritten against a prediction table (test-engineer
-  designs it). Predicted changes in `cross-plan-conformance.spec.ts`, all on a 24-hour calendar:
+- **Testing:** `cross-plan-derivation.spec.ts` rewritten against a prediction table that is
+  **hand-derived per cell** from the in-plan semantics (the engine's bound rules and the date
+  readers' documented meaning), written into the spec file **before** the new code first runs, in a
+  commit of its own (test-engineer T1). It is never characterised from the new code's output: that
+  would make it a second twin comparison, which spec D2 says cannot see a defect in a shared
+  function. M0-T1's record-then-flip method is the right model for today's code and the wrong model
+  here. A cell whose hand value disagrees with the run stops the work, as FC-2 does.
+  test-engineer re-derived the table below by hand in the agreement round and every cell
+  reproduced. Predicted changes in `cross-plan-conformance.spec.ts`, all on a 24-hour calendar:
 
   | Line     | Assertion                       | Old          | New                        |
   | -------- | ------------------------------- | ------------ | -------------------------- |
@@ -347,23 +512,42 @@ between them affected plans are silently wrong.
   arithmetic and change with it.
 
 - **Development steps:**
-  1. Rewrite the input types and the derivation. 2. Update the service caller
-     (`schedule.service.ts:1508-1540`) and delete the fixed-1440 docblock that justified E8.
-  2. Update the adapter, add `outgoing`. 4. Update the table above. 5. Rewrite the unit suite.
+  1. Commit the hand-derived unit prediction table (T1) before any new code runs.
+  2. Rewrite the input types and the derivation, with separate LOE and N32 branches.
+  3. Update the service caller (`schedule.service.ts:1508-1540`) and delete the fixed-1440 docblock
+     that justified E8.
+  4. Update the adapter, add `outgoing`. 5. Update the table above. 6. Run the unit suite against
+     the committed predictions.
 
 ##### Task M2-T6: the parity matrix and the goldens
 
 - **Description:** invert M0-T1's characterisation into FC-1's equality over the whole matrix. Add
-  FC-3 (weekend) and FC-4 (eight-hour lag, three outcomes) as hand-computed goldens. Add the
-  `TWENTY_FOUR_HOUR` case from US-2 and an LOE-upstream case (no bound).
+  the hand-computed goldens at the conformance tier, each written from the calendar before the run:
+  - FC-3 (forward FS, weekend lag) and FC-4 (forward FS, eight-hour lag, three outcomes);
+  - **FC-9, backward FS** (test-engineer T1; US-3's example): downstream late start Mon
+    `2026-01-19`, FS lag 0, so the upstream linked task's late finish is the end of Fri
+    `2026-01-16` on the Standard calendar. The fixture pins the downstream with `FNLT` Fri
+    `2026-01-23` on a 5-day task and gives the upstream plan an unlinked 20-day task, so the linked
+    task's late finish is set by the bound alone (spec FC-9). Today: Mon `2026-01-19`;
+  - **FC-10, forward FF** (T1): a 3-day downstream starts Wed `2026-01-07` (today Tue `2026-01-06`)
+    and a 6-day downstream starts Fri `2026-01-02` (today and "boundary fixed only" both Mon
+    `2026-01-05`), per spec FC-10.
+    Also the `TWENTY_FOUR_HOUR` case from US-2, and the two skip cases (test-engineer):
+  - **LOE upstream:** no bound, and `upstreamMissingCount === 0`;
+  - **null upstream dates (N32):** no bound, and `upstreamMissingCount === 1`.
 - **Complexity:** M
 - **Dependencies:** M2-T5
-- **Risks:** a matrix too large to read when it fails. → Each cell's name states its axes, and a
-  failure prints both instants.
+- **Risks:**
+  - A matrix too large to read when it fails. → Each cell's name states its axes, and a failure
+    prints both instants.
+  - A golden computed by running the engine and pasting the answer. → Each golden's docblock shows
+    the working-day walk that produced it.
 - **Testing:** verified red by running the matrix against the M0 code (the red run is already on
   record from M0-T1); FC-4 verified red three ways: today's code, the fixed derivation with the
-  migration reverted, and the full fix.
-- **Development steps:** 1. Invert. 2. Goldens. 3. Coverage tags added to
+  migration reverted, and the full fix; FC-9 and FC-10 verified red against today's code, and
+  FC-10's 6-day cell also against a build that fixes only the day boundary; the LOE case verified
+  red against a single shared skip branch.
+- **Development steps:** 1. Invert. 2. Goldens. 3. Skip cases. 4. Coverage tags added to
   `REQUIRED_CROSS_PLAN_TAGS` so the tier-1 gate notices if they are dropped.
 
 ##### Task M2-T7: API e2e through the real programme recalculation
@@ -373,7 +557,9 @@ between them affected plans are silently wrong.
   holding the same two activities joined by an in-plan FS link with the same lag. After a programme
   recalculation and a single-plan recalculation, the two successors' `earlyStart` are equal, and
   equal the FC-3 date. A second pair on an eight-hour calendar covers FC-4. A backward pair checks
-  the upstream's late finish against the in-plan twin with the far end pinned by an `FNLT`.
+  the upstream's late finish against the in-plan twin with the far end pinned by an `FNLT`, **and**
+  against FC-9's hand-computed Fri `2026-01-16`: the twin comparison alone shares the engine's
+  bound functions and cannot see a defect in them (test-engineer T1).
 - **Complexity:** M
 - **Dependencies:** M2-T5
 - **Risks:** a new plan takes the Standard calendar (full-day), which cannot exhibit E6. → The
@@ -418,18 +604,47 @@ on plans they did not touch.`
 >   planner writes, and this is an engine-owned write under the plan advisory lock.
 >   **Testing requirements:** FC-8.
 
+##### Task M3-T0: extract the Kahn step (backend-performance-reviewer P1)
+
+- **Description:** the first draft said M3-T1 would "reuse `programme-order.ts`'s sort over the
+  whole adjacency". It cannot: `resolveProgrammeOrder(targetPlanId, edges)` BFS-es one target's
+  upstream closure (`programme-order.ts:74-85`) and runs Kahn over that closure only (`:87-117`),
+  with no multi-node entry point. (The finding cited `:47-106`; the function is `:45-118`. The
+  substance is exact, spec E31.) Extract the Kahn step as an exported pure function, for example
+  `orderPlansUpstreamFirst(nodes: ReadonlySet<string>, edges: readonly PlanCrossEdge[]): string[]`,
+  counting in-degree only from edges inside `nodes`, keeping the same id-sorted frontier with
+  `compareIds` and the same `ProgrammeCycleError` on a shortfall. `resolveProgrammeOrder` computes
+  its closure and calls it.
+- **Complexity:** S
+- **Dependencies:** none (pure; may land with M1 or before M3-T1)
+- **Risks:** the extraction changes an order. → A move under the ADR-0078 rule: the existing
+  `programme-order` suite passes **unedited** as the before/after oracle, plus unit cases for the
+  new entry point on a multi-root node set and on a residual cycle.
+- **Development steps:** 1. Extract. 2. `resolveProgrammeOrder` calls it. 3. Run the suite unedited. 4. New cases.
+
 ##### Task M3-T1: the service
 
 - **Description:** mirror `finish-milestone-rederive.service.ts`: `pendingPlans()` (live, data date
   set, at least one active cross-plan edge in either direction, `schedule_computed_at` before the
-  lag migration's `finished_at` read from `_prisma_migrations`), ordered topologically over each
-  organisation's `loadOrgAdjacency` with plan id as the tie-break; `recalculateAsSystem` per plan;
-  events `schedule.xplan_rederived` and `schedule.xplan_rederive_plan_failed`.
+  lag migration's `finished_at` read from `_prisma_migrations`), returning `organizationId` with
+  each plan. **Group the global pending set by organisation** (P1); for each organisation load
+  `loadOrgAdjacency` once and call M3-T0's function with that organisation's pending plans as the
+  node set. Recalculate in that order with `recalculateAsSystem`, one plan at a time; events
+  `schedule.xplan_rederived` (with `pending`, `recalculated`, `organizations`, `durationMs`) and
+  `schedule.xplan_rederive_plan_failed`.
 - **Complexity:** M
-- **Dependencies:** M2-T2
-- **Risks:** a second topological sort beside `programme-order.ts`. → Reuse its sort over the whole
-  adjacency rather than write another.
-- **Testing:** unit cases for order and failure isolation.
+- **Dependencies:** M2-T2, M3-T0
+- **Risks:**
+  - A second topological sort beside `programme-order.ts`. → There is none: M3-T0's extracted step
+    is the only one.
+  - A deadlock between plans. → None possible: each plan's advisory lock is acquired and released
+    inside its own transaction, so the service never holds two (P1).
+  - The finish-milestone service recalculates the same plan at boot. → Harmless (idempotent,
+    serialised by the plan lock), stated in the ADR's Consequences with the jump-two-releases case
+    (spec D8).
+- **Testing:** unit cases for order within an organisation, two organisations ordered independently
+  (each topological, with one `loadOrgAdjacency` call per organisation), a chain whose middle plan is not pending (spec D8's stated
+  edge case, asserting the documented behaviour), and failure isolation.
 - **Development steps:** 1. Write. 2. Register in the schedule module. 3. Unit tests.
 
 ##### Task M3-T2: API e2e
@@ -453,9 +668,11 @@ on plans they did not touch.`
 
 ##### Task M4-T1: specialist reviews over the combined diff
 
-- **Description:** api-reviewer, backend-performance-reviewer, test-engineer, database-architect
-  (migration as built), security-reviewer (widened same-organisation reads). Blocking findings are
-  folded with a regression test verified red first; the rest are filed.
+- **Description:** api-reviewer (the read path and the additive field as built),
+  backend-performance-reviewer (the CRUD counting stub, FC-6, the boot service), test-engineer (the
+  goldens and the hand-derived tables), database-architect (migration and record table as built,
+  and the `docs/DEPLOYMENT.md` reverse), security-reviewer (widened same-organisation reads).
+  Blocking findings are folded with a regression test verified red first; the rest are filed.
 - **Complexity:** M
 
 ##### Task M4-T2: documents and registers
@@ -465,12 +682,17 @@ on plans they did not touch.`
     `docs/ROADMAP.md` line (`check:adr-coverage`, ADR-0147).
   - Add amendment notes to ADR-0045 and ADR-0035 §30.5 pointing at ADR-0161.
   - Spec and plan headers: `Accepted — shipped (ADR-0161)` (`check:spec-status`, ADR-0131).
-  - `docs/API.md`, `docs/DATABASE.md`, `docs/DEPLOYMENT.md` ("Rolling back past the cross-plan lag
-    release").
+  - Confirm that the documents M2 changed in its PR are still true of the shipped code:
+    `docs/API.md` (cross-plan section and `:704-705`, M2-T3c), `docs/DATABASE.md` and
+    `docs/DEPLOYMENT.md` ("Rolling back past the cross-plan lag release", M2-T2).
+  - ADR-0161's Consequences state the record table, the additive `lagMinutes`, and the two boot
+    services recalculating one plan (spec D8, §4.9).
   - `docs/TECH_DEBT.md`: close #385 (delete and ledger, the register's convention); file new rows
     for WBS-summary cross-plan endpoints (E18), progress-mode tie dropping, expected-finish resizing,
     and persisted instants (spec §1), each with its trigger.
-  - A changeset: `api` minor (dates change for linked plans; pre-1.0).
+  - The changeset M2-T3c added (`api` minor: dates change for linked plans and the additive
+    `lagMinutes`; `@repo/types` minor) still describes what ships, including M3's boot
+    re-derivation.
 - **Complexity:** S
 
 ##### Task M4-T3: the pre-push gate, run
@@ -482,14 +704,20 @@ on plans they did not touch.`
 ## Sequencing & slices
 
 1. **M0** lands alone: tests green on today's code, a harness, and records. `main` stays releasable.
-2. **Agreement round** on the spec and this plan. CQ-1 to CQ-3 answered.
+   The per-cell prediction's commit precedes the red run's.
+2. **Agreement round** on the spec and this plan: **complete** (2026-09-26). CQ-1 to CQ-3 answered
+   by the product owner's delegation and ratified.
 3. **M1** lands alone and ships dark: a move plus an unreachable branch, proven by unedited goldens.
-4. **M2 and M3** land as separate PRs **in one release**. No Version Packages PR is merged between
-   them.
-5. **M4** closes.
+   M3-T0 (the Kahn extraction) may land here too: it is a pure move with its own unedited oracle.
+4. **M2 is one PR** holding T2–T7 and the changeset (B4): the migration, the write path, the read
+   path, `lagMinutes`, the loads, the derivation and their tests. M2-T1's design document precedes
+   it; M2-T8's cost record may follow it.
+5. **M3 is its own PR, in the same release as M2.** No Version Packages PR is merged between them.
+6. **M4** closes.
 
-No `VITE_*` flag (ADR-0088 D1). The rollback is a commit boundary for M1, and a reverse migration
-plus the previous image for M2–M3 (spec §4.4).
+No `VITE_*` flag (ADR-0088 D1). The rollback is a commit boundary for M1, and for M2–M3 the
+documented five-step reverse (spec §4.4, `docs/DEPLOYMENT.md`) plus the previous image, never a
+redeploy alone.
 
 ## Definition of Done (per task)
 
@@ -499,15 +727,22 @@ Docker build, CI, changelog, version impact). Accessibility is not applicable: n
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                             | Likelihood | Impact | Mitigation                                                                                                  |
-| --------------------------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------- |
-| The §4.2 prediction is wrong somewhere                                                        | med        | med    | FC-2: stop and re-read before building. The prediction is committed first so it can be wrong visibly.       |
-| The shared bound functions hide a defect from the twin comparison                             | low        | high   | Hand-computed goldens FC-3/FC-4 and the unedited Pass-1 golden suite are independent oracles.               |
-| A timed-string trap (midnight dropped, string comparison) survives                            | med        | high   | One formatter (D7), instant composition (D6), structural gate M1-T4, unit cases at midnight in both orders. |
-| The migration resolves a factor against the wrong plan's calendar                             | med        | high   | database-architect design; a migration test seeding every resolution path, each verified red.               |
-| Rollback by redeploy after the migration mixes encodings                                      | low        | high   | Documented reverse migration; `docs/DEPLOYMENT.md`.                                                         |
-| Plans move at boot without a planner pressing anything                                        | high       | med    | Accepted (CQ-3), as for ADR-0155 D9; logged with counts.                                                    |
-| M2 released without M3                                                                        | low        | high   | One release; stated in the sequencing.                                                                      |
-| The sub-day, placed-upstream, progress-mode and expected-finish residuals are read as "fixed" | med        | med    | Named in the spec, the ADR and `docs/API.md`; filed with triggers.                                          |
-| A remote endpoint's inherit sentinel resolves to this plan's calendar (the ADR-0139 shape)    | med        | high   | Parity matrix cells with the two plans on different calendars and an inheriting remote activity.            |
-| The cross-plan path gets slower                                                               | low        | low    | FC-6 bar committed in the spec; counting stub; no-edge path unchanged.                                      |
+| Risk / assumption                                                                                 | Likelihood                | Impact | Mitigation                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------- | ------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The §4.2 prediction is wrong somewhere                                                            | med                       | med    | FC-2: stop and re-read before building. The prediction is committed first so it can be wrong visibly.                                                                |
+| The shared bound functions hide a defect from the twin comparison                                 | low                       | high   | Hand-computed goldens in both directions (FC-3/FC-4 forward FS, FC-9 backward FS, FC-10 FF), the hand-derived unit table, and the unedited Pass-1 golden suite (T1). |
+| The migration overflows `int4` on populated data (restart loop, ADR-0107)                         | med                       | high   | `numeric` arithmetic; ±3650-day rows at factor 480 and 1440 in the test, verified red against `int4` (B1, E28).                                                      |
+| The migration test cannot see a wrong factor                                                      | med                       | high   | Hand-written expected `lag_minutes` and the record-vs-TypeScript differential over every row (B2).                                                                   |
+| The reverse is claimed byte-for-byte while `version` moves                                        | low                       | med    | Changed rows only; `version` bumped again on reverse; `lag_minutes` restored exactly (B3).                                                                           |
+| A split PR leaves `lag_minutes` in two units and the lag silently dropped                         | med                       | high   | M2's T2–T7 are one PR (B4).                                                                                                                                          |
+| The CRUD reads still divide by 1440 after the migration                                           | high (until A1 was found) | high   | M2-T3b, tested through GET and both lists, never only the create echo (A1).                                                                                          |
+| An LOE cross-plan link reports a phantom N32 warning                                              | med                       | low    | Separate LOE and N32 branches; `=== 0` / `=== 1` cases (M2-T6).                                                                                                      |
+| A timed-string trap (midnight dropped, string comparison) survives                                | med                       | high   | One formatter (D7), instant composition (D6), structural gate M1-T4, unit cases at midnight in both orders.                                                          |
+| The migration resolves a factor against the wrong plan's calendar                                 | med                       | high   | database-architect design; a migration test seeding every resolution path, each verified red.                                                                        |
+| Rollback by redeploy after the migration mixes encodings                                          | low                       | high   | Documented reverse migration; `docs/DEPLOYMENT.md`.                                                                                                                  |
+| Plans move at boot without a planner pressing anything                                            | high                      | med    | Accepted (CQ-3), as for ADR-0155 D9; logged with counts.                                                                                                             |
+| M2 released without M3                                                                            | low                       | high   | One release; stated in the sequencing.                                                                                                                               |
+| The two boot services recalculate one plan, or the finish-milestone one orders a downstream first | low                       | low    | Idempotent and lock-serialised; a mis-ordered downstream shows stale, not wrong; stated in ADR-0161 (spec D8).                                                       |
+| The sub-day, placed-upstream, progress-mode and expected-finish residuals are read as "fixed"     | med                       | med    | Named in the spec, the ADR and `docs/API.md`; filed with triggers.                                                                                                   |
+| A remote endpoint's inherit sentinel resolves to this plan's calendar (the ADR-0139 shape)        | med                       | high   | Parity matrix cells with the two plans on different calendars and an inheriting remote activity.                                                                     |
+| The cross-plan path gets slower                                                                   | low                       | low    | FC-6 bar committed in the spec; counting stub; no-edge path unchanged.                                                                                               |
