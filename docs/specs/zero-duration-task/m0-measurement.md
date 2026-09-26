@@ -183,6 +183,53 @@ resourced (live when not a multiple of 4 and not on the deleted resource), so 1,
 The deployed-host reading (plan step 4): the product owner presses Run after the release. Nothing
 waits for it; it sizes the bulk-conversion default only.
 
+## M0-T5: selection-bar width
+
+`apps/web/measure-toolbar/zero-duration-foot-row.spec.ts`, beside `m-f-foot-row.spec.ts`, run with
+`pnpm --filter @repo/web exec playwright test --config playwright.measure-toolbar.config.ts
+measure-toolbar/zero-duration-foot-row.spec.ts` against this worktree's API and dev server.
+
+**Where it bypasses the product** (ADR-0081 §3): the item is not registered until M2, so with a
+zero-duration task selected the harness clones the bar's own `Edit` control, relabels the clone and
+inserts it after the original. The clone has the real control's classes, icon and padding, so its
+width is what a registered item with that label would take. It cannot show a different order or a
+second item appearing with it. The last candidate is the clone with its text removed, which
+approximates an icon-only item.
+
+Two selections: an **unplaced** zero-duration task (the common case) and a **placed** one, which
+also shows `Clear visual start` (the widest bar the item will join). The foot row is 51 px at rest
+at every width. "Slack" is the room the dock outlet has left beside the bar's card when the bar is
+on one line.
+
+| Width | Selection | Today             | `Make milestone…` (151 px) | `Make milestone` (139 px) | `Milestone…` (112 px) | icon only (38 px) |
+| ----- | --------- | ----------------- | -------------------------- | ------------------------- | --------------------- | ----------------- |
+| 1920  | unplaced  | 1 line, slack 344 | 1 line, slack 189          | 1 line, slack 201         | 1 line, slack 228     | 1 line, slack 302 |
+| 1920  | placed    | 1 line, slack 194 | 1 line, slack 39           | 1 line, slack 51          | 1 line, slack 78      | 1 line, slack 152 |
+| 1646  | unplaced  | 1 line, slack 70  | **2 lines, +36 px**        | **2 lines, +36 px**       | **2 lines, +36 px**   | 1 line, slack 28  |
+| 1646  | placed    | 2 lines, +36 px   | 2 lines, +36 px            | 2 lines, +36 px           | 2 lines, +36 px       | 2 lines, +36 px   |
+| 1440  | unplaced  | 2 lines, +36 px   | 3 lines, +76 px            | 3 lines, +76 px           | 2 lines, +36 px       | 2 lines, +36 px   |
+| 1440  | placed    | 3 lines, +76 px   | 3 lines, +76 px            | 3 lines, +76 px           | 3 lines, +76 px       | 3 lines, +76 px   |
+
+The widths check against the slack: at 1920 unplaced, 344 − 189 = 155 = 151 + the bar's 4 px gap.
+
+**Verdict: no labelled candidate meets FC-6 at 1646, so no label is selected.** With an unplaced
+zero-duration task selected at 1646 the outlet has **70 px** beside the bar. The shortest label,
+`Milestone…`, needs 116 (112 + gap), so every labelled candidate wraps the foot row to two lines and
+costs the diagram 36 px on the product owner's own screen. At 1920 all three fit. The one variant
+that keeps 1646 on one line is an icon-only control (about 38 px, 28 px to spare), which the spec
+does not offer and which would need an ADR-0117 name tooltip. This is the case the plan's risk names:
+"if none does, the product owner is shown the number (FC-6)". The spec's design is not changed
+here; the choice (accept the 36 px at 1646, go icon-only there, or place the action elsewhere on the
+bar) goes to the product owner before M2 registers the item.
+
+The placed rows already wrap at 1646 today, from `Clear visual start` (M-F-T6 accepted that cost),
+so a new item changes nothing there. At 1440 the unplaced bar already wraps today; `Milestone…` and
+icon-only keep it at two lines, and the two longer labels take it to three.
+
+The table menu has no such constraint, so if the bar takes a short or icon-only form, the table keeps
+`Make milestone…`; that decision is recorded with the bar's, in M2, where `MAKE_MILESTONE_LABEL` is
+defined.
+
 ## M0-T7: `check:engine-parity`
 
 ### The oracle for the row-lookup extraction
