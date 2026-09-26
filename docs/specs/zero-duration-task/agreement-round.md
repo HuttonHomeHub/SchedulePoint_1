@@ -328,3 +328,33 @@ Suggested:
 
 - The stripper's blind spot has two forms, not one. A `/* */` inside a string or template literal
   is stripped as well as a `//`. Name both in the docblock and in the `.mjs` port.
+
+### devops-reviewer: one blocking finding
+
+Confirmed:
+
+- The CI step inherits `quality`'s `fetch-depth: 0` and the `origin/main` fetch (`ci.yml:32,144-148`).
+- The gate is not advisory under ADR-0124 D4.
+- `ci-roster.json` stays `exempt: {}`.
+- Landing at M0 is right.
+- The self-expiring declaration fixes #194's mechanism.
+
+Blocking:
+
+- **O1: limb 3's row lookup is unspecified, and the obvious version misses #384 itself.**
+  `doc-register.mjs` exports no numbered-row lookup. The working one (`rowNumber`, `NOT_ITEMS`,
+  `sections(md, 2)` **and** `sections(md, 3)`) is private to `check-debt-status.mjs:39-66`, and a
+  second copy lives in `check-reconcile-due.mjs:111`. #384 is a `###` row
+  (`docs/TECH_DEBT.md:11712`), so a `sections(md, 2)`-only lookup reports the declaration stale on
+  M0's first commit. None of the five mutations uses a real-shaped fixture.
+  - **Decision (the robust option):** extract `openDetailedRow(md, number)` into
+    `scripts/lib/doc-register.mjs`, used by `check-debt-status.mjs` and the new gate. Pin it with a
+    `###`-shaped fixture (a sixth mutation), verified red against a `sections(md, 2)`-only lookup.
+    `check-debt-status`'s suite is the unedited oracle. `check-reconcile-due`'s copy moves too if
+    its semantics match; otherwise the reason is recorded.
+
+Suggested:
+
+- State in D10/R12 that limb 3 is unconditional on the diff: it fails any push while `active`
+  once #384 stops being open, unlike limbs 1–2.
+- On `main`, limbs 1–2 are empty and only limb 3 bites. Say so.
