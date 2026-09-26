@@ -411,6 +411,88 @@ describe('packGutterChannels', () => {
     expect([zig.line[1]!.y, zag.line[1]!.y]).toEqual([100, 97]);
   });
 
+  /**
+   * **Three runs, not two** (`docs/TECH_DEBT.md` #395 item 8). The repair used to visit pairs once
+   * in sorted order and swap each wrong pair, which settles two runs and not three: a later swap can
+   * undo an earlier one. Enumerating every three-run group (each end above or below the gutter, 64
+   * cases) found two left wrong; this is one of them. `a` leaves above and arrives below, `b` does
+   * both below, `c` both above. `a` must sit above `b` (they differ only at the left end, where `a`
+   * is above) and `c` above both.
+   */
+  it('orders three same-extent runs so every pair with a preference gets it', () => {
+    const run = (key: string, y0: number, y1: number) => ({
+      key,
+      fromLane: 0,
+      toLane: 3,
+      line: [
+        { x: 0, y: y0 },
+        { x: 0, y: 100 },
+        { x: 50, y: 100 },
+        { x: 50, y: y1 },
+      ],
+    });
+    const a = run('a', 70, 130);
+    const b = run('b', 130, 130);
+    const c = run('c', 70, 70);
+    packGutterChannels([a, b, c], CLEAR_HALF_BAND, GUTTER);
+    const y = (r: { line: Point[] }) => r.line[1]!.y;
+    expect(y(c)).toBeLessThan(y(a));
+    expect(y(a)).toBeLessThan(y(b));
+    // The swap is free: the three runs still occupy the same three channels between them.
+    expect([y(a), y(b), y(c)].sort((p, q) => p - q)).toEqual([97, 100, 103]);
+  });
+
+  /**
+   * The general property, over all 64 three-run groups: every pair whose ends agree on an order is
+   * in it, and a pair whose two ends disagree is not asked for one. Pins the rank rule rather than
+   * one shape, so a later change to the ordering cannot pass the case above by accident.
+   */
+  it('satisfies every ordered pair across all three-run groups', () => {
+    type Side = 'up' | 'down';
+    const yOf = (s: Side) => (s === 'up' ? 70 : 130);
+    const kinds: [Side, Side][] = [
+      ['up', 'up'],
+      ['up', 'down'],
+      ['down', 'up'],
+      ['down', 'down'],
+    ];
+    const wrong: string[] = [];
+    for (const k0 of kinds) {
+      for (const k1 of kinds) {
+        for (const k2 of kinds) {
+          const ks = [k0, k1, k2];
+          const rs = ks.map(([s0, s1], i) => ({
+            key: String(i),
+            fromLane: 0,
+            toLane: 3,
+            line: [
+              { x: 0, y: yOf(s0) },
+              { x: 0, y: 100 },
+              { x: 50, y: 100 },
+              { x: 50, y: yOf(s1) },
+            ],
+          }));
+          packGutterChannels(rs, CLEAR_HALF_BAND, GUTTER);
+          for (let i = 0; i < 3; i += 1) {
+            for (let j = i + 1; j < 3; j += 1) {
+              // +1: `i` should be above `j`; -1: below; 0: no end asks; NaN: the ends disagree.
+              let want = 0;
+              for (const e of [0, 1] as const) {
+                if (ks[i]![e] === ks[j]![e]) continue;
+                const here = ks[i]![e] === 'up' ? 1 : -1;
+                want = want === 0 || want === here ? here : Number.NaN;
+              }
+              if (want === 0 || Number.isNaN(want)) continue;
+              const above = rs[i]!.line[1]!.y < rs[j]!.line[1]!.y;
+              if ((want === 1) !== above) wrong.push(`${ks.join(' | ')}: runs ${i} and ${j}`);
+            }
+          }
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
   it('leaves one run on the boundary and moves nothing', () => {
     const cs = [vhv(100, 0, 50)];
     expect(packGutterChannels(cs, CLEAR_HALF_BAND, GUTTER)).toBe(0);

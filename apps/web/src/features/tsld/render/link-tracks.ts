@@ -491,17 +491,14 @@ export function splitResidueTracks(
         for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return a[i]! < b[i]!;
         return false;
       };
-      const chosen =
-        west.fail === null && (east.fail !== null || !better(east.cost, west.cost))
-          ? west
-          : east.fail === null
-            ? east
-            : null;
-      if (chosen === null) {
-        const reason = west.fail ?? east.fail ?? 'occupied';
-        refused[reason] = (refused[reason] ?? 0) + 1;
+      if (west.fail !== null && east.fail !== null) {
+        // Both sides refused; the track is counted under the west side's reason, the side a tie
+        // would have taken.
+        refused[west.fail] = (refused[west.fail] ?? 0) + 1;
         continue;
       }
+      const chosen =
+        west.fail === null && (east.fail !== null || !better(east.cost, west.cost)) ? west : east;
       split += 1;
       segments += track.length;
       splitAt.push(x);

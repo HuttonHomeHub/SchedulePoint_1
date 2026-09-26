@@ -11844,11 +11844,13 @@ not block on.
 7. **`text-index.ts` repeats the glyph index's shape** (component): bucket by lane, sort by x, keep
    a maximum width, binary-search the first box that can reach x. Disclosed in its docblock; a shared
    generic index would remove the second copy.
-8. **Three same-extent gutter runs are untested** (component). `orderSameExtentRuns` is tested for
-   two; with three, its pairwise swaps in one pass may not satisfy every pair's preference.
-9. **`route-frame.ts`'s wiring into the track pass and the painter's offset head trim have no unit
-   case** (test). Both are reached only by the journey; a scene that survives phase 3 with one opposed
-   pair would pin the marshalling and the trimmed arrowhead directly.
-10. **`textWidthTable` has no direct test** (component): its null-context throw and font restore.
-11. **A dead fallback** (test): in `splitResidueTracks`, `west.fail ?? east.fail ?? 'occupied'` is
-    reached only when both sides failed, so the last two operands never apply.
+
+**Items 8–11 closed 2026-09-26.** Item 8 turned out to be a real defect, not just an untested
+case: enumerating every three-run group (each end above or below the gutter, 64 cases) found two
+left in the wrong order, because one sweep of pairwise swaps settles two runs and not three.
+`orderSameExtentRuns` now ranks each run by its ends and hands the group's channels out in rank
+order (`link-routing.test.ts`, two cases, both red against the old code). No route moved on any of
+the 48 probe rows, so the defect was latent. Item 9 is `route-frame.tracks.test.ts` (the frame
+writes the split lines back; the painter trims an offset head to √(reach² − δ²)), item 10 is
+`text-width-table.test.ts`, and item 11's dead fallback is gone. Each new case was run against a
+deliberate break of the code it guards.
