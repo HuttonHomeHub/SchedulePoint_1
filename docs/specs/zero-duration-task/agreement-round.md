@@ -155,3 +155,38 @@ Suggested:
   so FC-7's "same query count" holds by a named change.
 - Pin the accepted zero-duration `RESOURCE_DEPENDENT` exception with one characterisation case in
   M2-T1.
+
+## api-reviewer: AGREE-WITH-CHANGES
+
+It confirmed:
+
+- No batch path touches `type`.
+- Interchange writes bypass `ActivitiesService.update`.
+- An explicit `null` counts as sent.
+- The compiler forces `advisories` onto the DTO (`implements ScheduleHealthReport`).
+- The totality suite does no whole-object equality.
+- `bucketFindings` cannot misfile an advisory.
+- ADR-0162 is free.
+
+Blocking:
+
+- **P1: the type families D3 covers are unstated.** The editor offers `LEVEL_OF_EFFORT`,
+  `WBS_SUMMARY` and `RESOURCE_DEPENDENT` (`activity-schemas.ts:145-149`), and `update()` does not
+  guard a type change into or out of them. State which `ActivityType` values the condition covers.
+  Add an M2-T1 unit case for a zero-duration `RESOURCE_DEPENDENT` crossing the convention, the
+  exception D3 already names.
+- **P2: M3 has no changeset step.** `advisories` is a new field on a public response and a new
+  panel section.
+
+Suggested:
+
+- A same-request duration change: `PATCH {type: 'TASK', durationDays: 5}` on a `FINISH_MILESTONE`
+  keys off the **stored** duration. Verify it red against a post-patch check.
+- Make "a null field is a no-op" its own row for each of the five fields.
+- G1/G2 live in `schedule-health-vocabulary.structural.test.ts:34-68` and need an explicit edit for
+  `HEALTH_ADVISORY_IDS`. G4 needs none.
+- The M5 ordering guard should be programmatic rather than a PR-description check (see C3).
+
+## Round complete
+
+All six reviewers returned AGREE-WITH-CHANGES. None disagreed.
