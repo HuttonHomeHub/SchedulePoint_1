@@ -13,6 +13,9 @@ import {
 } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityRepository } from '../activities/activity.repository';
+import { daysToMinutes } from '../activities/day-factor';
+import { CalendarRepository } from '../calendars/calendar.repository';
+import type { WithLagDayFactor } from '../dependencies/lag-day-factor';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -22,13 +25,11 @@ import {
   CrossPlanDependencyRepository,
   type CrossPlanDependencyWithEndpoints,
 } from './cross-plan-dependency.repository';
+import { attachCrossPlanLagDayFactors } from './cross-plan-lag-calendar';
 import type { CreateCrossPlanDependencyDto } from './dto/create-cross-plan-dependency.dto';
 
-/**
- * Minutes in one full calendar day — the fixed day↔minute factor (ADR-0036 §4.2), mirroring the
- * dependencies service. The public API stays day-denominated (`lagDays`); storage is signed minutes.
- */
-const MINUTES_PER_DAY = 1440;
+/** A cross-plan link carrying the factor its `lagDays` is measured in (#385, api-reviewer A1). */
+export type CrossPlanDependencyWithFactor = WithLagDayFactor<CrossPlanDependencyWithEndpoints>;
 
 /** Machine-readable reasons carried in a cross-plan {@link ConflictError}/{@link ValidationError}. */
 export const CROSS_PLAN_DEPENDENCY_CONFLICT = {
@@ -62,14 +63,39 @@ export class CrossPlanDependenciesService {
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     @InjectPinoLogger(CrossPlanDependenciesService.name) private readonly logger: PinoLogger,
+    private readonly calendars: CalendarRepository,
   ) {}
+
+  /**
+   * Attach each link's lag day↔minute factor before any response is built (#385 M2-T3b,
+   * api-reviewer A1). The in-plan service's shape (`dependencies.service.ts`), across two plans:
+   * every read of a cross-plan link divides its stored working minutes by the factor of the calendar
+   * its lag is measured on, which is the factor its write multiplied by. Batched per page
+   * ({@link attachCrossPlanLagDayFactors}).
+   */
+  private withLagDayFactors(
+    rows: readonly CrossPlanDependencyWithEndpoints[],
+  ): Promise<CrossPlanDependencyWithFactor[]> {
+    return attachCrossPlanLagDayFactors(
+      { db: this.prisma, plans: this.plans, calendars: this.calendars },
+      rows,
+    );
+  }
+
+  /** {@link withLagDayFactors} for one link. */
+  private async withLagDayFactor(
+    row: CrossPlanDependencyWithEndpoints,
+  ): Promise<CrossPlanDependencyWithFactor> {
+    const [decorated] = await this.withLagDayFactors([row]);
+    return decorated!;
+  }
 
   async listByPlan(
     principal: Principal,
     orgSlug: string,
     planId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: CrossPlanDependencyWithEndpoints[]; meta: PageMeta }> {
+  ): Promise<{ items: CrossPlanDependencyWithFactor[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:read', organization.id);
     await this.loadActivePlan(planId, organization.id);
@@ -88,7 +114,7 @@ export class CrossPlanDependenciesService {
     orgSlug: string,
     activityId: string,
     query: { limit: number; cursor?: string },
-  ): Promise<{ items: CrossPlanDependencyWithEndpoints[]; meta: PageMeta }> {
+  ): Promise<{ items: CrossPlanDependencyWithFactor[]; meta: PageMeta }> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:read', organization.id);
     await this.loadActiveActivity(activityId, organization.id);
@@ -106,20 +132,20 @@ export class CrossPlanDependenciesService {
     principal: Principal,
     orgSlug: string,
     id: string,
-  ): Promise<CrossPlanDependencyWithEndpoints> {
+  ): Promise<CrossPlanDependencyWithFactor> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:read', organization.id);
 
     const link = await this.crossPlanDependencies.findActiveByIdInOrg(id, organization.id);
     if (!link) throw new NotFoundError('Cross-plan dependency not found.');
-    return link;
+    return this.withLagDayFactor(link);
   }
 
   async create(
     principal: Principal,
     orgSlug: string,
     dto: CreateCrossPlanDependencyDto,
-  ): Promise<CrossPlanDependencyWithEndpoints> {
+  ): Promise<CrossPlanDependencyWithFactor> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
     this.assertCan(principal, 'dependency:link_cross_plan', organization.id);
 
@@ -167,7 +193,26 @@ export class CrossPlanDependenciesService {
             reason: CROSS_PLAN_DEPENDENCY_CONFLICT.DUPLICATE_CROSS_PLAN_DEPENDENCY,
           });
         }
-        return this.crossPlanDependencies.create(
+        // `lagDays` converts to working minutes on the link's lag calendar (#385, spec D4 and
+        // CQ-1), exactly as an in-plan lag does (ADR-0068 §4), through the one cross-plan rule
+        // that the read path and the derivation also use. The factor is resolved from the two
+        // endpoint activities as just loaded, each through its OWN plan (B5), inside the
+        // transaction so it reads what the insert is about to reference.
+        const [resolved] = await attachCrossPlanLagDayFactors(
+          { db: tx, plans: this.plans, calendars: this.calendars },
+          [
+            {
+              organizationId: organization.id,
+              lagCalendar: dto.lagCalendar ?? 'PROJECT_DEFAULT',
+              predecessorId: predecessor.id,
+              successorId: successor.id,
+              predecessor,
+              successor,
+            },
+          ],
+        );
+        const lagDayFactorMinutes = resolved!.lagDayFactorMinutes;
+        const created = await this.crossPlanDependencies.create(
           {
             organizationId: organization.id,
             predecessorPlanId,
@@ -175,13 +220,16 @@ export class CrossPlanDependenciesService {
             predecessorId: dto.predecessorActivityId,
             successorId: dto.successorActivityId,
             type,
-            ...(dto.lagDays !== undefined ? { lagMinutes: dto.lagDays * MINUTES_PER_DAY } : {}),
+            ...(dto.lagDays !== undefined
+              ? { lagMinutes: daysToMinutes(dto.lagDays, lagDayFactorMinutes) }
+              : {}),
             ...(dto.lagCalendar ? { lagCalendar: dto.lagCalendar } : {}),
             createdBy: principal.userId,
             updatedBy: principal.userId,
           },
           tx,
         );
+        return { ...created, lagDayFactorMinutes };
       });
       this.logger.info(
         {
@@ -241,14 +289,15 @@ export class CrossPlanDependenciesService {
     return error;
   }
 
-  private paginate(
+  /** Trim the look-ahead row, then attach the factors to the page that is actually returned. */
+  private async paginate(
     rows: CrossPlanDependencyWithEndpoints[],
     limit: number,
-  ): { items: CrossPlanDependencyWithEndpoints[]; meta: PageMeta } {
+  ): Promise<{ items: CrossPlanDependencyWithFactor[]; meta: PageMeta }> {
     const hasMore = rows.length > limit;
     const items = hasMore ? rows.slice(0, limit) : rows;
     const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
-    return { items, meta: { nextCursor, hasMore } };
+    return { items: await this.withLagDayFactors(items), meta: { nextCursor, hasMore } };
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {

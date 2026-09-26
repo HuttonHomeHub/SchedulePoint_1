@@ -4,6 +4,11 @@ import { join } from 'node:path';
 import { type LagCalendarSource, type Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { CalendarRepository } from '../src/modules/calendars/calendar.repository';
+import { attachCrossPlanLagDayFactors } from '../src/modules/cross-plan-dependencies/cross-plan-lag-calendar';
+import { PlanRepository } from '../src/modules/plans/plan.repository';
+import type { PrismaService } from '../src/prisma/prisma.service';
+
 import { clearDomainData } from './audit-reset';
 
 /**
@@ -901,14 +906,48 @@ describe.skipIf(!hasDatabase)('cross-plan lag re-encoding migration (e2e)', () =
   });
 
   /**
-   * **M2-T3's differential check lands here** (spec FC-7, database-architect B2). For every seeded
-   * row, the record's `day_factor_minutes` must equal the factor the M2-T3 cross-plan lag-calendar
-   * TypeScript function returns for the same link. It is the check that catches the SQL and the
-   * TypeScript being two spellings of one rule. It needs that function, which does not exist yet;
-   * `CASES[*].expectedFactor` is the hand-written value both must agree with. Red against a
-   * factor-1440 row that should resolve to 480.
+   * **M2-T3's differential check** (spec FC-7, database-architect B2). For every seeded row, the
+   * record's `day_factor_minutes` equals the factor the ONE cross-plan lag-calendar rule returns
+   * for the same link, AND both equal `CASES[*].expectedFactor`, the hand-written value. The SQL and
+   * the TypeScript are two spellings of one rule; this is what holds them together.
+   *
+   * The TypeScript side is `attachCrossPlanLagDayFactors` — the assembly the read path runs, not
+   * only the pure `crossPlanLagCalendarId` — fed exactly what the product loads: the link, its two
+   * endpoint activities' `type`/`calendarId`/`planId` (B5: the endpoint's own `plan_id`), those
+   * plans' calendars, and the driving calendars from `loadDrivingCalendarMapForRows` scoped by the
+   * link's own organisation. So a disagreement here is a disagreement between what the migration
+   * wrote and what every read after it will divide by.
+   *
+   * Every seeded link is compared, soft-deleted included (the migration converts those too, so a
+   * restored link reads back through this rule). Verified red: resolving `PROJECT_DEFAULT` on the
+   * predecessor's plan (the PD cases read 600, not 480), and dropping the driver (`PRED_DRIVEN`
+   * reads 600, not 420).
    */
-  it.todo(
-    'M2-T3 differential: record.day_factor_minutes equals the cross-plan lag-calendar function for every seeded link',
-  );
+  it('M2-T3 differential: record.day_factor_minutes equals the cross-plan lag-calendar function for every seeded link', async () => {
+    const world = await seed();
+    await convert();
+    const records = await prisma.crossPlanLagMigration.findMany();
+    const recordFactor = new Map(records.map((r) => [r.crossPlanDependencyId, r.dayFactorMinutes]));
+
+    const endpoint = { select: { id: true, type: true, calendarId: true, planId: true } } as const;
+    const rows = await prisma.crossPlanDependency.findMany({
+      include: { predecessor: endpoint, successor: endpoint },
+    });
+    const service = prisma as unknown as PrismaService;
+    const resolved = await attachCrossPlanLagDayFactors(
+      {
+        db: prisma,
+        plans: new PlanRepository(service),
+        calendars: new CalendarRepository(service),
+      },
+      rows,
+    );
+    const typescript = new Map(resolved.map((r) => [r.id, r.lagDayFactorMinutes]));
+
+    const keyed = (source: ReadonlyMap<string, number>) =>
+      Object.fromEntries(CASES.map((c) => [c.key, source.get(world.linkIds[c.key]!)]));
+    const expected = Object.fromEntries(CASES.map((c) => [c.key, c.expectedFactor]));
+    expect(keyed(typescript)).toEqual(expected);
+    expect(keyed(recordFactor)).toEqual(keyed(typescript));
+  });
 });

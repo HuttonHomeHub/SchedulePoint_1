@@ -36,7 +36,10 @@ export class CreateCrossPlanDependencyDto {
     minimum: -3650,
     maximum: 3650,
     default: 0,
-    description: 'Signed lag in working days (a lead is negative).',
+    description:
+      'Signed lag in working days (a lead is negative), converted on write to working minutes ' +
+      'on the lag calendar (`lagCalendar`), as an in-plan lag is (ADR-0068 §4, #385). A ' +
+      'cross-plan link accepts whole days only; the stored minutes read back as `lagMinutes`.',
   })
   @IsOptional()
   @Type(() => Number)
@@ -51,7 +54,9 @@ export class CreateCrossPlanDependencyDto {
     description:
       'The calendar the lag is measured on (ADR-0036 §6). Defaults to PROJECT_DEFAULT. ' +
       'TWENTY_FOUR_HOUR measures the lag as elapsed time (e.g. concrete cure); ' +
-      'PREDECESSOR/SUCCESSOR coincide with the plan calendar until per-activity calendars land.',
+      'PROJECT_DEFAULT is the SUCCESSOR activity’s plan’s calendar (the link’s home plan, #385 ' +
+      'CQ-2); PREDECESSOR/SUCCESSOR are that endpoint activity’s scheduling calendar, ' +
+      'inheriting from its OWN plan.',
   })
   @IsOptional()
   @IsEnum(LagCalendarSource)

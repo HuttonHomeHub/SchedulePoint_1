@@ -5,8 +5,25 @@ import { Prisma, type DependencyType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
-/** Endpoint fields embedded in a cross-plan dependency response (no N+1 — loaded via include). */
-const endpointSelect = { id: true, code: true, name: true } as const;
+/**
+ * Endpoint fields embedded in a cross-plan dependency response (no N+1 — loaded via include).
+ *
+ * `type`, `calendarId` and `planId` ride along because a lag's day↔minute factor is resolved from
+ * the endpoint the relationship's `lagCalendar` names, inheriting from that endpoint's OWN plan
+ * (#385 M2-T3b; the one rule is `cross-plan-lag-calendar.ts`). Selecting them here costs nothing on
+ * a join that already runs, and is the alternative to a second query per row. The plan is read
+ * through the activity's `planId`, never the link's denormalised plan ids (database-architect B5).
+ * They are selected, not mapped into the response — the DTO's endpoint summary is unchanged
+ * (`CrossPlanDependencyResponseDto.from` projects `id`, `code` and `name` by name).
+ */
+const endpointSelect = {
+  id: true,
+  code: true,
+  name: true,
+  type: true,
+  calendarId: true,
+  planId: true,
+} as const;
 
 const withEndpoints = {
   include: {

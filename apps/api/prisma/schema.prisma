@@ -1717,11 +1717,13 @@ model CrossPlanDependency {
   predecessorId     String @map("predecessor_id") @db.Uuid
   successorId       String @map("successor_id") @db.Uuid
 
-  // Logic (Planner-owned), IDENTICAL to ActivityDependency. `lag_minutes` is a SIGNED
-  // working-MINUTE lag (negative = lead), bounded to −5_256_000…5_256_000 (≈ ±10 y) by
-  // ck_cross_plan_dependencies_lag_minutes_range (raw SQL); `lag_calendar` is the
-  // ADR-0036 §6 resolution seam (default PROJECT_DEFAULT is behaviour-preserving). The
-  // public API stays day-denominated; the service scales days↔minutes.
+  // Logic (Planner-owned), as ActivityDependency. `lag_minutes` is a SIGNED working-MINUTE
+  // lag on the resolved lag calendar (negative = lead), bounded to −5_256_000…5_256_000
+  // (≈ ±10 y) by ck_cross_plan_dependencies_lag_minutes_range (raw SQL). It was
+  // `lagDays × 1440` whatever the calendar until 20260926120000 re-encoded it (#385).
+  // `lag_calendar` is the ADR-0036 §6 resolution seam, with ONE cross-plan difference:
+  // PROJECT_DEFAULT is the SUCCESSOR activity's plan's calendar (#385 CQ-2), resolved by
+  // `cross-plan-lag-calendar.ts`. The public API takes whole days; the service converts.
   type        DependencyType    @default(FS)
   lagMinutes  Int               @default(0) @map("lag_minutes")
   lagCalendar LagCalendarSource @default(PROJECT_DEFAULT) @map("lag_calendar")
