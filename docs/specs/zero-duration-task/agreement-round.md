@@ -310,3 +310,21 @@ and let the agents ratify them"). The orchestrator's calls were applied, with th
 - **test-engineer**: E34's sharpened discriminator (FC-3 (a) and (b)).
 - **devops-reviewer** (not in this round): the new CI step and the self-expiring declaration (spec
   D10, plan M0-T7).
+
+## Re-confirmation of the fold
+
+### test-engineer: confirmed
+
+- **FC-3.** Re-derived by hand. `finishMilestoneDateInstant(cal, D−1) = rollForwardToWorking(cal,
+abs(D))` holds for every D by substitution. A working-day shift gives the same instant, and the
+  same round trip from any working day. FC-3 (a), the stored value after conversion, and FC-3 (b),
+  a round trip from a Sunday that lands on Monday under the wrong rule, both discriminate.
+- **The engine-parity gate.** Sound. Its mutation list is consistent: three must fail and two must
+  pass.
+- **P1.** `ActivityType` has seven members, so D3's table is exhaustive. The HAMMOCK, LOE and
+  WBS_SUMMARY claims hold (`compute.ts:296-345,503-560`).
+
+Suggested:
+
+- The stripper's blind spot has two forms, not one. A `/* */` inside a string or template literal
+  is stripped as well as a `//`. Name both in the docblock and in the `.mjs` port.
