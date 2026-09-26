@@ -16,6 +16,7 @@ export {
 } from './working-time-calendar';
 export { computeSchedule, type ComputeOptions, type EngineOutput } from './compute';
 export { applyLag, backwardUpperBound, forwardLowerBound } from './edge-bounds';
+export { finishDateInstant, formatExternalInstant, startDateInstant } from './instants';
 export { levelSchedule } from './level';
 export { computeFloatPaths, type FloatPath } from './float-paths';
 export {

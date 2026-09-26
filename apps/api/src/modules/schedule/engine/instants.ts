@@ -131,4 +131,23 @@ export function finishDateInstant(
   return rollBackwardToWorking(cal, anchorAbs, instantToAbsMinutes(nextCalendarDay(date)));
 }
 
+/**
+ * **The one formatter for an instant handed to the engine's external-date seam** (#385, spec D7).
+ * It always writes `YYYY-MM-DDTHH:MM`, including `T00:00`.
+ *
+ * {@link absMinutesToInstant} drops `T00:00` and returns a bare date, and a bare date for a finish
+ * milestone means the END of that day ({@link finishMilestoneDateInstant}), so a midnight instant
+ * formatted that way is read one day late (spec E12). On a 24-hour or full-day calendar every day
+ * boundary is a midnight, so that is the common case there. Keeping the time makes the value an
+ * instant for every reader: `clampExternalForwardStart` and `clampExternalBackwardFinish` both read a
+ * value longer than ten characters as the instant it names.
+ *
+ * `external-instant.structural.spec.ts` holds this to being the only producer of a timed external
+ * string, and the cross-plan derivation to being its only caller outside the engine.
+ */
+export function formatExternalInstant(abs: number): string {
+  const instant = absMinutesToInstant(abs);
+  return instant.length > 10 ? instant : `${instant}T00:00`;
+}
+
 const MINUTES_PER_DAY = 1440;

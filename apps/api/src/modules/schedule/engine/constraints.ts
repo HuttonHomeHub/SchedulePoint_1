@@ -2,7 +2,7 @@ import type { ActivityType, ConstraintType } from '@repo/types';
 
 import { advanceWorking, finishDateInstant, startDateInstant } from './instants';
 import type { EngineActivity } from './types';
-import type { WorkingTimeCalendar } from './working-time-calendar';
+import { instantToAbsMinutes, type WorkingTimeCalendar } from './working-time-calendar';
 
 /**
  * The six constraint kinds the engine applies as date-clamp arithmetic. `MANDATORY_START` /
@@ -244,16 +244,21 @@ export function clampExternalBackwardFinish(
   ignoreExternal: boolean,
 ): number {
   if (ignoreExternal || !activity.externalLateFinish) return logicLateFinish;
-  // The bound is the exclusive end of the external day's working time (its last working minute + 1),
-  // measured on the activity's calendar — mirroring an FNLT constraint's `finishAbs` (see resolvePair).
-  // A zero-duration milestone finishes at its start instant.
-  const externalFinishAbs = finishDateInstant(
-    calendar,
-    dataDateAbs,
-    activity.externalLateFinish,
-    activity.type,
-    activity.durationMinutes,
-  );
+  const external = activity.externalLateFinish;
+  // A value carrying a time of day (`YYYY-MM-DDTHH:MM`) is already the bound, for every activity type
+  // (#385, spec D7): "a date carrying a time of day is already an instant" (`instants.ts`). It is
+  // used as it is, not rolled, because `compute.ts`'s backward pass rolls the tightest bound once
+  // after this clamp, exactly as it rolls an in-plan `backwardUpperBound`. No persisted column
+  // produces such a value (the service formats the M1 columns as bare dates); only
+  // `formatExternalInstant` does, and `external-instant.structural.spec.ts` holds its only caller
+  // outside the engine to the cross-plan derivation.
+  // A bare date's bound is the exclusive end of that day's working time (its last working minute
+  // + 1), measured on the activity's calendar — mirroring an FNLT constraint's `finishAbs` (see
+  // resolvePair). A zero-duration milestone finishes at its start instant.
+  const externalFinishAbs =
+    external.length > 10
+      ? instantToAbsMinutes(external)
+      : finishDateInstant(calendar, dataDateAbs, external, activity.type, activity.durationMinutes);
   return Math.min(logicLateFinish, externalFinishAbs);
 }
 
