@@ -66,3 +66,61 @@ Suggested:
   in the `@repo/types` interface.
 - ADR-0162 should say why the conversion PATCH stays `PLAN_CONTENT` and does not cross ADR-0073's
   blast-radius test the way `activity.reparented` did.
+
+## accessibility-reviewer: AGREE-WITH-CHANGES
+
+Blocking:
+
+- **A1: focus on confirm cannot work while the dialog is modal.** A `.focus()` outside an open
+  `showModal()` dialog is a no-op (top-layer inertness), and `close()` then restores focus to the
+  make-milestone button, which unmounted when the type changed. Focus drops to `<body>`.
+  - Use ADR-0149 D8's pattern (`TsldPanel.tsx:2329-2346`, `ArrangeDialog.tsx:29-31`): focus the
+    activity's listbox option (canvas) or Gantt row **before** the dialog opens, so native `close()`
+    returns there on confirm, cancel and error alike.
+- **A2: focus, then announce** (`use-focus-handoff.ts:54-61`). The plan announces before it moves
+  focus. With A1 no new focus call happens near the announcement, but the plan states the order.
+- **A3: the reused lists lack explicit roles.** `ScheduleHealthPanel.tsx:253,417`,
+  `HealthPrintDocument.tsx:86,109,135` and `InterchangeReportTable.tsx:87,89` render bare `<ul>`,
+  which Tailwind v4's Preflight strips of its role in WebKit (ADR-0122, ADR-0144). Add
+  `role="list"` / `role="listitem"` in the shared components, which fixes the existing lists too.
+
+Suggested:
+
+- If the bar's visible label is "Milestone…", the accessible name keeps the verb ("Make
+  milestone"), the `zoom-to-selection` WCAG 2.4.6 lesson.
+- The Gantt journey asserts the post-conversion focus target, not only that the item is reachable.
+- Pin the exact advisory sentence in `healthAnnouncement()` before M3-T2.
+- The dialog's error state is a `NoticeStrip role="alert"` in the body, as in `ArrangeDialog`.
+- State that axe does not cover WCAG 2.5.8 for the dialog's controls; the selection-bar item is
+  already covered by `e2e-workspace-fit`'s `[data-toolbar-item]` sweep.
+
+## component-reviewer: AGREE-WITH-CHANGES
+
+It confirmed nothing is added to `buildTsldToolbarItems()`, so ADR-0093's duplication gate does
+not trip, and that reusing `Dialog` and `RadioCardGroup` is right.
+
+Blocking:
+
+- **C1: one gate object cannot span the three surfaces as written.** The "resourced" half is
+  per-activity and async (`useAssignments`), while the Gantt row menu resolves its context once,
+  synchronously, at click time (`GanttPanel.tsx:1536`, `GanttRowMenu.tsx:32-38,89-101`), and
+  `ActivitiesTable.actionsFor` runs inside `DataTable`'s row loop, where no hook may run.
+  - Make the fact synchronous: add a `hasAssignment` field to the activities list, computed on the
+    server as the health loader already does (E9). All three surfaces then share one pure function.
+  - The pen/role half unifies on one existing mechanism, named in M4-T1, and the test asserts `===`
+    identity, not equal sentences. Today the bar (`scheduleRefusal`, `selection-actions.tsx:668`)
+    and the table (`editorGating.general.reason`, `ActivitiesTable.tsx:461-463`) use two.
+- **C2: there is no offender list to reuse.** `HealthMetricRow` (`ScheduleHealthPanel.tsx:286-437`)
+  and `HealthPrintDocument.tsx:121-144` inline the disclosure, tied to the verdict shape an advisory
+  does not have. Extract the offender disclosure (screen) and the offender section (print) first,
+  and have the fourteen metrics and the advisory both consume them.
+- **C3: M5 repeats the ordering #387 says nobody enforces.** The mitigation is a sentence in a PR
+  description. Fix #387 in this epic, so that an unknown additive report field no longer rejects
+  the report (drop `.strict()` for a schema that tolerates it), or add a computed check.
+
+Suggested:
+
+- The D5 preselection ("Finish when the task has a predecessor") is one shared predicate over
+  dependency data each surface already loads.
+- A structural test pins the make-milestone label across the bar, the Gantt menu and the table
+  menu, or records where a shorter bar label is decided.

@@ -106,3 +106,33 @@ Suggested:
 - The ADR's Consequences note that `FinishMilestoneRederiveService` and the new service can both
   recalculate one plan at boot, per replica. That is harmless (idempotent, serialised by the plan
   lock) and should be stated.
+
+## test-engineer: AGREE-WITH-CHANGES
+
+It re-derived FC-3, FC-4 and the whole M2-T5 inverted-assertion table by hand from the engine's
+own functions, and every cell reproduces. E1–E12, E14, E17, E19, E20, E22 and E23 match the code at
+the lines given.
+
+Blocking:
+
+- **T1: the independent oracle does not cover the risk it is cited for.** §4.7 D2 says a defect in
+  a shared bound function appears in both the cross-plan answer and its in-plan twin, so only FC-3
+  and FC-4 can catch it — and both are forward FS. M2-T7's backward case is a twin comparison, the
+  instrument the spec says cannot see the defect.
+  - Add a hand-computed backward golden to M2-T6 (US-3's own example: downstream late start Mon
+    `2026-01-19`, FS lag 0 ⇒ upstream external late finish the end of Fri `2026-01-16`).
+  - Add a hand-computed FF or SF golden, in either direction, at the conformance tier.
+  - M2-T5's rewritten prediction table in `cross-plan-derivation.spec.ts` is hand-derived per cell,
+    never characterised from the new code's output. M0-T1's record-then-flip method is the wrong
+    model for it.
+
+Suggested:
+
+- **Write M0-T1's per-cell prediction before the run.** §4.2 fixes one base case and M0-T1 varies
+  type, calendar, lag and lag calendar in both directions, so FC-2's "stop on any disagreement"
+  needs a written prediction for every cell, as a table or a small function.
+- **Split the LOE and N32 skips.** An LOE-upstream skip must not increment `upstreamMissingCount`,
+  or every plan with an LOE cross-plan link reports a phantom warning. M2-T6's LOE case asserts
+  `=== 0`, the null-dates case `=== 1`.
+- The M1-T4 structural gates catch drift in structure, not in content. FC-5 covers content. No
+  action.
