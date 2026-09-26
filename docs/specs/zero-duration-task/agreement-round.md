@@ -375,3 +375,25 @@ It checked all four points against the code, with no blocking or suggested corre
   envelope's own `.strict()` (`use-interchange.ts:111`) drops too.
 - **The label.** Pinned, since the bar and the Gantt share it and M4-T2's structural test pins the
   table.
+
+### backend-performance-reviewer (with api-reviewer's questions): confirmed
+
+No blocking finding.
+
+- **One decoration step serves every activity-returning method** (`activities.service.ts:123-157`,
+  used at :258, :272, :422, :656, :788, :876, :1025, :1208, :1533, :1669 and :1706). The canvas,
+  the table and the Gantt share one query.
+- **FC-9 is a real discriminator** over `idx_resource_assignments_activity_id_fk`, with a measured
+  precedent (`schedule.repository.ts:544-559`).
+- **The field is additive**, and the explicit mapper (`activity-response.dto.ts:442`) plus the
+  changeset are planned.
+
+Suggested:
+
+- **State the client refetch cost.** The new invalidation on assign and unassign re-pages the whole
+  plan: about 20 sequential requests at 2,000 activities (`apiFetchAllPages`, 100 per page).
+  FC-9 bounds only the server.
+  - Decision: invalidate `activityKeys.listByPlan(planId)`, never `.all`, which is org-wide. State
+    the figure in the Freshness bullet and R11.
+- The M4-T1 api-reviewer gate checks that `docs/API.md` and the `@ApiProperty` description landed
+  together (ADR-0146's recorded slip).
