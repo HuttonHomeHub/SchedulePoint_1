@@ -208,6 +208,15 @@ M2 is the first caller.`
 - **Testing:** golden suites unedited; the property case.
 - **Development steps:** 1. Extract. 2. Replace both call sites. 3. Run the engine suites.
 
+> **Corrected by M1 (`engine/instants.readers.spec.ts`).** The property is false as stated. The
+> result does not depend on an anchor at or before the **result** (the last working end boundary at
+> or before the day's end), pinned over three weeks of hourly anchors on three calendars. An anchor
+> after the result but before the day's end is returned as it is, because
+> `addWorkingTime(anchor, 0)` is the anchor: Wednesday on an eight-hour calendar with an anchor at
+> Wed 17:00 gives Wed 17:00, not Wed 16:00. So the derivation must pass the remote plan's data date,
+> the anchor the engine itself used, which M2-T4 loads. The forward external clamp's inline reading
+> was a third copy of `startDateInstant` and now calls it too.
+
 ##### Task M1-T3: the formatter and the timed backward branch
 
 - **Description:** `formatExternalInstant(abs)` always writes `YYYY-MM-DDTHH:MM`, including
@@ -220,6 +229,13 @@ M2 is the first caller.`
 - **Testing:** flip both M0-T3 probes; add cases for a timed backward value on a task, a finish
   milestone and a zero-duration activity, each at midnight and mid-day.
 - **Development steps:** 1. Add the formatter and the branch. 2. Flip the probes.
+
+> **Recorded by M1.** "For every activity type" changes the milestone branches too, not only the
+> task branch E11 names. Before M1 a timed value on a milestone was rolled forward to the next
+> working minute; now it is the bound as it stands, as an in-plan `backwardUpperBound` is. On a
+> 24-hour calendar the two agree; on an eight-hour calendar they differ for a value in a non-working
+> hour (`external-instant.timed.spec.ts` goes red on every milestone case there with the branch
+> disabled). No persisted column produces a timed value, so no existing input sees the difference.
 
 ##### Task M1-T4: structural gates
 
