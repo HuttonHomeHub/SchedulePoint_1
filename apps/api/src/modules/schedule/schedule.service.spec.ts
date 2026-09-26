@@ -7,7 +7,10 @@ import { ForbiddenError, NotFoundError, ValidationError } from '../../common/err
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { BaselineRepository } from '../baselines/baseline.repository';
 import type { CalendarRepository } from '../calendars/calendar.repository';
-import type { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
+import type {
+  CrossPlanDependencyRepository,
+  CrossPlanRemoteEndpointRow,
+} from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
@@ -103,6 +106,26 @@ const edgeRow = (predecessorId: string, successorId: string): ScheduleEdgeRow =>
 
 function principalWith(permissions: Permission[]): Principal {
   return new Principal(USER_ID, [{ organizationId: ORG_ID, role: 'PLANNER', permissions }]);
+}
+
+/**
+ * The other plan's end of a cross-plan edge, as the widened loads return it (#385 M2-T4): a 3-day
+ * task in a plan with no calendar (so every minute works, like this file's own plan) whose data
+ * date is 2026-01-01.
+ */
+function remoteEndpoint(
+  over: Partial<CrossPlanRemoteEndpointRow> = {},
+): CrossPlanRemoteEndpointRow {
+  return {
+    id: 'REMOTE',
+    type: 'TASK',
+    durationMinutes: 3 * 1440,
+    calendarId: null,
+    planId: 'REMOTE_PLAN',
+    planCalendarId: null,
+    planDataDate: new Date('2026-01-01T00:00:00.000Z'),
+    ...over,
+  };
 }
 
 /** A cross-plan repo mock defaulting to the byte-parity path (no cross-plan edge feeds the plan). */
@@ -415,8 +438,10 @@ describe('ScheduleService.recalculate', () => {
 
   it('derives an external early start from an incoming cross-plan edge’s upstream computed dates', async () => {
     // A(3) has NO M1 column but an incoming FS cross-plan edge from an upstream activity whose persisted
-    // early finish is 2026-01-10 (lag 0). Derived external early start = predEarlyFinish + lag = 01-10,
-    // so A clamps UP to 01-10 and is flagged external-driven — the live cross-plan bound reached the engine.
+    // placed finish is 2026-01-10 (lag 0). That finish is the END of 01-10, the instant 01-11 00:00
+    // (#385), so the derived external early start is 01-11 and A clamps UP to it, flagged
+    // external-driven — the live cross-plan bound reached the engine. It read 01-10 until #385: the
+    // downstream started on the upstream's last day, which the same link inside one plan never does.
     schedule.loadActivities.mockResolvedValue([activityRow('A', 3)]);
     crossPlan.countActiveForPlan.mockResolvedValue(1);
     crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue([
@@ -424,6 +449,8 @@ describe('ScheduleService.recalculate', () => {
         successorId: 'A',
         type: 'FS',
         lagMinutes: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+        predecessor: remoteEndpoint(),
         predecessorPlacedStart: new Date('2026-01-08T00:00:00.000Z'),
         predecessorPlacedFinish: new Date('2026-01-10T00:00:00.000Z'),
       },
@@ -433,7 +460,7 @@ describe('ScheduleService.recalculate', () => {
 
     const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
     const a = results.find((r) => r.activityId === 'A')!;
-    expect(a.earlyStart).toBe('2026-01-10');
+    expect(a.earlyStart).toBe('2026-01-11'); // was '2026-01-10' until #385
     expect(a.externalDriven).toBe(true);
     expect(summary.externalDrivenCount).toBe(1);
     const logged = logger.info.mock.calls.at(-1)?.[0] as { crossPlanUpstreamMissingCount: unknown };
@@ -441,7 +468,7 @@ describe('ScheduleService.recalculate', () => {
   });
 
   it('composes the derived bound with the M1 column by later-of, and later drives (§30.1/§30.5)', async () => {
-    // A carries an M1 external early start of 2026-01-15 AND an incoming FS edge deriving 2026-01-10.
+    // A carries an M1 external early start of 2026-01-15 AND an incoming FS edge deriving 01-11 00:00.
     // later-of ⇒ the M1 column (01-15) wins; A clamps to 01-15.
     schedule.loadActivities.mockResolvedValue([
       activityRow('A', 3, { externalEarlyStart: new Date('2026-01-15T00:00:00.000Z') }),
@@ -452,6 +479,8 @@ describe('ScheduleService.recalculate', () => {
         successorId: 'A',
         type: 'FS',
         lagMinutes: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+        predecessor: remoteEndpoint(),
         predecessorPlacedStart: new Date('2026-01-08T00:00:00.000Z'),
         predecessorPlacedFinish: new Date('2026-01-10T00:00:00.000Z'),
       },
@@ -473,6 +502,8 @@ describe('ScheduleService.recalculate', () => {
         successorId: 'A',
         type: 'FS',
         lagMinutes: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+        predecessor: remoteEndpoint(),
         predecessorPlacedStart: null,
         predecessorPlacedFinish: null,
       },
@@ -491,9 +522,11 @@ describe('ScheduleService.recalculate', () => {
 
   it('derives an external late finish from an outgoing cross-plan edge (tighter-of, §30.2/§30.5)', async () => {
     // A(3) occupies 01-01..01-03. An outgoing FS edge to a downstream activity whose persisted late start
-    // is 2026-01-02 derives an external late finish = succLateStart − lag = 01-02 — an FNLT-shaped bound
-    // TIGHTER than A's own finish, so A's late finish is pulled back to 01-02 (negative float) and it is
-    // flagged external-driven: the live downstream commitment reached the backward pass.
+    // is 2026-01-02 derives an external late finish = succLateStart − lag: the START of 01-02, the
+    // instant 01-02 00:00 (#385), so A must finish by the end of 01-01 — an FNLT-shaped bound TIGHTER
+    // than A's own finish, pulling its late finish back (negative float) and flagging it
+    // external-driven. It read 01-02 until #385: the upstream was allowed to finish on the day the
+    // downstream had to start.
     schedule.loadActivities.mockResolvedValue([activityRow('A', 3)]);
     crossPlan.countActiveForPlan.mockResolvedValue(1);
     crossPlan.loadOutgoingWithSuccessorDates.mockResolvedValue([
@@ -501,6 +534,8 @@ describe('ScheduleService.recalculate', () => {
         predecessorId: 'A',
         type: 'FS',
         lagMinutes: 0,
+        lagCalendar: 'PROJECT_DEFAULT',
+        successor: remoteEndpoint(),
         successorLateStart: new Date('2026-01-02T00:00:00.000Z'),
         successorLateFinish: new Date('2026-01-04T00:00:00.000Z'),
       },
@@ -510,9 +545,81 @@ describe('ScheduleService.recalculate', () => {
 
     const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
     const a = results.find((r) => r.activityId === 'A')!;
-    expect(a.lateFinish).toBe('2026-01-02'); // pulled back below its own early finish → tight, driven
+    expect(a.lateFinish).toBe('2026-01-01'); // was '2026-01-02' until #385; tight, driven
     expect(a.externalDriven).toBe(true);
     expect(summary.externalDrivenCount).toBe(1);
+  });
+
+  /**
+   * **FC-6, the counting half: no query or calendar resolution per edge** (#385 M2-T4). With the
+   * plans and calendars held fixed, the cross-plan branch must issue exactly as many database reads
+   * and build exactly as many calendar ports at 100 edges as at 10. The edges spread over five remote
+   * plans, each with its own calendar and one resource-dependent endpoint (so the driving-calendar
+   * read fires), and over all four lag-calendar sources, so every path that could loop is exercised.
+   * Each remote plan's own calendar and lag source are keyed on the plan alone, so ten edges already
+   * name every calendar there is: "calendars held fixed" is a property of the fixture, not a hope
+   * (the first two versions of it let the 100-edge run name a calendar the 10-edge run did not).
+   * Verified red by resolving each edge's remote port without the per-id cache: 14 → 140.
+   */
+  it('FC-6: the cross-plan branch reads as much at 100 edges as at 10', async () => {
+    const SOURCES = ['PROJECT_DEFAULT', 'PREDECESSOR', 'SUCCESSOR', 'TWENTY_FOUR_HOUR'] as const;
+    const locals = ['L0', 'L1', 'L2', 'L3', 'L4'];
+    const remote = (i: number) =>
+      remoteEndpoint({
+        id: `R${i}`,
+        type: i % 5 === 0 ? 'RESOURCE_DEPENDENT' : 'TASK',
+        // Keyed on the remote plan alone, so ten edges already name every calendar there is.
+        calendarId: i % 5 < 2 ? `CAL_OWN_${i % 5}` : null,
+        planId: `REMOTE_PLAN_${i % 5}`,
+        planCalendarId: `CAL_PLAN_${i % 5}`,
+      });
+    const count = async (edges: number) => {
+      const findMany = vi.fn().mockResolvedValue([]);
+      prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+        cb({ resourceAssignment: { findMany } }),
+      );
+      schedule.loadPlanCalendar.mockClear();
+      crossPlan.loadIncomingWithPredecessorDates.mockClear();
+      crossPlan.loadOutgoingWithSuccessorDates.mockClear();
+      schedule.loadActivities.mockResolvedValue(locals.map((id) => activityRow(id, 3)));
+      crossPlan.countActiveForPlan.mockResolvedValue(edges);
+      const half = Array.from({ length: edges / 2 }, (_, i) => i);
+      crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue(
+        half.map((i) => ({
+          successorId: locals[i % 5]!,
+          type: 'FS',
+          lagMinutes: 1440,
+          lagCalendar: SOURCES[(i % 5) % 4]!,
+          predecessor: remote(i),
+          predecessorPlacedStart: new Date('2026-01-02T00:00:00.000Z'),
+          predecessorPlacedFinish: new Date('2026-01-04T00:00:00.000Z'),
+        })),
+      );
+      crossPlan.loadOutgoingWithSuccessorDates.mockResolvedValue(
+        half.map((i) => ({
+          predecessorId: locals[i % 5]!,
+          type: 'FS',
+          lagMinutes: 1440,
+          lagCalendar: SOURCES[(i % 5) % 4]!,
+          successor: remote(i + 1000),
+          successorLateStart: new Date('2026-02-02T00:00:00.000Z'),
+          successorLateFinish: new Date('2026-02-04T00:00:00.000Z'),
+        })),
+      );
+      await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+      return {
+        incomingLoads: crossPlan.loadIncomingWithPredecessorDates.mock.calls.length,
+        outgoingLoads: crossPlan.loadOutgoingWithSuccessorDates.mock.calls.length,
+        drivingReads: findMany.mock.calls.length,
+        calendarResolves: schedule.loadPlanCalendar.mock.calls.length,
+      };
+    };
+    const at10 = await count(10);
+    const at100 = await count(100);
+    expect(at100).toEqual(at10);
+    // Non-vacuity: the fixture really does read remote calendars and driving calendars at all.
+    expect(at10.calendarResolves).toBeGreaterThan(0);
+    expect(at10.drivingReads).toBeGreaterThan(0);
   });
 
   it('threads the plan’s critical-path definition into the engine (M6, ADR-0035 §17)', async () => {

@@ -1,5 +1,13 @@
+import type { LagCalendarSource } from '@prisma/client';
+
+import {
+  crossPlanLagCalendarId,
+  type CrossPlanEndpointCalendarFacts,
+} from '../../cross-plan-dependencies/cross-plan-lag-calendar';
 import {
   deriveExternalInstants,
+  type CrossPlanLocalActivity,
+  type CrossPlanRemoteEndpoint,
   type IncomingCrossPlanEdge,
   type M1ExternalInstant,
   type OutgoingCrossPlanEdge,
@@ -27,13 +35,14 @@ import {
 } from './cross-plan-matrix';
 
 /**
- * **The #385 twin: one link built twice, across two plans and inside one** (plan M0-T1 step 2).
+ * **The #385 twin: one link built twice, across two plans and inside one** (plan M0-T1 step 2,
+ * inverted to FC-1 at M2-T6).
  *
  * For one matrix cell it builds a two-plan programme (an upstream plan, a downstream plan and one
  * cross-plan edge) and a single-plan twin holding the same activities and the same link as an
  * ordinary dependency. Both run through the real, unchanged engine. The cross-plan side goes
  * through the real {@link deriveExternalInstants}, fed exactly as `schedule.service.ts`'s
- * cross-plan branch feeds it today, so the twin measures the rule the product runs.
+ * cross-plan branch feeds it, so the twin measures the rule the product runs.
  *
  * **What it compares, and why that and not a late finish** (the plan's backward-twin risk):
  * - forward, the successor's early start. The downstream plan holds only the successor, so its early
@@ -43,20 +52,31 @@ import {
  *   difference left between the two late finishes is the seam.
  *
  * Both answers are read as the engine's exposed plan-frame offsets (working minutes from the data
- * date on the plan calendar). Both worlds share one calendar and one data date, so the offsets are
- * directly comparable, and a start and a finish boundary with no working time between them read as
- * one position, which is what the spec's "N days early/loose" means.
+ * date on the plan calendar), to the minute (spec FC-1). That is only a comparison if the SUBJECT
+ * sits on its plan's calendar in both worlds, so the single plan takes **the subject's plan's
+ * calendar** and the other endpoint carries its own calendar when the two differ (the mixed-calendar
+ * axis). Both worlds share one data date.
  *
  * **Mirroring the product, line for line, where it matters** (`schedule.service.ts`'s cross-plan
  * branch and `toEngineEdge`, and `cross-plan-dependencies.service.ts`'s write):
- * - the stored cross-plan lag is `lagDays × 1440` whatever the calendar, read back as
- *   `round(lagMinutes / 1440)` (E6), and its lag calendar is not passed (E7);
- * - durations reach the derivation as `round(durationMinutes / 1440)` (E8);
+ * - the cross-plan lag's calendar is decided by `crossPlanLagCalendarId`, and it is stored as
+ *   `lagDays × that calendar's hours-per-day` (1440 for `TWENTY_FOUR_HOUR` or no calendar);
+ * - the derivation receives lags in working minutes, the remote endpoint's type, duration, scheduling
+ *   port and plan data date, and the local activity's type, duration and port;
  * - the persisted dates the derivation reads are the engine's own display strings: the placed pair
  *   (`visualEffective*`) forward, the late pair backward;
- * - the in-plan twin resolves `PREDECESSOR` / `SUCCESSOR` to no port when the endpoint inherits
- *   the plan calendar (every activity here does), exactly as `toEngineEdge` receives `undefined`
- *   from `portFor`, and stores the in-plan lag on the lag calendar's hours-per-day.
+ * - the in-plan link names the calendar the cell's source means, **written by hand here and not
+ *   read from the product's rule** (so a defect in the rule moves one world and not both), spelled
+ *   as an in-plan source: `PROJECT_DEFAULT` when that is the single plan's calendar, otherwise the
+ *   endpoint whose own calendar it is, which `toEngineEdge` receives as that endpoint's port
+ *   (`portFor`). The in-plan lag is stored on that calendar's hours-per-day.
+ *
+ * Why the in-plan spelling may differ from the cross-plan one: cross-plan `PROJECT_DEFAULT` means the
+ * **successor's plan's** calendar (CQ-2). In the backward twin the single plan is the predecessor's,
+ * so the successor's plan's calendar is, inside one plan, the successor's own calendar. Writing the
+ * in-plan link as `PROJECT_DEFAULT` there would compare two different calendars and prove nothing.
+ * When both plans share a calendar (the original 1,728-cell matrix) every spelling collapses to the
+ * source the cell names.
  *
  * Pure: it imports the engine as `cross-plan-adapter.ts` does and touches no database.
  */
@@ -65,6 +85,7 @@ const MINUTES_PER_DAY = 1440;
 
 /** A matrix calendar as the engine port plus its hours-per-day (the day↔minute factor, ADR-0068). */
 export interface TwinCalendar {
+  name: MatrixCalendarName;
   port: WorkingTimeCalendar;
   hoursPerDayMinutes: number;
 }
@@ -77,35 +98,42 @@ export function twinCalendar(name: MatrixCalendarName): TwinCalendar {
     working.has(weekday) ? [{ startMinute: shape.open, endMinute: shape.close }] : [],
   );
   return {
+    name,
     port: buildWorkingTimeCalendar(weekly, []),
     hoursPerDayMinutes: shape.close - shape.open,
   };
 }
 
-/** One plan of the twin: its activities and its in-plan edges. */
+/** One plan of the twin: its calendar, its activities and its in-plan edges. */
 export interface TwinPlan {
+  calendar: TwinCalendar;
   activities: EngineActivity[];
   edges: EngineEdge[];
+}
+
+/** The calendars a twin's two plans sit on. Equal for every cell of the original matrix. */
+export interface TwinCalendars {
+  upstream: MatrixCalendarName;
+  downstream: MatrixCalendarName;
 }
 
 /** Everything one cell needs, built once. */
 export interface CrossPlanTwin {
   cell: CrossPlanMatrixCell;
   dataDate: string;
-  calendar: TwinCalendar;
   /** The predecessor's plan (holds `P`). */
   upstream: TwinPlan;
   /** The successor's plan (holds `S`). */
   downstream: TwinPlan;
   /** The one plan holding both ends and the link as an ordinary dependency. */
   single: TwinPlan;
-  /** The cross-plan edge as the product stores it (`lagMinutes = lagDays × 1440`, E6). */
+  /** The cross-plan edge as the product stores it. */
   crossEdge: {
     predecessorId: 'P';
     successorId: 'S';
     type: CrossPlanMatrixCell['linkType'];
     storedLagMinutes: number;
-    lagCalendar: CrossPlanMatrixCell['lagCalendar'];
+    lagCalendar: WorkingTimeCalendar;
   };
   /** The activity whose value the cell measures: `S` forward, `P` backward. */
   subjectId: 'S' | 'P';
@@ -123,37 +151,103 @@ function ofType(
   return type === 'TASK' ? task(id, MATRIX_TASK_DAYS, cal) : { id, type, durationMinutes: 0 };
 }
 
-/** The in-plan edge for the cell's link: lag on its lag calendar's factor, port as `toEngineEdge`. */
-function inPlanLink(cell: CrossPlanMatrixCell, cal: TwinCalendar): EngineEdge {
-  const twentyFourHour = cell.lagCalendar === 'TWENTY_FOUR_HOUR';
-  const factor = twentyFourHour ? MINUTES_PER_DAY : cal.hoursPerDayMinutes;
+/** An activity placed in the single plan: its own calendar only when it is not the plan's. */
+function inSingle(activity: EngineActivity, own: TwinCalendar, plan: TwinCalendar): EngineActivity {
+  return own.name === plan.name ? activity : { ...activity, calendar: own.port };
+}
+
+/**
+ * The cross-plan lag calendar, decided by the product's rule. The two endpoints each inherit their
+ * own plan's calendar (the matrix gives no activity a calendar of its own in the two-plan world), so
+ * the synthetic ids are the plans'.
+ */
+function crossPlanLagCalendar(
+  source: LagCalendarSource,
+  predType: EngineActivity['type'],
+  succType: EngineActivity['type'],
+  cals: { upstream: TwinCalendar; downstream: TwinCalendar },
+): TwinCalendar | null {
+  const facts = (
+    type: EngineActivity['type'],
+    plan: 'upstream' | 'downstream',
+  ): CrossPlanEndpointCalendarFacts => ({
+    type: type ?? 'TASK',
+    calendarId: null,
+    drivingCalendarId: null,
+    planCalendarId: plan,
+  });
+  const id = crossPlanLagCalendarId({
+    lagCalendar: source,
+    predecessor: facts(predType, 'upstream'),
+    successor: facts(succType, 'downstream'),
+  });
+  if (id === null) return null;
+  return id === 'upstream' ? cals.upstream : cals.downstream;
+}
+
+/**
+ * The in-plan link for the cell, naming the same calendar the cross-plan rule chose (see the file
+ * docblock), with its lag stored on that calendar's factor and its port as `toEngineEdge` builds it.
+ */
+function inPlanLink(
+  cell: CrossPlanMatrixCell,
+  lagCal: TwinCalendar | null,
+  single: TwinCalendar,
+): EngineEdge {
+  const factor = lagCal === null ? MINUTES_PER_DAY : lagCal.hoursPerDayMinutes;
+  const port =
+    lagCal === null
+      ? allMinutesWorkCalendar
+      : lagCal.name === single.name
+        ? undefined
+        : lagCal.port;
   return {
     id: 'P->S',
     predecessorId: 'P',
     successorId: 'S',
     type: cell.linkType,
     lagMinutes: cell.lagDays * factor,
-    // PREDECESSOR / SUCCESSOR on an inheriting endpoint reach `toEngineEdge` as `undefined`.
-    ...(twentyFourHour ? { lagCalendar: allMinutesWorkCalendar } : {}),
+    ...(port ? { lagCalendar: port } : {}),
   };
 }
 
-/** Build both worlds for one cell. See {@link ./cross-plan-matrix} for the geometry. */
-export function buildTwin(cell: CrossPlanMatrixCell): CrossPlanTwin {
-  const cal = twinCalendar(cell.calendar);
+/**
+ * Build both worlds for one cell. See {@link ./cross-plan-matrix} for the geometry. `cals` defaults
+ * to the cell's one calendar for both plans (the original matrix); the mixed-calendar axis passes two.
+ */
+export function buildTwin(
+  cell: CrossPlanMatrixCell,
+  cals: TwinCalendars = { upstream: cell.calendar, downstream: cell.calendar },
+): CrossPlanTwin {
+  const up = twinCalendar(cals.upstream);
+  const down = twinCalendar(cals.downstream);
+  const forward = cell.direction === 'forward';
+  const predType = forward ? cell.remoteType : cell.localType;
+  const succType = forward ? cell.localType : cell.remoteType;
+  const lagCal = crossPlanLagCalendar(cell.lagCalendar, predType, succType, {
+    upstream: up,
+    downstream: down,
+  });
+  // The in-plan side names its calendar by hand, NOT through the rule above, or a defect in the
+  // rule would move both worlds together and the twin would agree with itself (spec D2's caveat).
+  // CQ-2: PROJECT_DEFAULT is the successor's plan's calendar; an endpoint source is that endpoint's.
+  const referenceLagCal: TwinCalendar | null =
+    cell.lagCalendar === 'TWENTY_FOUR_HOUR' ? null : cell.lagCalendar === 'PREDECESSOR' ? up : down;
   const crossEdge = {
     predecessorId: 'P' as const,
     successorId: 'S' as const,
     type: cell.linkType,
-    storedLagMinutes: cell.lagDays * MINUTES_PER_DAY,
-    lagCalendar: cell.lagCalendar,
+    storedLagMinutes:
+      cell.lagDays * (lagCal === null ? MINUTES_PER_DAY : lagCal.hoursPerDayMinutes),
+    lagCalendar: lagCal === null ? allMinutesWorkCalendar : lagCal.port,
   };
-  const link = inPlanLink(cell, cal);
 
-  if (cell.direction === 'forward') {
-    const anchor = task('A', FORWARD_ANCHOR_DAYS, cal);
-    const predecessor = ofType('P', cell.remoteType, cal);
-    const successor = ofType('S', cell.localType, cal);
+  if (forward) {
+    // The single plan is the successor's (the subject's), so it takes the downstream calendar.
+    const single = down;
+    const anchor = task('A', FORWARD_ANCHOR_DAYS, up);
+    const predecessor = ofType('P', cell.remoteType, up);
+    const successor = ofType('S', cell.localType, down);
     const anchorEdge: EngineEdge = {
       id: 'A->P',
       predecessorId: 'A',
@@ -164,30 +258,38 @@ export function buildTwin(cell: CrossPlanMatrixCell): CrossPlanTwin {
     return {
       cell,
       dataDate: MATRIX_DATA_DATE,
-      calendar: cal,
-      upstream: { activities: [anchor, predecessor], edges: [anchorEdge] },
-      downstream: { activities: [successor], edges: [] },
-      single: { activities: [anchor, predecessor, successor], edges: [anchorEdge, link] },
+      upstream: { calendar: up, activities: [anchor, predecessor], edges: [anchorEdge] },
+      downstream: { calendar: down, activities: [successor], edges: [] },
+      single: {
+        calendar: single,
+        activities: [inSingle(anchor, up, single), inSingle(predecessor, up, single), successor],
+        edges: [anchorEdge, inPlanLink(cell, referenceLagCal, single)],
+      },
       crossEdge,
       subjectId: 'S',
     };
   }
 
-  const predecessor = ofType('P', cell.localType, cal);
+  // Backward: the single plan is the predecessor's (the subject's), on the upstream calendar.
+  const single = up;
+  const predecessor = ofType('P', cell.localType, up);
   const successor: EngineActivity = {
-    ...ofType('S', cell.remoteType, cal),
+    ...ofType('S', cell.remoteType, down),
     constraintType: 'FNLT',
     constraintDate: BACKWARD_SUCCESSOR_FNLT,
   };
-  const longUpstream = task('L', LONG_TASK_DAYS, cal);
-  const longDownstream = task('L2', LONG_TASK_DAYS, cal);
+  const longUpstream = task('L', LONG_TASK_DAYS, up);
+  const longDownstream = task('L2', LONG_TASK_DAYS, down);
   return {
     cell,
     dataDate: MATRIX_DATA_DATE,
-    calendar: cal,
-    upstream: { activities: [predecessor, longUpstream], edges: [] },
-    downstream: { activities: [successor, longDownstream], edges: [] },
-    single: { activities: [predecessor, longUpstream, successor], edges: [link] },
+    upstream: { calendar: up, activities: [predecessor, longUpstream], edges: [] },
+    downstream: { calendar: down, activities: [successor, longDownstream], edges: [] },
+    single: {
+      calendar: single,
+      activities: [predecessor, longUpstream, inSingle(successor, down, single)],
+      edges: [inPlanLink(cell, referenceLagCal, single)],
+    },
     crossEdge,
     subjectId: 'P',
   };
@@ -196,7 +298,7 @@ export function buildTwin(cell: CrossPlanMatrixCell): CrossPlanTwin {
 function run(twin: CrossPlanTwin, plan: TwinPlan): EngineOutput {
   return computeSchedule(plan.activities, plan.edges, {
     dataDate: twin.dataDate,
-    calendar: twin.calendar.port,
+    calendar: plan.calendar.port,
   });
 }
 
@@ -206,19 +308,42 @@ function resultOf(output: EngineOutput, id: string): EngineResult {
   return result;
 }
 
+/** A remote endpoint as `schedule.service.ts` hands it to the derivation. */
+function remoteOf(twin: CrossPlanTwin, plan: TwinPlan, id: 'P' | 'S'): CrossPlanRemoteEndpoint {
+  const activity = plan.activities.find((a) => a.id === id)!;
+  return {
+    type: activity.type ?? 'TASK',
+    durationMinutes: activity.durationMinutes,
+    calendar: plan.calendar.port,
+    dataDate: twin.dataDate,
+  };
+}
+
 /** The inputs `schedule.service.ts` builds before calling the derivation, for one plan's activities. */
-function serviceInputs(plan: TwinPlan): {
+function serviceInputs(
+  twin: CrossPlanTwin,
+  plan: TwinPlan,
+): {
   m1: Map<string, M1ExternalInstant>;
-  durationDaysByActivity: Map<string, number>;
+  activities: Map<string, CrossPlanLocalActivity>;
+  dataDate: string;
 } {
   return {
     // No hand-entered M1 column anywhere in the matrix; the service still builds an entry per row.
     m1: new Map(
       plan.activities.map((a) => [a.id, { externalEarlyStart: null, externalLateFinish: null }]),
     ),
-    durationDaysByActivity: new Map(
-      plan.activities.map((a) => [a.id, Math.round(a.durationMinutes / MINUTES_PER_DAY)]),
+    activities: new Map(
+      plan.activities.map((a) => [
+        a.id,
+        {
+          type: a.type ?? 'TASK',
+          durationMinutes: a.durationMinutes,
+          calendar: plan.calendar.port,
+        },
+      ]),
     ),
+    dataDate: twin.dataDate,
   };
 }
 
@@ -228,6 +353,7 @@ function withDerived(
   derived: ReturnType<typeof deriveExternalInstants>['derived'],
 ): TwinPlan {
   return {
+    calendar: plan.calendar,
     edges: plan.edges,
     activities: plan.activities.map((activity) => {
       const d = derived.get(activity.id);
@@ -242,28 +368,24 @@ function withDerived(
   };
 }
 
-/** What one cell produced on today's code. */
+/** What one cell produced. */
 export interface TwinObservation {
   /** The single-plan answer, as a plan-frame offset (working minutes from the data date). */
   inPlanOffset: number;
   /** The two-plan answer, the same way. */
   crossPlanOffset: number;
-  /** `crossPlanOffset − inPlanOffset` in working days on the cell's calendar. */
+  /** `crossPlanOffset − inPlanOffset` in working days on the subject's calendar. */
   disagreementDays: number;
-  /** The bare date today's derivation handed the engine. */
-  derivedDate: string | null;
+  /** The external value the derivation handed the engine. */
+  derivedValue: string | null;
   /** The display dates the two answers print as (early start forward, late finish backward). */
   inPlanDate: string;
   crossPlanDate: string;
 }
 
-/**
- * Run one cell on **today's** derivation. M2-T6 keeps the builder and replaces this comparison
- * with FC-1's equality over the fixed derivation.
- */
-export function runTwinToday(cell: CrossPlanMatrixCell): TwinObservation {
-  const twin = buildTwin(cell);
-  const lagDays = Math.round(twin.crossEdge.storedLagMinutes / MINUTES_PER_DAY);
+/** Run one cell on the derivation the product runs. */
+export function runTwin(cell: CrossPlanMatrixCell, cals?: TwinCalendars): TwinObservation {
+  const twin = buildTwin(cell, cals);
   const single = resultOf(run(twin, twin.single), twin.subjectId);
 
   if (cell.direction === 'forward') {
@@ -271,18 +393,20 @@ export function runTwinToday(cell: CrossPlanMatrixCell): TwinObservation {
     const incoming: IncomingCrossPlanEdge = {
       successorActivityId: 'S',
       type: twin.crossEdge.type,
-      lagDays,
+      lagMinutes: twin.crossEdge.storedLagMinutes,
+      lagCalendar: twin.crossEdge.lagCalendar,
+      predecessor: remoteOf(twin, twin.upstream, 'P'),
       predecessorPlacedStart: predecessor.visualEffectiveStart,
       predecessorPlacedFinish: predecessor.visualEffectiveFinish,
     };
     const { derived } = deriveExternalInstants({
       incoming: [incoming],
       outgoing: [],
-      ...serviceInputs(twin.downstream),
+      ...serviceInputs(twin, twin.downstream),
     });
     const successor = resultOf(run(twin, withDerived(twin.downstream, derived)), 'S');
     return observe(
-      twin,
+      twin.downstream.calendar,
       single.earlyStartOffset,
       successor.earlyStartOffset,
       derived.get('S')?.externalEarlyStart ?? null,
@@ -295,18 +419,20 @@ export function runTwinToday(cell: CrossPlanMatrixCell): TwinObservation {
   const outgoing: OutgoingCrossPlanEdge = {
     predecessorActivityId: 'P',
     type: twin.crossEdge.type,
-    lagDays,
+    lagMinutes: twin.crossEdge.storedLagMinutes,
+    lagCalendar: twin.crossEdge.lagCalendar,
+    successor: remoteOf(twin, twin.downstream, 'S'),
     successorLateStart: successor.lateStart,
     successorLateFinish: successor.lateFinish,
   };
   const { derived } = deriveExternalInstants({
     incoming: [],
     outgoing: [outgoing],
-    ...serviceInputs(twin.upstream),
+    ...serviceInputs(twin, twin.upstream),
   });
   const predecessor = resultOf(run(twin, withDerived(twin.upstream, derived)), 'P');
   return observe(
-    twin,
+    twin.upstream.calendar,
     single.lateFinishOffset,
     predecessor.lateFinishOffset,
     derived.get('P')?.externalLateFinish ?? null,
@@ -316,18 +442,18 @@ export function runTwinToday(cell: CrossPlanMatrixCell): TwinObservation {
 }
 
 function observe(
-  twin: CrossPlanTwin,
+  subjectCalendar: TwinCalendar,
   inPlanOffset: number,
   crossPlanOffset: number,
-  derivedDate: string | null,
+  derivedValue: string | null,
   inPlanDate: string,
   crossPlanDate: string,
 ): TwinObservation {
   return {
     inPlanOffset,
     crossPlanOffset,
-    disagreementDays: (crossPlanOffset - inPlanOffset) / twin.calendar.hoursPerDayMinutes,
-    derivedDate,
+    disagreementDays: (crossPlanOffset - inPlanOffset) / subjectCalendar.hoursPerDayMinutes,
+    derivedValue,
     inPlanDate,
     crossPlanDate,
   };

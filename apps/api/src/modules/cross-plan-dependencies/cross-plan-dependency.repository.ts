@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import { Prisma, type DependencyType } from '@prisma/client';
+import {
+  Prisma,
+  type ActivityType,
+  type DependencyType,
+  type LagCalendarSource,
+} from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -38,6 +43,55 @@ export type CrossPlanDependencyWithEndpoints = Prisma.CrossPlanDependencyGetPayl
 >;
 
 /**
+ * **The other plan's endpoint, as the derivation reads it** (#385 M2-T4). A remote persisted date is
+ * a date on the remote activity's own calendar, so reading it as an instant needs that activity's
+ * type, its duration, its scheduling calendar and its plan's data date (`finishDateInstant`'s
+ * anchor, M1's finding); and a `PROJECT_DEFAULT` or endpoint lag calendar needs its plan's calendar.
+ * All of it rides the include that already fetched the remote dates, so the load stays one query per
+ * direction whatever the edge count (FC-6).
+ *
+ * The plan is reached through the **activity's** `plan` relation, never the link's denormalised
+ * `predecessor_plan_id` / `successor_plan_id` (database-architect B5): one source for a calendar.
+ */
+const remoteEndpointSelect = {
+  id: true,
+  type: true,
+  durationMinutes: true,
+  calendarId: true,
+  planId: true,
+  plan: { select: { calendarId: true, plannedStart: true } },
+} as const;
+
+/** One remote endpoint, flattened. `planDataDate` is the remote plan's data date. */
+export interface CrossPlanRemoteEndpointRow {
+  /** The remote activity's id: the key its driving resource's calendar is looked up by. */
+  id: string;
+  type: ActivityType;
+  durationMinutes: number;
+  calendarId: string | null;
+  planId: string;
+  planCalendarId: string | null;
+  planDataDate: Date;
+}
+
+const toRemoteEndpoint = (e: {
+  id: string;
+  type: ActivityType;
+  durationMinutes: number;
+  calendarId: string | null;
+  planId: string;
+  plan: { calendarId: string | null; plannedStart: Date };
+}): CrossPlanRemoteEndpointRow => ({
+  id: e.id,
+  type: e.type,
+  durationMinutes: e.durationMinutes,
+  calendarId: e.calendarId,
+  planId: e.planId,
+  planCalendarId: e.plan.calendarId,
+  planDataDate: e.plan.plannedStart,
+});
+
+/**
  * A directed edge in the PLAN-level programme graph — the minimal shape the cross-plan cycle
  * walk (ADR-0045 §3) needs. Its nodes are plans, not activities.
  */
@@ -70,6 +124,9 @@ export interface IncomingCrossPlanEdgeRow {
   successorId: string;
   type: DependencyType;
   lagMinutes: number;
+  lagCalendar: LagCalendarSource;
+  /** The upstream predecessor (another plan), for reading its dates as instants (#385). */
+  predecessor: CrossPlanRemoteEndpointRow;
   predecessorPlacedStart: Date | null;
   predecessorPlacedFinish: Date | null;
 }
@@ -93,6 +150,9 @@ export interface OutgoingCrossPlanEdgeRow {
   predecessorId: string;
   type: DependencyType;
   lagMinutes: number;
+  lagCalendar: LagCalendarSource;
+  /** The downstream successor (another plan), for reading its dates as instants (#385). */
+  successor: CrossPlanRemoteEndpointRow;
   successorLateStart: Date | null;
   successorLateFinish: Date | null;
 }
@@ -216,7 +276,9 @@ export class CrossPlanDependencyRepository {
    * PREDECESSOR's persisted PLACED dates (`visualEffective*`, one-planning-surface M-H) — the
    * forward-derivation load (F4, ADR-0045 §2). Only called
    * when {@link countActiveForPlan} is non-zero. Org-scoped (anti-IDOR); no N+1 (dates come via the
-   * predecessor include). Served by the (successor_plan_id, …) index.
+   * predecessor include, and so do the lag calendar and the remote endpoint's type, duration,
+   * calendar and plan the derivation needs to read those dates as instants, #385 M2-T4). Served by
+   * the (successor_plan_id, …) index.
    */
   async loadIncomingWithPredecessorDates(
     organizationId: string,
@@ -229,13 +291,22 @@ export class CrossPlanDependencyRepository {
         successorId: true,
         type: true,
         lagMinutes: true,
-        predecessor: { select: { visualEffectiveStart: true, visualEffectiveFinish: true } },
+        lagCalendar: true,
+        predecessor: {
+          select: {
+            visualEffectiveStart: true,
+            visualEffectiveFinish: true,
+            ...remoteEndpointSelect,
+          },
+        },
       },
     });
     return rows.map((r) => ({
       successorId: r.successorId,
       type: r.type,
       lagMinutes: r.lagMinutes,
+      lagCalendar: r.lagCalendar,
+      predecessor: toRemoteEndpoint(r.predecessor),
       predecessorPlacedStart: r.predecessor.visualEffectiveStart,
       predecessorPlacedFinish: r.predecessor.visualEffectiveFinish,
     }));
@@ -245,7 +316,7 @@ export class CrossPlanDependencyRepository {
    * The plan's active OUTGOING cross-plan edges (predecessor in this plan) with each downstream
    * SUCCESSOR's persisted late dates — the backward-derivation load (F4, ADR-0045 §2). Only called
    * when {@link countActiveForPlan} is non-zero. Org-scoped (anti-IDOR); no N+1 (dates come via the
-   * successor include).
+   * successor include, with the lag calendar and the remote endpoint's facts as above, #385).
    */
   async loadOutgoingWithSuccessorDates(
     organizationId: string,
@@ -258,13 +329,16 @@ export class CrossPlanDependencyRepository {
         predecessorId: true,
         type: true,
         lagMinutes: true,
-        successor: { select: { lateStart: true, lateFinish: true } },
+        lagCalendar: true,
+        successor: { select: { lateStart: true, lateFinish: true, ...remoteEndpointSelect } },
       },
     });
     return rows.map((r) => ({
       predecessorId: r.predecessorId,
       type: r.type,
       lagMinutes: r.lagMinutes,
+      lagCalendar: r.lagCalendar,
+      successor: toRemoteEndpoint(r.successor),
       successorLateStart: r.successor.lateStart,
       successorLateFinish: r.successor.lateFinish,
     }));

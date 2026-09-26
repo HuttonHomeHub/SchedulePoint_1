@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { wouldCreatePlanCycle } from '../../cross-plan-dependencies/cross-plan-cycle-detector';
 import { deriveExternalInstants } from '../cross-plan-derivation';
+import { allMinutesWorkCalendar } from '../engine';
 
 import {
   checkCrossPlanCoverage,
@@ -87,9 +88,12 @@ describe('F7 tier-2 — cross-plan differential (ADR-0035 §30.7/§30.8)', () =>
   ]);
 
   it('programme recalc (upstream fresh) differs from downstream-alone (upstream stale) for the driven activity', () => {
-    // Programme: PROC_STEEL recomputed fresh (EF 2026-01-10) ⇒ derived FS+2 = 2026-01-12 drives
-    // CONS_ERECT to 2026-01-12. Downstream-alone: reads the STALE 2026-01-04 ⇒ derived FS+2 = 2026-01-06.
+    // Programme: PROC_STEEL recomputed fresh (EF 2026-01-10, i.e. it finishes at the END of that day,
+    // 2026-01-11 00:00) ⇒ FS+2 walks 2 × 1440 minutes to 2026-01-13 00:00 and drives CONS_ERECT there.
+    // Downstream-alone: reads the STALE 2026-01-04 (ends 2026-01-05 00:00) ⇒ FS+2 = 2026-01-07.
     // "Flip the axis (fresh vs stale upstream), the dates must move" — the live-axis differential.
+    // (#385: these read 2026-01-12 and 2026-01-06 while the derivation read a finish date as the
+    // START of its day, one day earlier than the same link inside one plan.)
     const programme = solveProgramme(FS_INTERFACE_FIXTURE);
     const alone = solveTargetAlone(FS_INTERFACE_FIXTURE, staleUpstream);
 
@@ -98,8 +102,8 @@ describe('F7 tier-2 — cross-plan differential (ADR-0035 §30.7/§30.8)', () =>
 
     const fresh = downstreamOut.results.find((r) => r.activityId === 'CONS_ERECT')!;
     const stale = alone.output.results.find((r) => r.activityId === 'CONS_ERECT')!;
-    expect(fresh.earlyStart).toBe('2026-01-12'); // fresh upstream (EF 2026-01-10) + FS 2
-    expect(stale.earlyStart).toBe('2026-01-06'); // stale upstream (EF 2026-01-04) + FS 2
+    expect(fresh.earlyStart).toBe('2026-01-13'); // end of fresh EF 2026-01-10, + FS 2
+    expect(stale.earlyStart).toBe('2026-01-07'); // end of stale EF 2026-01-04, + FS 2
     // The stale downstream sits EARLIER than the fresh programme recalc: an older (earlier-finishing)
     // upstream schedule under-derives the interface, which is precisely why a programme recalc is due.
     expect(stale.earlyStart < fresh.earlyStart).toBe(true);
@@ -120,11 +124,12 @@ describe('F7 tier-2 — cross-plan differential (ADR-0035 §30.7/§30.8)', () =>
 
 describe('F7 tier-3 — golden: FS-across-plan later-of-two (§30.5 / §30.1)', () => {
   // Upstream PROC_STEEL: 10 working days from the 2026-01-01 data date on a 24/7 calendar ⇒ inclusive
-  // early finish 2026-01-10 (start + 9). The FS+2 cross-plan edge derives CONS_ERECT's external early
-  // start as 2026-01-10 + 2 = 2026-01-12 (§30.5, §30.1-shaped). The effective external early start is
-  // the LATER of that derived bound and CONS_ERECT's hand-entered M1 column.
+  // early finish 2026-01-10 (start + 9), i.e. the instant 2026-01-11 00:00. The FS+2 cross-plan edge
+  // walks 2 × 1440 minutes from there, so CONS_ERECT's derived external early start is the instant
+  // 2026-01-13 00:00, handed to the engine as `2026-01-13T00:00` (§30.5, §30.1-shaped; #385 D7). The
+  // effective external early start is the LATER of that derived bound and the hand-entered M1 column.
   it('the derived cross-plan bound drives when it is later than the M1 column', () => {
-    // M1 column = 2026-01-05 (earlier than 2026-01-12) ⇒ later-of = the derived 2026-01-12.
+    // M1 column = 2026-01-05 (earlier than 2026-01-13) ⇒ later-of = the derived 2026-01-13T00:00.
     const { solve, result } = programmeResults(FS_INTERFACE_FIXTURE);
     expect(solve.order).toEqual(['PLAN_PROCUREMENT', 'PLAN_CONSTRUCTION']);
 
@@ -132,15 +137,15 @@ describe('F7 tier-3 — golden: FS-across-plan later-of-two (§30.5 / §30.1)', 
     expect(result('PROC_STEEL').earlyFinish).toBe('2026-01-10');
 
     // The composed (derived later-of M1) external early start fed to the engine.
-    expect(solve.derivedByActivity.get('CONS_ERECT')!.externalEarlyStart).toBe('2026-01-12');
+    expect(solve.derivedByActivity.get('CONS_ERECT')!.externalEarlyStart).toBe('2026-01-13T00:00');
     const cons = result('CONS_ERECT');
-    expect(cons.earlyStart).toBe('2026-01-12'); // SNET-shaped: max(data date, external) = external
-    expect(cons.earlyFinish).toBe('2026-01-16'); // 2026-01-12 + (5 − 1)
+    expect(cons.earlyStart).toBe('2026-01-13'); // SNET-shaped: max(data date, external) = external
+    expect(cons.earlyFinish).toBe('2026-01-17'); // 2026-01-13 + (5 − 1)
     expect(cons.externalDriven).toBe(true); // the external bound raised it above the data-date floor
   });
 
   it('the M1 hand-entered column drives when it is later than the derived bound', () => {
-    // Same network, but the M1 column is 2026-01-20 (later than the derived 2026-01-12) ⇒ later-of =
+    // Same network, but the M1 column is 2026-01-20 (later than the derived 2026-01-13) ⇒ later-of =
     // the M1 2026-01-20 (§30.5 "the manual column stands when it is later"). The derived value never
     // overwrites it — it composes with it.
     const m1Later: CrossPlanFixture = {
@@ -164,9 +169,10 @@ describe('F7 tier-3 — golden: FS-across-plan later-of-two (§30.5 / §30.1)', 
 });
 
 describe('F7 tier-3 — golden: diamond fan-in (§30.5 latest-of / §30.8 topo order)', () => {
-  // U1: 8d from 2026-01-01 ⇒ EF 2026-01-08. MA1 (FS+0) ⇒ ES 2026-01-08, 4d ⇒ EF 2026-01-11. MB1 (FS+3)
-  // ⇒ ES 2026-01-08 + 3 = 2026-01-11, 6d ⇒ EF 2026-01-16. D1 has two incoming FS+0 edges, so its derived
-  // external early start is the LATEST of the two mid finishes: max(2026-01-11, 2026-01-16) = 2026-01-16.
+  // U1: 8d from 2026-01-01 ⇒ EF 2026-01-08, ending 2026-01-09 00:00. MA1 (FS+0) ⇒ ES 2026-01-09, 4d
+  // ⇒ EF 2026-01-12 (ends 01-13 00:00). MB1 (FS+3) ⇒ ES 2026-01-09 + 3 = 2026-01-12, 6d ⇒ EF 2026-01-17
+  // (ends 01-18 00:00). D1 has two incoming FS+0 edges, so its derived external early start is the
+  // LATEST of the two mid finish instants: max(01-13 00:00, 01-18 00:00) = `2026-01-18T00:00`.
   it('resolves the programme order upstream-first, deterministic by plan id', () => {
     const solve = solveProgramme(DIAMOND_FIXTURE);
     expect(solve.order).toEqual(['PLAN_UP', 'PLAN_MID_A', 'PLAN_MID_B', 'PLAN_DOWN']);
@@ -176,23 +182,23 @@ describe('F7 tier-3 — golden: diamond fan-in (§30.5 latest-of / §30.8 topo o
     const { solve, result } = programmeResults(DIAMOND_FIXTURE);
 
     // The two mids, first-principles from the fresh upstream (EF 2026-01-08).
-    expect(result('MA1').earlyStart).toBe('2026-01-08'); // FS+0
-    expect(result('MA1').earlyFinish).toBe('2026-01-11'); // 4d
-    expect(result('MB1').earlyStart).toBe('2026-01-11'); // FS+3
-    expect(result('MB1').earlyFinish).toBe('2026-01-16'); // 6d
+    expect(result('MA1').earlyStart).toBe('2026-01-09'); // FS+0 from U1's end
+    expect(result('MA1').earlyFinish).toBe('2026-01-12'); // 4d
+    expect(result('MB1').earlyStart).toBe('2026-01-12'); // FS+3
+    expect(result('MB1').earlyFinish).toBe('2026-01-17'); // 6d
 
-    // The fan-in: D1's derived bound = latest(MA1 EF, MB1 EF) = 2026-01-16 (MB1's chain wins).
-    expect(solve.derivedByActivity.get('D1')!.externalEarlyStart).toBe('2026-01-16');
+    // The fan-in: D1's derived bound = latest(MA1 end, MB1 end) = 2026-01-18 00:00 (MB1's chain wins).
+    expect(solve.derivedByActivity.get('D1')!.externalEarlyStart).toBe('2026-01-18T00:00');
     const d1 = result('D1');
-    expect(d1.earlyStart).toBe('2026-01-16');
-    expect(d1.earlyFinish).toBe('2026-01-18'); // 2026-01-16 + (3 − 1)
+    expect(d1.earlyStart).toBe('2026-01-18');
+    expect(d1.earlyFinish).toBe('2026-01-20'); // 2026-01-18 + (3 − 1)
     expect(d1.externalDriven).toBe(true);
   });
 });
 
 describe('F7 tier-3 — golden: ignore-external drops the derived cross-plan bound (§30.4, S09 extended)', () => {
   it('drops the derived bound so the downstream falls back to its own logic (data-date floor)', () => {
-    // The derivation still composes the 2026-01-12 bound (it is engine-free and unaffected by the
+    // The derivation still composes the 2026-01-13T00:00 bound (it is engine-free and unaffected by the
     // toggle); the ENGINE drops it under ignoreExternalRelationships, so CONS_ERECT — which has no
     // internal predecessor — floors at its 2026-01-01 data date. This is S09 (ADR-0035 §30.4) extended
     // to a DERIVED (live cross-plan) bound, not just a hand-entered M1 column.
@@ -201,15 +207,15 @@ describe('F7 tier-3 — golden: ignore-external drops the derived cross-plan bou
 
     // The derived bound is identical either way — only the engine's response to it changes.
     expect(honoured.solve.derivedByActivity.get('CONS_ERECT')!.externalEarlyStart).toBe(
-      '2026-01-12',
+      '2026-01-13T00:00',
     );
     expect(ignored.solve.derivedByActivity.get('CONS_ERECT')!.externalEarlyStart).toBe(
-      '2026-01-12',
+      '2026-01-13T00:00',
     );
 
     const honCons = honoured.result('CONS_ERECT');
     const ignCons = ignored.result('CONS_ERECT');
-    expect(honCons.earlyStart).toBe('2026-01-12'); // honoured: the derived bound drives
+    expect(honCons.earlyStart).toBe('2026-01-13'); // honoured: the derived bound drives
     expect(ignCons.earlyStart).toBe('2026-01-01'); // ignored: pulled back to the data date
     expect(ignCons.earlyStart < honCons.earlyStart).toBe(true);
     expect(ignCons.externalDriven).toBeUndefined(); // no external bound is binding once dropped
@@ -267,14 +273,27 @@ describe('F7 negatives — N30–N33 (ADR-0035 §30.5–§30.6)', () => {
         {
           successorActivityId: 'CONS_ERECT',
           type: 'FS',
-          lagDays: 2,
+          lagMinutes: 2 * 1440,
+          lagCalendar: allMinutesWorkCalendar,
+          predecessor: {
+            type: 'TASK',
+            durationMinutes: 10 * 1440,
+            calendar: allMinutesWorkCalendar,
+            dataDate: '2026-01-01',
+          },
           predecessorPlacedStart: null,
           predecessorPlacedFinish: null,
         },
       ],
       outgoing: [],
       m1: new Map([['CONS_ERECT', { externalEarlyStart: null, externalLateFinish: null }]]),
-      durationDaysByActivity: new Map([['CONS_ERECT', 5]]),
+      activities: new Map([
+        [
+          'CONS_ERECT',
+          { type: 'TASK', durationMinutes: 5 * 1440, calendar: allMinutesWorkCalendar },
+        ],
+      ]),
+      dataDate: '2026-01-01',
     });
     expect(upstreamMissingCount).toBe(1);
     expect(derived.get('CONS_ERECT')).toEqual({

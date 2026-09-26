@@ -40,7 +40,10 @@ import {
   resolveDayFactorMinutes,
   schedulingCalendarId,
 } from '../activities/day-factor';
-import { loadDrivingCalendarMap } from '../activities/driving-calendars';
+import {
+  loadDrivingCalendarMap,
+  loadDrivingCalendarMapForRows,
+} from '../activities/driving-calendars';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { classifyRevisionChanges } from '../baselines/revision-changes';
 import { correlateByCode, correlateEdges } from '../baselines/revision-correlate';
@@ -58,7 +61,14 @@ import {
   revisionDate,
 } from '../baselines/revision-projections';
 import { CalendarRepository } from '../calendars/calendar.repository';
-import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
+import {
+  CrossPlanDependencyRepository,
+  type CrossPlanRemoteEndpointRow,
+} from '../cross-plan-dependencies/cross-plan-dependency.repository';
+import {
+  crossPlanLagCalendarId,
+  type CrossPlanEndpointCalendarFacts,
+} from '../cross-plan-dependencies/cross-plan-lag-calendar';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
@@ -73,11 +83,12 @@ import {
 } from './criticality-rule';
 import {
   deriveExternalInstants,
+  type CrossPlanLocalActivity,
+  type CrossPlanRemoteEndpoint,
   type DerivedExternalInstant,
   type IncomingCrossPlanEdge,
   type OutgoingCrossPlanEdge,
 } from './cross-plan-derivation';
-import { MINUTES_PER_DAY } from './day-compat-calendar';
 import { type RevisionInclude } from './dto/revision-compare-query.dto';
 import {
   allMinutesWorkCalendar,
@@ -1505,39 +1516,140 @@ export class ScheduleService {
           },
         ]),
       );
-      // Durations in whole days for the FF/SF start-/finish-implied arithmetic (ADR-0036 §7).
+      // **One rule, on instants** (#385, spec D1–D7). The derivation now does what the engine does,
+      // with the engine's own functions: each remote date is read as an instant on the REMOTE
+      // activity's scheduling calendar, anchored at the remote plan's data date; the lag is walked
+      // in working minutes on the port the one cross-plan lag-calendar rule names; and the FF/SF
+      // durations walk this plan's activity's own calendar. There is no day-denominated input left
+      // here, so no 1440 and no hours-per-day: every quantity is the stored working-minute value.
       //
-      // **Fixed 1440 here, deliberately — NOT the calendar's hours-per-day** (ADR-0068 §3b). This is
-      // the one place a day-denominated value becomes engine INPUT: `deriveExternalInstants` walks
-      // `addDays` over CALENDAR days, so what it needs is elapsed days, not working ones. Feeding it
-      // a working-hours-scaled value would compound two approximations in the only spot where the
-      // result moves computed dates — a 540-minute activity would read as one day here and be added
-      // as one CALENDAR day, which is a different claim from the one its duration makes.
-      const durationDaysByActivity = new Map(
-        activityRows.map((r) => [r.id, Math.round(r.durationMinutes / MINUTES_PER_DAY)]),
+      // Cost (FC-6): the loads above are one query per direction whatever the edge count, the
+      // remote driving calendars are ONE loader call over every remote endpoint, and each distinct
+      // calendar id is built into a port once (`portOfCalId`). No query or port resolution is issued
+      // per edge.
+      const remoteEndpoints = [
+        ...incomingRows.map((e) => e.predecessor),
+        ...outgoingRows.map((e) => e.successor),
+      ];
+      // The remote driving calendars, org-scoped by THIS link's organisation (the recalculating
+      // plan's), which is every link's here: `countActiveForPlan` and both loads are org-scoped.
+      const remoteDrivingCal = await loadDrivingCalendarMapForRows(
+        tx,
+        remoteEndpoints.map((e) => ({ organizationId, planId: e.planId, type: e.type })),
       );
-      // Lag likewise: signed working-MINUTES ÷ a fixed 1440, for the same reason as above.
-      const incoming: IncomingCrossPlanEdge[] = incomingRows.map((e) => ({
-        successorActivityId: e.successorId,
+      const remoteFacts = (e: CrossPlanRemoteEndpointRow): CrossPlanEndpointCalendarFacts => ({
         type: e.type,
-        lagDays: Math.round(e.lagMinutes / MINUTES_PER_DAY),
-        predecessorPlacedStart: e.predecessorPlacedStart
-          ? formatCalendarDate(e.predecessorPlacedStart)
-          : null,
-        predecessorPlacedFinish: e.predecessorPlacedFinish
-          ? formatCalendarDate(e.predecessorPlacedFinish)
-          : null,
-      }));
-      const outgoing: OutgoingCrossPlanEdge[] = outgoingRows.map((e) => ({
-        predecessorActivityId: e.predecessorId,
-        type: e.type,
-        lagDays: Math.round(e.lagMinutes / MINUTES_PER_DAY),
-        successorLateStart: e.successorLateStart ? formatCalendarDate(e.successorLateStart) : null,
-        successorLateFinish: e.successorLateFinish
-          ? formatCalendarDate(e.successorLateFinish)
-          : null,
-      }));
-      const result = deriveExternalInstants({ incoming, outgoing, m1, durationDaysByActivity });
+        calendarId: e.calendarId,
+        drivingCalendarId: remoteDrivingCal.get(e.id) ?? null,
+        planCalendarId: e.planCalendarId,
+      });
+      const rowById = new Map(activityRows.map((r) => [r.id, r] as const));
+      const localFacts = (id: string): CrossPlanEndpointCalendarFacts => {
+        const r = rowById.get(id);
+        if (!r)
+          throw new Error(`cross-plan edge names activity "${id}", which this plan has no row for`);
+        return {
+          type: r.type,
+          calendarId: r.calendarId,
+          drivingCalendarId: drivingResourceCalByActivity.get(id) ?? null,
+          planCalendarId: plan.calendarId,
+        };
+      };
+      // A calendar id to its port, built once per distinct id. `null` is "no calendar": a
+      // TWENTY_FOUR_HOUR lag, or a plan without one; both are the all-minutes port, which is what
+      // `resolveCalendar(null)` builds and what the engine walks a 24-hour lag on.
+      const allMinutes = await this.resolveCalendar(organizationId, null, tx);
+      const portOfCalId = async (calId: string | null): Promise<WorkingTimeCalendar> => {
+        if (calId === null) return allMinutes;
+        if (calId === plan.calendarId) return calendar;
+        let port = portByCalId.get(calId);
+        if (!port) {
+          port = await this.resolveCalendar(organizationId, calId, tx);
+          portByCalId.set(calId, port);
+        }
+        return port;
+      };
+      const remoteEndpoint = async (
+        e: CrossPlanRemoteEndpointRow,
+      ): Promise<CrossPlanRemoteEndpoint> => {
+        const f = remoteFacts(e);
+        return {
+          type: e.type,
+          durationMinutes: e.durationMinutes,
+          calendar: await portOfCalId(
+            schedulingCalendarId({
+              type: f.type,
+              drivingCalendarId: f.drivingCalendarId,
+              activityCalendarId: f.calendarId,
+              planCalendarId: f.planCalendarId,
+            }),
+          ),
+          dataDate: formatCalendarDate(e.planDataDate),
+        };
+      };
+      const incoming: IncomingCrossPlanEdge[] = [];
+      for (const e of incomingRows) {
+        incoming.push({
+          successorActivityId: e.successorId,
+          type: e.type,
+          lagMinutes: e.lagMinutes,
+          lagCalendar: await portOfCalId(
+            crossPlanLagCalendarId({
+              lagCalendar: e.lagCalendar,
+              predecessor: remoteFacts(e.predecessor),
+              successor: localFacts(e.successorId),
+            }),
+          ),
+          predecessor: await remoteEndpoint(e.predecessor),
+          predecessorPlacedStart: e.predecessorPlacedStart
+            ? formatCalendarDate(e.predecessorPlacedStart)
+            : null,
+          predecessorPlacedFinish: e.predecessorPlacedFinish
+            ? formatCalendarDate(e.predecessorPlacedFinish)
+            : null,
+        });
+      }
+      const outgoing: OutgoingCrossPlanEdge[] = [];
+      for (const e of outgoingRows) {
+        outgoing.push({
+          predecessorActivityId: e.predecessorId,
+          type: e.type,
+          lagMinutes: e.lagMinutes,
+          lagCalendar: await portOfCalId(
+            crossPlanLagCalendarId({
+              lagCalendar: e.lagCalendar,
+              predecessor: localFacts(e.predecessorId),
+              successor: remoteFacts(e.successor),
+            }),
+          ),
+          successor: await remoteEndpoint(e.successor),
+          successorLateStart: e.successorLateStart
+            ? formatCalendarDate(e.successorLateStart)
+            : null,
+          successorLateFinish: e.successorLateFinish
+            ? formatCalendarDate(e.successorLateFinish)
+            : null,
+        });
+      }
+      // This plan's activities as the bound functions need them: the port each SCHEDULES on (the
+      // plan's own when it inherits), the same port `toEngineActivity` hands the engine below.
+      const localActivities = new Map<string, CrossPlanLocalActivity>(
+        activityRows.map((r) => [
+          r.id,
+          {
+            type: r.type,
+            durationMinutes: r.durationMinutes,
+            calendar: portFor(effectiveByActivity.get(r.id)!.calId) ?? calendar,
+          },
+        ]),
+      );
+      const result = deriveExternalInstants({
+        incoming,
+        outgoing,
+        m1,
+        activities: localActivities,
+        dataDate,
+      });
       for (const [id, instant] of result.derived) derivedExternalByActivity.set(id, instant);
       crossPlanUpstreamMissingCount = result.upstreamMissingCount;
     }

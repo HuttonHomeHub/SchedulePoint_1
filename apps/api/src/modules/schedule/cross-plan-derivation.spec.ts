@@ -298,6 +298,56 @@ const BACKWARD: BackwardCell[] = [
     }),
     expected: '2026-02-12T00:00',
   },
+  // ---- Added after the table above, when the mixed-calendar axis (M2-T6) found 96 red cells. ----
+  // The engine's backward pass holds every late FINISH at the pre-gap end boundary
+  // (`compute.ts`: `finish = rollBackwardToWorking(cal, dataDateAbs, upper)`) and a zero-duration
+  // activity's late START at that same instant (`duration === 0 ? finish : …`). So a late date
+  // read on the backward side means the END of that day's working time, never the next working
+  // minute after it. The two are one position on the remote activity's own calendar and differ by
+  // the non-working gap on any other, which is exactly when a lag or the local calendar sees it.
+  {
+    // A finish milestone on the eight-hour calendar dated Wed 02-11: its working day ends Wed
+    // 16:00, which is where the engine holds its late finish and (zero duration) its late start.
+    // FS lag 0 on Standard ⇒ Wed 16:00. The post-gap reading, Thu 08:00, is 960 Standard
+    // minutes later.
+    name: 'FS into an eight-hour finish milestone reads the END of its working day, not Thu 08:00',
+    edge: outgoing({
+      successor: remoteTask({
+        type: 'FINISH_MILESTONE',
+        durationMinutes: 0,
+        calendar: EIGHT_HOUR,
+      }),
+      successorLateStart: '2026-02-11',
+      successorLateFinish: '2026-02-11',
+    }),
+    expected: '2026-02-11T16:00',
+  },
+  {
+    // A Standard finish milestone dated Fri 02-13: its working day ends Sat 02-14 00:00 (Standard
+    // works to midnight), the pre-gap end boundary. FS lag 0 on the every-minute calendar ⇒ that
+    // instant. The post-gap reading would be Mon 02-16 00:00, two elapsed days later.
+    name: 'FS into a Friday finish milestone, 24-hour lag: the end of Friday, not Monday',
+    edge: outgoing({
+      lagCalendar: allMinutesWorkCalendar,
+      successor: remoteTask({ type: 'FINISH_MILESTONE', durationMinutes: 0 }),
+      successorLateStart: '2026-02-13',
+      successorLateFinish: '2026-02-13',
+    }),
+    expected: '2026-02-14T00:00',
+  },
+  {
+    // An eight-hour 3-day task with late finish Wed 02-11: its late finish is the end of Wed's
+    // working time, Wed 16:00 (already the pre-gap boundary: `finishDateInstant` rolls back from
+    // Thu 00:00). FF lag 0 on Standard ⇒ Wed 16:00. A control: a task's late finish did not move.
+    name: 'FF from an eight-hour task: its late finish is already the end of its working day',
+    edge: outgoing({
+      type: 'FF',
+      successor: remoteTask({ calendar: EIGHT_HOUR, durationMinutes: 3 * 480 }),
+      successorLateStart: '2026-02-09',
+      successorLateFinish: '2026-02-11',
+    }),
+    expected: '2026-02-11T16:00',
+  },
 ];
 
 describe('deriveExternalInstants — forward bound on instants (hand-derived)', () => {
