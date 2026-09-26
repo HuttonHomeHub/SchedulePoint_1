@@ -172,6 +172,17 @@ We will implement the following semantics. Each cites the milestone that will bu
     negative float** (e.g. from a downstream FNLT); an LOE with no span is rejected/warned (N12).
 22. **Zero-duration task ≠ milestone:** a zero-duration `TASK` has both a start and a finish (equal),
     can carry resources, and obeys duration-type rules; it is not coerced to a milestone (A7550).
+
+    > **§22 amendment — the date a zero-duration task reads (ADR-0162, 2026-09-26).** A zero-duration
+    > `TASK` is dated by the day its instant **opens**, and every date given for one (placement,
+    > constraint, external date) means the start of that day. This is the rule it always had; §22
+    > did not state it. It differs from a `FINISH_MILESTONE`, which ADR-0155 dates by the day that
+    > closes at its instant, so after a task ending Friday the two read Monday and Friday at the same
+    > instant. The finish-milestone rule is not applied to a task because it would date a task
+    > reached only by start-type logic a day before the work it is tied to starts; a rule chosen per
+    > task from its driving link would read one engine output to label another. A type change across
+    > the two conventions re-expresses the stored dates so the instant is kept (ADR-0162 decision 3).
+
 23. **Resource-dependent** activities schedule on the **resource's** calendar, not the activity's
     (A6100 on the crane-hire window; A8300 on the Mon–Thu specialist calendar).
 24. **WBS-summary** dates roll up from the earliest start / latest finish of the branch; summaries

@@ -11712,14 +11712,29 @@ the previous router and the target has to be re-read before any work starts.
 
 ### 384. A zero-duration task and a finish milestone at the same instant print different dates
 
-**Status:** open · **Verified:** 2026-09-23 · **Raised:** 2026-09-23 (ADR-0155) ·
-**Size:** S · **Owner:** product
+**Status:** open · **Verified:** 2026-09-26 · **Raised:** 2026-09-23 (ADR-0155) ·
+**Size:** M · **Owner:** product
 
-ADR-0155 dates a finish milestone by the day that closes at its instant and deliberately leaves a
-zero-duration `TASK` on the old rule (the day that opens there). After a task ending Friday, the two
-read Friday and Monday. ADR-0035 §22 called them "date-neutral", and that stopped being true.
-Whether a zero-duration task should follow the finish-milestone rule is a separate question the
-spec left open; `compute.finish-milestone.spec.ts` pins the current reading.
+**Decided (ADR-0162, 2026-09-26): the task's date rule stays.** A zero-duration `TASK` is dated by
+the day its instant opens and a finish milestone by the day that closes there, so after a task
+ending Friday they read Monday and Friday. The finish-milestone rule would misdate a task reached
+only by start-type logic, and a rule chosen per task from its driving link would read one engine
+output to label another. The "date-neutral" sentence this row once attributed to ADR-0035 §22 was a
+test docblock (`compute.zero-task.spec.ts`), now corrected; §22 carries the rule as an amendment.
+
+What is left is a data-quality problem, worked as the zero-duration-task epic
+(`docs/specs/zero-duration-task/`):
+
+- **M0** (done): measurements, the engine characterisation, the type-change defect reproduced
+  through the API, two staff diagnostics, the catalogue's `Z`, and `check:engine-parity`, whose
+  limb 3 reads this row — **keep it `open` until M6 closes it and deactivates the gate in the same
+  commit**.
+- **M1** (done): ADR-0162, the §22 amendment and the docblock.
+- **M2**: a type change across the finish-milestone convention keeps the instant (server rule).
+- **M3**: the health advisory, and a tolerant import-report reader (closes #387).
+- **M4**: the resourced fact on activity rows and the **Make milestone** action.
+- **M5**: the import advisory producer, at least one release after M3.
+- **M6**: the gate pass; close this row.
 
 ### 387. The import report schema is strict, so a report that gains a field breaks a browser one release behind
 

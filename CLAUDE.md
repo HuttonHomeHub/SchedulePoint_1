@@ -5978,6 +5978,30 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   before `A`. Rollback is a documented reverse, not a redeploy. **The CPM engine's arithmetic is
   unchanged** — moved, not edited, and `compute.spec.ts` passes unedited.
 
+- **ADR-0162** _(Proposed; M0 and M1 landed 2026-09-26, the rest accepts per milestone)_ — A
+  zero-duration task keeps its date, is reported, and converts without moving the schedule.
+  ADR-0155 dated a finish milestone by the day that **closes** at its instant and left a
+  zero-duration `TASK` on the day that **opens** there, so the two read Friday and Monday at one
+  instant. **The task's rule stays** (decision 1): the finish-milestone rule would date a task
+  reached only by start-type logic a day before the work it is tied to starts, and choosing a rule
+  per task from its driving link would read one engine output to label another. What is left is a
+  data-quality problem, and M0 **measured** its sharpest instance rather than reading it: changing a
+  placed or constrained zero-duration task's type to finish milestone in the editor moved its
+  successor from Monday 12 to **Tuesday 13 January**, because the stored SNET was read at the end of
+  its day after the type changed (`zero-duration-type-change.e2e-spec.ts`). So the server
+  **re-expresses the unsent stored dates one calendar day** on any type change across the
+  convention, for every `ActivityType`, before the N26 check — calendar days and never working days,
+  because a working-day shift keeps every instant and round-trips every working day, so only the
+  stored value and a round trip from a Sunday can tell them apart. Findings are a health-report
+  `advisories` section outside the 14 DCMA metrics and an optional import-report `advisories`
+  array, never a new finding kind (a fourth kind would be filed as a drop). The import report's
+  readers become tolerant of unknown keys at every level, closing #387. The conversion action is a
+  plain `PATCH {type}`, unaudited because a type edit is a content edit whose effect is bounded to
+  one activity's label and the plan's finish label. **ADR-0035 §22 never said "date-neutral"**:
+  ADR-0155 and #384 attributed a test docblock's sentence to it; §22 gains the rule as an amendment
+  and the docblock is corrected, comment only, under `check:engine-parity` — the gate's first real
+  run. **The CPM engine is not modified and no migration runs.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the

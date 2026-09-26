@@ -13,12 +13,14 @@ import {
  * Zero-duration task ≠ milestone (M4-F1, ADR-0035 §22). A zero-duration `TASK` has an equal start and
  * finish (no work) but is scheduled as a **task**, not coerced to a milestone. The engine keeps the
  * task/milestone distinction by **TYPE** (`isMilestone`) — the project-finish tie-break's
- * "occupies its start instant" privilege keys off the milestone type, not `duration === 0`. In the
- * current date model that distinction is **date-neutral** (a zero-duration task still has a real
- * finish, so it carries the project finish exactly as a milestone at the same instant would), which is
- * precisely why the golden suite stays byte-identical; the change expresses §22's intent in code and
- * future-proofs the type-vs-duration seam (resources, duration-type rules). Plan calendar: Mon–Fri
- * full days, `DATA_DATE = 2026-01-05` (Mon).
+ * "occupies its start instant" privilege keys off the milestone type, not `duration === 0`. The
+ * distinction is **not** date-neutral: since ADR-0155 a finish milestone is dated by the day that
+ * closes at its instant and a zero-duration task by the day that opens there, so after a task ending
+ * Friday the two read Friday and Monday at the same instant (the project-finish case below asserts
+ * exactly that). This docblock said "date-neutral" until 2026-09-26, and ADR-0155 and
+ * `docs/TECH_DEBT.md` #384 attributed that phrase to ADR-0035 §22, which never carried it; §22 now
+ * carries the date rule as an amendment (ADR-0162). The golden suite stays byte-identical because it
+ * holds no finish milestone. Plan calendar: Mon–Fri full days, `DATA_DATE = 2026-01-05` (Mon).
  */
 const DATA_DATE = '2026-01-05';
 const DAY = 1440;
@@ -56,7 +58,7 @@ describe('zero-duration task ≠ milestone (M4-F1, ADR-0035 §22)', () => {
     // **Since #381 they no longer print the same day, and that is the change.** A finish milestone is
     // reported on the day it closes, its predecessor's last day (Fri 01-09), as P6 and NetPoint print
     // it. A zero-duration TASK keeps the start-dated reading (Mon 01-12): it is a task (§22), and moving
-    // it too is a separate question, filed rather than folded in. This case said "both read Mon 01-12"
+    // it too was decided against (ADR-0162 decision 1). This case said "both read Mon 01-12"
     // until the change; the instant, and so every successor, is unchanged.
     const withMilestone = run(
       [act('A', 5 * DAY), act('M', 0, 'FINISH_MILESTONE')],

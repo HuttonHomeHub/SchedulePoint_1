@@ -395,6 +395,15 @@ keep `main` releasable.
   identically. MS Project files do not carry the layout yet. Whether a real P6 opens the file has
   not been observed.
 
+- **A zero-duration task keeps its date, and changing its type no longer moves it** (ADR-0162,
+  amending ADR-0035 §22; in progress). A zero-duration task is still dated by the day it starts, so
+  after a task ending Friday it reads Monday where a finish milestone at the same instant reads
+  Friday. Changing such an activity's type in the editor now re-expresses its stored dates so its
+  place in the schedule, its successors and its float are unchanged; before, it moved by up to a
+  working day. Still to come in this epic: the health check lists zero-duration tasks in a section
+  of its own, an import says which activities arrived with no duration, and a **Make milestone**
+  action turns one into a milestone in one step.
+
 - **A link between two plans gives the same dates as the same link in one plan** (ADR-0161,
   amending ADR-0045 §2 and ADR-0035 §30.5). A cross-plan link used its own simplified arithmetic,
   in whole calendar days: a finish-to-start link with no lag let the next plan start on the
