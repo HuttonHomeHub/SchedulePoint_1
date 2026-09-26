@@ -16,6 +16,11 @@ const nextId = (prefix: string): string => `${prefix}-${++seq}`;
 
 export function activity(overrides: Partial<HealthActivityInput> = {}): HealthActivityInput {
   const id = overrides.id ?? nextId('act');
+  // `assignmentCount` defaults FROM `hasAssignment` when a case gives only the latter, so the suites
+  // written before the advisory existed pass unedited and never build an activity whose two
+  // readings disagree (zero-duration-task M3-T1).
+  const assignmentCount = overrides.assignmentCount ?? ((overrides.hasAssignment ?? true) ? 1 : 0);
+  const hasAssignment = overrides.hasAssignment ?? assignmentCount > 0;
   return {
     id,
     code: null,
@@ -35,8 +40,9 @@ export function activity(overrides: Partial<HealthActivityInput> = {}): HealthAc
     earlyStart: '2026-03-02',
     earlyFinish: '2026-03-03',
     dayFactorMinutes: 480,
-    hasAssignment: true,
     ...overrides,
+    hasAssignment,
+    assignmentCount,
   };
 }
 

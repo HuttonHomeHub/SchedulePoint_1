@@ -1,10 +1,14 @@
-import type {
-  HealthMeasured,
-  HealthMetricId,
-  HealthMetricResult,
-  HealthNotAssessableReason,
-  HealthOffender,
-  ScheduleHealthReport,
+import {
+  HEALTH_ADVISORY_IDS,
+  isZeroDurationTask,
+  type HealthAdvisoryId,
+  type HealthAdvisoryResult,
+  type HealthMeasured,
+  type HealthMetricId,
+  type HealthMetricResult,
+  type HealthNotAssessableReason,
+  type HealthOffender,
+  type ScheduleHealthReport,
 } from '@repo/types';
 
 import { resolveRemainingMinutes } from '../remaining-duration';
@@ -54,7 +58,24 @@ export interface HealthActivityInput {
   earlyFinish: string | null;
   /** Minutes per authored day on the activity's effective calendar (ADR-0068, attachDayFactors). */
   dayFactorMinutes: number;
+  /** Metric 10's reading: the activity holds at least one live assignment. */
   hasAssignment: boolean;
+  /**
+   * How many live assignments it holds — the zero-duration advisory's offender note. Always built
+   * with `hasAssignment` by {@link healthActivityAssignmentFields}, from one count, so the two
+   * readings cannot disagree (spec FC-7).
+   */
+  assignmentCount: number;
+}
+
+/**
+ * Both assignment readings of one activity from one count (spec FC-7): metric 10 reads presence,
+ * the advisory reads the number. The service's one construction site spreads this.
+ */
+export function healthActivityAssignmentFields(
+  count: number,
+): Pick<HealthActivityInput, 'hasAssignment' | 'assignmentCount'> {
+  return { hasAssignment: count > 0, assignmentCount: count };
 }
 
 export interface HealthDependencyInput {
@@ -187,6 +208,15 @@ function informational(
   };
 }
 
+/**
+ * The advisory's offender note. "no resource assignment" is metric 10's phrase (below), reused so a
+ * planner reads one fact one way wherever the panel states it.
+ */
+function assignmentNote(count: number): string {
+  if (count === 0) return 'no resource assignment';
+  return count === 1 ? '1 resource assignment' : `${count} resource assignments`;
+}
+
 const activityOffender = (a: HealthActivityInput, note: string): HealthOffender => ({
   kind: 'ACTIVITY',
   id: a.id,
@@ -270,6 +300,13 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
     };
   });
 
+  // The findings beyond the DCMA assessment (ADR-0162 decision 2). Total over their own tuple and
+  // built AFTER the summary's inputs, which read `metrics` alone: an advisory is never counted
+  // there (FC-4).
+  const advisoryRows: Record<HealthAdvisoryId, HealthAdvisoryResult> = {
+    ZERO_DURATION_TASKS: advisoryZeroDurationTasks(),
+  };
+
   const summary = {
     passed: metrics.filter((m) => m.verdict === 'PASS').length,
     failed: metrics.filter((m) => m.verdict === 'FAIL').length,
@@ -290,6 +327,7 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
     summary,
     offenderCap: OFFENDER_CAP,
     metrics,
+    advisories: HEALTH_ADVISORY_IDS.map((id) => advisoryRows[id]),
   };
 
   // --- Metric 1 — missing logic -----------------------------------------------------------------
@@ -471,6 +509,22 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
     const measured = measuredPercent(unassigned.length, considered.length);
     const offenders = unassigned.map((a) => activityOffender(a, 'no resource assignment'));
     return informational(measured, offenders, { narrowing: RESOURCES_NARROWING });
+  }
+
+  // --- Advisory — zero-duration tasks (ADR-0162) ---------------------------------------------
+  // A `TASK` with no work is almost always a milestone entered, or imported, as a task. Assessed
+  // from STORED durations, so it is present whether or not the plan has been calculated. Never
+  // NOT_ASSESSABLE: an empty plan is "0 of 0", which the panel reads as "None".
+  function advisoryZeroDurationTasks(): HealthAdvisoryResult {
+    const zero = acts.filter((a) => isZeroDurationTask(a.type, a.durationMinutes));
+    const offenders = zero.map((a) => activityOffender(a, assignmentNote(a.assignmentCount)));
+    return {
+      id: 'ZERO_DURATION_TASKS',
+      name: 'Zero-duration tasks',
+      measured: measuredPercent(zero.length, acts.length),
+      ...capped(offenders),
+      detail: { resourced: zero.filter((a) => a.assignmentCount > 0).length },
+    };
   }
 
   // --- Metric 11 — missed activities ------------------------------------------------------------

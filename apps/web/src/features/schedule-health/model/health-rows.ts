@@ -1,4 +1,5 @@
 import type {
+  HealthAdvisoryResult,
   HealthMetricResult,
   HealthNotAssessableReason,
   ScheduleHealthReport,
@@ -200,5 +201,28 @@ export function mergeCriticalPathResult(
  */
 export function healthAnnouncement(report: ScheduleHealthReport): string {
   const s = report.summary;
-  return `Health check: ${s.failed} failed, ${s.passed} passed, ${s.notAssessable} not assessed, ${s.informational} informational.`;
+  const headline = `Health check: ${s.failed} failed, ${s.passed} passed, ${s.notAssessable} not assessed, ${s.informational} informational.`;
+  const zero = healthAdvisoriesOf(report)?.find((a) => a.id === 'ZERO_DURATION_TASKS');
+  return zero === undefined
+    ? headline
+    : `${headline} Beyond the DCMA assessment: ${zeroDurationPhrase(zero.offenderCount)}.`;
+}
+
+/**
+ * The report's advisories (ADR-0162 D1), read **defensively**: `@repo/types` declares the field
+ * required because the server always sends it, but a new bundle can meet an API released before it
+ * (spec E32), and then the field is absent at runtime. Absent is `null`, and every consumer renders
+ * nothing for it — never a failure and never an invented "none".
+ */
+export function healthAdvisoriesOf(
+  report: ScheduleHealthReport,
+): readonly HealthAdvisoryResult[] | null {
+  const advisories: readonly HealthAdvisoryResult[] | undefined = report.advisories;
+  return advisories ?? null;
+}
+
+/** "no zero-duration tasks" / "1 zero-duration task" / "3 zero-duration tasks". */
+export function zeroDurationPhrase(count: number): string {
+  if (count === 0) return 'no zero-duration tasks';
+  return count === 1 ? '1 zero-duration task' : `${String(count)} zero-duration tasks`;
 }

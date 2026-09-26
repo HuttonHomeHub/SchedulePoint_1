@@ -49,6 +49,7 @@ function report(overrides: Partial<ScheduleHealthReport> = {}): ScheduleHealthRe
     baseline: null,
     summary: { passed: 12, failed: 1, notAssessable: 1, informational: 0 },
     offenderCap: 50,
+    advisories: [],
     metrics: METRIC_IDS.map((id, i) =>
       metric({ id, ordinal: i + 1, name: id.toLowerCase().replaceAll('_', ' ') }),
     ),

@@ -111,7 +111,7 @@ import {
   type HistogramAssignmentInput,
   type WorkingTimeCalendar,
 } from './engine';
-import { computeHealthReport } from './health/compute-health';
+import { computeHealthReport, healthActivityAssignmentFields } from './health/compute-health';
 import type { HealthActivityInput } from './health/compute-health';
 import {
   buildPlanCalendar,
@@ -945,13 +945,14 @@ export class ScheduleService {
     const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
     if (!plan) throw new NotFoundError('Plan not found.');
 
-    const [activityRows, edges, baselineSnapshot, assignedIds, planCalendar] = await Promise.all([
-      this.schedule.loadHealthActivities(organization.id, planId),
-      this.schedule.loadEdges(organization.id, planId),
-      this.schedule.loadActiveBaselineHealthSnapshot(organization.id, planId),
-      this.schedule.loadHealthAssignedActivityIds(organization.id, planId),
-      this.resolveCalendar(organization.id, plan.calendarId),
-    ]);
+    const [activityRows, edges, baselineSnapshot, assignmentCounts, planCalendar] =
+      await Promise.all([
+        this.schedule.loadHealthActivities(organization.id, planId),
+        this.schedule.loadEdges(organization.id, planId),
+        this.schedule.loadActiveBaselineHealthSnapshot(organization.id, planId),
+        this.schedule.loadHealthAssignmentCounts(organization.id, planId),
+        this.resolveCalendar(organization.id, plan.calendarId),
+      ]);
 
     // Each activity's SCHEDULING day↔minute factor (ADR-0068 + `docs/TECH_DEBT.md` #86) in one
     // batched lookup — metric 8's conversion, never a constant and never a per-row query — beside
@@ -1001,7 +1002,10 @@ export class ScheduleService {
       earlyStart: date(r.earlyStart),
       earlyFinish: date(r.earlyFinish),
       dayFactorMinutes: r.dayFactorMinutes,
-      hasAssignment: assignedIds.has(r.id),
+      // The one construction site for both readings of the count (spec FC-7): metric 10 reads
+      // presence, the zero-duration advisory the number. `healthActivityAssignmentFields` derives
+      // both from one value so they cannot disagree; a unit case pins it.
+      ...healthActivityAssignmentFields(assignmentCounts.get(r.id) ?? 0),
     }));
 
     return computeHealthReport({

@@ -681,12 +681,13 @@ const VISUAL_CONFLICT_LATER: DiagnosticEntry = {
  * advisory, and D-M sizes how much of it the action will shade rather than offer.
  *
  * **"Live assignment" is spec FC-10's predicate**: `ra.deleted_at IS NULL` and
- * `r.deleted_at IS NULL`, on a live activity in a live plan — the one
- * `ScheduleRepository.loadHealthAssignedActivityIds` already applies, and the one the activity field
- * and the health advisory will use, so three readers cannot disagree about one activity. An
- * unassigned row and an assignment to a soft-deleted resource both leave a task **unresourced**; the
- * e2e fixture holds one of each and asserts neither is counted. `is_driving` is not consulted: any
- * live assignment makes the task resourced, driving or not.
+ * `r.deleted_at IS NULL`, on a live activity in a live plan — the two conditions
+ * `liveAssignmentWhere` (`activities/live-assignment.ts`) states for the health loader
+ * (`ScheduleRepository.loadHealthAssignmentCounts`) and, from M4, the activity field, so three
+ * readers cannot disagree about one activity. An unassigned row and an assignment to a soft-deleted
+ * resource both leave a task **unresourced**; the e2e fixture holds one of each and asserts neither
+ * is counted. `is_driving` is not consulted: any live assignment makes the task resourced, driving
+ * or not.
  *
  * **D-M counts `DISTINCT a.id` through a join, never `EXISTS`** — gate S-4 refuses the semi-join's
  * `SELECT 1` (D-I's docblock), and the `DISTINCT` is load-bearing: a task holding two live

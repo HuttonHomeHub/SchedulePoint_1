@@ -33,6 +33,7 @@ function report(metrics: HealthMetricResult[]): ScheduleHealthReport {
     baseline: null,
     summary: { passed: 1, failed: 2, notAssessable: 3, informational: 1 },
     offenderCap: 50,
+    advisories: [],
     metrics,
   };
 }
@@ -153,6 +154,47 @@ describe('healthAnnouncement', () => {
     r.summary = { passed: 14, failed: 0, notAssessable: 0, informational: 0 };
     expect(healthAnnouncement(r)).toBe(
       'Health check: 0 failed, 14 passed, 0 not assessed, 0 informational.',
+    );
+  });
+  // ADR-0162 D1: the advisory joins the ONE settled announcement, after the DCMA summary, so the live
+  // region never tells a screen-reader user a different report from the one on screen (ADR-0116 M5).
+  const withZero = (offenderCount: number): ScheduleHealthReport => ({
+    ...report([]),
+    advisories: [
+      {
+        id: 'ZERO_DURATION_TASKS',
+        name: 'Zero-duration tasks',
+        measured: { count: offenderCount, denominator: 10, percent: null, ratio: null },
+        offenderCount,
+        offendersTruncated: false,
+        offenders: [],
+        detail: { resourced: 0 },
+      },
+    ],
+  });
+
+  it('ends with the zero-duration advisory, counted from offenderCount', () => {
+    expect(healthAnnouncement(withZero(3))).toBe(
+      'Health check: 2 failed, 1 passed, 3 not assessed, 1 informational. Beyond the DCMA assessment: 3 zero-duration tasks.',
+    );
+  });
+
+  it('says "1 zero-duration task" at one', () => {
+    expect(healthAnnouncement(withZero(1))).toMatch(
+      / Beyond the DCMA assessment: 1 zero-duration task\.$/,
+    );
+  });
+
+  it('states a zero rather than dropping the clause', () => {
+    expect(healthAnnouncement(withZero(0))).toMatch(
+      / Beyond the DCMA assessment: no zero-duration tasks\.$/,
+    );
+  });
+
+  it('appends nothing when the API predates `advisories` (spec E32)', () => {
+    const { advisories: _dropped, ...legacy } = withZero(3);
+    expect(healthAnnouncement(legacy as unknown as ScheduleHealthReport)).toBe(
+      'Health check: 2 failed, 1 passed, 3 not assessed, 1 informational.',
     );
   });
 });
