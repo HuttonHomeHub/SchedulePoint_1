@@ -104,6 +104,85 @@ flipping it today fails both cases (`Expected "2026-01-12"`, `Received "2026-01-
 `TASK` whose child still names it as its parent. Filed as `docs/TECH_DEBT.md` **#396** (status
 `open`), not fixed.
 
+## M0-T4: two staff diagnostics
+
+`zero-duration-tasks` (D-L) and `zero-duration-tasks-resourced` (D-M) are in
+`apps/api/src/modules/staff/staff-diagnostics.registry.ts`, both `prospective`, both ids in
+`DIAGNOSTIC_IDS`. Gates S-1 to S-5 (`staff-diagnostics.structural.spec.ts`) pass **unedited**: the
+staff unit suites report 68 passed.
+
+### The fixture, and one departure from the plan
+
+The plan put the fixture case in "the repository spec". That spec mocks Prisma (it tests the `bigint`
+boundary), so it cannot count anything; the case is in `apps/api/test/staff-diagnostics.e2e-spec.ts`,
+against a real database, beside every other entry's fixture. The empty-estate case's list of ids
+gains the two new ones, which is the only edit to an existing case.
+
+| Activity      | Shape                                                   | D-L | D-M |
+| ------------- | ------------------------------------------------------- | --- | --- |
+| Resourced     | zero `TASK`, one live assignment                        | yes | yes |
+| Double        | zero `TASK`, two live assignments                       | yes | yes |
+| Unassigned    | zero `TASK`, its only assignment unassigned             | yes | no  |
+| Gone resource | zero `TASK`, live assignment to a soft-deleted resource | yes | no  |
+| Bare          | zero `TASK`, no assignment                              | yes | no  |
+| Long          | 5-day `TASK`, one live assignment                       | no  | no  |
+| Sign-off      | `FINISH_MILESTONE`, zero duration, one live assignment  | no  | no  |
+| Deleted       | zero `TASK`, deleted                                    | no  | no  |
+
+Expected and read: D-L 5 of 6, D-M 2 of 5, one plan, one organisation. `Gone resource` is the one
+row built below the API, because the API refuses to delete a resource that is still assigned
+(`RESOURCE_IN_USE`); the resource row is soft-deleted directly and its assignment is left live.
+
+### Red runs
+
+One mutation of the registry per run, the new case only (`-t 'zero-duration M0-T4'`), each restored
+from a backup before the next:
+
+| Mutation                                       | Result | Read                       |
+| ---------------------------------------------- | ------ | -------------------------- |
+| D-M numerator without `r.deleted_at IS NULL`   | red    | D-M affected 3, expected 2 |
+| D-M numerator without `ra.deleted_at IS NULL`  | red    | D-M affected 3, expected 2 |
+| D-M numerator `count(*)` for `count(DISTINCT)` | red    | D-M affected 3, expected 2 |
+| D-M numerator without the duration filter      | red    | D-M affected 3, expected 2 |
+| D-M numerator without the type filter          | red    | D-M affected 3, expected 2 |
+| D-L numerator without `a.deleted_at IS NULL`   | red    | D-L affected 6, expected 5 |
+| D-L numerator without the type filter          | red    | D-L affected 6, expected 5 |
+| D-L denominator without the type filter        | red    | D-L examined 7, expected 6 |
+| D-M denominator without the duration filter    | red    | D-M examined 6, expected 5 |
+
+**The first sweep was invalid and is not counted.** It ran against the shared `app_test` database
+while other agents' suites were using it, and from the third mutation on every run failed on
+fixture setup (a `422`, then a plan insert refused on its own project's foreign key), not on the
+count. A red run for the wrong reason is not a red run. The sweep was repeated on a database of its
+own (`app_test_zd0`, built by `prisma migrate deploy`), where all nine failed on the count.
+
+### Cost
+
+`docs/specs/zero-duration-task/m0-dilute.sql` builds 102,000 activities over 40 plans: 91,800
+`TASK`s, 10,200 zero-duration finish milestones, and 2,040 zero-duration `TASK`s. It is **fully
+resourced** (103,020 assignment rows, a quarter soft-deleted, a third on a soft-deleted resource,
+every 100th activity holding two), because ADR-0140's M0 found that the expensive shape for a
+query joining `resource_assignments`. `apps/api/scripts/measure-zero-duration-diagnostics.mts`
+reads the SQL from the registry and runs each statement warmed once then five times under
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, on a throwaway database (`app_cost_zd0`):
+
+| Statement       | median ms | max ms | Rows returned    | Plan                                        |
+| --------------- | --------: | -----: | ---------------- | ------------------------------------------- |
+| D-L denominator |     35.68 |  37.66 | 91,800           | hash join, seq scan `activities`            |
+| D-L numerator   |     18.42 |  20.76 | 2,040 in 4 plans | the same                                    |
+| D-M denominator |     17.89 |  20.76 | 2,040            | the same                                    |
+| D-M numerator   |     39.26 |  42.38 | 1,700 in 4 plans | hash joins, seq scan `resource_assignments` |
+
+Every figure is inside ADR-0140's ≤ 500 ms bar by more than ten times. The row counts match the
+estate's arithmetic: of the 2,040 zero tasks (every 50th activity), the second assignment makes
+the 1,020 even multiples resourced, and the first assignment makes 680 of the 1,020 odd ones
+resourced (live when not a multiple of 4 and not on the deleted resource), so 1,700.
+
+### Still owed
+
+The deployed-host reading (plan step 4): the product owner presses Run after the release. Nothing
+waits for it; it sizes the bulk-conversion default only.
+
 ## M0-T7: `check:engine-parity`
 
 ### The oracle for the row-lookup extraction
