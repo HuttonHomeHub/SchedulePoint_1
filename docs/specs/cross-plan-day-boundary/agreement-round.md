@@ -233,3 +233,20 @@ Suggested:
   `dependencies.service.ts:99-100` does. There is no endpoint `organizationId`.
 - Copy the in-plan "selected, not mapped into the response" sentence
   (`dependency.repository.ts:9-16`) onto the cross-plan `endpointSelect` docblock.
+
+### backend-performance-reviewer: confirmed with one correction
+
+- **Q2 (the two boot services race): confirmed.** It is true, visible as `scheduleStale`, and
+  accepted as written.
+- **M3-T0 (the Kahn extraction): confirmed.** A pure move, with `programme-order.spec.ts` as the
+  unedited oracle.
+- **Q1 (pending-only ordering): the prose is wrong.** Staleness reads the full transitive upstream
+  closure (`schedule.service.ts:809-818`). The extracted Kahn step counts only edges with both ends
+  in the node set (`programme-order.ts:90-96`). So in A→B→C with B not pending, A and C both have
+  in-degree 0, and their order comes from `compareIds`. Plan ids are UUID v7, i.e. creation order,
+  so C can be processed before A and then read stale against A. "Harmless for C" is not true.
+  - The reviewer's suggestion: correct the prose and keep the design.
+  - **Decision (the robust option):** order the **whole organisation graph** with the extracted
+    function, then recalculate only the pending plans in that order. That costs one sort over a
+    graph already loaded by `loadOrgAdjacency` and removes the C-before-A case. B, a non-pending
+    intermediate, can still read stale until a programme recalculation, and the spec says so.
