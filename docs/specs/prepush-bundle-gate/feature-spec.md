@@ -16,8 +16,9 @@ small. The decision it reverses is recorded in an ADR, and that is why it needs 
 
 This spec was written without a shell: the environment had read and search tools only. So every
 claim below was checked by **reading**. The one claim that needs **running**, the added time, was
-**not measured**, and that is stated here rather than estimated. Taking it is the first task of the
-plan (M1-T1), and its ceiling is committed below before the number exists (§1, success criteria).
+**not measured** when the spec was written, and that is stated here rather than estimated. Its
+ceiling is committed below (§1, success criteria); first readings were then taken the same day and
+are recorded under those criteria. The M1-T1 sitting on the built change still decides FC-1/FC-2.
 
 | #   | Claim                                                                                       | Verdict                                                   | Established by                                                                                                                                                                                                                                                                                                                                                                                                     |
 | --- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -94,6 +95,19 @@ check:web-bundle` and exit 1. A yellow `WARN` counts as failure of this criterio
 - **FC-4, CI does not grow.** The `quality` job's new step reports a turbo cache hit, and the step
   takes at most 15 s. `quality` is the job that bounds whole-CI wall clock (ADR-0138), so any
   rebuild there lengthens every round.
+
+**First readings, 2026-09-26** (taken after the spec was written, in the Claude Code container;
+not yet the M1-T1 sitting, which is taken on the built change):
+
+- **FC-1 reading: 17.8, 15.7, 15.8 s, median 15.8 s** against the 60 s ceiling. Each run was
+  `pnpm exec turbo run build --filter=@repo/web --force` then `pnpm --filter @repo/web
+check:bundle-size`, timed together.
+- **FC-2 reading: 1.8, 1.8, 1.9 s** against 10 s, with turbo reporting `6 cached, 6 total`.
+- **D3's premise is confirmed, not just read.** With `apps/web/bundle-report.json` deleted, the same
+  warm run is a full cache hit and leaves no report, and `check:bundle-size` then fails asking for a
+  build. So today a cache hit cannot feed the check, and `check-bundle-size.mjs`'s docblock
+  claiming this "cannot happen" is wrong. The 1.8 s readings passed only because a report from the
+  previous cold run was still on disk.
 
 The brief also asked for `pnpm --filter @repo/web build` plus the check to be timed. That figure is
 taken in M1-T1 as a reference. It is **not** the figure FC-1 judges: that command runs `tsc --noEmit`
