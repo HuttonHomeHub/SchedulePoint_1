@@ -11733,7 +11733,8 @@ What is left is a data-quality problem, worked as the zero-duration-task epic
 - **M1** (done): ADR-0162, the §22 amendment and the docblock.
 - **M2** (done): a type change across the finish-milestone convention keeps the instant (server
   rule, editor hint and re-seed; `m2-record.md`).
-- **M3**: the health advisory, and a tolerant import-report reader (closes #387).
+- **M3** (done): the health advisory, and a tolerant import-report reader, which closed #387
+  (`m3-record.md`).
 - **M4**: the resourced fact on activity rows and the **Make milestone** action.
 - **M5**: the import advisory producer, at least one release after M3.
 - **M6**: the gate pass; close this row.
