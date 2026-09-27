@@ -11735,8 +11735,10 @@ What is left is a data-quality problem, worked as the zero-duration-task epic
   rule, editor hint and re-seed; `m2-record.md`).
 - **M3** (done): the health advisory, and a tolerant import-report reader, which closed #387
   (`m3-record.md`).
-- **M4**: the resourced fact on activity rows and the **Make milestone** action.
-- **M5**: the import advisory producer, at least one release after M3.
+- **M4** (done): `resourceAssignmentCount` on activity rows (zero-duration tasks only, FC-9's
+  first remedy rung) and **Make milestone…** on the selection bar, the Gantt row menu and the
+  activities table's row menu (`m4-record.md`).
+- **M5** (done): the import advisory producer for XER and MSPDI (`m5-record.md`).
 - **M6**: the gate pass; close this row.
 
 ### 388. The partial lane pack is quadratic in occupied lanes in the worst case
@@ -11878,3 +11880,20 @@ child still names it as its parent. The reverse (an activity with dependencies c
 It is not the zero-duration epic's to fix: that epic's type-change work (M2) is about dates. The
 remedy is a refusal in `update()` (a 422 naming the children or the links), with the e2e case
 flipped from a characterisation to its acceptance test.
+
+### 397. The selection bar's pen-gated items word the role refusal differently from Make milestone
+
+**Status:** open · **Verified:** 2026-09-27 · **Raised:** 2026-09-27 (zero-duration-task M4-T2) ·
+**Size:** S · **Owner:** web
+
+**Make milestone…** is gated by `deriveMakeMilestoneGate`, which reads the workspace's
+`activityEditorGating.general` by identity (ADR-0162 D6), so a Viewer sees that gate's sentence,
+_"Your role cannot edit activity details."_ (`activity-editor-gating.ts`, `NO_ROLE`). Its neighbours
+on the same bar (Edit, Duplicate, Delete) are gated by the host's `scheduleRefusal(PEN_ACTION)`
+(`selection-actions.tsx`, `PEN_ACTION = 'change this activity'`, formatted by
+`plan-lock/lib/plan-gating.ts` as `` `Your role cannot ${action}.` ``), which words the same refusal
+_"Your role cannot change this activity."_ Both are true; they are two sentences for one fact on
+one bar. The fix is to move the bar's other pen-gated items onto the same `ScopeGate` object the
+editor and Make milestone read, which also retires `scheduleRefusal` as a second derivation of the
+role-and-pen rule. Not done in M4 because it changes the copy of five shipped controls and their
+tests, which is outside the zero-duration epic.
