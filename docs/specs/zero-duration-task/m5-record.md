@@ -32,6 +32,14 @@ arrives through the API and that a file with none carries no key.
 
 The torture XER yields exactly one advisory, `A7550` (spec E15).
 
+**The layout-interchange M0 baseline moved, and was not regenerated.** `scripts/e2e-local.sh api`
+failed one case, `layout-interchange.e2e-spec.ts` FC-2: the torture file's graph digest held and its
+report digest moved (`f386b7a6…` to `9d025125…`), because the report now carries the advisory. The
+file says a changed figure is a finding to explain, not a snapshot to update. So the case now strips
+`advisories` and requires the rest of the report to hash to the **unchanged** M0 baseline, and
+requires `advisories` to be exactly `[ZERO_DURATION_TASK, A7550]`. That is FC-5 (a)'s additivity,
+judged on the file it was measured on. The failing run is this case's red.
+
 ## The journey (`e2e-interchange/interchange.spec.ts`)
 
 A fixture XER adds `A1020 Handover` as a zero-hour `TT_Task` after the two-task network. The import
