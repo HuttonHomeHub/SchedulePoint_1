@@ -90,6 +90,37 @@ const TIP_OFFSET_PX = 6;
 /** Pre-measurement estimate for the first paint only; the measured clamp corrects before paint. */
 const TIP_ESTIMATE = { width: 120, height: 28 };
 
+/** Where the trigger is, in the two forms placement needs: its centre, and a gap off either edge. */
+interface TriggerAnchor {
+  x: number;
+  below: number;
+  above: number;
+}
+
+/**
+ * **Below the trigger when it fits there, above it when it does not.**
+ *
+ * The clamp alone keeps the tip on screen, and for a trigger on the viewport's bottom edge it did
+ * that by pushing the tip UP ONTO THE TRIGGER. Focus opens the tip immediately, and a mouse press
+ * focuses the button, so the tip appeared under the pointer between mousedown and mouseup; the
+ * mouseup then landed on the portalled tip and the browser dispatched the click to the two targets'
+ * common ancestor, never the button. Found by the zero-duration-task M4 journey on the canvas
+ * dock's icon-only **Make milestone…**, the first icon-only trigger at the bottom of the screen: a
+ * real mouse click did nothing. Every earlier icon-only trigger sat in the command deck at the top,
+ * where below always fits.
+ */
+function placeTip(
+  anchor: TriggerAnchor,
+  width: number,
+  height: number,
+): { left: number; top: number } {
+  const x = anchor.x - width / 2;
+  const below = clampAnchor({ x, y: anchor.below }, width, height);
+  // The clamp moved it up: it would have covered the trigger. Put it above instead.
+  if (below.top < anchor.below) return clampAnchor({ x, y: anchor.above - height }, width, height);
+  return below;
+}
+
 /**
  * The one-open-tooltip token: the instance handle currently on screen. A stable per-instance
  * object, acquired/released only through the two module functions below — the React compiler
@@ -117,7 +148,7 @@ export function useTooltip({ content, purpose, disabled = false }: TooltipOption
   const tipId = useId();
   const triggerRef = useRef<HTMLElement | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
-  const [openState, setOpen] = useState<{ box: { x: number; y: number } } | null>(null);
+  const [openState, setOpen] = useState<{ box: TriggerAnchor } | null>(null);
   const open = active && openState !== null;
 
   // Every timer lives in a ref and is cleared in the unmount cleanup — a leaked timer fails
@@ -168,7 +199,13 @@ export function useTooltip({ content, purpose, disabled = false }: TooltipOption
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     acquireTip(handle);
-    setOpen({ box: { x: rect.left + rect.width / 2, y: rect.bottom + TIP_OFFSET_PX } });
+    setOpen({
+      box: {
+        x: rect.left + rect.width / 2,
+        below: rect.bottom + TIP_OFFSET_PX,
+        above: rect.top - TIP_OFFSET_PX,
+      },
+    });
   };
 
   const scheduleOpen = (): void => {
@@ -243,9 +280,7 @@ export function useTooltip({ content, purpose, disabled = false }: TooltipOption
   const box = useMeasuredBox(tipRef, openState, open);
   const width = box?.width ?? TIP_ESTIMATE.width;
   const height = box?.height ?? TIP_ESTIMATE.height;
-  const position = openState
-    ? clampAnchor({ x: openState.box.x - width / 2, y: openState.box.y }, width, height)
-    : null;
+  const position = openState ? placeTip(openState.box, width, height) : null;
 
   const triggerProps: TooltipApi['triggerProps'] = {
     ref: (el) => {

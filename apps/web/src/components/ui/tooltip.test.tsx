@@ -245,6 +245,41 @@ describe('useTooltip', () => {
     }
   });
 
+  /** Put the trigger at `top` (24 px tall) in a 768 px jsdom viewport, focus it, read the tip. */
+  function openAt(top: number): { tipTop: number; triggerTop: number; triggerBottom: number } {
+    render(<Host />);
+    const button = screen.getByRole('button');
+    const rect = {
+      top,
+      bottom: top + 24,
+      left: 100,
+      right: 124,
+      width: 24,
+      height: 24,
+      x: 100,
+      y: top,
+    };
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({ ...rect, toJSON: () => rect });
+    fireEvent.focus(button);
+    const el = tip();
+    if (!el) throw new Error('the tip did not open');
+    return { tipTop: parseFloat(el.style.top), triggerTop: rect.top, triggerBottom: rect.bottom };
+  }
+
+  it('sits below a trigger with room beneath it', () => {
+    const { tipTop, triggerBottom } = openAt(100);
+    expect(tipTop).toBeGreaterThanOrEqual(triggerBottom);
+  });
+
+  it('flips above a trigger on the bottom edge rather than covering it (red: below-only placement)', () => {
+    // The zero-duration-task M4 defect: clamped onto the trigger, the tip caught the mouseup, so a
+    // mouse click on the canvas dock's icon-only button never reached it.
+    expect(window.innerHeight).toBe(768);
+    const { tipTop, triggerTop } = openAt(740);
+    const height = tip()!.getBoundingClientRect().height;
+    expect(tipTop + height).toBeLessThanOrEqual(triggerTop);
+  });
+
   it('disabled leaves the mechanism inert', () => {
     render(<Host disabled />);
     fireEvent.focus(screen.getByRole('button'));
