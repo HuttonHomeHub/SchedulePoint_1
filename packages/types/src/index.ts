@@ -512,6 +512,20 @@ export interface ActivitySummary {
    */
   drivingResourceCalendarId: string | null;
   /**
+   * For a **zero-duration task**: how many **live** resource assignments it holds (ADR-0162
+   * decision 6), where an assignment counts when neither it nor its resource is soft-deleted, the one
+   * predicate the health report and the staff diagnostics also use. Derived on read, never stored.
+   *
+   * `null` for every other activity, and that is its only meaning: **not counted for this row type**.
+   * The count's one reader is the Make milestone gate, which applies to zero-duration tasks alone;
+   * counting every row failed FC-9's plan-shape condition, and the spec's remedy is to ask only the
+   * rows that need the answer (`docs/specs/zero-duration-task/m0-measurement.md`, "M4-T1").
+   *
+   * On the row for the reason `drivingResourceCalendarId` is: the activities table's row loop and
+   * the Gantt row menu gate **Make milestone…** synchronously and cannot call a hook per row.
+   */
+  resourceAssignmentCount: number | null;
+  /**
    * WBS parent (ADR-0038, M5-epic §24): the `id` of the `WBS_SUMMARY` activity this one rolls up into,
    * or null for a top-level activity. The parent tree is an adjacency list, kept acyclic and same-plan by
    * the service; it is orthogonal to the dependency DAG (ADR-0021). A `WBS_SUMMARY` activity's dates roll

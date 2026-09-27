@@ -113,6 +113,12 @@ export const CLONE_FIELD_DECISIONS: Record<keyof ActivitySummary, CloneFieldDeci
       'anyway. A clone carries no assignments, so its own value is null until somebody assigns a ' +
       "driver — and sending the source's would assert a driver the copy does not have.",
   },
+  resourceAssignmentCount: {
+    disposition: 'withheld',
+    reason:
+      'Not a field of the activity: it is derived on read from the live assignments (ADR-0162), so ' +
+      'the create DTO refuses it. A clone carries no assignments, so the server counts it afresh.',
+  },
   budgetedExpense: {
     disposition: 'carried',
     reason:

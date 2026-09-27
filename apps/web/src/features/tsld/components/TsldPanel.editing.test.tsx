@@ -40,6 +40,7 @@ beforeEach(() => announceSpy.mockClear());
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   const row: ActivitySummary = {
     drivingResourceCalendarId: null,
+    resourceAssignmentCount: null,
     id: 'a1',
     planId: 'p1',
     code: 'A100',

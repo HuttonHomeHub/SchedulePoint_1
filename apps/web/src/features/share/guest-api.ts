@@ -193,6 +193,9 @@ export function toActivitySummary(activity: GuestActivity, planId: string): Acti
     // too: a guest adopts the CORRECTED durationDays — the server already converts it on the driving
     // resource's calendar — and never learns that a resource is why. Null is the answer, not a gap.
     drivingResourceCalendarId: null,
+    // The same scope rule: the guest DTO carries no assignment count (ADR-0051), and the guest view
+    // offers no Make milestone, the field's only reader. Null is "not counted", which is true here.
+    resourceAssignmentCount: null,
     parentId: null,
     laneIndex: activity.laneIndex,
     scheduleAsLateAsPossible: false,

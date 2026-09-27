@@ -42,6 +42,7 @@ const LANE0_Y = DEFAULT_VIEWPORT.originY + BAR_PAD + BAR_HEIGHT / 2;
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {
     drivingResourceCalendarId: null,
+    resourceAssignmentCount: null,
     id: 'a1',
     planId: 'p1',
     code: 'A100',

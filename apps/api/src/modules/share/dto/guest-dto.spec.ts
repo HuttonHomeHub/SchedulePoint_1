@@ -2,6 +2,7 @@ import type { Activity } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
 import type { WithDayFactor } from '../../activities/day-factor';
+import type { WithAssignmentCount } from '../../activities/resource-assignment-counts';
 import type { CalendarWithExceptions } from '../../calendars/calendar.repository';
 import type { DependencyWithEndpoints } from '../../dependencies/dependency.repository';
 import type { ScheduleAggregate } from '../../schedule/schedule.repository';
@@ -20,7 +21,7 @@ const DAY = new Date(Date.UTC(2026, 6, 1));
  */
 
 /** A fully-populated activity row — every sensitive column set, so a leak would be caught. */
-function activityRow(): WithDayFactor<Activity> {
+function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
   return {
     id: 'act-1',
     organizationId: 'org-1',
@@ -92,6 +93,8 @@ function activityRow(): WithDayFactor<Activity> {
     // Attached by the service (ADR-0068). 1440 keeps this fixture's arithmetic exactly as it was.
     drivingResourceCalendarId: null,
     dayFactorMinutes: 1440,
+    // Attached by the member service (ADR-0162 decision 6). Non-null so a leak would carry a value.
+    resourceAssignmentCount: 2,
   };
 }
 
@@ -103,6 +106,9 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   // as an accident rather than a decision.
   'drivingResourceCalendarId',
   'dayFactorMinutes',
+  // ADR-0162 decision 6: resources are outside SCHEDULE_READ (ADR-0051), so the count of them is
+  // too, and the guest view offers no Make milestone, the field's only reader.
+  'resourceAssignmentCount',
   'organizationId',
   'planId',
   'description',

@@ -27,6 +27,7 @@ const PLACEMENT: ClonePlacement = {
 function source(): ActivitySummary {
   return {
     drivingResourceCalendarId: null,
+    resourceAssignmentCount: null,
     id: 'a',
     planId: 'p1',
     code: 'A1010',
@@ -120,7 +121,11 @@ describe('the clone field census', () => {
     // `ck_activities_visual_conflict_matches_reason` refuses a row whose reason and flag disagree,
     // and the flag is not carried either, so a carried reason would be a write the schema rejects.
     // Classified `withheld`.
-    expect(entries.length).toBe(62);
+    //
+    // 62 -> 63 on 2026-09-27: `resourceAssignmentCount` (ADR-0162, zero-duration M4-T1). Derived on
+    // read from the live assignments, and a clone carries no assignments, so the server counts the
+    // copy afresh. Classified `withheld`.
+    expect(entries.length).toBe(63);
   });
 
   it('sends nothing the census withholds', () => {

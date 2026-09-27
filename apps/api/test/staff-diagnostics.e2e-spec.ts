@@ -739,7 +739,9 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
    * is soft-deleted directly, leaving its assignment row live, which is exactly the shape a
    * `r.deleted_at IS NULL` clause exists to exclude.
    */
-  async function seedZeroDurationEstate(actor: Actor): Promise<void> {
+  async function seedZeroDurationEstate(
+    actor: Actor,
+  ): Promise<{ planId: string; ids: Record<string, string> }> {
     const allDay = await calendar(actor, 'Site (24h)', 24);
     const planId = await planOn(actor, allDay, 'Zero duration');
     const crew = await resource(actor, 'Crew');
@@ -764,7 +766,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     await assign(actor, goneResource, gone);
     await prisma.resource.update({ where: { id: gone }, data: { deletedAt: new Date() } });
 
-    await activityOn(actor, planId, { name: 'Bare', durationDays: 0 });
+    const bare = await activityOn(actor, planId, { name: 'Bare', durationDays: 0 });
 
     const long = await activityOn(actor, planId, { name: 'Long', durationDays: 5 });
     await assign(actor, long, crew);
@@ -779,6 +781,11 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     const deleted = await activityOn(actor, planId, { name: 'Deleted', durationDays: 0 });
     await assign(actor, deleted, crew);
     await actor.agent.delete(`${org}/activities/${deleted}`).expect(200);
+
+    return {
+      planId,
+      ids: { resourced, double, unassigned, goneResource, bare, long, signOff },
+    };
   }
 
   it('counts zero-duration tasks, and which of them hold a live assignment (zero-duration M0-T4)', async () => {
@@ -805,6 +812,78 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       affectedPlans: 1,
       affectedOrganizations: 1,
     });
+  });
+
+  it('agrees with the activity field and the health advisory on one fixture (FC-10)', async () => {
+    // **Three readers of "a live resource assignment", one answer** (spec FC-10, D8). The activity
+    // rows' `resourceAssignmentCount` and the health advisory spread `liveAssignmentWhere`; this
+    // diagnostic is raw SQL and states the same two `deleted_at IS NULL` conditions by hand. So
+    // agreement on `Unassigned` (a soft-deleted assignment) and `Gone resource` (a live assignment
+    // to a soft-deleted resource) is the property, and only a real database can show it.
+    //
+    // Verified red (M4-T1 record): dropping `resource: { deletedAt: null }` from
+    // `liveAssignmentWhere` moves `Gone resource` to 1 in the field and `resourced` to 3 in the
+    // advisory, while the diagnostic stays at 2 — the three disagree, and this case fails.
+    const actor = await adminWithOrg();
+    const { planId, ids } = await seedZeroDurationEstate(actor);
+    const staff = await signedInStaff();
+
+    // Reader 1 — the activity field, on the list route.
+    const list = await actor.agent.get(`${org}/plans/${planId}/activities`).expect(200);
+    const rows = list.body.data as { id: string; resourceAssignmentCount: number | null }[];
+    const field = new Map(rows.map((r) => [r.id, r.resourceAssignmentCount]));
+    expect(Object.fromEntries(Object.entries(ids).map(([k, id]) => [k, field.get(id)]))).toEqual({
+      resourced: 1,
+      double: 2,
+      unassigned: 0,
+      goneResource: 0,
+      bare: 0,
+      // Not counted for this row type — null, never 0 (FC-9 remedy rung 1).
+      long: null,
+      signOff: null,
+    });
+    const fieldResourced = [...field.values()].filter((n) => n !== null && n > 0).length;
+
+    // Reader 2 — the health advisory.
+    const health = await actor.agent
+      .get(`${org}/plans/${planId}/schedule/health-check`)
+      .expect(200);
+    const advisory = (
+      health.body.data.advisories as {
+        id: string;
+        detail: { resourced: number };
+        offenderCount: number;
+      }[]
+    ).find((a) => a.id === 'ZERO_DURATION_TASKS');
+    expect(advisory?.offenderCount).toBe(5);
+
+    // Reader 3 — the staff diagnostic.
+    const byId = await readDiagnostics(staff);
+    const diagnostic = byId.get('zero-duration-tasks-resourced')?.affected;
+
+    expect({ field: fieldResourced, advisory: advisory?.detail.resourced, diagnostic }).toEqual({
+      field: 2,
+      advisory: 2,
+      diagnostic: 2,
+    });
+  });
+
+  it('carries the count on the get and PATCH routes too (M4-T1)', async () => {
+    const actor = await adminWithOrg();
+    const { ids } = await seedZeroDurationEstate(actor);
+
+    const got = await actor.agent.get(`${org}/activities/${ids.double}`).expect(200);
+    expect(got.body.data.resourceAssignmentCount).toBe(2);
+
+    const long = await actor.agent.get(`${org}/activities/${ids.long}`).expect(200);
+    expect(long.body.data.resourceAssignmentCount).toBeNull();
+
+    // A PATCH response is a fresh read: renaming the task keeps its count.
+    const patched = await actor.agent
+      .patch(`${org}/activities/${ids.resourced}`)
+      .send({ name: 'Resourced (renamed)', version: 1 })
+      .expect(200);
+    expect(patched.body.data.resourceAssignmentCount).toBe(1);
   });
 
   it('carries each entry’s nature, read from the registry rather than hard-coded', async () => {

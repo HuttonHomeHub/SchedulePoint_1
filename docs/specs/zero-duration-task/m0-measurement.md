@@ -299,3 +299,59 @@ The three new `doc-register` cases were also run against M6 and M6b and went red
   there with no edit to that file.
 - On this branch: `check:engine-parity: OK. checked 44 engine files for "zero-duration-task"
 (#384): 0 changed since origin/main, 0 existing spec(s) compared.`
+
+## M4-T1: what `resourceAssignmentCount` costs (FC-9)
+
+Harness: `apps/api/scripts/measure-resource-assignment-count.mts`. The SQL is the product's: a
+logging `PrismaClient` runs the shipped `loadResourceAssignmentCounts` and the one statement it
+issues is explained 25 times. Estate: the 102,000-activity diluted estate from `m0-dilute.sql`, which
+is **one organisation** holding 103,020 assignments. Route: a throwaway migrated database with a
+2,000-activity plan, every activity holding one live assignment and every 50th of zero duration,
+inserted directly (the harness docblock names this bypass; it stands in for `scale-2000`, which is
+seeded through the API).
+
+### The first version failed (a)
+
+Counting every row of a 100-row page, as M4-T1's description specified:
+
+| Database                                                       | Plan of the grouped query                                   | p95      | (a)  | (b)  |
+| -------------------------------------------------------------- | ----------------------------------------------------------- | -------- | ---- | ---- |
+| Diluted estate                                                 | Index Scan using `idx_resource_assignments_activity_id_fk`  | 0.414 ms | PASS | PASS |
+| 2,000-activity plan, database with residue from an earlier run | Index Scan using `resource_assignments_organization_id_idx` | 0.542 ms | FAIL | PASS |
+| 2,000-activity plan, fresh database                            | **Seq Scan on resource_assignments**                        | 1.186 ms | FAIL | PASS |
+
+(c) on the fresh database: without the count 29.6 / 30.9 ms p95, with it 29.2 ms, rise −1.7 ms, PASS.
+
+The failure is the one (a) names: on a single-tenant table of 2,000 assignments, a 100-id list is not
+selective enough for the planner to prefer the foreign-key index. It is cheap at this size, and it is
+also O(table), which is the property (a) exists to refuse. The first route run also failed for an
+unrelated reason: 105 requests exceed the global 100-per-60-s throttle (`RATE_LIMIT_LIMIT` now lifts
+it for the harness), and its cleanup did not run, which is why the next run used a fresh database.
+
+### Remedy rung 1, as the spec orders
+
+Count only the page's zero-duration tasks, skip the query when the page holds none, and carry `null`
+on every other row, meaning "not counted for this row type" (`resource-assignment-counts.ts`). The
+bars did not move. The field is `number | null` rather than the plan's `number`.
+
+Re-measured, with the plan shape judged on a WORST page (as many zero-duration tasks as one page can
+hold) as well as the TYPICAL one (the list route's first page):
+
+| Database, page                            | Rows counted | Plan of the grouped query                                  | p95      | (a)  | (b)  |
+| ----------------------------------------- | ------------ | ---------------------------------------------------------- | -------- | ---- | ---- |
+| Estate, typical (largest plan, first 100) | 0            | no query issued                                            | —        | n/a  | n/a  |
+| Estate, worst (100 zero-duration tasks)   | 100          | Index Scan using `idx_resource_assignments_activity_id_fk` | 0.460 ms | PASS | PASS |
+| 2,000-activity plan, typical              | 2            | Index Scan using `idx_resource_assignments_activity_id_fk` | 0.053 ms | PASS | PASS |
+| 2,000-activity plan, worst (all 40)       | 40           | Index Scan using `idx_resource_assignments_activity_id_fk` | 0.210 ms | PASS | PASS |
+
+(c), 30 runs after 5 warm-ups each, on the 2,000-activity plan's first page: without the count
+36.7 / 31.3 ms p95, with it 32.2 ms, rise −4.5 ms against the slower "without", PASS. Non-vacuity: 2
+of 100 rows carried a count above 0, which is the two zero-duration tasks on that page.
+
+(d) is a service unit spy, not this harness: see `activities.service.spec.ts`.
+
+**What this does not establish.** The first run shows that a 100-id list over a 2,000-row
+single-tenant table seq-scans. A page made entirely of zero-duration tasks on a table that small would
+plan the same way; the plan tested here holds 40, and the estate's 100-task page plans on the index.
+Such a page is a plan whose activities are mostly zero-duration tasks, which the health advisory
+exists to report. It is recorded rather than tested.

@@ -236,6 +236,18 @@ It applies to every other type (`TASK`, `START_MILESTONE`, `HAMMOCK`, `LEVEL_OF_
 of effort takes its position from its span, a summary from its branch, and a resource-dependent
 activity from its driving resource's calendar, none of which a type change keeps.
 
+**`resourceAssignmentCount` is counted for zero-duration tasks only** (ADR-0162 decision 6). Every
+activity read, list and write response carries it. For a `TASK` whose stored duration is 0 it is the
+number of **live** resource assignments the activity holds — an assignment counts when neither it
+nor its resource is soft-deleted, the rule the health report and the staff diagnostics use. For every
+other activity it is `null`, and `null` means exactly "not counted for this row type", never "none".
+Its one reader is **Make milestone**, which applies to zero-duration tasks alone and is offered only
+at `0`, because a milestone does no work. It is derived on read from one grouped query per response
+(none when the page holds no zero-duration task) and is never stored, so a client re-reads the
+activities after it assigns or unassigns a resource. Counting every row failed its cost
+condition on a single-tenant plan (`docs/specs/zero-duration-task/m0-measurement.md`, "M4-T1"). The
+guest share DTO does not carry it.
+
 **Two engine-owned read fields carry what a placement costs:**
 
 | Field                  | On             | Meaning                                                                                                                                                                                      |
