@@ -102,7 +102,26 @@ constraint and its placement and reports 9 Jan; `SUCC` starts 12 Jan. **1 passed
 with the server rule disabled (`durationMinutes >= 0` early return): `Expected "2026-01-11"`,
 `Received "2026-01-12"`.
 
-## Owed
+## Reviewed
 
-- **api-reviewer** reviews the `PATCH` contract change before M2 merges (plan R1). Not run from this
-  session.
+- **api-reviewer** reviewed the `PATCH` contract change (plan R1) on 2026-09-27, after the branch was
+  rebased onto the #385 release. **Pass, nothing blocking.** It confirmed:
+  - The response reflects the moved dates: `update()` re-reads the row after the transaction.
+  - A sent date, including `null`, is never shifted (`dto[field] !== undefined`).
+  - N26 runs on the effective pair, before the transaction, with 404/423/409 unchanged.
+  - One PATCH bumps `version` once.
+  - `A → B → A` is an exact inverse (FC-2).
+  - `type` is writable only through the single-activity `update()`. `create()` needs no
+    re-expression, and no placement, position, parent or paste path writes `type`.
+
+## Changed after the rebase
+
+#385 (ADR-0161 D3) moved the engine's end-of-day reads behind two readers, `startDateInstant` and
+`finishDateInstant` in `engine/instants.ts`. So `zero-duration-reexpression.structural.spec.ts`
+found two calls in `instants.ts` reading a parameter called `date`, and none in `constraints.ts`.
+
+The census now reads all three readers. It takes each reader's date argument by position and skips
+the readers' own bodies. It pins five calls: `visualStart` in `compute.ts`, and in `constraints.ts`
+the constraint date through both readers, plus both external dates. Verified red three ways:
+dropping the `external` mapping, not skipping the readers' bodies, and adding a sixth reader call
+to `compute.ts`.
