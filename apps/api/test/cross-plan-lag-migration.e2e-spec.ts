@@ -838,7 +838,7 @@ describe.skipIf(!hasDatabase)('cross-plan lag re-encoding migration (e2e)', () =
   });
 
   describe('the factor-drift finder, as written in docs/DEPLOYMENT.md', () => {
-    it('lists an hours change, a non-multiple and a resolution-path change, and nothing else', async () => {
+    it('lists an hours change, a non-multiple, a resolution-path change and an un-flagged driver, and nothing else', async () => {
       const world = await seed();
       await convert();
 
@@ -847,13 +847,14 @@ describe.skipIf(!hasDatabase)('cross-plan lag re-encoding migration (e2e)', () =
         successor: string,
         lagMinutes: number,
         lagCalendar: LagCalendarSource,
+        predecessor = 'uA',
       ) => {
         const link = await prisma.crossPlanDependency.create({
           data: {
             organizationId: world.organizationId,
             predecessorPlanId: world.planIds.U,
             successorPlanId: world.planIds.D,
-            predecessorId: world.activityIds.uA!,
+            predecessorId: world.activityIds[predecessor]!,
             successorId: world.activityIds[successor]!,
             type: 'FS',
             lagMinutes,
@@ -867,6 +868,10 @@ describe.skipIf(!hasDatabase)('cross-plan lag re-encoding migration (e2e)', () =
       await make('NOT_A_MULTIPLE', 'd19', 1000, 'PROJECT_DEFAULT'); // 1000 % 480 ≠ 0
       await make('HOURS_CHANGED', 'dH', 2400, 'SUCCESSOR'); // 5 days at 480 → 4 at 600
       await make('PATH_CHANGED', 'dP', 2400, 'SUCCESSOR'); // 5 days at 480 → 4 at 600
+      // 10 days at uR's driver (420) → 7 at its own plan U (600) once the driver is un-flagged.
+      // 4200 is a multiple of both, so only limb 3 can see it, and only if its assignment join
+      // does not filter on `is_driving` (database-architect M4 B1).
+      await make('DRIVER_UNFLAGGED', 'd18', 4200, 'PREDECESSOR', 'uR');
 
       await inRolledBackTransaction(prisma, async (tx) => {
         // Pin the clock: the migration "finished" at noon, every seeded row was last edited at
@@ -895,11 +900,33 @@ describe.skipIf(!hasDatabase)('cross-plan lag re-encoding migration (e2e)', () =
           `UPDATE "activities" SET "calendar_id" = '${world.calendarIds.PATH_B}', "updated_at" = ${after} WHERE "id" = '${world.activityIds.dP}'`,
         );
 
+        // A driver un-flagged: `PATCH …/assignments/:id { isDriving: false }` writes only the
+        // assignment row, so neither the activity nor its plan moves.
+        await tx.$executeRawUnsafe(
+          `UPDATE "resource_assignments" SET "is_driving" = false, "updated_at" = ${after} WHERE "activity_id" = '${world.activityIds.uR}' AND "is_driving" AND "deleted_at" IS NULL`,
+        );
+
         const listed =
           await tx.$queryRawUnsafe<Array<{ cross_plan_dependency_id: string }>>(FINDER_SQL);
         const keyOf = new Map(Object.entries(world.linkIds).map(([k, v]) => [v, k]));
         expect(listed.map((r) => keyOf.get(r.cross_plan_dependency_id)).sort()).toEqual(
-          ['HOURS_CHANGED', 'NOT_A_MULTIPLE', 'PATH_CHANGED'].sort(),
+          ['DRIVER_UNFLAGGED', 'HOURS_CHANGED', 'NOT_A_MULTIPLE', 'PATH_CHANGED'].sort(),
+        );
+
+        // With no applied marker the finder must not go silent: it lists every unrecorded link.
+        await tx.$executeRawUnsafe(
+          `DELETE FROM "_prisma_migrations" WHERE "migration_name" = '${MIGRATION_NAME}'`,
+        );
+        const unmarked =
+          await tx.$queryRawUnsafe<Array<{ cross_plan_dependency_id: string }>>(FINDER_SQL);
+        expect(unmarked.map((r) => keyOf.get(r.cross_plan_dependency_id)).sort()).toEqual(
+          [
+            'DRIVER_UNFLAGGED',
+            'HOURS_CHANGED',
+            'NOT_A_MULTIPLE',
+            'PATH_CHANGED',
+            'UNTOUCHED',
+          ].sort(),
         );
       });
     });

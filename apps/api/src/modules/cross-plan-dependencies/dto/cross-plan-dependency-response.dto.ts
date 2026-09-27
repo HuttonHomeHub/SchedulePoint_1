@@ -41,11 +41,14 @@ export class CrossPlanDependencyResponseDto implements CrossPlanDependencySummar
     description:
       'Signed lag in working days (a lead is negative), ROUNDED from the stored minutes. A day is ' +
       'the standard working day of THIS LINK’S LAG CALENDAR (ADR-0068 §4) — an eight-hour ' +
-      'calendar counts 480 minutes to the day; `TWENTY_FOUR_HOUR` is pinned at 1440.',
+      'calendar counts 480 minutes to the day; `TWENTY_FOUR_HOUR` is pinned at 1440. The ' +
+      'factor is the lag calendar’s CURRENT hours per day, so a later hours edit can make this ' +
+      'read back non-whole: read `lagMinutes` for the exact stored value.',
   })
   lagDays!: number;
 
   @ApiProperty({
+    readOnly: true,
     description:
       'Signed lag in working MINUTES on the lag calendar — what is stored and what the ' +
       'programme recalculation applies (#385). Read-only: a cross-plan link is created with ' +

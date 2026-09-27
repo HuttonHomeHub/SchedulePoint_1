@@ -502,8 +502,10 @@ minutes into the wrong number of days. Run this finder first. It lists every lin
 1. the calendar it resolves to was edited after the migration finished (an hours-per-day change is
    one kind of edit; the column moves on any edit, so this over-reports on purpose);
 2. its `lag_minutes` is not a whole multiple of today's factor; or
-3. **one of its endpoint activities, their plans, or their driving assignments or resources was
-   edited after the migration finished.** This limb was added in M2-T2 and is not in the spec's
+3. **one of its endpoint activities, their plans, or any of their resource assignments or those
+   assignments' resources was edited after the migration finished.** Any assignment, not only a
+   driving one: un-flagging a driver writes only the assignment row, and a join on
+   `is_driving` would no longer see it. This limb was added in M2-T2 and is not in the spec's
    reversal section: the first two cannot see a change of **resolution path**. A plan switched to a
    different, unedited calendar, or an activity given its own calendar, changes the factor with no
    calendar edit, and when the stored minutes happen to be a multiple of the new factor the second
@@ -548,8 +550,14 @@ WITH resolved AS (
   LEFT JOIN "calendars" c ON c."id" = k."calendar_id"
 ),
 released AS (
-  SELECT "finished_at" FROM "_prisma_migrations"
-   WHERE "migration_name" = '20260926120000_cross_plan_lag_working_minutes'
+  -- Always one row. With no applied marker every edit counts as "after", so the finder lists
+  -- every unrecorded link rather than none: over-reporting, never silence.
+  SELECT COALESCE(
+    (SELECT "finished_at" FROM "_prisma_migrations"
+      WHERE "migration_name" = '20260926120000_cross_plan_lag_working_minutes'
+        AND "rolled_back_at" IS NULL),
+    '-infinity'::timestamptz
+  ) AS "finished_at"
 )
 SELECT r."cross_plan_dependency_id", d."lag_minutes", r."lag_calendar", r."lag_calendar_id",
        r."day_factor_minutes"
@@ -570,7 +578,7 @@ SELECT r."cross_plan_dependency_id", d."lag_minutes", r."lag_calendar", r."lag_c
            SELECT 1
              FROM "activities" a
              JOIN "plans" ap ON ap."id" = a."plan_id"
-             LEFT JOIN "resource_assignments" ra ON ra."activity_id" = a."id" AND ra."is_driving"
+             LEFT JOIN "resource_assignments" ra ON ra."activity_id" = a."id"
              LEFT JOIN "resources" rs ON rs."id" = ra."resource_id"
             WHERE a."id" IN (d."predecessor_id", d."successor_id")
               AND (a."updated_at" > rel."finished_at" OR ap."updated_at" > rel."finished_at"
