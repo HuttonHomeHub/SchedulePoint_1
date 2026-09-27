@@ -408,6 +408,38 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(res.body.data.repairs).toEqual([]);
   });
 
+  it('carries a zero-duration advisory through the API, and no key for a file with none (ADR-0162)', async () => {
+    // `InterchangeReportResponseDto.from` rebuilds the report field by field, so a key the pure
+    // pipeline produces reaches the client only if the DTO maps it. This is what proves it does.
+    const { actor } = await adminWithOrg();
+    const projectId = await makeProject(actor);
+    const zeroXer = validXer().replace(
+      '%R\tT2\tP1\tA1010\tDesign\tTT_Task\t80',
+      '%R\tT2\tP1\tA1010\tHandover\tTT_Task\t0',
+    );
+    expect(zeroXer).not.toBe(validXer());
+
+    const res = await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(zeroXer, 'utf8'), 'zero.xer')
+      .expect(200);
+    expect(res.body.data.advisories).toEqual([
+      {
+        code: 'ZERO_DURATION_TASK',
+        entity: 'activity',
+        sourceRef: 'A1010',
+        detail:
+          'imported as a task with no duration; a zero-length event is usually a milestone — convert it after import',
+      },
+    ]);
+
+    const none = await actor.agent
+      .post(dryRunUrl(projectId))
+      .attach('file', Buffer.from(validXer(), 'utf8'), 'sample.xer')
+      .expect(200);
+    expect('advisories' in none.body.data).toBe(false);
+  });
+
   it('reports repairs for a file with a dangling edge (still 200)', async () => {
     const { actor } = await adminWithOrg();
     const projectId = await makeProject(actor);

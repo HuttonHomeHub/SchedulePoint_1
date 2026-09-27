@@ -1,3 +1,4 @@
+import { zeroDurationAdvisories } from './advisories.js';
 import { importGraphSchema, type ImportCalendarScope, type ImportGraph } from './import-graph.js';
 import { mapCanonicalToImportGraph } from './mapper.js';
 import type { InterchangeReport, ReportFinding } from './report.js';
@@ -232,6 +233,9 @@ export function importXer(input: ImportXerInput): ImportXerResult {
   const placements = g.activities.filter((a) => a.visualStart != null).length;
   const lanes = g.activities.filter((a) => a.laneIndex != null).length;
 
+  // Activities imported faithfully that the planner probably wants to convert (ADR-0162).
+  const advisories = zeroDurationAdvisories(g);
+
   const report: InterchangeReport = {
     detectedFormat: adapted.model.source.format,
     sourceVersion: adapted.model.source.version,
@@ -250,6 +254,9 @@ export function importXer(input: ImportXerInput): ImportXerResult {
     approximations,
     repairs,
     drops,
+    // Absent, never empty, when nothing is advised (FC-5 (a)): a file with no zero-duration task
+    // yields a report byte-identical to one written before the key existed.
+    ...(advisories.length > 0 ? { advisories } : {}),
   };
 
   return { ok: true, graph: validated.graph, report };

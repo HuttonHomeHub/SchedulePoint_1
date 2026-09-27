@@ -90,6 +90,23 @@ export function layoutXerFile(): { name: string; mimeType: string; buffer: Buffe
   };
 }
 
+/**
+ * {@link validXer} plus a third task, A1020 "Handover", carrying **zero hours** after Design — the
+ * shape P6 exports for an event entered as a task (ADR-0162). The import brings it in unchanged as a
+ * zero-duration task and says so in the report's Advisories section, which is what this fixture exists
+ * to drive; the health check then lists the same activity (FC-10's third reader, from the browser).
+ */
+export function zeroDurationXerFile(): { name: string; mimeType: string; buffer: Buffer } {
+  const text = validXer()
+    .replace('%T\tTASKPRED', '%R\tT3\tP1\tA1020\tHandover\tTT_Task\t0\n%T\tTASKPRED')
+    .replace(/%E$/, '%R\tR2\tT3\tT2\tPR_FS\t0\n%E');
+  return {
+    name: 'schedule-with-event.xer',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(text, 'utf8'),
+  };
+}
+
 /** The `.xer` fixture as bytes, ready for `Locator.setInputFiles`. */
 export function validXerFile(): { name: string; mimeType: string; buffer: Buffer } {
   return {

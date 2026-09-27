@@ -1,9 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type {
-  InterchangeReport,
-  ReportFinding,
-  ReportFindingKind,
-  ResourceCollision,
+import {
+  IMPORT_ADVISORY_CODES,
+  type ImportAdvisory,
+  type ImportAdvisoryCode,
+  type InterchangeReport,
+  type ReportFinding,
+  type ReportFindingKind,
+  type ResourceCollision,
 } from '@repo/interchange';
 
 /**
@@ -133,6 +136,34 @@ export class ResourceCollisionResponseDto {
 }
 
 /**
+ * One import advisory (ADR-0162 D1/D2): an activity the import brought in faithfully that the
+ * planner probably wants to change afterwards. Not a finding — nothing was coerced, repaired or left
+ * out — so it is its own list rather than a fourth finding kind.
+ */
+export class ImportAdvisoryResponseDto {
+  @ApiProperty({
+    enum: IMPORT_ADVISORY_CODES,
+    description:
+      'What is advised. `ZERO_DURATION_TASK`: a task that arrived with no duration, which is ' +
+      'usually a milestone entered as a task.',
+  })
+  code!: ImportAdvisoryCode;
+
+  @ApiProperty({ enum: ['activity'], description: 'The kind of entity advised on.' })
+  entity!: 'activity';
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'The activity’s code in the source file, the identifier the planner knows it by.',
+  })
+  sourceRef!: string | null;
+
+  @ApiProperty({ description: 'A sentence saying what was found and what to do about it.' })
+  detail!: string;
+}
+
+/**
  * The pre-commit interchange report returned by the dry-run: detected format/version, mapped counts,
  * and the approximation / repair / drop findings. This is the runtime instance of ADR-0050's mapping
  * contract; it is produced by the pure `@repo/interchange` pipeline and carries no server internals.
@@ -177,6 +208,18 @@ export class InterchangeReportResponseDto {
   })
   resourceCollisions?: ResourceCollisionResponseDto[];
 
+  @ApiProperty({
+    type: ImportAdvisoryResponseDto,
+    isArray: true,
+    required: false,
+    description:
+      'Activities the import brought in faithfully that you probably want to change afterwards ' +
+      '(ADR-0162), such as a task with no duration. Never blocks the import. Absent means none: it ' +
+      'is never an empty array, so a report with nothing to advise is identical to one written ' +
+      'before the field existed.',
+  })
+  advisories?: ImportAdvisoryResponseDto[];
+
   /** Map a pure-pipeline report to its API representation (the shapes are identical; this documents it). */
   static from(report: InterchangeReport): InterchangeReportResponseDto {
     return {
@@ -207,8 +250,19 @@ export class InterchangeReportResponseDto {
       ...(report.resourceCollisions === undefined
         ? {}
         : { resourceCollisions: report.resourceCollisions.map(toCollision) }),
+      ...(report.advisories === undefined ? {} : { advisories: report.advisories.map(toAdvisory) }),
     };
   }
+}
+
+/** Map one pure `ImportAdvisory` to its response shape (identical; this documents the contract). */
+function toAdvisory(advisory: ImportAdvisory): ImportAdvisoryResponseDto {
+  return {
+    code: advisory.code,
+    entity: advisory.entity,
+    sourceRef: advisory.sourceRef,
+    detail: advisory.detail,
+  };
 }
 
 /** Map one pure `ResourceCollision` to its response shape (identical; this documents the contract). */

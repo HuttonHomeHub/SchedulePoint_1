@@ -15,6 +15,7 @@
  */
 export * from './canonical.js';
 export * from './report.js';
+export * from './advisories.js';
 export * from './xer-parser.js';
 export * from './xer-calendar.js';
 export * from './xer-adapter.js';
