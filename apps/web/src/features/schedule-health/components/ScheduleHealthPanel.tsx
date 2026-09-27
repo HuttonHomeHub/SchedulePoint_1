@@ -1,12 +1,20 @@
-import type { HealthMetricResult, HealthOffender, ScheduleHealthReport } from '@repo/types';
+import type {
+  HealthAdvisoryResult,
+  HealthMetricResult,
+  HealthOffender,
+  ScheduleHealthReport,
+} from '@repo/types';
 import { CircleCheck, CircleHelp, CircleX, Info } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 
 import {
   buildHealthRows,
+  HEALTH_ADVISORY_FOOTER,
+  healthAdvisoriesOf,
   healthAnnouncement,
   mergeCriticalPathResult,
   REMEDY_ROLE_SENTENCES,
+  zeroDurationSummary,
   type HealthRowView,
 } from '../model/health-rows';
 import { printHealthReport } from '../print/HealthPrintDocument';
@@ -277,6 +285,15 @@ export function ScheduleHealthPanel({
               ))}
             </ul>
 
+            <HealthAdvisorySection
+              advisories={healthAdvisoriesOf(effectiveReport)}
+              offenderCap={effectiveReport.offenderCap}
+              onActivateActivity={(offender) => {
+                onActivateActivity(offender.activityId);
+                announce(`${offender.name} selected in the plan.`);
+              }}
+            />
+
             <p className="text-muted-foreground border-border border-t pt-2 text-xs">
               This checks how the plan is built. It is separate from the issues a recalculation
               finds — the Next conflict cycle counts those, and the two can honestly disagree about
@@ -394,6 +411,87 @@ function HealthMetricRow({
             )}
           </div>
         ) : null}
+      </HealthOffenderDisclosure>
+    </li>
+  );
+}
+
+/**
+ * **Beyond the DCMA assessment** (ADR-0162 D1) — a section of its own, after the metrics list and
+ * never an item in it, because an advisory has no ordinal, no verdict and no threshold, and is never
+ * counted in the summary (FC-4). Its one row renders through the same disclosure the metrics use, so
+ * an offender list reads and jumps one way on both.
+ *
+ * `null` advisories means an API that predates the field (spec E32): nothing renders, and nothing
+ * claims "none" — an absent answer is not an answer of zero.
+ */
+function HealthAdvisorySection({
+  advisories,
+  offenderCap,
+  onActivateActivity,
+}: {
+  advisories: readonly HealthAdvisoryResult[] | null;
+  offenderCap: number;
+  onActivateActivity: (offender: HealthOffender) => void;
+}): React.ReactElement | null {
+  const headingId = useId();
+  if (advisories === null || advisories.length === 0) return null;
+  return (
+    <section aria-labelledby={headingId} className="space-y-1">
+      <h3 id={headingId} className="text-sm font-medium">
+        Beyond the DCMA assessment
+      </h3>
+      {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the metrics `ul`. */}
+      <ul role="list" aria-labelledby={headingId} className="space-y-1">
+        {advisories.map((advisory) => (
+          <HealthAdvisoryRow
+            key={advisory.id}
+            advisory={advisory}
+            offenderCap={offenderCap}
+            onActivateActivity={onActivateActivity}
+          />
+        ))}
+      </ul>
+      <p className="text-muted-foreground text-xs">{HEALTH_ADVISORY_FOOTER}</p>
+    </section>
+  );
+}
+
+function HealthAdvisoryRow({
+  advisory,
+  offenderCap,
+  onActivateActivity,
+}: {
+  advisory: HealthAdvisoryResult;
+  offenderCap: number;
+  onActivateActivity: (offender: HealthOffender) => void;
+}): React.ReactElement {
+  const summaryId = useId();
+  const count = advisory.offenderCount;
+  return (
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the metrics `ul`.
+    <li role="listitem" className="border-border rounded-md border px-2 py-1.5 text-sm">
+      <HealthOffenderDisclosure
+        name={advisory.name}
+        // A count, not a verdict: an advisory judges nothing (ADR-0162 D1). "None" at zero, so the
+        // badge never reads as a bare "0" beside a name that sounds like a problem.
+        badge={
+          <span className="text-muted-foreground shrink-0 text-xs font-medium">
+            {count === 0 ? 'None' : String(count)}
+          </span>
+        }
+        describedBy={count === 0 ? undefined : summaryId}
+        offenders={advisory.offenders}
+        offenderCount={count}
+        offendersTruncated={advisory.offendersTruncated}
+        offenderCap={offenderCap}
+        onActivate={onActivateActivity}
+      >
+        {count === 0 ? null : (
+          <p id={summaryId} className="text-muted-foreground pl-5 text-xs">
+            {zeroDurationSummary(advisory)}
+          </p>
+        )}
       </HealthOffenderDisclosure>
     </li>
   );

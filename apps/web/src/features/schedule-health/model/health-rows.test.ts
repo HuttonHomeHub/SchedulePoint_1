@@ -1,7 +1,12 @@
 import type { HealthMetricResult, ScheduleHealthReport } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildHealthRows, healthAnnouncement, mergeCriticalPathResult } from './health-rows';
+import {
+  buildHealthRows,
+  healthAnnouncement,
+  mergeCriticalPathResult,
+  zeroDurationSummary,
+} from './health-rows';
 
 /** A report factory: every number in these fixtures is deliberately NOT a DCMA default, so an
  *  assertion passing proves the label came from the payload and not from a constant (G3). */
@@ -246,5 +251,33 @@ describe('mergeCriticalPathResult (health M6)', () => {
     const rows = buildHealthRows(report([cptResult('FAIL')]));
     const row = rows.find((r) => r.metric.id === 'CRITICAL_PATH_TEST');
     expect(row?.caveatSentence).toBe('Injected 600 d at Groundworks; completion moved 0 d.');
+  });
+});
+
+describe('zeroDurationSummary (ADR-0162 D1)', () => {
+  const advisory = (count: number, resourced: number, denominator: number | null = 40) => ({
+    id: 'ZERO_DURATION_TASKS' as const,
+    name: 'Zero-duration tasks',
+    measured: { count, denominator, percent: null, ratio: null },
+    offenderCount: count,
+    offendersTruncated: false,
+    offenders: [],
+    detail: { resourced },
+  });
+
+  it('states the count, what it is out of, and the resourced figure', () => {
+    expect(zeroDurationSummary(advisory(3, 1))).toBe(
+      '3 zero-duration tasks out of 40 activities; 1 has resource assignments',
+    );
+    expect(zeroDurationSummary(advisory(3, 2))).toBe(
+      '3 zero-duration tasks out of 40 activities; 2 have resource assignments',
+    );
+    expect(zeroDurationSummary(advisory(1, 0))).toBe(
+      '1 zero-duration task out of 40 activities; none has resource assignments',
+    );
+  });
+
+  it('reads "None" at zero rather than disappearing', () => {
+    expect(zeroDurationSummary(advisory(0, 0))).toBe('None');
   });
 });

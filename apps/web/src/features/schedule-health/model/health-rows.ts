@@ -221,6 +221,34 @@ export function healthAdvisoriesOf(
   return advisories ?? null;
 }
 
+/**
+ * The one sentence that closes the "Beyond the DCMA assessment" section, on screen and on paper
+ * (ADR-0162 D1): what the finding is read from, and that it is not part of the assessment above it.
+ */
+export const HEALTH_ADVISORY_FOOTER =
+  'Found from stored durations, whether or not the plan has been calculated, and not part of the DCMA assessment above.';
+
+/**
+ * The advisory row's summary line: the count, the activities it is out of, and how many of the
+ * offenders hold a resource assignment — "3 zero-duration tasks out of 40 activities; 1 has resource
+ * assignments". At zero the row reads "None" (US-1): the row is present and says so, never absent.
+ */
+export function zeroDurationSummary(advisory: HealthAdvisoryResult): string {
+  const count = advisory.offenderCount;
+  if (count === 0) return 'None';
+  const denominator = advisory.measured.denominator;
+  const outOf =
+    denominator === null
+      ? ''
+      : ` out of ${String(denominator)} ${denominator === 1 ? 'activity' : 'activities'}`;
+  const r = advisory.detail.resourced;
+  const resourced =
+    r === 0
+      ? 'none has resource assignments'
+      : `${String(r)} ${r === 1 ? 'has' : 'have'} resource assignments`;
+  return `${zeroDurationPhrase(count)}${outOf}; ${resourced}`;
+}
+
 /** "no zero-duration tasks" / "1 zero-duration task" / "3 zero-duration tasks". */
 export function zeroDurationPhrase(count: number): string {
   if (count === 0) return 'no zero-duration tasks';

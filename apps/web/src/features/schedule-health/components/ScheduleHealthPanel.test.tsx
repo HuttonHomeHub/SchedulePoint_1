@@ -1,5 +1,5 @@
-import type { HealthMetricResult, ScheduleHealthReport } from '@repo/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import type { HealthAdvisoryResult, HealthMetricResult, ScheduleHealthReport } from '@repo/types';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
@@ -22,6 +22,26 @@ function metric(overrides: Partial<HealthMetricResult>): HealthMetricResult {
     offendersTruncated: false,
     offenders: [],
     ...overrides,
+  };
+}
+
+/** ADR-0162 D1's one advisory, with `count` offenders of whom `resourced` hold an assignment. */
+function zeroAdvisory(count: number, resourced = 0): HealthAdvisoryResult {
+  return {
+    id: 'ZERO_DURATION_TASKS',
+    name: 'Zero-duration tasks',
+    measured: { count, denominator: 10, percent: count * 10, ratio: null },
+    offenderCount: count,
+    offendersTruncated: false,
+    offenders: Array.from({ length: count }, (_, i) => ({
+      kind: 'ACTIVITY' as const,
+      id: `z${i}`,
+      code: `Z${i}`,
+      name: `Handover ${i}`,
+      note: i < resourced ? '1 resource assignment' : 'no resource assignment',
+      activityId: `z${i}`,
+    })),
+    detail: { resourced },
   };
 }
 
@@ -456,5 +476,66 @@ describe('ScheduleHealthPanel', () => {
     expect(spoken).toEqual([
       ['Critical path test passed — the completion moved with the injection.'],
     ]);
+  });
+
+  describe('Beyond the DCMA assessment (ADR-0162 D1)', () => {
+    it('renders the advisory as its own section after the metrics, never an item in them', () => {
+      renderPanel({ report: fullReport({ advisories: [zeroAdvisory(3, 1)] }) });
+      const metrics = screen.getByRole('list', { name: 'DCMA metrics' });
+      expect(within(metrics).getAllByRole('listitem')).toHaveLength(14);
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      const list = within(section).getByRole('list', { name: 'Beyond the DCMA assessment' });
+      expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+      // The count, what it is out of, and the resourced figure, as the row's description.
+      const toggle = within(section).getByRole('button', { name: /Zero-duration tasks\s*3/ });
+      expect(toggle).toHaveAccessibleDescription(
+        '3 zero-duration tasks out of 10 activities; 1 has resource assignments',
+      );
+      expect(section).toHaveTextContent(
+        'Found from stored durations, whether or not the plan has been calculated, and not part of the DCMA assessment above.',
+      );
+      // DOM order: after the metrics list.
+      expect(
+        metrics.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('reads "None" at zero rather than disappearing', () => {
+      renderPanel({ report: fullReport({ advisories: [zeroAdvisory(0)] }) });
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      expect(section).toHaveTextContent('Zero-duration tasks');
+      expect(section).toHaveTextContent('None');
+    });
+
+    it('activating an offender selects its activity through the same seam the metrics use', () => {
+      const props = renderPanel({ report: fullReport({ advisories: [zeroAdvisory(2)] }) });
+      const section = screen.getByRole('region', { name: 'Beyond the DCMA assessment' });
+      fireEvent.click(within(section).getByRole('button', { name: /Zero-duration tasks/ }));
+      fireEvent.click(within(section).getByRole('button', { name: /Z1 Handover 1/ }));
+      expect(props.onActivateActivity).toHaveBeenCalledWith('z1');
+      expect(announce).toHaveBeenCalledWith('Handover 1 selected in the plan.');
+    });
+
+    it('renders no section, and does not fail, against an API that predates the field (spec E32)', () => {
+      const { advisories: _dropped, ...legacy } = fullReport({ advisories: [zeroAdvisory(3)] });
+      renderPanel({ report: legacy as unknown as ScheduleHealthReport });
+      expect(screen.queryByRole('region', { name: 'Beyond the DCMA assessment' })).toBeNull();
+      expect(screen.getAllByRole('listitem')).toHaveLength(14);
+    });
+
+    it('has no axe violations with the advisory expanded', async () => {
+      const { container } = render(
+        <ScheduleHealthPanel
+          report={fullReport({ advisories: [zeroAdvisory(2, 1)] })}
+          isPending={false}
+          isError={false}
+          onRetry={vi.fn()}
+          onClose={vi.fn()}
+          onActivateActivity={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Zero-duration tasks/ }));
+      expect((await axe(container)).violations).toEqual([]);
+    });
   });
 });
