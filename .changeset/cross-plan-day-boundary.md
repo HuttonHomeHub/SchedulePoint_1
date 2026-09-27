@@ -4,8 +4,10 @@
 ---
 
 **A cross-plan link now gives the dates the same link gives inside one plan** (#385). Linked
-plans' dates change on this release: most downstream plans move later and upstream plans lose
-float, by amounts the old derivation hid.
+plans' dates change on this release, in both directions: most downstream plans move later, but
+where leads or finish-to-finish links cross a weekend some move earlier (of 1,728 test cases, 477
+moved later and 442 earlier). The API recalculates every linked plan once when it starts,
+upstream first, so nobody has to press Recalculate to see the new dates.
 
 - **The upstream's finish means the end of its day.** A finish-to-start link with no lag used to
   let the downstream activity start on the upstream's last day; it now starts at the first working
