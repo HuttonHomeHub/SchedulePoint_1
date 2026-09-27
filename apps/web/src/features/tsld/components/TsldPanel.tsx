@@ -112,6 +112,7 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Surface } from '@/components/ui/surface';
 import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
+import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import { deriveWbsBandSource, wbsBandDescribedRows, wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor } from '@/lib/bar-dates';
@@ -525,6 +526,14 @@ export interface TsldPanelProps {
   /** Open the activity editor where a conflict lives — `constraint` → Scheduling, `resources` →
    * Resources. Opaque so `features/tsld` need not import `ActivityEditorPurpose` (§5/§12). */
   onOpenEditorAt?: (activity: ActivitySummary, at: 'constraint' | 'resources') => void;
+  /**
+   * The workspace's `activityEditorGating.general`, passed through to the selection bar untouched so
+   * Make milestone… shades from the same object as the editor and the table (ADR-0162 decision 4).
+   * Absent in a host that offers no conversion, which omits the action.
+   */
+  definitionGate?: ScopeGate | undefined;
+  /** Open the Make milestone dialog for the activity (ADR-0162 decision 4). Absent ⇒ omitted. */
+  onMakeMilestone?: ((activity: ActivitySummary) => void) | undefined;
   /** The plan's baseline-variance rows (`useBaselineVariance`), for the **Baseline overlay** lens
    * (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`). The host passes the shipped
    * variance data (already route-composed for the activities table) so no new fetch is added; the
@@ -647,6 +656,8 @@ export function TsldPanel({
   clearPlacement,
   onClearVisualPlacement,
   onOpenEditorAt,
+  definitionGate,
+  onMakeMilestone,
   varianceRows,
   resourceStripActive = false,
   resourceStrip = null,
@@ -1762,6 +1773,8 @@ export function TsldPanel({
         onProgress,
         onClearVisualPlacement,
         onOpenEditorAt,
+        definitionGate,
+        onMakeMilestone,
       }),
     [
       selectionCanvas,
@@ -1782,6 +1795,8 @@ export function TsldPanel({
       onProgress,
       onClearVisualPlacement,
       onOpenEditorAt,
+      definitionGate,
+      onMakeMilestone,
       // The same omission as `rowTextById`'s above, found the same way and fixed in the same pass:
       // a role change that revokes note-writing, or a host that swaps its notes handler, left the
       // selection bar offering the old answer.

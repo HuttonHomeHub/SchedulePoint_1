@@ -4,6 +4,7 @@ export {
   useCreateActivity,
   useCreatePlacedActivity,
   useUpdateActivity,
+  useUpdateActivityFields,
   useRepositionLane,
   useSetActivityVisualStart,
   useBatchPositions,

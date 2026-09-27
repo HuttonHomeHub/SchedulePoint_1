@@ -1,5 +1,6 @@
 import type {
   ActivitySummary,
+  ActivityType,
   ConstraintType,
   DependencySummary,
   DependencyType,
@@ -265,6 +266,45 @@ export function updateCommand(params: {
     before: params.before,
     after: params.after,
   });
+}
+
+/** `useUpdateActivityFields().mutateAsync` — a partial PATCH of exactly the fields in `patch`. */
+export type PatchActivityFieldsFn = (input: {
+  activityId: string;
+  version: number;
+  patch: Record<string, unknown>;
+}) => Promise<ActivitySummary>;
+
+/**
+ * Reverse **Make milestone…** (ADR-0162 decision 4): a plain `PATCH {version, type}` each way.
+ *
+ * Exact because the server re-expresses the unsent stored dates when a zero-duration activity's type
+ * crosses the milestone convention, in BOTH directions (decision 3): converting a Monday placement
+ * to a finish milestone stores the Sunday, and converting back stores the Monday again. So the
+ * inverse sends the type and nothing else, and the row returns byte-identical — the journey pins it.
+ * A full-definition inverse (`updateCommand`) would be wrong here: it would resend the pre-edit
+ * dates alongside the type, and a date sent WITH the type is read in the new type's convention.
+ *
+ * Discrete (no coalescing): one dialog confirm is one step.
+ */
+export function typeChangeCommand(params: {
+  patch: PatchActivityFieldsFn;
+  activityId: string;
+  before: ActivityType;
+  after: ActivityType;
+  version: number;
+  label?: string;
+}): Command {
+  let version = params.version;
+  const set = async (type: ActivityType): Promise<void> => {
+    const saved = await params.patch({ activityId: params.activityId, version, patch: { type } });
+    version = saved.version;
+  };
+  return {
+    label: params.label ?? 'Make milestone',
+    undo: () => set(params.before),
+    redo: () => set(params.after),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------

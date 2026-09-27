@@ -83,6 +83,8 @@ import {
   buildSelectionBarContext,
   type SelectionContextInput,
 } from '@/features/plan-actions/build-selection-context';
+import { defaultMilestoneType } from '@/features/plan-actions/make-milestone-gate';
+import { MakeMilestoneDialog } from '@/features/plan-actions/MakeMilestoneDialog';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { HANDOFF_ACTIONS, PenStatusCluster, usePenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, plansQueryOptions } from '@/features/plans';
@@ -1123,6 +1125,10 @@ export function ToolbarPlanWorkspace({
       })}
       onClearVisualPlacement={(a) => void model.clearVisualPlacement(a.id, a.version)}
       onOpenEditorAt={model.onOpenActivityEditorAt}
+      // The editor's own `general` gate, by identity (ADR-0162 decision 4): Make milestone… on the
+      // bar and on the table's row menu shade from ONE object, so they cannot give two reasons.
+      definitionGate={model.activityEditorGating.general}
+      onMakeMilestone={model.onMakeMilestone}
       onSelectionChange={model.onSelectionChange}
       onPluralSelectionChange={model.onPluralSelectionChange}
       onRefresh={model.onTsldRefresh}
@@ -1202,6 +1208,22 @@ export function ToolbarPlanWorkspace({
   }, []);
 
   /**
+   * Focus ONE activity's row, falling back to the grid's roving stop when that row is not mounted
+   * (the grid virtualizes). The Make milestone dialog's successor (spec D4): the row survives the
+   * conversion, so the dialog's native restore lands on the activity rather than on `<body>`.
+   */
+  const focusGanttRow = useCallback(
+    (activityId: string) => {
+      const row = document.querySelector<HTMLElement>(
+        `[role="treegrid"] [role="row"][data-activity-id="${CSS.escape(activityId)}"]`,
+      );
+      if (row) row.focus();
+      else focusGanttGrid();
+    },
+    [focusGanttGrid],
+  );
+
+  /**
    * **The Gantt's object-action context — M1, discharging the ADR-0093 promise.**
    *
    * ADR-0093 took `Report progress` off the command surface because an object action belongs on the
@@ -1267,6 +1289,15 @@ export function ToolbarPlanWorkspace({
     onNotes: model.revealActivityNotes,
     onClearVisualPlacement: (a) => void model.clearVisualPlacement(a.id, a.version),
     onOpenEditorAt: model.onOpenActivityEditorAt,
+    // The same object the canvas bar receives above, by identity (ADR-0162 decision 4).
+    definitionGate: model.activityEditorGating.general,
+    // Focus the activity's ROW before the dialog opens (spec D4): the dialog's native restore
+    // returns focus to whatever held it at `showModal()`, and the control that opened it is gone
+    // once the task is a milestone.
+    onMakeMilestone: (a) => {
+      focusGanttRow(a.id);
+      model.onMakeMilestone(a);
+    },
   };
 
   const ganttSelectionCtx = buildSelectionBarContext(ganttSelectionInput);
@@ -2354,6 +2385,34 @@ export function ToolbarPlanWorkspace({
 
         {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
         <ActivityCrudDialogs model={model} />
+
+        {/* Make milestone… (ADR-0162 decision 4), mounted once for every surface that opens it —
+            the canvas bar, the Gantt row menu and the activities table. A fresh `key` per target,
+            so a pick or an error never carries over from a previous opening. */}
+        {model.makeMilestoneActivity ? (
+          <MakeMilestoneDialog
+            // Mounted while closed, so closing runs `close()` and the native restore returns focus
+            // to the activity (the model's docblock). A fresh key per OPENING, not per target.
+            key={`${model.makeMilestoneActivity.id}:${String(model.makeMilestoneOpening)}`}
+            open={model.makeMilestoneOpen}
+            onClose={model.closeMakeMilestone}
+            activityName={model.makeMilestoneActivity.name}
+            reportedDate={
+              model.makeMilestoneActivity.visualEffectiveStart ??
+              model.makeMilestoneActivity.earlyStart
+            }
+            defaultType={defaultMilestoneType(
+              model.makeMilestoneActivity.id,
+              model.dependencies.data ?? [],
+            )}
+            carriesProjectFinish={
+              scheduleSummary.data?.projectFinish != null &&
+              (model.makeMilestoneActivity.visualEffectiveFinish ??
+                model.makeMilestoneActivity.earlyFinish) === scheduleSummary.data.projectFinish
+            }
+            onConfirm={model.confirmMakeMilestone}
+          />
+        ) : null}
 
         {/* The progress editor (toolbar Report-progress + the entry-route selection-bar Report-progress)
           now lives in the shared `PlanDialogs`, so it's mounted once for whichever canvas layout is

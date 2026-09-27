@@ -31,6 +31,10 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
   return {
     canvas: null,
     targetName: 'Excavate',
+    // Make milestone… does not apply to this fixture's activity (ADR-0162 decision 4).
+    definitionGate: null,
+    makeMilestone: { applies: false },
+    onMakeMilestone: vi.fn(),
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,

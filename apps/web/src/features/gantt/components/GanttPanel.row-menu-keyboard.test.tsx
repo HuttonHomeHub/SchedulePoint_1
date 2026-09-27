@@ -47,6 +47,10 @@ const ROWS = [
 const rowContext = (): SelectionBarContext => ({
   canvas: null,
   targetName: 'Excavate',
+  // Make milestone… does not apply to this fixture's activity (ADR-0162 decision 4).
+  definitionGate: null,
+  makeMilestone: { applies: false },
+  onMakeMilestone: vi.fn(),
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,

@@ -411,12 +411,21 @@ const CANVAS_MONTHS = [
  * is pure and its output is snapshot-tested, so a machine's locale must not change what is drawn
  * (the same reason the render model does no other domain string work).
  */
-export function formatCanvasDate(isoDate: string): string {
+export function formatCanvasDate(isoDate: string, options: { weekday?: boolean } = {}): string {
   const [, month, day] = isoDate.split('-');
   const index = Number(month) - 1;
   const name = CANVAS_MONTHS[index] ?? month ?? '';
-  return `${Number(day)} ${name}`;
+  const date = `${Number(day)} ${name}`;
+  if (options.weekday !== true) return date;
+  // **The weekday form, `Fri 9 Jan`** (ADR-0162 decision 4). The Make milestone dialog and its
+  // announcement name a date whose WEEKDAY is the point — "after a weekend it appears on the Friday
+  // rather than the Monday" — so this adds the day rather than being a third date format. Read in
+  // UTC, because the ISO date names a calendar day and the reader's zone must not shift it.
+  const weekday = CANVAS_WEEKDAYS[new Date(`${isoDate}T00:00:00Z`).getUTCDay()];
+  return weekday === undefined ? date : `${weekday} ${date}`;
 }
+
+const CANVAS_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 /** A flanking date label's placement decision for one bar (ADR-0054 §3). */
 export interface DateLabelSlot {
