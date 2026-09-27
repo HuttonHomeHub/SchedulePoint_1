@@ -1,5 +1,34 @@
 # @repo/types
 
+## 0.35.0
+
+### Minor Changes
+
+- [#706](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/706) [`1163e89`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1163e89c4dadfb97c6a1924ddac01707b8f4715f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **A cross-plan link now gives the dates the same link gives inside one plan** ([#385](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/385)). Linked
+  plans' dates change on this release, in both directions: most downstream plans move later, but
+  where leads or finish-to-finish links cross a weekend some move earlier (of 1,728 test cases, 477
+  moved later and 442 earlier). The API recalculates every linked plan once when it starts,
+  upstream first, so nobody has to press Recalculate to see the new dates.
+  
+  - **The upstream's finish means the end of its day.** A finish-to-start link with no lag used to
+    let the downstream activity start on the upstream's last day; it now starts at the first working
+    moment after it, as in one plan. The backward bound had the mirror overlap and loses it too.
+  - **The lag counts working time on its lag calendar.** It was stored as whole calendar days of
+    1,440 minutes whatever the calendar, so a two-day lag across a weekend landed short and a
+    one-day lag on an eight-hour calendar meant three working days. A migration re-encodes every
+    stored link to working minutes on its resolved lag calendar, and every read divides by that
+    calendar's hours-per-day. `PROJECT_DEFAULT` means the **successor activity's plan's** calendar.
+  - **Finish-to-finish and start-to-finish durations walk the successor's calendar**, and a
+    `TWENTY_FOUR_HOUR` lag counts elapsed time, as in one plan.
+  - **A Level-of-Effort activity never bounds a linked activity in another plan**, as it never does
+    in one plan, and is not reported as a never-calculated upstream.
+  - **The cross-plan response gains `lagMinutes`** (read-only, the stored working minutes), also on
+    `CrossPlanDependencySummary`. Creating a link still takes whole `lagDays` only.
+  
+  Residuals, stated rather than fixed: an upstream that finishes mid-day is read as the end of that
+  day, because persisted dates carry no time; and a hand-placed upstream bounds its downstream on
+  its placed dates (ADR-0148 M-H).
+
 ## 0.34.0
 
 ### Minor Changes
