@@ -1,3 +1,7 @@
+import type { ActivityType } from '@repo/types';
+
+import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
+
 import {
   absMinutesToInstant,
   instantToAbsMinutes,
@@ -73,6 +77,77 @@ export function finishMilestoneDateInstant(cal: WorkingTimeCalendar, date: strin
  */
 export function finishMilestoneDisplayIndex(ownOffset: number): number {
   return Math.max(ownOffset - 1, 0);
+}
+
+/** The calendar day after `date` (a `YYYY-MM-DD`), at 00:00 — the exclusive end of the day. */
+function nextCalendarDay(date: string): string {
+  const d = parseCalendarDate(date);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return formatCalendarDate(d);
+}
+
+/**
+ * **The instant a date given for an activity's START means**, on the activity's calendar (#385, spec
+ * D3). One of the two date readers, lifted verbatim from `resolvePair` in `constraints.ts` so the
+ * engine's constraint and external clamps and the cross-plan derivation read a date one way.
+ *
+ * A finish milestone's date means the END of that day (#381, {@link finishMilestoneDateInstant});
+ * every other type reads the first working minute at or after the start of the day.
+ */
+export function startDateInstant(
+  cal: WorkingTimeCalendar,
+  date: string,
+  type: ActivityType,
+): number {
+  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(cal, date);
+  return rollForwardToWorking(cal, instantToAbsMinutes(date));
+}
+
+/**
+ * **The instant a date given for an activity's FINISH means**, on the activity's calendar (#385, spec
+ * D3): the exclusive end of that day's working time (its last working minute + 1). Lifted verbatim
+ * from `resolvePair` and `clampExternalBackwardFinish` in `constraints.ts`.
+ *
+ * A finish milestone reads the end of the day as above; a zero-duration activity finishes at its
+ * start instant; everything else rolls back from the next calendar day's midnight.
+ *
+ * `anchorAbs` is where `rollBackwardToWorking` counts working minutes from (the engine passes its
+ * data date). The result does not depend on it **provided the anchor is at or before the answer**:
+ * the last working end boundary at or before the end of that day. An anchor later than that, in the
+ * non-working gap that closes the day, is returned as it is, because `addWorkingTime(anchor, 0)` is
+ * the anchor normalised; so "any anchor at or before the date's end" is not enough
+ * (`instants.readers.spec.ts` pins both halves). A caller outside the engine should pass the anchor
+ * the engine itself used, the remote plan's data date.
+ */
+export function finishDateInstant(
+  cal: WorkingTimeCalendar,
+  anchorAbs: number,
+  date: string,
+  type: ActivityType,
+  durationMinutes: number,
+): number {
+  if (type === 'FINISH_MILESTONE') return finishMilestoneDateInstant(cal, date);
+  if (durationMinutes === 0) return rollForwardToWorking(cal, instantToAbsMinutes(date));
+  return rollBackwardToWorking(cal, anchorAbs, instantToAbsMinutes(nextCalendarDay(date)));
+}
+
+/**
+ * **The one formatter for an instant handed to the engine's external-date seam** (#385, spec D7).
+ * It always writes `YYYY-MM-DDTHH:MM`, including `T00:00`.
+ *
+ * {@link absMinutesToInstant} drops `T00:00` and returns a bare date, and a bare date for a finish
+ * milestone means the END of that day ({@link finishMilestoneDateInstant}), so a midnight instant
+ * formatted that way is read one day late (spec E12). On a 24-hour or full-day calendar every day
+ * boundary is a midnight, so that is the common case there. Keeping the time makes the value an
+ * instant for every reader: `clampExternalForwardStart` and `clampExternalBackwardFinish` both read a
+ * value longer than ten characters as the instant it names.
+ *
+ * `external-instant.structural.spec.ts` holds this to being the only producer of a timed external
+ * string, and the cross-plan derivation to being its only caller outside the engine.
+ */
+export function formatExternalInstant(abs: number): string {
+  const instant = absMinutesToInstant(abs);
+  return instant.length > 10 ? instant : `${instant}T00:00`;
 }
 
 const MINUTES_PER_DAY = 1440;

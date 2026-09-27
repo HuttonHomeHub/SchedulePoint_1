@@ -1,13 +1,28 @@
+import type { LagCalendarSource } from '@prisma/client';
+
 import type { PlanCrossEdge } from '../../cross-plan-dependencies/cross-plan-dependency.repository';
+import {
+  crossPlanLagCalendarId,
+  type CrossPlanEndpointCalendarFacts,
+} from '../../cross-plan-dependencies/cross-plan-lag-calendar';
 import {
   deriveExternalInstants,
   type CrossPlanEdgeType,
+  type CrossPlanLocalActivity,
+  type CrossPlanRemoteEndpoint,
   type DerivedExternalInstant,
   type IncomingCrossPlanEdge,
   type M1ExternalInstant,
+  type OutgoingCrossPlanEdge,
 } from '../cross-plan-derivation';
-import { allMinutesWorkCalendar, computeSchedule } from '../engine';
-import type { EngineActivity, EngineEdge, EngineOutput, EngineResult } from '../engine';
+import { allMinutesWorkCalendar, buildWorkingTimeCalendar, computeSchedule } from '../engine';
+import type {
+  EngineActivity,
+  EngineEdge,
+  EngineOutput,
+  EngineResult,
+  WorkingTimeCalendar,
+} from '../engine';
 import { resolveProgrammeOrder } from '../programme-order';
 
 /**
@@ -24,8 +39,16 @@ import { resolveProgrammeOrder } from '../programme-order';
  * engine is never modified; cross-plan is derived strictly above it.
  *
  * No external oracle (ADR-0034 §3): the fixtures are tiny, on a 24/7 calendar (1 working day = 1440
- * minutes) so day arithmetic is transparent, and every asserted date is hand-computed from the §30.5–
- * §30.8 semantics in `cross-plan-conformance.spec.ts` — self-baselined, first-principles.
+ * minutes) by default so day arithmetic is transparent, and every asserted date is hand-computed from
+ * the §30.5–§30.8 semantics in `cross-plan-conformance.spec.ts` — self-baselined, first-principles.
+ * A fixture plan may name its own calendar port and an activity its own, which is how the
+ * mixed-calendar axis (#385 M2-T6) runs through the same adapter.
+ *
+ * **It derives exactly as the product does** (#385): the same `deriveExternalInstants`, with edges
+ * in BOTH directions, lags in working minutes, and each lag's port chosen by the one cross-plan
+ * rule, `crossPlanLagCalendarId`. The fixtures carry ports rather than calendar ids, so each port is
+ * given a synthetic id (`plan:<id>`, `act:<id>`) for the rule to decide between and is looked up
+ * again afterwards: the adapter restates no part of the rule, which is the drift ADR-0065 describes.
  */
 
 /** One plan in a cross-plan fixture — a bare engine network plus any hand-entered M1 external columns. */
@@ -34,6 +57,11 @@ export interface CrossPlanFixturePlan {
   name: string;
   /** The plan's data date (`YYYY-MM-DD`) — its schedule's earliest instant. */
   dataDate: string;
+  /**
+   * The plan's calendar port. Absent = the all-minutes 24/7 calendar every fixture used before the
+   * mixed-calendar axis. An activity with its own `calendar` schedules on that instead.
+   */
+  calendar?: WorkingTimeCalendar;
   /** Engine-ready activities (no external columns; the derivation supplies those). */
   activities: EngineActivity[];
   /** Intra-plan logic edges (usually none for these interface fixtures). */
@@ -46,8 +74,14 @@ export interface CrossPlanFixturePlan {
 export interface CrossPlanFixtureEdge {
   id: string;
   type: CrossPlanEdgeType;
-  /** Typed lag in whole working days (a lead is negative). */
-  lagDays: number;
+  /**
+   * The stored lag in working minutes on this edge's lag calendar (a lead is negative), as the
+   * product stores it since #385: `lagDays × the lag calendar's hours-per-day`. On the default
+   * 24/7 calendar a day is 1440.
+   */
+  lagMinutes: number;
+  /** The lag's calendar source (default `PROJECT_DEFAULT`, the successor plan's calendar). */
+  lagCalendar?: LagCalendarSource;
   predecessorPlanId: string;
   predecessorActivityId: string;
   successorPlanId: string;
@@ -119,9 +153,87 @@ export function toPlanEdges(fixture: CrossPlanFixture): PlanCrossEdge[] {
   }));
 }
 
-/** A plan's whole-day activity durations (the FF/SF start-implied arithmetic input for the derivation). */
-function durationDaysByActivity(plan: CrossPlanFixturePlan): Map<string, number> {
-  return new Map(plan.activities.map((a) => [a.id, Math.round(a.durationMinutes / 1440)]));
+/** A plan's calendar port: its own, or the 24/7 all-minutes calendar. */
+const planCalendar = (plan: CrossPlanFixturePlan): WorkingTimeCalendar =>
+  plan.calendar ?? allMinutesWorkCalendar;
+
+/** Where one activity sits in a fixture: its plan and its engine row. */
+interface Located {
+  plan: CrossPlanFixturePlan;
+  activity: EngineActivity;
+}
+
+function locate(fixture: CrossPlanFixture, activityId: string): Located {
+  for (const plan of fixture.plans) {
+    const activity = plan.activities.find((a) => a.id === activityId);
+    if (activity) return { plan, activity };
+  }
+  throw new Error(`cross-plan fixture "${fixture.id}" has no activity "${activityId}"`);
+}
+
+/** Synthetic calendar ids, so the fixtures' ports can be decided between by the product's rule. */
+const PLAN_CAL = 'plan:';
+const ACTIVITY_CAL = 'act:';
+
+function facts({ plan, activity }: Located): CrossPlanEndpointCalendarFacts {
+  return {
+    type: activity.type ?? 'TASK',
+    calendarId: activity.calendar ? `${ACTIVITY_CAL}${activity.id}` : null,
+    // The fixtures model no resources, so no driving calendar: an honest `null`, not an omission.
+    drivingCalendarId: null,
+    planCalendarId: `${PLAN_CAL}${plan.id}`,
+  };
+}
+
+/** The port a synthetic calendar id names; `null` is "no calendar", the all-minutes port. */
+function portOf(fixture: CrossPlanFixture, calId: string | null): WorkingTimeCalendar {
+  if (calId === null) return allMinutesWorkCalendar;
+  if (calId.startsWith(PLAN_CAL)) {
+    const id = calId.slice(PLAN_CAL.length);
+    const plan = fixture.plans.find((p) => p.id === id);
+    if (!plan) throw new Error(`cross-plan fixture "${fixture.id}" has no plan "${id}"`);
+    return planCalendar(plan);
+  }
+  const { activity } = locate(fixture, calId.slice(ACTIVITY_CAL.length));
+  if (!activity.calendar)
+    throw new Error(`"${calId}" was chosen and that activity has no calendar`);
+  return activity.calendar;
+}
+
+/** The lag port for one edge, decided by the one cross-plan rule (`crossPlanLagCalendarId`). */
+function lagPort(fixture: CrossPlanFixture, edge: CrossPlanFixtureEdge): WorkingTimeCalendar {
+  return portOf(
+    fixture,
+    crossPlanLagCalendarId({
+      lagCalendar: edge.lagCalendar ?? 'PROJECT_DEFAULT',
+      predecessor: facts(locate(fixture, edge.predecessorActivityId)),
+      successor: facts(locate(fixture, edge.successorActivityId)),
+    }),
+  );
+}
+
+/** A remote endpoint as the derivation reads it: its scheduling port and its plan's data date. */
+function remote({ plan, activity }: Located): CrossPlanRemoteEndpoint {
+  return {
+    type: activity.type ?? 'TASK',
+    durationMinutes: activity.durationMinutes,
+    calendar: activity.calendar ?? planCalendar(plan),
+    dataDate: plan.dataDate,
+  };
+}
+
+/** This plan's activities, each on the port it schedules on. */
+function localActivities(plan: CrossPlanFixturePlan): Map<string, CrossPlanLocalActivity> {
+  return new Map(
+    plan.activities.map((a) => [
+      a.id,
+      {
+        type: a.type ?? 'TASK',
+        durationMinutes: a.durationMinutes,
+        calendar: a.calendar ?? planCalendar(plan),
+      },
+    ]),
+  );
 }
 
 /**
@@ -140,9 +252,37 @@ function incomingEdgesInto(
       return {
         successorActivityId: edge.successorActivityId,
         type: edge.type,
-        lagDays: edge.lagDays,
+        lagMinutes: edge.lagMinutes,
+        lagCalendar: lagPort(fixture, edge),
+        predecessor: remote(locate(fixture, edge.predecessorActivityId)),
         predecessorPlacedStart: pred?.placedStart ?? null,
         predecessorPlacedFinish: pred?.placedFinish ?? null,
+      };
+    });
+}
+
+/**
+ * Build the outgoing cross-plan edges out of `planId`, reading each successor's LATE dates from
+ * `computed`. In an upstream-first solve the successor is not computed yet, so this contributes
+ * nothing there, exactly as in the product (and it is not counted as N32).
+ */
+function outgoingEdgesFrom(
+  fixture: CrossPlanFixture,
+  planId: string,
+  computed: Map<string, ComputedDates>,
+): OutgoingCrossPlanEdge[] {
+  return fixture.edges
+    .filter((edge) => edge.predecessorPlanId === planId)
+    .map((edge) => {
+      const succ = computed.get(edge.successorActivityId) ?? null;
+      return {
+        predecessorActivityId: edge.predecessorActivityId,
+        type: edge.type,
+        lagMinutes: edge.lagMinutes,
+        lagCalendar: lagPort(fixture, edge),
+        successor: remote(locate(fixture, edge.successorActivityId)),
+        successorLateStart: succ?.lateStart ?? null,
+        successorLateFinish: succ?.lateFinish ?? null,
       };
     });
 }
@@ -162,12 +302,12 @@ function recalcPlan(
   derived: Map<string, DerivedExternalInstant>;
   upstreamMissingCount: number;
 } {
-  const incoming = incomingEdgesInto(fixture, plan.id, computed);
   const { derived, upstreamMissingCount } = deriveExternalInstants({
-    incoming,
-    outgoing: [],
+    incoming: incomingEdgesInto(fixture, plan.id, computed),
+    outgoing: outgoingEdgesFrom(fixture, plan.id, computed),
     m1: new Map(Object.entries(plan.m1 ?? {})),
-    durationDaysByActivity: durationDaysByActivity(plan),
+    activities: localActivities(plan),
+    dataDate: plan.dataDate,
   });
 
   // Feed the derived (or manual-only) external columns onto cloned activities; the engine reads them
@@ -185,7 +325,7 @@ function recalcPlan(
 
   const output = computeSchedule(activities, plan.intraEdges ?? [], {
     dataDate: plan.dataDate,
-    calendar: allMinutesWorkCalendar,
+    calendar: planCalendar(plan),
     ...(opts.ignoreExternalRelationships ? { ignoreExternalRelationships: true } : {}),
   });
   return { output, derived, upstreamMissingCount };
@@ -279,9 +419,11 @@ function task(id: string, durationDays: number): EngineActivity {
 /**
  * **The FS inter-project interface** (the canonical Procurement → Construction hand-off, ADR-0045 §2).
  * Upstream *Procurement* activity `PROC_STEEL` (10 d, data date 2026-01-01 ⇒ inclusive early finish
- * 2026-01-10) feeds downstream *Construction* `CONS_ERECT` over an FS+2 cross-plan edge, so the derived
- * external early start is `2026-01-10 + 2 = 2026-01-12` (§30.5, §30.1-shaped). `CONS_ERECT` also carries
- * a hand-entered M1 external column so the **later-of** composition (§30.5) can be exercised both ways.
+ * 2026-01-10, which is the instant 2026-01-11 00:00) feeds downstream *Construction* `CONS_ERECT` over
+ * an FS+2 cross-plan edge, so the derived external early start is 2 × 1440 minutes later,
+ * `2026-01-13T00:00` (§30.5, §30.1-shaped; it read `2026-01-12` until #385, one day early). `CONS_ERECT`
+ * also carries a hand-entered M1 external column so the **later-of** composition (§30.5) can be
+ * exercised both ways.
  */
 export const FS_INTERFACE_FIXTURE: CrossPlanFixture = {
   id: 'fs-interface',
@@ -301,7 +443,7 @@ export const FS_INTERFACE_FIXTURE: CrossPlanFixture = {
       name: 'Construction',
       dataDate: '2026-01-01',
       activities: [task('CONS_ERECT', 5)],
-      // A hand-entered M1 external early start EARLIER than the derived 2026-01-12, so the derived bound
+      // A hand-entered M1 external early start EARLIER than the derived 2026-01-13, so the derived bound
       // drives by default (§30.5 later-of); the golden also overrides it to prove the manual column wins.
       m1: { CONS_ERECT: { externalEarlyStart: '2026-01-05', externalLateFinish: null } },
     },
@@ -310,7 +452,7 @@ export const FS_INTERFACE_FIXTURE: CrossPlanFixture = {
     {
       id: 'x1',
       type: 'FS',
-      lagDays: 2,
+      lagMinutes: 2 * 1440,
       predecessorPlanId: 'PLAN_PROCUREMENT',
       predecessorActivityId: 'PROC_STEEL',
       successorPlanId: 'PLAN_CONSTRUCTION',
@@ -322,11 +464,12 @@ export const FS_INTERFACE_FIXTURE: CrossPlanFixture = {
 
 /**
  * **The diamond fan-in** (ADR-0045 §4 topo order + multi-upstream fold, §30.5). Upstream `U1` (8 d,
- * 2026-01-01 ⇒ EF 2026-01-08) feeds two mid plans: `MA1` over FS+0 (⇒ external early start 2026-01-08,
- * 4 d ⇒ EF 2026-01-11) and `MB1` over FS+3 (⇒ 2026-01-11, 6 d ⇒ EF 2026-01-16). Both mids feed downstream
- * `D1` over FS+0, so `D1`'s derived external early start is the **latest** of the two mid bounds —
- * `max(2026-01-11, 2026-01-16) = 2026-01-16` (§30.5 later-of across incoming edges). The programme order
- * must be upstream-first: `[UP, MID_A, MID_B, DOWN]`.
+ * 2026-01-01 ⇒ EF 2026-01-08, ending 2026-01-09 00:00) feeds two mid plans: `MA1` over FS+0 (⇒ external
+ * early start 2026-01-09, 4 d ⇒ EF 2026-01-12) and `MB1` over FS+3 (⇒ 2026-01-12, 6 d ⇒ EF 2026-01-17).
+ * Both mids feed downstream `D1` over FS+0, so `D1`'s derived external early start is the **latest** of
+ * the two mid bounds — the ends of 2026-01-12 and 2026-01-17, so `2026-01-18T00:00` (§30.5 later-of
+ * across incoming edges; every date here read one day earlier until #385). The programme order must be
+ * upstream-first: `[UP, MID_A, MID_B, DOWN]`.
  */
 export const DIAMOND_FIXTURE: CrossPlanFixture = {
   id: 'diamond-fan-in',
@@ -344,7 +487,7 @@ export const DIAMOND_FIXTURE: CrossPlanFixture = {
     {
       id: 'd1',
       type: 'FS',
-      lagDays: 0,
+      lagMinutes: 0,
       predecessorPlanId: 'PLAN_UP',
       predecessorActivityId: 'U1',
       successorPlanId: 'PLAN_MID_A',
@@ -354,7 +497,7 @@ export const DIAMOND_FIXTURE: CrossPlanFixture = {
     {
       id: 'd2',
       type: 'FS',
-      lagDays: 3,
+      lagMinutes: 3 * 1440,
       predecessorPlanId: 'PLAN_UP',
       predecessorActivityId: 'U1',
       successorPlanId: 'PLAN_MID_B',
@@ -364,7 +507,7 @@ export const DIAMOND_FIXTURE: CrossPlanFixture = {
     {
       id: 'd3',
       type: 'FS',
-      lagDays: 0,
+      lagMinutes: 0,
       predecessorPlanId: 'PLAN_MID_A',
       predecessorActivityId: 'MA1',
       successorPlanId: 'PLAN_DOWN',
@@ -374,7 +517,7 @@ export const DIAMOND_FIXTURE: CrossPlanFixture = {
     {
       id: 'd4',
       type: 'FS',
-      lagDays: 0,
+      lagMinutes: 0,
       predecessorPlanId: 'PLAN_MID_B',
       predecessorActivityId: 'MB1',
       successorPlanId: 'PLAN_DOWN',
@@ -384,7 +527,292 @@ export const DIAMOND_FIXTURE: CrossPlanFixture = {
   ],
 };
 
-export const CROSS_PLAN_FIXTURES: CrossPlanFixture[] = [FS_INTERFACE_FIXTURE, DIAMOND_FIXTURE];
+// ---------------------------------------------------------------------------------------------------
+// #385 M2-T6 goldens — the calendars the day-boundary defect needed and the two 24/7 fixtures above
+// could not show. Every expected date is walked by hand in `cross-plan-conformance.spec.ts`.
+// ---------------------------------------------------------------------------------------------------
+
+const weekdayWindows = (open: number, close: number) =>
+  Array.from({ length: 7 }, (_, weekday) =>
+    weekday < 5 ? [{ startMinute: open, endMinute: close }] : [],
+  );
+
+/** Monday to Friday, 00:00–24:00: the organisation stock calendar (#385 E16). A day is 1440. */
+export const STANDARD_CALENDAR = buildWorkingTimeCalendar(weekdayWindows(0, 1440), []);
+/** Monday to Friday, 08:00–16:00. A day is 480 (FC-4). */
+export const EIGHT_HOUR_CALENDAR = buildWorkingTimeCalendar(weekdayWindows(480, 960), []);
+
+/** A task of `days` working days on a calendar whose day is `minutesPerDay`. */
+function taskOn(id: string, days: number, minutesPerDay: number): EngineActivity {
+  return { id, durationMinutes: days * minutesPerDay, type: 'TASK' };
+}
+
+/**
+ * **FC-3: a weekend-spanning lag on the Standard calendar.** Upstream `U` is a 5-day task from Mon
+ * 2026-01-05, so it finishes Fri 01-09; the FS+2 link is two WORKING days, so the downstream starts
+ * Wed 2026-01-14. Today's code added two calendar days to the finish date and got Sun 01-11, rolled
+ * to Mon 01-12.
+ */
+export const FC3_WEEKEND_LAG_FIXTURE: CrossPlanFixture = {
+  id: 'fc3-weekend-lag',
+  description: 'Standard: U (5d, Mon–Fri) → D (3d), FS+2 across a weekend.',
+  targetPlanId: 'PLAN_FC3_DOWN',
+  coverageTags: ['xplan_weekend_lag'],
+  plans: [
+    {
+      id: 'PLAN_FC3_UP',
+      name: 'FC-3 upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('FC3_U', 5, 1440)],
+    },
+    {
+      id: 'PLAN_FC3_DOWN',
+      name: 'FC-3 downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('FC3_D', 3, 1440)],
+    },
+  ],
+  edges: [
+    {
+      id: 'fc3',
+      type: 'FS',
+      lagMinutes: 2 * 1440,
+      predecessorPlanId: 'PLAN_FC3_UP',
+      predecessorActivityId: 'FC3_U',
+      successorPlanId: 'PLAN_FC3_DOWN',
+      successorActivityId: 'FC3_D',
+      coverageTag: 'xplan_weekend_lag',
+    },
+  ],
+};
+
+/**
+ * **FC-4: a one-day lag on an eight-hour calendar.** Upstream `U` is a 2-day task from Mon
+ * 2026-01-05 08:00, finishing Tue 01-06 16:00. One working day is 480 minutes, so the stored lag
+ * is 480 (the migration's encoding) and the downstream starts Thu 2026-01-08. Built with the stored
+ * lag as a parameter so the spec can also show the other two outcomes.
+ */
+export function fc4EightHourFixture(storedLagMinutes: number): CrossPlanFixture {
+  return {
+    id: 'fc4-eight-hour-lag',
+    description: 'Eight-hour: U (2d) → D (2d), FS+1d on the successor plan calendar.',
+    targetPlanId: 'PLAN_FC4_DOWN',
+    coverageTags: ['xplan_eight_hour_lag'],
+    plans: [
+      {
+        id: 'PLAN_FC4_UP',
+        name: 'FC-4 upstream',
+        dataDate: '2026-01-05',
+        calendar: EIGHT_HOUR_CALENDAR,
+        activities: [taskOn('FC4_U', 2, 480)],
+      },
+      {
+        id: 'PLAN_FC4_DOWN',
+        name: 'FC-4 downstream',
+        dataDate: '2026-01-05',
+        calendar: EIGHT_HOUR_CALENDAR,
+        activities: [taskOn('FC4_D', 2, 480)],
+      },
+    ],
+    edges: [
+      {
+        id: 'fc4',
+        type: 'FS',
+        lagMinutes: storedLagMinutes,
+        predecessorPlanId: 'PLAN_FC4_UP',
+        predecessorActivityId: 'FC4_U',
+        successorPlanId: 'PLAN_FC4_DOWN',
+        successorActivityId: 'FC4_D',
+        coverageTag: 'xplan_eight_hour_lag',
+      },
+    ],
+  };
+}
+
+/**
+ * **FC-9: backward FS on the Standard calendar** (US-3). The downstream `S` is a 5-day task pinned
+ * `FNLT` Fri 2026-01-23, so its late start is Mon 01-19; a long downstream task keeps that plan's
+ * own finish from binding. The upstream holds the linked 5-day `U` and an unlinked 20-day `L`, so
+ * `U`'s late finish is set by the link alone: the end of Fri 2026-01-16. Today: Mon 01-19.
+ *
+ * The programme solves upstream first, so the backward bound is read when the UPSTREAM is
+ * recalculated again against the downstream's written dates (the spec's `solveTargetAlone` step).
+ */
+export const FC9_BACKWARD_FS_FIXTURE: CrossPlanFixture = {
+  id: 'fc9-backward-fs',
+  description: 'Standard: U (5d) → S (5d, FNLT Fri 01-23), FS+0; the upstream late finish.',
+  targetPlanId: 'PLAN_FC9_DOWN',
+  coverageTags: ['xplan_backward_fs'],
+  plans: [
+    {
+      id: 'PLAN_FC9_UP',
+      name: 'FC-9 upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('FC9_U', 5, 1440), taskOn('FC9_L', 20, 1440)],
+    },
+    {
+      id: 'PLAN_FC9_DOWN',
+      name: 'FC-9 downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [
+        { ...taskOn('FC9_S', 5, 1440), constraintType: 'FNLT', constraintDate: '2026-01-23' },
+        taskOn('FC9_L2', 30, 1440),
+      ],
+    },
+  ],
+  edges: [
+    {
+      id: 'fc9',
+      type: 'FS',
+      lagMinutes: 0,
+      predecessorPlanId: 'PLAN_FC9_UP',
+      predecessorActivityId: 'FC9_U',
+      successorPlanId: 'PLAN_FC9_DOWN',
+      successorActivityId: 'FC9_S',
+      coverageTag: 'xplan_backward_fs',
+    },
+  ],
+};
+
+/**
+ * **FC-10: forward FF on the Standard calendar.** Upstream `U` is a 5-day task Mon 2026-01-05 to
+ * Fri 01-09; the downstream plan's data date is Mon 2025-12-29, so nothing floors. FF lag 0: a
+ * 3-day downstream finishes with `U` and starts Wed 01-07 (today Tue 01-06); a 6-day downstream
+ * starts Fri 2026-01-02 (today, and a build that fixes only the day boundary, Mon 01-05).
+ */
+export function fc10ForwardFfFixture(downstreamDays: 3 | 6): CrossPlanFixture {
+  return {
+    id: `fc10-forward-ff-${downstreamDays}d`,
+    description: `Standard: U (5d) → D (${downstreamDays}d), FF+0; the downstream early start.`,
+    targetPlanId: 'PLAN_FC10_DOWN',
+    coverageTags: ['xplan_forward_ff'],
+    plans: [
+      {
+        id: 'PLAN_FC10_UP',
+        name: 'FC-10 upstream',
+        dataDate: '2026-01-05',
+        calendar: STANDARD_CALENDAR,
+        activities: [taskOn('FC10_U', 5, 1440)],
+      },
+      {
+        id: 'PLAN_FC10_DOWN',
+        name: 'FC-10 downstream',
+        dataDate: '2025-12-29',
+        calendar: STANDARD_CALENDAR,
+        activities: [taskOn('FC10_D', downstreamDays, 1440)],
+      },
+    ],
+    edges: [
+      {
+        id: 'fc10',
+        type: 'FF',
+        lagMinutes: 0,
+        predecessorPlanId: 'PLAN_FC10_UP',
+        predecessorActivityId: 'FC10_U',
+        successorPlanId: 'PLAN_FC10_DOWN',
+        successorActivityId: 'FC10_D',
+        coverageTag: 'xplan_forward_ff',
+      },
+    ],
+  };
+}
+
+/**
+ * **US-2: an elapsed lag.** A `TWENTY_FOUR_HOUR` lag of two days from `U`'s Friday finish (Standard)
+ * counts every minute: Sat 01-10 00:00 + 2880 is Mon 01-12 00:00. Today's code also said Monday,
+ * by accident (two calendar days from the finish DATE, then a weekend roll).
+ */
+export const US2_ELAPSED_LAG_FIXTURE: CrossPlanFixture = {
+  id: 'us2-elapsed-lag',
+  description: 'Standard: U (5d, Mon–Fri) → D (3d), FS+2 on the 24-hour lag calendar.',
+  targetPlanId: 'PLAN_US2_DOWN',
+  coverageTags: ['xplan_elapsed_lag'],
+  plans: [
+    {
+      id: 'PLAN_US2_UP',
+      name: 'US-2 upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('US2_U', 5, 1440)],
+    },
+    {
+      id: 'PLAN_US2_DOWN',
+      name: 'US-2 downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('US2_D', 3, 1440)],
+    },
+  ],
+  edges: [
+    {
+      id: 'us2',
+      type: 'FS',
+      lagMinutes: 2 * 1440,
+      lagCalendar: 'TWENTY_FOUR_HOUR',
+      predecessorPlanId: 'PLAN_US2_UP',
+      predecessorActivityId: 'US2_U',
+      successorPlanId: 'PLAN_US2_DOWN',
+      successorActivityId: 'US2_D',
+      coverageTag: 'xplan_elapsed_lag',
+    },
+  ],
+};
+
+/**
+ * **An LOE upstream never bounds its downstream** (ADR-0035 §21), across plans as in one. The LOE
+ * has computed dates, so the only thing keeping it from driving is the skip, and it is not counted
+ * as a never-calculated upstream (`upstreamMissingCount === 0`).
+ */
+export const LOE_UPSTREAM_FIXTURE: CrossPlanFixture = {
+  id: 'loe-upstream',
+  description: 'Standard: an LOE upstream → D (3d), FS+0; no bound and no N32 count.',
+  targetPlanId: 'PLAN_LOE_DOWN',
+  coverageTags: ['xplan_loe_upstream'],
+  plans: [
+    {
+      id: 'PLAN_LOE_UP',
+      name: 'LOE upstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [{ ...taskOn('LOE_U', 10, 1440), type: 'LEVEL_OF_EFFORT' }],
+    },
+    {
+      id: 'PLAN_LOE_DOWN',
+      name: 'LOE downstream',
+      dataDate: '2026-01-05',
+      calendar: STANDARD_CALENDAR,
+      activities: [taskOn('LOE_D', 3, 1440)],
+    },
+  ],
+  edges: [
+    {
+      id: 'loe',
+      type: 'FS',
+      lagMinutes: 0,
+      predecessorPlanId: 'PLAN_LOE_UP',
+      predecessorActivityId: 'LOE_U',
+      successorPlanId: 'PLAN_LOE_DOWN',
+      successorActivityId: 'LOE_D',
+      coverageTag: 'xplan_loe_upstream',
+    },
+  ],
+};
+
+export const CROSS_PLAN_FIXTURES: CrossPlanFixture[] = [
+  FS_INTERFACE_FIXTURE,
+  DIAMOND_FIXTURE,
+  FC3_WEEKEND_LAG_FIXTURE,
+  fc4EightHourFixture(480),
+  FC9_BACKWARD_FS_FIXTURE,
+  fc10ForwardFfFixture(3),
+  fc10ForwardFfFixture(6),
+  US2_ELAPSED_LAG_FIXTURE,
+  LOE_UPSTREAM_FIXTURE,
+];
 
 // ---------------------------------------------------------------------------------------------------
 // Tier-1 structural coverage gate (ADR-0034 §1) — the cross-plan analogue of `checkCoverage`.
@@ -412,6 +840,13 @@ export const REQUIRED_CROSS_PLAN_TAGS: readonly string[] = [
   'xplan_plan_cycle_reject', // N30: a cross-plan edge that would close a plan-level cycle is rejected
   'xplan_same_plan_reject', // N31: a same-plan cross-plan edge is rejected
   'xplan_duplicate_reject', // N33: a duplicate (pred, succ, type) cross-plan edge is rejected
+  // the day boundary and the lag (#385 M2-T6): one link, one rule, whichever plan holds the ends
+  'xplan_weekend_lag', // FC-3: a lag counts working days across a weekend
+  'xplan_eight_hour_lag', // FC-4: a lag day is the lag calendar's day, not 1440 minutes
+  'xplan_backward_fs', // FC-9: the upstream finishes before the downstream's late start
+  'xplan_forward_ff', // FC-10: an FF duration walks the successor's working days
+  'xplan_elapsed_lag', // US-2: a TWENTY_FOUR_HOUR lag counts elapsed time
+  'xplan_loe_upstream', // an LOE upstream contributes no bound and no N32 count
 ];
 
 /**

@@ -12,6 +12,7 @@ import {
 } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ActivityRepository } from '../activities/activity.repository';
+import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
@@ -161,8 +162,22 @@ function link(): CrossPlanDependencyWithEndpoints {
     updatedBy: USER_ID,
     deletedAt: null,
     deleteBatchId: null,
-    predecessor: { id: PRED_ID, code: null, name: 'Pred' },
-    successor: { id: SUCC_ID, code: null, name: 'Succ' },
+    predecessor: {
+      id: PRED_ID,
+      code: null,
+      name: 'Pred',
+      type: 'TASK',
+      calendarId: null,
+      planId: PRED_PLAN,
+    },
+    successor: {
+      id: SUCC_ID,
+      code: null,
+      name: 'Succ',
+      type: 'TASK',
+      calendarId: null,
+      planId: SUCC_PLAN,
+    },
   };
 }
 
@@ -178,7 +193,11 @@ const ALL: Permission[] = ['dependency:read', 'dependency:link_cross_plan'];
 
 describe('CrossPlanDependenciesService', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
-  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let plans: {
+    findActiveByIdInOrg: ReturnType<typeof vi.fn>;
+    findCalendarIds: ReturnType<typeof vi.fn>;
+  };
+  let calendars: { findHoursPerDayMinutes: ReturnType<typeof vi.fn> };
   let activities: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
   let repo: {
     create: ReturnType<typeof vi.fn>;
@@ -190,14 +209,25 @@ describe('CrossPlanDependenciesService', () => {
     softDelete: ReturnType<typeof vi.fn>;
   };
   let editLock: { assertHoldsPen: ReturnType<typeof vi.fn> };
-  let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let prisma: {
+    $transaction: ReturnType<typeof vi.fn>;
+    resourceAssignment: { findMany: ReturnType<typeof vi.fn> };
+  };
   let service: CrossPlanDependenciesService;
 
   beforeEach(() => {
     organizations = {
       resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'PLANNER' }),
     };
-    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    // The lag factor (#385 M2-T3): neither plan has a calendar unless a case says otherwise, so
+    // every factor is the 1440 fallback and the lag round-trips as it always did.
+    plans = {
+      findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()),
+      findCalendarIds: vi.fn((ids: readonly string[]) =>
+        Promise.resolve([...new Set(ids)].map((id) => ({ id, calendarId: null }))),
+      ),
+    };
+    calendars = { findHoursPerDayMinutes: vi.fn().mockResolvedValue(new Map()) };
     // Predecessor is in the upstream plan; successor in the downstream plan (different plans).
     activities = {
       findActiveByIdInOrg: vi.fn((id: string) =>
@@ -218,8 +248,9 @@ describe('CrossPlanDependenciesService', () => {
     editLock = { assertHoldsPen: vi.fn().mockResolvedValue(undefined) };
     // The tx handle carries `$executeRaw` because the service takes the org-scoped advisory lock
     // (acquireOrgCrossPlanLock) directly on it before loading the adjacency.
-    const tx = { $executeRaw: vi.fn().mockResolvedValue(1) };
-    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(tx)) };
+    const resourceAssignment = { findMany: vi.fn().mockResolvedValue([]) };
+    const tx = { $executeRaw: vi.fn().mockResolvedValue(1), resourceAssignment };
+    prisma = { $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(tx)), resourceAssignment };
     const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
     service = new CrossPlanDependenciesService(
       organizations as unknown as OrganizationsService,
@@ -229,6 +260,7 @@ describe('CrossPlanDependenciesService', () => {
       editLock as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       logger,
+      calendars as unknown as CalendarRepository,
     );
   });
 
@@ -403,6 +435,125 @@ describe('CrossPlanDependenciesService', () => {
           limit: 20,
         }),
       ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe('the lag in working minutes on its lag calendar (#385 M2-T3/T3b)', () => {
+    // Two plans on two calendars, so a lag resolved against the wrong plan lands on a different
+    // number: the upstream plan's calendar is 600 minutes a day, the downstream plan's 480.
+    beforeEach(() => {
+      plans.findCalendarIds = vi.fn((ids: readonly string[]) =>
+        Promise.resolve(
+          [...new Set(ids)].map((id) => ({
+            id,
+            calendarId: id === PRED_PLAN ? 'cal-up' : id === SUCC_PLAN ? 'cal-down' : null,
+          })),
+        ),
+      );
+      calendars.findHoursPerDayMinutes.mockResolvedValue(
+        new Map([
+          ['cal-up', 600],
+          ['cal-down', 480],
+        ]),
+      );
+    });
+
+    it('writes lagDays × the SUCCESSOR plan’s factor for PROJECT_DEFAULT (CQ-2)', async () => {
+      repo.create.mockResolvedValue(link());
+      await service.create(principalWith(ALL), 'acme', {
+        predecessorActivityId: PRED_ID,
+        successorActivityId: SUCC_ID,
+        lagDays: 2,
+      });
+      // 2 × 480, not 2 × 1440 (E6) and not 2 × 600 (the predecessor's plan).
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ lagMinutes: 960 }),
+        expect.anything(),
+      );
+    });
+
+    it('writes on the predecessor’s own plan calendar for an inheriting PREDECESSOR', async () => {
+      repo.create.mockResolvedValue(link());
+      await service.create(principalWith(ALL), 'acme', {
+        predecessorActivityId: PRED_ID,
+        successorActivityId: SUCC_ID,
+        lagDays: -1,
+        lagCalendar: 'PREDECESSOR',
+      });
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ lagMinutes: -600 }),
+        expect.anything(),
+      );
+    });
+
+    it('pins a TWENTY_FOUR_HOUR lag at 1440 a day whatever the plans say', async () => {
+      repo.create.mockResolvedValue(link());
+      await service.create(principalWith(ALL), 'acme', {
+        predecessorActivityId: PRED_ID,
+        successorActivityId: SUCC_ID,
+        lagDays: 2,
+        lagCalendar: 'TWENTY_FOUR_HOUR',
+      });
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ lagMinutes: 2880 }),
+        expect.anything(),
+      );
+    });
+
+    it('get divides the stored minutes by the same factor (not by 1440)', async () => {
+      repo.findActiveByIdInOrg.mockResolvedValue({ ...link(), lagMinutes: 480 });
+      const got = await service.get(principalWith(ALL), 'acme', LINK_ID);
+      expect(got.lagDayFactorMinutes).toBe(480);
+    });
+
+    /**
+     * **The counting stub** (spec FC-6, its CRUD limb; api-reviewer's batching suggestion). A page
+     * of 5 and a page of 50 links spanning the same 3 plans and 3 calendars, with a
+     * RESOURCE_DEPENDENT endpoint in each plan, issue the same number of lookups: one plan-calendar
+     * read, one driving read per distinct (organisation, plan) with a driven endpoint, and one
+     * factor read. Verified red against a per-row resolution (`withLagDayFactor` in a loop).
+     */
+    it('a page of 5 and a page of 50 issue the same number of lookups', async () => {
+      const planIds = ['plan-a', 'plan-b', 'plan-c'];
+      const page = (n: number): CrossPlanDependencyWithEndpoints[] =>
+        Array.from({ length: n }, (_, i) => {
+          const from = planIds[i % 3]!;
+          const to = planIds[(i + 1) % 3]!;
+          const base = link();
+          return {
+            ...base,
+            id: `x${i}`,
+            predecessorId: `p${i}`,
+            successorId: `s${i}`,
+            lagCalendar: (['PROJECT_DEFAULT', 'PREDECESSOR', 'SUCCESSOR'] as const)[i % 3]!,
+            predecessor: {
+              ...base.predecessor,
+              id: `p${i}`,
+              planId: from,
+              type: i % 2 === 0 ? 'RESOURCE_DEPENDENT' : 'TASK',
+            },
+            successor: { ...base.successor, id: `s${i}`, planId: to, calendarId: `cal-${i % 3}` },
+          };
+        });
+      const counts = async (n: number) => {
+        plans.findCalendarIds.mockClear();
+        calendars.findHoursPerDayMinutes.mockClear();
+        prisma.resourceAssignment.findMany.mockClear();
+        repo.listBySuccessorPlan.mockResolvedValue(page(n));
+        const { items } = await service.listByPlan(principalWith(ALL), 'acme', SUCC_PLAN, {
+          limit: n,
+        });
+        expect(items).toHaveLength(n);
+        return {
+          plans: plans.findCalendarIds.mock.calls.length,
+          driving: prisma.resourceAssignment.findMany.mock.calls.length,
+          factors: calendars.findHoursPerDayMinutes.mock.calls.length,
+        };
+      };
+      const five = await counts(5);
+      const fifty = await counts(50);
+      expect(five).toEqual({ plans: 1, driving: 3, factors: 1 });
+      expect(fifty).toEqual(five);
     });
   });
 

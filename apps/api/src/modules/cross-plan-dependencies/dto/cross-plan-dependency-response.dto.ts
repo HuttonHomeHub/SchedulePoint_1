@@ -2,10 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import { DependencyType, LagCalendarSource } from '@prisma/client';
 import type { CrossPlanDependencySummary, DependencyEndpoint } from '@repo/types';
 
-import type { CrossPlanDependencyWithEndpoints } from '../cross-plan-dependency.repository';
-
-/** Day↔minute factor (ADR-0036 §4.2): lag is stored in signed minutes, exposed as signed days. */
-const MINUTES_PER_DAY = 1440;
+import { minutesToDays } from '../../activities/day-factor';
+import type { CrossPlanDependencyWithFactor } from '../cross-plan-dependencies.service';
 
 /** The public shape of a cross-plan dependency's endpoint activity. */
 class CrossPlanDependencyEndpointDto implements DependencyEndpoint {
@@ -39,13 +37,33 @@ export class CrossPlanDependencyResponseDto implements CrossPlanDependencySummar
   @ApiProperty({ enum: DependencyType })
   type!: DependencyType;
 
-  @ApiProperty({ description: 'Signed lag in working days (a lead is negative).' })
+  @ApiProperty({
+    description:
+      'Signed lag in working days (a lead is negative), ROUNDED from the stored minutes. A day is ' +
+      'the standard working day of THIS LINK’S LAG CALENDAR (ADR-0068 §4) — an eight-hour ' +
+      'calendar counts 480 minutes to the day; `TWENTY_FOUR_HOUR` is pinned at 1440. The ' +
+      'factor is the lag calendar’s CURRENT hours per day, so a later hours edit can make this ' +
+      'read back non-whole: read `lagMinutes` for the exact stored value.',
+  })
   lagDays!: number;
+
+  @ApiProperty({
+    readOnly: true,
+    description:
+      'Signed lag in working MINUTES on the lag calendar — what is stored and what the ' +
+      'programme recalculation applies (#385). Read-only: a cross-plan link is created with ' +
+      'whole `lagDays` only.',
+  })
+  lagMinutes!: number;
 
   @ApiProperty({
     enum: LagCalendarSource,
     description:
-      'The calendar the lag is measured on (ADR-0036 §6). TWENTY_FOUR_HOUR = elapsed time; the rest schedule on the plan calendar today.',
+      'The calendar the lag is measured on (ADR-0036 §6). TWENTY_FOUR_HOUR = elapsed time; ' +
+      'PROJECT_DEFAULT = the SUCCESSOR activity’s plan’s calendar, in both directions (#385 ' +
+      'CQ-2: the link’s home plan); PREDECESSOR / SUCCESSOR = that endpoint activity’s ' +
+      'scheduling calendar (its driving resource’s for a RESOURCE_DEPENDENT activity, else its ' +
+      'own, else ITS OWN plan’s).',
   })
   lagCalendar!: LagCalendarSource;
 
@@ -64,14 +82,19 @@ export class CrossPlanDependencyResponseDto implements CrossPlanDependencySummar
   @ApiProperty({ format: 'date-time' })
   updatedAt!: string;
 
-  static from(entity: CrossPlanDependencyWithEndpoints): CrossPlanDependencyResponseDto {
+  /**
+   * Built from a link carrying its lag factor, which the service resolves before any response
+   * (`withLagDayFactor(s)`, #385 M2-T3b). The type makes the factor unforgettable: `lagDays`
+   * divides the stored working minutes by the factor the write multiplied them by, never by 1440.
+   */
+  static from(entity: CrossPlanDependencyWithFactor): CrossPlanDependencyResponseDto {
     return {
       id: entity.id,
       predecessorPlanId: entity.predecessorPlanId,
       successorPlanId: entity.successorPlanId,
       type: entity.type,
-      // Stored as signed working-minutes (ADR-0036); the public field stays signed days.
-      lagDays: Math.round(entity.lagMinutes / MINUTES_PER_DAY),
+      lagDays: minutesToDays(entity.lagMinutes, entity.lagDayFactorMinutes),
+      lagMinutes: entity.lagMinutes,
       lagCalendar: entity.lagCalendar,
       predecessor: {
         id: entity.predecessor.id,

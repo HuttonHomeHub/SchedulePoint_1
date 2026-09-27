@@ -78,7 +78,19 @@ const CENSUS: readonly CensusEntry[] = [
       'The second of #86 two mechanisms. The engine port map carries null as an INHERIT sentinel ' +
       'and resolveDayFactors read that as no calendar at all, taking 1440 while the schedule ran ' +
       'on the plan day. This builds the resolved map beside it, by calling the rule rather than ' +
-      'restating its fallback rung.',
+      'restating its fallback rung. The cross-plan branch calls it a second time for the REMOTE ' +
+      'endpoint of each cross-plan link (#385): the port its persisted dates are read on is the ' +
+      'calendar that endpoint schedules on, inheriting from ITS OWN plan.',
+  },
+  {
+    file: 'src/modules/cross-plan-dependencies/cross-plan-lag-calendar.ts',
+    symbol: 'schedulingCalendarId',
+    rule: 'scheduling',
+    quantity: 'cross-plan PREDECESSOR / SUCCESSOR relationship lag (#385, spec D5)',
+    reason:
+      'The cross-plan twin of lag-day-factor.ts: a lag measures the work at the end it names, on ' +
+      'that end driving resource calendar (ADR-0039 §4), inheriting from the plan THAT END belongs ' +
+      'to. One function decides it for the write path, the read path and the derivation.',
   },
   {
     file: 'src/modules/schedule/schedule.service.ts',

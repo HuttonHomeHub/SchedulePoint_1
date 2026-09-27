@@ -1,24 +1,86 @@
+import type { ActivityType } from '@repo/types';
+
+import {
+  backwardUpperBound,
+  finishDateInstant,
+  formatExternalInstant,
+  forwardLowerBound,
+  startDateInstant,
+  type EngineEdge,
+  type WorkingTimeCalendar,
+} from './engine';
+import { rollBackwardToWorking } from './engine/instants';
+import { instantToAbsMinutes } from './engine/working-time-calendar';
+
 /**
  * Live cross-plan external-instant derivation (ADR-0045 §2, ADR-0035 §30.5) — the F4 seam that feeds
  * live inter-project bounds into the CPM engine WITHOUT touching the pure engine. It lives ABOVE the
  * engine (beside {@link ./schedule.service}) and overrides each activity's M1 `externalEarlyStart` /
- * `externalLateFinish` (ADR-0043) with a value composed from its cross-plan edges' upstream
- * **persisted** computed dates and the hand-entered M1 column.
+ * `externalLateFinish` (ADR-0043) with a value composed from its cross-plan edges' remote
+ * **persisted** dates and the hand-entered M1 column.
  *
- * Purity & parity: this module is engine-free and side-effect-free. The caller only invokes it when a
- * plan has ≥1 active cross-plan edge; a plan with none derives nothing, so no map entry is produced and
- * {@link ./schedule.service} takes the byte-identical M1-column fast path (the parity gate).
+ * Purity & parity: this module is side-effect-free and never calls `computeSchedule`. The caller only
+ * invokes it when a plan has ≥1 active cross-plan edge; a plan with none derives nothing, so no map
+ * entry is produced and {@link ./schedule.service} takes the byte-identical M1-column fast path (the
+ * parity gate).
  *
- * Day granularity: the M1 external instant is day-denominated (`YYYY-MM-DD`), so the derivation mirrors
- * the engine's forward/backward bound *shapes* (see `forwardLowerBound`/`backwardUpperBound` in
- * `engine/compute.ts`) at **whole-day** granularity — lag and duration are days, arithmetic is UTC
- * calendar-day add/subtract. The composed instant is fed back through the exact same
- * `clampExternalForwardStart` / `clampExternalBackwardFinish` seam as a hand-entered M1 column, so the
- * engine interprets a derived bound identically to a manual one.
+ * **One rule, not two** (#385, spec D1–D7). Until #385 this module restated the engine's link
+ * arithmetic in whole UTC calendar days: a finish date read as the start of its day, a lag added as
+ * calendar days, a stored lag read as `minutes / 1440` whatever the calendar, durations subtracted as
+ * calendar days, and an LOE upstream allowed to drive. Each made a programme split into plans read
+ * differently from the same logic in one plan. It now does what the engine does, with the engine's
+ * own functions, on absolute working instants:
+ *
+ * 1. Each remote date is read as an **instant** on the remote activity's own scheduling calendar by
+ *    the engine's date readers (`startDateInstant`, `finishDateInstant`): a finish is the exclusive
+ *    end of that day's working time, a finish milestone's date the end of its day (ADR-0155), a
+ *    zero-duration activity finishes at its start. `finishDateInstant` is anchored at the remote
+ *    plan's data date, the anchor the engine itself used (M1's finding: the reader returns an anchor
+ *    that falls after the result but before the day's end, so any other anchor can differ).
+ * 2. The bound is the engine's `forwardLowerBound` / `backwardUpperBound`, called with the edge's
+ *    lag in working minutes and an explicit lag-calendar port, so `applyLag`'s plan-calendar
+ *    fallback is never reached: "the plan" is two plans here (D5). The FF/SF and SS/SF durations
+ *    walk the calendar of the activity they belong to.
+ * 3. An LOE endpoint contributes no bound (ADR-0035 §21), as in one plan, and is NOT counted as a
+ *    never-calculated upstream: only null upstream dates are N32.
+ * 4. The derived bound is composed with the M1 column as **instants** on this activity's calendar
+ *    (D6): a bare finish-milestone date means the end of its day, so a string comparison gets the
+ *    order wrong. An M1 winner or tie is passed through as its own bare string, keeping the engine's
+ *    input byte-identical wherever the hand-entered date already wins (the N25 count compares
+ *    strings, `compute.ts`). A derived winner is written by `formatExternalInstant`, `YYYY-MM-DDTHH:MM`
+ *    with midnight kept (D7, E12), which the engine's clamps read as the instant itself.
+ *
+ * What it still cannot match is stated in the spec (§1): persisted dates carry no time of day, so an
+ * upstream finishing mid-day is read as the end of that day; and the forward bound reads the
+ * upstream's PLACED dates in both passes (ADR-0148 M-H), where one plan feeds placements to Pass 2
+ * only. The parity domain is unplaced upstreams that finish on a day boundary.
  */
 
 /** The four relationship kinds a cross-plan edge can carry — structurally Prisma's `DependencyType`. */
 export type CrossPlanEdgeType = 'FS' | 'SS' | 'FF' | 'SF';
+
+/**
+ * The OTHER plan's end of a cross-plan edge: what the engine needs to read its persisted dates as
+ * instants. `calendar` is its **scheduling** calendar resolved on ITS OWN plan (driving resource →
+ * its own → its plan's; `schedulingCalendarId`), never this plan's: the inherit sentinel means "my
+ * plan", and there are two plans (the ADR-0139 lesson).
+ */
+export interface CrossPlanRemoteEndpoint {
+  type: ActivityType;
+  /** Its stored duration in working minutes (a zero-duration activity finishes at its start). */
+  durationMinutes: number;
+  calendar: WorkingTimeCalendar;
+  /** Its plan's data date (`YYYY-MM-DD`), the anchor `finishDateInstant` counts from. */
+  dataDate: string;
+}
+
+/** An activity of the plan being scheduled, as the bound functions need it. */
+export interface CrossPlanLocalActivity {
+  type: ActivityType;
+  durationMinutes: number;
+  /** Its scheduling calendar port (the plan's own port when it inherits). */
+  calendar: WorkingTimeCalendar;
+}
 
 /**
  * A cross-plan edge whose SUCCESSOR is in the plan being scheduled (its incoming links), carrying the
@@ -28,8 +90,12 @@ export interface IncomingCrossPlanEdge {
   /** The successor activity (in this plan) whose external early start this edge derives. */
   successorActivityId: string;
   type: CrossPlanEdgeType;
-  /** The edge's typed lag, in whole working days (a lead is negative). */
-  lagDays: number;
+  /** The edge's stored lag in working minutes on `lagCalendar` (a lead is negative). */
+  lagMinutes: number;
+  /** The port the lag walks on, resolved by the one cross-plan lag-calendar rule (D5). */
+  lagCalendar: WorkingTimeCalendar;
+  /** The upstream predecessor: its type, duration, calendar and plan data date. */
+  predecessor: CrossPlanRemoteEndpoint;
   /**
    * The upstream predecessor's persisted **placed** start / finish (`YYYY-MM-DD`) — the
    * effective-Visual columns, since one-planning-surface M-H. Null where the bound cannot be
@@ -55,8 +121,11 @@ export interface OutgoingCrossPlanEdge {
   /** The predecessor activity (in this plan) whose external late finish this edge derives. */
   predecessorActivityId: string;
   type: CrossPlanEdgeType;
-  /** The edge's typed lag, in whole working days (a lead is negative). */
-  lagDays: number;
+  /** The edge's stored lag in working minutes on `lagCalendar` (a lead is negative). */
+  lagMinutes: number;
+  lagCalendar: WorkingTimeCalendar;
+  /** The downstream successor: its type, duration, calendar and plan data date. */
+  successor: CrossPlanRemoteEndpoint;
   /** The downstream successor's persisted late start / finish (`YYYY-MM-DD`), or null if never calculated. */
   successorLateStart: string | null;
   successorLateFinish: string | null;
@@ -68,26 +137,31 @@ export interface M1ExternalInstant {
   externalLateFinish: string | null;
 }
 
-/** The effective external instants derived for one activity — the values fed onto its `EngineActivity`. */
+/**
+ * The effective external values derived for one activity — the values fed onto its `EngineActivity`.
+ * Each is either an M1 bare date passed through verbatim or a derived `YYYY-MM-DDTHH:MM` instant.
+ */
 export interface DerivedExternalInstant {
   externalEarlyStart: string | null;
   externalLateFinish: string | null;
 }
 
 export interface DeriveExternalInstantsInput {
-  /** Cross-plan edges into this plan (successor here); each carries its predecessor's persisted early dates. */
+  /** Cross-plan edges into this plan (successor here). */
   incoming: readonly IncomingCrossPlanEdge[];
-  /** Cross-plan edges out of this plan (predecessor here); each carries its successor's persisted late dates. */
+  /** Cross-plan edges out of this plan (predecessor here). */
   outgoing: readonly OutgoingCrossPlanEdge[];
   /** The M1 hand-entered external columns, keyed by activity id. Absent id ⇒ no manual bound. */
   m1: ReadonlyMap<string, M1ExternalInstant>;
-  /** Each activity's duration in whole days, keyed by id — needed for the FF/SF start-implied arithmetic. */
-  durationDaysByActivity: ReadonlyMap<string, number>;
+  /** This plan's activities, keyed by id: every endpoint an edge names must be present. */
+  activities: ReadonlyMap<string, CrossPlanLocalActivity>;
+  /** This plan's data date (`YYYY-MM-DD`), the anchor for reading an M1 late finish. */
+  dataDate: string;
 }
 
 export interface DeriveExternalInstantsResult {
   /**
-   * The effective external instants keyed by activity id — ONE entry per activity that has ≥1 cross-plan
+   * The effective external values keyed by activity id — ONE entry per activity that has ≥1 cross-plan
    * edge (incoming or outgoing). The value composes the derived bound with the M1 column, so an activity
    * whose upstreams are all missing (or which has only one direction of edge) still reproduces its M1
    * value. An activity with no cross-plan edge is ABSENT (the caller keeps the M1-column fast path).
@@ -96,173 +170,235 @@ export interface DeriveExternalInstantsResult {
   /**
    * How many **incoming** cross-plan edges pointed at an *upstream predecessor* that has never been
    * calculated (N32, ADR-0035 §30.5) — that edge contributes no forward bound and is counted here;
-   * never an error. Outgoing (backward) edges whose downstream successor is uncomputed are deliberately
-   * NOT counted: in an upstream-first programme solve the downstream is computed later in the same
-   * closure, so counting it would report a phantom "upstream never calculated" after a clean recalc.
+   * never an error. An LOE upstream is NOT counted: it never bounds a successor in one plan, so its
+   * absence is not a warning (test-engineer). Outgoing (backward) edges whose downstream successor is
+   * uncomputed are deliberately NOT counted either: in an upstream-first programme solve the
+   * downstream is computed later in the same closure, so counting it would report a phantom
+   * "upstream never calculated" after a clean recalc.
    */
   upstreamMissingCount: number;
 }
 
-/** Add (or subtract, for a negative `days`) whole calendar days to a `YYYY-MM-DD`, in UTC. */
-function addDays(date: string, days: number): string {
-  const instant = new Date(`${date}T00:00:00.000Z`);
-  instant.setUTCDate(instant.getUTCDate() + days);
-  return instant.toISOString().slice(0, 10);
-}
-
-/** The later (max) of two `YYYY-MM-DD` days; a null side yields the other (both null ⇒ null). Lexicographic
- * comparison is exact for the fixed-width zero-padded format. */
-function laterOf(a: string | null, b: string | null): string | null {
-  if (a === null) return b;
-  if (b === null) return a;
-  return a >= b ? a : b;
-}
-
-/** The earlier (min) of two `YYYY-MM-DD` days; a null side yields the other (both null ⇒ null). */
-function earlierOf(a: string | null, b: string | null): string | null {
-  if (a === null) return b;
-  if (b === null) return a;
-  return a <= b ? a : b;
-}
+const isLoe = (type: ActivityType): boolean => type === 'LEVEL_OF_EFFORT';
 
 /**
- * The forward (external early start) bound one incoming edge imposes, mirroring the engine's
- * `forwardLowerBound` shape at day granularity: FS → predEarlyFinish + lag; SS → predEarlyStart + lag;
- * FF → predEarlyFinish + lag − succDuration; SF → predEarlyStart + lag − succDuration (the start implied
- * by the finish bound). A null upstream date (never calculated) ⇒ `missing` (no bound, counted as N32).
+ * The engine's edge shape for the bound functions. The lag calendar is always an explicit port, so
+ * the `planCalendar` argument the bound functions take as a fallback is never consulted.
  */
-function forwardBound(
-  edge: IncomingCrossPlanEdge,
-  successorDurationDays: number,
-): { date: string | null; missing: boolean } {
-  switch (edge.type) {
-    case 'FS':
-      return edge.predecessorPlacedFinish === null
-        ? { date: null, missing: true }
-        : { date: addDays(edge.predecessorPlacedFinish, edge.lagDays), missing: false };
-    case 'SS':
-      return edge.predecessorPlacedStart === null
-        ? { date: null, missing: true }
-        : { date: addDays(edge.predecessorPlacedStart, edge.lagDays), missing: false };
-    case 'FF':
-      return edge.predecessorPlacedFinish === null
-        ? { date: null, missing: true }
-        : {
-            date: addDays(edge.predecessorPlacedFinish, edge.lagDays - successorDurationDays),
-            missing: false,
-          };
-    case 'SF':
-      return edge.predecessorPlacedStart === null
-        ? { date: null, missing: true }
-        : {
-            date: addDays(edge.predecessorPlacedStart, edge.lagDays - successorDurationDays),
-            missing: false,
-          };
+function engineEdge(
+  type: CrossPlanEdgeType,
+  lagMinutes: number,
+  lagCalendar: WorkingTimeCalendar,
+): EngineEdge {
+  return {
+    id: 'cross-plan',
+    predecessorId: 'remote',
+    successorId: 'local',
+    type,
+    lagMinutes,
+    lagCalendar,
+  };
+}
+
+function localOf(
+  activities: ReadonlyMap<string, CrossPlanLocalActivity>,
+  id: string,
+): CrossPlanLocalActivity {
+  const activity = activities.get(id);
+  if (!activity) {
+    throw new Error(`deriveExternalInstants: activity "${id}" has a cross-plan edge but no row`);
   }
+  return activity;
+}
+
+/** The remote end's start and finish instants, or null when a date the edge type needs is null. */
+function remoteInstants(
+  remote: CrossPlanRemoteEndpoint,
+  start: string | null,
+  finish: string | null,
+  needs: 'start' | 'finish',
+  pass: 'forward' | 'backward',
+): { start: number; finish: number } | null {
+  const date = needs === 'start' ? start : finish;
+  if (date === null) return null;
+  const anchor = instantToAbsMinutes(remote.dataDate);
+  const read =
+    needs === 'start'
+      ? startDateInstant(remote.calendar, date, remote.type)
+      : finishDateInstant(remote.calendar, anchor, date, remote.type, remote.durationMinutes);
+  // **A late date is the END of that day's working time** (found by the M2-T6 mixed-calendar axis).
+  // The engine's backward pass holds every late finish at the pre-gap end boundary
+  // (`compute.ts`: `finish = rollBackwardToWorking(cal, dataDateAbs, upper)`) and a zero-duration
+  // activity's late start at that same instant. The date readers are the constraint clamps' and
+  // read a finish milestone's date, and a zero-duration start, as the NEXT working minute: the same
+  // position on the remote activity's own calendar, and a different one on any calendar with working
+  // time in the gap (an eight-hour milestone's Wed 16:00 against Thu 08:00 is 960 Standard minutes).
+  // A task's late start is a real start (`advanceWorking(finish, −duration)`), so it is left as read;
+  // a finish read by `finishDateInstant` is already an end boundary, so rolling it back is a no-op.
+  const onBackwardSide =
+    pass === 'backward' && (needs === 'finish' || remote.durationMinutes === 0);
+  const instant = onBackwardSide ? rollBackwardToWorking(remote.calendar, anchor, read) : read;
+  // Only the date the edge type reads is read. The other is NaN, which the bound function for that
+  // type never consults (FS/FF read the finish, SS/SF the start), so a null there is not a miss.
+  return needs === 'start'
+    ? { start: instant, finish: Number.NaN }
+    : { start: Number.NaN, finish: instant };
 }
 
 /**
- * The backward (external late finish) bound one outgoing edge imposes, mirroring the engine's
- * `backwardUpperBound` shape at day granularity: FS → succLateStart − lag; SS → succLateStart − lag +
- * predDuration; FF → succLateFinish − lag; SF → succLateFinish − lag + predDuration (the finish implied
- * by the start bound). A null downstream date (never calculated) ⇒ `missing` (no bound, counted as N32).
+ * Which remote date each bound reads, straight off `edge-bounds.ts`. Forward: an FS or FF edge
+ * reads the predecessor's FINISH, an SS or SF edge its START. Backward: an FS or SS edge reads the
+ * successor's START, an FF or SF edge its FINISH. The two tables differ on FS and SF, which is
+ * why there are two.
  */
-function backwardBound(
-  edge: OutgoingCrossPlanEdge,
-  predecessorDurationDays: number,
-): { date: string | null; missing: boolean } {
-  switch (edge.type) {
-    case 'FS':
-      return edge.successorLateStart === null
-        ? { date: null, missing: true }
-        : { date: addDays(edge.successorLateStart, -edge.lagDays), missing: false };
-    case 'SS':
-      return edge.successorLateStart === null
-        ? { date: null, missing: true }
-        : {
-            date: addDays(edge.successorLateStart, -edge.lagDays + predecessorDurationDays),
-            missing: false,
-          };
-    case 'FF':
-      return edge.successorLateFinish === null
-        ? { date: null, missing: true }
-        : { date: addDays(edge.successorLateFinish, -edge.lagDays), missing: false };
-    case 'SF':
-      return edge.successorLateFinish === null
-        ? { date: null, missing: true }
-        : {
-            date: addDays(edge.successorLateFinish, -edge.lagDays + predecessorDurationDays),
-            missing: false,
-          };
-  }
-}
+const forwardAnchorOf = (type: CrossPlanEdgeType): 'start' | 'finish' =>
+  type === 'SS' || type === 'SF' ? 'start' : 'finish';
+const backwardAnchorOf = (type: CrossPlanEdgeType): 'start' | 'finish' =>
+  type === 'FS' || type === 'SS' ? 'start' : 'finish';
 
 /**
- * Derive each cross-plan-linked activity's effective external instants (ADR-0045 §2 / ADR-0035 §30.5).
- * Forward: the derived external early start is the **latest** of all incoming-edge bounds, composed with
- * the M1 column by **later-of** (max; §30.1 "later drives"). Backward: the derived external late finish
- * is the **earliest** of all outgoing-edge bounds, composed by **tighter-of** (min; §30.2). An
- * **incoming** edge whose upstream predecessor is never-calculated contributes no forward bound and
- * increments `upstreamMissingCount` (N32); an **outgoing** edge whose downstream successor is
- * never-calculated likewise contributes no backward bound but is NOT counted (it is expected and
- * transient in an upstream-first programme solve — see `upstreamMissingCount`). An activity with a
- * cross-plan edge but neither a derived nor an M1 bound gets `{ null, null }` (a no-op override,
- * byte-identical to feeding the M1 columns).
+ * Derive each cross-plan-linked activity's effective external values (ADR-0045 §2 / ADR-0035 §30.5).
+ * Forward: the latest of all incoming-edge bounds, composed with the M1 column by **later-of**
+ * (§30.1). Backward: the earliest of all outgoing-edge bounds, composed by **tighter-of** (§30.2).
+ * Both compositions compare instants read on this activity's calendar (D6).
  */
 export function deriveExternalInstants(
   input: DeriveExternalInstantsInput,
 ): DeriveExternalInstantsResult {
-  // The latest incoming-derived early start / earliest outgoing-derived late finish per activity.
-  const derivedForward = new Map<string, string>();
-  const derivedBackward = new Map<string, string>();
+  // The latest incoming-derived early start / earliest outgoing-derived late finish per activity,
+  // as absolute working instants.
+  const derivedForward = new Map<string, number>();
+  const derivedBackward = new Map<string, number>();
   const activityIds = new Set<string>();
   let upstreamMissingCount = 0;
 
   for (const edge of input.incoming) {
     activityIds.add(edge.successorActivityId);
-    const succDuration = input.durationDaysByActivity.get(edge.successorActivityId) ?? 0;
-    const bound = forwardBound(edge, succDuration);
-    if (bound.missing) {
+    const successor = localOf(input.activities, edge.successorActivityId);
+    // An LOE upstream never drives its successor (ADR-0035 §21). Not an N32 miss: skipped first,
+    // whatever its dates, so a never-calculated LOE is not counted either.
+    if (isLoe(edge.predecessor.type)) continue;
+    const anchors = remoteInstants(
+      edge.predecessor,
+      edge.predecessorPlacedStart,
+      edge.predecessorPlacedFinish,
+      forwardAnchorOf(edge.type),
+      'forward',
+    );
+    if (anchors === null) {
       upstreamMissingCount += 1;
       continue;
     }
-    derivedForward.set(
-      edge.successorActivityId,
-      laterOf(derivedForward.get(edge.successorActivityId) ?? null, bound.date)!,
+    const bound = forwardLowerBound(
+      engineEdge(edge.type, edge.lagMinutes, edge.lagCalendar),
+      anchors.start,
+      anchors.finish,
+      successor.calendar,
+      successor.durationMinutes,
+      edge.lagCalendar,
     );
+    const current = derivedForward.get(edge.successorActivityId);
+    if (current === undefined || bound > current)
+      derivedForward.set(edge.successorActivityId, bound);
   }
 
   for (const edge of input.outgoing) {
     activityIds.add(edge.predecessorActivityId);
-    const predDuration = input.durationDaysByActivity.get(edge.predecessorActivityId) ?? 0;
-    const bound = backwardBound(edge, predDuration);
-    if (bound.missing) {
-      // A never-computed DOWNSTREAM successor yields no backward bound, but it is NOT counted as N32:
-      // `upstreamMissingCount` is specifically the *upstream* (incoming-predecessor) never-calculated
-      // count (§30.5, web copy "pointed at an upstream activity"). In an upstream-first programme solve
-      // the most-upstream plan's outgoing edge always reads its downstream as uncomputed on this pass —
-      // that is expected and transient (the downstream is solved later in the same closure), so counting
-      // it here would surface a false "1 upstream never calculated" after a fully successful recalc.
-      continue;
-    }
-    derivedBackward.set(
-      edge.predecessorActivityId,
-      earlierOf(derivedBackward.get(edge.predecessorActivityId) ?? null, bound.date)!,
+    const predecessor = localOf(input.activities, edge.predecessorActivityId);
+    // An LOE downstream never bounds its predecessor (ADR-0035 §21).
+    if (isLoe(edge.successor.type)) continue;
+    const anchors = remoteInstants(
+      edge.successor,
+      edge.successorLateStart,
+      edge.successorLateFinish,
+      backwardAnchorOf(edge.type),
+      'backward',
     );
+    // A never-computed DOWNSTREAM successor yields no backward bound, and it is NOT counted as N32:
+    // `upstreamMissingCount` is specifically the *upstream* (incoming-predecessor) never-calculated
+    // count (§30.5, web copy "pointed at an upstream activity"). In an upstream-first programme solve
+    // the most-upstream plan's outgoing edge always reads its downstream as uncomputed on this pass —
+    // that is expected and transient (the downstream is solved later in the same closure), so counting
+    // it here would surface a false "1 upstream never calculated" after a fully successful recalc.
+    if (anchors === null) continue;
+    const bound = backwardUpperBound(
+      engineEdge(edge.type, edge.lagMinutes, edge.lagCalendar),
+      anchors.start,
+      anchors.finish,
+      predecessor.calendar,
+      predecessor.durationMinutes,
+      edge.lagCalendar,
+    );
+    const current = derivedBackward.get(edge.predecessorActivityId);
+    if (current === undefined || bound < current) {
+      derivedBackward.set(edge.predecessorActivityId, bound);
+    }
   }
 
+  const dataDateAbs = instantToAbsMinutes(input.dataDate);
   const derived = new Map<string, DerivedExternalInstant>();
   for (const id of activityIds) {
-    const m1 = input.m1.get(id);
+    const activity = localOf(input.activities, id);
+    const manual = input.m1.get(id);
     derived.set(id, {
-      // Later-of the derived early start and the M1 column (§30.1); tighter-of for the late finish (§30.2).
-      externalEarlyStart: laterOf(derivedForward.get(id) ?? null, m1?.externalEarlyStart ?? null),
-      externalLateFinish: earlierOf(
-        derivedBackward.get(id) ?? null,
-        m1?.externalLateFinish ?? null,
+      externalEarlyStart: laterOfForward(
+        activity,
+        derivedForward.get(id),
+        manual?.externalEarlyStart ?? null,
+      ),
+      externalLateFinish: tighterOfBackward(
+        activity,
+        dataDateAbs,
+        derivedBackward.get(id),
+        manual?.externalLateFinish ?? null,
       ),
     });
   }
 
   return { derived, upstreamMissingCount };
+}
+
+/**
+ * Later-of the derived early-start bound and the M1 column, compared as the engine will read each
+ * (`clampExternalForwardStart` reads both through `startDateInstant`). The M1 string wins a tie.
+ */
+function laterOfForward(
+  activity: CrossPlanLocalActivity,
+  derivedAbs: number | undefined,
+  manual: string | null,
+): string | null {
+  if (derivedAbs === undefined) return manual;
+  const derived = formatExternalInstant(derivedAbs);
+  if (manual === null) return derived;
+  const derivedRead = startDateInstant(activity.calendar, derived, activity.type);
+  const manualRead = startDateInstant(activity.calendar, manual, activity.type);
+  return derivedRead > manualRead ? derived : manual;
+}
+
+/**
+ * Tighter-of the derived late-finish bound and the M1 column, compared as the engine will read each
+ * (`clampExternalBackwardFinish`: a timed value is the instant itself, a bare date its
+ * `finishDateInstant` on this activity's calendar from this plan's data date). The M1 string wins a
+ * tie.
+ */
+function tighterOfBackward(
+  activity: CrossPlanLocalActivity,
+  dataDateAbs: number,
+  derivedAbs: number | undefined,
+  manual: string | null,
+): string | null {
+  if (derivedAbs === undefined) return manual;
+  const derived = formatExternalInstant(derivedAbs);
+  if (manual === null) return derived;
+  const manualRead =
+    manual.length > 10
+      ? instantToAbsMinutes(manual)
+      : finishDateInstant(
+          activity.calendar,
+          dataDateAbs,
+          manual,
+          activity.type,
+          activity.durationMinutes,
+        );
+  return derivedAbs < manualRead ? derived : manual;
 }

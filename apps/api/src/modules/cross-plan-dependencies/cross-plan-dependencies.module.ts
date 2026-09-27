@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { ActivitiesModule } from '../activities/activities.module';
+import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlansModule } from '../plans/plans.module';
 
@@ -27,7 +28,9 @@ import { PlanCrossPlanDependenciesController } from './plan-cross-plan-dependenc
     PlanCrossPlanDependenciesController,
     ActivityCrossPlanDependenciesController,
   ],
-  providers: [CrossPlanDependenciesService, CrossPlanDependencyRepository],
+  // CalendarRepository resolves each link's lag day↔minute factor (#385 M2-T3), as the in-plan
+  // DependenciesModule provides it for the same purpose.
+  providers: [CrossPlanDependenciesService, CrossPlanDependencyRepository, CalendarRepository],
   exports: [CrossPlanDependencyRepository],
 })
 export class CrossPlanDependenciesModule {}

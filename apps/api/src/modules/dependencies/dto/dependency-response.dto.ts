@@ -57,7 +57,10 @@ export class DependencyResponseDto implements DependencySummary {
   @ApiProperty({
     enum: LagCalendarSource,
     description:
-      'The calendar the lag is measured on (ADR-0036 §6). TWENTY_FOUR_HOUR = elapsed time; the rest schedule on the plan calendar today.',
+      'The calendar the lag is measured on (ADR-0036 §6). TWENTY_FOUR_HOUR = elapsed time; ' +
+      'PROJECT_DEFAULT = the plan calendar; PREDECESSOR / SUCCESSOR = that endpoint activity’s ' +
+      'scheduling calendar (its driving resource’s for a RESOURCE_DEPENDENT activity, else its ' +
+      'own, else the plan’s; ADR-0037).',
   })
   lagCalendar!: LagCalendarSource;
 
