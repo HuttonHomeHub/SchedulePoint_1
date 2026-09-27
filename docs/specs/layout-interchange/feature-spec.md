@@ -144,6 +144,10 @@ A new `mapped` key therefore **throws** in a tab loaded before the release. Beca
 **omitted when zero** (the existing idiom, `import-xer.ts:205-213`), only a file that carries layout
 can trigger it, and only a post-release instance can produce one. Stated in §4.9, not guarded.
 
+_Correction, 2026-09-27: this describes the reader as it was when this spec was written. ADR-0162 D9
+(zero-duration-task M3-T3, closing `docs/TECH_DEBT.md` #387) made every web reader strip unknown keys
+at every level of the report; only the producer's own tests keep the strict schema._
+
 ---
 
 ## 1. Business understanding

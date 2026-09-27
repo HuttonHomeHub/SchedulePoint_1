@@ -105,10 +105,13 @@ async function postFile<T>(path: string, upload: InterchangeUpload): Promise<T> 
   return (body as ApiResponse<T>).data;
 }
 
-/** The commit envelope: the new plan id plus the same report the planner reviewed (validated below). */
-const commitResultSchema = z
-  .object({ planId: z.string().min(1), report: interchangeReportSchema })
-  .strict();
+/**
+ * The commit envelope: the new plan id plus the same report the planner reviewed. It strips an unknown
+ * key rather than refusing it, like the report inside it (ADR-0162 D9): the import has already
+ * happened by the time this parses, so refusing a newer API's extra field would tell the planner an
+ * import failed that did not.
+ */
+const commitResultSchema = z.object({ planId: z.string().min(1), report: interchangeReportSchema });
 
 /** The successful result of a committed import — a new plan id and its interchange report. */
 export type InterchangeCommitResult = z.infer<typeof commitResultSchema>;

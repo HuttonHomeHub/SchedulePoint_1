@@ -9,7 +9,7 @@ import {
   type MspdiProjectSpec,
   type MspdiTaskSpec,
 } from './mspdi.fixtures.js';
-import { interchangeReportSchema } from './report.js';
+import { interchangeReportStrictSchema } from './report.js';
 
 /**
  * End-to-end tests for the `importMspdi` orchestrator (Task 3.3): an untrusted MSPDI file runs the SAME
@@ -90,7 +90,7 @@ describe('importMspdi — clean rich file → correct import graph + report', ()
 
   it('produces a Zod-valid import graph and report', () => {
     expect(importGraphSchema.safeParse(graph).success).toBe(true);
-    expect(interchangeReportSchema.safeParse(report).success).toBe(true);
+    expect(interchangeReportStrictSchema.safeParse(report).success).toBe(true);
   });
 
   it('maps the plan, data date and calendar', () => {

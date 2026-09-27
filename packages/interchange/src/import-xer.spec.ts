@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { importGraphSchema } from './import-graph.js';
 import { importXer, MAX_ACTIVITIES, MAX_DEPENDENCIES, MAX_RESOURCES } from './import-xer.js';
-import { interchangeReportSchema, type ReportFinding } from './report.js';
+import { interchangeReportStrictSchema, type ReportFinding } from './report.js';
 import { buildXer, standardClndrData, type XerTableSpec } from './xer.fixtures.js';
 
 // Excel/OLE serial 46023 === 2026-01-01 (base 1899-12-30).
@@ -67,7 +67,7 @@ describe('importXer — clean file → correct import graph', () => {
 
   it('produces a Zod-valid import graph and report', () => {
     expect(importGraphSchema.safeParse(graph).success).toBe(true);
-    expect(interchangeReportSchema.safeParse(report).success).toBe(true);
+    expect(interchangeReportStrictSchema.safeParse(report).success).toBe(true);
   });
 
   it('maps the plan and data date', () => {
@@ -613,7 +613,7 @@ describe('importXer — M2 rich fixture (WBS + constraints + progress + resource
 
   it('produces a Zod-valid graph and report', () => {
     expect(importGraphSchema.safeParse(graph).success).toBe(true);
-    expect(interchangeReportSchema.safeParse(report).success).toBe(true);
+    expect(interchangeReportStrictSchema.safeParse(report).success).toBe(true);
   });
 
   it('maps the WBS hierarchy to nested WBS_SUMMARY activities', () => {
