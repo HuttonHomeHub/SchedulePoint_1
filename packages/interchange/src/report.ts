@@ -67,6 +67,20 @@ export const RESOURCE_COLLISION_RESOLUTIONS = ['REUSE_EXISTING', 'CREATE_COPY'] 
 export const resourceCollisionResolutionSchema = z.enum(RESOURCE_COLLISION_RESOLUTIONS);
 export type ResourceCollisionResolution = z.infer<typeof resourceCollisionResolutionSchema>;
 
+/**
+ * The closed vocabulary of **import advisories** (ADR-0162 D1/D2). An advisory is not a finding: the
+ * three finding kinds each describe something the import did to the data (coerced, repaired, left
+ * out), and an advisory describes something it imported **faithfully** that the planner probably
+ * wants to change afterwards. Filing one as a finding would make it read as a loss the import caused.
+ *
+ * - `ZERO_DURATION_TASK` — a task that arrived with no duration. A zero-length event is usually a
+ *   milestone, and the two are dated by different conventions (ADR-0155, ADR-0162), so the planner is
+ *   told which activities they are and left to convert them.
+ */
+export const IMPORT_ADVISORY_CODES = ['ZERO_DURATION_TASK'] as const;
+export const importAdvisoryCodeSchema = z.enum(IMPORT_ADVISORY_CODES);
+export type ImportAdvisoryCode = z.infer<typeof importAdvisoryCodeSchema>;
+
 /** Builds every report schema in one mode. The only place the report's fields are declared. */
 export function buildReportSchemas(mode: ReportSchemaMode) {
   /** One line in the report. Open `entity` string keeps the shape stable as the domain grows (M2+). */
@@ -109,6 +123,17 @@ export function buildReportSchemas(mode: ReportSchemaMode) {
     lanes: z.number().int().min(0).optional(),
   });
 
+  /** One advisory line: which activity, by its source code, and a sentence saying what to do. */
+  const advisory = objectIn(mode, {
+    code: importAdvisoryCodeSchema,
+    /** The affected entity kind; every advisory so far is about an activity. */
+    entity: z.literal('activity'),
+    /** The activity's source code, the identifier the planner knows it by; null when it has none. */
+    sourceRef: z.string().min(1).nullable(),
+    /** Human-readable sentence, e.g. "imported as a task with no duration; …". */
+    detail: z.string().min(1),
+  });
+
   const collision = objectIn(mode, {
     /** The import graph's key for the incoming resource — what a resolution is keyed by. */
     resourceKey: z.string().min(1),
@@ -143,9 +168,16 @@ export function buildReportSchemas(mode: ReportSchemaMode) {
      * it: detecting a collision needs the org library, which the pure package deliberately cannot see.
      */
     resourceCollisions: z.array(collision).optional(),
+    /**
+     * What the import brought in faithfully that the planner probably wants to change (ADR-0162).
+     * **Optional, and absent means none**: a report with nothing to advise carries no key at all, so a
+     * file with no such activity produces a report byte-identical to one written before the field
+     * existed. Never an empty array.
+     */
+    advisories: z.array(advisory).optional(),
   });
 
-  return { finding, counts, collision, report };
+  return { finding, counts, advisory, collision, report };
 }
 
 const readerSchemas = buildReportSchemas('strip');
@@ -157,6 +189,10 @@ export type ReportFinding = z.infer<typeof reportFindingSchema>;
 /** The mapped counts, read tolerantly. */
 export const interchangeCountsSchema = readerSchemas.counts;
 export type InterchangeCounts = z.infer<typeof interchangeCountsSchema>;
+
+/** An import advisory, read tolerantly. */
+export const importAdvisorySchema = readerSchemas.advisory;
+export type ImportAdvisory = z.infer<typeof importAdvisorySchema>;
 
 /** A resource-name collision, read tolerantly. */
 export const resourceCollisionSchema = readerSchemas.collision;

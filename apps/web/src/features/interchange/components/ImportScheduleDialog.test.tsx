@@ -1,7 +1,7 @@
 import type { InterchangeReport } from '@repo/interchange';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImportScheduleDialog } from './ImportScheduleDialog';
@@ -394,6 +394,54 @@ describe('ImportScheduleDialog', () => {
       await waitFor(() => expect(h.navigate).toHaveBeenCalled());
       expect(vi.mocked(fetch).mock.calls[2]![0]).toContain('/interchange/commit');
       expect(layoutOf(2)).toBe('IGNORE');
+    });
+  });
+
+  describe('import advisories (ADR-0162)', () => {
+    const ADVISED: InterchangeReport = {
+      ...REPORT,
+      advisories: [
+        {
+          code: 'ZERO_DURATION_TASK',
+          entity: 'activity',
+          sourceRef: 'A1030',
+          detail: 'imported as a task with no duration',
+        },
+        {
+          code: 'ZERO_DURATION_TASK',
+          entity: 'activity',
+          sourceRef: 'A1040',
+          detail: 'imported as a task with no duration',
+        },
+      ],
+    };
+
+    it('shows an Advisories group naming each activity by its code, and does not block Confirm', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: ADVISED }));
+      renderDialog();
+      pickFile();
+
+      const heading = await screen.findByRole('heading', { name: 'Advisories (2)' });
+      const section = heading.closest('section');
+      expect(section).not.toBeNull();
+      const items = within(section!).getAllByRole('listitem');
+      expect(items.map((item) => item.textContent)).toEqual([
+        'activity [A1030]: imported as a task with no duration',
+        'activity [A1040]: imported as a task with no duration',
+      ]);
+      expect(screen.getByRole('button', { name: 'Confirm import' })).toHaveAttribute(
+        'aria-disabled',
+        'false',
+      );
+    });
+
+    it('shows no Advisories group for a report that carries none', async () => {
+      vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { data: REPORT }));
+      renderDialog();
+      pickFile();
+
+      expect(await screen.findByText('214')).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: /^Advisories/ })).not.toBeInTheDocument();
     });
   });
 });

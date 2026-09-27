@@ -102,8 +102,38 @@ describe('the interchange report schema, read and produced (ADR-0162 D9)', () =>
   it('the two modes are built over the same fields, so they agree on which keys exist', () => {
     const strip = buildReportSchemas('strip');
     const strict = buildReportSchemas('strict');
-    for (const part of ['finding', 'counts', 'collision', 'report'] as const) {
+    for (const part of ['finding', 'counts', 'advisory', 'collision', 'report'] as const) {
       expect(Object.keys(strict[part].shape).sort()).toEqual(Object.keys(strip[part].shape).sort());
     }
+  });
+});
+
+describe('import advisories on the report (ADR-0162 D1/D2, M3-T4)', () => {
+  const ADVISORY = {
+    code: 'ZERO_DURATION_TASK' as const,
+    entity: 'activity' as const,
+    sourceRef: 'A1030',
+    detail: 'imported as a task with no duration',
+  };
+
+  it('both modes accept a report with no advisories key and one with advisories', () => {
+    for (const schema of [interchangeReportSchema, interchangeReportStrictSchema]) {
+      expect(schema.parse(REPORT)).toEqual(REPORT);
+      expect('advisories' in schema.parse(REPORT)).toBe(false);
+      const withAdvisories = { ...REPORT, advisories: [ADVISORY] };
+      expect(schema.parse(withAdvisories)).toEqual(withAdvisories);
+    }
+  });
+
+  it('refuses an advisory code outside the closed vocabulary, in both modes', () => {
+    const bad = { ...REPORT, advisories: [{ ...ADVISORY, code: 'SOMETHING_ELSE' }] };
+    expect(interchangeReportSchema.safeParse(bad).success).toBe(false);
+    expect(interchangeReportStrictSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('the reader strips an unknown key inside an advisory; the strict schema refuses it', () => {
+    const extra = { ...REPORT, advisories: [{ ...ADVISORY, later: true }] };
+    expect(interchangeReportSchema.parse(extra)).toEqual({ ...REPORT, advisories: [ADVISORY] });
+    expect(interchangeReportStrictSchema.safeParse(extra).success).toBe(false);
   });
 });

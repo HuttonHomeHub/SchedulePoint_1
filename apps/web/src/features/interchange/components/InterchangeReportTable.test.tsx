@@ -69,4 +69,29 @@ describe('InterchangeReportTable', () => {
     render(<InterchangeReportTable report={report} />);
     expect(screen.getByText('No repairs were needed.')).toBeInTheDocument();
   });
+
+  it('renders a report without advisories exactly as one with an empty advisories array (FC-5 (a))', () => {
+    const { container: absent, unmount } = render(<InterchangeReportTable report={report} />);
+    // `useId` numbers each mount afresh, so the ids are normalised; everything else must match.
+    const withoutIds = (html: string): string => html.replace(/_r_[0-9a-z]+_/g, 'ID');
+    const absentHtml = withoutIds(absent.innerHTML);
+    unmount();
+    const { container: empty } = render(
+      <InterchangeReportTable report={{ ...report, advisories: [] }} />,
+    );
+    expect(withoutIds(empty.innerHTML)).toBe(absentHtml);
+    expect(screen.queryByRole('heading', { name: /^Advisories/ })).not.toBeInTheDocument();
+  });
+
+  it('exposes every finding list with explicit list and listitem roles (ADR-0122)', () => {
+    const { container } = render(<InterchangeReportTable report={report} />);
+    const lists = container.querySelectorAll('ul');
+    expect(lists.length).toBeGreaterThan(0);
+    for (const list of lists) {
+      expect(list).toHaveAttribute('role', 'list');
+      for (const item of list.querySelectorAll(':scope > li')) {
+        expect(item).toHaveAttribute('role', 'listitem');
+      }
+    }
+  });
 });

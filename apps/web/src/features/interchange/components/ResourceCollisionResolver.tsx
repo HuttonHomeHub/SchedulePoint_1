@@ -27,11 +27,16 @@ export function ResourceCollisionResolver({
   onChange: (resourceKey: string, resolution: ResourceCollisionResolution) => void;
 }): React.ReactElement {
   return (
-    <ul className="flex list-none flex-col gap-3 p-0">
+    // Explicit roles (ADR-0122): `list-none` is exactly the style WebKit and VoiceOver read as "not a
+    // list", so the collisions would be heard as loose paragraphs rather than as N questions.
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above.
+    <ul role="list" className="flex list-none flex-col gap-3 p-0">
       {collisions.map((collision) => {
         const answered = resolutions[collision.resourceKey];
         return (
+          // eslint-disable-next-line jsx-a11y/no-redundant-roles -- ADR-0122; see the list above.
           <li
+            role="listitem"
             key={collision.resourceKey}
             className="border-border flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
           >

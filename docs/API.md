@@ -582,6 +582,16 @@ is a user-safe **422** (`details.reason = UNPARSEABLE_FILE`); a missing `file` i
 (`NO_FILE`). Anti-IDOR is uniform: a foreign or other-org project (or a caller who is not a member of the
 org) is an indistinguishable **404**; a malformed project id is **400**.
 
+**Read the report tolerantly** (ADR-0162 D9). The report gains fields over time, and the web and API
+images are recreated independently, so a client one release behind will meet keys it does not know. The
+shared `@repo/interchange` schema a reader uses, `interchangeReportSchema`, drops an unknown key at every
+level of the report and validates every known key strictly; `interchangeReportStrictSchema`, which refuses
+an unknown key, is for the producer's own tests. The report may carry an optional **`advisories`** array
+(`{ code: 'ZERO_DURATION_TASK', entity: 'activity', sourceRef, detail }`), **absent when there are none**:
+activities the import brought in faithfully that the planner probably wants to change, such as a task with
+no duration. An advisory never changes what is imported and is never filed as an approximation, repair or
+drop. No importer produces one yet; the reader ships first.
+
 The **commit** endpoint is the second phase: it re-accepts the same multipart upload (stateless — `importXer`
 is pure + deterministic, so the graph committed equals the one reviewed) and, in **one transaction**, creates
 the plan with its calendars, activities and dependencies via the existing repositories (the same
@@ -1508,6 +1518,15 @@ controller's 30 / 60 s per handler.
   join — the counter is per route handler (`docs/TECH_DEBT.md` #315), so this
   route has its own 100 / 60 s. The decision it describes is unchanged; only
   the mechanism was wrong.
+  The response also carries **`advisories`** (ADR-0162 D1): an array **always
+  present**, one entry per `HealthAdvisoryId` (today only `ZERO_DURATION_TASKS`),
+  kept **outside** the fourteen metrics and **never counted in `summary`**, so the
+  DCMA contract above is unchanged. Each entry has the metric's own shape —
+  `id`, `name`, `measured`, `offenderCount`, `offendersTruncated`, `offenders` —
+  plus `detail.resourced`, the number of those activities that have live resource
+  assignments. It is found from stored durations whether or not the plan has been
+  calculated. A client must tolerate its absence: the web and API images are
+  recreated independently, so a new web bundle can meet an API that predates it.
 
 - `GET …/schedule/health-check/critical-path-test` runs **DCMA metric 12, the
   Critical Path Test, as a read-only what-if** (health M6, `schedule:read` —
