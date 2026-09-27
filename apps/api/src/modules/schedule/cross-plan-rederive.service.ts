@@ -28,9 +28,10 @@ export interface PendingCrossPlanPlan {
  * in working minutes on its lag calendar. Neither change moves a stored date by itself: the engine-owned
  * columns of a linked plan keep the old rule's dates until somebody recalculates it. And nothing flags
  * such a plan, because staleness is computed from upstream `schedule_computed_at` (ADR-0045 §5), which
- * this release does not change. So an affected plan would keep its old dates indefinitely, and those
- * dates are optimistic, which is the direction that hides risk. The API therefore recalculates those
- * plans itself, once.
+ * this release does not change. So an affected plan would keep its old dates indefinitely. They are
+ * wrong in BOTH directions, not only the optimistic one: of the 1,728 cells M0 predicted, 442 the old
+ * rule dated later than the new one (docs/specs/cross-plan-day-boundary/m0/red-run.md). The API
+ * therefore recalculates those plans itself, once.
  *
  * **Which plans, and why it cannot repeat.** A live plan with a data date, with at least one active
  * cross-plan edge in either direction, whose `schedule_computed_at` is EARLIER than the moment the lag

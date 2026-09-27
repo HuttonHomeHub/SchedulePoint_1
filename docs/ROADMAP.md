@@ -395,6 +395,16 @@ keep `main` releasable.
   identically. MS Project files do not carry the layout yet. Whether a real P6 opens the file has
   not been observed.
 
+- **A link between two plans gives the same dates as the same link in one plan** (ADR-0161,
+  amending ADR-0045 §2 and ADR-0035 §30.5). A cross-plan link used its own simplified arithmetic,
+  in whole calendar days: a finish-to-start link with no lag let the next plan start on the
+  upstream's last day, and a lag was counted in calendar days, stored as 24-hour days whatever the
+  calendar, and never used the lag calendar the dialog offered. A programme split into plans could
+  therefore finish on a different day from the same programme kept in one plan, earlier or later.
+  Cross-plan links now use the engine's own link arithmetic on its own working instants. Existing
+  lags were converted to working time on their lag calendar, each conversion recorded, and every
+  linked plan is recalculated once, upstream first, when the API starts.
+
 - **A finish milestone is dated by the day it closes** (ADR-0155, amending ADR-0023 §4). After a
   task ending Friday, a finish milestone now reads Friday, not the following Monday, which is how P6
   and NetPoint print it. Placing one on its predecessor's last day is no longer a conflict, and a

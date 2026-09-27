@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 24 API modules
 > (`apps/api/src/modules/`), 34 Prisma models across 71 migrations, 1373 web
 > source files with 46 Playwright suites beside the base journey, and
-> 160 ADRs.
+> 161 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -5949,6 +5949,34 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   with a reason) is **not** built, on the product owner's decision, and is recorded under
   `docs/TECH_DEBT.md` #299 with `format:check` as the remaining instance. **The CPM engine is not
   imported and no migration runs.**
+
+- **ADR-0161** _(Accepted; M0–M3 landed 2026-09-27)_ — A cross-plan link is the same link in one
+  plan. ADR-0045 §2 derived a cross-plan bound with a second, simplified copy of the engine's link
+  arithmetic in whole UTC calendar days. #385 reported one symptom (a finish date read as the start
+  of its day, so FS lag 0 let the downstream start on the upstream's last day, pinned by a
+  conformance test). Reading the code found five more: lag walked in calendar days, lag **stored**
+  as `lagDays × 1440` whatever the calendar under a schema comment saying working minutes, the lag
+  calendar the dialog offers never loaded, FF/SF durations in calendar days, and an LOE upstream
+  driving. So a programme split into plans finished on a different day from the same programme kept
+  in one. **M0 committed a per-cell prediction before any product code changed and it matched on all
+  1,728 cells** (919 disagree, 809 agree). **The fix removes the second copy rather than repairing
+  it**: `applyLag`, `forwardLowerBound` and `backwardUpperBound` move byte-for-byte into
+  `engine/edge-bounds.ts` and the derivation calls them on absolute working instants, with one pair of
+  date readers and one formatter for a timed external value. The cost is stated: a defect in a shared
+  function appears on both sides, so the twin comparison cannot see it, and the independent oracle is
+  the unedited Pass-1 golden suite plus hand-computed goldens in both directions. Lags are
+  **re-encoded** to working minutes on the resolved lag calendar (`PROJECT_DEFAULT` is the successor
+  plan's, the link's home), by one set-based migration designed by database-architect whose record
+  table and conversion are one statement — `numeric` arithmetic, because `int4` overflows at the
+  ±3,650-day bound for any factor of 409 or more. Convert-on-read was rejected: the lag would change
+  whenever somebody edited a calendar's hours. **Dates move in BOTH directions**, 477 optimistic and
+  442 pessimistic cells, which corrected a docblock that called the old dates "optimistic, the
+  direction that hides risk". Because staleness reads upstream `schedule_computed_at`, which this
+  release does not change, `CrossPlanRederiveService` recalculates every pending linked plan once at
+  boot (the ADR-0155 D9 precedent) — **ordering the whole organisation graph and recalculating only
+  the pending plans**, since ordering the pending set alone lets `A → B → C` with `B` settled put `C`
+  before `A`. Rollback is a documented reverse, not a redeploy. **The CPM engine's arithmetic is
+  unchanged** — moved, not edited, and `compute.spec.ts` passes unedited.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
