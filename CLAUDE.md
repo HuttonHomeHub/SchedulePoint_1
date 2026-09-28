@@ -140,7 +140,9 @@ SchedulePoint/
 - **TypeScript strict everywhere.** No `any` without a written justification;
   prefer `unknown` + narrowing. `noUncheckedIndexedAccess` is on.
 - **Formatting is not a debate.** Prettier owns formatting; ESLint owns
-  correctness. Never hand-format to fight the tools.
+  correctness. Never hand-format to fight the tools. A lint warning fails lint
+  (`--max-warnings=0` on every workspace, ADR-0164) — there is no passing state
+  that prints a finding nobody reads.
 - **Naming:** `camelCase` for variables/functions, `PascalCase` for
   types/components/classes, `SCREAMING_SNAKE_CASE` for constants, `kebab-case`
   for file names (React components may use `PascalCase.tsx`).

@@ -1,6 +1,6 @@
 # Feature Spec: A lint warning is a failure, and `exhaustive-deps` is armed
 
-- **Status:** Approved — by the product owner, 2026-09-28. Q1: `--max-warnings=0` in all nine workspaces. Q2: the default (reasons required) stands.
+- **Status:** Accepted — shipped (ADR-0164). Q1: `--max-warnings=0` in all nine workspaces. Q2: the default (reasons required) stands.
 - **Author(s):** Claude (feature-analyst, for the product owner)
 - **Date:** 2026-09-28
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #353. Repository tooling, plus one printed-programme
