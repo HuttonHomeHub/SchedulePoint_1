@@ -302,12 +302,28 @@ describe('usePlanWorkspaceModel — Make milestone…', () => {
     act(() => result.current.onMakeMilestone(ZERO));
     await act(async () => {
       await expect(result.current.confirmMakeMilestone('START_MILESTONE')).rejects.toThrow(
-        /nothing was changed/,
+        'This activity changed since you opened it, so nothing was changed. Close and try again.',
       );
     });
     expect(result.current.makeMilestoneOpen).toBe(true);
     expect(h.record).not.toHaveBeenCalled();
     expect(h.notify).not.toHaveBeenCalled();
+  });
+
+  it('says so in the dialog when the pen is taken, recording nothing', async () => {
+    h.patchFields.mockRejectedValueOnce(
+      new ApiFetchError(423, { message: 'locked', code: 'LOCKED' }),
+    );
+    h.onWriteRejected.mockReturnValueOnce({ kind: 'lock' });
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    act(() => result.current.onMakeMilestone(ZERO));
+    await act(async () => {
+      await expect(result.current.confirmMakeMilestone('START_MILESTONE')).rejects.toThrow(
+        'The edit lock was taken, so nothing was changed.',
+      );
+    });
+    expect(result.current.makeMilestoneOpen).toBe(true);
+    expect(h.record).not.toHaveBeenCalled();
   });
 });
 

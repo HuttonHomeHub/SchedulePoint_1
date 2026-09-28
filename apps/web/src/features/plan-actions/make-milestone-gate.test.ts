@@ -95,7 +95,7 @@ describe('deriveMakeMilestoneGate', () => {
 
   it('says "1 resource assignment", not "1 resource assignments"', () => {
     expect(resourcedReason(1)).toBe(
-      'It has 1 resource assignment. A milestone does no work; remove them in Resources first.',
+      'It has 1 resource assignment. A milestone does no work; remove it in Resources first.',
     );
   });
 

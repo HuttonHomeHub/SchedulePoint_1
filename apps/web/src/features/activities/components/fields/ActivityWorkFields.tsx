@@ -12,10 +12,7 @@ import {
   durationInputProps,
   durationLabel,
 } from '@/features/activities/model/duration-field';
-import {
-  TYPE_CHANGE_DATES_HINT,
-  typeChangeReexpressesDates,
-} from '@/features/activities/model/type-change-dates';
+import { typeChangeDatesHint } from '@/features/activities/model/type-change-dates';
 import {
   ACTIVITY_TYPE_LABELS,
   DURATION_TYPE_LABELS,
@@ -76,7 +73,7 @@ export function ActivityWorkFields({
   const { errors } = form.formState;
   const type = useWatch({ control: form.control, name: 'type' });
   const derived = isDurationDerivedType(type);
-  const reexpresses = typeChangeReexpressesDates(savedType, savedDurationMinutes, type);
+  const typeChangeHint = typeChangeDatesHint(savedType, savedDurationMinutes, type);
 
   return (
     <FormSection title="Work" description="What kind of activity this is, and how long it takes.">
@@ -84,7 +81,7 @@ export function ActivityWorkFields({
         <SelectField
           label="Type"
           error={errors.type?.message}
-          hint={reexpresses ? TYPE_CHANGE_DATES_HINT : undefined}
+          hint={typeChangeHint}
           {...form.register('type')}
         >
           {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, savedType).map((value) => (

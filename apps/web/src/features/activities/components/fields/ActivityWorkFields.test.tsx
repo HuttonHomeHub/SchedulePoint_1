@@ -191,6 +191,40 @@ describe('ActivityWorkFields — the type-change dates hint (ADR-0162, M2-T2)', 
     expect(screen.getByText(HINT)).toBeInTheDocument();
   });
 
+  // ADR-0162 decision 3 keeps the instant for a task, a milestone and a hammock only: a level of
+  // effort takes its position from its span, a summary from its branch and a resource-dependent
+  // activity from its driving resource's calendar, so the type change itself can move it. The
+  // hint must not promise otherwise (M6 UX review), for either direction of the change.
+  it.each([
+    ['FINISH_MILESTONE', 'LEVEL_OF_EFFORT', /span/i],
+    ['FINISH_MILESTONE', 'WBS_SUMMARY', /activities it summarises/i],
+    ['FINISH_MILESTONE', 'RESOURCE_DEPENDENT', /driving resource/i],
+  ] as const)('does not promise the schedule stays put for %s to %s', (saved, selected, reason) => {
+    render(<Harness type={saved} savedType={saved} savedDurationMinutes={0} />);
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: selected } });
+    const type = screen.getByLabelText('Type');
+    expect(type).toHaveAccessibleDescription(HINT);
+    expect(type).not.toHaveAccessibleDescription(/successors and float are unchanged/i);
+    expect(type).toHaveAccessibleDescription(/may still move/i);
+    expect(type).toHaveAccessibleDescription(reason);
+  });
+
+  it('does not promise it for the reverse change either (level of effort to finish milestone)', () => {
+    render(<Harness type="LEVEL_OF_EFFORT" savedType="LEVEL_OF_EFFORT" savedDurationMinutes={0} />);
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'FINISH_MILESTONE' } });
+    const type = screen.getByLabelText('Type');
+    expect(type).not.toHaveAccessibleDescription(/successors and float are unchanged/i);
+    expect(type).toHaveAccessibleDescription(/may still move/i);
+  });
+
+  it('keeps the promise for a task, which the server does keep in place', () => {
+    render(<Harness type="TASK" savedType="TASK" savedDurationMinutes={0} />);
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'FINISH_MILESTONE' } });
+    expect(screen.getByLabelText('Type')).toHaveAccessibleDescription(
+      /successors and float are unchanged/i,
+    );
+  });
+
   it('is absent while the type is unchanged', () => {
     render(<Harness type="TASK" savedType="TASK" savedDurationMinutes={0} />);
     expect(screen.queryByText(HINT)).toBeNull();

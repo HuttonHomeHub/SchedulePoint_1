@@ -31,8 +31,9 @@ type MakeMilestoneSubject = Pick<
 
 /** Why a resourced zero-duration task cannot convert (spec US-3). */
 export function resourcedReason(count: number): string {
-  const noun = count === 1 ? '1 resource assignment' : `${count} resource assignments`;
-  return `It has ${noun}. A milestone does no work; remove them in Resources first.`;
+  const [noun, them] =
+    count === 1 ? ['1 resource assignment', 'it'] : [`${count} resource assignments`, 'them'];
+  return `It has ${noun}. A milestone does no work; remove ${them} in Resources first.`;
 }
 
 /**

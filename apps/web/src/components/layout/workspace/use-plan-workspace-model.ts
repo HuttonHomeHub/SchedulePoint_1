@@ -1783,12 +1783,16 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           patch: { type },
         });
       } catch (err) {
+        // Unlike `clearVisualPlacement`, which returns silently and leaves the edit-lock banner to
+        // say it, this write runs from a modal `<dialog>`: the page behind it, banner included, is
+        // inert under the top layer, so a sighted reader would see a Confirm that did nothing.
+        // The dialog says it itself; an AT user may also hear the banner, accepted (M6 UX review).
         if (onPenWriteRejected(err).kind === 'lock') {
           throw new Error('The edit lock was taken, so nothing was changed.');
         }
         if (err instanceof ApiFetchError && err.status === 409) {
           throw new Error(
-            'This activity changed since you opened this, so nothing was changed. Close and try again.',
+            'This activity changed since you opened it, so nothing was changed. Close and try again.',
           );
         }
         throw err;
