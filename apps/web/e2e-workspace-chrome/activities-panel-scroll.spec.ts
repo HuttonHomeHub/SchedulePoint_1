@@ -150,13 +150,15 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
   });
 
   test('scrolls as one region at 390px, the narrow single-pane layout too', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+    // Build the plan at the default width: below `md` the organisation nav folds behind a menu, so
+    // `createHierarchy`'s "Clients" link is not on screen. The narrow layout is what is measured.
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Panel scale narrow');
     await ensurePen(page);
     await seedSixty(page, orgSlug);
     await ensurePen(page);
+    await page.setViewportSize({ width: 390, height: 844 });
 
     // Below `md` there is no separate expand/collapse — the view toggle IS the show/hide mechanism
     // (`plan-workspace-toolbar.tsx`: both panes are always mounted, switched with `hidden`/`block`).
