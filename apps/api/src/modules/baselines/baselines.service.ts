@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, type Baseline } from '@prisma/client';
-import type { BaselineVarianceRow, PageMeta, PlanVarianceSummary } from '@repo/types';
+import { Prisma, type Baseline, type PlacementSnapshotLevel } from '@prisma/client';
+import type {
+  BaselineVarianceRow,
+  PageMeta,
+  PlanVarianceSummary,
+  VarianceBasis,
+} from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -383,7 +388,8 @@ export class BaselinesService {
     if (!plan) throw new NotFoundError('Plan not found.');
 
     const active = await this.baselines.findActiveBaselineByPlan(organization.id, planId);
-    // No active baseline → nothing to compare against; the UI hides variance.
+    // No active baseline → nothing to compare against; the UI hides variance. `basis: null`
+    // is the one value naming "nothing was compared" — never a guessed basis.
     if (!active) {
       return {
         rows: [],
@@ -395,6 +401,7 @@ export class BaselinesService {
           behindCount: 0,
           addedCount: 0,
           removedCount: 0,
+          basis: null,
         },
       };
     }
@@ -405,21 +412,27 @@ export class BaselinesService {
       this.resolveCalendar(organization.id, plan.calendarId),
     ]);
 
+    // The basis is chosen ONCE per read, from the active baseline's level (never per row —
+    // that would mix two questions in one table, `placement-baseline-variance` §2 edge
+    // cases). Both projections below are basis-neutral field names (`start`/`finish`);
+    // `computeVariance` itself stays basis-blind.
+    const basis = this.varianceBasisFor(active.placementSnapshotLevel);
+
     const { rows, rollup } = computeVariance(
       snapshot.map((s) => ({
         sourceActivityId: s.sourceActivityId,
         code: s.code,
         name: s.name,
-        baselineStart: day(s.baselineStart),
-        baselineFinish: day(s.baselineFinish),
+        baselineStart: basis === 'PLACED' ? day(s.placedStart) : day(s.baselineStart),
+        baselineFinish: basis === 'PLACED' ? day(s.placedFinish) : day(s.baselineFinish),
         totalFloat: s.totalFloat,
       })),
       liveRows.map((l) => ({
         id: l.id,
         code: l.code,
         name: l.name,
-        earlyStart: day(l.earlyStart),
-        earlyFinish: day(l.earlyFinish),
+        start: basis === 'PLACED' ? day(l.visualEffectiveStart) : day(l.earlyStart),
+        finish: basis === 'PLACED' ? day(l.visualEffectiveFinish) : day(l.earlyFinish),
         totalFloat: l.totalFloat,
       })),
       calendar,
@@ -433,8 +446,29 @@ export class BaselinesService {
         baselineName: active.name,
         capturedAt: active.capturedAt.toISOString(),
         ...rollup,
+        basis,
       },
     };
+  }
+
+  /**
+   * The read's basis, from the active baseline's frozen placement level
+   * (`placement-baseline-variance`, amending ADR-0025). `FULL → PLACED`: the baseline
+   * recorded where bars were placed at capture, so compare placed-vs-placed (ADR-0148 — a
+   * bar is drawn where it is placed). `NONE → NETWORK`: every baseline captured before
+   * `api-v0.70.0` recorded nothing about placement, so the only honest comparison left is
+   * the pure-network dates on both sides — the accepted residual is that on such a
+   * baseline a constraint-to-placement conversion still reads as "ahead" (Q1 default (a)).
+   * Exhaustive with no `default` case: a third level is a compile error, not a silent fall-
+   * through to one of the two existing answers.
+   */
+  private varianceBasisFor(level: PlacementSnapshotLevel): VarianceBasis {
+    switch (level) {
+      case 'FULL':
+        return 'PLACED';
+      case 'NONE':
+        return 'NETWORK';
+    }
   }
 
   /**

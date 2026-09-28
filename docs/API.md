@@ -271,6 +271,36 @@ where the two disagree — **read the reason wherever the sentence or the mark d
 Never derive `remainingFloat` client-side from `totalFloat − visualDriftDays`: the difference of two
 roundings is not the rounding of the difference, and minutes are persisted for neither input.
 
+### Baseline variance basis (`placement-baseline-variance`, amending ADR-0025)
+
+`GET …/plans/:planId/baselines/variance`'s `meta.basis: 'PLACED' | 'NETWORK' | null` names which
+dates the read compared, chosen **once per read** from the active baseline's
+`placementSnapshotLevel` — never per row, which would mix two questions in one table. `null` only
+when `meta.baselineId` is `null` (no active baseline — nothing was compared; nothing is guessed).
+
+- **`PLACED`** (`placementSnapshotLevel: 'FULL'`, every baseline captured since `api-v0.70.0`): the
+  frozen `placedStart`/`placedFinish` (where the bar sat at capture) against the live
+  `visualEffectiveStart`/`visualEffectiveFinish` (where it is drawn now, ADR-0148). A bar that has
+  genuinely moved reads as moved; removing a binding constraint and placing the bar exactly where
+  the constraint held it does not read as movement, because neither side has changed.
+- **`NETWORK`** (`placementSnapshotLevel: 'NONE'`, a baseline captured before placement capture
+  existed): the frozen `baselineStart`/`baselineFinish` against the live `earlyStart`/`earlyFinish`
+  — the only comparison such a baseline can honestly make. The accepted residual: on a `NETWORK`
+  baseline, converting a binding constraint into a placement (or a later drag) still reads as
+  "ahead", because the network dates moved and the placed ones were never recorded.
+
+`baselineStart`, `baselineFinish`, `currentStart`, `currentFinish` and the start/finish variance
+fields are on `meta.basis`; the field names do **not** change with the basis (a field named "early"
+sometimes holding a placed date would be the silent redefinition ADR-0148 refused elsewhere).
+`currentTotalFloat`, `baselineTotalFloat` and `floatVarianceDays` are total float on **both** bases,
+always — no baseline has ever frozen remaining float.
+
+`GET …/baselines` and `GET …/baselines/:baselineId` expose the same discriminator directly:
+`BaselineSummary.placementSnapshotLevel` says which basis a variance read against that baseline
+will use, and each snapshot row's `placedStart`/`placedFinish`/`visualStart` are meaningful only
+under `FULL` — on a `NONE` baseline they are null because nothing was recorded, never inferred from
+the null.
+
 **Revision comparison reports whether placements are comparable at all.** Both
 `…/revision-compare` and `…/cross-plan-revision-compare` carry
 `placementNotAssessableReason` — `null` when both sides recorded a placement, `NOT_SNAPSHOTTED` when

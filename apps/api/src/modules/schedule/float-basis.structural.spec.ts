@@ -61,7 +61,12 @@ const GUARDED: ReadonlyArray<{ readonly path: string; readonly why: string }> = 
   // siblings the same reasoning reaches:
   {
     path: 'modules/baselines/variance.ts',
-    why: 'baseline float variance compares against a captured float; remainingFloat was frozen by no baseline before M-C',
+    // Corrected wording (placement-baseline-variance §F2): the earlier text said
+    // "before M-C", which implies a LATER baseline (`placementSnapshotLevel: 'FULL'`) does
+    // freeze remaining float. None does — the only placement columns M-C added are
+    // `placedStart`/`placedFinish`/`visualStart`, none of them remaining float — so no
+    // baseline captured to date has ever frozen it.
+    why: 'baseline float variance compares against a captured float; remainingFloat is frozen by no baseline, of any placement level',
   },
   {
     path: 'modules/schedule/criticality-rule.ts',

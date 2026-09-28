@@ -295,6 +295,45 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     });
   });
 
+  // T3 (placement-baseline-variance): a plain fixture where placed == early cannot tell
+  // "the capture correctly froze the placed span" apart from "the capture froze the early
+  // span twice" — both produce the same numbers. Hand-placing A first, so placed ≠ early,
+  // is what discriminates them (m-c/placement-snapshot.md:25-34).
+  it('exposes the frozen placement and level on baseline reads, on a hand-placed bar (M-C)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await makeActivity(actor, planId, 'A', 3); // early start 2026-01-01 (all-days)
+    // Hand-place A five days later than its logic-earliest — placed (01-06) ≠ early (01-01).
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${a}`)
+      .send({ visualStart: '2026-01-06', version: 1 })
+      .expect(200);
+    await recalc(actor, planId);
+
+    const activities = await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .expect(200);
+    const live = (activities.body.data as { visualEffectiveStart: string | null }[])[0]!;
+    expect(live.visualEffectiveStart).toBe('2026-01-06'); // the bar as drawn — not 01-01
+
+    const created = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Contract Baseline' })
+      .expect(201);
+    expect(created.body.data).toMatchObject({ placementSnapshotLevel: 'FULL' });
+    const baselineId = created.body.data.id as string;
+
+    const detail = await actor.agent.get(`${baselinesUrl(planId)}/${baselineId}`).expect(200);
+    expect(detail.body.data.activities[0]).toMatchObject({
+      sourceActivityId: a,
+      baselineStart: '2026-01-01', // the pure-network dates, unchanged
+      baselineFinish: '2026-01-03',
+      placedStart: '2026-01-06', // where the bar actually sat — NOT re-frozen from early
+      placedFinish: '2026-01-08',
+      visualStart: '2026-01-06', // the planner's own input, distinct from the engine's output
+    });
+  });
+
   it('activates only the first baseline; later captures are inactive', async () => {
     const { actor } = await adminWithOrg();
     const { planId } = await calculatedPlan(actor);
@@ -582,6 +621,166 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0]).toMatchObject({ name: 'A', removed: true, currentFinish: null });
     expect(res.body.meta.removedCount).toBe(1);
+  });
+
+  // R1 (placement-baseline-variance §2, fails against today's code before this epic): the
+  // stripped activity reads as ahead of baseline while its bar has not moved. A carries a
+  // BINDING SNET nine calendar days after the data date; B is its FS successor. After
+  // capture, PATCH A the way ADR-0148's strip converted a binding constraint into a
+  // placement — through the public PATCH, not the migration SQL (that row transformation
+  // is already covered by strip-drag-constraints-migration.e2e-spec.ts, and running the SQL
+  // here would convert other tests' rows too, since it is not plan-scoped).
+  it('R1: a stripped activity reads as ahead of baseline while its bar has not moved', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate'); // data date 2026-01-01
+    const a = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'A', durationDays: 3, constraintType: 'SNET', constraintDate: '2026-01-10' })
+      .expect(201);
+    const aId = a.body.data.id as string;
+    const bId = await makeActivity(actor, planId, 'B', 2);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .send({ predecessorId: aId, successorId: bId, type: 'FS' })
+      .expect(201);
+    await recalc(actor, planId);
+
+    type Row = {
+      id: string;
+      visualEffectiveStart: string | null;
+      visualEffectiveFinish: string | null;
+    };
+    const listUrl = `/api/v1/organizations/acme/plans/${planId}/activities?limit=100`;
+    const beforeById = new Map(
+      ((await actor.agent.get(listUrl).expect(200)).body.data as Row[]).map((r) => [r.id, r]),
+    );
+    // Fixture is only worth anything if A is genuinely bound (the constraint pushed it later
+    // than logic would have) — assert that FIRST.
+    expect(beforeById.get(aId)!.visualEffectiveStart).toBe('2026-01-10');
+
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${aId}`)
+      .send({ constraintType: null, constraintDate: null, visualStart: '2026-01-10', version: 1 })
+      .expect(200);
+    await recalc(actor, planId);
+
+    // Assert FIRST that the bars have not moved — without this, a passing 0 below could come
+    // from a fixture where both moved by the same amount.
+    const afterById = new Map(
+      ((await actor.agent.get(listUrl).expect(200)).body.data as Row[]).map((r) => [r.id, r]),
+    );
+    for (const id of [aId, bId]) {
+      expect(afterById.get(id)!.visualEffectiveStart, `${id} start moved`).toBe(
+        beforeById.get(id)!.visualEffectiveStart,
+      );
+      expect(afterById.get(id)!.visualEffectiveFinish, `${id} finish moved`).toBe(
+        beforeById.get(id)!.visualEffectiveFinish,
+      );
+    }
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    const byId = new Map(
+      (res.body.data as { activityId: string; startVarianceDays: number | null }[]).map((r) => [
+        r.activityId,
+        r,
+      ]),
+    );
+    expect(byId.get(aId)).toMatchObject({ startVarianceDays: 0, finishVarianceDays: 0 });
+    expect(byId.get(bId)).toMatchObject({ startVarianceDays: 0, finishVarianceDays: 0 });
+    expect(res.body.meta).toMatchObject({
+      basis: 'PLACED',
+      worstFinishSlipDays: null,
+      behindCount: 0,
+    });
+  });
+
+  // R2 (placement-baseline-variance §2, fails against today's code before this epic): a
+  // dragged bar reads as unmoved.
+  it('R2: a bar dragged after capture reads as moved', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const aId = await makeActivity(actor, planId, 'A', 3); // unconstrained
+    const bId = await makeActivity(actor, planId, 'B', 2);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .send({ predecessorId: aId, successorId: bId, type: 'FS' })
+      .expect(201);
+    await recalc(actor, planId);
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+
+    // Drag A five calendar days later (all-days calendar, so five working days too).
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${aId}`)
+      .send({ visualStart: '2026-01-06', version: 1 })
+      .expect(200);
+    await recalc(actor, planId);
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    const byId = new Map(
+      (res.body.data as { activityId: string; startVarianceDays: number | null }[]).map((r) => [
+        r.activityId,
+        r,
+      ]),
+    );
+    expect(byId.get(aId)).toMatchObject({ startVarianceDays: 5, finishVarianceDays: 5 });
+    expect(byId.get(bId)).toMatchObject({ startVarianceDays: 5, finishVarianceDays: 5 });
+    expect(res.body.meta).toMatchObject({ basis: 'PLACED', behindCount: 2 });
+  });
+
+  // R3 (characterisation): a NONE-level baseline compares network-vs-network, unchanged from
+  // before this epic. Repeats R1's fixture, then forces the active baseline back to how a
+  // pre-M-C capture reads (`placement_snapshot_level: 'NONE'`, the three placement columns
+  // null) through Prisma directly — the public API never produces this shape any more. Pins
+  // the Q1 default; if Q1 is ever answered otherwise, this case changes with it.
+  it('R3: a NONE-level baseline compares network-vs-network, unchanged', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const a = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'A', durationDays: 3, constraintType: 'SNET', constraintDate: '2026-01-10' })
+      .expect(201);
+    const aId = a.body.data.id as string;
+    const bId = await makeActivity(actor, planId, 'B', 2);
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+      .send({ predecessorId: aId, successorId: bId, type: 'FS' })
+      .expect(201);
+    await recalc(actor, planId);
+    const created = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Contract' })
+      .expect(201);
+    const baselineId = created.body.data.id as string;
+
+    await prisma.baselineActivity.updateMany({
+      where: { baselineId },
+      data: { placedStart: null, placedFinish: null, visualStart: null },
+    });
+    await prisma.baseline.update({
+      where: { id: baselineId },
+      data: { placementSnapshotLevel: 'NONE' },
+    });
+
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${aId}`)
+      .send({ constraintType: null, constraintDate: null, visualStart: '2026-01-10', version: 1 })
+      .expect(200);
+    await recalc(actor, planId);
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    const byId = new Map(
+      (res.body.data as { activityId: string; startVarianceDays: number | null }[]).map((r) => [
+        r.activityId,
+        r,
+      ]),
+    );
+    // -9 (ahead): the frozen constraint-bound early start compared with today's lowered one —
+    // exactly today's (pre-epic) behaviour, kept for a NONE-level baseline by Q1's default (a).
+    expect(byId.get(aId)).toMatchObject({ startVarianceDays: -9, finishVarianceDays: -9 });
+    expect(byId.get(bId)).toMatchObject({ startVarianceDays: -9, finishVarianceDays: -9 });
+    expect(res.body.meta.basis).toBe('NETWORK');
   });
 
   it('variance reads for any member but hides the plan from non-members (404)', async () => {

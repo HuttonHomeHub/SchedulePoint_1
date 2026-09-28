@@ -444,7 +444,14 @@ export class BaselineRepository {
     });
   }
 
-  /** A baseline's frozen snapshot rows projected to the fields variance needs. */
+  /**
+   * A baseline's frozen snapshot rows projected to the fields variance needs.
+   *
+   * `placedStart`/`placedFinish` are selected alongside the network dates so the caller can
+   * project the row onto EITHER basis (`placement-baseline-variance`) without a second query —
+   * the basis is chosen once per read from the parent baseline's `placementSnapshotLevel`, never
+   * per row.
+   */
   loadSnapshotRowsForVariance(
     baselineId: string,
     db: Prisma.TransactionClient = this.prisma,
@@ -455,6 +462,8 @@ export class BaselineRepository {
       name: string;
       baselineStart: Date | null;
       baselineFinish: Date | null;
+      placedStart: Date | null;
+      placedFinish: Date | null;
       totalFloat: number | null;
     }[]
   > {
@@ -466,6 +475,8 @@ export class BaselineRepository {
         name: true,
         baselineStart: true,
         baselineFinish: true,
+        placedStart: true,
+        placedFinish: true,
         totalFloat: true,
       },
     });
@@ -704,7 +715,13 @@ export class BaselineRepository {
     });
   }
 
-  /** A plan's active live activities projected to the fields variance needs, in a stable order. */
+  /**
+   * A plan's active live activities projected to the fields variance needs, in a stable order.
+   *
+   * `visualEffectiveStart`/`visualEffectiveFinish` are selected alongside the early dates for
+   * the same reason as `loadSnapshotRowsForVariance` above: the caller picks the basis once per
+   * read (`placement-baseline-variance`), never per row.
+   */
   loadActiveActivitiesForVariance(
     organizationId: string,
     planId: string,
@@ -716,6 +733,8 @@ export class BaselineRepository {
       name: string;
       earlyStart: Date | null;
       earlyFinish: Date | null;
+      visualEffectiveStart: Date | null;
+      visualEffectiveFinish: Date | null;
       totalFloat: number | null;
     }[]
   > {
@@ -728,6 +747,8 @@ export class BaselineRepository {
         name: true,
         earlyStart: true,
         earlyFinish: true,
+        visualEffectiveStart: true,
+        visualEffectiveFinish: true,
         totalFloat: true,
       },
     });

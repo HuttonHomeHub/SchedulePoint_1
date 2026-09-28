@@ -21,8 +21,8 @@ function live(overrides: Partial<VarianceLiveRow> = {}): VarianceLiveRow {
     id: 'a1',
     code: 'A1',
     name: 'Mobilise',
-    earlyStart: '2026-01-05',
-    earlyFinish: '2026-01-09',
+    start: '2026-01-05',
+    finish: '2026-01-09',
     totalFloat: 0,
     ...overrides,
   };
@@ -51,7 +51,7 @@ describe('computeVariance', () => {
   it('signs a slip positive (behind) and a gain negative (ahead)', () => {
     const behind = computeVariance(
       [base()],
-      [live({ earlyFinish: '2026-01-12', earlyStart: '2026-01-06' })],
+      [live({ finish: '2026-01-12', start: '2026-01-06' })],
       allMinutesWorkCalendar,
     );
     expect(behind.rows[0]).toMatchObject({ startVarianceDays: 1, finishVarianceDays: 3 });
@@ -59,7 +59,7 @@ describe('computeVariance', () => {
 
     const ahead = computeVariance(
       [base()],
-      [live({ earlyFinish: '2026-01-07' })],
+      [live({ finish: '2026-01-07' })],
       allMinutesWorkCalendar,
     );
     expect(ahead.rows[0]?.finishVarianceDays).toBe(-2);
@@ -72,7 +72,7 @@ describe('computeVariance', () => {
     const cal = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4]), []);
     const { rows } = computeVariance(
       [base({ baselineFinish: '2026-01-09' })],
-      [live({ earlyFinish: '2026-01-12' })],
+      [live({ finish: '2026-01-12' })],
       cal,
     );
     expect(rows[0]?.finishVarianceDays).toBe(1);
@@ -125,7 +125,7 @@ describe('computeVariance', () => {
   it('treats a not-yet-computed live date as not comparable (null, not zero)', () => {
     const { rows, rollup } = computeVariance(
       [base()],
-      [live({ earlyFinish: null })],
+      [live({ finish: null })],
       allMinutesWorkCalendar,
     );
     expect(rows[0]?.finishVarianceDays).toBeNull();
