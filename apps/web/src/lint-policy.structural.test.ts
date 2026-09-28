@@ -127,7 +127,7 @@ describe('the lint policy is armed and its findings are enforced (ADR-0164, #353
       );
 
     const missing = withLintScript
-      .filter((entry) => !entry.pkg.scripts!.lint.includes('--max-warnings=0'))
+      .filter((entry) => !(entry.pkg.scripts?.lint ?? '').includes('--max-warnings=0'))
       .map((entry) => relative(REPO_ROOT, join(entry.dir, 'package.json')));
 
     expect(

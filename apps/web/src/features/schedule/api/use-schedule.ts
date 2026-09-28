@@ -105,20 +105,24 @@ export function useRecalculate(orgSlug: string, planId: string) {
  * `isPending` lets a trigger show/convey the in-flight (busy) state.
  */
 export function useRecalculateCommand(orgSlug: string, planId: string) {
-  const recalculate = useRecalculate(orgSlug, planId);
+  // Read the stable pieces out rather than closing over the mutation object: `useMutation` returns
+  // a fresh `{ ...result, mutate }` literal every render, so depending on it (or calling
+  // `recalculate.mutate`, which makes the lint rule demand it) re-identified `run` — and with it this
+  // whole command and the TSLD toolbar context that lists it — on every render.
+  const { isPending, mutate } = useRecalculate(orgSlug, planId);
   const run = useCallback(
     (handlers: { onSuccess?: () => void; onError?: (message: string) => void } = {}): void => {
-      if (recalculate.isPending) return;
-      recalculate.mutate(undefined, {
+      if (isPending) return;
+      mutate(undefined, {
         onSuccess: () => handlers.onSuccess?.(),
         onError: (error) =>
           handlers.onError?.(isPlanStartRequired(error) ? NO_START_HINT : RECALC_FAILED_MESSAGE),
       });
     },
-    [recalculate],
+    [isPending, mutate],
   );
   // Memoise the returned command so its identity only changes when `isPending` flips — callers put it
   // in memo dep arrays (the TSLD toolbar context), and an unmemoised literal here defeats their
   // stability guarantee, churning the `<Toolbar>` measure cycle on every unrelated render (perf review).
-  return useMemo(() => ({ isPending: recalculate.isPending, run }), [recalculate.isPending, run]);
+  return useMemo(() => ({ isPending, run }), [isPending, run]);
 }
